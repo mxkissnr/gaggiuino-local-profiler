@@ -5,8 +5,7 @@ import (
 	"fmt"
 )
 
-// This file ports lib/repositories/AchievementRepository.js: deliberately
-// thin persistence for the `achievements` table (created by
+// Deliberately thin persistence for the `achievements` table (created by
 // internal/db/db.go — no schema work here). The badge conditions live in
 // registry.go; this only reads/writes the (id, unlocked_at, progress) rows
 // the evaluator decides on.
@@ -21,17 +20,16 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// Row mirrors AchievementRepository.getAll()'s per-id value: {id,
-// unlockedAt, progress}. UnlockedAt/Progress are pointers so "column is
-// NULL" is distinct from 0.
+// Row is a per-id value: {id, unlockedAt, progress}. UnlockedAt/Progress are
+// pointers so "column is NULL" is distinct from 0.
 type Row struct {
 	ID         string
 	UnlockedAt *int64
 	Progress   *int64
 }
 
-// GetAll ports getAll(): id -> Row for every row ever written. An id with
-// no row is simply absent from the map (callers treat that as locked/0).
+// GetAll returns id -> Row for every row ever written. An id with no row is
+// simply absent from the map (callers treat that as locked/0).
 func (r *Repository) GetAll() (map[string]Row, error) {
 	rows, err := r.db.Query(`SELECT id, unlocked_at, progress FROM achievements`)
 	if err != nil {
@@ -67,10 +65,9 @@ func (r *Repository) GetAll() (map[string]Row, error) {
 // Service.GetState can call this on every GET /api/achievements and only
 // pay the ~200ms full-context scan (evaluateAll -> buildContext ->
 // FindAllExcludingTrash over every datapoints blob + per-shot scoring) when
-// the digest actually changed since the last pass. lib/db.js's Node
-// counterpart gets "evaluate on change, not on every read" for free from
-// its event bus; this port has none (see doc.go), so it derives the same
-// signal from the data. #956.
+// the digest actually changed since the last pass. Without an event bus (see
+// doc.go), this derives the "evaluate on change, not on every read" signal
+// from the data. #956.
 func (r *Repository) ChangeFingerprint() (string, error) {
 	var (
 		shotCount, shotMaxID, shotMaxTS int64
@@ -120,9 +117,9 @@ func (r *Repository) ChangeFingerprint() (string, error) {
 	), nil
 }
 
-// Unlock ports unlock(id, unlockedAt, progress): idempotent via INSERT OR
-// IGNORE — a badge already unlocked keeps its original unlocked_at forever,
-// even if evaluateAll runs again.
+// Unlock records id as unlocked, idempotent via INSERT OR IGNORE — a badge
+// already unlocked keeps its original unlocked_at forever, even if
+// evaluateAll runs again.
 func (r *Repository) Unlock(id string, unlockedAt int64, progress *int64) error {
 	var prog any
 	if progress != nil {
@@ -138,9 +135,8 @@ func (r *Repository) Unlock(id string, unlockedAt int64, progress *int64) error 
 	return nil
 }
 
-// SetProgress ports setProgress(id, progress): updates progress on a
-// still-locked badge, never touching unlocked_at (the WHERE clause makes an
-// already-unlocked row a no-op).
+// SetProgress updates progress on a still-locked badge, never touching
+// unlocked_at (the WHERE clause makes an already-unlocked row a no-op).
 func (r *Repository) SetProgress(id string, progress int64) error {
 	_, err := r.db.Exec(
 		`INSERT INTO achievements (id, unlocked_at, progress) VALUES (?, NULL, ?)
@@ -150,6 +146,52 @@ func (r *Repository) SetProgress(id string, progress int64) error {
 	)
 	if err != nil {
 		return fmt.Errorf("achievements: setting progress for %q: %w", id, err)
+	}
+	return nil
+}
+
+// ReplaceAll wipes the achievements table and inserts the given rows in one
+// transaction — the restore path's bulk write, as opposed to the single-row
+// Unlock/SetProgress the live evaluator uses. A nil UnlockedAt/Progress is
+// stored as SQL NULL. An empty rows slice still clears the table (a restored
+// backup with no unlocked badges must clear the target's).
+//
+// Achievements are excluded from ChangeFingerprint on purpose (it digests
+// only buildContext's inputs, and TestGetState_SkipsFullEvaluateWhenNothingChanged
+// pins that a bare row deletion must not trigger re-evaluation); GetState
+// re-reads via GetAll on every call, so restored rows are never served from
+// a stale cached evaluation.
+func (r *Repository) ReplaceAll(rows []Row) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("achievements: starting replace tx: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM achievements`); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("achievements: clearing table: %w", err)
+	}
+	stmt, err := tx.Prepare(`INSERT INTO achievements (id, unlocked_at, progress) VALUES (?,?,?)`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("achievements: preparing replace: %w", err)
+	}
+	for _, row := range rows {
+		var unlockedAt, progress any
+		if row.UnlockedAt != nil {
+			unlockedAt = *row.UnlockedAt
+		}
+		if row.Progress != nil {
+			progress = *row.Progress
+		}
+		if _, err := stmt.Exec(row.ID, unlockedAt, progress); err != nil {
+			stmt.Close()
+			tx.Rollback()
+			return fmt.Errorf("achievements: restoring %q: %w", row.ID, err)
+		}
+	}
+	stmt.Close()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("achievements: committing replace: %w", err)
 	}
 	return nil
 }

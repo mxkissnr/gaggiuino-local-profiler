@@ -14,15 +14,12 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 )
 
-// Registry ports lib/machines/registry.js: one row per configured espresso
-// machine, backed by the `machines` table internal/db already creates
-// (see internal/db/db.go). Deliberately NOT ported here: restoreMachines()
-// (routes/backup.js's POST /api/restore path — belongs to the not-yet-built
-// backup domain, same deferral pattern internal/library used for its own
-// backup-only repository methods, see internal/library/repository.go) and
-// options-adoption.js's legacy-options reconciliation (also backup-restore-
-// triggered). ensureDefaultMachine's #718 seed-from-legacy-options behavior
-// is ported in a reduced form — see its own doc comment below.
+// Registry is one row per configured espresso machine, backed by the
+// `machines` table internal/db already creates (see internal/db/db.go).
+// RestoreMachines (below) handles the backup-restore path; its legacy-
+// options reconciliation is not implemented (see that method's own doc
+// comment). EnsureDefaultMachine's #718 seed-from-legacy-options behavior
+// is reduced — see its own doc comment below.
 type Registry struct {
 	db *sql.DB
 }
@@ -32,11 +29,10 @@ func NewRegistry(db *sql.DB) *Registry {
 	return &Registry{db: db}
 }
 
-// LogRegistrySnapshot ports lib/machines/registry.js's
-// logRegistrySnapshot(): the whole machine registry as one log line,
-// behind debug_logging (#977 follow-up) so it doesn't spam production
-// logs. Called at startup and after every registry CRUD — see this
-// function's callers in cmd/server/main.go and handlers_registry.go.
+// LogRegistrySnapshot logs the whole machine registry as one line, behind
+// debug_logging (#977 follow-up) so it doesn't spam production logs.
+// Called at startup and after every registry CRUD — see this function's
+// callers in cmd/server/main.go and handlers_registry.go.
 func (r *Registry) LogRegistrySnapshot() {
 	if !config.IsDebugLoggingEnabled() {
 		return
@@ -93,17 +89,15 @@ func scanMachineRow(scanner interface{ Scan(...any) error }) (machineRow, error)
 	return r, err
 }
 
-// EnsureDefaultMachine ports ensureDefaultMachine(): idempotent, seeds
-// machine #1 if the registry is still empty. registry.js seeds it from
-// config.yaml's legacy machine_host/switch_entity add-on options
-// (lib/data.js's loadOptions()) — go/internal/system (the options.json
-// facade) doesn't exist yet in this phase, so this Go port seeds an empty
-// "not configured yet" machine #1 instead (empty host/switchEntity, #718's
-// same "empty is a valid not-configured state" convention Node itself
-// falls back to when no legacy option is set). A future system-domain
-// package can extend this to read real options.json once it exists; no
-// currently-shipped behavior regresses since this binary isn't wired into
-// the add-on yet (see go/README.md).
+// EnsureDefaultMachine is idempotent: it seeds machine #1 if the registry
+// is still empty. Rather than seeding it from config.yaml's legacy
+// machine_host/switch_entity add-on options (no options.json facade exists
+// here yet), it seeds an empty "not configured yet" machine #1 — empty
+// host/switchEntity, #718's "empty is a valid not-configured state"
+// convention that also applies when no legacy option is set. A future
+// system-domain package can extend this to read real options.json once it
+// exists; no currently-shipped behavior regresses since this binary isn't
+// wired into the add-on yet (see go/README.md).
 func (r *Registry) EnsureDefaultMachine() error {
 	var count int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM machines`).Scan(&count); err != nil {
@@ -123,7 +117,7 @@ func (r *Registry) EnsureDefaultMachine() error {
 	return nil
 }
 
-// ListMachines ports listMachines(): ordered default-first, then by id.
+// ListMachines returns machines ordered default-first, then by id.
 func (r *Registry) ListMachines() ([]Machine, error) {
 	rows, err := r.db.Query(`SELECT ` + selectMachineColumns + ` FROM machines ORDER BY is_default DESC, id ASC`)
 	if err != nil {
@@ -141,7 +135,7 @@ func (r *Registry) ListMachines() ([]Machine, error) {
 	return out, rows.Err()
 }
 
-// GetMachine ports getMachine(id): nil, nil (not an error) when not found.
+// GetMachine returns nil, nil (not an error) when id is not found.
 func (r *Registry) GetMachine(id int64) (*Machine, error) {
 	row := r.db.QueryRow(`SELECT `+selectMachineColumns+` FROM machines WHERE id = ?`, id)
 	mr, err := scanMachineRow(row)
@@ -155,9 +149,9 @@ func (r *Registry) GetMachine(id int64) (*Machine, error) {
 	return &m, nil
 }
 
-// GetDefaultMachine ports getDefaultMachine(): ensures the registry is
-// seeded, then returns the is_default row, falling back to the first row
-// by id if (unexpectedly) none is flagged default.
+// GetDefaultMachine ensures the registry is seeded, then returns the
+// is_default row, falling back to the first row by id if (unexpectedly)
+// none is flagged default.
 func (r *Registry) GetDefaultMachine() (*Machine, error) {
 	if err := r.EnsureDefaultMachine(); err != nil {
 		return nil, err
@@ -181,9 +175,9 @@ func (r *Registry) GetDefaultMachine() (*Machine, error) {
 	return &all[0], nil
 }
 
-// CreateMachine ports createMachine(): input has already been validated by
-// the caller (handlers.go) via MachineInput.validate(true) — Name/Type/Host
-// are guaranteed non-nil there.
+// CreateMachine assumes its input has already been validated by the caller
+// (handlers.go) via MachineInput.validate(true) — Name/Type/Host are
+// guaranteed non-nil there.
 func (r *Registry) CreateMachine(in MachineInput) (*Machine, error) {
 	themeStr, err := themeJSON(in.Theme)
 	if err != nil {
@@ -213,12 +207,11 @@ func (r *Registry) CreateMachine(in MachineInput) (*Machine, error) {
 	return r.GetMachine(id)
 }
 
-// UpdateMachine ports updateMachine(id, fields): partial update, omitted
+// UpdateMachine is a partial update: omitted
 // fields (nil pointers) keep their current value. Returns (nil, nil) if id
 // doesn't exist. onHostChanged is invoked with the OLD host string whenever
 // Host changes OR Type changes (even with Host unchanged) — the caller
-// wires this to live-session eviction (registry.js's
-// evictLiveSession(existing.host)), kept as an injected callback here
+// wires this to live-session eviction, kept as an injected callback here
 // instead of a direct dependency so this package's data layer doesn't need
 // to import its own WS-client file (avoids a needless internal coupling;
 // ws.go's evictSession has the same signature). The Type-change trigger
@@ -285,8 +278,8 @@ func (r *Registry) UpdateMachine(id int64, fields MachineInput, onHostChanged fu
 	return r.GetMachine(id)
 }
 
-// SetDefaultMachine ports setDefaultMachine(id) (#753): reassigns
-// is_default transactionally. Returns (nil, nil) if id doesn't exist;
+// SetDefaultMachine (#753) reassigns is_default transactionally.
+// Returns (nil, nil) if id doesn't exist;
 // returns the machine unchanged (no-op) if it's already the default.
 func (r *Registry) SetDefaultMachine(id int64) (*Machine, error) {
 	existing, err := r.GetMachine(id)
@@ -313,17 +306,15 @@ func (r *Registry) SetDefaultMachine(id int64) (*Machine, error) {
 	return r.GetMachine(id)
 }
 
-// ErrCannotDeleteDefault / ErrCannotDeleteLastMachine port deleteMachine()'s
-// two guard-thrown Errors verbatim, as sentinel errors handlers.go maps to
-// the same 400 responses routes/machines.js's catch block produces.
+// ErrCannotDeleteDefault / ErrCannotDeleteLastMachine are the two delete
+// guards, as sentinel errors handlers.go maps to 400 responses.
 var (
 	ErrCannotDeleteDefault     = fmt.Errorf("cannot delete the default machine")
 	ErrCannotDeleteLastMachine = fmt.Errorf("cannot delete the last remaining machine")
 )
 
-// DeleteMachine ports deleteMachine(id). Returns (false, nil) if id
-// doesn't exist (matching routes/machines.js's 404 branch); onHostEvicted
-// mirrors UpdateMachine's onHostChanged callback.
+// DeleteMachine deletes a machine. Returns (false, nil) if id doesn't
+// exist; onHostEvicted mirrors UpdateMachine's onHostChanged callback.
 func (r *Registry) DeleteMachine(id int64, onHostEvicted func(host string)) (bool, error) {
 	existing, err := r.GetMachine(id)
 	if err != nil {
@@ -351,31 +342,29 @@ func (r *Registry) DeleteMachine(id int64, onHostEvicted func(host string)) (boo
 	return true, nil
 }
 
-// RestoreMachines ports registry.js's restoreMachines(machines) (Phase 1f,
-// #901): wipes and re-inserts the whole `machines` table from a backup's
-// `machines` array, validating each entry the same way MachineInput.validate
-// does for a live POST/PUT, then enforcing exactly one is_default row
-// (lowest id wins on a tie/absence, matching the Node original). Returns
-// the count of entries actually restored (out of len(in)) — an invalid
-// entry (bad id, or a field that fails machineSchema-equivalent validation)
-// is skipped, not fatal to the rest of the restore, matching Node's
-// per-entry try/skip loop.
+// RestoreMachines (#901) wipes and re-inserts the whole `machines` table
+// from a backup's `machines` array, validating each entry the same way
+// MachineInput.validate does for a live POST/PUT, then enforcing exactly
+// one is_default row (lowest id wins on a tie/absence). Returns the count
+// of entries actually restored (out of len(in)) — an invalid entry (bad id,
+// or a field that fails validation) is skipped, not fatal to the rest of
+// the restore.
 //
-// Deliberately NOT ported here (see go/internal/machines/doc.go for the
-// full rationale): evictLiveSession(oldHost) for every host that existed
+// Deliberately NOT done here (see go/internal/machines/doc.go for the
+// full rationale): evicting the live session for every host that existed
 // before the restore (this package's own live WS sessions reconnect/fail
 // naturally against a host that no longer resolves to any machine, rather
-// than being torn down immediately) and options-adoption.js's
-// reconcileAfterRestore() (ties a restored machine's stale host/
-// switchEntity back to the current legacy add-on options.json — that
-// facade doesn't exist in this Go port yet, see internal/orders/options.go
-// for the same options.json-facade gap noted elsewhere in this rewrite).
+// than being torn down immediately) and reconciling a restored machine's
+// stale host/switchEntity back to the current legacy add-on options.json
+// (that facade doesn't exist yet, see internal/orders/options.go for the
+// same options.json-facade gap noted elsewhere).
 func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	type validated struct {
 		id              int64
 		name, typ, host string
 		switchEntity    *string
 		theme           *string
+		hasWaterSensor  bool
 		isDefault       bool
 		enabled         bool
 		createdAt       int64
@@ -402,7 +391,8 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 		}
 		valid = append(valid, validated{
 			id: m.ID, name: name, typ: typ, host: host, switchEntity: m.SwitchEntity,
-			theme: themeStr, isDefault: m.IsDefault, enabled: m.Enabled, createdAt: createdAt,
+			theme: themeStr, hasWaterSensor: m.HasWaterSensor, isDefault: m.IsDefault,
+			enabled: m.Enabled, createdAt: createdAt,
 		})
 	}
 
@@ -425,7 +415,7 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 		return 0, fmt.Errorf("machines: clearing table: %w", err)
 	}
 	stmt, err := tx.Prepare(
-		`INSERT INTO machines (id, name, type, host, switch_entity, theme, is_default, enabled, created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO machines (id, name, type, host, switch_entity, theme, has_water_sensor, is_default, enabled, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
 	)
 	if err != nil {
 		tx.Rollback()
@@ -434,7 +424,7 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	for _, v := range valid {
 		if _, err := stmt.Exec(
 			v.id, v.name, v.typ, v.host, nullableString(v.switchEntity), nullableString(v.theme),
-			boolToInt(v.isDefault), boolToInt(v.enabled), v.createdAt,
+			boolToInt(v.hasWaterSensor), boolToInt(v.isDefault), boolToInt(v.enabled), v.createdAt,
 		); err != nil {
 			stmt.Close()
 			tx.Rollback()
@@ -490,10 +480,10 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	return len(valid), nil
 }
 
-// ResolveMachine ports registry.js's resolveMachine(rawId) (#679): an
-// explicit machineId if it names a known machine, otherwise the default
-// machine. rawId == nil means "no machineId given at all" (query/body
-// param absent), matching every existing call site's convention.
+// ResolveMachine (#679) returns an explicit machineId if it names a known
+// machine, otherwise the default machine. rawId == nil means "no machineId
+// given at all" (query/body param absent), matching every existing call
+// site's convention.
 func (r *Registry) ResolveMachine(rawID *int64) (*Machine, error) {
 	if err := r.EnsureDefaultMachine(); err != nil {
 		return nil, err
@@ -533,14 +523,6 @@ func (g *guardVar[F]) get() F {
 	return *g.p.Load()
 }
 
-// set stores f and returns the previous value, so a test can restore it
-// via t.Cleanup(func() { v.set(prev) }).
-func (g *guardVar[F]) set(f F) F {
-	prev := g.get()
-	g.p.Store(&f)
-	return prev
-}
-
 // machineHostGuard is assertMachineHost by default — a package-level var
 // (same testing seam pattern as ssrf.go's lookupIPAddr) so tests exercising
 // an adapter end-to-end against an httptest.Server (which only ever binds
@@ -556,12 +538,10 @@ var machineHostGuard = newGuardVar[func(context.Context, string) error](assertMa
 // gets dialed in tests.
 var machineHostGuardResolved = newGuardVar[func(context.Context, string) (net.IP, error)](assertMachineHostResolved)
 
-// BaseURLFor ports the adapters' shared baseUrlFor(machine) helper
-// (lib/machines/gaggiuino/adapter.js and gaggimate/adapter.js define the
-// identical function twice — consolidated here to one place, since both Go
-// adapters need it and there's no reason to keep the duplication Node has).
-// Re-validates the host on every call (not just at machine-save time),
-// same defense-in-depth rationale as the Node original's header comment.
+// BaseURLFor is the adapters' shared base-URL helper — consolidated to one
+// place since both Go adapters need it and would otherwise duplicate it.
+// Re-validates the host on every call (not just at machine-save time), for
+// defense in depth.
 //
 // #901 code review asked whether a DNS-TTL cache belongs here to save the
 // repeat resolution: deliberately NOT added. Caching a hostname's resolved
@@ -593,9 +573,9 @@ func BaseURLFor(ctx context.Context, m *Machine) (string, error) {
 	return u.Scheme + "://" + u.Host, nil
 }
 
-// hostnameOf ports routes/machines.js's validateHost()'s hostname
-// extraction: accepts a bare host or one already prefixed with a scheme,
-// returns just the hostname portion for assertMachineHost to resolve.
+// hostnameOf extracts a hostname for assertMachineHost to resolve: accepts
+// a bare host or one already prefixed with a scheme, and returns just the
+// hostname portion.
 func hostnameOf(host string) (string, error) {
 	normalized := host
 	lower := strings.ToLower(host)

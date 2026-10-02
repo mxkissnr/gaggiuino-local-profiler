@@ -1,5 +1,5 @@
 // #811: WCAG audit of the design-token palette, computed from the values
-// actually declared in public-src/style.css rather than from a copy kept
+// actually declared in public-src/tokens.css rather than from a copy kept
 // alongside them.
 //
 // This exists because the previous audits (#397, #404) checked the gray
@@ -37,7 +37,7 @@ const { resolveAccentInk } = await import('../public-src/components/machines-set
 const { THEME_PRESETS } = await import('../public-src/shared/theme-presets.js');
 
 const CSS = fs.readFileSync(
-  path.join(import.meta.dirname, '..', 'public-src', 'style.css'), 'utf8');
+  path.join(import.meta.dirname, '..', 'public-src', 'tokens.css'), 'utf8');
 
 // Pulls one selector block's custom properties out of the stylesheet. Later
 // declarations win, matching the cascade for identical specificity.
@@ -52,7 +52,12 @@ function tokensOf(selector: string): Record<string, string> {
   const out: Record<string, string> = {};
   // Three-digit hex counts: --on-fill is declared as #000/#fff, and a
   // six-digit-only pattern silently reported it as undefined.
-  for (const m of body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{3,6})\b/g)) out[m[1]] = expand(m[2]);
+  for (const m of body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{3,6})\b/g)) {
+    const key = m[1];
+    const value = m[2];
+    if (key === undefined || value === undefined) continue;
+    out[key] = expand(value);
+  }
   return out;
 }
 
@@ -65,12 +70,21 @@ function expand(hex: string): string {
 
 const lin = (c: number): number => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
 function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const [r = 0, g = 0, b = 0] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 function contrast(a: string, b: string): number {
-  const [x, y] = [luminance(a), luminance(b)];
+  const x = luminance(a);
+  const y = luminance(b);
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+// tokens is a plain Record, so tokens[role] is `string | undefined` under
+// noUncheckedIndexedAccess; this narrows it back by throwing on a missing
+// token instead of letting the absent value become a NaN contrast ratio.
+function token(tokens: Record<string, string>, role: string): string {
+  const v = tokens[role];
+  if (v === undefined) throw new Error(`token not defined: ${role}`);
+  return v;
 }
 
 // A variant is the full set of tokens in effect for one theme combination:
@@ -105,7 +119,7 @@ describe('design token contrast (#811)', () => {
       for (const text of TEXT_ROLES) {
         it(`${text} clears ${AA}:1 on every surface`, () => {
           for (const surface of SURFACE_ROLES) {
-            const ratio = contrast(tokens[text], tokens[surface]);
+            const ratio = contrast(token(tokens, text), token(tokens, surface));
             expect(ratio, `${name}: ${text} (${tokens[text]}) on ${surface} (${tokens[surface]}) = ${ratio.toFixed(2)}:1`)
               .toBeGreaterThanOrEqual(AA);
           }
@@ -117,7 +131,7 @@ describe('design token contrast (#811)', () => {
         // borders, so it has to be perceivable on its own. This is not a
         // WCAG threshold — no standard covers "two adjacent large fills" —
         // it just must not be the same colour twice.
-        const ratio = contrast(tokens['--raised'], tokens['--gray-800']);
+        const ratio = contrast(token(tokens, '--raised'), token(tokens, '--gray-800'));
         expect(ratio, `${name}: --raised vs --gray-800 = ${ratio.toFixed(3)}:1`)
           .toBeGreaterThan(1.05);
       });
@@ -134,7 +148,7 @@ describe('design token contrast (#811)', () => {
       it(`${name}: --on-fill is readable on every semantic fill`, () => {
         expect(tokens['--on-fill'], `${name} has no --on-fill`).toBeDefined();
         for (const fill of FILL_ROLES) {
-          const ratio = contrast(tokens['--on-fill'], tokens[fill]);
+          const ratio = contrast(token(tokens, '--on-fill'), token(tokens, fill));
           expect(ratio, `${name}: --on-fill (${tokens['--on-fill']}) on ${fill} (${tokens[fill]}) = ${ratio.toFixed(2)}:1`)
             .toBeGreaterThanOrEqual(AA);
         }
@@ -156,7 +170,7 @@ describe('design token contrast (#811)', () => {
       it(`${p.key} ink clears ${AA}:1 on every light surface`, () => {
         const ink = resolveAccentInk(p.key, p.a, true);
         for (const surface of SURFACE_ROLES) {
-          const ratio = contrast(ink, lightSurfaces[surface]);
+          const ratio = contrast(ink, token(lightSurfaces, surface));
           expect(ratio, `${p.key} ink ${ink} (raw ${p.a}) on ${surface} (${lightSurfaces[surface]}) = ${ratio.toFixed(2)}:1`)
             .toBeGreaterThanOrEqual(AA);
         }
@@ -180,8 +194,9 @@ describe('design token contrast (#811)', () => {
 
     it('leaves an already-compliant preset (ruby-ristretto, mulberry-mocha) unmodified in the light theme too', () => {
       for (const key of ['ruby-ristretto', 'mulberry-mocha']) {
-        const raw = THEME_PRESETS.find(p => p.key === key)!.a;
-        expect(resolveAccentInk(key, raw, true)).toBe(raw);
+        const preset = THEME_PRESETS.find(p => p.key === key);
+        if (preset === undefined) throw new Error(`preset not found: ${key}`);
+        expect(resolveAccentInk(key, preset.a, true)).toBe(preset.a);
       }
     });
 

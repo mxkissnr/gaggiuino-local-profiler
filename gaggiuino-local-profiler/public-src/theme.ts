@@ -11,7 +11,7 @@ export const THEME_STORAGE_KEY: string = 'glp_theme';
 // #1019: maps the app's old, unrelated 6-swatch Settings -> Farbschema
 // values (amber/ocean/aurora/ember/forest/crema, see the now-retired
 // style.css [data-accent="..."] blocks) onto the nearest of the 8 named
-// THEME_PRESETS (lib/machines/theme-presets.js) that now back both the
+// THEME_PRESETS (shared/theme-presets.ts) that now back both the
 // per-machine theme picker and the Farbschema picker. Picked by color
 // proximity, not alphabetically -- ocean and forest both land on
 // frosty-flat-white (their nearest new preset happens to coincide; accepted

@@ -2,27 +2,28 @@ import Chart from 'chart.js/auto';
 import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import * as timerRegistry from '../state/timers.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName } from '../constants.js';
-import { esc, scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
+import { esc, html, joinHtml, scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
+import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
-import type { MachineRecord, ShotMeta } from '../state/index.js';
-import type { ChartConfiguration } from 'chart.js';
+import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
+import type { ChartConfiguration, TooltipItem } from 'chart.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
 // an index signature); this view reads the annotation, profile, curve and
 // machine fields, so this local alias names them — same pattern as
 // views/shots/index.ts.
 interface ShotAnnotation {
-  coffee?: string | null;
-  beanId?: number | null;
-  basketId?: number | null;
-  puckScreenId?: number | null;
-  grinder?: string | null;
-  grindSetting?: string | number | null;
-  dose?: number | null;
+  coffee?: string | null | undefined;
+  beanId?: number | null | undefined;
+  basketId?: number | null | undefined;
+  puckScreenId?: number | null | undefined;
+  grinder?: string | null | undefined;
+  grindSetting?: string | number | null | undefined;
+  dose?: number | null | undefined;
 }
 
 interface ShotRow extends ShotMeta {
@@ -31,7 +32,7 @@ interface ShotRow extends ShotMeta {
   duration?: number | null;
   weight?: number | null;
   tempStabilityDev?: number | null;
-  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null;
+  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null | undefined;
   annotation?: ShotAnnotation | null;
 }
 
@@ -74,7 +75,7 @@ type BeanRankKey = 'name' | 'shots' | 'avgScore' | 'lastGrind' | 'trend';
 
 // CoffeeLibrary (state/index.ts) types beans/grinders only; the world map
 // additionally reads each bean's origin list and geocoded location.
-interface SharedBean {
+interface SharedBean extends LibraryRow {
   id?: number | null;
   name: string;
   origin?: string | null;
@@ -83,13 +84,13 @@ interface SharedBean {
   location?: { lon: number; lat: number } | null;
 }
 
-function _beans(): SharedBean[] { return (S.coffeeLibrary.beans || []) as unknown as SharedBean[]; }
+function _beans(): SharedBean[] { return (S.coffeeLibrary.beans || []) as SharedBean[]; }
 
-// baskets/puckScreens are library collections CoffeeLibrary doesn't declare —
+// baskets/puckScreens are optional library collections (see CoffeeLibrary) —
 // same collection-by-name lookup views/shots/index.ts does for its own
 // annotation panel.
 function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, unknown>[] | undefined {
-  return (S.coffeeLibrary as unknown as Record<string, Record<string, unknown>[] | undefined>)[name];
+  return S.coffeeLibrary[name];
 }
 
 // World map: a bean's origins (a blend carries several), the per-country
@@ -168,7 +169,10 @@ function calcLongestStreak(shots: ShotRow[]): number {
   }))].sort();
   let max = 1, cur = 1;
   for (let i = 1; i < days.length; i++) {
-    const diff = (new Date(days[i]).getTime() - new Date(days[i-1]).getTime()) / 86400000;
+    const day = days[i];
+    const prevDay = days[i - 1];
+    if (day === undefined || prevDay === undefined) continue;
+    const diff = (new Date(day).getTime() - new Date(prevDay).getTime()) / 86400000;
     if (diff === 1) { max = Math.max(max, ++cur); } else cur = 1;
   }
   return max;
@@ -205,15 +209,15 @@ export function buildSummaryKpis() {
   const streak   = calcLongestStreak(_shots());
 
   const kpis = [
-    { val: total,  lbl: t('analytics_total_shots') },
-    { val: avgScore !== null ? avgScore : '—', lbl: t('analytics_avg_score'), cls: avgScore !== null ? scoreClass(avgScore) : '' },
-    { val: total > 0 ? totalCoffee : '—', lbl: t('analytics_total_coffee') },
-    { val: thisWeek, lbl: t('analytics_this_week') },
-    { val: streak > 0 ? t('analytics_days', streak) : '—', lbl: t('analytics_streak') },
+    { val: esc(total),  lbl: tHtml('analytics_total_shots') },
+    { val: esc(avgScore !== null ? avgScore : '—'), lbl: tHtml('analytics_avg_score'), cls: avgScore !== null ? scoreClass(avgScore) : '' },
+    { val: esc(total > 0 ? totalCoffee : '—'), lbl: tHtml('analytics_total_coffee') },
+    { val: esc(thisWeek), lbl: tHtml('analytics_this_week') },
+    { val: streak > 0 ? tHtml('analytics_days', streak) : esc('—'), lbl: tHtml('analytics_streak') },
   ];
-  el.innerHTML = kpis.map(k =>
-    `<div class="kpi-tile"><div class="kpi-val ${k.cls||''}">${k.val}</div><div class="kpi-lbl">${k.lbl}</div></div>`
-  ).join('');
+  el.innerHTML = joinHtml(kpis.map(k =>
+    html`<div class="kpi-tile"><div class="kpi-val ${esc(k.cls || '')}">${k.val}</div><div class="kpi-lbl">${k.lbl}</div></div>`
+  ));
 
   // Trend warning: check last 5 scored shots for declining trend
   const warnEl = document.getElementById('trendWarning');
@@ -225,7 +229,7 @@ export function buildSummaryKpis() {
       const xs = recentScores.map((_, i) => i);
       const xm = (n - 1) / 2;
       const ym = recentScores.reduce((a, b) => a + b, 0) / n;
-      const slope = xs.reduce((s, x, i) => s + (x - xm) * (recentScores[i] - ym), 0) /
+      const slope = xs.reduce((s, x, i) => s + (x - xm) * ((recentScores[i] ?? 0) - ym), 0) /
                     xs.reduce((s, x) => s + (x - xm) ** 2, 0);
       if (slope < -1.5) {
         const drop = Math.abs(slope).toFixed(1);
@@ -233,7 +237,7 @@ export function buildSummaryKpis() {
         // #811: the ⚠ glyph came out of the translated string; the icon is
         // rendered here instead so translators never carry markup. `n`/`drop`
         // are numbers computed above, so there is no untrusted input here.
-        warnEl.innerHTML = `${WARNING_ICON_SVG} ${esc(t('analytics_trend_warning', n, drop))}`;
+        warnEl.innerHTML = html`${WARNING_ICON_SVG} ${esc(t('analytics_trend_warning', n, drop))}`;
         warnEl.style.display = '';
       } else {
         warnEl.style.display = 'none';
@@ -249,7 +253,7 @@ export function buildPersonalBests() {
   const el = document.getElementById('personalBests');
   if (!el) return;
   if (_shots().length < 3) {
-    el.innerHTML = `<p class="empty-note">${t('analytics_no_bests')}</p>`;
+    el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_bests')}</p>`;
     return;
   }
 
@@ -275,25 +279,25 @@ export function buildPersonalBests() {
   const streak     = calcLongestStreak(_shots());
   const locale     = localeFor(S.currentLang);
 
-  const rows: { lbl: string; val: string; link?: number }[] = [];
+  const rows: { lbl: Html; val: Html; link?: number }[] = [];
   if (bestShot) {
     const d  = new Date(bestShot.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-    rows.push({ lbl: t('analytics_best_shot'),
-      val: `<span class="${scoreClass(bestScore)}">${bestScore}</span> · ${d}`,
+    rows.push({ lbl: tHtml('analytics_best_shot'),
+      val: html`<span class="${esc(scoreClass(bestScore))}">${esc(bestScore)}</span> · ${esc(d)}`,
       link: bestShot.id });
   }
-  if (streak > 0) rows.push({ lbl: t('analytics_longest_streak'), val: t('analytics_days', streak) });
-  if (favBean)    rows.push({ lbl: t('analytics_fav_bean'),    val: `${esc(favBean[0])} <span class="bests-count">${favBean[1]} ${t('bean_stat_shots')}</span>` });
-  if (favProfile) rows.push({ lbl: t('analytics_fav_profile'), val: `${esc(favProfile[0])} <span class="bests-count">${favProfile[1]} ${t('bean_stat_shots')}</span>` });
+  if (streak > 0) rows.push({ lbl: tHtml('analytics_longest_streak'), val: tHtml('analytics_days', streak) });
+  if (favBean)    rows.push({ lbl: tHtml('analytics_fav_bean'),    val: html`${esc(favBean[0])} <span class="bests-count">${esc(favBean[1])} ${tHtml('bean_stat_shots')}</span>` });
+  if (favProfile) rows.push({ lbl: tHtml('analytics_fav_profile'), val: html`${esc(favProfile[0])} <span class="bests-count">${esc(favProfile[1])} ${tHtml('bean_stat_shots')}</span>` });
   if (busiestDay) {
     const d = new Date(busiestDay[0]).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-    rows.push({ lbl: t('analytics_busiest_day'), val: `${d} <span class="bests-count">${busiestDay[1]} ${t('bean_stat_shots')}</span>` });
+    rows.push({ lbl: tHtml('analytics_busiest_day'), val: html`${esc(d)} <span class="bests-count">${esc(busiestDay[1])} ${tHtml('bean_stat_shots')}</span>` });
   }
 
-  el.innerHTML = `<div class="bests-list">${rows.map(r =>
-    `<div class="bests-row"><span class="bests-lbl">${r.lbl}</span><span class="bests-val">${r.val}${
-      r.link ? ` <button class="bests-link" data-action="goto-shot" data-id="${r.link}">→</button>` : ''}</span></div>`
-  ).join('')}</div>`;
+  el.innerHTML = html`<div class="bests-list">${joinHtml(rows.map(r =>
+    html`<div class="bests-row"><span class="bests-lbl">${r.lbl}</span><span class="bests-val">${r.val}${
+      r.link ? html` <button class="bests-link" data-action="goto-shot" data-id="${esc(r.link)}">→</button>` : esc('')}</span></div>`
+  ))}</div>`;
 }
 
 // ── Grinder, Basket & Puck Screen Stats (#668, #674) ────────────────────────
@@ -322,12 +326,13 @@ export function _computeEquipmentStats(
   for (const s of shots) {
     const key = getKey(s);
     if (key == null) continue;
-    if (!byEquip[key]) byEquip[key] = { count: 0, scores: [], durations: [] };
-    byEquip[key].count++;
+    let stat = byEquip[key];
+    if (!stat) { stat = { count: 0, scores: [], durations: [] }; byEquip[key] = stat; }
+    stat.count++;
     const sc = window.calcShotScore ? window.calcShotScore(s) : null;
-    if (sc !== null) byEquip[key].scores.push(sc);
+    if (sc !== null) stat.scores.push(sc);
     const dur = (s.duration || 0) / 10;
-    if (dur > 5) byEquip[key].durations.push(dur);
+    if (dur > 5) stat.durations.push(dur);
   }
   return Object.entries(byEquip)
     .map(([key, d]) => {
@@ -352,22 +357,19 @@ function _renderEquipmentStats(containerId: string, entries: EquipStatEntry[], e
   const el = document.getElementById(containerId);
   if (!el) return;
   if (entries.length === 0) {
-    el.innerHTML = `<p class="empty-note">${t(emptyKey)}</p>`;
+    el.innerHTML = html`<p class="empty-note">${tHtml(emptyKey)}</p>`;
     return;
   }
-  let html = '<div class="bean-cards">';
-  for (const d of entries) {
-    html += `<div class="bean-card">
+  const cards = entries.map(d => html`<div class="bean-card">
       <div class="bean-card-name" title="${esc(d.name)}">${esc(d.name)}</div>
       <div class="bean-card-stats">
-        <div class="bean-stat"><span class="bean-stat-val">${d.count}</span><span class="bean-stat-lbl">${t('bean_stat_shots')}</span></div>
-        ${d.avgScore    !== null ? `<div class="bean-stat"><span class="bean-stat-val ${scoreClass(d.avgScore)}">${d.avgScore}</span><span class="bean-stat-lbl">${t('bean_stat_avg')}</span></div>` : ''}
-        ${d.bestScore   !== null ? `<div class="bean-stat"><span class="bean-stat-val">${d.bestScore}</span><span class="bean-stat-lbl">${t('bean_stat_best')}</span></div>` : ''}
-        ${d.avgDuration !== null ? `<div class="bean-stat"><span class="bean-stat-val">${d.avgDuration}s</span><span class="bean-stat-lbl">${t('bean_stat_duration')}</span></div>` : ''}
+        <div class="bean-stat"><span class="bean-stat-val">${esc(d.count)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_shots')}</span></div>
+        ${d.avgScore    !== null ? html`<div class="bean-stat"><span class="bean-stat-val ${esc(scoreClass(d.avgScore))}">${esc(d.avgScore)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_avg')}</span></div>` : esc('')}
+        ${d.bestScore   !== null ? html`<div class="bean-stat"><span class="bean-stat-val">${esc(d.bestScore)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_best')}</span></div>` : esc('')}
+        ${d.avgDuration !== null ? html`<div class="bean-stat"><span class="bean-stat-val">${esc(d.avgDuration)}s</span><span class="bean-stat-lbl">${tHtml('bean_stat_duration')}</span></div>` : esc('')}
       </div>
-    </div>`;
-  }
-  el.innerHTML = html + '</div>';
+    </div>`);
+  el.innerHTML = html`<div class="bean-cards">${joinHtml(cards)}</div>`;
 }
 
 export function buildGrinderStats() {
@@ -409,14 +411,14 @@ function _buildDoseDist() {
   chartRegistry.dispose('doseDistChart');
   const doses = _shots().map(s => s.annotation?.dose).filter((d): d is number => d != null && d > 5 && d < 50);
   if (doses.length < 5) {
-    ctx.parentElement!.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_distribution')}</p>`;
+    ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_distribution')}</p>`;
     return;
   }
   const lo = Math.floor(Math.min(...doses) * 2) / 2;
   const hi = Math.ceil(Math.max(...doses) * 2) / 2;
   const buckets: Record<string, number> = {};
   for (let b = lo; b <= hi + 0.001; b += 0.5) buckets[b.toFixed(1)] = 0;
-  for (const d of doses) { const k = (Math.floor(d * 2) / 2).toFixed(1); if (k in buckets) buckets[k]++; }
+  for (const d of doses) { const k = (Math.floor(d * 2) / 2).toFixed(1); if (k in buckets) buckets[k] = (buckets[k] ?? 0) + 1; }
   chartRegistry.set('doseDistChart', new Chart(ctx, {
     type: 'bar',
     data: { labels: Object.keys(buckets).map(k => k + 'g'),
@@ -428,7 +430,7 @@ function _buildDoseDist() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 function _buildRatioDist() {
@@ -439,14 +441,14 @@ function _buildRatioDist() {
     .map(s => s.annotation?.dose && s.weight ? (s.weight / 10) / s.annotation.dose : null)
     .filter((r): r is number => r != null && r > 1 && r < 4);
   if (ratios.length < 5) {
-    ctx.parentElement!.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_distribution')}</p>`;
+    ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_distribution')}</p>`;
     return;
   }
   const lo = Math.floor(Math.min(...ratios) * 10) / 10;
   const hi = Math.ceil(Math.max(...ratios) * 10) / 10;
   const buckets: Record<string, number> = {};
   for (let b = lo; b <= hi + 0.001; b += 0.1) buckets[b.toFixed(1)] = 0;
-  for (const r of ratios) { const k = (Math.floor(r * 10) / 10).toFixed(1); if (k in buckets) buckets[k]++; }
+  for (const r of ratios) { const k = (Math.floor(r * 10) / 10).toFixed(1); if (k in buckets) buckets[k] = (buckets[k] ?? 0) + 1; }
   chartRegistry.set('ratioDistChart', new Chart(ctx, {
     type: 'bar',
     data: { labels: Object.keys(buckets).map(k => '1:' + k),
@@ -458,7 +460,7 @@ function _buildRatioDist() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 // ── Time of Day ───────────────────────────────────────────────────────────
@@ -469,14 +471,16 @@ export function buildTimeOfDay() {
   const hours: { count: number; scores: number[] }[] = Array.from({ length: 24 }, () => ({ count: 0, scores: [] }));
   for (const s of _shots()) {
     const h = new Date(s.timestamp * 1000).getHours();
-    hours[h].count++;
+    const bin = hours[h];
+    if (!bin) continue;
+    bin.count++;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
-      if (sc !== null) hours[h].scores.push(sc);
+      if (sc !== null) bin.scores.push(sc);
     }
   }
   if (!hours.some(h => h.count > 0)) {
-    ctx.parentElement!.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_time')}</p>`;
+    ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_time')}</p>`;
     return;
   }
   const avgSc = (h: { count: number; scores: number[] }): number | null =>
@@ -489,8 +493,9 @@ export function buildTimeOfDay() {
     },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: (c: { dataIndex: number; parsed: { y: number } }) => {
-          const h = hours[c.dataIndex], sc = avgSc(h);
+        tooltip: { callbacks: { label: (c: TooltipItem<'bar'>) => {
+          const h = hours[c.dataIndex];
+          const sc = h ? avgSc(h) : null;
           return `${c.parsed.y} Shot${c.parsed.y !== 1 ? 's' : ''}${sc !== null ? ' · Ø ' + sc : ''}`;
         }}}
       },
@@ -499,7 +504,7 @@ export function buildTimeOfDay() {
         y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 export function setTrendWindow(n: number): void {
@@ -525,7 +530,7 @@ export function buildTrendChart() {
   chartRegistry.dispose('trendChart');
 
   if (src.length < 2) {
-    ctx.parentElement!.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_trend')}</p>`;
+    ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_trend')}</p>`;
     return;
   }
 
@@ -551,7 +556,9 @@ export function buildTrendChart() {
     options: {
       responsive: true, maintainAspectRatio: false,
       onClick: (_: unknown, elements: { index: number }[]) => {
-        if (elements.length > 0 && window.goToShot) window.goToShot(src[elements[0].index].id);
+        const first = elements[0];
+        const shot = first ? src[first.index] : undefined;
+        if (shot && window.goToShot) window.goToShot(shot.id);
       },
       plugins: {
         legend: { labels: { color: C.tick, font: { size: 11 } } },
@@ -562,7 +569,7 @@ export function buildTrendChart() {
         y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: 'rgba(63,63,70,.3)' } }
       }
     }
-  } as unknown as ChartConfiguration<'line'>));
+  } satisfies ChartConfiguration<'line'>));
 }
 
 export function buildCalendar() {
@@ -584,12 +591,13 @@ export function _renderCalendar() {
   const dayMap: Record<string, { count: number; scores: number[]; lastId: number | null }> = {};
   for (const s of _shots()) {
     const key = new Date(s.timestamp * 1000).toISOString().slice(0, 10);
-    if (!dayMap[key]) dayMap[key] = { count: 0, scores: [], lastId: null };
-    dayMap[key].count++;
-    dayMap[key].lastId = s.id;
+    let day = dayMap[key];
+    if (!day) { day = { count: 0, scores: [], lastId: null }; dayMap[key] = day; }
+    day.count++;
+    day.lastId = s.id;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
-      if (sc !== null) dayMap[key].scores.push(sc);
+      if (sc !== null) day.scores.push(sc);
     }
   }
 
@@ -629,24 +637,20 @@ export function _renderCalendar() {
 
   const cls = (c: number): string => c === 0 ? 'cal-0' : c === 1 ? 'cal-1' : c === 2 ? 'cal-2' : 'cal-3';
 
-  let html = `<div style="position:relative;height:${cellSize + 3}px;margin-bottom:4px">`;
-  for (const m of months) html += `<span style="position:absolute;left:${m.weekIdx * CELL}px;font-size:.65rem;color:var(--gray-600)">${m.label}</span>`;
-  html += `</div><div class="cal-grid" style="gap:${GAP}px">`;
-
-  for (const week of weeks) {
-    html += `<div class="cal-week" style="gap:${GAP}px">`;
+  const monthLabels = months.map(m => html`<span style="position:absolute;left:${esc(m.weekIdx * CELL)}px;font-size:.65rem;color:var(--gray-600)">${esc(m.label)}</span>`);
+  const weekCols = weeks.map(week => {
+    const dayCells: Html[] = [];
     for (const day of week) {
       const isFuture = day.date > today;
       const dateStr  = day.date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
       const title    = day.count === 0 ? dateStr
                      : `${dateStr}: ${day.count} Shot${day.count > 1 ? 's' : ''}${day.avgSc !== null ? ` · Ø ${day.avgSc}` : ''}`;
       const clickable = !isFuture && day.count > 0 && day.lastId !== null;
-      html += `<div class="${isFuture ? 'cal-future' : cls(day.count)} cal-day${clickable ? ' cal-day-link' : ''}" style="${cellSz}" title="${title}"${clickable ? ` data-action="goto-shot" data-id="${day.lastId}"` : ''}></div>`;
+      dayCells.push(html`<div class="${esc(isFuture ? 'cal-future' : cls(day.count))} cal-day${clickable ? html` cal-day-link` : esc('')}" style="${esc(cellSz)}" title="${esc(title)}"${clickable ? html` data-action="goto-shot" data-id="${esc(day.lastId)}"` : esc('')}></div>`);
     }
-    html += `</div>`;
-  }
-  html += `</div>`;
-  el.innerHTML = html;
+    return html`<div class="cal-week" style="gap:${esc(GAP)}px">${joinHtml(dayCells)}</div>`;
+  });
+  el.innerHTML = html`<div style="position:relative;height:${esc(cellSize + 3)}px;margin-bottom:4px">${joinHtml(monthLabels)}</div><div class="cal-grid" style="gap:${esc(GAP)}px">${joinHtml(weekCols)}</div>`;
 }
 
 export function buildBeanStats() {
@@ -657,46 +661,45 @@ export function buildBeanStats() {
   for (const s of _shots()) {
     const name = s.annotation?.coffee;
     if (!name) continue;
-    if (!byBean[name]) byBean[name] = { count: 0, scores: [], durations: [], dialinShot: null };
-    byBean[name].count++;
+    let bean = byBean[name];
+    if (!bean) { bean = { count: 0, scores: [], durations: [], dialinShot: null }; byBean[name] = bean; }
+    bean.count++;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
       if (sc !== null) {
-        byBean[name].scores.push(sc);
-        if (byBean[name].dialinShot === null && sc >= 80)
-          byBean[name].dialinShot = byBean[name].count;
+        bean.scores.push(sc);
+        if (bean.dialinShot === null && sc >= 80)
+          bean.dialinShot = bean.count;
       }
     }
     const dur = (s.duration || 0) / 10;
-    if (dur > 5) byBean[name].durations.push(dur);
+    if (dur > 5) bean.durations.push(dur);
   }
 
   const beans = Object.entries(byBean).sort((a, b) => b[1].count - a[1].count);
 
   if (beans.length === 0) {
-    el.innerHTML = `<p class="empty-note">${t('analytics_no_beans')}</p>`;
+    el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_beans')}</p>`;
     return;
   }
 
-  let html = '<div class="bean-cards">';
-  for (const [name, d] of beans) {
+  const cards = beans.map(([name, d]) => {
     const avgSc  = d.scores.length    ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : null;
     const bestSc = d.scores.length    ? Math.max(...d.scores) : null;
     const avgDur = d.durations.length ? (d.durations.reduce((a, b) => a + b, 0) / d.durations.length).toFixed(1) : null;
     const scCls  = avgSc !== null ? scoreClass(avgSc) : '';
-    html += `<div class="bean-card">
+    return html`<div class="bean-card">
       <div class="bean-card-name" title="${esc(name)}">${esc(name)}</div>
       <div class="bean-card-stats">
-        <div class="bean-stat"><span class="bean-stat-val">${d.count}</span><span class="bean-stat-lbl">${t('bean_stat_shots')}</span></div>
-        ${avgSc  !== null ? `<div class="bean-stat"><span class="bean-stat-val ${scCls}">${avgSc}</span><span class="bean-stat-lbl">${t('bean_stat_avg')}</span></div>` : ''}
-        ${bestSc !== null ? `<div class="bean-stat"><span class="bean-stat-val">${bestSc}</span><span class="bean-stat-lbl">${t('bean_stat_best')}</span></div>` : ''}
-        ${avgDur !== null ? `<div class="bean-stat"><span class="bean-stat-val">${avgDur}s</span><span class="bean-stat-lbl">${t('bean_stat_duration')}</span></div>` : ''}
+        <div class="bean-stat"><span class="bean-stat-val">${esc(d.count)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_shots')}</span></div>
+        ${avgSc  !== null ? html`<div class="bean-stat"><span class="bean-stat-val ${esc(scCls)}">${esc(avgSc)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_avg')}</span></div>` : esc('')}
+        ${bestSc !== null ? html`<div class="bean-stat"><span class="bean-stat-val">${esc(bestSc)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_best')}</span></div>` : esc('')}
+        ${avgDur !== null ? html`<div class="bean-stat"><span class="bean-stat-val">${esc(avgDur)}s</span><span class="bean-stat-lbl">${tHtml('bean_stat_duration')}</span></div>` : esc('')}
       </div>
-      ${d.dialinShot !== null ? `<div class="bean-stat-dialin">${TARGET_ICON_SVG} ${t('analytics_dialin', d.dialinShot)}</div>` : (d.scores.length >= 3 ? `<div class="bean-stat-dialin" style="color:var(--gray-600)">${t('analytics_dialin_none')}</div>` : '')}
+      ${d.dialinShot !== null ? html`<div class="bean-stat-dialin">${TARGET_ICON_SVG} ${tHtml('analytics_dialin', d.dialinShot)}</div>` : (d.scores.length >= 3 ? html`<div class="bean-stat-dialin" style="color:var(--gray-600)">${tHtml('analytics_dialin_none')}</div>` : esc(''))}
     </div>`;
-  }
-  html += '</div>';
-  el.innerHTML = html;
+  });
+  el.innerHTML = html`<div class="bean-cards">${joinHtml(cards)}</div>`;
 }
 
 // ── Origin world map ──────────────────────────────────────────────────────
@@ -732,7 +735,7 @@ let _worldMapReqToken = 0;
 function _hexToRgba(hex: string, alpha: number): string {
   const m = /^#?([a-f\d]{3}|[a-f\d]{6})$/i.exec(String(hex || '').trim());
   if (!m) return hex;
-  let h = m[1];
+  let h = m[1] ?? '';
   if (h.length === 3) h = h.split('').map(c => c + c).join('');
   const num = parseInt(h, 16);
   const r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
@@ -800,7 +803,7 @@ function _repaintWorldMapTheme() {
 // single country (or a single point) doesn't zoom in absurdly far, and
 // stays within the geo.scaleLimit used by buildWorldMap (max 12).
 export function computeMapBoundingView(coords: (number[] | null | undefined)[] | null): { center: number[] | undefined; zoom: number } {
-  const valid = (coords || []).filter((c): c is number[] => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]));
+  const valid = (coords || []).filter((c): c is [number, number] => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]));
   if (!valid.length) return { center: undefined, zoom: 1 };
   let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
   for (const [lon, lat] of valid) {
@@ -838,11 +841,14 @@ export function computeMapBoundingView(coords: (number[] | null | undefined)[] |
 // of drawing straight across the map.
 function _closeRingPiece(seg: Ring): Ring {
   const first = seg[0], lastPt = seg[seg.length - 1];
-  if (first[0] === lastPt[0] && first[1] === lastPt[1]) return seg;
-  if (Math.abs(first[0] - lastPt[0]) > 180) {
-    const pole = lastPt[1] < 0 ? -90 : 90;
-    const sideOut = lastPt[0] > 0 ? 180 : -180;
-    const sideIn  = first[0] > 0 ? 180 : -180;
+  if (!first || !lastPt) return seg;
+  const [fx = 0, fy = 0] = first;
+  const [lx = 0, ly = 0] = lastPt;
+  if (fx === lx && fy === ly) return seg;
+  if (Math.abs(fx - lx) > 180) {
+    const pole = ly < 0 ? -90 : 90;
+    const sideOut = lx > 0 ? 180 : -180;
+    const sideIn  = fx > 0 ? 180 : -180;
     seg.push([sideOut, pole], [sideIn, pole], first);
   } else {
     seg.push(first);
@@ -861,13 +867,20 @@ export function splitAntimeridianRing(ring: Ring): Ring[] {
   // that closing edge along the map border (nearest pole) instead of cutting
   // straight across, the standard way flat equirectangular maps render a
   // polygon that touches both the left and right edges.
+  const firstPt = ring[0];
   const last = ring[ring.length - 1];
-  const closesAtStart = last[0] === ring[0][0] && last[1] === ring[0][1];
+  if (!firstPt || !last) return [ring];
+  const closesAtStart = last[0] === firstPt[0] && last[1] === firstPt[1];
   const scanEnd = closesAtStart ? ring.length - 1 : ring.length;
-  const segments = [[ring[0]]];
+  const segments: Ring[] = [[firstPt]];
   for (let i = 1; i < scanEnd; i++) {
-    const [lon1] = ring[i - 1];
-    const [lon2, lat2] = ring[i];
+    const prev = ring[i - 1];
+    const cur = ring[i];
+    const current = segments[segments.length - 1];
+    if (!prev || !cur || !current) continue;
+    const lon1 = prev[0] ?? 0;
+    const lon2 = cur[0] ?? 0;
+    const lat2 = cur[1] ?? 0;
     const dLon = lon2 - lon1;
     if (Math.abs(dLon) > 180) {
       // Crossing the seam: close the current segment on this side, start a
@@ -875,14 +888,16 @@ export function splitAntimeridianRing(ring: Ring): Ring[] {
       // latitude on their respective edge (+180 or -180).
       const side1 = lon1 > 0 ? 180 : -180;
       const side2 = lon2 > 0 ? 180 : -180;
-      segments[segments.length - 1].push([side1, lat2]);
+      current.push([side1, lat2]);
       segments.push([[side2, lat2]]);
     } else {
-      segments[segments.length - 1].push([lon2, lat2]);
+      current.push([lon2, lat2]);
     }
   }
   if (segments.length === 1) {
-    return [closesAtStart ? _closeRingPiece(segments[0]) : segments[0]];
+    const only = segments[0];
+    if (!only) return [ring];
+    return [closesAtStart ? _closeRingPiece(only) : only];
   }
   // A jump landing exactly on a closed ring's own closing edge produces a
   // degenerate 1-point trailing segment — not a renderable ring. Drop
@@ -1019,9 +1034,10 @@ export async function buildWorldMap() {
   const byCode: Record<string, MapStats> = {};
   for (const { bean, origins } of nameToBean.values()) {
     for (const o of origins) {
-      if (!byCode[o.code]) byCode[o.code] = { shots: 0, beans: new Set(), beanShots: new Map() };
-      byCode[o.code].beans.add(bean.name);
-      if (!byCode[o.code].beanShots.has(bean.name)) byCode[o.code].beanShots.set(bean.name, 0);
+      let codeStats = byCode[o.code];
+      if (!codeStats) { codeStats = { shots: 0, beans: new Set(), beanShots: new Map() }; byCode[o.code] = codeStats; }
+      codeStats.beans.add(bean.name);
+      if (!codeStats.beanShots.has(bean.name)) codeStats.beanShots.set(bean.name, 0);
     }
   }
   for (const s of _shots()) {
@@ -1029,6 +1045,7 @@ export async function buildWorldMap() {
     if (!entry) continue;
     for (const o of entry.origins) {
       const stats = byCode[o.code];
+      if (!stats) continue;
       stats.shots += o.weight;
       stats.beanShots.set(entry.bean.name, (stats.beanShots.get(entry.bean.name) ?? 0) + o.weight);
     }
@@ -1040,12 +1057,12 @@ export async function buildWorldMap() {
 
   if (Object.keys(byCode).length === 0) {
     if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
-    wrap.innerHTML = `<p class="empty-note">${t('analytics_map_empty')}</p>`;
+    wrap.innerHTML = html`<p class="empty-note">${tHtml('analytics_map_empty')}</p>`;
     return;
   }
   if (!wrap.querySelector('.world-map-canvas')) {
-    wrap.innerHTML = `<div class="world-map-canvas" style="width:100%;height:100%"></div>
-      <div class="world-map-hint">${t('analytics_map_zoom_hint')}</div>`;
+    wrap.innerHTML = html`<div class="world-map-canvas" style="width:100%;height:100%"></div>
+      <div class="world-map-hint">${tHtml('analytics_map_zoom_hint')}</div>`;
   }
   const container = wrap.querySelector<HTMLElement>('.world-map-canvas')!;
 
@@ -1054,7 +1071,7 @@ export async function buildWorldMap() {
     try { topo = await (await fetch('countries-110m.json')).json() as WorldTopo; }
     catch {
       if (token !== _worldMapReqToken) return; // a newer call has since taken over
-      wrap.innerHTML = `<p class="empty-note">${t('analytics_map_empty')}</p>`;
+      wrap.innerHTML = html`<p class="empty-note">${tHtml('analytics_map_empty')}</p>`;
       return;
     }
     if (token !== _worldMapReqToken) return; // a newer call has since taken over
@@ -1073,14 +1090,14 @@ export async function buildWorldMap() {
     if (!_mapLibsPromise) {
       // @ts-expect-error -- topojson-client 3.1.0 ships no type declarations
       _mapLibsPromise = Promise.all([import('echarts'), import('topojson-client')]);
-      container.innerHTML = `<p class="empty-note">${t('analytics_map_loading')}</p>`;
+      container.innerHTML = html`<p class="empty-note">${tHtml('analytics_map_loading')}</p>`;
     }
     [echarts, topojson] = await _mapLibsPromise;
   } catch {
     // A concurrent call resetting the same promise to null is idempotent, not a real race.
     _mapLibsPromise = null; // don't cache a rejected promise — allow a retry on the next navigation
     if (token !== _worldMapReqToken) return; // a newer call has since taken over
-    wrap.innerHTML = `<p class="empty-note">${t('analytics_map_unavailable')}</p>`;
+    wrap.innerHTML = html`<p class="empty-note">${tHtml('analytics_map_unavailable')}</p>`;
     return;
   }
   if (token !== _worldMapReqToken) return; // a newer call has since taken over
@@ -1094,6 +1111,7 @@ export async function buildWorldMap() {
     for (const f of geo.features) f.geometry = _splitGeometryAtAntimeridian(f.geometry);
     const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
     for (const f of geo.features) f.properties = { ...f.properties, code: numToCode.get(String(f.id)) || null };
+    // topojson-client ships no types, so its GeoJSON output can't be matched to ECharts' map input.
     echarts.registerMap('world', geo as unknown as Parameters<typeof echarts.registerMap>[1]);
     _worldMapRegistered = true;
   }
@@ -1112,7 +1130,9 @@ export async function buildWorldMap() {
     // Even a blend gets exactly one map point — from its geocoded growing
     // region if resolved, else a centroid fallback keyed on its primary
     // (first-listed) origin country.
-    const primaryCode = origins[0].code;
+    const primary = origins[0];
+    if (!primary) continue;
+    const primaryCode = primary.code;
     let coord: number[] | null = bean.location ? [bean.location.lon, bean.location.lat] : null;
     if (!coord) {
       const centroid = COUNTRY_CENTROIDS[primaryCode];
@@ -1139,13 +1159,13 @@ export async function buildWorldMap() {
   const c = resolveWorldMapColors();
 
   if (!_echartsInstance) {
-    container.innerHTML = ''; // clear the loading message before echarts takes over this node
+    container.innerHTML = html``; // clear the loading message before echarts takes over this node
     _echartsInstance = echarts.init(container);
   }
 
   const boundingCoords = [
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
-    ...points.map(p => [p.value[0], p.value[1]]),
+    ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
   ];
   const { center, zoom } = computeMapBoundingView(boundingCoords);
 
@@ -1192,11 +1212,12 @@ export function buildProfileChart() {
   const byProfile: Record<string, { scores: number[]; count: number }> = {};
   for (const s of _shots()) {
     const p = s.profile?.name || s.profileName || 'Unbekannt';
-    if (!byProfile[p]) byProfile[p] = { scores: [], count: 0 };
-    byProfile[p].count++;
+    let entry = byProfile[p];
+    if (!entry) { entry = { scores: [], count: 0 }; byProfile[p] = entry; }
+    entry.count++;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
-      if (sc !== null) byProfile[p].scores.push(sc);
+      if (sc !== null) entry.scores.push(sc);
     }
   }
 
@@ -1211,7 +1232,7 @@ export function buildProfileChart() {
   chartRegistry.dispose('profileBarChart');
 
   if (entries.length === 0) {
-    wrap.innerHTML = `<p class="empty-note">${t('analytics_no_profiles')}</p>`;
+    wrap.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_profiles')}</p>`;
     return;
   }
 
@@ -1231,14 +1252,17 @@ export function buildProfileChart() {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { afterLabel: (c: { dataIndex: number }) => `${entries[c.dataIndex].count} Shots` } }
+        tooltip: { callbacks: { afterLabel: (c: { dataIndex: number }) => {
+          const e = entries[c.dataIndex];
+          return `${e ? e.count : 0} Shots`;
+        } } }
       },
       scales: {
         x: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: 'rgba(63,63,70,.3)' } },
         y: { ticks: { color: C.tick, font: { size: 11 } }, grid: { display: false } }
       }
     }
-  } as unknown as ChartConfiguration<'bar'>));
+  } satisfies ChartConfiguration<'bar'>));
 }
 
 // ── Weekday x Hour heatmap ─────────────────────────────────────────────────
@@ -1251,7 +1275,7 @@ export function buildWeekdayHourHeatmap() {
   if (!el) return;
 
   if (!_shots().length) {
-    el.innerHTML = `<p class="empty-note">${t('analytics_no_time')}</p>`;
+    el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_time')}</p>`;
     return;
   }
 
@@ -1259,7 +1283,10 @@ export function buildWeekdayHourHeatmap() {
   for (const s of _shots()) {
     const d  = new Date(s.timestamp * 1000);
     const wd = (d.getDay() + 6) % 7; // 0=Mon..6=Sun, same convention as the calendar above
-    matrix[wd][d.getHours()]++;
+    const row = matrix[wd];
+    if (!row) continue;
+    const h = d.getHours();
+    row[h] = (row[h] ?? 0) + 1;
   }
   const max = Math.max(1, ...matrix.flat());
   const level = (c: number): number => c === 0 ? 0 : Math.min(4, Math.ceil((c / max) * 4));
@@ -1274,20 +1301,19 @@ export function buildWeekdayHourHeatmap() {
     return d.toLocaleDateString(locale, { weekday: 'short' });
   });
 
-  let html = '<div class="wh-heatmap"><div class="wh-row wh-header"><div class="wh-label"></div>';
-  for (let h = 0; h < 24; h++) html += `<div class="wh-hourlabel">${h % 3 === 0 ? h : ''}</div>`;
-  html += '</div>';
+  const hourLabels: Html[] = [];
+  for (let h = 0; h < 24; h++) hourLabels.push(html`<div class="wh-hourlabel">${esc(h % 3 === 0 ? h : '')}</div>`);
+  const dayRows: Html[] = [];
   for (let wd = 0; wd < 7; wd++) {
-    html += `<div class="wh-row"><div class="wh-label">${esc(weekdayLabels[wd])}</div>`;
+    const cells: Html[] = [];
     for (let h = 0; h < 24; h++) {
-      const c = matrix[wd][h];
+      const c = matrix[wd]?.[h] ?? 0;
       const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} Shot${c === 1 ? '' : 's'}`;
-      html += `<div class="wh-cell wh-l${level(c)}" title="${esc(title)}"></div>`;
+      cells.push(html`<div class="wh-cell wh-l${esc(level(c))}" title="${esc(title)}"></div>`);
     }
-    html += '</div>';
+    dayRows.push(html`<div class="wh-row"><div class="wh-label">${esc(weekdayLabels[wd])}</div>${joinHtml(cells)}</div>`);
   }
-  html += '</div>';
-  el.innerHTML = html;
+  el.innerHTML = html`<div class="wh-heatmap"><div class="wh-row wh-header"><div class="wh-label"></div>${joinHtml(hourLabels)}</div>${joinHtml(dayRows)}</div>`;
 }
 
 // ── Bean ranking ────────────────────────────────────────────────────────────
@@ -1299,8 +1325,9 @@ export function _computeBeanRanking(shots: ShotRow[]): BeanRankRow[] {
   for (const s of shots) {
     const name = s.annotation?.coffee;
     if (!name) continue;
-    if (!byBean[name]) byBean[name] = [];
-    byBean[name].push(s);
+    let list = byBean[name];
+    if (!list) { list = []; byBean[name] = list; }
+    list.push(s);
   }
 
   const rows: BeanRankRow[] = [];
@@ -1350,38 +1377,38 @@ export function buildBeanRanking() {
 
   const rows = _computeBeanRanking(_shots());
   if (!rows.length) {
-    el.innerHTML = `<p class="empty-note">${t('analytics_no_beans')}</p>`;
+    el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_beans')}</p>`;
     return;
   }
 
   const { key, dir } = _beanRankSort;
   rows.sort((a, b) => key === 'name' ? _cmpNullsLast(a.name.toLowerCase(), b.name.toLowerCase(), dir) : _cmpNullsLast(a[key], b[key], dir));
 
-  const arrow = (k: string): string => k === key ? `<span class="sort-arrow">${dir === 'asc' ? '▲' : '▼'}</span>` : '';
-  const cols = [
+  const arrow = (k: string): Html => k === key ? html`<span class="sort-arrow">${esc(dir === 'asc' ? '▲' : '▼')}</span>` : esc('');
+  const cols: [string, string][] = [
     ['name', t('lib_recipe_bean')], ['shots', t('bean_stat_shots')], ['avgScore', t('bean_stat_avg')],
     ['lastGrind', t('ann_grind_setting')], ['trend', t('analytics_bean_rank_trend')],
   ];
 
-  const headerHtml = cols.map(([k, lbl]) =>
-    `<th data-action="set-bean-rank-sort" data-key="${k}">${esc(lbl)}${arrow(k)}</th>`).join('');
+  const headerHtml = joinHtml(cols.map(([k, lbl]) =>
+    html`<th data-action="set-bean-rank-sort" data-key="${esc(k)}">${esc(lbl)}${arrow(k)}</th>`));
 
-  const rowsHtml = rows.map(r => {
-    const scoreCell = r.avgScore !== null ? `<span class="${scoreClass(r.avgScore)}">${r.avgScore}</span>` : '–';
-    const trendCell = r.trend === null ? '<span class="trend-flat">–</span>'
-      : r.trend > 0.5  ? `<span class="trend-up">▲ ${r.trend > 0 ? '+' : ''}${r.trend}</span>`
-      : r.trend < -0.5 ? `<span class="trend-down">▼ ${r.trend}</span>`
-      : `<span class="trend-flat">▬ ${r.trend}</span>`;
-    return `<tr>
+  const rowsHtml = joinHtml(rows.map(r => {
+    const scoreCell = r.avgScore !== null ? html`<span class="${esc(scoreClass(r.avgScore))}">${esc(r.avgScore)}</span>` : esc('–');
+    const trendCell = r.trend === null ? html`<span class="trend-flat">–</span>`
+      : r.trend > 0.5  ? html`<span class="trend-up">▲ ${esc(r.trend > 0 ? '+' : '')}${esc(r.trend)}</span>`
+      : r.trend < -0.5 ? html`<span class="trend-down">▼ ${esc(r.trend)}</span>`
+      : html`<span class="trend-flat">▬ ${esc(r.trend)}</span>`;
+    return html`<tr>
       <td>${esc(r.name)}</td>
-      <td class="num">${r.shots}</td>
+      <td class="num">${esc(r.shots)}</td>
       <td class="num">${scoreCell}</td>
-      <td>${r.lastGrind ? esc(r.lastGrind) : '–'}</td>
+      <td>${r.lastGrind ? esc(r.lastGrind) : esc('–')}</td>
       <td>${trendCell}</td>
     </tr>`;
-  }).join('');
+  }));
 
-  el.innerHTML = `<div class="analytics-table-wrap"><table class="analytics-table">
+  el.innerHTML = html`<div class="analytics-table-wrap"><table class="analytics-table">
     <thead><tr>${headerHtml}</tr></thead>
     <tbody>${rowsHtml}</tbody>
   </table></div>`;
@@ -1417,7 +1444,8 @@ export function _computeMachineComparison(shots: ShotRow[], machines: MachineRow
   for (const m of machines) byMachine[m.id] = { name: m.name, shots: [] };
   for (const s of shots) {
     const mid = s.machineId ?? 1;
-    if (byMachine[mid]) byMachine[mid].shots.push(s);
+    const machine = byMachine[mid];
+    if (machine) machine.shots.push(s);
   }
 
   return Object.values(byMachine).map(d => {
@@ -1448,22 +1476,22 @@ export function buildMachineComparison() {
 
   const rows = _computeMachineComparison(_allShots() || [], machines);
   if (!rows.some(r => r.count > 0)) {
-    el.innerHTML = `<p class="empty-note">${t('analytics_no_machine_data')}</p>`;
+    el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_machine_data')}</p>`;
     return;
   }
 
-  const rowsHtml = rows.map(r => `<tr>
+  const rowsHtml = joinHtml(rows.map(r => html`<tr>
     <td>${esc(r.name)}</td>
-    <td class="num">${r.count}</td>
-    <td class="num">${r.avgScore !== null ? `<span class="${scoreClass(r.avgScore)}">${r.avgScore}</span>` : '–'}</td>
-    <td class="num">${r.avgDuration !== null ? r.avgDuration + 's' : '–'}</td>
-    <td class="num">${r.avgStability !== null ? '±' + r.avgStability + '°' : '–'}</td>
-  </tr>`).join('');
+    <td class="num">${esc(r.count)}</td>
+    <td class="num">${r.avgScore !== null ? html`<span class="${esc(scoreClass(r.avgScore))}">${esc(r.avgScore)}</span>` : esc('–')}</td>
+    <td class="num">${esc(r.avgDuration !== null ? r.avgDuration + 's' : '–')}</td>
+    <td class="num">${esc(r.avgStability !== null ? '±' + r.avgStability + '°' : '–')}</td>
+  </tr>`));
 
-  el.innerHTML = `<div class="analytics-table-wrap"><table class="analytics-table">
+  el.innerHTML = html`<div class="analytics-table-wrap"><table class="analytics-table">
     <thead><tr>
-      <th>${t('maint_log_machine')}</th><th>${t('bean_stat_shots')}</th><th>${t('bean_stat_avg')}</th>
-      <th>${t('bean_stat_duration')}</th><th>${t('analytics_machine_stability')}</th>
+      <th>${tHtml('maint_log_machine')}</th><th>${tHtml('bean_stat_shots')}</th><th>${tHtml('bean_stat_avg')}</th>
+      <th>${tHtml('bean_stat_duration')}</th><th>${tHtml('analytics_machine_stability')}</th>
     </tr></thead>
     <tbody>${rowsHtml}</tbody>
   </table></div>`;
@@ -1488,14 +1516,14 @@ export function buildDialinProgression() {
   const beanNames = [...seen.values()].sort((a, b) => a.localeCompare(b));
 
   if (!beanNames.length) {
-    sel.innerHTML = '';
+    sel.innerHTML = html``;
     _renderDialinProgressionChart(null);
     return;
   }
 
   const prevValue = sel.value;
-  sel.innerHTML = beanNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  sel.value = beanNames.includes(prevValue) ? prevValue : beanNames[0];
+  sel.innerHTML = joinHtml(beanNames.map(n => html`<option value="${esc(n)}">${esc(n)}</option>`));
+  sel.value = beanNames.includes(prevValue) ? prevValue : beanNames[0] ?? '';
   _renderDialinProgressionChart(sel.value);
 }
 
@@ -1512,7 +1540,7 @@ function _renderDialinProgressionChart(beanName: string | null): void {
   chartRegistry.dispose('dialinProgressionChart');
 
   if (!beanName) {
-    ctx.parentElement!.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_beans')}</p>`;
+    ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_beans')}</p>`;
     return;
   }
 
@@ -1521,7 +1549,7 @@ function _renderDialinProgressionChart(beanName: string | null): void {
     .sort((a, b) => a.timestamp - b.timestamp);
 
   if (shots.length < 2) {
-    ctx.parentElement!.innerHTML = `<p class="empty-note pad-top">${t('analytics_no_trend')}</p>`;
+    ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_trend')}</p>`;
     return;
   }
 
@@ -1543,7 +1571,9 @@ function _renderDialinProgressionChart(beanName: string | null): void {
     options: {
       responsive: true, maintainAspectRatio: false,
       onClick: (_: unknown, elements: { index: number }[]) => {
-        if (elements.length > 0 && window.goToShot) window.goToShot(shots[elements[0].index].id);
+        const first = elements[0];
+        const shot = first ? shots[first.index] : undefined;
+        if (shot && window.goToShot) window.goToShot(shot.id);
       },
       plugins: { legend: { labels: { color: C.tick, font: { size: 11 } } } },
       scales: {
@@ -1552,5 +1582,5 @@ function _renderDialinProgressionChart(beanName: string | null): void {
         y1: { position: 'right', min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { drawOnChartArea: false } },
       },
     },
-  } as unknown as ChartConfiguration<'line'>));
+  } satisfies ChartConfiguration<'line'>));
 }

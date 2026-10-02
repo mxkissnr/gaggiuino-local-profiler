@@ -91,7 +91,7 @@ func (f fakePanicAdapter) GetLiveSystemState(context.Context, *Machine) (*proto.
 // data as if the fetch had quietly succeeded.
 func TestFirmwareVersion_PanicDuringSettingsFetchReturns502(t *testing.T) {
 	registry, _ := newTestRegistry(t)
-	h := &Handlers{registry: registry, gaggiuino: fakePanicAdapter{}, profilesCache: newProfilesCache()}
+	h := &Handlers{registry: registry, gaggiuino: fakePanicAdapter{}}
 	mux := newMux(h)
 
 	machine, err := registry.CreateMachine(MachineInput{

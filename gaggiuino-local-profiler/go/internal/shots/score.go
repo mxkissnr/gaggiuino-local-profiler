@@ -10,40 +10,55 @@ import (
 	json "github.com/goccy/go-json"
 )
 
-// This file ports lib/score.js verbatim: the canonical shot score (0-100)
-// shared by the Node backend and frontend. Same weights (pressure 25, temp
-// stability+accuracy 20, duration 20, brew ratio 20, extraction yield 20,
-// channeling 15), same thresholds, same rounding.
+// This file computes the canonical shot score (0-100): the weights (pressure
+// 25, temp stability+accuracy 20, duration 20, brew ratio 20, extraction yield
+// 20, channeling 15), thresholds and rounding are the agreed scoring
+// definition, shared with the frontend.
 
-// Bean is the subset of a library bean's fields score.js reads
+// Bean is the subset of a library bean's fields the scorer reads
 // (brewTempC/brewRatio) to replace the generic fixed-band targets with the
-// bean's own recommendation (#450). internal/library (Phase 0 placeholder,
-// not ported yet) is what will actually resolve a shot's annotation to a
-// Bean — see ComputeScoreDetail's doc comment. A nil *Bean reproduces
-// score.js's behavior when no bean is passed at all: generic bands only.
+// bean's own recommendation (#450). library.ScoreBean resolves a shot's
+// annotation to a Bean — see ComputeScoreDetail's doc comment. A nil *Bean
+// means no bean was passed at all: generic bands only.
 type Bean struct {
-	// BrewTempC is nil when the bean has no target temperature set —
-	// mirrors the `typeof bean.brewTempC === 'number' && bean.brewTempC > 0`
-	// guard in calcShotScoreDetail.
+	// BrewTempC is nil when the bean has no target temperature set — only a
+	// positive number counts as a target.
 	BrewTempC *float64
-	// BrewRatio is the bean form's own "1:X" convention (see
-	// sanitize-bean.js) — empty string means "no target ratio set".
+	// BrewRatio is the bean form's own "1:X" convention — empty string means
+	// "no target ratio set".
 	BrewRatio string
 }
 
-// ScoreDetail mirrors calcShotScoreDetail's { score, usedBeanTarget }
-// return shape. Score is nil for JS's `null` (not enough datapoints to
-// score at all).
+// ScoreDetail is the score plus whether a bean target was used. Score is nil
+// when there are not enough datapoints to score at all.
 type ScoreDetail struct {
 	Score          *int
 	UsedBeanTarget bool
+	// Components is the per-part breakdown behind Score, in the same order
+	// the parts are combined. It is nil whenever Score is nil.
+	Components []ScoreComponent
 }
 
-// jsRound matches JS's Math.round: round-half-up (towards +Infinity), not
-// Go's math.Round (round-half-away-from-zero) — the two only disagree on
-// negative .5 boundaries, which this package's score math never produces,
-// but the distinct name documents the intent instead of leaving a bare
-// math.Round call for a future reader to wonder about.
+// ScoreComponent is one weighted part of CalcShotScoreDetail's score.
+type ScoreComponent struct {
+	// Name identifies the part: "pressure", "temperature", "duration",
+	// "ratio", "extraction_yield" or "channeling".
+	Name string
+	// Score is 0..100, exactly the value appended to scores.
+	Score int
+	// Weight is exactly the value appended to weights.
+	Weight int
+	// Inputs holds the measured values and targets this part was scored on.
+	Inputs map[string]float64
+	// Target is "profile", "bean" or "generic" — which target band was used.
+	Target string
+}
+
+// jsRound rounds half-up (towards +Infinity), not Go's math.Round
+// (round-half-away-from-zero) — the two only disagree on negative .5
+// boundaries, which this package's score math never produces, but the
+// distinct name documents the intent instead of leaving a bare math.Round
+// call for a future reader to wonder about.
 func jsRound(x float64) int {
 	return int(math.Floor(x + 0.5))
 }
@@ -69,7 +84,7 @@ func maxOf(vals []float64) float64 {
 	return m
 }
 
-// stddev ports lib/score.js's _stddev.
+// stddev returns the population standard deviation of vals.
 func stddev(vals []float64) float64 {
 	if len(vals) < 2 {
 		return 0
@@ -82,10 +97,9 @@ func stddev(vals []float64) float64 {
 	return math.Sqrt(sumSq / float64(len(vals)))
 }
 
-// detectChanneling ports lib/score.js's _detectChanneling. times may be
-// shorter than pressures (mirrors JS's out-of-bounds array access
-// returning undefined, which fails every comparison below and is treated
-// as "skip this sample" — see the len(times) guard).
+// detectChanneling reports whether the pressure curve shows channeling. times
+// may be shorter than pressures (a missing time is treated as "skip this
+// sample" — see the len(times) guard below).
 func detectChanneling(times, pressures []float64) bool {
 	if len(times) == 0 || len(pressures) < 5 {
 		return false
@@ -110,7 +124,6 @@ func detectChanneling(times, pressures []float64) bool {
 
 var brewRatioPattern = regexp.MustCompile(`^\s*1\s*:\s*(\d+(?:\.\d+)?)\s*$`)
 
-// parseBrewRatioTarget ports lib/score.js's _parseBrewRatioTarget.
 func parseBrewRatioTarget(brewRatio string) (float64, bool) {
 	if brewRatio == "" {
 		return 0, false
@@ -150,9 +163,9 @@ type scoreSeries struct {
 	temperature       []float64
 	targetTemperature []float64
 	timeInShot        []float64
-	// weight ports JS's `d.shotWeight || d.weight`: shotWeight wins whenever
-	// it is present and non-null, even when it is an empty array (in which
-	// case weight is deliberately NOT consulted as a fallback).
+	// weight follows the `d.shotWeight || d.weight` rule: shotWeight wins
+	// whenever it is present and non-null, even when it is an empty array (in
+	// which case weight is deliberately NOT consulted as a fallback).
 	weight []float64
 }
 
@@ -246,12 +259,12 @@ func rawHasNonEmptyArray(raw []byte) bool {
 	return false
 }
 
-// tempStabilityDev ports analytics.js's _tempStability: the mean absolute
-// deviation of the temperature series from its target, in °C (both series
-// are the ×10-scaled GLP convention, hence the /10). Returned per GET
-// /api/shots row as `tempStabilityDev` so the Analytics machine-comparison's
-// "Ø stability" column doesn't need every shot's curve client-side (#957
-// decision 3 / step 13). nil when the shot has no usable temp+target pair.
+// tempStabilityDev is the mean absolute deviation of the temperature series
+// from its target, in °C (both series are the ×10-scaled GLP convention,
+// hence the /10). Returned per GET /api/shots row as `tempStabilityDev` so
+// the Analytics machine-comparison's "Ø stability" column doesn't need every
+// shot's curve client-side (#957 decision 3 / step 13). nil when the shot has
+// no usable temp+target pair.
 func tempStabilityDev(v any) *float64 {
 	var temp, target []float64
 	switch t := v.(type) {
@@ -365,20 +378,15 @@ func toFloat(v any) (float64, bool) {
 	}
 }
 
-// CalcShotScoreDetail ports lib/score.js's calcShotScoreDetail(shot, bean)
-// verbatim, operating on the same Shot map hydrateRow produces (a shot's
-// "datapoints"/"duration"/"annotation" fields, addressed exactly the way
-// the JS original reads shot.datapoints/shot.duration/shot.annotation).
+// CalcShotScoreDetail scores a shot, operating on the Shot map hydrateRow
+// produces (a shot's "datapoints"/"duration"/"annotation" fields).
 //
-// bean is always nil in this phase: resolving a shot's annotation to its
-// library bean (#450) is LibraryService.resolveBeanForAnnotation's job,
-// and internal/library isn't ported yet (still a Phase 0 placeholder) — see
-// service.go's ComputeScoreDetail. Scoring with bean == nil is
-// byte-identical to what score.js itself does whenever no bean is resolved
-// (no beanId/coffee match, or an install with an empty library), so every
-// shot without a bean-specific target scores exactly like Node today; shots
-// that would use a bean's own brewTempC/brewRatio target instead fall back
-// to the generic band until the Library phase wires bean resolution in.
+// bean is the shot's resolved library bean target (#450), or nil when none
+// resolves — see service.go's ComputeScoreDetail and library.ScoreBean.
+// bean == nil yields the generic bands, used whenever no bean is resolved (no
+// beanId/coffee match, or an install with an empty library). A non-nil bean
+// replaces the generic temperature/ratio targets with its own
+// brewTempC/brewRatio recommendations.
 func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 	if shot == nil {
 		return ScoreDetail{}
@@ -398,6 +406,7 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 
 	var scores []int
 	var weights []int
+	var components []ScoreComponent
 	usedBeanTarget := false
 
 	avgP := avg(pVals)
@@ -410,8 +419,16 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 	default:
 		sPressure = math.Max(20, 100-(avgP-9.5)*28)
 	}
-	scores = append(scores, jsRound(sPressure))
+	pressureScore := jsRound(sPressure)
+	scores = append(scores, pressureScore)
 	weights = append(weights, 25)
+	components = append(components, ScoreComponent{
+		Name:   "pressure",
+		Score:  pressureScore,
+		Weight: 25,
+		Inputs: map[string]float64{"avg_pressure_bar": avgP},
+		Target: "generic",
+	})
 
 	tVals := divAll(ss.temperature, 10)
 	if len(tVals) > 5 {
@@ -452,11 +469,20 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 				return math.Max(15, 50-(dev-4)*8)
 			}
 		}
+		targetTemp := 0.0
+		hasTargetTemp := false
+		tempTarget := "generic"
 		switch {
 		case len(tgt) > 0:
-			acc = accBand(math.Abs(avgT - avg(tgt)))
+			targetTemp = avg(tgt)
+			hasTargetTemp = true
+			tempTarget = "profile"
+			acc = accBand(math.Abs(avgT - targetTemp))
 		case bean != nil && bean.BrewTempC != nil && *bean.BrewTempC > 0:
-			acc = accBand(math.Abs(avgT - *bean.BrewTempC))
+			targetTemp = *bean.BrewTempC
+			hasTargetTemp = true
+			tempTarget = "bean"
+			acc = accBand(math.Abs(avgT - targetTemp))
 			usedBeanTarget = true
 		default:
 			var off float64
@@ -474,8 +500,25 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 				acc = math.Max(15, 100-off*10)
 			}
 		}
-		scores = append(scores, jsRound((stab+acc)/2))
+		temperatureScore := jsRound((stab + acc) / 2)
+		scores = append(scores, temperatureScore)
 		weights = append(weights, 20)
+		tempInputs := map[string]float64{
+			"stddev_c":        sd,
+			"avg_temp_c":      avgT,
+			"stability_score": stab,
+			"accuracy_score":  acc,
+		}
+		if hasTargetTemp {
+			tempInputs["target_temp_c"] = targetTemp
+		}
+		components = append(components, ScoreComponent{
+			Name:   "temperature",
+			Score:  temperatureScore,
+			Weight: 20,
+			Inputs: tempInputs,
+			Target: tempTarget,
+		})
 	}
 
 	durationRaw, _ := toFloat(shot["duration"])
@@ -494,13 +537,21 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		default:
 			sDur = math.Max(15, 62-(secs-55)*3)
 		}
-		scores = append(scores, jsRound(sDur))
+		durationScore := jsRound(sDur)
+		scores = append(scores, durationScore)
 		weights = append(weights, 20)
+		components = append(components, ScoreComponent{
+			Name:   "duration",
+			Score:  durationScore,
+			Weight: 20,
+			Inputs: map[string]float64{"seconds": secs},
+			Target: "generic",
+		})
 	}
 
 	ann := toMap(shot["annotation"])
-	// ss.weight already replicates JS's `d.shotWeight || d.weight || []`
-	// truthiness quirk (see scoreSeries.weight's doc comment).
+	// ss.weight already applies the `d.shotWeight || d.weight || []`
+	// truthiness rule (see scoreSeries.weight's doc comment).
 	wArr := ss.weight
 	var finalW float64
 	if len(wArr) > 0 {
@@ -516,7 +567,9 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		if bean != nil {
 			beanTarget, hasBeanTarget = parseBrewRatioTarget(bean.BrewRatio)
 		}
+		ratioTarget := "generic"
 		if hasBeanTarget {
+			ratioTarget = "bean"
 			dev := math.Abs(r - beanTarget)
 			switch {
 			case dev <= 0.35:
@@ -539,8 +592,24 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 				sRatio = math.Max(15, 60-(r-3.2)*22)
 			}
 		}
-		scores = append(scores, jsRound(sRatio))
+		ratioScore := jsRound(sRatio)
+		scores = append(scores, ratioScore)
 		weights = append(weights, 20)
+		ratioInputs := map[string]float64{
+			"ratio":   r,
+			"dose_g":  dose,
+			"yield_g": finalW,
+		}
+		if hasBeanTarget {
+			ratioInputs["target_ratio"] = beanTarget
+		}
+		components = append(components, ScoreComponent{
+			Name:   "ratio",
+			Score:  ratioScore,
+			Weight: 20,
+			Inputs: ratioInputs,
+			Target: ratioTarget,
+		})
 	}
 
 	tds, hasTDS := toFloat(ann["tds"])
@@ -557,17 +626,37 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		default:
 			sEY = math.Max(15, 60-(ey-24)*10)
 		}
-		scores = append(scores, jsRound(sEY))
+		eyScore := jsRound(sEY)
+		scores = append(scores, eyScore)
 		weights = append(weights, 20)
+		components = append(components, ScoreComponent{
+			Name:   "extraction_yield",
+			Score:  eyScore,
+			Weight: 20,
+			Inputs: map[string]float64{
+				"extraction_yield_pct": ey,
+				"tds_pct":              tds,
+			},
+			Target: "generic",
+		})
 	}
 
 	times := divAll(ss.timeInShot, 10)
+	channelingScore := 100
+	detectedValue := 0.0
 	if detectChanneling(times, p) {
-		scores = append(scores, 20)
-	} else {
-		scores = append(scores, 100)
+		channelingScore = 20
+		detectedValue = 1
 	}
+	scores = append(scores, channelingScore)
 	weights = append(weights, 15)
+	components = append(components, ScoreComponent{
+		Name:   "channeling",
+		Score:  channelingScore,
+		Weight: 15,
+		Inputs: map[string]float64{"detected": detectedValue},
+		Target: "generic",
+	})
 
 	totalWeight := 0
 	for _, w := range weights {
@@ -581,11 +670,10 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		weighted += float64(s * weights[i])
 	}
 	score := jsRound(weighted / float64(totalWeight))
-	return ScoreDetail{Score: &score, UsedBeanTarget: usedBeanTarget}
+	return ScoreDetail{Score: &score, UsedBeanTarget: usedBeanTarget, Components: components}
 }
 
-// CalcShotScore ports lib/score.js's calcShotScore: the score-only wrapper
-// every non-detail caller uses.
+// CalcShotScore is the score-only wrapper every non-detail caller uses.
 func CalcShotScore(shot Shot, bean *Bean) *int {
 	return CalcShotScoreDetail(shot, bean).Score
 }

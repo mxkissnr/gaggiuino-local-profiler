@@ -1,6 +1,6 @@
 import { S } from '../state/index.js';
 import * as timerRegistry from '../state/timers.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { getSwitch } from '../api/system.js';
 import {
   getOrdersSettings, postOrdersSettings, listOrders, getOrdersMenu, getQueueEta, getMilkStock,
@@ -12,7 +12,8 @@ import type {
   MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats,
   OrdersSettings, OrdersSettingsUpdate, QueueEta,
 } from '../api/types.js';
-import { esc } from '../utils.js';
+import { esc, html, joinHtml } from '../utils.js';
+import type { Html } from '../utils.js';
 import { localeFor } from '../constants.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
@@ -20,7 +21,7 @@ import { localeFor } from '../constants.js';
 // BEAN_ICON_SVG now lives in ../icons.js (also used by main.js's bean-age
 // hint, #419 follow-up) — MILK_ICON_SVG stays local, single-use here.
 import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
-const MILK_ICON_SVG = '<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>';
+const MILK_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>`;
 
 // Two orders-runtime fields that state/index.ts's OrdersSlice does not
 // declare: they are written and read only by this view, so they get a local
@@ -34,14 +35,13 @@ const SO = S as OrdersRuntimeState;
 // Hand-built view of GET /api/switch as loadOrdersView reads it.
 interface SwitchState { configured?: boolean; state?: boolean }
 
-// S._ordersEtaSelected / S._ordersDeclineOpen are typed by numeric order id,
-// but the ids arrive as dataset strings — this keeps the runtime key (a
-// string either way) and the declared key type honest at the call sites.
-const _idKey = (id: string | undefined): number => id as unknown as number;
+// S._ordersEtaSelected / S._ordersDeclineOpen are keyed by the order id that
+// arrives as a dataset string — keep the runtime key a string and type the
+// lookup accordingly (object keys are strings at runtime either way).
+const _idKey = (id: string | undefined): string => id as string;
 
 // addEventListener's handler is typed void-returning; async click/change work
-// goes through this helper, which makes the fire-and-forget the .js already
-// did explicit.
+// goes through this helper, which makes the fire-and-forget explicit.
 function _onAsync(el: Element | null | undefined, type: string, fn: () => Promise<void>): void {
   el?.addEventListener(type, () => { void fn(); });
 }
@@ -51,14 +51,14 @@ function _onAsync(el: Element | null | undefined, type: string, fn: () => Promis
 // keep sending every notification they already were.
 // #614: notify_preheat_ready/notify_low_stock moved to the always-visible
 // Settings page card (components/notify-settings.js) — they fire regardless
-// of enable_orders (lib/preheat.js, lib/services/LibraryService.js), so this
+// of enable_orders, so this
 // panel (which only exists when Orders is enabled) is the wrong home for
 // them. Only the genuinely Orders-only types stay here.
 const NOTIFY_TYPE_KEYS = [
   { key: 'notify_shop_state',    i18nKey: 'orders_type_shop_state' },
   { key: 'notify_new_order',     i18nKey: 'orders_type_new_order' },
   { key: 'notify_order_status',  i18nKey: 'orders_type_order_status' },
-];
+] as const;
 
 // Typed "value or fallback" wrappers: the API helpers already fall back to
 // empty values at each call site, but a bare .catch(() => ({})) widens the
@@ -92,7 +92,7 @@ export function toggleOrdersMenu(): void {
 function _playOrderChime(): void {
   try {
     const Ctor = (window.AudioContext
-      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+      || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
     const ctx  = new Ctor();
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -197,14 +197,14 @@ export async function loadOrdersView(): Promise<void> {
 // Tiered relative time (#320) — raw minutes was unreadable once an order
 // sat for hours/days (e.g. "Vor 3904 Min"): minutes under an hour, hours
 // under a day, days beyond that.
-export function _orderTimeAgo(ts: number): string {
+export function _orderTimeAgo(ts: number): Html {
   const min = Math.round((Date.now() - ts) / 60000);
-  if (min < 1) return t('orders_just_now');
-  if (min < 60) return t('orders_ago', min);
+  if (min < 1) return tHtml('orders_just_now');
+  if (min < 60) return tHtml('orders_ago', min);
   const hours = Math.round(min / 60);
-  if (hours < 24) return t('orders_ago_hours', hours);
+  if (hours < 24) return tHtml('orders_ago_hours', hours);
   const days = Math.round(hours / 24);
-  return t('orders_ago_days', days);
+  return tHtml('orders_ago_days', days);
 }
 
 export function renderMilkStock(milks: MilkStock[]): void {
@@ -212,19 +212,19 @@ export function renderMilkStock(milks: MilkStock[]): void {
   if (!el) return;
   if (!milks?.length) { el.style.display = 'none'; return; }
   el.style.display = '';
-  el.innerHTML = `<p class="orders-milk-title">${MILK_ICON_SVG} ${t('orders_milk_title')}</p>` +
+  el.innerHTML = html`<p class="orders-milk-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p>${joinHtml(
     milks.map(m => {
       const cls = (m.stockMl as number) <= 0 ? 'empty' : m.remaining < 300 ? 'low' : 'ok';
-      const label = (m.stockMl as number) <= 0 ? t('lib_milk_empty')
-        : m.remaining < 300 ? `${m.remaining} ml`
-        : `${m.remaining} ml`;
-      return `<div class="orders-milk-row">
+      const label = (m.stockMl as number) <= 0 ? tHtml('lib_milk_empty')
+        : m.remaining < 300 ? html`${esc(m.remaining)} ml`
+        : html`${esc(m.remaining)} ml`;
+      return html`<div class="orders-milk-row">
         <span class="orders-milk-emoji">${esc(m.emoji || '🥛')}</span>
         <span class="orders-milk-name">${esc(m.name)}</span>
-        ${m.demand > 0 ? `<span style="font-size:.72rem;color:var(--gray-500)">${t('lib_milk_demand', m.demand)}</span>` : ''}
-        <span class="orders-milk-badge ${cls}">${label}</span>
+        ${m.demand > 0 ? html`<span style="font-size:.72rem;color:var(--gray-500)">${tHtml('lib_milk_demand', m.demand)}</span>` : html``}
+        <span class="orders-milk-badge ${esc(cls)}">${label}</span>
       </div>`;
-    }).join('');
+    }))}`;
 }
 
 export function renderOrdersList(orders: Order[]): void {
@@ -244,19 +244,19 @@ export function renderOrdersList(orders: Order[]): void {
     ? Math.ceil((SO._ordersQueueEta.acceptedRemaining || 0) + (SO._ordersQueueEta.pendingCount || 0) * (SO._ordersQueueEta.prepTime || 4))
     : 0;
   const queueBanner = totalActive >= 2 && totalEta > 0
-    ? `<div class="orders-queue-banner">${CLOCK_ICON_SVG} ${t('orders_queue_banner', totalActive, totalEta)}</div>`
-    : '';
+    ? html`<div class="orders-queue-banner">${CLOCK_ICON_SVG} ${tHtml('orders_queue_banner', totalActive, totalEta)}</div>`
+    : html``;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  pendingEl.innerHTML = queueBanner + (pending.length ? pending.map(o => renderOrderCard(o, 'pending')).join('') :
-    `<div class="orders-empty">${t('orders_empty')}</div>`);
+  pendingEl.innerHTML = html`${queueBanner}${pending.length ? joinHtml(pending.map(o => renderOrderCard(o, 'pending'))) :
+    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`}`;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  (acceptedEl as HTMLElement).innerHTML = accepted.length ? accepted.map(o => renderOrderCard(o, 'accepted')).join('') :
-    `<div class="orders-empty">${t('orders_empty')}</div>`;
+  (acceptedEl as HTMLElement).innerHTML = accepted.length ? joinHtml(accepted.map(o => renderOrderCard(o, 'accepted'))) :
+    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  (historyEl as HTMLElement).innerHTML = history.length ? history.map(o => renderOrderCard(o, 'history')).join('') : '';
+  (historyEl as HTMLElement).innerHTML = history.length ? joinHtml(history.map(o => renderOrderCard(o, 'history'))) : html``;
   if (clearHistBtn) clearHistBtn.style.display = history.length ? '' : 'none';
 
   // Bind buttons after render
@@ -304,7 +304,7 @@ export function renderOrdersList(orders: Order[]): void {
   }
 }
 
-export function renderOrderCard(o: Order, ctx: string): string {
+export function renderOrderCard(o: Order, ctx: string): Html {
   const etaBtns    = [2, 5, 10, 15, 20];
   // Use queue-suggested ETA if barista hasn't manually overridden
   const queuePos  = SO._ordersQueueEta?.positions?.[String(o.id)];
@@ -315,27 +315,27 @@ export function renderOrderCard(o: Order, ctx: string): string {
   if (ctx === 'pending') {
     const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
     const queueHint = queuePos
-      ? `<span class="order-queue-hint">${t('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}</span>`
-      : '';
-    return `<div class="order-card status-pending">
+      ? html`<span class="order-queue-hint">${tHtml('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}</span>`
+      : html``;
+    return html`<div class="order-card status-pending">
       <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? ` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : ''}${isNew ? `<span class="orders-new-badge">${t('orders_new_badge')}</span>` : ''}</span>
+        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}${isNew ? html`<span class="orders-new-badge">${tHtml('orders_new_badge')}</span>` : html``}</span>
         <span class="order-meta">${_orderTimeAgo(o.createdAt)}${queueHint}</span>
       </div>
-      <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.note ? ` · <span class="order-note">${esc(o.note)}</span>` : ''}</div>
+      <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-eta-picker">
-        ${etaBtns.map(m => `<button class="order-eta-btn${selectedEta === m ? ' selected' : ''}" data-order-id="${esc(o.id)}" data-eta-btn="${m}">${m} min</button>`).join('')}
-        <input class="order-eta-custom" type="number" min="1" max="60" value="${selectedEta}" id="etaCustom_${esc(o.id)}" placeholder="min">
-        ${queuePos ? `<span class="order-eta-suggest">${t('orders_suggested_eta', queuePos.suggestedEta)}</span>` : ''}
+        ${joinHtml(etaBtns.map(m => html`<button class="order-eta-btn${selectedEta === m ? html` selected` : html``}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
+        <input class="order-eta-custom" type="number" min="1" max="60" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" placeholder="min">
+        ${queuePos ? html`<span class="order-eta-suggest">${tHtml('orders_suggested_eta', queuePos.suggestedEta)}</span>` : html``}
       </div>
       <div class="order-actions">
-        <button class="order-btn accept" data-order-accept="${esc(o.id)}">${t('orders_accept')}</button>
-        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${t('orders_decline')}</button>
+        <button class="order-btn accept" data-order-accept="${esc(o.id)}">${tHtml('orders_accept')}</button>
+        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
-      ${declineOpen ? `<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${t('orders_decline_ph')}">
-        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${t('orders_decline')}</button>
-      </div>` : ''}
+      ${declineOpen ? html`<div class="order-actions">
+        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${tHtml('orders_decline_ph')}">
+        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
+      </div>` : html``}
     </div>`;
   }
 
@@ -343,34 +343,34 @@ export function renderOrderCard(o: Order, ctx: string): string {
     const etaDone  = (o.acceptedAt as number) + (o.eta as number) * 60000;
     const minsLeft = Math.max(0, Math.ceil((etaDone - Date.now()) / 60000));
     const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
-    return `<div class="order-card status-accepted">
+    return html`<div class="order-card status-accepted">
       <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? ` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : ''}</span>
-        <span class="order-eta-tag">${t('orders_eta_in', minsLeft)}</span>
+        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}</span>
+        <span class="order-eta-tag">${tHtml('orders_eta_in', minsLeft)}</span>
       </div>
-      <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.note ? ` · <span class="order-note">${esc(o.note)}</span>` : ''}</div>
+      <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-actions">
-        <button class="order-btn complete" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${t('orders_complete')}</button>
-        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${t('orders_decline')}</button>
+        <button class="order-btn complete" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${tHtml('orders_complete')}</button>
+        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
-      ${declineOpen ? `<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${t('orders_decline_ph')}">
-        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${t('orders_decline')}</button>
-      </div>` : ''}
+      ${declineOpen ? html`<div class="order-actions">
+        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${tHtml('orders_decline_ph')}">
+        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
+      </div>` : html``}
     </div>`;
   }
 
   // history
-  const statusLabel = o.status === 'done' ? t('orders_done') : t('orders_declined');
-  return `<div class="order-card status-${o.status}">
+  const statusLabel = o.status === 'done' ? tHtml('orders_done') : tHtml('orders_declined');
+  return html`<div class="order-card status-${esc(o.status)}">
     <div class="order-card-top">
-      <span class="order-item-name">${esc(o.item)}${o.variant ? ` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : ''}</span>
+      <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}</span>
       <span class="order-history-right">
         <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
-        <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${t('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
+        <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${tHtml('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
       </span>
     </div>
-    <div class="order-customer">${t('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? ` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : ''}${o.shotId != null ? ` <span class="order-shot-link" data-action="goto-shot" data-id="${o.shotId}">Shot #${o.shotId}</span>` : ''}</div>
+    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <span class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">Shot #${esc(o.shotId)}</span>` : html``}</div>
   </div>`;
 }
 
@@ -402,37 +402,37 @@ export async function completeOrder(id: string): Promise<void> {
 export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
   const list = document.getElementById('ordersMenuList');
   if (!list) return;
-  list.innerHTML = menu.map(item => {
+  list.innerHTML = joinHtml(menu.map(item => {
     const variants   = item.variants || [];
     const useBeans   = !!item.useBeans;
     const useMilks   = !!item.useMilks;
-    const chipHtml   = variants.map(v =>
-      `<span class="orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}">×</button></span>`
-    ).join('');
+    const chipHtml   = joinHtml(variants.map(v =>
+      html`<span class="orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}">×</button></span>`
+    ));
     const variantSection = useBeans
-      ? `<span class="orders-use-beans-note">${BEAN_ICON_SVG} ${t('orders_use_beans_note')}</span>`
+      ? html`<span class="orders-use-beans-note">${BEAN_ICON_SVG} ${tHtml('orders_use_beans_note')}</span>`
       : useMilks
-      ? `<span class="orders-use-beans-note">${MILK_ICON_SVG} ${t('orders_use_milks_note')}</span>`
-      : `${chipHtml}
-         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${t('orders_variant_ph')}">
-         <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${t('orders_variant_add_btn')}</button>`;
+      ? html`<span class="orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
+      : html`${chipHtml}
+         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${tHtml('orders_variant_ph')}">
+         <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
     const milkMl = item.milkMl || '';
-    return `
+    return html`
     <div class="orders-menu-item">
       <div class="orders-menu-item-top">
         <span>${esc(item.emoji)}</span>
         <span class="orders-menu-item-name">${esc(item.name)}</span>
-        <button class="orders-menu-use-beans${useBeans ? ' active' : ''}" data-menu-use-beans="${esc(item.id)}" title="${t('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
-        <button class="orders-menu-use-milks${useMilks ? ' active' : ''}" data-menu-use-milks="${esc(item.id)}" title="${t('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
-        <button class="orders-menu-trend${item.trending ? ' active' : ''}" data-menu-trend="${esc(item.id)}" title="${t('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
-        <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${t('orders_confirm_delete_item')}">${CLOSE_ICON_SVG}</button>
+        <button class="orders-menu-use-beans${useBeans ? html` active` : html``}" data-menu-use-beans="${esc(item.id)}" title="${tHtml('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
+        <button class="orders-menu-use-milks${useMilks ? html` active` : html``}" data-menu-use-milks="${esc(item.id)}" title="${tHtml('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
+        <button class="orders-menu-trend${item.trending ? html` active` : html``}" data-menu-trend="${esc(item.id)}" title="${tHtml('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
+        <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${tHtml('orders_confirm_delete_item')}">${CLOSE_ICON_SVG}</button>
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
       <div class="orders-menu-milk-row">
-        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${milkMl}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}"> ${t('orders_milk_per_order')}
+        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}"> ${tHtml('orders_milk_per_order')}
       </div>
     </div>`;
-  }).join('');
+  }));
   list.querySelectorAll<HTMLElement>('[data-menu-trend]').forEach(btn => {
     _onAsync(btn, 'click', async () => {
       const id   = btn.dataset.menuTrend as string;
@@ -511,26 +511,26 @@ export function renderOrdersStats(stats: OrderStats | null | undefined): void {
   const el = document.getElementById('ordersStatsContent');
   if (!el) return;
   if (!stats?.total) {
-    el.innerHTML = `<div style="color:#52525b;font-size:.8rem;padding:8px 0">${t('orders_stats_no_data')}</div>`;
+    el.innerHTML = html`<div style="color:#52525b;font-size:.8rem;padding:8px 0">${tHtml('orders_stats_no_data')}</div>`;
     return;
   }
 
-  const fmtDate = (ts: number | null | undefined): string => ts ? new Date(ts).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '–';
-  const cards = (stats.customers || []).map(c => `<div class="orders-stats-card">
+  const fmtDate = (ts: number | null | undefined): Html => esc(ts ? new Date(ts).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '–');
+  const cards = joinHtml((stats.customers || []).map(c => html`<div class="orders-stats-card">
       <div class="orders-stats-name" title="${esc(c.name)}">${esc(c.name)}</div>
-      <div class="orders-stats-row"><span>${t('orders_stats_total')}</span><span class="orders-stats-val">${c.count} ${t('orders_stats_orders')}</span></div>
-      <div class="orders-stats-row"><span>${t('orders_stats_fav')}</span><span class="orders-stats-val">${c.favItem ? esc(c.favItem) : '–'}</span></div>
-      <div class="orders-stats-row"><span>${t('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(c.lastAt)}</span></div>
-    </div>`).join('');
-  el.innerHTML = `
+      <div class="orders-stats-row"><span>${tHtml('orders_stats_total')}</span><span class="orders-stats-val">${esc(c.count)} ${tHtml('orders_stats_orders')}</span></div>
+      <div class="orders-stats-row"><span>${tHtml('orders_stats_fav')}</span><span class="orders-stats-val">${c.favItem ? esc(c.favItem) : html`–`}</span></div>
+      <div class="orders-stats-row"><span>${tHtml('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(c.lastAt)}</span></div>
+    </div>`));
+  el.innerHTML = html`
     <div class="orders-stats-global">
       <div class="orders-stats-global-item">
-        <span class="orders-stats-global-label">${t('orders_stats_total')}</span>
-        <span class="orders-stats-global-val">${stats.total}</span>
+        <span class="orders-stats-global-label">${tHtml('orders_stats_total')}</span>
+        <span class="orders-stats-global-val">${esc(stats.total)}</span>
       </div>
       <div class="orders-stats-global-item">
-        <span class="orders-stats-global-label">${t('orders_stats_popular')}</span>
-        <span class="orders-stats-global-val">${stats.mostPopular ? esc(stats.mostPopular.item) + ' ×' + stats.mostPopular.count : '–'}</span>
+        <span class="orders-stats-global-label">${tHtml('orders_stats_popular')}</span>
+        <span class="orders-stats-global-val">${stats.mostPopular ? html`${esc(stats.mostPopular.item)} ×${esc(stats.mostPopular.count)}` : html`–`}</span>
       </div>
     </div>
     <div class="orders-stats-grid">${cards}</div>`;
@@ -558,7 +558,7 @@ export async function loadNotifyMappingView(): Promise<void> {
   ]);
 
   if (services === null) {
-    section.innerHTML = `<p class="orders-notify-hint">${t('orders_notify_no_ha')}</p>`;
+    section.innerHTML = html`<p class="orders-notify-hint">${tHtml('orders_notify_no_ha')}</p>`;
     return;
   }
 
@@ -566,78 +566,78 @@ export async function loadNotifyMappingView(): Promise<void> {
   const savedBaristaSvc     = settings.baristaNotifyService || '';
 
   // ── Notification types section ─────────────────────────────── (#603)
-  const typesRows = NOTIFY_TYPE_KEYS.map(({ key, i18nKey }) => `
+  const typesRows = joinHtml(NOTIFY_TYPE_KEYS.map(({ key, i18nKey }) => html`
       <div class="orders-broadcast-row">
-        <input type="checkbox" id="nt_${key}" data-notify-key="${key}"${(settings as unknown as Record<string, unknown>)[key] !== false ? ' checked' : ''}>
-        <label for="nt_${key}">${t(i18nKey)}</label>
-      </div>`).join('');
+        <input type="checkbox" id="nt_${esc(key)}" data-notify-key="${esc(key)}"${settings[key] !== false ? html` checked` : html``}>
+        <label for="nt_${esc(key)}">${tHtml(i18nKey)}</label>
+      </div>`));
 
-  const typesHtml = `
+  const typesHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${t('orders_types_title')}</p>
-      <p class="orders-notify-hint">${t('orders_types_desc')}</p>
+      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_types_title')}</p>
+      <p class="orders-notify-hint">${tHtml('orders_types_desc')}</p>
       <div class="orders-broadcast-list" id="ordersTypesList">${typesRows}</div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersTypesSaveBtn">${t('orders_types_save')}</button>
+        <button class="orders-menu-save-btn" id="ordersTypesSaveBtn">${tHtml('orders_types_save')}</button>
       </div>
     </div>`;
 
   // ── Broadcast section ────────────────────────────────────────
   const broadcastRows = services.length
-    ? services.map(s => `
+    ? joinHtml(services.map(s => html`
         <div class="orders-broadcast-row">
-          <input type="checkbox" id="bc_${esc(s.id)}" data-svc="${esc(s.id)}"${savedRecipients.includes(s.id) ? ' checked' : ''}>
+          <input type="checkbox" id="bc_${esc(s.id)}" data-svc="${esc(s.id)}"${savedRecipients.includes(s.id) ? html` checked` : html``}>
           <label for="bc_${esc(s.id)}">${esc(s.name)}</label>
-        </div>`).join('')
-    : `<p class="orders-broadcast-empty">${t('orders_notify_no_ha')}</p>`;
+        </div>`))
+    : html`<p class="orders-broadcast-empty">${tHtml('orders_notify_no_ha')}</p>`;
 
-  const broadcastHtml = `
+  const broadcastHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${t('orders_broadcast_title')}</p>
-      <p class="orders-notify-hint">${t('orders_broadcast_desc')}</p>
+      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_broadcast_title')}</p>
+      <p class="orders-notify-hint">${tHtml('orders_broadcast_desc')}</p>
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn">${t('orders_broadcast_save')}</button>
+        <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn">${tHtml('orders_broadcast_save')}</button>
       </div>
     </div>`;
 
   // ── Barista section ──────────────────────────────────────────
-  const baristaOptions = `<option value="">${t('orders_notify_no_service')}</option>` +
-    services.map(s => `<option value="${esc(s.id)}"${savedBaristaSvc === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  const baristaOptions = html`<option value="">${tHtml('orders_notify_no_service')}</option>${joinHtml(
+    services.map(s => html`<option value="${esc(s.id)}"${savedBaristaSvc === s.id ? html` selected` : html``}>${esc(s.name)}</option>`))}`;
 
-  const baristaHtml = `
+  const baristaHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${t('orders_barista_title')}</p>
-      <p class="orders-notify-hint">${t('orders_barista_desc')}</p>
+      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
+      <p class="orders-notify-hint">${tHtml('orders_barista_desc')}</p>
       <select class="orders-notify-select" id="ordersBaristaSelect">${baristaOptions}</select>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn">${t('orders_barista_save')}</button>
+        <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
       </div>
     </div>`;
 
   // ── Per-customer section ─────────────────────────────────────
   const haUserIds = Object.keys(customers);
   const perCustomerHtml = haUserIds.length ? (() => {
-    const serviceOptions = services.map(s =>
-      `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
-    return `
-      <p class="orders-notify-hint">${t('orders_notify_desc')}</p>
+    const serviceOptions = joinHtml(services.map(s =>
+      html`<option value="${esc(s.id)}">${esc(s.name)}</option>`));
+    return html`
+      <p class="orders-notify-hint">${tHtml('orders_notify_desc')}</p>
       <div class="orders-notify-list" id="ordersNotifyList">
-        ${haUserIds.map(uid => `
+        ${joinHtml(haUserIds.map(uid => html`
           <div class="orders-notify-row">
             <span class="orders-notify-customer">${esc(customers[uid])}</span>
             <select class="orders-notify-select" data-uid="${esc(uid)}">
-              <option value="">${t('orders_notify_no_service')}</option>
+              <option value="">${tHtml('orders_notify_no_service')}</option>
               ${serviceOptions}
             </select>
-          </div>`).join('')}
+          </div>`))}
       </div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersNotifySaveBtn">${t('orders_notify_save')}</button>
+        <button class="orders-menu-save-btn" id="ordersNotifySaveBtn">${tHtml('orders_notify_save')}</button>
       </div>`;
-  })() : `<p class="orders-notify-hint">${t('orders_notify_no_customers')}</p>`;
+  })() : html`<p class="orders-notify-hint">${tHtml('orders_notify_no_customers')}</p>`;
 
-  section.innerHTML = typesHtml + broadcastHtml + baristaHtml + perCustomerHtml;
+  section.innerHTML = joinHtml([typesHtml, broadcastHtml, baristaHtml, perCustomerHtml]);
 
   document.getElementById('ordersTypesSaveBtn')?.addEventListener('click', () => { void saveNotifyToggles(); });
   document.getElementById('ordersBroadcastSaveBtn')?.addEventListener('click', () => { void saveBroadcastRecipients(); });
@@ -660,7 +660,7 @@ export async function saveBroadcastRecipients(): Promise<void> {
   await postOrdersSettings({ enabled: settings.enabled ?? true, broadcastRecipients: recipients });
   const btn = document.getElementById('ordersBroadcastSaveBtn');
   if (btn) {
-    btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_broadcast_saved')}`;
+    btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_broadcast_saved')}`;
     setTimeout(() => { btn.textContent = t('orders_broadcast_save'); }, 2000);
   }
 }
@@ -676,7 +676,7 @@ export async function saveNotifyToggles(): Promise<void> {
   await postOrdersSettings(body as OrdersSettingsUpdate);
   const btn = document.getElementById('ordersTypesSaveBtn');
   if (btn) {
-    btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_types_saved')}`;
+    btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_types_saved')}`;
     setTimeout(() => { btn.textContent = t('orders_types_save'); }, 2000);
   }
 }
@@ -688,7 +688,7 @@ export async function saveBaristaNotify(): Promise<void> {
   await postOrdersSettings({ enabled: settings.enabled ?? true, baristaNotifyService: sel.value || null });
   const btn = document.getElementById('ordersBaristaSaveBtn');
   if (btn) {
-    btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_barista_saved')}`;
+    btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_barista_saved')}`;
     setTimeout(() => { btn.textContent = t('orders_barista_save'); }, 2000);
   }
 }
@@ -703,7 +703,7 @@ export async function saveNotifyMapping(): Promise<void> {
   await postNotifyMapping(updates);
   const btn = document.getElementById('ordersNotifySaveBtn');
   if (btn) {
-    btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_notify_saved')}`;
+    btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_notify_saved')}`;
     setTimeout(() => { btn.textContent = t('orders_notify_save'); }, 2000);
   }
 }

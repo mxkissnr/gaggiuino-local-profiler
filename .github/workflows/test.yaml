@@ -84,16 +84,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # templ codegen for internal/web/templates (git-ignored _templ.go) —
-      # cmd/server imports that package, so the harness's `go build
-      # ./cmd/server` needs it. Pinned to the version go.mod already
-      # requires, same as the go-test job.
-      - name: Install templ and generate
-        working-directory: gaggiuino-local-profiler/go
-        run: |
-          go install github.com/a-h/templ/cmd/templ@v0.3.1020
-          go generate ./...
-
       # Own job (not a step in `test` above) so a Chromium download never
       # slows the unit test job — see #798.
       - name: Install Playwright Chromium
@@ -117,6 +107,18 @@ jobs:
 
       - name: Run E2E smoke test
         run: npm run test:e2e
+
+      # Same three steps the Pages deploy runs (demo-pages.yml), so a change
+      # that breaks the browser demo fails here instead of after the release
+      # reaches main (#1315).
+      - name: Generate demo fixtures
+        run: npm run demo:fixtures
+
+      - name: Build demo
+        run: npm run build:demo
+
+      - name: Smoke test demo build
+        run: npm run demo:smoke
 
   go-test:
     name: Go backend test/vet/build/vuln gate
@@ -176,17 +178,6 @@ jobs:
         working-directory: gaggiuino-local-profiler
         run: npm ci
 
-      # templ generate writes the _templ.go files internal/web/templates'
-      # .templ sources need to be valid Go at all — git-ignored, so every
-      # fresh checkout (including this one) needs this before build/vet/
-      # test/fmt can even parse the package. Pinned to the same version
-      # go.mod already pulls in as the templ runtime library's own indirect
-      # dependency — see go/README.md's "Codegen" section.
-      - name: Install templ and generate
-        run: |
-          go install github.com/a-h/templ/cmd/templ@v0.3.1020
-          go generate ./...
-
       - name: gofmt
         run: |
           fmt_out="$(gofmt -l .)"
@@ -216,6 +207,19 @@ jobs:
       # lockstep with a deliberate review of the finding set.
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      # BLOCKING deadcode gate (#1285, motivated by #1286): fails on any
+      # function no production path reaches, so code that is built but never
+      # wired up is caught in the PR that adds it. Keep list: the three proto
+      # command DTOs keep Unmarshal for a symmetric codec (round-trip tests).
+      # Version-pinned like govulncheck.
+      - name: deadcode
+        run: |
+          go run golang.org/x/tools/cmd/deadcode@v0.50.0 ./cmd/... > "$RUNNER_TEMP/deadcode.txt"
+          if grep -vE '(WebSocketProfileIdCommandDto|UpdateSystemStateCommandDto|ServiceTestCommandDto)\.Unmarshal$' "$RUNNER_TEMP/deadcode.txt"; then
+            echo "::error::deadcode found unreachable Go functions (listed above)"
+            exit 1
+          fi
 
   docker-smoke:
     name: Docker image build+smoke test (${{ matrix.arch }})

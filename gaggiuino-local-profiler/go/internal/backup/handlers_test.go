@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -189,6 +191,54 @@ func TestPostBackup_EstimateExcludesImagesWhenShotsOutOfScope(t *testing.T) {
 	if got := rec.Header().Get("X-GLP-Backup-Estimate"); got != strconv.Itoa(backupEnvelopeEstimateBytes) {
 		t.Errorf("X-GLP-Backup-Estimate = %q; want %d (envelope only)", got, backupEnvelopeEstimateBytes)
 	}
+}
+
+// TestBackupExport_CallbackFiresOnlyOnSuccess pins #1286 R2: the backup badge
+// is driven by Handlers.SetOnExported, which must fire exactly once per fully
+// written export — both GET /api/backup's JSON and POST /api/backup's zip —
+// and never when the export fails mid-response.
+func TestBackupExport_CallbackFiresOnlyOnSuccess(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	var calls int
+	h.SetOnExported(func() { calls++ })
+	mux := newMux(h)
+
+	if rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil); rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/backup status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if calls != 1 {
+		t.Fatalf("onExported calls after a successful GET export = %d, want 1", calls)
+	}
+
+	if rec := doJSON(t, mux, http.MethodPost, "/api/backup", nil); rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/backup status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if calls != 2 {
+		t.Fatalf("onExported calls after a successful POST export = %d, want 2", calls)
+	}
+
+	// The response writer fails the moment the handler streams its body, so
+	// the export never completes and the callback must not fire.
+	fail := httptest.NewRequest(http.MethodGet, "/api/backup", nil)
+	mux.ServeHTTP(&failingWriter{header: http.Header{}}, fail)
+	if calls != 2 {
+		t.Fatalf("onExported fired on a failed export (calls = %d, want 2)", calls)
+	}
+}
+
+// failingWriter is an http.ResponseWriter whose Write always errors, standing
+// in for a dropped connection so a streaming handler sees a mid-response
+// failure.
+type failingWriter struct{ header http.Header }
+
+func (w *failingWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *failingWriter) WriteHeader(statusCode int) {}
+
+func (w *failingWriter) Write(p []byte) (int, error) {
+	return 0, errors.New("writer closed")
 }
 
 func readBackupJSON(t *testing.T, zr *zip.Reader) map[string]any {
@@ -404,14 +454,15 @@ func newTestHandlersInDir(t *testing.T) (*Handlers, Dependencies, *sql.DB) {
 	t.Cleanup(func() { sqlDB.Close() })
 	libRepo := library.NewRepository(sqlDB)
 	deps := Dependencies{
-		DB:              sqlDB,
-		ShotsRepo:       shots.NewRepository(sqlDB),
-		LibRepo:         libRepo,
-		OrdersRepo:      orders.NewRepository(sqlDB),
-		MaintenanceRepo: maintenance.NewRepository(sqlDB, libRepo),
-		Registry:        machines.NewRegistry(sqlDB),
-		Token:           "second-install-token",
-		TokenFile:       filepath.Join(t.TempDir(), "api_token.txt"),
+		DB:               sqlDB,
+		ShotsRepo:        shots.NewRepository(sqlDB),
+		LibRepo:          libRepo,
+		OrdersRepo:       orders.NewRepository(sqlDB),
+		MaintenanceRepo:  maintenance.NewRepository(sqlDB, libRepo),
+		Registry:         machines.NewRegistry(sqlDB),
+		AchievementsRepo: achievements.NewRepository(sqlDB),
+		Token:            "second-install-token",
+		TokenFile:        filepath.Join(t.TempDir(), "api_token.txt"),
 	}
 	return NewHandlers(deps), deps, sqlDB
 }

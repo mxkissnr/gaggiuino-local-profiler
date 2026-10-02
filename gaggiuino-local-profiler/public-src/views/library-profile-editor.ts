@@ -10,19 +10,19 @@
 // removeRecipeStep().
 import Chart from 'chart.js/auto';
 import { S } from '../state/index.js';
-import type { MachineProfileRow } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
 import type { MachineProfile, MachineProfileList } from '../api/types.js';
-import { esc } from '../utils.js';
+import { esc, html, joinHtml } from '../utils.js';
+import type { Html } from '../utils.js';
 import { suggestProfileFromBean } from '../profile-suggestion.js';
 import type { ProfileSuggestion } from '../profile-suggestion.js';
 import { TARGET_ICON_SVG } from '../icons.js';
 
-const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH  = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
-const ICON_COPY   = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M19,21H8V7H19V21Z"/></svg>`;
+const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
+const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
+const ICON_COPY: Html   = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M19,21H8V7H19V21Z"/></svg>`;
 
 const PHASE_TYPES = ['FLOW', 'PRESSURE', 'MANUAL'];
 const CURVES      = ['EASE_IN_OUT', 'EASE_IN', 'EASE_OUT', 'LINEAR', 'INSTANT'];
@@ -93,7 +93,7 @@ export async function loadMachineProfileList(): Promise<void> {
   const data = await _profileListRequest();
   if (!data) return;
   if (token !== _profileListReqToken) return;
-  S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw as MachineProfileRow[] : [];
+  S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw : [];
   S.machineProfilesStale = !!data.stale;
   renderProfileList();
   updateProfileDatalist();
@@ -110,24 +110,25 @@ export function renderProfileList(): void {
   const el = document.getElementById('profileListUI');
   if (!el) return;
   if (!S.machineProfiles.length) {
-    el.innerHTML = `<div class="lib-empty">${t(S.machineProfilesStale ? 'lib_profiles_offline' : 'lib_empty_profiles')}</div>`;
+    el.innerHTML = html`<div class="lib-empty">${tHtml(S.machineProfilesStale ? 'lib_profiles_offline' : 'lib_empty_profiles')}</div>`;
     return;
   }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = S.machineProfiles.map(p => `<div class="lib-item${p.utility ? ' lib-item-utility' : ''}">
+  el.innerHTML = joinHtml(S.machineProfiles.map(p => html`<div class="lib-item${p.utility ? html` lib-item-utility` : html``}">
       <div class="lib-item-info">
         <div class="lib-item-name-row">
           <span class="lib-item-name">${esc(p.name)}</span>
-          ${p.utility ? `<span class="lib-utility-badge">${t('profile_utility_badge')}</span>` : ''}
+          ${p.utility ? html`<span class="lib-utility-badge">${tHtml('profile_utility_badge')}</span>` : html``}
+          ${p.syncStatus && p.syncStatus !== 'synced' ? html`<span class="lib-utility-badge" title="${tHtml('profile_not_synced')}">⏳</span>` : html``}
         </div>
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}" title="${t('profile_dialin_start')}">${TARGET_ICON_SVG}</button>
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-profile" data-id="${esc(p.id as string | number)}" title="${t('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm lib-btn-icon" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}" title="${t('profile_btn_duplicate')}">${ICON_COPY}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-profile" data-id="${esc(p.id as string | number)}" title="${t('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button class="lib-btn-sm" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_dialin_start')}">${TARGET_ICON_SVG}</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="edit-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button class="lib-btn-sm lib-btn-icon" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_btn_duplicate')}">${ICON_COPY}</button>
+        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
-    </div>`).join('');
+    </div>`));
 }
 
 export async function editProfile(id: string): Promise<void> {
@@ -143,7 +144,9 @@ export async function editProfile(id: string): Promise<void> {
 export async function duplicateProfile(id: string): Promise<void> {
   const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
   if (!profile) { window.showToast?.(t('profile_load_error')); return; }
-  openProfileForm({ ...profile, id: undefined, name: `${profile.name}${t('profile_duplicate_suffix')}` });
+  const duplicate: MachineProfile = { ...profile };
+  delete duplicate.id;
+  openProfileForm({ ...duplicate, name: `${profile.name}${t('profile_duplicate_suffix')}` });
 }
 
 export async function deleteMachineProfile(id: string): Promise<void> {
@@ -216,44 +219,44 @@ function _applySuggestion(suggestion: ProfileSuggestion): void {
 function _renderPhaseRows(phases: unknown[] | null | undefined): void {
   const list = document.getElementById('profilePhaseList');
   if (!list) return;
-  list.innerHTML = (phases || []).map((p, i) => _phaseRowHtml(i, p as Phase)).join('');
+  list.innerHTML = joinHtml((phases || []).map((p, i) => _phaseRowHtml(i, p as Phase)));
 }
 
-function _phaseRowHtml(i: number, p: Phase = {}): string {
+function _phaseRowHtml(i: number, p: Phase = {}): Html {
   const target = p.target || {};
   const stop   = p.stopConditions || {};
   const type   = typeof p.type === 'string' ? p.type : PHASE_TYPES[p.type as number] || 'FLOW';
   const curve  = typeof target.curve === 'string' ? target.curve : CURVES[target.curve as number] || 'LINEAR';
-  return `<div class="pp-row" id="profilePhase${i}">
+  return html`<div class="pp-row" id="profilePhase${esc(i)}">
     <div class="pp-header">
-      <span class="pp-num">${i + 1}</span>
-      <input class="pp-name" placeholder="${t('profile_phase_name')}" value="${esc(p.name || '')}">
+      <span class="pp-num">${esc(i + 1)}</span>
+      <input class="pp-name" placeholder="${tHtml('profile_phase_name')}" value="${esc(p.name || '')}">
       <select class="pp-type">
-        ${PHASE_TYPES.map(pt => `<option value="${pt}" ${pt === type ? 'selected' : ''}>${t('phase_type_' + pt.toLowerCase())}</option>`).join('')}
+        ${joinHtml(PHASE_TYPES.map(pt => html`<option value="${esc(pt)}" ${pt === type ? html`selected` : html``}>${tHtml('phase_type_' + pt.toLowerCase())}</option>`))}
       </select>
       <label class="lib-check-label pp-skip-label">
-        <input type="checkbox" class="pp-skip" ${p.skip ? 'checked' : ''}>
-        <span>${t('profile_phase_skip')}</span>
+        <input type="checkbox" class="pp-skip" ${p.skip ? html`checked` : html``}>
+        <span>${tHtml('profile_phase_skip')}</span>
       </label>
-      <button class="lib-btn-sm del lib-btn-icon" data-action="remove-profile-phase" data-idx="${i}">${ICON_TRASH}</button>
+      <button class="lib-btn-sm del lib-btn-icon" data-action="remove-profile-phase" data-idx="${esc(i)}">${ICON_TRASH}</button>
     </div>
     <div class="pp-grid">
-      <div class="pp-field"><label>${t('profile_phase_target_start')}</label><input type="number" step="0.1" class="pp-target-start" value="${target.start ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_phase_target_end')}</label><input type="number" step="0.1" class="pp-target-end" value="${target.end ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_phase_target_curve')}</label>
-        <select class="pp-target-curve">${CURVES.map(c => `<option value="${c}" ${c === curve ? 'selected' : ''}>${t('curve_' + c.toLowerCase())}</option>`).join('')}</select>
+      <div class="pp-field"><label>${tHtml('profile_phase_target_start')}</label><input type="number" step="0.1" class="pp-target-start" value="${esc(target.start ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_phase_target_end')}</label><input type="number" step="0.1" class="pp-target-end" value="${esc(target.end ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_phase_target_curve')}</label>
+        <select class="pp-target-curve">${joinHtml(CURVES.map(c => html`<option value="${esc(c)}" ${c === curve ? html`selected` : html``}>${tHtml('curve_' + c.toLowerCase())}</option>`))}</select>
       </div>
-      <div class="pp-field"><label>${t('profile_phase_target_time')}</label><input type="number" step="1" class="pp-target-time" value="${target.time ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_phase_target_volume')}</label><input type="number" step="0.1" class="pp-target-volume" value="${target.volume ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_phase_restriction')}</label><input type="number" step="0.1" class="pp-restriction" value="${p.restriction ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_phase_water_temperature')}</label><input type="number" step="0.1" class="pp-water-temp" value="${p.waterTemperature ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_stop_time')}</label><input type="number" step="1" class="pp-stop-time" value="${stop.time ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_stop_pressure_above')}</label><input type="number" step="0.1" class="pp-stop-pressure-above" value="${stop.pressureAbove ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_stop_pressure_below')}</label><input type="number" step="0.1" class="pp-stop-pressure-below" value="${stop.pressureBelow ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_stop_flow_above')}</label><input type="number" step="0.1" class="pp-stop-flow-above" value="${stop.flowAbove ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_stop_flow_below')}</label><input type="number" step="0.1" class="pp-stop-flow-below" value="${stop.flowBelow ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_stop_weight')}</label><input type="number" step="0.1" class="pp-stop-weight" value="${stop.weight ?? ''}"></div>
-      <div class="pp-field"><label>${t('profile_stop_water_pumped')}</label><input type="number" step="0.1" class="pp-stop-water-pumped" value="${stop.waterPumpedInPhase ?? ''}"></div>
+      <div class="pp-field"><label>${tHtml('profile_phase_target_time')}</label><input type="number" step="1" class="pp-target-time" value="${esc(target.time ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_phase_target_volume')}</label><input type="number" step="0.1" class="pp-target-volume" value="${esc(target.volume ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_phase_restriction')}</label><input type="number" step="0.1" class="pp-restriction" value="${esc(p.restriction ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_phase_water_temperature')}</label><input type="number" step="0.1" class="pp-water-temp" value="${esc(p.waterTemperature ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_stop_time')}</label><input type="number" step="1" class="pp-stop-time" value="${esc(stop.time ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_stop_pressure_above')}</label><input type="number" step="0.1" class="pp-stop-pressure-above" value="${esc(stop.pressureAbove ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_stop_pressure_below')}</label><input type="number" step="0.1" class="pp-stop-pressure-below" value="${esc(stop.pressureBelow ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_stop_flow_above')}</label><input type="number" step="0.1" class="pp-stop-flow-above" value="${esc(stop.flowAbove ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_stop_flow_below')}</label><input type="number" step="0.1" class="pp-stop-flow-below" value="${esc(stop.flowBelow ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_stop_weight')}</label><input type="number" step="0.1" class="pp-stop-weight" value="${esc(stop.weight ?? '')}"></div>
+      <div class="pp-field"><label>${tHtml('profile_stop_water_pumped')}</label><input type="number" step="0.1" class="pp-stop-water-pumped" value="${esc(stop.waterPumpedInPhase ?? '')}"></div>
     </div>
   </div>`;
 }
@@ -298,6 +301,10 @@ function _num(row: Element, selector: string): number {
   return parseFloat(row.querySelector<HTMLInputElement>(selector)?.value as string) || 0;
 }
 
+function optionalKey<K extends string>(key: K, v: number | undefined): { [P in K]?: number } {
+  return v === undefined ? {} : { [key]: v } as { [P in K]?: number };
+}
+
 // Exported for testing — reads phase rows from the DOM (module-level
 // document global), no separate JS state kept in sync.
 export function _collectPhases(): Phase[] {
@@ -309,10 +316,10 @@ export function _collectPhases(): Phase[] {
       end:    _num(row, '.pp-target-end'),
       curve:  row.querySelector<HTMLSelectElement>('.pp-target-curve')?.value || 'LINEAR',
       time:   _num(row, '.pp-target-time'),
-      volume: _optionalNumber(row, '.pp-target-volume'),
+      ...optionalKey('volume', _optionalNumber(row, '.pp-target-volume')),
     },
     restriction: _num(row, '.pp-restriction'),
-    waterTemperature: _optionalNumber(row, '.pp-water-temp'),
+    ...optionalKey('waterTemperature', _optionalNumber(row, '.pp-water-temp')),
     stopConditions: {
       time:               _num(row, '.pp-stop-time'),
       pressureAbove:      _num(row, '.pp-stop-pressure-above'),
@@ -357,8 +364,17 @@ export async function sendProfileToMachine(): Promise<void> {
     window.showToast?.(t('profile_send_error') + (err ? `: ${err}` : ''));
     return;
   }
+  // Same offline-editor contract as gaggimate-profile-editor.js's
+  // saveGaggiMateProfile: the backend saved locally first, this 200 might
+  // just mean "queued, machine unreachable right now" — surface that
+  // distinctly from a silent success.
+  const saved: unknown = await r.json().catch(() => null);
   closeProfileForm();
   await loadMachineProfileList();
+  const syncStatus = (saved as { syncStatus?: string } | null)?.syncStatus;
+  if (syncStatus && syncStatus !== 'synced') {
+    window.showToast?.(t('gm_toast_saved_offline'));
+  }
 }
 
 // ── Preview chart ─────────────────────────────────────────────────────

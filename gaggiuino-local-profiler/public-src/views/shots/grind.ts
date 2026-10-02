@@ -1,7 +1,7 @@
 import { t }                               from '../../i18n.js';
 import { S }                               from '../../state/index.js';
-import { detectChanneling, calcBrewRatio } from '../../utils.js';
-import type { ShotSeries } from '../../utils.js';
+import { detectChanneling, calcBrewRatio, esc, html, joinHtml } from '../../utils.js';
+import type { ShotSeries, Html } from '../../utils.js';
 import { calcShotScore }                   from './utils.js';
 import type { ShotLike }                   from './utils.js';
 import { getRawCurve }                     from '../../shot-curves.js';
@@ -27,7 +27,7 @@ interface XYPoint { x: number; y: number }
 
 export interface GrindAdvice {
   type: string;
-  icon: string;
+  icon: Html;
   text: string;
 }
 
@@ -70,14 +70,14 @@ export interface GrindSuggestion {
 // every comparable shot before rendering the panel, so the cache read is
 // synchronous here; a still-missing curve falls back to the shot's own
 // datapoints (synthetic/demo) and finally to the no-data placeholder.
-export function _miniShotChart(shot: GrindShot): string {
+export function _miniShotChart(shot: GrindShot): Html {
   const d  = getRawCurve(shot.id) || shot.datapoints || {};
   const tm = d.timeInShot || [];
   const series = [
-    { vals: (d.pressure  || []).map((v, i) => ({ x: tm[i] / 10, y: v / 10 })).filter(p => p.y > 0), color: '#60a5fa' },
-    { vals: (d.pumpFlow  || []).map((v, i) => ({ x: tm[i] / 10, y: v / 10 })).filter(p => p.y >= 0), color: '#fb923c' },
+    { vals: (d.pressure  || []).map((v, i) => ({ x: (tm[i] ?? NaN) / 10, y: v / 10 })).filter(p => p.y > 0), color: '#60a5fa' },
+    { vals: (d.pumpFlow  || []).map((v, i) => ({ x: (tm[i] ?? NaN) / 10, y: v / 10 })).filter(p => p.y >= 0), color: '#fb923c' },
   ].filter(s => s.vals.length >= 3);
-  if (!series.length) return '<div class="comp-thumb-no-data">–</div>';
+  if (!series.length) return html`<div class="comp-thumb-no-data">–</div>`;
 
   const W = 140, H = 65, pad = 2;
   const allX = series.flatMap(s => s.vals.map(p => p.x));
@@ -88,11 +88,11 @@ export function _miniShotChart(shot: GrindShot): string {
   const px = (x: number): number => pad + ((x - xMin) / (xMax - xMin)) * (W - pad * 2);
   const py = (y: number): number => H - pad - (y / yMax) * (H - pad * 2);
 
-  const polyline = ({ vals, color }: { vals: XYPoint[]; color: string }): string => {
+  const polyline = ({ vals, color }: { vals: XYPoint[]; color: string }): Html => {
     const pts = vals.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>`;
+    return html`<polyline points="${esc(pts)}" fill="none" stroke="${esc(color)}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>`;
   };
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px;display:block">${series.map(polyline).join('')}</svg>`;
+  return html`<svg viewBox="0 0 ${esc(W)} ${esc(H)}" preserveAspectRatio="none" style="width:100%;height:${esc(H)}px;display:block">${joinHtml(series.map(polyline))}</svg>`;
 }
 
 // ── Grind setting parser ───────────────────────────────────────────────────
@@ -100,7 +100,8 @@ export function _miniShotChart(shot: GrindShot): string {
 export function _parseGrindNum(s: string | number | null | undefined): number | null {
   if (!s) return null;
   const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
-  return m ? parseFloat(m[1].replace(',', '.')) : null;
+  const captured = m?.[1];
+  return captured !== undefined ? parseFloat(captured.replace(',', '.')) : null;
 }
 
 // ── Grind advice ──────────────────────────────────────────────────────────
@@ -112,21 +113,21 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
   const pAll   = data.pressure.map(p => p.y);
   if (detectChanneling(pTimes, pAll))
     return { type: 'warning', icon: LIGHTNING_ICON_SVG, text: t('grind_channeling_full') };
-  if (secs < 18) return { type: 'finer',   icon: '↓', text: t('grind_short', secs.toFixed(0)) };
-  if (secs < 23) return { type: 'finer',   icon: '↓', text: t('grind_short_slight', secs.toFixed(0)) };
-  if (secs > 50) return { type: 'coarser', icon: '↑', text: t('grind_long', secs.toFixed(0)) };
-  if (secs > 42) return { type: 'coarser', icon: '↑', text: t('grind_long_slight', secs.toFixed(0)) };
+  if (secs < 18) return { type: 'finer',   icon: html`↓`, text: t('grind_short', secs.toFixed(0)) };
+  if (secs < 23) return { type: 'finer',   icon: html`↓`, text: t('grind_short_slight', secs.toFixed(0)) };
+  if (secs > 50) return { type: 'coarser', icon: html`↑`, text: t('grind_long', secs.toFixed(0)) };
+  if (secs > 42) return { type: 'coarser', icon: html`↑`, text: t('grind_long_slight', secs.toFixed(0)) };
   // Duration is fine — check the brew ratio against the classic espresso
   // window (1:1.8–1:2.2). Yield is machine-stopped, so this is dose/yield
   // guidance rather than a grind direction.
-  const ratio = calcBrewRatio(shot as unknown as Parameters<typeof calcBrewRatio>[0], data);
+  const ratio = calcBrewRatio(shot, data);
   if (ratio !== null && ratio > 2.3)
     return { type: 'warning', icon: SCALE_ICON_SVG, text: t('dialin_ratio_high', ratio.toFixed(1)) };
   if (ratio !== null && ratio < 1.7)
     return { type: 'warning', icon: SCALE_ICON_SVG, text: t('dialin_ratio_low', ratio.toFixed(1)) };
   const pVals = pAll.filter(v => v >= 5);
   const avgP  = pVals.length ? pVals.reduce((a, b) => a + b, 0) / pVals.length : 0;
-  return { type: 'ok', icon: '✓', text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
+  return { type: 'ok', icon: html`✓`, text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
 }
 
 // Parses a shot's own recorded grindSetting and normalizes it to what it
@@ -177,8 +178,8 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
     const g   = _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp) as number;
     const sc  = calcShotScore(s) as number;
     const key = Math.round(g * 2) / 2;
-    if (!byGrind[key]) byGrind[key] = [];
-    byGrind[key].push(sc);
+    const bucket = (byGrind[key] ??= []);
+    bucket.push(sc);
   });
 
   let bestSetting: number | null = null, bestAvg = -1;
@@ -241,8 +242,8 @@ export function calcBestGrindCombosForBean(
     const grinder = (s.annotation?.grinder as string).trim();
     const grind    = Math.round((_currentGrindNum(grinder, s.annotation?.grindSetting, s.timestamp) as number) * 2) / 2;
     const key      = `${grinder.toLowerCase()}${grind}`;
-    if (!byCombo[key]) byCombo[key] = { grinder, grindSetting: grind, scores: [] };
-    byCombo[key].scores.push(calcShotScore(s) as number);
+    const combo    = (byCombo[key] ??= { grinder, grindSetting: grind, scores: [] });
+    combo.scores.push(calcShotScore(s) as number);
   });
 
   const combos = Object.values(byCombo)
@@ -302,12 +303,16 @@ export function suggestGrindDoseForBean(
 
   if (!grindSetting) {
     const combos = calcBestGrindCombosForBean(name, allShots, beanId);
-    if (combos?.length) {
-      grinder = combos[0].grinder;
-      grindSetting = String(combos[0].grindSetting);
-    } else if (bean?.knownGrindSettings?.length) {
-      grinder = bean.knownGrindSettings[0].grinder;
-      grindSetting = bean.knownGrindSettings[0].grindSetting;
+    const bestCombo = combos?.[0];
+    if (bestCombo) {
+      grinder = bestCombo.grinder;
+      grindSetting = String(bestCombo.grindSetting);
+    } else {
+      const known = bean?.knownGrindSettings?.[0];
+      if (known) {
+        grinder = known.grinder;
+        grindSetting = known.grindSetting;
+      }
     }
   }
 

@@ -1,0 +1,100 @@
+# Builds the static browser demo (#1193) and deploys it to GitHub Pages.
+# Demo fixtures are regenerated from the sanitized demo backup on every
+# run via `npm run demo:fixtures` — they are never committed to the repo.
+
+name: Demo (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gaggiuino-local-profiler/**'
+      - '.github/workflows/demo-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: gaggiuino-local-profiler
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: gaggiuino-local-profiler/package-lock.json
+
+      # The E2E harness (scripts/e2e-harness.mjs) builds and boots the real
+      # glp-server Go binary as the backend under test — the Node backend it
+      # used to require() in-process is gone (3.0.0, #1028).
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: gaggiuino-local-profiler/go/go.mod
+          cache-dependency-path: gaggiuino-local-profiler/go/go.sum
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Own job (not a step in `test` above) so a Chromium download never
+      # slows the unit test job — see #798.
+      - name: Install Playwright Chromium
+        # apt-get (triggered by --with-deps) can hang indefinitely when the
+        # runner's regional Ubuntu mirror is unreachable (#882) -- a short
+        # per-attempt timeout + retry lets a single mirror hiccup self-heal
+        # within this run instead of needing a manual rerun.
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 300 npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "Playwright install attempt $attempt/3 failed or timed out, retrying..."
+            sleep 10
+          done
+          echo "::error::Playwright Chromium install failed after 3 attempts"
+          exit 1
+
+      - name: Generate demo fixtures
+        run: npm run demo:fixtures
+
+      - name: Build demo
+        run: npm run build:demo
+
+      - name: Smoke test demo build
+        run: npm run demo:smoke
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: gaggiuino-local-profiler/demo-dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

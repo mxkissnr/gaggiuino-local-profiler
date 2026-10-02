@@ -6,8 +6,6 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
-// This file ports routes/achievements.js (the whole route is 22 lines):
-//
 //	GET /api/achievements?lang=<de|en|it|fr|es|nl>
 //	  -> { cards: CARD_KEYS, badges: <state for lang> }
 //

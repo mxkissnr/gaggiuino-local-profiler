@@ -1,7 +1,7 @@
 import Chart from 'chart.js/auto';
 import { S, filterShotsByMachine }                            from '../../state/index.js';
 import * as chartRegistry                                     from '../../state/charts.js';
-import { t }                                                  from '../../i18n.js';
+import { t, tHtml }                                           from '../../i18n.js';
 import { isApiPortBlocked }                                   from '../../api/transport.js';
 import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard } from '../../api/shots.js';
 import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
@@ -9,7 +9,7 @@ import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPha
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
-  chartColors
+  chartColors, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar }                                      from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
@@ -24,7 +24,7 @@ import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.
 import { loadShotImageBlobUrl }                               from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
 import type { ShotMeta } from '../../state/index.js';
-import type { ShotDatapoints, ShotSeries } from '../../utils.js';
+import type { ShotDatapoints, ShotSeries, Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
@@ -106,8 +106,8 @@ const _el = (id: string): HTMLElement => document.getElementById(id) as HTMLElem
 
 // CoffeeLibrary (state/index.ts) only declares beans/grinders; loadLibrary()
 // adds the basket/puck-screen collections this file reads for export labels.
-function _libCollection(name: string): Record<string, unknown>[] | undefined {
-  return (S.coffeeLibrary as unknown as Record<string, Record<string, unknown>[]>)[name];
+function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, unknown>[] | undefined {
+  return S.coffeeLibrary[name];
 }
 
 export function invalidateGmPhaseCache(machineId: number): void {
@@ -213,7 +213,7 @@ async function fetchShotsPage({ cursor = null, trash = false }: { cursor?: strin
 export async function loadData(): Promise<void> {
   const token = ++_loadDataReqToken;
   const shotsEl = _el('shots');
-  shotsEl.innerHTML = `<div class="loading-state">${t('loading')}</div>`;
+  shotsEl.innerHTML = html`<div class="loading-state">${tHtml('loading')}</div>`;
 
   let fetched;
   try {
@@ -227,7 +227,7 @@ export async function loadData(): Promise<void> {
       // here instead of showing a bare status code.
       shotsEl.innerHTML = isApiPortBlocked(page.error)
         ? apiPortClosedHtml()
-        : `<div class="loading-state" style="color:#ef4444">HTTP ${page.error}</div>`;
+        : html`<div class="loading-state" style="color:#ef4444">HTTP ${esc(page.error)}</div>`;
       return;
     }
     fetched = [...(page.shots || [])].reverse(); // page is newest-first; keep S.allShots oldest-first
@@ -236,14 +236,15 @@ export async function loadData(): Promise<void> {
     S.allShotsLoaded  = !page.hasMore;
   } catch {
     if (token !== _loadDataReqToken) return;
-    shotsEl.innerHTML =
+    shotsEl.innerHTML = joinHtml([
       // #814: was a hardcoded #ef4444 (the pre-redesign err value) and an
       // untranslated German string in an otherwise six-language app.
-      `<div class="loading-state" style="color:var(--err)">${t('conn_error')}<br>` +
+      html`<div class="loading-state" style="color:var(--err)">${tHtml('conn_error')}<br>`,
       // #814: was inline dark-theme neutrals (rgba(63,63,70,.5) fill, #a1a1aa
       // text, #3f3f46 border) that never inverted. .export-btn is the same
       // "fill, no persistent border" button this was hand-rolling.
-      `<button data-action="reload-data" class="export-btn" style="margin-top:var(--sp-3)">${t('btn_reload')}</button></div>`;
+      html`<button data-action="reload-data" class="export-btn" style="margin-top:var(--sp-3)">${tHtml('btn_reload')}</button></div>`,
+    ]);
     return;
   }
 
@@ -270,7 +271,7 @@ export async function loadData(): Promise<void> {
     const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId') as string);
     S.primaryShotId = (savedPrimary && S.shots.find(s => s.id === savedPrimary))
       ? savedPrimary
-      : S.shots[S.shots.length - 1].id;
+      : (S.shots.at(-1)?.id ?? null);
     if (savedCompare && S.shots.find(s => s.id === savedCompare) && savedCompare !== S.primaryShotId) {
       S.compareShotId = savedCompare;
     }
@@ -384,7 +385,7 @@ export function renderTrash(): void {
   section.style.display = count > 0 ? 'block' : 'none';
   countEl.textContent   = String(count);
 
-  listEl.innerHTML = '';
+  listEl.innerHTML = html``;
   const now = Date.now();
   (S.trashedShots as ShotRow[]).forEach(shot => {
     const daysLeft = Math.max(0, 30 - Math.floor((now - (shot.trashedAt as number)) / 86400000));
@@ -392,13 +393,13 @@ export function renderTrash(): void {
     const row  = document.createElement('div');
     row.className = 'trash-item';
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-    row.innerHTML = `
+    row.innerHTML = html`
       <div class="trash-item-info">
         <div class="trash-item-name">${esc(name)}</div>
-        <div class="trash-item-days">Shot ${shot.id} · ${t('trash_days_left', daysLeft)}</div>
+        <div class="trash-item-days">Shot ${esc(shot.id)} · ${tHtml('trash_days_left', daysLeft)}</div>
       </div>
-      <button class="trash-restore-btn" data-action="restore-shot" data-id="${shot.id}">${t('trash_restore_label')}</button>
-      <button class="trash-delete-btn" title="${t('trash_delete_title')}" data-action="perm-delete-shot" data-id="${shot.id}"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
+      <button class="trash-restore-btn" data-action="restore-shot" data-id="${esc(shot.id)}">${tHtml('trash_restore_label')}</button>
+      <button class="trash-delete-btn" title="${tHtml('trash_delete_title')}" data-action="perm-delete-shot" data-id="${esc(shot.id)}"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
     `;
     listEl.appendChild(row);
   });
@@ -714,9 +715,9 @@ export async function updateView(): Promise<void> {
     // #457: compact hint icon when the score was weighed against the bean's
     // own brewTempC/brewRatio recommendation (#450) rather than the generic
     // fallback band — native title tooltip, no new permanent header text.
-    const beanTargetHint = shotUsedBeanTarget(shotA)
-      ? `<span class="verdict-bean-target-hint" title="${esc(t('verdict_bean_target_hint'))}">${TARGET_ICON_SVG}</span>` : '';
-    _el('verdictHeadline').innerHTML = (advice ? `${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))) + beanTargetHint;
+    const beanTargetHint: Html = shotUsedBeanTarget(shotA)
+      ? html`<span class="verdict-bean-target-hint" title="${tHtml('verdict_bean_target_hint')}">${TARGET_ICON_SVG}</span>` : html``;
+    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${beanTargetHint}`;
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process-zone pressure card, so repeating them here was pure duplication.
@@ -745,21 +746,21 @@ export async function updateView(): Promise<void> {
       if (token !== _updateViewToken) return;
 
       const locale   = localeFor(S.currentLang);
-      const listHtml = compAdv.shots.map(({ shot: s, grind, score }) => {
+      const listHtml = joinHtml(compAdv.shots.map(({ shot: s, grind, score }) => {
         const date  = new Date((s.timestamp as number) * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
         const dur   = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
         const cls   = scoreClass(score);
         const chart = _miniShotChart(s);
-        return `<div class="comp-thumb" data-action="goto-shot" data-id="${s.id}" title="Shot ${s.id} — ${date}">
+        return html`<div class="comp-thumb" data-action="goto-shot" data-id="${esc(s.id)}" title="Shot ${esc(s.id)} — ${esc(date)}">
           <div class="comp-thumb-chart">${chart}</div>
           <div class="comp-thumb-meta">
-            <span class="comp-shot-date">${date}</span>
-            <span class="comp-shot-grind">${GEAR_ICON_SVG} ${grind}</span>
-            <span class="comp-shot-score ${cls}">${score}</span>
-            ${dur ? `<span class="comp-shot-dur">${dur}</span>` : ''}
+            <span class="comp-shot-date">${esc(date)}</span>
+            <span class="comp-shot-grind">${GEAR_ICON_SVG} ${esc(grind)}</span>
+            <span class="comp-shot-score ${esc(cls)}">${esc(score)}</span>
+            ${dur ? html`<span class="comp-shot-dur">${esc(dur)}</span>` : html``}
           </div>
         </div>`;
-      }).join('');
+      }));
 
       let panel = compEl.querySelector('.comp-shots-panel');
       if (!panel) {
@@ -789,9 +790,7 @@ export async function updateView(): Promise<void> {
     const ob = !shotB ? shotA.annotation?.orderedBy : null;
     if (ob?.customer) {
       const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
-      obEl.innerHTML =
-        `<span class="ann-ordered-by-label">${COFFEE_ICON_SVG} ${t('ann_ordered_by')}</span>` +
-        `<span class="ann-ordered-by-val">${esc(ob.customer)}${drink ? ` · ${esc(drink)}` : ''}${ob.note ? ` · <em>${esc(ob.note)}</em>` : ''}</span>`;
+      obEl.innerHTML = html`<span class="ann-ordered-by-label">${COFFEE_ICON_SVG} ${tHtml('ann_ordered_by')}</span><span class="ann-ordered-by-val">${esc(ob.customer)}${drink ? html` · ${esc(drink)}` : html``}${ob.note ? html` · <em>${esc(ob.note)}</em>` : html``}</span>`;
       obEl.style.display = '';
     } else {
       obEl.style.display = 'none';
@@ -801,9 +800,9 @@ export async function updateView(): Promise<void> {
   renderAnnotationPanel(shotA);
 
   // Build main chart datasets
-  const maxTimeA    = dA.rawTimes.length > 0 ? dA.rawTimes[dA.rawTimes.length - 1] : 0;
-  const maxTimeB    = dB && dB.rawTimes.length > 0 ? dB.rawTimes[dB.rawTimes.length - 1] : 0;
-  const maxTimePrev = dPrev && dPrev.rawTimes.length > 0 ? dPrev.rawTimes[dPrev.rawTimes.length - 1] : 0;
+  const maxTimeA    = dA.rawTimes.at(-1) ?? 0;
+  const maxTimeB    = dB ? (dB.rawTimes.at(-1) ?? 0) : 0;
+  const maxTimePrev = dPrev ? (dPrev.rawTimes.at(-1) ?? 0) : 0;
 
   const sfx = shotB ? ' (A)' : '';
   const datasets = [
@@ -873,7 +872,7 @@ export async function updateView(): Promise<void> {
             tooltip: {
               callbacks: {
                 title: (ctx: { parsed: { x: number } }[]) => {
-                  const time = ctx[0].parsed.x;
+                  const time = ctx[0]?.parsed.x ?? 0;
                   const ph = phasesOpt.gaggimatePhases?.find(p => time >= p.t0 && time <= p.t1);
                   const timeLabel = t('chart_time', formatTimeLabel(time));
                   return ph?.name ? `${ph.name} — ${timeLabel}` : timeLabel;
@@ -980,7 +979,7 @@ export async function exportShot(): Promise<void> {
   const tcl = (arr: unknown[] | null | undefined): string => arr?.length ? `{${arr.map(v => ((v as number) / 10).toFixed(2)).join(' ')}}` : '{}';
 
   const finalWeight = d.shotWeight || d.weight || [];
-  const lastW = finalWeight.length ? (finalWeight[finalWeight.length - 1] / 10).toFixed(1) : '0.0';
+  const lastW = finalWeight.length ? ((finalWeight.at(-1) ?? 0) / 10).toFixed(1) : '0.0';
   const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
   const basketName     = _equipmentName(_libCollection('baskets'), ann.basketId);
   const puckScreenName = _equipmentName(_libCollection('puckScreens'), ann.puckScreenId);
@@ -1039,13 +1038,13 @@ export async function exportProfile(): Promise<void> {
 
   const times  = rawT.map(v => v / 10);
   const tPress = rawTP.map(v => v / 10);
-  const totalMs = Math.round(times[times.length - 1] * 1000);
+  const totalMs = Math.round((times.at(-1) ?? NaN) * 1000);
   const ann     = shot.annotation || {};
 
   const PREINF_THRESHOLD = 6;
   let preinfEndIdx = tPress.findIndex(p => p >= PREINF_THRESHOLD);
   if (preinfEndIdx < 0) preinfEndIdx = 0;
-  const preinfMs = preinfEndIdx > 0 ? Math.round(times[preinfEndIdx] * 1000) : 0;
+  const preinfMs = preinfEndIdx > 0 ? Math.round((times[preinfEndIdx] ?? NaN) * 1000) : 0;
 
   const phases = [];
   if (preinfMs > 500) {

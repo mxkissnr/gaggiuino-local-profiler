@@ -1,6 +1,7 @@
 package machines
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,10 +12,10 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
-// This file ports routes/machine-control.js: the #597 Gaggiuino settings/
-// control proxy (settings read/write, opmode/tare/service-test, active-
-// profile persistence, firmware OTA, live sensor/system state). Every
-// route here is gated by requireSettingsProxySupport, same as Node.
+// This file is the #597 Gaggiuino settings/control proxy (settings
+// read/write, opmode/tare/service-test, active-profile persistence,
+// firmware OTA, live sensor/system state). Every route here is gated by
+// requireSettingsProxySupport.
 
 var gaggiuinoSettingsCategories = map[string]bool{
 	"boiler": true, "system": true, "display": true, "scales": true, "led": true, "theme": true,
@@ -25,8 +26,8 @@ func (h *Handlers) registerControlRoutes(mux *http.ServeMux) {
 	// Registered before the /{category} route below so this exact path
 	// always wins — Go's ServeMux already prefers the more specific
 	// literal pattern regardless of registration order (see
-	// shots/handlers.go's header comment on the same non-issue), but kept
-	// in the same order as the Node original for readability.
+	// shots/handlers.go's header comment on the same non-issue), but
+	// registered in this order for readability.
 	mux.HandleFunc("POST /api/machine/settings/save", h.saveSettings)
 	mux.HandleFunc("POST /api/machine/settings/{category}", h.updateSettings)
 
@@ -43,8 +44,8 @@ func (h *Handlers) registerControlRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/machine/live", h.machineLive)
 }
 
-// resolveWithAdapter ports the repeated `resolveMachine + getAdapter` pair
-// every route in this file (and handlers_profiles.go) opens with.
+// resolveWithAdapter performs the repeated resolve-machine + get-adapter
+// pair every route in this file (and handlers_profiles.go) opens with.
 func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, machineID *int64) (*Machine, Adapter, bool) {
 	machine, err := h.registry.ResolveMachine(machineID)
 	if err != nil {
@@ -265,6 +266,18 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	if !requireSettingsProxySupport(w, adapter, machine) {
 		return
 	}
+	// #1136 follow-up: resolve the installed/target version BEFORE triggering
+	// the update -- a successful trigger reboots the machine, so after that
+	// call neither `versions` nor `system` can be read reliably. Only done
+	// when a maintenance-log hook is wired, and entirely best-effort: any
+	// error or panic inside the lookup degrades to an empty string for that
+	// side and never touches the update or this response.
+	var from, to string
+	if h.onFirmwareUpdate != nil {
+		httputil.SafeCall("machines: firmware update version lookup", func() {
+			from, to = h.firmwareFromTo(r.Context(), machine, adapter)
+		})
+	}
 	result, err := adapter.TriggerFirmwareUpdate(r.Context(), machine)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -277,7 +290,7 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	if h.onFirmwareUpdate != nil {
 		var cbErr error
 		httputil.SafeCall("machines: firmware update maintenance log", func() {
-			cbErr = h.onFirmwareUpdate(machine)
+			cbErr = h.onFirmwareUpdate(machine, from, to)
 		})
 		if cbErr != nil {
 			slog.Warn("firmware update: maintenance log callback failed", "err", cbErr)
@@ -288,7 +301,47 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	w.Write(result)
 }
 
-// firmwareVersion ports GET /api/machine/firmware/version (#620 Phase 1).
+// firmwareFromTo best-effort resolves the version being replaced (from: the
+// machine's installed `versions`.coreVersion) and the version it is updating
+// to (to: the latest release on the machine's `system`.releaseChannel),
+// mirroring the reads firmwareVersion above already does. Both reads are
+// wrapped in SafeCall and swallow every error/panic, so a missing or
+// unreachable machine simply yields an empty side rather than affecting the
+// update; to stays empty when the release lookup fails or reports nothing.
+func (h *Handlers) firmwareFromTo(ctx context.Context, machine *Machine, adapter Adapter) (from, to string) {
+	var versionsRaw json.RawMessage
+	httputil.SafeCall("machines: firmware update from-version fetch", func() {
+		versionsRaw, _ = adapter.GetSettings(ctx, machine, "versions")
+	})
+	var versions struct {
+		CoreVersion *string `json:"coreVersion"`
+	}
+	if len(versionsRaw) > 0 {
+		_ = json.Unmarshal(versionsRaw, &versions)
+	}
+	if versions.CoreVersion != nil {
+		from = *versions.CoreVersion
+	}
+
+	var systemRaw json.RawMessage
+	httputil.SafeCall("machines: firmware update system-settings fetch", func() {
+		systemRaw, _ = adapter.GetSettings(ctx, machine, "system")
+	})
+	var system map[string]any
+	if len(systemRaw) > 0 {
+		_ = json.Unmarshal(systemRaw, &system)
+	}
+	channel := ParseReleaseChannel(system["releaseChannel"])
+	httputil.SafeCall("machines: firmware update latest-release lookup", func() {
+		latest, err := h.firmware.GetLatestFirmwareRelease(ctx, channel)
+		if err == nil && latest != nil {
+			to = latest.Hash
+		}
+	})
+	return from, to
+}
+
+// firmwareVersion serves GET /api/machine/firmware/version (#620).
 func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
 	if !ok {
@@ -297,9 +350,9 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	if !requireSettingsProxySupport(w, adapter, machine) {
 		return
 	}
-	// Ports Node's Promise.all([getSettings('versions'), getSettings('system')])
-	// (#901 code review) — the two reads are independent, so fetch them
-	// concurrently instead of paying two round-trips back to back.
+	// The "versions" and "system" settings reads are independent (#901 code
+	// review), so fetch them concurrently instead of paying two round-trips
+	// back to back.
 	var versionsRaw, systemRaw json.RawMessage
 	var versionsErr, systemErr error
 	var versionsPanicked bool
@@ -387,7 +440,7 @@ func nullOr(s *string) any {
 	return *s
 }
 
-// machineLive ports GET /api/machine/live: latest cached live sensor/
+// machineLive serves GET /api/machine/live: latest cached live sensor/
 // system-state pushes from the machine's persistent WebSocket session
 // (live.go) — null until the first push arrives.
 func (h *Handlers) machineLive(w http.ResponseWriter, r *http.Request) {

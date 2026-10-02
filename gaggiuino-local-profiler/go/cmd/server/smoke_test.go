@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// This file is the HA-ingress smoke test (#901, Phase 3). It boots the
+// This file is the HA-ingress smoke test (#901). It boots the
 // real handler chain (buildApp: SecurityHeaders -> rate limiter ->
 // RequireToken -> the full domain mux, exactly what main() serves) and
 // drives the three ingress traps that hit the templ branch three times
@@ -95,36 +95,62 @@ func smokeGet(t *testing.T, url string, headers map[string]string) *http.Respons
 func TestIngressSmoke_NoOriginAbsoluteReferences(t *testing.T) {
 	base, token := newSmokeServer(t)
 
-	// The bare /ui/ entrypoint must redirect with a RELATIVE Location, so
-	// the browser resolves it against its ingress address bar
-	// (/api/hassio_ingress/<tok>/ui/), not the origin root.
-	resp := smokeGet(t, base+"/ui/", map[string]string{"X-Ingress-Path": ingressHeader})
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("GET /ui/ status = %d, want 302", resp.StatusCode)
+	// The old /ui/kiosk bookmark must keep working (#1267): 302 with a
+	// genuinely relative Location onto the rebuilt kiosk page.
+	respKiosk := smokeGet(t, base+"/ui/kiosk", map[string]string{"X-Ingress-Path": ingressHeader})
+	defer respKiosk.Body.Close()
+	if respKiosk.StatusCode != http.StatusFound {
+		t.Fatalf("GET /ui/kiosk status = %d, want 302", respKiosk.StatusCode)
 	}
-	if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, "/") || loc == "" {
-		t.Errorf("GET /ui/ Location = %q, want a relative target (no leading slash)", loc)
+	if loc := respKiosk.Header.Get("Location"); strings.HasPrefix(loc, "/") || loc == "" {
+		t.Errorf("GET /ui/kiosk Location = %q, want a relative target (no leading slash)", loc)
 	}
 
-	// The SPA shell and every templ page must reference their assets/links
-	// relatively — a leading-slash href/src/action/hx-* breaks the moment
-	// the app is served under /api/hassio_ingress/<tok>/.
-	for _, path := range []string{"/", "/ui/shots"} {
-		resp := smokeGet(t, base+path, map[string]string{
-			"X-Ingress-Path": ingressHeader,
-			"X-GLP-Token":    token,
-		})
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("GET %s status = %d, want 200", path, resp.StatusCode)
+	// #1200: the frozen templ pages that used to live under /ui/ are gone —
+	// a path that used to be one now 404s (the SPA has no index.html
+	// fallback for unknown paths).
+	respGone := smokeGet(t, base+"/ui/shots", map[string]string{"X-GLP-Token": token})
+	respGone.Body.Close()
+	if respGone.StatusCode != http.StatusNotFound {
+		t.Errorf("GET /ui/shots status = %d, want 404 (templ pages removed)", respGone.StatusCode)
+	}
+
+	// The SPA shell must reference its assets/links relatively — a
+	// leading-slash href/src/action/hx-* breaks the moment the app is served
+	// under /api/hassio_ingress/<tok>/.
+	resp := smokeGet(t, base+"/", map[string]string{
+		"X-Ingress-Path": ingressHeader,
+		"X-GLP-Token":    token,
+	})
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", resp.StatusCode)
+	}
+	for _, needle := range []string{`href="/`, `src="/`, `action="/`, `hx-get="/`, `hx-post="/`} {
+		if strings.Contains(string(body), needle) {
+			t.Errorf("GET / response contains origin-absolute reference %q — breaks under an ingress prefix", needle)
 		}
-		for _, needle := range []string{`href="/`, `src="/`, `action="/`, `hx-get="/`, `hx-post="/`} {
-			if strings.Contains(string(body), needle) {
-				t.Errorf("GET %s response contains origin-absolute reference %q — breaks under an ingress prefix", path, needle)
-			}
+	}
+
+	// The rebuilt kiosk (#1267) is served at /kiosk.html by webapp's static
+	// handler. A bare `go test` resolves the embed against the committed
+	// dist/index.html placeholder (no frontend build), so the page only
+	// exists in CI's frontend-built modes; when present it must be text/html,
+	// and when absent it must still 404 cleanly rather than being claimed by
+	// the removed /ui/ handlers.
+	respKioskHTML := smokeGet(t, base+"/kiosk.html", map[string]string{"X-GLP-Token": token})
+	respKioskHTML.Body.Close()
+	switch respKioskHTML.StatusCode {
+	case http.StatusOK:
+		if ct := respKioskHTML.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Errorf("GET /kiosk.html Content-Type = %q, want text/html", ct)
 		}
+	case http.StatusNotFound:
+		// Committed dist/index.html placeholder only — expected without a
+		// frontend build.
+	default:
+		t.Errorf("GET /kiosk.html status = %d, want 200 (built) or 404 (placeholder dist)", respKioskHTML.StatusCode)
 	}
 }
 
@@ -235,5 +261,36 @@ func TestIngressSmoke_AuthBehindIngressHeader(t *testing.T) {
 	withToken.Body.Close()
 	if withToken.StatusCode != http.StatusOK {
 		t.Errorf("GET %s with a valid token: status = %d, want 200", apiPath, withToken.StatusCode)
+	}
+}
+
+// TestIngressSmoke_MCPSettingsRequireToken pins #1288's auth shape: the MCP
+// settings API lives under /api/, so like every other route it needs the
+// token. The MCP endpoint itself is now always mounted but disabled by
+// default, so a token-holder gets a 404 (not a 401) from it.
+func TestIngressSmoke_MCPSettingsRequireToken(t *testing.T) {
+	base, token := newSmokeServer(t)
+	const settingsPath = "/api/mcp/settings"
+
+	noAuth := smokeGet(t, base+settingsPath, nil)
+	noAuth.Body.Close()
+	if noAuth.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET %s unauthenticated: status = %d, want 401", settingsPath, noAuth.StatusCode)
+	}
+
+	withToken := smokeGet(t, base+settingsPath, map[string]string{"X-GLP-Token": token})
+	body, _ := io.ReadAll(withToken.Body)
+	withToken.Body.Close()
+	if withToken.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s with token: status = %d, want 200", settingsPath, withToken.StatusCode)
+	}
+	if !strings.Contains(string(body), "developerToolsAvailable") {
+		t.Errorf("GET %s body = %s, want developerToolsAvailable", settingsPath, body)
+	}
+
+	disabled := smokeGet(t, base+"/api/mcp", map[string]string{"X-GLP-Token": token})
+	disabled.Body.Close()
+	if disabled.StatusCode != http.StatusNotFound {
+		t.Errorf("GET /api/mcp with token while disabled: status = %d, want 404", disabled.StatusCode)
 	}
 }

@@ -1,6 +1,5 @@
 // #594: machine icon rendering (public-src/machine-icon.js). Pure ESM string
-// builder, no DOM dependency, so it's tested directly the same way
-// public-src/bean-math.js is (see test/bean-math.test.js).
+// builder, no DOM dependency, so it's tested directly.
 import { describe, it, expect } from 'vitest';
 import { machineIconSvg, machineIconMiniSvg, machineIconAnimatedSvg,
          MACHINE_ICON_MODES, resolveMachineIconState } from '../public-src/machine-icon.js';
@@ -36,7 +35,7 @@ describe('machineIconSvg / machineIconMiniSvg theme rendering (#594)', () => {
     });
 
     // XSS safety: theme.a/b are meant to be validated #rrggbb hex by
-    // machineSchema (see lib/validation/schemas.js) before ever reaching the
+    // machineSchema before ever reaching the
     // DB, but this module has its own defense-in-depth guard (HEX_RE in
     // machine-icon.js) — a value that somehow bypassed validation (corrupt
     // DB row, future caller that forgets to validate) must never be
@@ -111,7 +110,7 @@ describe('machineIconSvg / machineIconMiniSvg kind rendering (#822)', () => {
     });
 });
 
-describe('resolveTheme (lib/machines/theme-presets.js)', () => {
+describe('resolveTheme (shared/theme-presets.js)', () => {
     it('returns null for no theme / unknown preset', () => {
         expect(resolveTheme(null)).toBeNull();
         expect(resolveTheme({ preset: 'nonexistent' })).toBeNull();

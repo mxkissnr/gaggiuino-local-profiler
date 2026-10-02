@@ -286,6 +286,84 @@ func TestHandlers_MachineProfileCRUD_EndToEnd(t *testing.T) {
 	}
 }
 
+// TestHandlers_MachineProfileCreate_OfflineSavesLocallyReturns200 regresses
+// the 2026-09-09 bug report ("Fehler beim Speichern" saving a profile while
+// the machine was offline): creating a profile against an unreachable
+// machine must now succeed locally (200, syncStatus pending_create) instead
+// of hard-failing with 502.
+func TestHandlers_MachineProfileCreate_OfflineSavesLocallyReturns200(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machines", nil)) // seed default (gaggiuino, unreachable — no fake server)
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"Offline Profile","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (saved locally despite unreachable machine), body = %s", rec.Code, rec.Body)
+	}
+	created := decodeBody(t, rec.Body.Bytes())
+	if created["syncStatus"] != ProfileSyncPendingCreate {
+		t.Errorf("syncStatus = %v, want %q", created["syncStatus"], ProfileSyncPendingCreate)
+	}
+	id, _ := created["id"].(string)
+	if !strings.HasPrefix(id, "local:") {
+		t.Errorf("id = %q, want a local: placeholder (never synced to the machine)", id)
+	}
+
+	// The list endpoint must fall back to this same local row when the
+	// machine can't be reached to list its own profiles either.
+	rec = doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profiles", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want 200, body = %s", rec.Code, rec.Body)
+	}
+	list := decodeBody(t, rec.Body.Bytes())
+	if list["stale"] != true {
+		t.Errorf("stale = %v, want true (machine unreachable)", list["stale"])
+	}
+	optionsRaw, _ := list["optionsRaw"].([]any)
+	if len(optionsRaw) != 1 {
+		t.Fatalf("optionsRaw = %+v, want the one locally-created profile", optionsRaw)
+	}
+}
+
+// TestHandlers_GetMachineProfile_OfflineFallsBackToLocalCache regresses the
+// other half of the same bug: opening the editor for an EXISTING profile
+// used to hard-502 with no fallback at all once the machine went
+// unreachable, even though it had been fetched successfully moments
+// earlier.
+func TestHandlers_GetMachineProfile_OfflineFallsBackToLocalCache(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newFakeGaggiuinoMachine()
+	fake.restProfileCreate404 = true
+
+	h, registry, _ := newTestHandlers(t)
+	m, err := registry.CreateMachine(MachineInput{Name: strPtr("Real"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL), Enabled: boolPtr(true)})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if _, err := registry.SetDefaultMachine(m.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+	mux := newMux(h)
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"Espresso","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body)
+	}
+	profileID := decodeBody(t, rec.Body.Bytes())["id"].(string)
+
+	// Take the machine offline (same "close the fake server" pattern used
+	// elsewhere for unreachable-machine tests) and re-fetch the same profile.
+	fake.Close()
+	rec = doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profile/"+profileID, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (served from local cache), body = %s", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["name"] != "Espresso" {
+		t.Fatalf("cached profile = %+v, want name Espresso", body)
+	}
+}
+
 // TestDecodeJSONBody_EmptyBodyKeepsDefaults and
 // TestDecodeJSONBody_MalformedBodyStill400s pin decodeJSONBody's behavior
 // (#901's httputil.DecodeJSONBodyInto extraction) at the unit level rather
@@ -320,5 +398,85 @@ func TestDecodeJSONBody_MalformedBodyStill400s(t *testing.T) {
 	}
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHandlers_MachineProfileSavedCallback_ReportsCreateAndUpdate pins
+// #1286 R1: after a profile create and a profile update have both fully
+// succeeded against a reachable machine, SetOnProfileSaved's hook fires
+// once with "create" and once with "update" (in that order), and never more
+// than that per request.
+func TestHandlers_MachineProfileSavedCallback_ReportsCreateAndUpdate(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newFakeGaggiuinoMachine()
+	fake.restProfileCreate404 = true // force the create onto the WS path, same as the adapter-level test
+	defer fake.Close()
+
+	h, registry, _ := newTestHandlers(t)
+	var actions []string
+	h.SetOnProfileSaved(func(action string) { actions = append(actions, action) })
+
+	m, err := registry.CreateMachine(MachineInput{Name: strPtr("Real"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL), Enabled: boolPtr(true)})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if _, err := registry.SetDefaultMachine(m.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+	mux := newMux(h)
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"Espresso","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if len(actions) != 1 || actions[0] != "create" {
+		t.Fatalf("after create, callback actions = %v, want [create]", actions)
+	}
+	profileID := decodeBody(t, rec.Body.Bytes())["id"].(string)
+
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPut, "/api/machine/profile/"+profileID, strings.NewReader(`{"name":"Espresso v2","phases":[{"type":"FLOW"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if len(actions) != 2 || actions[1] != "update" {
+		t.Fatalf("after update, callback actions = %v, want [create update]", actions)
+	}
+}
+
+// TestHandlers_MachineProfileSavedCallback_NotOnFailure pins the other half
+// of #1286 R1: a create that never reaches the machine (the offline
+// local-save fallback), one rejected before any write (invalid body), and
+// an update of a profile that never existed must not fire the hook at all.
+func TestHandlers_MachineProfileSavedCallback_NotOnFailure(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	var actions []string
+	h.SetOnProfileSaved(func(action string) { actions = append(actions, action) })
+	mux := newMux(h)
+	doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machines", nil)) // seed default (gaggiuino, unreachable)
+
+	// Unreachable machine: the create is saved locally with pending_create
+	// (200), not created on the machine -> no callback.
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"Offline","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offline create status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if created := decodeBody(t, rec.Body.Bytes()); created["syncStatus"] != ProfileSyncPendingCreate {
+		t.Fatalf("syncStatus = %v, want %q", created["syncStatus"], ProfileSyncPendingCreate)
+	}
+
+	// Invalid body -> 400, nothing saved -> no callback.
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(`{"name":"","phases":[]}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid create status = %d, want 400", rec.Code)
+	}
+
+	// Update of a profile that never existed -> 404 -> no callback.
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPut, "/api/machine/profile/local:999", strings.NewReader(`{"name":"X","phases":[{"type":"PRESSURE"}]}`)))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("update missing profile status = %d, want 404, body = %s", rec.Code, rec.Body)
+	}
+
+	if len(actions) != 0 {
+		t.Fatalf("callback fired on failed create/update: %v", actions)
 	}
 }

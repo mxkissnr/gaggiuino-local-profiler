@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// This file ports routes/library/recipes.js.
+// This file implements the recipe endpoints.
 
 var validBrewMethods = map[string]bool{
 	"espresso": true, "aeropress": true, "v60": true, "french_press": true,
@@ -21,8 +21,8 @@ func findRecipeIndex(lib Library, id int64) int {
 	return -1
 }
 
-// parseSteps ports routes/library/recipes.js's local _parseSteps: up to 30
-// {text, duration_s} steps, entries with a blank text dropped entirely.
+// parseSteps is the local steps parser: up to 30 {text, duration_s} steps,
+// entries with a blank text dropped entirely.
 func parseSteps(raw any) []any {
 	arr, ok := raw.([]any)
 	if !ok {
@@ -51,9 +51,8 @@ func brewMethodOrOther(v any) string {
 	return "other"
 }
 
-// createRecipe ports POST /api/library/recipe — a thin wrapper around
-// CreateRecipe (create.go), the same logic internal/web's "New recipe" form
-// also calls.
+// createRecipe handles POST /api/library/recipe — a thin wrapper around
+// CreateRecipe (create.go).
 func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -75,9 +74,8 @@ func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, recipe)
 }
 
-// updateRecipe ports PUT /api/library/recipe/:id — a thin wrapper around
-// UpdateRecipe (update.go), the same logic internal/web's Edit recipe form
-// also calls.
+// updateRecipe handles PUT /api/library/recipe/:id — a thin wrapper around
+// UpdateRecipe (update.go).
 func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -96,24 +94,27 @@ func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, recipe)
 }
 
-// deleteRecipe ports POST /api/library/recipe/:id/delete.
+// deleteRecipe handles POST /api/library/recipe/:id/delete.
 func (h *Handlers) deleteRecipe(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	filtered := make([]Entity, 0, len(lib.Recipes))
-	for _, rc := range lib.Recipes {
-		rid, ok := idOf(rc, "id")
-		if !noMatch && ok && rid == id {
-			continue
+	err := h.repo.Update(func(lib *Library) error {
+		filtered := make([]Entity, 0, len(lib.Recipes))
+		removed := false
+		for _, rc := range lib.Recipes {
+			rid, ok := idOf(rc, "id")
+			if !noMatch && ok && rid == id {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, rc)
 		}
-		filtered = append(filtered, rc)
-	}
-	lib.Recipes = filtered
-	if err := h.repo.SaveLibrary(lib); err != nil {
+		if !removed {
+			return ErrSkipSave
+		}
+		lib.Recipes = filtered
+		return nil
+	})
+	if err != nil && !errors.Is(err, ErrSkipSave) {
 		internalError(w, err)
 		return
 	}

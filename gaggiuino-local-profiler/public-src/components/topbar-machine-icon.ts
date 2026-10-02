@@ -11,12 +11,13 @@
 // two only share the pure resolveMachineIconState() translator and the
 // setMachineIconMode()/machineIconAnimatedSvg() renderers, all in
 // machine-icon.js — #902 made isSteaming/isFlushing real signals sourced via
-// lib/machine-state.js's deriveMachineState() (sensorSnap.steamActive/
-// sysState.operationMode), so steaming and flushing are now told apart from
-// heating and from each other, not just inferred from temperature.
+// the backend's deriveMachineState() (go/internal/system/derive.go) from
+// sensorSnap.steamActive/sysState.operationMode, so steaming and flushing
+// are now told apart from heating and from each other, not just inferred
+// from temperature.
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { esc, html, joinHtml } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, resolveMachineIconState,
          MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 
@@ -34,17 +35,34 @@ function host(): HTMLElement | null {
 // switch, not a new regression here.
 let _iconFor: unknown = null;
 
+function iconMachine() {
+  return (S.machines || []).find(m => m.id === S.activeMachineId)
+      || (S.machines || []).find(m => m.isDefault)
+      || (S.machines || [])[0];
+}
+
+// SSE live data only describes the default machine (#952), so it may drive
+// the icon only while the icon shows that one. A single-machine install
+// always counts as default.
+function iconShowsDefaultMachine(): boolean {
+  const machines = S.machines || [];
+  if (machines.length <= 1) return true;
+  const machine = iconMachine();
+  return !machine || machine.isDefault === true;
+}
+
+let _lastSnapshot: unknown = null;
+
 export function renderTopbarMachineIcon(): void {
   const el = host();
   if (!el) return;
-  const machine = (S.machines || []).find(m => m.id === S.activeMachineId)
-               || (S.machines || []).find(m => m.isDefault)
-               || (S.machines || [])[0];
+  const machine = iconMachine();
   const id = machine?.id ?? null;
   if (_iconFor !== id || !el.firstChild) {
     el.className = `topbar-machine-icon ${MACHINE_ICON_LIVE_CLASS}`;
     el.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
     _iconFor = id;
+    if (S.sseActive && iconShowsDefaultMachine()) _applyState(_lastSnapshot);
   }
 }
 
@@ -54,11 +72,14 @@ let _lastPreheat: unknown = null;
 // live.js's own handlers for the same two event types (multiple listeners
 // per event are supported, see sse.js's onEvent()).
 export function handleTopbarLiveSnapshotEvent(msg: unknown): void {
+  _lastSnapshot = msg;
+  if (!iconShowsDefaultMachine()) return;
   _applyState(msg);
 }
 
 export function handleTopbarPreheatUpdateEvent(preheat: unknown): void {
   _lastPreheat = preheat;
+  if (!iconShowsDefaultMachine()) return;
   _applyState(null);
 }
 
@@ -78,7 +99,7 @@ function _applyState(msg: unknown): void {
 // falls back to once a machine is reachable but reports neither isLive nor
 // an active preheat.
 export function syncTopbarMachineIconFallback(reachable: unknown): void {
-  if (S.sseActive) return;
+  if (S.sseActive && iconShowsDefaultMachine()) return;
   const el = host();
   if (!el) return;
   setMachineIconMode(el, reachable === false ? 'off' : 'hot', 1);
@@ -235,7 +256,7 @@ function renderPanelStats(): void {
     [t('machine_switcher_title'), machineLabel()],
   ];
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = rows.map(([label, value]) => `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join('');
+  el.innerHTML = joinHtml(rows.map(([label, value]) => html`<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`));
 }
 
 export function openEasterEggPanel(): void {

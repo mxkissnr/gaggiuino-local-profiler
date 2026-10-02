@@ -10,7 +10,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 )
 
-// This file pins the wire contract of routes/system.js's machine-switch and
+// This file pins the wire contract of the machine-switch and
 // openapi endpoints — the "pin the essential shape" check
 // orders/shots/library's contract_test.go established. The not-configured
 // branches and the openapi-copy-in-sync guard live in extra_test.go; this
@@ -108,4 +108,119 @@ func TestContract_OpenAPI_JSONContentType(t *testing.T) {
 	if _, ok := doc["paths"].(map[string]any); !ok {
 		t.Errorf("converted spec missing paths object")
 	}
+}
+
+func requireBoolField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if _, ok := v.(bool); !ok {
+		t.Errorf("expected %q to be a boolean, got %T (%v)", key, v, v)
+	}
+}
+
+func requireStringField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if _, ok := v.(string); !ok {
+		t.Errorf("expected %q to be a string, got %T (%v)", key, v, v)
+	}
+}
+
+func requireNumberField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if _, ok := v.(float64); !ok {
+		t.Errorf("expected %q to be a number, got %T (%v)", key, v, v)
+	}
+}
+
+func requireNullableNumberField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if v == nil {
+		return
+	}
+	if _, ok := v.(float64); !ok {
+		t.Errorf("expected %q to be a number or null, got %T (%v)", key, v, v)
+	}
+}
+
+func requireNullableBoolField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if v == nil {
+		return
+	}
+	if _, ok := v.(bool); !ok {
+		t.Errorf("expected %q to be a boolean or null, got %T (%v)", key, v, v)
+	}
+}
+
+func requireNullableObjectField(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	v, ok := body[key]
+	if !ok {
+		t.Errorf("expected required field %q, got %+v", key, body)
+		return
+	}
+	if v == nil {
+		return
+	}
+	if _, ok := v.(map[string]any); !ok {
+		t.Errorf("expected %q to be an object or null, got %T (%v)", key, v, v)
+	}
+}
+
+// TestContract_LiveDataShape pins openapi.yaml's LiveData schema (every key
+// always present) on GET /api/live/data, the same payload the SSE
+// live-snapshot event carries.
+func TestContract_LiveDataShape(t *testing.T) {
+	sqlDB := newTestDB(t)
+	p := newTestPollerWithHA(t, &fakeAdapter{}, sqlDB, newDisabledHAClient(), "switch.machine")
+	mux := newSystemMux(NewHandlers(p, NewDemoService(sqlDB, nil, nil), testAPIToken))
+
+	rec := doGet(mux, "/api/live/data")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeMap(t, rec.Body.Bytes())
+
+	requireBoolField(t, body, "isLive")
+	requireStringField(t, body, "profileName")
+	requireNullableObjectField(t, body, "datapoints")
+	requireNumberField(t, body, "seq")
+	requireNullableBoolField(t, body, "machineReachable")
+	requireBoolField(t, body, "isSteaming")
+	requireNumberField(t, body, "steamSeq")
+	requireNullableObjectField(t, body, "steamDatapoints")
+	requireBoolField(t, body, "isFlushing")
+	requireNumberField(t, body, "flushSeq")
+	requireNullableObjectField(t, body, "flushDatapoints")
+	requireBoolField(t, body, "isDescaling")
+	requireNumberField(t, body, "descaleSeq")
+	requireNullableObjectField(t, body, "descaleDatapoints")
+	requireNullableNumberField(t, body, "temperature")
+	requireNullableNumberField(t, body, "targetTemperature")
+	requireNullableNumberField(t, body, "pressure")
+	requireNullableNumberField(t, body, "waterLevel")
 }

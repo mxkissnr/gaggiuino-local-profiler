@@ -10,12 +10,13 @@
 // comments below are Max's approved Theme Lab / redesign-2026-08 mockup
 // measurements, kept as-is; do not redesign.
 //
-// Body colour comes from the machine's theme (lib/machines/theme-presets.js
-// resolveTheme()); the dark/chrome parts are fixed neutral greys (not pure
+// Body colour comes from the machine's theme (resolveTheme()); the
+// dark/chrome parts are fixed neutral greys (not pure
 // black) by design, so the icon stays legible on both the app's light and
 // dark backgrounds regardless of theme.
 import { resolveTheme } from './shared/theme-presets.js';
 import type { ThemeStops } from './shared/theme-presets.js';
+import type { Html } from './utils.js';
 
 export type MachineIconKind = 'gaggiuino' | 'gaggimate';
 
@@ -306,7 +307,7 @@ function gaggimatePanelAndDisplay(): { panel: string; disp: string } {
 //     idle look
 //   - no lamps/cup/jug/steam/pour groups — Live-view-only extras that were
 //     never part of the pre-#811 static icon either
-function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): string {
+function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): Html {
     const mate = kind === 'gaggimate';
     const id = nextGradientId();
     const { a, b } = stopsFor(theme);
@@ -326,20 +327,20 @@ function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): 
       </defs>
       ${animBody(id, `${id}-steel`, mini)}
       ${panel}
-    </svg>`;
+    </svg>` as Html; // interpolations: module-internal ids/paths, theme colours pre-validated by stopsFor() (HEX_RE or CSS var)
 }
 
 // Detail variant — full geometry, for anywhere the icon renders at a
 // reasonable size (machine form, larger list rows). `kind` is
 // 'gaggiuino' (default) or 'gaggimate', same convention as
 // machineIconAnimatedSvg(theme, kind) below.
-export function machineIconSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
+export function machineIconSvg(theme: unknown, kind: unknown = 'gaggiuino'): Html {
     return machineIconStaticMarkup(theme, kind, false);
 }
 
 // Mini variant — drops sub-2px detail (button highlights, drip tray ribs;
 // see animBody()'s `mini` param). Use at <=24px.
-export function machineIconMiniSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
+export function machineIconMiniSvg(theme: unknown, kind: unknown = 'gaggiuino'): Html {
     return machineIconStaticMarkup(theme, kind, true);
 }
 
@@ -387,7 +388,7 @@ export const MACHINE_ICON_MODES: Readonly<Record<MachineIconMode, readonly strin
  *   el.innerHTML = machineIconAnimatedSvg(machine.theme, machine.type);
  *   setMachineIconMode(el, 'hot');
  */
-export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuino'): string {
+export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuino'): Html {
     const mate = kind === 'gaggimate';
     const idBase = nextAnimId();
     const { a, b } = stopsFor(theme);
@@ -486,7 +487,7 @@ export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuin
         <path d="M50 94.4 C50 99 50.2 104 50.1 111" stroke="#7a4a22" stroke-width="1.7" stroke-linecap="round" fill="none"/>
         <path d="M50 94.4 C50 99 50.2 104 50.1 111" stroke="#a9713f" stroke-width=".7" stroke-linecap="round" fill="none" opacity=".8"/>
       </g>
-    </svg>`;
+    </svg>` as Html; // interpolations: module-internal ids/paths, theme colours pre-validated by stopsFor() (HEX_RE or CSS var)
 }
 
 // Applies one of MACHINE_ICON_MODES to the wrapper element (see
@@ -520,13 +521,12 @@ export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatF
 // result straight to setMachineIconMode().
 //
 // #902/#983: steam/flush/descale signal source -- msg.isSteaming/
-// msg.isFlushing/msg.isDescaling come from lib/machine-state.js's
-// deriveMachineState() (sensorSnap.steamActive/status.steamSwitchState for
-// steam; sysState.operationMode, normalized via gaggiuino-proto.js's
-// normalizeOperationMode(), for flush/descale), surfaced on every GET
-// /api/live/data / LIVE_SNAPSHOT payload by lib/poll.js's
-// buildLiveDataResponse(). Checked ahead of the isLive/heating/hot fallbacks
-// below since brewing/steaming/flushing/descaling are mutually exclusive
+// msg.isFlushing/msg.isDescaling come from the derived live machine state
+// (sensorSnap.steamActive/status.steamSwitchState for steam;
+// sysState.operationMode for flush/descale), surfaced on every GET
+// /api/live/data / LIVE_SNAPSHOT payload. Checked ahead of the
+// isLive/heating/hot fallbacks below since brewing/steaming/flushing/
+// descaling are mutually exclusive
 // machine states, checked in that priority order if somehow reported
 // alongside one another (mirrors poll.go's effectiveSteaming/
 // effectiveFlushing/effectiveDescaling priority guard).

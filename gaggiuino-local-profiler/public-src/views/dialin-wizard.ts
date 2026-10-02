@@ -10,11 +10,12 @@
 // doesn't lose progress. It only ever references real shot ids; annotation
 // data lives on the shot itself via the normal annotate endpoint.
 import { S }                     from '../state/index.js';
-import { t }                     from '../i18n.js';
+import { t, tHtml }              from '../i18n.js';
 import { saveBeanKnownGrind } from '../api/library.js';
 import { annotateShot }          from '../api/shots.js';
-import type { ShotAnnotation }   from '../api/types.js';
-import { esc, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
+import type { ShotAnnotationInput } from '../api/types.js';
+import { esc, html, joinHtml, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
+import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
 import { getShotCurve } from '../shot-curves.js';
@@ -52,7 +53,7 @@ interface DialinReviewRound {
   suggestion?: DialinSuggestion;
 }
 
-interface DialinSession {
+interface DialinSession extends Record<string, unknown> {
   id: number;
   startedAt: number;
   bean: string;
@@ -84,7 +85,7 @@ const POLL_MS = 3000;
 let _pollTimer: ReturnType<typeof setInterval> | null = null;
 
 function _session(): DialinSession | null {
-  return S.dialinSession as unknown as DialinSession | null;
+  return S.dialinSession as DialinSession | null;
 }
 
 function _shots(): DialinShotRow[] {
@@ -169,7 +170,7 @@ export function closeDialinWizard(): void {
 
 function _parseRatio(brewRatio: string | number | null | undefined): number {
   const m = String(brewRatio || '').trim().match(/^1\s*:\s*([\d.]+)$/);
-  const n = m ? parseFloat(m[1]) : NaN;
+  const n = m ? parseFloat(m[1] ?? '') : NaN;
   return Number.isFinite(n) && n > 0 ? n : 2;
 }
 
@@ -180,9 +181,11 @@ function _suggestStartGrind(beanName: string | undefined, grinderName: string | 
   if (beanName) {
     const combos = calcBestGrindCombosForBean(beanName, _shots(), beanId);
     if (combos?.length) {
-      const combo = grinderName
-        ? combos.find(c => c.grinder.toLowerCase() === grinderName.toLowerCase()) || combos[0]
-        : combos[0];
+      const matched = grinderName
+        ? combos.find(c => c.grinder.toLowerCase() === grinderName.toLowerCase())
+        : undefined;
+      const [firstCombo] = combos;
+      const combo = matched || firstCombo;
       if (combo) return combo.grindSetting;
     }
     const bean = beanId != null
@@ -211,9 +214,7 @@ async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channelin
   const pTimes = data.pressure.map(p => p.x);
   const pAll   = data.pressure.map(p => p.y);
   const channeling = detectChanneling(pTimes, pAll);
-  // calcBrewRatio declares the annotation dose as a string, but the API stores
-  // a number here (which is why it parseFloat()s it) — keep passing the real value.
-  const ratio = calcBrewRatio(shot as unknown as { annotation?: { dose?: string | null } | null }, data);
+  const ratio = calcBrewRatio(shot, data);
   const score = calcShotScore(shot);
   return { secs, channeling, ratio, score };
 }
@@ -321,16 +322,21 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
   const shot = _shots().find(sh => sh.id === shotId);
   if (!shot) return;
 
-  const payload = {
+  const payload: ShotAnnotationInput = {
     coffee: s.bean, beanId: s.beanId ?? null, grinder: s.grinder, grindSetting: String(s.pendingGrind),
     dose: s.dose || null, recipeId: s.recipeId || null,
   };
   try {
-    const r = await annotateShot(shotId, payload as unknown as ShotAnnotation);
+    // ShotAnnotationInput types dose as the raw form value (string or number)
+    // the wizard passes straight through (#1103).
+    const r = await annotateShot(shotId, payload);
     if (r.ok) {
       const rows = _shots();
       const idx = rows.findIndex(sh => sh.id === shotId);
-      if (idx !== -1) rows[idx].annotation = { ...rows[idx].annotation, ...payload };
+      if (idx !== -1) {
+        const row = rows[idx];
+        if (row) row.annotation = { ...row.annotation, ...payload };
+      }
       renderSidebar();
       updateSidebarHighlighting();
     }
@@ -355,9 +361,9 @@ export async function dialinSaveKnownGrind(): Promise<void> {
     : S.coffeeLibrary?.beans?.find(b => b.name === s.bean);
   const best = _bestRound(s.rounds);
   if (!bean || !best) return;
-  // api/library.ts declares grindSetting as string, but the untyped .js sent
-  // the round's numeric value straight through — keep the wire body identical.
-  const updated = await saveBeanKnownGrind(bean.id as number, { grinder: s.grinder, grindSetting: best.grindSetting as unknown as string });
+  // saveBeanKnownGrind's grindSetting accepts the round's numeric value too,
+  // so the wire body stays identical to the untyped .js.
+  const updated = await saveBeanKnownGrind(bean.id as number, { grinder: s.grinder, grindSetting: best.grindSetting });
   if (updated) {
     const idx = S.coffeeLibrary.beans.findIndex(b => b.id === bean.id);
     if (idx !== -1) S.coffeeLibrary.beans[idx] = updated;
@@ -382,7 +388,7 @@ export function renderDialinWizard(): void {
   const s = _session();
   const body = document.getElementById('dwBody');
   if (!body) return;
-  if (!s) { body.innerHTML = ''; return; }
+  if (!s) { body.innerHTML = html``; return; }
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   if (s.status === 'setup')                       { body.innerHTML = _renderSetup(s); return; }
@@ -418,20 +424,20 @@ function _checkForCandidate(s: DialinSession): void {
 // "other…" option that reveals a free-text fallback input, since not every
 // grinder is necessarily in the library yet. Falls back to a plain text
 // input (as before) when the library has no grinders at all.
-function _renderGrinderField(s: DialinSession): string {
+function _renderGrinderField(s: DialinSession): Html {
   const grinders = S.coffeeLibrary?.grinders || [];
   if (!grinders.length) {
-    return `<input type="text" id="dwGrinder" value="${esc(s.grinder)}">`;
+    return html`<input type="text" id="dwGrinder" value="${esc(s.grinder)}">`;
   }
   const knownNames = new Set(grinders.map(g => g.name));
   const isOther = !!s.grinder && !knownNames.has(s.grinder);
-  return `
+  return html`
     <select id="dwGrinder" data-action="dialin-grinder-select">
-      ${grinders.map(g => `<option value="${esc(g.name as string)}"${!isOther && s.grinder === g.name ? ' selected' : ''}>${esc(g.name as string)}</option>`).join('')}
-      <option value="__other__"${isOther ? ' selected' : ''}>${t('dialin_wizard_grinder_other')}</option>
+      ${joinHtml(grinders.map(g => html`<option value="${esc(g.name as string)}"${!isOther && s.grinder === g.name ? html` selected` : html``}>${esc(g.name as string)}</option>`))}
+      <option value="__other__"${isOther ? html` selected` : html``}>${tHtml('dialin_wizard_grinder_other')}</option>
     </select>
-    <input type="text" id="dwGrinderOther" placeholder="${t('dialin_wizard_grinder_other_ph')}"
-      style="${isOther ? '' : 'display:none'};margin-top:6px" value="${isOther ? esc(s.grinder) : ''}">`;
+    <input type="text" id="dwGrinderOther" placeholder="${tHtml('dialin_wizard_grinder_other_ph')}"
+      style="${isOther ? html`` : html`display:none`};margin-top:6px" value="${isOther ? esc(s.grinder) : html``}">`;
 }
 
 // Toggles the free-text fallback input's visibility when the grinder select
@@ -443,37 +449,37 @@ export function dialinGrinderChange(): void {
   other.style.display = (select as HTMLSelectElement).value === '__other__' ? '' : 'none';
 }
 
-function _renderSetup(s: DialinSession): string {
+function _renderSetup(s: DialinSession): Html {
   const beans = S.coffeeLibrary?.beans || [];
-  return `<div class="dw-setup">
+  return html`<div class="dw-setup">
     <div class="lib-form-field">
-      <label>${t('dialin_wizard_setup_bean')}</label>
+      <label>${tHtml('dialin_wizard_setup_bean')}</label>
       <input type="text" id="dwBean" list="dwBeanList" value="${esc(s.bean)}">
-      <datalist id="dwBeanList">${beans.map(b => `<option value="${esc(b.name as string)}">`).join('')}</datalist>
+      <datalist id="dwBeanList">${joinHtml(beans.map(b => html`<option value="${esc(b.name as string)}">`))}</datalist>
     </div>
     <div class="lib-form-field">
-      <label>${t('dialin_wizard_setup_grinder')}</label>
+      <label>${tHtml('dialin_wizard_setup_grinder')}</label>
       ${_renderGrinderField(s)}
     </div>
     <div class="lib-form-field">
-      <label>${t('dialin_wizard_setup_dose')}</label>
-      <input type="number" step="0.1" min="0" id="dwDose" value="${s.dose ?? ''}">
+      <label>${tHtml('dialin_wizard_setup_dose')}</label>
+      <input type="number" step="0.1" min="0" id="dwDose" value="${esc(s.dose)}">
     </div>
     <div class="lib-form-field">
-      <label>${t('dialin_wizard_setup_ratio')}</label>
-      <input type="number" step="0.1" min="0" id="dwRatio" value="${s.targetRatio ?? 2}">
+      <label>${tHtml('dialin_wizard_setup_ratio')}</label>
+      <input type="number" step="0.1" min="0" id="dwRatio" value="${esc(s.targetRatio ?? 2)}">
     </div>
     <div class="lib-form-field">
-      <label>${t('dialin_wizard_setup_start_grind')}</label>
+      <label>${tHtml('dialin_wizard_setup_start_grind')}</label>
       <input type="text" id="dwStartGrind" value="${esc(String(s.pendingGrind ?? ''))}">
     </div>
   </div>
   <div class="lib-form-actions">
-    <button class="lib-save-btn" data-action="dialin-accept-next">${t('dialin_wizard_setup_start_btn')}</button>
+    <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_setup_start_btn')}</button>
   </div>`;
 }
 
-function _renderRound(s: DialinSession): string {
+function _renderRound(s: DialinSession): Html {
   const roundNum = s.rounds.length + 1;
   const chips = _renderChips(s.rounds);
 
@@ -483,20 +489,20 @@ function _renderRound(s: DialinSession): string {
     const sugText = (sug.type === 'finer' || sug.type === 'coarser')
       ? t(sug.reason, rr.grindSetting, sug.nextGrind)
       : t(sug.reason);
-    return `<div class="dw-round">
-      <div class="dw-round-label">${t('dialin_wizard_round_label', roundNum)}</div>
+    return html`<div class="dw-round">
+      <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
       <div class="dw-score-row">
-        <div class="dw-score-chip" style="background:${scoreColor(rr.score)}">${rr.score ?? '–'}</div>
-        <div class="dw-score-meta">${rr.seconds.toFixed(0)} s${rr.ratio ? ` · 1:${rr.ratio.toFixed(1)}` : ''}${rr.channeling ? ` · ${t('grind_channeling_full')}` : ''}</div>
+        <div class="dw-score-chip" style="background:${esc(scoreColor(rr.score))}">${esc(rr.score ?? '–')}</div>
+        <div class="dw-score-meta">${esc(rr.seconds.toFixed(0))} s${rr.ratio ? html` · 1:${esc(rr.ratio.toFixed(1))}` : html``}${rr.channeling ? html` · ${tHtml('grind_channeling_full')}` : html``}</div>
       </div>
       <div class="dw-suggestion">${esc(sugText)}</div>
       <div class="dw-actions">
-        <button class="lib-save-btn" data-action="dialin-accept-next">${t('dialin_wizard_accept_next')}</button>
+        <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_accept_next')}</button>
         <div class="dw-override-row">
-          <input type="text" id="dwOverrideInput" placeholder="${t('dialin_wizard_override')}">
-          <button class="lib-btn-sm" data-action="dialin-override">${t('dialin_wizard_override')}</button>
+          <input type="text" id="dwOverrideInput" placeholder="${tHtml('dialin_wizard_override')}">
+          <button class="lib-btn-sm" data-action="dialin-override">${tHtml('dialin_wizard_override')}</button>
         </div>
-        <button class="lib-btn-sm del" data-action="dialin-end">${t('dialin_wizard_end')}</button>
+        <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
       </div>
       ${chips}
     </div>`;
@@ -504,47 +510,47 @@ function _renderRound(s: DialinSession): string {
 
   const candidate = s.candidateShotId ? _shots().find(sh => sh.id === s.candidateShotId) : null;
 
-  return `<div class="dw-round">
-    <div class="dw-round-label">${t('dialin_wizard_round_label', roundNum)}</div>
+  return html`<div class="dw-round">
+    <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
     <div class="dw-grind-display">${esc(String(s.pendingGrind ?? ''))}</div>
-    ${candidate ? `
+    ${candidate ? html`
       <div class="dw-candidate">
-        <div class="dw-candidate-title">${t('dialin_wizard_candidate_title')}</div>
+        <div class="dw-candidate-title">${tHtml('dialin_wizard_candidate_title')}</div>
         ${_miniShotChart(candidate)}
         <div class="dw-candidate-actions">
-          <button class="lib-save-btn" data-action="dialin-confirm-shot" data-id="${candidate.id}" data-match="1">${t('dialin_wizard_candidate_confirm')}</button>
-          <button class="lib-btn-sm" data-action="dialin-confirm-shot" data-id="${candidate.id}" data-match="0">${t('dialin_wizard_candidate_reject')}</button>
+          <button class="lib-save-btn" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
+          <button class="lib-btn-sm" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
         </div>
-      </div>` : `<div class="dw-waiting">${t('dialin_wizard_waiting')}</div>`}
-    <button class="lib-btn-sm del" data-action="dialin-end">${t('dialin_wizard_end')}</button>
+      </div>` : html`<div class="dw-waiting">${tHtml('dialin_wizard_waiting')}</div>`}
+    <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
     ${chips}
   </div>`;
 }
 
-function _renderSummary(s: DialinSession): string {
+function _renderSummary(s: DialinSession): Html {
   const best = _bestRound(s.rounds);
-  const title = s.status === 'converged' ? t('dialin_wizard_converged_title') : t('dialin_wizard_summary_title');
+  const title = s.status === 'converged' ? tHtml('dialin_wizard_converged_title') : tHtml('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length
     ? t(calcNextGrindSuggestion(s.rounds).reason) : '';
-  return `<div class="dw-summary">
+  return html`<div class="dw-summary">
     <div class="dw-summary-title">${title}</div>
-    ${reasonText ? `<div class="dw-summary-reason">${esc(reasonText)}</div>` : ''}
-    ${best ? `<div class="dw-summary-best">
-      <div class="dw-score-chip" style="background:${scoreColor(best.score)}">${best.score}</div>
-      <div>${t('dialin_wizard_summary_best')}: ${esc(String(best.grindSetting))} · ${best.seconds.toFixed(0)} s</div>
-    </div>` : ''}
+    ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
+    ${best ? html`<div class="dw-summary-best">
+      <div class="dw-score-chip" style="background:${esc(scoreColor(best.score))}">${esc(best.score)}</div>
+      <div>${tHtml('dialin_wizard_summary_best')}: ${esc(String(best.grindSetting))} · ${esc(best.seconds.toFixed(0))} s</div>
+    </div>` : html``}
     <div class="dw-actions">
-      ${best ? `<button class="lib-save-btn" data-action="dialin-save-known-grind">${t('dialin_wizard_save_known')}</button>` : ''}
-      ${best ? `<button class="lib-btn-sm" data-action="goto-shot" data-id="${best.shotId}">${t('dialin_wizard_goto_shot')}</button>` : ''}
-      <button class="lib-btn-sm" data-action="dialin-close">${t('dialin_wizard_continue')}</button>
+      ${best ? html`<button class="lib-save-btn" data-action="dialin-save-known-grind">${tHtml('dialin_wizard_save_known')}</button>` : html``}
+      ${best ? html`<button class="lib-btn-sm" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
+      <button class="lib-btn-sm" data-action="dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
     ${_renderChips(s.rounds)}
   </div>`;
 }
 
-function _renderChips(rounds: DialinReviewRound[]): string {
-  if (!rounds?.length) return '';
-  return `<div class="dw-chip-strip">${rounds.map(r =>
-    `<div class="dw-chip" style="border-color:${scoreColor(r.score)}">${esc(String(r.grindSetting))} → ${r.score ?? '–'}</div>`
-  ).join('')}</div>`;
+function _renderChips(rounds: DialinReviewRound[]): Html {
+  if (!rounds?.length) return html``;
+  return html`<div class="dw-chip-strip">${joinHtml(rounds.map(r =>
+    html`<div class="dw-chip" style="border-color:${esc(scoreColor(r.score))}">${esc(String(r.grindSetting))} → ${esc(r.score ?? '–')}</div>`
+  ))}</div>`;
 }

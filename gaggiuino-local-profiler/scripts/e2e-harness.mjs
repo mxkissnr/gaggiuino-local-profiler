@@ -1,6 +1,6 @@
 // Shared E2E harness: builds and boots a throwaway instance of the real
-// Go backend (`glp-server`) against its own tmp data dir and port — never
-// touches /data or 8099 — seeds the built-in demo dataset plus a second
+// Go backend (`glp-server`) against its own tmp data dir, image dir and
+// port — never touches /data or 8099 — seeds the built-in demo dataset plus a second
 // machine so Library / Analytics / the multi-machine switcher aren't empty,
 // and exposes the resulting baseUrl. Used by both scripts/screenshots.mjs
 // (README/wiki screenshots) and test/e2e/smoke.test.mjs (Playwright smoke
@@ -16,7 +16,7 @@
 // that drive Chromium (this module itself never touches Playwright).
 
 import { spawn, execFileSync } from 'child_process';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,15 +25,16 @@ const __dirname   = path.dirname(fileURLToPath(import.meta.url));
 export const appRoot = path.join(__dirname, '..');
 const goDir       = path.join(appRoot, 'go');
 const distDir     = path.join(goDir, 'internal', 'webapp', 'dist');
-const templatesDir = path.join(goDir, 'internal', 'web', 'templates');
-// Pinned to the version go/go.mod already requires — keep in lockstep.
-const TEMPL_VERSION = 'v0.3.1020';
 
 export const PORT = 8199;
 
 // Throwaway data dir — the Go server writes its SQLite DB and token file
 // here via GLP_DB_PATH / GLP_TOKEN_FILE, never into the real /data.
 export const tmpDataDir = mkdtempSync(path.join(tmpdir(), 'glp-e2e-'));
+
+// Throwaway image dir — the Go server reads and writes every entity photo
+// here via GLP_IMAGE_DIR, never into the real /data/bean-images.
+export const tmpImageDir = path.join(tmpDataDir, 'bean-images');
 
 let serverProc = null;
 
@@ -58,12 +59,6 @@ function buildServerBinary() {
     const binPath = path.join(tmpDataDir, 'glp-server');
 
     try {
-        // templ generate — internal/web/templates' .templ sources aren't
-        // valid Go until this runs (git-ignored _templ.go output). `go run`
-        // the pinned CLI so this works with no global install.
-        execFileSync('go', ['run', `github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}`, 'generate'],
-            { cwd: templatesDir, stdio: 'inherit' });
-
         // Frontend bundle → internal/webapp/dist (the //go:embed tree), then
         // the server binary that embeds it.
         execFileSync('go', ['run', './cmd/frontend-build'], { cwd: goDir, stdio: 'inherit' });
@@ -88,6 +83,7 @@ function buildServerBinary() {
 // show instead of the tab not existing at all.
 export async function bootServer() {
     mkdirSync(tmpDataDir, { recursive: true });
+    mkdirSync(tmpImageDir, { recursive: true });
     const binPath = buildServerBinary();
 
     serverProc = spawn(binPath, [], {
@@ -98,6 +94,7 @@ export async function bootServer() {
             GLP_PORT: String(PORT),
             GLP_DB_PATH: path.join(tmpDataDir, 'glp.db'),
             GLP_TOKEN_FILE: path.join(tmpDataDir, 'api_token.txt'),
+            GLP_IMAGE_DIR: tmpImageDir,
             GLP_ENABLE_ORDERS: 'true',
         },
     });
@@ -138,4 +135,58 @@ export async function seed(baseUrl) {
     const machine2 = await post('/api/machines', { name: 'GaggiMate Sim', type: 'gaggimate', host: '192.168.1.50' });
 
     return { machine2 };
+}
+
+// Restores a GLP backup zip into the throwaway instance through the app's own
+// POST /api/restore endpoint (#1181), in place of seed(). screenshots.mjs
+// calls this only when GLP_SCREENSHOT_BACKUP is set. The zip is sent raw with
+// Content-Type: application/zip; GLP_SCREENSHOT_BACKUP_PASSPHRASE supplies the
+// passphrase for an encrypted backup. Real backups sit well under the
+// endpoint's 50 MB body cap. Any non-2xx, non-JSON or `ok !== true` response
+// throws, so a failed restore aborts the caller instead of screenshotting an
+// un-restored instance. The restored token is written to disk but the running
+// process keeps the one it started with (see go/internal/backup/doc.go), so
+// fetching the token before the restore is fine.
+export async function restoreBackup(baseUrl, zipPath) {
+    let zip;
+    try {
+        zip = readFileSync(zipPath);
+    } catch (err) {
+        throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${err.message}`, { cause: err });
+    }
+
+    // Same auth the SPA and seed() use: the token from the already-public
+    // GET /api/token, sent back as the x-glp-token header.
+    const { apiToken } = await fetch(`${baseUrl}/api/token`).then(r => r.json());
+    const headers = { 'Content-Type': 'application/zip', 'x-glp-token': apiToken };
+    if (process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE) {
+        headers['X-GLP-Passphrase'] = process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE;
+    }
+
+    const r = await fetch(`${baseUrl}/api/restore`, { method: 'POST', headers, body: zip });
+    const text = await r.text();
+    if (!r.ok) throw new Error(`POST /api/restore -> ${r.status}: ${text}`);
+
+    let parsed;
+    try {
+        parsed = text ? JSON.parse(text) : {};
+    } catch {
+        throw new Error(`POST /api/restore -> ${r.status}: invalid JSON: ${text}`);
+    }
+    if (parsed.ok !== true) throw new Error(`POST /api/restore -> ${r.status}: ${text}`);
+
+    // parsed.images is how many images the restore queued to write. If it
+    // queued any, the server must have written them under GLP_IMAGE_DIR: a
+    // silently skipped MkdirAll (the /data permission failure this harness
+    // used to hit) would otherwise leave the DB rows pointing at files that
+    // 404, producing blank-photo screenshots with no error at all. Fail
+    // loudly instead.
+    if (parsed.images > 0) {
+        const files = readdirSync(tmpImageDir);
+        const written = files.filter(f => !f.includes('.thumb.')).length;
+        if (written < parsed.images) {
+            throw new Error(`POST /api/restore reported ${parsed.images} image(s) but only ${written} were written to ${tmpImageDir}`);
+        }
+    }
+    return parsed;
 }

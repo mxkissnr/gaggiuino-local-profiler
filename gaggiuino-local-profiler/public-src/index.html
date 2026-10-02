@@ -29,7 +29,6 @@
 <!-- ── Sidebar (shot list panel) ── -->
 <div id="sidebar">
     <h2><span class="shot-count-num" id="flapDigits"></span><span class="shot-count-label">Shots</span><button id="collapseBtn" data-i18n-title="sidebar_collapse" title="Sidebar einklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg></button></h2>
-    <div id="syncProgressBar" style="display:none"><span id="syncProgressLabel"></span><div class="sync-progress-track"><div class="sync-progress-fill"></div></div></div>
     <div id="search-container">
         <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …">
         <div id="beanFilterIndicator" style="display:none"></div>
@@ -659,14 +658,8 @@
                                 </div>
                                 <span class="lib-form-hint" data-i18n="bean_image_hint">Falls der automatische Import fehlschlägt</span>
                             </div>
-                            <div class="lib-form-field">
-                                <label data-i18n="lib_bean_stock">Vorrat (g)</label>
-                                <input type="number" id="beanFormStock" data-i18n-placeholder="lib_bean_stock_ph" placeholder="z.B. 500" step="1" min="0">
-                            </div>
-                            <div class="lib-form-field">
-                                <label data-i18n="bag_batch_number_label">Chargennummer</label>
-                                <input type="text" id="beanFormBatchNumber" data-i18n-placeholder="bag_batch_number_ph" placeholder="L2405-13" maxlength="50">
-                            </div>
+                        </div>
+                        <div class="lib-form-grid">
                             <div class="lib-form-field lib-form-field-check">
                                 <label class="lib-check-label">
                                     <input type="checkbox" id="beanFormDecaf">
@@ -676,7 +669,9 @@
                         </div>
                         <div class="lib-form-actions">
                             <button class="lib-btn-sm" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveBeanBtn" data-i18n="lib_save">Speichern</button>
+                            <button class="lib-save-btn" id="saveBeanBtn" data-i18n="lib_save" style="display:none">Speichern</button>
+                            <button class="lib-save-btn" id="saveBeanNoBagBtn" data-i18n="lib_save_bean_no_bag" style="display:none">Speichern ohne Packung</button>
+                            <button class="lib-save-btn" id="saveBeanAddBagBtn" data-i18n="lib_save_bean_add_bag" style="display:none">Speichern und Packung hinzufügen</button>
                         </div>
                     </div>
                     <div class="lib-trigger-row">
@@ -1125,6 +1120,55 @@
                     <div class="idle-stat-label" data-i18n="live_idle_water_label">Wasserstand</div>
                 </div>
             </div>
+
+            <!-- Pre-shot setup: bean/dose/grinder/grind/basket/puckscreen/recipe
+                 chosen here get written onto the next completed shot's
+                 annotation automatically once it syncs (views/live.js). Sticky
+                 across shots (same setup usually applies to several pulls in a
+                 row) — #lsReset clears it back to empty. -->
+            <div id="live-shot-setup">
+                <button id="lsToggle" type="button">
+                    <svg class="ls-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
+                    <span data-i18n="live_setup_toggle">Bezug einstellen</span>
+                    <svg class="ls-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div id="lsFields">
+                    <div class="ls-fields-grid">
+                        <div class="annotation-field">
+                            <label for="lsBean" data-i18n="ann_coffee">Kaffee / Bohne</label>
+                            <select id="lsBean"></select>
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsDose" data-i18n="ann_dose">Dosis (g)</label>
+                            <input type="number" id="lsDose" step="0.1" min="0">
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsGrinder" data-i18n="ann_grinder">Mühle</label>
+                            <select id="lsGrinder"></select>
+                            <input type="text" id="lsGrinderOther" style="display:none">
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
+                            <input type="text" id="lsGrindSetting">
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsBasket" data-i18n="ann_basket">Sieb</label>
+                            <select id="lsBasket"></select>
+                        </div>
+                        <div class="annotation-field">
+                            <label for="lsPuckScreen" data-i18n="ann_puckscreen">Puck Screen</label>
+                            <select id="lsPuckScreen"></select>
+                        </div>
+                        <div class="annotation-field" id="lsRecipeField">
+                            <label for="lsRecipe" data-i18n="ann_recipe">Rezept</label>
+                            <select id="lsRecipe"></select>
+                        </div>
+                    </div>
+                    <div class="ls-fields-footer">
+                        <button id="lsReset" type="button" data-i18n="live_setup_reset">Zurücksetzen</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div><!-- #live-view -->
 
@@ -1298,7 +1342,7 @@
     <!-- Settings view -->
     <div id="settings-view">
         <!-- "What's New" in-app changelog (#610) — always visible, newest
-             release first. Entries come from lib/whats-new.js (hand-
+             release first. Entries come from shared/whats-new.ts (hand-
              maintained, English-only, capped at 8), rendered by
              renderWhatsNewCard() (components/whats-new.js). Only the card
              title/description are translated; highlight text stays
@@ -1343,10 +1387,10 @@
         <!-- Machine/library notification toggles (#614) — moved out of the
              Orders admin panel (which only exists when enable_orders: true)
              since notify_preheat_ready/notify_low_stock fire regardless of
-             Orders being enabled (lib/preheat.js, lib/services/
-             LibraryService.js). Always visible; reads/writes the same
-             /api/orders/settings blob as the Orders panel's remaining 3
-             order-specific toggles (components/notify-settings.js). -->
+             Orders being enabled (internal/system's preheat notifier,
+             internal/library's low-stock scan). Always visible; reads/writes
+             the same /api/orders/settings blob as the Orders panel's
+             remaining 3 order-specific toggles (components/notify-settings.js). -->
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_notify_title">Benachrichtigungen</h3>
             <p class="settings-card-desc" data-i18n="settings_notify_desc">Welche automatischen Benachrichtigungen der Maschine und der Kaffee-Bibliothek sollen gesendet werden?</p>
@@ -1362,6 +1406,30 @@
             </div>
             <div class="orders-notify-actions">
                 <button class="orders-menu-save-btn" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
+            </div>
+        </div>
+        <!-- AI assistants (MCP) settings (#1288, part of #1196) — the built-in
+             MCP server's toggles. The developer-tools row is revealed by
+             loadMcpSettingsCard() only when the build offers it (GLP_DEV_BUILD). -->
+        <div class="settings-card" id="mcpSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
+            <p class="settings-card-desc" data-i18n="settings_mcp_desc">Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.</p>
+            <div class="orders-broadcast-list" id="mcpSettingsList">
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpEnabled" data-mcp-key="enabled">
+                    <label for="mcpEnabled" data-i18n="settings_mcp_enabled">MCP-Server aktivieren</label>
+                </div>
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpAllowWrite" data-mcp-key="allowWrite">
+                    <label for="mcpAllowWrite" data-i18n="settings_mcp_write">Schreib-Tools erlauben — diese verändern deine Daten</label>
+                </div>
+                <div class="orders-broadcast-row" id="mcpDevRow" style="display:none">
+                    <input type="checkbox" id="mcpAllowDeveloperTools" data-mcp-key="allowDeveloperTools">
+                    <label for="mcpAllowDeveloperTools" data-i18n="settings_mcp_dev">Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben</label>
+                </div>
+            </div>
+            <div class="orders-notify-actions">
+                <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
         <!-- Shot logging auto-prefill defaults (#654) — optional, per-install
@@ -1525,7 +1593,7 @@
              when /api/status reports devBuild (see components/status.js) --
              same signal the version-badge suffix and "UNSTABLE DEV BUILD"
              banner already use, never present on a real install. The route
-             itself (routes/debug.js) independently 404s for anyone who hits
+             itself (internal/debug) independently 404s for anyone who hits
              it without GLP_DEV_BUILD set -- this hidden-by-default markup is
              just UI hygiene, not the actual safety mechanism. -->
         <div class="settings-card" id="devToolsCard" style="display:none">

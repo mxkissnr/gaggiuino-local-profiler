@@ -1,0 +1,119 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+
+// library.js's import chain touches state.js/i18n.js, which read
+// localStorage/navigator at module load time — stub the minimum browser
+// globals so the module graph can be imported under vitest's node
+// environment (same pattern as test/library-roastdate-esc.test.js).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+
+const { S } = await import('../public-src/state/index.js');
+interface LibraryModule {
+  renderBeanList: () => void;
+}
+const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+// Roast dates below are built with todayIsoDate() (local YYYY-MM-DD, not
+// Date#toISOString()'s UTC date): roastAgeDays() reparses the stored date in
+// local time, so a UTC date string rolls a day early/late outside UTC.
+const { todayIsoDate } = await import('../public-src/utils.js');
+
+interface FakeDocument {
+  beanListUI: { innerHTML: string };
+  document: {
+    getElementById: (id: string) => { innerHTML: string } | undefined;
+    querySelectorAll: () => never[];
+  };
+}
+
+function fakeDocument(): FakeDocument {
+  const beanListUI = { innerHTML: '' };
+  const elements: Record<string, { innerHTML: string }> = { beanListUI };
+  return {
+    beanListUI,
+    document: {
+      getElementById: (id: string) => elements[id],
+      querySelectorAll: () => [],
+    },
+  };
+}
+
+const DAY = 86400000;
+
+// #856: a frozen portion's own paused age (frozenPortionAgeDays) was only
+// ever surfaced as a tooltip — nothing on screen distinguished it from a
+// portion that kept aging at the bag's normal rate. Now it also renders as
+// a visible badge, reusing the bag-level fresh-badge classes/color tiers.
+describe('renderBeanList (#856 frozen-portion age badge)', () => {
+  beforeEach(() => {
+    S.shots = [];
+  });
+
+  it('renders a fresh-badge with the paused age for a still-frozen portion', () => {
+    const { beanListUI, document } = fakeDocument();
+    g.document = document;
+
+    const now = Date.now();
+    S.coffeeLibrary = {
+      beans: [{
+        id: 1,
+        name: 'Test Bean',
+        // consumedG/remainingG/current are backend-computed (SimulateBagQueue)
+        // and attached to every bag on load — this bag must be "current" for
+        // activeBag (frozenPortions' source) to resolve to it at all.
+        bags: [{
+          id: 1,
+          roastDate: todayIsoDate(now - 10 * DAY),
+          stock_g: 250,
+          consumedG: 0,
+          remainingG: 250,
+          current: true,
+          frozenPortions: [
+            { id: 1, frozenAt: now - 5 * DAY, portionCount: 4, remainingCount: 4, portionWeight_g: 18 },
+          ],
+        }],
+      }],
+      grinders: [],
+    };
+
+    renderBeanList();
+
+    const html = beanListUI.innerHTML;
+    expect(html).toContain('lib-frozen-badge');
+    // the portion's own paused age (5d, held flat since freezing) rendered
+    // as its own lib-fresh-badge, distinct from the bag-level badge
+    expect(html).toMatch(/lib-fresh-badge fresh-\w+"[^>]*>5d<\/span>/);
+  });
+
+  it('renders the age badge for an already-thawed portion too', () => {
+    const { beanListUI, document } = fakeDocument();
+    g.document = document;
+
+    const now = Date.now();
+    S.coffeeLibrary = {
+      beans: [{
+        id: 1,
+        name: 'Test Bean',
+        bags: [{
+          id: 1,
+          roastDate: todayIsoDate(now - 20 * DAY),
+          stock_g: 250,
+          consumedG: 0,
+          remainingG: 250,
+          current: true,
+          frozenPortions: [
+            { id: 2, frozenAt: now - 15 * DAY, thawedAt: now - 2 * DAY, portionCount: 2, remainingCount: 0, portionWeight_g: 18 },
+          ],
+        }],
+      }],
+      grinders: [],
+    };
+
+    renderBeanList();
+
+    const html = beanListUI.innerHTML;
+    expect(html).toContain('lib-frozen-badge thawed');
+    // age at freeze (5d) + 2 days since thaw = 7d
+    expect(html).toMatch(/lib-fresh-badge fresh-\w+"[^>]*>7d<\/span>/);
+  });
+});

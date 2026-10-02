@@ -81,16 +81,12 @@ step "build"
 if [[ -n "$DOCKER_IMAGE" ]]; then
 	ok "using pre-built Docker image $DOCKER_IMAGE (skipping native go build)"
 else
-	# Phase 2a (#901): cmd/server now imports internal/web, whose .templ
-	# sources aren't valid Go until `templ generate` writes their _templ.go
-	# files (git-ignored — see go/README.md's Frontend section) — required
-	# before this build step on a clean checkout.
-	if ! (cd "$GO_DIR" && go generate ./... && go build -o "$BIN" ./cmd/server) 2>"$SMOKE_DIR/build.log"; then
-		bad "go generate && go build ./cmd/server"
+	if ! (cd "$GO_DIR" && go build -o "$BIN" ./cmd/server) 2>"$SMOKE_DIR/build.log"; then
+		bad "go build ./cmd/server"
 		cat "$SMOKE_DIR/build.log"
 		exit 1
 	fi
-	ok "go generate && go build ./cmd/server"
+	ok "go build ./cmd/server"
 fi
 
 # start_server launches either the native binary against
@@ -196,9 +192,9 @@ step "auth"
 code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/shots.json")
 [[ "$code" == "401" ]] && ok "unauthenticated request rejected (401)" || bad "expected 401 for unauthenticated request, got $code"
 
-step "frontend: webapp SPA at / + templ pages moved under /ui/ (#901 Phase 1)"
+step "frontend: webapp SPA at / (#901 Phase 1; /ui/ templ pages removed in #1200)"
 # GET / serves internal/webapp's index.html unauthenticated (auth.RequireToken
-# GET/HEAD static bypass), with server.js's no-cache headers. In a native run
+# GET/HEAD static bypass), with internal/webapp's no-cache headers. In a native run
 # this is the committed dist/index.html placeholder; in Docker mode it's the
 # real Vite build.
 root_headers=$(curl -s -D - -o "$SMOKE_DIR/root.html" "$BASE_A/")
@@ -209,13 +205,26 @@ grep -qi '^Cache-Control: no-cache, no-store, must-revalidate' <<<"$root_headers
 # manifest link must be injected.
 grep -q 'rel="manifest"' "$SMOKE_DIR/root.html" && ok "GET / injects the PWA manifest link for a non-Ingress request" || bad "GET / did not inject the manifest link"
 
-ui_code=$(curl -s -o "$SMOKE_DIR/ui-shots.html" -w '%{http_code}' "$BASE_A/ui/shots")
-[[ "$ui_code" == "200" ]] && ok "GET /ui/shots -> 200 (templ page still reachable)" || bad "GET /ui/shots: $ui_code"
-grep -q 'class="side-nav"' "$SMOKE_DIR/ui-shots.html" && ok "GET /ui/shots renders the templ shell" || bad "GET /ui/shots is not the templ page: $(head -c 200 "$SMOKE_DIR/ui-shots.html")"
-css_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/ui/web/static/style.css")
-[[ "$css_code" == "200" ]] && ok "GET /ui/web/static/style.css -> 200 (vendored assets moved with the pages)" || bad "GET /ui/web/static/style.css: $css_code"
-ui_root=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE_A/ui/")
-[[ "$ui_root" == 302* ]] && ok "GET /ui/ -> 302 (relative redirect to shots)" || bad "GET /ui/: $ui_root"
+# #1200: the frozen templ pages that used to live under /ui/ are gone — the
+# paths that used to be pages now 404 through the SPA's static handler.
+ui_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/ui/shots")
+[[ "$ui_code" == "404" ]] && ok "GET /ui/shots -> 404 (templ page removed)" || bad "GET /ui/shots: $ui_code"
+# #1267: the old /ui/kiosk bookmark must keep working, redirecting (relative,
+# so it survives the Ingress prefix) to the built kiosk page.
+kiosk_headers=$(curl -s -D - -o /dev/null "$BASE_A/ui/kiosk")
+grep -qi '^HTTP/[0-9.]* 302' <<<"$kiosk_headers" && ok "GET /ui/kiosk -> 302 (old kiosk bookmark redirects)" || bad "GET /ui/kiosk: $(head -1 <<<"$kiosk_headers")"
+kiosk_loc=$(grep -i '^Location:' <<<"$kiosk_headers" | tr -d '\r' | sed 's/^[^:]*: *//')
+[[ "$kiosk_loc" == "../kiosk.html" ]] && ok "GET /ui/kiosk Location is relative ($kiosk_loc)" || bad "GET /ui/kiosk Location: $kiosk_loc"
+# The rebuilt kiosk (#1267) is served at /kiosk.html by the SPA bundle. A
+# native run resolves the embed against the committed dist/ placeholder
+# (index.html only), so the built page is only present in Docker mode.
+if [[ -n "$DOCKER_IMAGE" ]]; then
+	kiosk_page=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$BASE_A/kiosk.html")
+	[[ "$kiosk_page" == "200 text/html"* ]] && ok "GET /kiosk.html -> 200 text/html (built kiosk page)" || bad "GET /kiosk.html: $kiosk_page"
+else
+	kiosk_page_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/kiosk.html")
+	[[ "$kiosk_page_code" == "404" ]] && ok "GET /kiosk.html -> 404 (placeholder dist, no frontend build)" || bad "GET /kiosk.html: $kiosk_page_code"
+fi
 
 if [[ -n "$DOCKER_IMAGE" ]]; then
 	for asset in manifest.json sw.js; do

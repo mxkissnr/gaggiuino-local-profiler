@@ -9,16 +9,14 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports lib/achievements/registry.js: the achievements ("stamp
-// card") catalogue — the same 48 open + 6 secret badges across 7
-// categories. See the Node file's header for the registry contract (id/
-// card/stamp/check/progress/secret) and why every check() aggregates
-// across ALL machines rather than scoping to the default one.
+// The achievements ("stamp card") catalogue — 48 open + 6 secret badges
+// across 7 categories. The registry contract is
+// id/card/stamp/check/progress/secret; every check() aggregates across ALL
+// machines rather than scoping to the default one.
 
-// cardKeys mirrors registry.js's CARD_KEYS.
 var cardKeys = []string{"basics", "craft", "beans", "endurance", "care", "house", "secret"}
 
-// badge mirrors one BADGES entry. ProgressTarget == 0 means "no progress
+// badge is one catalogue entry. ProgressTarget == 0 means "no progress
 // bar"; Progress == nil likewise. Retired entries stay in the slice
 // forever (never delete a row) but are skipped by the evaluator and the
 // state view.
@@ -33,7 +31,7 @@ type badge struct {
 	Progress       func(*Context) int
 }
 
-// ── Craft-card math thresholds (registry.js's documented sources) ───────
+// ── Craft-card math thresholds (documented sources) ─────────────────────
 const (
 	tempStableToleranceC        = 1.5
 	pressurePlateauToleranceBar = 0.3
@@ -105,7 +103,7 @@ func badges() []badge {
 			byBean := map[int64][]shots.Shot{}
 			var order []int64
 			for _, shot := range c.Shots {
-				bean := resolveBeanForShot(shot, c.Beans)
+				bean := library.ResolveBeanForShot(shot, c.Beans)
 				if bean == nil {
 					continue
 				}
@@ -331,7 +329,7 @@ func badges() []badge {
 		}},
 		{ID: "price_low", Card: "house", Stamp: "scale", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
-				bean := resolveBeanForShot(s, c.Beans)
+				bean := library.ResolveBeanForShot(s, c.Beans)
 				if bean == nil {
 					continue
 				}
@@ -401,7 +399,7 @@ func badges() []badge {
 	}
 }
 
-// ── shared aggregates (registry.js's `_countryCodes` et al.) ───────────
+// ── shared aggregates ───────────────────────────────────────────────────
 
 func countryCodes(beans []library.Entity) map[string]bool {
 	set := map[string]bool{}
@@ -478,7 +476,7 @@ func shotDaySet(shotList []shots.Shot) map[string]bool {
 func flavoredShots(c *Context) []shots.Shot {
 	var out []shots.Shot
 	for _, s := range c.Shots {
-		bean := resolveBeanForShot(s, c.Beans)
+		bean := library.ResolveBeanForShot(s, c.Beans)
 		if bean == nil {
 			continue
 		}
@@ -551,15 +549,14 @@ func payloadTruthy(c *Context, key string) bool {
 	return truthy(c.Event.Payload[key])
 }
 
-// strOf ports JS's implicit string coercion for the free-text fields the
-// registry reads: a string stays itself, everything else (including nil)
-// is "".
+// strOf returns a free-text field the registry reads as a string: a string
+// stays itself, everything else (including nil) is "".
 func strOf(v any) string {
 	s, _ := v.(string)
 	return s
 }
 
-// truthy ports a JS truthiness test for the union of shapes an order/menu/
+// truthy applies a truthiness test to the union of shapes an order/menu/
 // payload field can hold (string, bool, number, nil).
 func truthy(v any) bool {
 	switch t := v.(type) {
@@ -578,5 +575,4 @@ func truthy(v any) bool {
 	}
 }
 
-// isRetired ports registry.js's isRetired.
 func isRetired(b badge) bool { return b.Retired }

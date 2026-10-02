@@ -209,6 +209,45 @@ func TestScoreCache_BackfilledOnReadThenReused(t *testing.T) {
 	}
 }
 
+func TestScoreCache_PageReusesTheBeanAwareEntry(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	seedShots(t, repo, 1)
+
+	temp := 90.0
+	SetBeanSource(func() (func(Shot) *Bean, error) {
+		bean := &Bean{BrewTempC: &temp}
+		return func(Shot) *Bean { return bean }, nil
+	})
+	t.Cleanup(func() { SetBeanSource(nil) })
+
+	svc := NewService(repo)
+	if _, err := svc.GetPage(Cursor{}, 60, 0); err != nil {
+		t.Fatalf("GetPage: %v", err)
+	}
+	if _, ok := cachedScoreRow(t, repo, 1); !ok {
+		t.Fatal("expected a cache row after the first GetPage")
+	}
+
+	// Poison the cached score: a cache miss recomputes and overwrites it.
+	if _, err := sqlDB.Exec(`UPDATE shot_score_cache SET score = 999 WHERE shot_id = 1`); err != nil {
+		t.Fatalf("poisoning the cached score: %v", err)
+	}
+
+	// A second GetPage must reuse the same bean-aware entry rather than
+	// overwrite it with a different (generic-band) cache key.
+	if _, err := svc.GetPage(Cursor{}, 10, 0); err != nil {
+		t.Fatalf("GetPage: %v", err)
+	}
+
+	page, err := svc.GetPage(Cursor{}, 60, 0)
+	if err != nil {
+		t.Fatalf("GetPage: %v", err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0].Score == nil || *page.Rows[0].Score != 999 {
+		t.Fatalf("second GetPage score = %v, want the cached sentinel 999 (a rewrite means the cache key changed)", page.Rows[0].Score)
+	}
+}
+
 func TestScoreCache_InvalidatedByAnnotation(t *testing.T) {
 	_, repo, _ := newTestHandlers(t)
 	seedShots(t, repo, 1)

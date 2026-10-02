@@ -8,13 +8,12 @@ import (
 	"testing"
 )
 
-// perf_test.go covers the /shots.json + /api/shots/last throughput work
-// from #951: the list endpoint must keep every shot's datapoints in the
-// response (no contract break for the Vite bundle's charts/sparklines,
-// which load them straight out of the bulk /shots.json), and /api/shots/last
-// must land on the same shot Node's getAll()+last did without hydrating the
-// whole history. BenchmarkListShots documents the marshalling cost against
-// a realistic dataset.
+// perf_test.go covers the /shots.json + /api/shots/last throughput work from
+// #951: the list endpoint must keep every shot's datapoints in the response
+// (no contract break for the frontend's charts/sparklines, which load them
+// straight out of the bulk /shots.json), and /api/shots/last must land on the
+// same newest shot without hydrating the whole history. BenchmarkListShots
+// documents the marshalling cost against a realistic dataset.
 
 // bigDatapoints builds a datapoints blob roughly the size of a real shot's
 // (samples across the series the frontend charts).
@@ -41,7 +40,7 @@ func bigDatapoints(samples int) map[string]any {
 // TestListShots_KeepsDatapointsInResponse pins that /shots.json still ships
 // each shot's full datapoints object — the hydrateRow projection keeps the
 // bytes raw for speed, it does not drop them (a frontend consumer reads
-// shot.datapoints out of this bulk response, see public-src/views/shots).
+// shot.datapoints out of this bulk response).
 func TestListShots_KeepsDatapointsInResponse(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	mux := newMux(h)
@@ -131,9 +130,9 @@ func TestListShots_ScoreMatchesRawAndMapDatapoints(t *testing.T) {
 	}
 }
 
-// TestLastShot_TieBreaksOnHighestID pins that GET /api/shots/last resolves
-// a timestamp tie the same way Node's getAll() (ORDER BY timestamp ASC)
-// then `shots[shots.length-1]` did: the greatest id wins.
+// TestLastShot_TieBreaksOnHighestID pins that GET /api/shots/last resolves a
+// timestamp tie the same way the ASC-ordered list would keep its last element:
+// the greatest id wins.
 func TestLastShot_TieBreaksOnHighestID(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	mux := newMux(h)

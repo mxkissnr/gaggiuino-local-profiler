@@ -1,7 +1,6 @@
 package machines
 
-// themePreset ports one entry of lib/machines/theme-presets.js's
-// THEME_PRESETS array.
+// themePreset is one entry of the THEME_PRESETS array.
 type themePreset struct {
 	Key string
 	A   string

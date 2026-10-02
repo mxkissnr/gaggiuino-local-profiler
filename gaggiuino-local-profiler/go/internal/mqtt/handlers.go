@@ -10,8 +10,8 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 )
 
-// This file ports routes/mqtt.js (#608): GET /api/mqtt/discovery,
-// GET/POST /api/mqtt/settings, POST /api/mqtt/apply-to-machine.
+// This file wires the #608 MQTT routes: GET /api/mqtt/discovery, GET/POST
+// /api/mqtt/settings, POST /api/mqtt/apply-to-machine.
 
 // SupervisorAPI is the subset of *ha.Client this package needs for broker
 // auto-discovery — an interface so tests don't need a real Supervisor.
@@ -19,13 +19,13 @@ type SupervisorAPI interface {
 	SupervisorGet(ctx context.Context, path string, out any) error
 }
 
-// AdapterProvider mirrors internal/web/handlers_settings.go's own narrow
-// dependency on *machines.Handlers.
+// AdapterProvider is the narrow dependency on *machines.Handlers this
+// package needs.
 type AdapterProvider interface {
 	GetAdapter(m *machines.Machine) (machines.Adapter, error)
 }
 
-// Handlers ports routes/mqtt.js's router.
+// Handlers wires the MQTT routes.
 type Handlers struct {
 	repo      *Repository
 	transport *Transport
@@ -104,7 +104,7 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Drop any already-open session so a changed host/port/prefix/credentials
-	// takes effect on the very next read (mirrors gaggiuinoMqtt.disconnectAll()).
+	// takes effect on the very next read.
 	h.transport.DisconnectAll()
 	log.Printf("MQTT live-data transport settings updated")
 	httputil.WriteJSON(w, http.StatusOK, redact(saved))

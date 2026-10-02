@@ -1,5 +1,6 @@
 import type { Chart } from 'chart.js';
 import { TRANSLATIONS } from '../constants.js';
+import type { Basket, Milk, PuckScreen, Recipe } from '../api/types.js';
 
 // ── State ─────────────────────────────────────────────────────────────────
 // S is one flat runtime object — every view reads S.<field> directly. The
@@ -36,6 +37,13 @@ export type LibraryRow = Record<string, unknown>;
 export interface CoffeeLibrary {
   beans: LibraryRow[];
   grinders: LibraryRow[];
+  // Baskets/puck screens/recipes/milks load with the rest of the library;
+  // typed with the real API shapes so views can read them (and the
+  // collection-by-name lookup) without casting coffeeLibrary.
+  baskets?: Basket[];
+  puckScreens?: PuckScreen[];
+  recipes?: Recipe[];
+  milks?: Milk[];
 }
 
 // BarcodeDetector is not in TypeScript's DOM lib yet; only the shape GLP uses.
@@ -76,7 +84,7 @@ export interface LiveSlice {
   liveWasLive: boolean;
   liveBrewStartWall: number | null;
   liveTimerTick: number | null;
-  machinePowerState: string | null;
+  machinePowerState: boolean | null;
   machineReachable: boolean | null;
 }
 
@@ -86,7 +94,8 @@ export interface LibrarySlice {
   milkTypes: LibraryRow[];
   shotDefaults: Record<string, unknown> | null;
   beanEditId: number | null;
-  _beanStockEditId: number | null;
+  _bagStockEditId: number | null;
+  _bagFullEditId: number | null;
   grinderEditId: number | null;
   basketEditId: number | null;
   puckScreenEditId: number | null;
@@ -101,8 +110,10 @@ export interface LibrarySlice {
 export interface OrdersSlice {
   _ordersMenuOpen: boolean;
   _ordersPollTimer: number | null;
-  _ordersEtaSelected: Record<number, number>;
-  _ordersDeclineOpen: Record<number, boolean>;
+  // Keyed by order id as a string (the ids arrive as dataset strings); object
+  // keys are strings at runtime anyway, so Record<string, …> is the honest type.
+  _ordersEtaSelected: Record<string, number>;
+  _ordersDeclineOpen: Record<string, boolean>;
   _ordersStatsOpen: boolean;
 }
 
@@ -215,7 +226,8 @@ export const S: AppState = {
   milkTypes: [],
   shotDefaults: null,
   beanEditId: null,
-  _beanStockEditId: null,
+  _bagStockEditId: null,
+  _bagFullEditId: null,
   grinderEditId: null,
   basketEditId: null,
   puckScreenEditId: null,

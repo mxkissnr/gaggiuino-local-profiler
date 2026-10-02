@@ -7,10 +7,9 @@ import (
 )
 
 // TestContract_EmptyState pins the Go GET /api/achievements response for a
-// fresh DB against the captured Node fixture (testdata/empty_en.json,
-// generated from lib/services/AchievementService.js — see the file header
-// there). Every badge's id/card/secret/unlocked/stamp/progress must match;
-// unlockedAt is null for all of them on an empty DB.
+// fresh DB against the captured fixture (testdata/empty_en.json — see the
+// file header there). Every badge's id/card/secret/unlocked/stamp/progress
+// must match; unlockedAt is null for all of them on an empty DB.
 func TestContract_EmptyState(t *testing.T) {
 	env := newTestEnv(t)
 	got := env.get(t, "en")
@@ -121,8 +120,8 @@ func TestSecretBadgeHiddenUntilUnlocked(t *testing.T) {
 }
 
 // TestSecretsTableDecodes verifies every base64 string in secretsTable
-// decodes to non-empty valid UTF-8 for all six languages (guards the
-// one-off transcription from lib/achievements/secrets.js).
+// decodes to non-empty valid UTF-8 for all six languages (guards the one-off
+// transcription).
 func TestSecretsTableDecodes(t *testing.T) {
 	for id := range secretsTable {
 		for _, lang := range []string{"de", "en", "it", "fr", "es", "nl"} {
@@ -264,4 +263,75 @@ func numAsFloat(v any) (float64, bool) {
 func jsonNumber(v any) float64 {
 	f, _ := numAsFloat(v)
 	return f
+}
+
+// TestEvaluateEvent_ProfileSavedUnlocksProfileBadges pins #1286 R1: the two
+// profile live-moment badges have no event bus, so cmd/server drives them
+// with explicit Service.EvaluateEvent calls. A profile-saved create unlocks
+// first_profile; an update unlocks profile_edit; both are then visible
+// through the same GET /api/achievements state.
+func TestEvaluateEvent_ProfileSavedUnlocksProfileBadges(t *testing.T) {
+	env := newTestEnv(t)
+
+	before := badgeByID(env.get(t, "en"))
+	if before["first_profile"]["unlocked"] != false || before["profile_edit"]["unlocked"] != false {
+		t.Fatalf("profile badges should start locked: first_profile=%v profile_edit=%v",
+			before["first_profile"]["unlocked"], before["profile_edit"]["unlocked"])
+	}
+
+	if _, err := env.svc.EvaluateEvent(&Event{Type: "profile-saved", Payload: map[string]any{"action": "create"}}); err != nil {
+		t.Fatalf("EvaluateEvent(create): %v", err)
+	}
+	afterCreate := badgeByID(env.get(t, "en"))
+	if afterCreate["first_profile"]["unlocked"] != true {
+		t.Fatalf("first_profile should unlock after a profile-saved create")
+	}
+	if afterCreate["profile_edit"]["unlocked"] != false {
+		t.Errorf("profile_edit should stay locked after a create: %v", afterCreate["profile_edit"]["unlocked"])
+	}
+
+	if _, err := env.svc.EvaluateEvent(&Event{Type: "profile-saved", Payload: map[string]any{"action": "update"}}); err != nil {
+		t.Fatalf("EvaluateEvent(update): %v", err)
+	}
+	afterUpdate := badgeByID(env.get(t, "en"))
+	if afterUpdate["profile_edit"]["unlocked"] != true {
+		t.Fatalf("profile_edit should unlock after a profile-saved update")
+	}
+}
+
+// TestEvaluateEvent_BackupAndRestockUnlock pins #1286 R2: the backup and
+// restock live-moment badges have no event bus, so cmd/server drives them
+// with explicit Service.EvaluateEvent calls. A backup-exported event unlocks
+// backup; a bean-changed/restock event with wasEmpty=true unlocks restock,
+// while one with wasEmpty=false leaves it locked.
+func TestEvaluateEvent_BackupAndRestockUnlock(t *testing.T) {
+	env := newTestEnv(t)
+
+	before := badgeByID(env.get(t, "en"))
+	if before["backup"]["unlocked"] != false || before["restock"]["unlocked"] != false {
+		t.Fatalf("backup/restock should start locked: backup=%v restock=%v",
+			before["backup"]["unlocked"], before["restock"]["unlocked"])
+	}
+
+	if _, err := env.svc.EvaluateEvent(&Event{Type: "backup-exported"}); err != nil {
+		t.Fatalf("EvaluateEvent(backup-exported): %v", err)
+	}
+	if got := badgeByID(env.get(t, "en"))["backup"]["unlocked"]; got != true {
+		t.Fatalf("backup should unlock after a backup-exported event")
+	}
+
+	// A restock that was not on an empty bean must not unlock the badge.
+	if _, err := env.svc.EvaluateEvent(&Event{Type: "bean-changed", Payload: map[string]any{"reason": "restock", "wasEmpty": false}}); err != nil {
+		t.Fatalf("EvaluateEvent(restock wasEmpty=false): %v", err)
+	}
+	if got := badgeByID(env.get(t, "en"))["restock"]["unlocked"]; got != false {
+		t.Fatalf("restock should stay locked when wasEmpty is false")
+	}
+
+	if _, err := env.svc.EvaluateEvent(&Event{Type: "bean-changed", Payload: map[string]any{"reason": "restock", "wasEmpty": true}}); err != nil {
+		t.Fatalf("EvaluateEvent(restock wasEmpty=true): %v", err)
+	}
+	if got := badgeByID(env.get(t, "en"))["restock"]["unlocked"]; got != true {
+		t.Fatalf("restock should unlock after a restock on an empty bean")
+	}
 }

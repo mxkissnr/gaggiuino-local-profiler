@@ -8,41 +8,37 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
-// sync_triggers.go ports the three automatic drivers of the default
-// machine's shot-history pull that live in lib/sync.js / lib/poll.js
-// (#953). Before this, sync.go only exposed RunManualSync (POST /api/sync),
-// so a new shot never landed in the Go build until the barista hit "Sync"
-// by hand:
+// sync_triggers.go implements the three automatic drivers of the default
+// machine's shot-history pull (#953). Before this, sync.go only exposed
+// RunManualSync (POST /api/sync), so a new shot never landed until the barista
+// hit "Sync" by hand:
 //
-//   - syncAfterBrew (lib/sync.js:52): 3s after a brew finishes, pull the
-//     shot the machine just wrote.
-//   - scheduleNextSync (lib/sync.js:329): a periodic pull every
-//     sync_interval minutes, with a short retry-backoff sequence on
-//     failure before falling back to the regular cadence.
-//   - #725 reachability recovery (lib/poll.js:228): when the machine goes
-//     unreachable->reachable again and a sync is known to be outstanding,
+//   - scheduleSyncAfterBrew: 3s after a brew finishes, pull the shot the
+//     machine just wrote.
+//   - runScheduledSync: a periodic pull every sync_interval minutes, with a
+//     short retry-backoff sequence on failure before falling back to the
+//     regular cadence.
+//   - #725 reachability recovery (maybeCatchUpAfterRecovery): when the machine
+//     goes unreachable->reachable again and a sync is known to be outstanding,
 //     catch up immediately instead of waiting for the next scheduled pull.
 //
-// syncOtherMachines (#1146) now rides along with the scheduled loop (and with
-// the manual trigger) — see sync.go; native-maintenance sync and the
-// SYNC_PROGRESS events stay unported (see sync.go + doc.go). The post-brew
-// and reachability-recovery catch-up paths deliberately stay default-only,
-// matching Node's syncAfterBrew()/poll.js, which call syncShots() alone.
+// syncOtherMachines (#1146) rides along with the scheduled loop (and with the
+// manual trigger) — see sync.go; native-maintenance sync and syncProgress stay
+// unimplemented (see sync.go + doc.go). The post-brew and reachability-recovery
+// catch-up paths deliberately stay default-only: they pull the default machine
+// alone.
 
 // Tunables, package-level so tests can shrink them (restore with defer).
 var (
-	// syncAfterBrewDelay mirrors lib/poll.js's setTimeout(syncAfterBrew, 3000).
+	// syncAfterBrewDelay is how long to wait after a brew before pulling.
 	syncAfterBrewDelay = 3 * time.Second
-	// syncRetryDelays ports lib/sync.js's SYNC_RETRY_DELAYS: the backoff
-	// sequence tried after a failed scheduled sync before resuming the
-	// regular sync_interval cadence.
+	// syncRetryDelays is the backoff sequence tried after a failed scheduled
+	// sync before resuming the regular sync_interval cadence.
 	syncRetryDelays = []time.Duration{30 * time.Second, 60 * time.Second, 120 * time.Second}
-	// syncAfterPowerOnDelay mirrors lib/poll.js's #663
-	// syncSoonAfterPowerOn(): the first pull after a machine off->on edge
-	// waits 2s, because the physical machine can take a moment to bring
-	// its own HTTP API up (Node also runs a bounded 10s retry chain there,
-	// which is not ported -- the scheduled loop already retries a failed
-	// sync on its own backoff).
+	// syncAfterPowerOnDelay is the wait before the first pull after a machine
+	// off->on edge: 2s, because the physical machine can take a moment to bring
+	// its own HTTP API up (a bounded 10s retry chain there is not implemented --
+	// the scheduled loop already retries a failed sync on its own backoff).
 	syncAfterPowerOnDelay = 2 * time.Second
 )
 
@@ -75,11 +71,10 @@ func (p *Poller) syncCtx() context.Context {
 	return context.Background()
 }
 
-// scheduleSyncAfterBrew ports lib/poll.js's `setTimeout(syncAfterBrew,
-// 3000)` fired from the brew-finished branch: wait 3s (the machine needs a
-// moment to persist the shot), then pull, logging the new shot id(s) the
-// way syncAfterBrew() does. Single-flight is handled inside
-// syncDefaultMachineShots (defaultSyncInFlight, #773).
+// scheduleSyncAfterBrew is fired from the brew-finished branch: wait 3s (the
+// machine needs a moment to persist the shot), then pull, logging the new shot
+// id(s). Single-flight is handled inside syncDefaultMachineShots
+// (defaultSyncInFlight, #773).
 func (p *Poller) scheduleSyncAfterBrew() {
 	if p.shots == nil {
 		return
@@ -99,15 +94,19 @@ func (p *Poller) scheduleSyncAfterBrew() {
 		if newMax, _ := p.shots.MaxNativeShotID(1); newMax > prevMax {
 			log.Printf("system: post-brew sync: caught up to new shot #%d", newMax)
 		}
+		// A shot just finished syncing, so the machine is definitely
+		// reachable right now — cheap opportunity to also flush any
+		// profile edits made while it was offline, no extra network cost
+		// beyond what already just happened.
+		p.pushDirtyProfilesForDefaultMachine(ctx)
 	})
 }
 
-// scheduleSyncSoonAfterPowerOn ports lib/poll.js's #663
-// syncSoonAfterPowerOn(): fired on the machine off->on edge, it waits
-// Node's initial 2s before the first post-power-on pull (the machine can
-// still be bringing its API up), then syncs the default machine. Default
-// machine only, matching Node. Single-flight is handled inside
-// syncDefaultMachineShots (defaultSyncInFlight, #773).
+// scheduleSyncSoonAfterPowerOn is fired on the machine off->on edge, it waits
+// 2s before the first post-power-on pull (the machine can still be bringing
+// its API up), then syncs the default machine. Default machine only.
+// Single-flight is handled inside syncDefaultMachineShots
+// (defaultSyncInFlight, #773).
 func (p *Poller) scheduleSyncSoonAfterPowerOn() {
 	if p.shots == nil {
 		return
@@ -125,12 +124,30 @@ func (p *Poller) scheduleSyncSoonAfterPowerOn() {
 	})
 }
 
-// maybeCatchUpAfterRecovery ports lib/poll.js's #725 block: called from the
-// status-poll success path with the reachability value observed on the
-// PREVIOUS poll. A false->true transition, plus either a recorded sync
-// error or no successful sync ever, means the shot history is behind — pull
-// now rather than waiting up to a full sync_interval. Fire-and-forget: it
-// must never block or fail the live poll.
+// pushDirtyProfilesForDefaultMachine resolves the default machine and pushes
+// its pending profile edits — shared by scheduleSyncAfterBrew and
+// maybeCatchUpAfterRecovery below, both of which only ever act on the
+// default machine (see this file's header comment on that scope). A second,
+// non-default machine is instead covered by profile_sync.go's periodic
+// runProfileSyncSweep.
+func (p *Poller) pushDirtyProfilesForDefaultMachine(ctx context.Context) {
+	if p.profilesRepo == nil {
+		return
+	}
+	machine, err := p.registry.GetDefaultMachine()
+	if err != nil || machine == nil {
+		return
+	}
+	if err := p.PushDirtyProfiles(ctx, machine.ID); err != nil {
+		log.Printf("system: post-brew profile sync failed: %v", err)
+	}
+}
+
+// maybeCatchUpAfterRecovery is called from the status-poll success path with
+// the reachability value observed on the PREVIOUS poll. A false->true
+// transition, plus either a recorded sync error or no successful sync ever,
+// means the shot history is behind — pull now rather than waiting up to a full
+// sync_interval. Fire-and-forget: it must never block or fail the live poll.
 func (p *Poller) maybeCatchUpAfterRecovery(prevReachable *bool) {
 	if p.shots == nil || prevReachable == nil || *prevReachable {
 		return
@@ -146,17 +163,19 @@ func (p *Poller) maybeCatchUpAfterRecovery(prevReachable *bool) {
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: catch-up sync after reachability recovery failed: %v", err)
 		}
+		// The machine just came back — flush any profile edits made while
+		// it was gone. This is what makes "profiles sync alongside shots"
+		// literally true for the default machine's reconnect path.
+		p.pushDirtyProfilesForDefaultMachine(ctx)
 	})
 }
 
-// runScheduledSync ports lib/sync.js's scheduleNextSync() recursion as a
-// context-driven loop: sync every regularSyncInterval() (retry == 0); after
-// a failure, retry on the syncRetryDelays sequence (30s / 60s / 120s),
-// capping at the last delay for a persistent outage exactly like Node's
-// `Math.min(retryCount + 1, SYNC_RETRY_DELAYS.length)`. A success resets to
-// the regular cadence. Like Node's server.js boot call to syncAllMachines(),
-// the first pass runs immediately on start rather than after one interval
-// (#1153). Started from Start(); exits on context cancel.
+// runScheduledSync is a context-driven loop: sync every regularSyncInterval()
+// (retry == 0); after a failure, retry on the syncRetryDelays sequence
+// (30s / 60s / 120s), capping at the last delay for a persistent outage. A
+// success resets to the regular cadence. The first pass runs immediately on
+// start rather than after one interval (#1153). Started from Start(); exits on
+// context cancel.
 func (p *Poller) runScheduledSync(ctx context.Context) {
 	if p.shots == nil {
 		return
@@ -184,9 +203,8 @@ func (p *Poller) runScheduledSync(ctx context.Context) {
 		immediate = false
 
 		err := p.syncOnce(ctx)
-		// #1146: the scheduler drives every enabled non-default machine too,
-		// like Node's syncAllMachines(). A test's syncFn seam replaces the
-		// default pull only, so it must bypass this.
+		// #1146: the scheduler drives every enabled non-default machine too.
+		// A test's syncFn seam replaces the default pull only, so it must bypass this.
 		if p.syncFn == nil {
 			p.syncOtherMachines(ctx)
 		}

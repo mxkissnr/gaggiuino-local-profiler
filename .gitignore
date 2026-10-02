@@ -1,7 +1,6 @@
 gaggiuino-local-profiler/node_modules/
 gaggiuino-local-profiler/public/
 gaggiuino-local-profiler/coverage/
-gaggiuino-local-profiler/go/**/*_templ.go
 
 # Phase 1 (#901): the SPA bundle internal/webapp embeds is a build artifact,
 # produced by `make -C go frontend` or the Dockerfile's builder stage via
@@ -18,6 +17,18 @@ gaggiuino-local-profiler/go/internal/webapp/dist/*
 *.db-shm
 api_token.txt
 preheat_state.json
+# #1181: GLP_SCREENSHOT_BACKUP input — personal data, never committed
+gaggiuino-local-profiler/scripts/*.zip
+gaggiuino-local-profiler/scripts/**/*.zip
+
+# #1193: recorded demo fixtures are a regenerated build artifact (npm run
+# demo:fixtures), not source — and must be re-checked for personal data on
+# every run rather than reviewed once in a PR.
+gaggiuino-local-profiler/demo/fixtures/
+
+# #1193: the static demo build output (npm run build:demo) is a generated
+# artifact published to GitHub Pages, never committed.
+gaggiuino-local-profiler/demo-dist/
 
 # defence-in-depth: secrets that must never land in git regardless of location
 .env

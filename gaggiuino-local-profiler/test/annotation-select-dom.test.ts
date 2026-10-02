@@ -28,6 +28,20 @@ interface Catalog { beans: CatalogRow[]; baskets: CatalogRow[]; puckScreens: Cat
 // them back to the FakeOption instances the render path actually created.
 const optionsOf = (select: FakeSelect): FakeOption[] => (select.options ?? []) as FakeOption[];
 
+// `selects` and `options` are plain Record/array, so `selects.x` / `opts[i]`
+// are `| undefined` under noUncheckedIndexedAccess; these narrow them back and
+// throw on a missing entry, matching the old code which would have crashed.
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`no element at index ${i}`);
+  return v;
+}
+function sel(name: string): FakeSelect {
+  const s = selects[name];
+  if (s === undefined) throw new Error(`unknown select: ${name}`);
+  return s;
+}
+
 let selects: Record<string, FakeSelect>;
 let catalog: Catalog;
 beforeEach(() => {
@@ -44,26 +58,26 @@ describe('#946 annotation selects built via DOM API', () => {
   it('basket options carry value + data-basket-id and mark the selected one', () => {
     catalog.baskets = [{ id: 5, name: 'IMS Precision' }, { id: 7, name: 'VST 18g' }];
     _renderBasketSelect(7);
-    const opts = optionsOf(selects.annBasket);
-    expect(opts[0].value).toBe('');           // "none" entry
-    expect(opts[1].value).toBe('5');
-    expect(opts[1].dataset.basketId).toBe(5);
-    expect(opts[1].selected).toBe(false);
-    expect(opts[2].dataset.basketId).toBe(7);
-    expect(opts[2].selected).toBe(true);
+    const opts = optionsOf(sel('annBasket'));
+    expect(at(opts, 0).value).toBe('');           // "none" entry
+    expect(at(opts, 1).value).toBe('5');
+    expect(at(opts, 1).dataset.basketId).toBe(5);
+    expect(at(opts, 1).selected).toBe(false);
+    expect(at(opts, 2).dataset.basketId).toBe(7);
+    expect(at(opts, 2).selected).toBe(true);
   });
 
   it('puck screen options use the puckscreenId dataset key _buildAnnotationPayload reads', () => {
     catalog.puckScreens = [{ id: 9, name: 'Slayer mesh' }];
     _renderPuckScreenSelect(9);
-    expect(optionsOf(selects.annPuckScreen)[1].dataset.puckscreenId).toBe(9);
-    expect(optionsOf(selects.annPuckScreen)[1].selected).toBe(true);
+    expect(at(optionsOf(sel('annPuckScreen')), 1).dataset.puckscreenId).toBe(9);
+    expect(at(optionsOf(sel('annPuckScreen')), 1).selected).toBe(true);
   });
 
   it('recipe options carry no data attribute (payload reads annRecipe.value)', () => {
     catalog.recipes = [{ id: 3, name: 'Ratio 1:2' }];
     _renderRecipeSelect(3);
-    const opt = optionsOf(selects.annRecipe)[1];
+    const opt = at(optionsOf(sel('annRecipe')), 1);
     expect(opt.value).toBe('3');
     expect(opt.selected).toBe(true);
     expect(Object.keys(opt.dataset)).toHaveLength(0);
@@ -72,7 +86,7 @@ describe('#946 annotation selects built via DOM API', () => {
   it('a bean name with HTML metacharacters becomes option text, never markup', () => {
     catalog.beans = [{ id: 1, name: '<img src=x onerror=alert(1)> "Ácme"' }];
     _renderBeanSelect('<img src=x onerror=alert(1)> "Ácme"', 1);
-    const opt = optionsOf(selects.annCoffee)[1];
+    const opt = at(optionsOf(sel('annCoffee')), 1);
     expect(opt.text).toBe('<img src=x onerror=alert(1)> "Ácme"');
     expect(opt.value).toBe('<img src=x onerror=alert(1)> "Ácme"');
     expect(opt.dataset.beanId).toBe(1);

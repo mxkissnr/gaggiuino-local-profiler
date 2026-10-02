@@ -7,16 +7,15 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// This file ports lib/import-parsers.js's three built-in shop parsers
-// (parseKaffeebraun, parseHoploProduct, parseElbgoldProduct). Each returns
-// a bean map (JS object) or nil when the page/JSON carries no product.
-// cheerio.load(html) -> goquery.
+// This file holds the three built-in shop parsers (parseKaffeebraun,
+// parseHoploProduct, parseElbgoldProduct). Each returns a bean map or nil
+// when the page/JSON carries no product.
 
 func loadHTML(html string) *goquery.Document {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		// goquery only errors on a nil reader; an empty/garbage string
-		// still yields a usable (empty) document, same as cheerio.load('').
+		// still yields a usable (empty) document.
 		doc, _ = goquery.NewDocumentFromReader(strings.NewReader(""))
 	}
 	return doc
@@ -124,8 +123,8 @@ func parseHoploProduct(product map[string]any) map[string]any {
 		}
 		return true
 	})
-	// Node uses `product.vendor || 'Hoppenworth & Ploch'` — the raw field,
-	// not trimmed (unlike parseGenericShopifyProduct).
+	// The raw vendor field is used untrimmed (unlike parseGenericShopifyProduct);
+	// an empty vendor falls back to 'Hoppenworth & Ploch'.
 	roaster := mstr(product, "vendor")
 	if roaster == "" {
 		roaster = "Hoppenworth & Ploch"

@@ -2,11 +2,11 @@ package mqtt
 
 import "context"
 
-// This file ports lib/mqtt-discovery.js (#608): Supervisor MQTT service
-// auto-discovery via the Supervisor's own /services/mqtt endpoint (a
-// different root than the Core API — lib/constants.js's SUPERVISOR_API,
-// reached through ha.Client.SupervisorGet). Requires `services: [mqtt:want]`
-// in config.yaml. An install with no MQTT service registered gets a 4xx
+// This file implements the #608 Supervisor MQTT service auto-discovery via
+// the Supervisor's own /services/mqtt endpoint (a different root than the
+// Core API, reached through ha.Client.SupervisorGet). Requires
+// `services: [mqtt:want]` in config.yaml. An install with no MQTT service
+// registered gets a 4xx
 // here, treated the same as "not available" (manual entry is always a valid
 // fallback) rather than an error.
 
@@ -18,9 +18,8 @@ type Broker struct {
 	Password string
 }
 
-// DiscoverSupervisorMQTT ports discoverSupervisorMqtt(): returns nil on any
-// failure (no token, unreachable Supervisor, no MQTT service), matching the
-// Node original's `catch -> null` and `if (!d || !d.host) return null`.
+// DiscoverSupervisorMQTT returns nil on any failure (no token, unreachable
+// Supervisor, no MQTT service), treating all of them as "not available".
 //
 // #988 code review: the returned Broker.Host is NOT run through the SSRF
 // guard client.go's connect() applies to a manually-entered/restored

@@ -1,6 +1,8 @@
 import { S } from './state/index.js';
 import { TRANSLATIONS } from './constants.js';
 import { STAR_ICON_SVG } from './icons.js';
+import { html } from './utils.js';
+import type { Html } from './utils.js';
 
 // Cross-module entry points main.js wires onto `window` (kept off direct
 // imports to avoid circular deps); declared so the calls below stay typed.
@@ -41,6 +43,13 @@ export function t(key: string, ...args: unknown[]): string {
   return typeof val === 'function' ? val(...args) : val;
 }
 
+// t() for markup contexts: dictionary entries are bundled at build time and
+// may carry trusted markup (icon SVGs), so the result is Html. Arguments are
+// still the caller's responsibility, esc() them.
+export function tHtml(key: string, ...args: unknown[]): Html {
+  return t(key, ...args) as Html; // static dictionaries, never user data
+}
+
 export function setLang(lang: string): void {
   if (!TRANSLATIONS[lang]) return;
   S.currentLang = lang;
@@ -78,7 +87,7 @@ export function applyTranslations(): void {
   // can't hold — same pattern setSortMode() (sidebar.js) uses when this
   // button is the active sort.
   const sortRatingEl = document.getElementById('sortRating');
-  if (sortRatingEl) sortRatingEl.innerHTML = `${STAR_ICON_SVG} ${t('sort_rating')}`;
+  if (sortRatingEl) sortRatingEl.innerHTML = html`${STAR_ICON_SVG} ${tHtml('sort_rating')}`;
   // Search placeholder
   const searchEl = document.getElementById('shotSearch') as HTMLInputElement | null;
   if (searchEl) searchEl.placeholder = t('search_placeholder');
@@ -108,6 +117,6 @@ export function applyTranslations(): void {
   });
   document.querySelectorAll<HTMLElement>('[data-i18n-html]').forEach(el => {
     const key = el.dataset.i18nHtml;
-    if (key) el.innerHTML = t(key);
+    if (key) el.innerHTML = tHtml(key);
   });
 }

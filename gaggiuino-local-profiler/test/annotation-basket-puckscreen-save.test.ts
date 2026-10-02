@@ -59,7 +59,7 @@ describe('annotation save — basketId/puckScreenId roundtrip (#635, beanId patt
     scheduleAutoSave();
     flushAutoSave();
     expect(fetchSpy).toHaveBeenCalledWith('api/shots/1/annotate', expect.objectContaining({ method: 'POST' }));
-    const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string) as AnnotationPayload;
+    const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string) as AnnotationPayload;
     expect(body.basketId).toBe(5);
     expect(body.puckScreenId).toBe(9);
   });
@@ -68,7 +68,7 @@ describe('annotation save — basketId/puckScreenId roundtrip (#635, beanId patt
     fakeAnnotationDom(null, null);
     scheduleAutoSave();
     flushAutoSave();
-    const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string) as AnnotationPayload;
+    const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string) as AnnotationPayload;
     expect(body.basketId).toBeNull();
     expect(body.puckScreenId).toBeNull();
   });

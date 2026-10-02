@@ -3,18 +3,18 @@
 // previewing exactly what a file would change before anything is written.
 // A single shared implementation instead of two separate ones keeps the
 // section list and its labels from drifting apart between export and
-// restore, the same reasoning `lib/machines/options-adoption.js` documents
-// for tracked options.
-import { t } from '../i18n.js';
+// restore.
+import { t, tHtml } from '../i18n.js';
 import { initToken } from '../api/transport.js';
 import { requestBackup, postRestore } from '../api/system.js';
-import { shareOrDownloadBlob } from '../utils.js';
+import { esc, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
+import type { Html } from '../utils.js';
 
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
 
 // Filename-safe local-time timestamp, e.g. "2026-08-06_08-32-05" -- mirrors
 // go/internal/backup's timestamp helper (kept as two copies rather than
-// one shared module since one runs in the browser and one in Node, same
+// one shared module since one runs in the browser and one in the backend, same
 // reasoning SECTION_PRESENCE_KEYS/SECTION_PRESENCE_BUNDLE_KEYS already
 // accept). A bare date collapsed every backup taken the same day into one
 // filename, forcing the browser to append "(1)"/"(2)" or overwrite silently.
@@ -126,7 +126,7 @@ function els(): BackupEls {
 }
 
 // Progress row (#960). A null `pct` means "size unknown" — an indeterminate
-// bar (Node backend sends no X-GLP-Backup-Estimate; or the server-side
+// bar (when no X-GLP-Backup-Estimate header is sent; or the server-side
 // restore phase after the upload bytes are all sent). Both the confirm and
 // the cancel button are disabled for the whole transfer (setBusy) so an
 // in-flight stream/XHR is never orphaned — there is no abort path.
@@ -197,15 +197,13 @@ function closeBackupModal(): void {
 
 function renderSectionCheckboxes(presentSections: Set<string> | null): void {
     const { sectionsBox } = els();
-    sectionsBox.innerHTML = '';
+    sectionsBox.innerHTML = html``;
     for (const key of SECTION_KEYS) {
         if (key === 'secrets') continue; // rendered separately below, it needs the passphrase row next to it
         const present = !presentSections || presentSections.has(key);
         const label = document.createElement('label');
         label.className = 'backup-section-row';
-        label.innerHTML = `<input type="checkbox" class="backup-section-cb" value="${key}" ${present ? 'checked' : 'disabled'}>`
-            + `<span>${t(`backup_section_${key}`)}</span>`
-            + (present ? '' : `<span class="backup-section-empty">${t('backup_section_empty')}</span>`);
+        label.innerHTML = html`<input type="checkbox" class="backup-section-cb" value="${esc(key)}" ${present ? html`checked` : html`disabled`}><span>${tHtml(`backup_section_${key}`)}</span>${present ? html`` : html`<span class="backup-section-empty">${tHtml('backup_section_empty')}</span>`}`;
         sectionsBox.appendChild(label);
     }
 }
@@ -229,19 +227,19 @@ async function refreshRestorePreview(): Promise<void> {
         const body = await r.json() as { preview?: BackupPreview };
         if (!r.ok || !body.preview) { preview.textContent = ''; return; }
         const p = body.preview;
-        const lines: string[] = [];
-        if (sections.includes('shots'))       lines.push(t('backup_preview_shots', p.shots) + (p.library ? ` · ${t('backup_preview_library')}` : ''));
-        if (sections.includes('maintenance')) lines.push(t('backup_preview_maintenance', p.maintenance, p.maintenanceTotal) + ', ' + t('backup_preview_maintenance_log', p.maintenanceLog, p.maintenanceLogTotal));
-        if (sections.includes('orders'))      lines.push(t('backup_preview_orders', p.orders, p.ordersTotal));
-        if (sections.includes('machines'))    lines.push(t('backup_preview_machines', p.machines));
-        if (sections.includes('settings') && p.settings) lines.push(t('backup_preview_settings'));
-        if (p.images) lines.push(t('backup_preview_images', p.images));
+        const lines: Html[] = [];
+        if (sections.includes('shots'))       lines.push(html`${tHtml('backup_preview_shots', p.shots)}${p.library ? html` · ${tHtml('backup_preview_library')}` : html``}`);
+        if (sections.includes('maintenance')) lines.push(html`${tHtml('backup_preview_maintenance', p.maintenance, p.maintenanceTotal)}, ${tHtml('backup_preview_maintenance_log', p.maintenanceLog, p.maintenanceLogTotal)}`);
+        if (sections.includes('orders'))      lines.push(tHtml('backup_preview_orders', p.orders, p.ordersTotal));
+        if (sections.includes('machines'))    lines.push(tHtml('backup_preview_machines', p.machines));
+        if (sections.includes('settings') && p.settings) lines.push(tHtml('backup_preview_settings'));
+        if (p.images) lines.push(tHtml('backup_preview_images', p.images));
         if (els().secretsCb.checked) {
             lines.push(p.secretsPresent
-                ? (p.secretsRestored ? t('backup_preview_secrets_ok') : t('backup_preview_secrets_wrong'))
-                : t('backup_preview_secrets_none'));
+                ? (p.secretsRestored ? tHtml('backup_preview_secrets_ok') : tHtml('backup_preview_secrets_wrong'))
+                : tHtml('backup_preview_secrets_none'));
         }
-        preview.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+        preview.innerHTML = joinHtml(lines.map(l => html`<div>${l}</div>`));
     } catch { preview.textContent = ''; }
 }
 
@@ -261,7 +259,7 @@ export function openBackupExportModal(): void {
     passRow.style.display = 'none';
     passConfirmRow.style.display = 'none';
     preview.style.display = 'none';
-    preview.innerHTML = '';
+    preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_export_confirm');
     modal.classList.add('open');
@@ -282,9 +280,9 @@ export function openBackupExportModal(): void {
             // The response is already the zip binary (backup.json + real
             // image files, see go/internal/backup's bundle builder) -- no
             // re-serialization needed, unlike the old JSON.stringify(bundle).
-            // X-GLP-Backup-Estimate is an approximate size for the bar; the
-            // Go backend sends it, the Node backend doesn't (then the bar
-            // stays indeterminate). requestBackup() buffers the whole zip in
+            // X-GLP-Backup-Estimate is an approximate size for the bar; when
+            // it's absent the bar stays indeterminate. requestBackup()
+            // buffers the whole zip in
             // memory before the download — fine for these file sizes.
             const res = await requestBackup({
                 sections,
@@ -311,9 +309,9 @@ export function openBackupExportModal(): void {
     };
 }
 
-// Zip files always start with this 4-byte local-file-header signature (see
-// lib/zip.js) -- sniffed instead of trusting the file's extension/MIME type,
-// which a rename or a picky OS file picker can't be relied on for.
+// Zip files always start with this 4-byte local-file-header signature --
+// sniffed instead of trusting the file's extension/MIME type, which a rename
+// or a picky OS file picker can't be relied on for.
 function looksLikeZip(bytes: Uint8Array): boolean {
     return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04;
 }
@@ -331,8 +329,8 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
     if (looksLikeZip(bytes)) {
         // A zip's backup.json can't be inspected locally the way a plain
         // .json file's contents can (no zip reader on the frontend --
-        // deliberately, see lib/zip.js's module doc comment: keeping zip
-        // parsing in exactly one place, Node-only, was the whole point).
+        // deliberately: keeping zip parsing in exactly one place, on the
+        // server, was the whole point).
         // One dry-run round trip against the full file (no sections header,
         // so the backend falls back to "everything the file itself has")
         // gets the same section-presence information the legacy .json path
@@ -366,7 +364,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
             }
             restoreBundle = bundle;
             restoreZipBytes = null;
-            present = new Set(SECTION_KEYS.filter(key => SECTION_PRESENCE_KEYS[key].some(k => k in bundle)));
+            present = new Set(SECTION_KEYS.filter(key => (SECTION_PRESENCE_KEYS[key] ?? []).some(k => k in bundle)));
         } catch (e) {
             alert(t('backup_error', (e as Error).message));
             input.value = '';
@@ -385,7 +383,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
     passRow.style.display = hasSecrets ? '' : 'none';
     passConfirmRow.style.display = 'none'; // restore only needs the passphrase once, no confirm field
     preview.style.display = '';
-    preview.innerHTML = '';
+    preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_restore_confirm');
     modal.classList.add('open');

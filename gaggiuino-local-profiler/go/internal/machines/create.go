@@ -9,10 +9,9 @@ import (
 // This file (#901, Go web-UI Create/Edit follow-up) extracts POST
 // /api/machines' validate -> SSRF-check -> Registry.CreateMachine sequence
 // (handlers_registry.go's createMachine) into a single function so
-// internal/web's "New machine" form can call the exact same validation and
-// SSRF-guard logic instead of reimplementing it — the same "same service
-// method, not new logic" discipline internal/library.CreateBean et al.
-// (internal/library/create.go) apply for that domain's own Create* forms.
+// the validation and SSRF-guard logic lives outside the HTTP layer — the
+// same discipline internal/library.CreateBean et al.
+// (internal/library/create.go) apply for that domain's own Create* functions.
 
 // ValidationError carries the 400 message CreateMachineChecked's caller
 // should surface. Aliased to httputil.ValidationError (#901 code review

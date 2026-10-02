@@ -79,15 +79,8 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            /** @description Each row is a Shot with the `datapoints` curve blob removed (fetch it via GET /api/shots/{id}) plus `score`, `usedBeanTarget` and `hasChartData`. */
-                            shots: (components["schemas"]["Shot"] & {
-                                score?: number | null;
-                                usedBeanTarget?: boolean;
-                                /** @description Whether the shot has a non-empty pressure/time curve series */
-                                hasChartData?: boolean;
-                                /** @description Mean absolute deviation of the temperature series from target */
-                                tempStabilityDev?: number | null;
-                            })[];
+                            /** @description Each row is a HydratedShot with the `datapoints` curve blob removed (fetch it via GET /api/shots/{id}). */
+                            shots: components["schemas"]["HydratedShot"][];
                             /** @description Cursor for the next page, or null when hasMore is false. */
                             nextCursor: string | null;
                             hasMore: boolean;
@@ -170,15 +163,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            drinkType?: string | null;
-                            coffee?: string | null;
-                            beanId?: number | null;
-                            basketId?: number | null;
-                            puckScreenId?: number | null;
-                            grinder?: string;
-                            dose?: number | null;
-                        };
+                        "application/json": components["schemas"]["ShotDefaults"];
                     };
                 };
             };
@@ -194,15 +179,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": {
-                        drinkType?: string | null;
-                        coffee?: string | null;
-                        beanId?: number | null;
-                        basketId?: number | null;
-                        puckScreenId?: number | null;
-                        grinder?: string;
-                        dose?: number | null;
-                    };
+                    "application/json": components["schemas"]["ShotDefaultsInput"];
                 };
             };
             responses: {
@@ -256,7 +233,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Shot"] | null;
+                        "application/json": components["schemas"]["HydratedShot"] | null;
                     };
                 };
             };
@@ -471,7 +448,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Save or update annotation for a shot */
+        /**
+         * Save or update annotation for a shot
+         * @description Merges the posted fields into the shot's stored annotation: a key omitted from the body keeps its stored value, while a key sent as null or "" clears it. The orderedBy attribution is server-owned and cannot be changed here.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -861,7 +841,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Open a new bag for a bean (pushes bag history, resets roastDate/stock_g) */
+        /**
+         * Open a new bag for a bean (joins the back of the queue)
+         * @description The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -873,12 +856,7 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": {
-                        /** Format: date */
-                        roastDate?: string;
-                        stock_g?: number;
-                        batchNumber?: string;
-                    };
+                    "application/json": components["schemas"]["NewBagInput"];
                 };
             };
             responses: {
@@ -897,6 +875,69 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/bean/{id}/reorder-bags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-reassign sortOrder for a bean's "upcoming" (non-current) bags
+         * @description bagIds must list every upcoming bag exactly once (no duplicates, none omitted) — the server assigns sequential sortOrder values in that order, all strictly above the current bag's own position.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReorderBagsInput"];
+                };
+            };
+            responses: {
+                /** @description Updated bean */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bean"];
+                    };
+                };
+                /** @description bagIds missing */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Bean not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
                 };
             };
         };
@@ -927,12 +968,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @description Epoch ms, default now */
-                        frozenAt?: number;
-                        portionCount: number;
-                        portionWeight_g: number;
-                    };
+                    "application/json": components["schemas"]["FreezePortionsInput"];
                 };
             };
             responses: {
@@ -988,11 +1024,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        portionId: number;
-                        /** @default 1 */
-                        count?: number;
-                    };
+                    "application/json": components["schemas"]["ThawPortionInput"];
                 };
             };
             responses: {
@@ -1041,14 +1073,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        portionId: number;
-                        portionWeight_g?: number;
-                        /** @description Epoch ms */
-                        frozenAt?: number;
-                        /** @description Set absolutely, re-clamped to [0, portionCount] */
-                        remainingCount?: number;
-                    };
+                    "application/json": components["schemas"]["AdjustFrozenPortionInput"];
                 };
             };
             responses: {
@@ -1091,7 +1116,55 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /**
+         * Full-replace one bag's editable fields (roastDate/stock_g/price_eur/batchNumber; sortOrder optional)
+         * @description roastDate/stock_g/price_eur/batchNumber are full-replaced — resend the bag's current value for any field not being changed, or it's cleared. sortOrder is the one exception, falling back to the bag's existing value when omitted (reorder-bags is the normal bulk way to change it).
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    bagId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BagUpdateInput"];
+                };
+            };
+            responses: {
+                /** @description Updated bean */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bean"];
+                    };
+                };
+                /** @description Invalid roastDate/stock_g/price_eur */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Bean or bag not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         post?: never;
         /** Delete a bag from a bean's bag history (the last remaining bag cannot be deleted) */
         delete: {
@@ -2547,6 +2620,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/milk/{id}/restock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restock milk (additive top-up of stockMl) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        ml: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated milk */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Milk"];
+                    };
+                };
+                /** @description ml must be positive */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/library/recipe": {
         parameters: {
             query?: never;
@@ -3685,12 +3816,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": (components["schemas"]["Milk"] & {
-                            /** @description ml requested by pending/accepted orders for this milk */
-                            demand?: number;
-                            /** @description max(0, stockMl - demand) */
-                            remaining?: number;
-                        })[];
+                        "application/json": components["schemas"]["MilkStock"][];
                     };
                 };
             };
@@ -3728,7 +3854,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["QueueEta"];
+                    };
                 };
             };
         };
@@ -3769,26 +3897,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            total?: number;
-                            customers?: {
-                                name?: string;
-                                count?: number;
-                                favItem?: string | null;
-                                /** @description Unix ms */
-                                lastAt?: number;
-                            }[];
-                            mostPopular?: {
-                                item?: string;
-                                count?: number;
-                            } | null;
-                            /** @description Only present once orders reference more than one machine. */
-                            byMachine?: {
-                                machineId?: number;
-                                machineName?: string | null;
-                                count?: number;
-                            }[] | null;
-                        };
+                        "application/json": components["schemas"]["OrderStats"];
                     };
                 };
             };
@@ -4054,7 +4163,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": string[];
+                        "application/json": components["schemas"]["NotifyService"][];
                     };
                 };
             };
@@ -4090,13 +4199,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            mapping?: components["schemas"]["NotifyMapping"];
-                            /** @description Map of haUserId → customer display name (derived from order history) */
-                            customers?: {
-                                [key: string]: string;
-                            };
-                        };
+                        "application/json": components["schemas"]["NotifyMappingView"];
                     };
                 };
             };
@@ -4529,18 +4632,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            available?: boolean;
-                            /** @description True when the list came from the last-known cache rather than a fresh fetch */
-                            stale?: boolean;
-                            current?: string | null;
-                            currentId?: number | null;
-                            options?: string[];
-                            optionsRaw?: {
-                                id?: number;
-                                name?: string;
-                            }[];
-                        };
+                        "application/json": components["schemas"]["MachineProfileList"];
                     };
                 };
             };
@@ -4639,12 +4731,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Profile detail (name */
+                /** @description Profile detail (name, phases, globalStopConditions, waterTemperature, recipe) */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MachineProfile"];
+                    };
                 };
                 /** @description Machine unreachable or returned an error */
                 502: {
@@ -4835,7 +4929,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MachineSystemSettings"];
+                    };
                 };
                 /** @description unknown category */
                 400: {
@@ -5251,7 +5347,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["FirmwareProgress"];
+                    };
                 };
                 /** @description machine type does not support the settings proxy */
                 501: {
@@ -5355,7 +5453,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["FirmwareVersion"];
+                    };
                 };
                 /** @description machine type does not support the settings proxy */
                 501: {
@@ -5431,6 +5531,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current MCP settings (stored toggles + whether developer tools are available on this build) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { enabled, allowWrite, allowDeveloperTools, developerToolsAvailable } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpSettings"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Save the MCP settings. Takes effect on the next request — no restart. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["McpSettingsInput"];
+                };
+            };
+            responses: {
+                /** @description Saved settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpSettings"];
+                    };
+                };
+                /** @description Invalid settings payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mqtt/discovery": {
         parameters: {
             query?: never;
@@ -5487,7 +5654,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MqttSettings"];
+                    };
                 };
             };
         };
@@ -5502,18 +5671,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        transport?: "websocket" | "mqtt";
-                        host?: string;
-                        port?: number;
-                        username?: string;
-                        /** @description Omit to keep the stored password unchanged (#1050); a present value always overwrites it unless clearPassword is also set. */
-                        password?: string;
-                        /** @description Wipe the stored password regardless of the password field (#1062). */
-                        clearPassword?: boolean;
-                        prefix?: string;
-                    };
+                    "application/json": components["schemas"]["MqttSettingsInput"];
                 };
             };
             responses: {
@@ -5522,7 +5680,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MqttSettings"];
+                    };
                 };
                 /** @description Invalid settings payload */
                 400: {
@@ -5636,7 +5796,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["MachineInput"];
+                    "application/json": components["schemas"]["MachineSaveInput"];
                 };
             };
             responses: {
@@ -5687,7 +5847,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["MachineInput"];
+                    "application/json": components["schemas"]["MachineSaveInput"];
                 };
             };
             responses: {
@@ -6064,7 +6224,7 @@ export interface paths {
         };
         /**
          * Add-on version and whether an update is available
-         * @description Cached/rate-limited by lib/version-check.js — see also the `up_to_date` achievement badge.
+         * @description Cached/rate-limited — see also the `up_to_date` achievement badge.
          */
         get: {
             parameters: {
@@ -6127,7 +6287,7 @@ export interface paths {
                         "application/json": {
                             /** @description Card layout key order */
                             cards?: string[];
-                            /** @description Open badges carry name/description/stamp; secret badges omit stamp/name/description until unlocked (see lib/achievements/secrets.js). */
+                            /** @description Open badges carry name/description/stamp; secret badges omit stamp/name/description until unlocked. */
                             badges?: Record<string, never>[];
                         };
                     };
@@ -6690,7 +6850,7 @@ export interface components {
             /** @example not found */
             error: string;
         };
-        /** @description Mirrors the Gaggiuino machine's own profile shape 1:1 (see lib/gaggiuino-proto.js). `type`/`curve` accept either the machine's enum name strings ("PRESSURE"/"FLOW"/"MANUAL", "LINEAR"/"EASE_IN"/"EASE_OUT"/"EASE_IN_OUT"/"INSTANT") or their numeric wire values. */
+        /** @description Mirrors the Gaggiuino machine's own profile shape 1:1. `type`/`curve` accept either the machine's enum name strings ("PRESSURE"/"FLOW"/"MANUAL", "LINEAR"/"EASE_IN"/"EASE_OUT"/"EASE_IN_OUT"/"INSTANT") or their numeric wire values. */
         MachineProfileInput: {
             name: string;
             phases: {
@@ -6750,24 +6910,70 @@ export interface components {
                 haUserId?: string;
                 orderId?: string;
             };
+            /** @description Library bean the shot used (#450) — drives bean-stock/age math */
+            beanId?: number | null;
+            /** @description Library basket the shot used (#635) */
+            basketId?: number | null;
+            /** @description Library puck screen the shot used (#635) */
+            puckScreenId?: number | null;
+            /** @description Bean age in days at brew time, computed on save */
+            beanAgeDays?: number | null;
+            /** @description Selected brew recipe, if the install has any */
+            recipeId?: number | null;
+            /** @description Selected frozen portion, if the install uses them */
+            frozenPortionId?: number | null;
+            /** @description Barista-order drink type (orders feature) */
+            drinkType?: string | null;
+            /** @description Barista-order milk type id (orders feature) */
+            milkType?: number | null;
+            /** @description Score snapshot read by the live view's reference-shot selector */
+            score?: number | null;
         };
         /** @description Raw shot record from the Gaggiuino machine, enriched with annotation and trash metadata by the add-on. */
         Shot: {
             /** @description Unique shot ID */
-            id?: number;
+            id: number;
             /** @description Unix seconds (divide by 1 to get Date) */
-            timestamp?: number;
-            /** @description Duration × 10 — divide by 10 for seconds */
-            duration?: number;
-            profileName?: string;
+            timestamp: number;
+            /** @description Duration × 10 — divide by 10 for seconds; null when stored without one */
+            duration: number | null;
+            /** @description Null when the shot was stored without a profile name */
+            profileName: string | null;
+            /** @description Snake-case alias of profileName, served alongside it */
+            profile_name: string | null;
             profile?: {
                 name?: string;
             };
             /** @description Output weight in grams */
             weight?: number;
-            annotation?: components["schemas"]["Annotation"];
+            /** @description Owning machine id (#317); defaults to 1 backend-side */
+            machineId: number | null;
+            /** @description Machine-local shot number (toNativeShotID) — global id minus the machine offset */
+            nativeId: number;
+            /** @description Machine-reported curve series: an open-ended map of series name to samples. Deliberately an open object (additionalProperties: true) because the machine payload is a cross-repo contract the add-on passes through without knowing every field. Present on GET /api/shots/{id} and /shots.json; stripped from the GET /api/shots metadata list. */
+            datapoints?: {
+                [key: string]: unknown;
+            };
+            /** @description Stored photo extension (see GET /api/shots/{id}/image), if any */
+            image?: string | null;
+            /** @description GaggiMate BLE-scale flag, merged from the machine payload */
+            gaggimateBleScale?: boolean | null;
+            annotation: components["schemas"]["Annotation"];
             /** @description Unix ms timestamp when shot was trashed */
             trashedAt?: number | null;
+        };
+        HydratedShot: components["schemas"]["Shot"] & {
+            /** @description Computed 0-100 score; null when the shot has too little data to score */
+            score: number | null;
+            /** @description Whether scoring detected the shot hit the bean's target */
+            usedBeanTarget: boolean;
+            /** @description GET /api/shots rows only: whether the shot has a non-empty pressure/time curve series */
+            hasChartData?: boolean;
+            /** @description GET /api/shots rows only: mean absolute deviation of the temperature series from target, in °C */
+            tempStabilityDev?: number | null;
+            /** @description GET /api/shots/{id} only: id of the previous same-profile shot (null if none) */
+            previousShotId?: number | null;
+            previousShot?: components["schemas"]["HydratedShot"] | null;
         };
         /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/flavors/origins are allowlist-validated, not just trimmed). */
         Bean: {
@@ -6791,7 +6997,8 @@ export interface components {
             /** @description Source of truth for origin (#singleOrBlend beans) — replaces the legacy `origin` field. */
             origins?: {
                 code?: string;
-                pct?: number | null;
+                /** @description Blend share, 0–100, rounded to one decimal — sent as `percent`, not `pct` */
+                percent?: number;
             }[];
             variety?: string;
             /** @description Allowlist-validated (e.g. arabica/robusta) */
@@ -6832,6 +7039,10 @@ export interface components {
                 /** @description Unix ms */
                 openedAt?: number;
                 batchNumber?: string;
+                /** @description Set on new-bag/update-bag, not on the initial create bag */
+                price_eur?: number | null;
+                /** @description Queue position (#1122) — the current bag is the lowest-sortOrder tracked bag */
+                sortOrder?: number;
                 frozenPortions?: {
                     id?: number;
                     /** @description Unix ms */
@@ -6842,12 +7053,22 @@ export interface components {
                     /** @description Unix ms */
                     thawedAt?: number | null;
                 }[];
+                /** @description Grams drawn from this bag, computed on read (#1122); absent for an untracked bag */
+                consumedG?: number;
+                /** @description Grams left in this bag, computed on read (#1122); absent for an untracked bag */
+                remainingG?: number;
+                /** @description Whether this is the bag currently being drawn from, computed on read (#1122); absent for an untracked bag */
+                current?: boolean;
             }[];
             /** @description Guided Dial-In (#310) — remembered (grinder, grindSetting) pairs, see POST .../known-grind */
             knownGrindSettings?: {
                 grinder?: string;
                 grindSetting?: string;
             }[];
+            /** @description Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
+            remainingG?: number;
+            /** @description Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
+            consumedG?: number;
         };
         Grinder: {
             id: number;
@@ -6938,19 +7159,32 @@ export interface components {
             recipes?: components["schemas"]["Recipe"][];
             milks?: components["schemas"]["Milk"][];
         };
+        /** @description One maintenance task's computed state. The base keys are always sent; threshold_g/grinderName/disabled are grinder_* only, label is custom_* only, machineSyncedAt is descaling/backflush only, and gramsSince is only added for grinder_* tasks that track a gram threshold. */
         MaintenanceTask: {
-            /** Format: date */
-            lastDate?: string | null;
-            threshold_shots?: number | null;
-            threshold_days?: number | null;
+            /** @description ISO timestamp of the last completion (a plain YYYY-MM-DD after a restore/import), null when never done */
+            lastDate: string | null;
+            threshold_shots: number | null;
+            threshold_days: number | null;
+            /** @description grinder_* only: gram threshold backing gramsSince */
+            threshold_g?: number | null;
+            /** @description grinder_* only: the grinder's display name */
+            grinderName?: string;
+            /** @description custom_* only: the user-defined label */
+            label?: string;
+            /** @description descaling/backflush only: when the task was last auto-synced from the machine */
+            machineSyncedAt?: string | null;
+            /** @description grinder_* only: task hidden from the maintenance view when true */
+            disabled?: boolean;
+            /** @description Days since last maintenance, null when never done */
+            daysSince: number | null;
             /** @description Shots since last maintenance */
-            shots_since?: number;
-            /** @description Days since last maintenance */
-            days_since?: number | null;
-            /** @description Progress toward threshold (0–1) */
-            pct?: number;
+            shotsSince: number;
+            /** @description grinder_* only: grams dosed since last maintenance */
+            gramsSince?: number;
+            /** @description Progress toward threshold (0–1, capped at 1) */
+            pct: number;
             /** @enum {string} */
-            status?: "ok" | "warning" | "overdue";
+            status: "never" | "ok" | "soon" | "due";
         };
         /** @description Keys are task names: `descaling`, `backflush`, `grouphead`, `gaskets`, `waterfilter`, `grinder_{id}`. */
         MaintenanceStats: {
@@ -7006,36 +7240,38 @@ export interface components {
             /** @description Milk demand per order */
             milkMl?: number | null;
         };
+        /** @description A barista order. id/createdAt/customer/item/variant/note/notifyService/ machine/machineId/status/eta/acceptedAt/completedAt/declineReason/beanId are always sent by the current handlers; haUserId and shotId are not (haUserId on legacy rows, shotId only once the order is completed). */
         Order: {
             /** @example ord_1716000000000_ab12 */
             id: string;
             /** @description Unix ms */
             createdAt: number;
             customer: string;
+            /** @description Absent on rows persisted before the field existed */
             haUserId?: string;
             /** @description Menu item name */
             item: string;
-            /** @description Selected variant */
-            variant?: string | null;
-            note?: string;
-            notifyService?: string | null;
+            /** @description Selected variant, if the menu item has any */
+            variant: string | null;
+            note: string;
+            notifyService: string | null;
             /** @enum {string} */
             status: "pending" | "accepted" | "done" | "declined";
             /** @description Minutes */
-            eta?: number | null;
+            eta: number | null;
             /** @description Unix ms */
-            acceptedAt?: number | null;
+            acceptedAt: number | null;
             /** @description Unix ms */
-            completedAt?: number | null;
-            declineReason?: string | null;
+            completedAt: number | null;
+            declineReason: string | null;
             /** @description Last shot ID when order completed — resolved from the order's own machineId (#326), not the global latest shot */
             shotId?: number | null;
             /** @description Optional machine name/slug target as supplied by the client (#317/glp-order-card #29) */
-            machine?: string | null;
+            machine: string | null;
             /** @description machine's registry id, resolved server-side from `machine` (#326) — always set on orders placed since #326, falls back to the default machine when `machine` is unset/unmatched */
-            machineId?: number | null;
+            machineId: number;
             /** @description Library bean id for stable order-to-bean attribution (#563, glp-order-card #35). Resolved server-side against the library's actual beans — a stale/unknown id becomes null. */
-            beanId?: number | null;
+            beanId: number | null;
         };
         OrdersSettings: {
             enabled?: boolean;
@@ -7086,12 +7322,6 @@ export interface components {
             legacyMachineOptionsPending?: boolean;
             /** @description Stable per-database identity (#751) — changes only when glp.db is freshly (re)created */
             installId?: string;
-            /** @description Present only while at least one shot-import backfill is actively running. */
-            syncProgress?: {
-                machineId?: number;
-                current?: number;
-                total?: number;
-            }[];
             /** @description All configured machines (#317). The fields above always describe the default machine, unchanged, for backward compatibility. */
             machines?: {
                 id?: number;
@@ -7100,8 +7330,12 @@ export interface components {
                 type?: "gaggiuino" | "gaggimate";
                 isDefault?: boolean;
                 enabled?: boolean;
-                /** @description Only populated for the default machine */
+                /** @description Per-machine reachability (#1201) */
                 reachable?: boolean | null;
+                /** @description Last poll/sync error for this machine (#1201); authenticated callers only (valid X-GLP-Token), like lastMachineError */
+                lastError?: string | null;
+                /** @description Cached firmware version for this machine (#1201) */
+                firmwareVersion?: string | null;
                 on?: boolean | null;
                 /** @description #701 accent color, synced from Settings → Machines */
                 theme?: string | null;
@@ -7115,18 +7349,24 @@ export interface components {
             isDemo?: boolean;
         };
         Machine: {
-            id?: number;
-            name?: string;
+            id: number;
+            name: string;
             /** @enum {string} */
-            type?: "gaggiuino" | "gaggimate";
-            host?: string;
-            switchEntity?: string | null;
-            isDefault?: boolean;
-            enabled?: boolean;
-            /** @description #701 accent color picker */
-            theme?: string | null;
+            type: "gaggiuino" | "gaggimate";
+            host: string;
+            switchEntity: string | null;
+            /** @description #701 accent color — either {preset} or {a,b} hex colors; null when unset */
+            theme: {
+                preset?: string;
+                a?: string;
+                b?: string;
+            } | null;
+            /** @description Whether the machine reports a water-level sensor */
+            hasWaterSensor: boolean;
+            isDefault: boolean;
+            enabled: boolean;
             /** @description Unix ms */
-            createdAt?: number;
+            createdAt: number;
         };
         MachineInput: {
             name: string;
@@ -7157,40 +7397,62 @@ export interface components {
             /** @description Epoch-ms when the preheat watcher will turn the switch on to hit readyByTargetAt, or null */
             plannedSwitchOnAt?: number | null;
         };
+        /** @description GET /api/live/data and the SSE live-snapshot payload (one shared Go builder, so every key below is always present — null where noted). */
         LiveData: {
-            isLive?: boolean;
-            profileName?: string;
-            datapoints?: Record<string, never>[] | null;
+            isLive: boolean;
+            profileName: string;
+            /** @description Brew session's per-tenth-second series; null when not brewing. Each series is null until its first sample arrives. */
+            datapoints: {
+                timeInShot: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+                shotWeight: number[] | null;
+                weightFlow: number[] | null;
+                pumpFlow: number[] | null;
+                targetTemperature: number[] | null;
+            } | null;
             /** @description Sequence counter — increments on each update */
-            seq?: number;
+            seq: number;
             /** @description #655: distinguishes a powered-off machine (false) from an idle-but-reachable one (isLive:false, machineReachable:true) — without it both looked identical */
-            machineReachable?: boolean | null;
+            machineReachable: boolean | null;
             /** @description #902: a steam live-session is active (kept separate from isLive, which stays brew-only) */
-            isSteaming?: boolean;
+            isSteaming: boolean;
             /** @description #902: increments when a steam session ends */
-            steamSeq?: number;
-            /** @description #902: timeInMode/pressure/temperature arrays while steaming, null otherwise */
-            steamDatapoints?: Record<string, never> | null;
+            steamSeq: number;
+            /** @description #902: timeInMode/pressure/temperature series while steaming, null otherwise */
+            steamDatapoints: {
+                timeInMode: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+            } | null;
             /** @description #902: a flush live-session is active */
-            isFlushing?: boolean;
+            isFlushing: boolean;
             /** @description #902: increments when a flush session ends */
-            flushSeq?: number;
-            /** @description #902: timeInMode/pressure/temperature arrays while flushing, null otherwise */
-            flushDatapoints?: Record<string, never> | null;
+            flushSeq: number;
+            /** @description #902: timeInMode/pressure/temperature series while flushing, null otherwise */
+            flushDatapoints: {
+                timeInMode: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+            } | null;
             /** @description #983: a descale live-session is active */
-            isDescaling?: boolean;
+            isDescaling: boolean;
             /** @description #983: increments when a descale session ends */
-            descaleSeq?: number;
-            /** @description #983: timeInMode/pressure/temperature arrays while descaling, null otherwise */
-            descaleDatapoints?: Record<string, never> | null;
+            descaleSeq: number;
+            /** @description #983: timeInMode/pressure/temperature series while descaling, null otherwise */
+            descaleDatapoints: {
+                timeInMode: number[] | null;
+                pressure: number[] | null;
+                temperature: number[] | null;
+            } | null;
             /** @description #902 idle stats: current temperature from the per-tick machineStatus, null before the first successful poll */
-            temperature?: number | null;
+            temperature: number | null;
             /** @description #902 idle stats: current target temperature */
-            targetTemperature?: number | null;
+            targetTemperature: number | null;
             /** @description #902 idle stats: current pressure */
-            pressure?: number | null;
+            pressure: number | null;
             /** @description #902 idle stats: current water level */
-            waterLevel?: number | null;
+            waterLevel: number | null;
         };
         BackupBundle: {
             /** @example true */
@@ -7234,6 +7496,246 @@ export interface components {
             authTag?: string;
             /** @description base64 */
             ciphertext?: string;
+        };
+        NewBagInput: {
+            /** Format: date */
+            roastDate?: string;
+            stock_g?: number | null;
+            batchNumber?: string;
+        };
+        BagUpdateInput: {
+            /** Format: date */
+            roastDate?: string;
+            stock_g?: number | null;
+            price_eur?: number | null;
+            batchNumber?: string;
+            sortOrder?: number;
+        };
+        ReorderBagsInput: {
+            /** @description Every upcoming (non-current) bag id, in the desired order. */
+            bagIds: number[];
+        };
+        FreezePortionsInput: {
+            /** @description Epoch ms, default now */
+            frozenAt?: number;
+            portionCount: number;
+            portionWeight_g: number;
+        };
+        ThawPortionInput: {
+            portionId: number;
+            /** @default 1 */
+            count: number;
+        };
+        AdjustFrozenPortionInput: {
+            portionId: number;
+            portionWeight_g?: number;
+            /** @description Epoch ms */
+            frozenAt?: number;
+            /** @description Set absolutely, re-clamped to [0, portionCount] */
+            remainingCount?: number;
+        };
+        /** @description GET/POST /api/shots/defaults (#654) — per-install values pre-filled into a new shot's annotation panel. Mirrors go/internal/shots/defaults.go's DEFAULTS-merged blob: all seven keys are always present, nil values stay null and grinder stays a string. */
+        ShotDefaults: {
+            drinkType: string | null;
+            coffee: string | null;
+            beanId: number | null;
+            basketId: number | null;
+            puckScreenId: number | null;
+            grinder: string;
+            dose: number | null;
+        };
+        /** @description POST /api/shots/defaults body — a partial update. Every key is optional: go/internal/shots/validation.go's ValidateShotDefaults accepts absent keys and handlers.go's shotDefaultsFromBody fills each missing one (nil, or "" for grinder). */
+        ShotDefaultsInput: {
+            drinkType?: string | null;
+            coffee?: string | null;
+            beanId?: number | null;
+            basketId?: number | null;
+            puckScreenId?: number | null;
+            grinder?: string;
+            dose?: number | null;
+        };
+        /** @description One entry of GET /api/orders/queue-eta's `positions` map. */
+        QueuePosition: {
+            position: number;
+            /** @description Minutes, clamped to 1..60 */
+            suggestedEta: number;
+        };
+        /** @description GET /api/orders/queue-eta — rolling prep-time estimate plus a queue position for every pending order (go/internal/orders ComputeQueueEta). */
+        QueueEta: {
+            acceptedRemaining: number;
+            pendingCount: number;
+            prepTime: number;
+            positions: {
+                [key: string]: components["schemas"]["QueuePosition"];
+            };
+        };
+        /** @description One row of GET /api/orders/milk-stock: a library milk entity plus the two order-derived fields the go/internal/orders handler adds. */
+        MilkStock: components["schemas"]["Milk"] & {
+            /** @description ml requested by pending/accepted orders for this milk */
+            demand: number;
+            /** @description max(0, stockMl - demand) */
+            remaining: number;
+        };
+        /** @description One row of GET /api/orders/stats's `customers`. */
+        OrderCustomerStat: {
+            name: string;
+            count: number;
+            favItem: string | null;
+            /** @description Unix ms */
+            lastAt: number;
+        };
+        /** @description GET /api/orders/stats — lifetime completed-order rollups (go/internal/orders' stats handler). */
+        OrderStats: {
+            total: number;
+            customers: components["schemas"]["OrderCustomerStat"][];
+            mostPopular: {
+                item: string;
+                count: number;
+            } | null;
+            /** @description Only present once orders reference more than one machine. */
+            byMachine: {
+                machineId: number;
+                machineName: string | null;
+                count: number;
+            }[] | null;
+        };
+        /** @description One HA notify service (go/internal/ha's NotifyService). */
+        NotifyService: {
+            /** @example notify.mobile_app_phone */
+            id: string;
+            name: string;
+        };
+        /** @description GET /api/orders/notify-mapping — per-HA-user mapping plus the known customer names. */
+        NotifyMappingView: {
+            mapping: components["schemas"]["NotifyMapping"];
+            /** @description Map of haUserId → customer display name (derived from order history) */
+            customers: {
+                [key: string]: string;
+            };
+        };
+        /** @description A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries it. Covers both device dialects the app touches: the Gaggiuino shape (name/phases/recipe/globalStopConditions/waterTemperature) and the GaggiMate one (label/description/temperature/phases). The machine payload is passed through, so unknown keys are preserved. */
+        MachineProfile: {
+            id?: string | number;
+            name?: string;
+            label?: string;
+            description?: string;
+            temperature?: number;
+            type?: string;
+            utility?: boolean;
+            favorite?: boolean;
+            waterTemperature?: number;
+            phases?: {
+                [key: string]: unknown;
+            }[];
+            recipe?: {
+                coffeeIn?: number;
+                coffeeOut?: number;
+                ratio?: number;
+            };
+            globalStopConditions?: {
+                /** @description milliseconds */
+                time?: number;
+                weight?: number;
+                waterPumped?: number;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description GET /api/machine/profiles — the machine's profile names plus a last-known offline/cache flag. */
+        MachineProfileList: {
+            available: boolean;
+            /** @description True when the list came from the last-known cache rather than a fresh fetch */
+            stale: boolean;
+            current: string | null;
+            currentId: number | null;
+            options: string[];
+            optionsRaw: {
+                /** @description Machine-assigned id, or a "local:<n>" placeholder until first synced */
+                id: string;
+                name: string;
+                utility: boolean;
+                syncStatus: string;
+            }[];
+        };
+        /** @description GET /api/machine/settings — the machine's own settings object, passed through from its GET /api/settings/{category}. Only releaseChannel is read by the app today, so the rest stays an open object. */
+        MachineSystemSettings: {
+            releaseChannel?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found. */
+        FirmwareVersion: {
+            installed: string | null;
+            latest: string | null;
+            updateAvailable: boolean;
+            releaseUrl: string | null;
+        };
+        /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim (progress/status/type today). */
+        FirmwareProgress: {
+            status?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description POST/PUT /api/machines body — the Settings machine form's fields (go/internal/machines' MachineInput). */
+        MachineSaveInput: {
+            name: string;
+            /** @enum {string} */
+            type: "gaggiuino" | "gaggimate";
+            /** @description Hostname or host:port, e.g. gaggiuino.local or 192.168.1.50 */
+            host: string;
+            /** @description HA switch entity id for this machine's power outlet */
+            switchEntity?: string | null;
+            /** @description #701 accent color — either {preset} or {a,b} hex colors; null when unset */
+            theme?: {
+                preset?: string;
+                a?: string;
+                b?: string;
+            } | null;
+            /** @description Whether the machine reports a water-level sensor */
+            hasWaterSensor?: boolean;
+            /** @description Defaults to true when omitted */
+            enabled?: boolean;
+        };
+        /** @description GET/POST /api/mqtt/settings response (go/internal/mqtt's SettingsView): the redacted view, which reports hasPassword instead of the stored password and never echoes the password back (#1050). The POST request body is MqttSettingsInput instead, since it additionally carries the write-only password/clearPassword pair. */
+        MqttSettings: {
+            /** @enum {string} */
+            transport: "websocket" | "mqtt";
+            host: string;
+            port: number;
+            username: string;
+            /** @description Whether a password is stored (never the password itself, #1050) */
+            hasPassword: boolean;
+            prefix: string;
+        };
+        /** @description POST /api/mqtt/settings request body (go/internal/mqtt's parseSettings). Only transport is required; every other field is optional and keeps its current value (or schema default) when omitted. password is write-only (absent keeps the stored password unchanged, #1050) and clearPassword wipes it regardless (#1062). */
+        MqttSettingsInput: {
+            /** @enum {string} */
+            transport: "websocket" | "mqtt";
+            host?: string;
+            port?: number;
+            username?: string;
+            /** @description Write-only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set. */
+            password?: string;
+            /** @description Write-only: wipe the stored password regardless of the password field (#1062). */
+            clearPassword?: boolean;
+            prefix?: string;
+        };
+        /** @description GET/POST /api/mcp/settings response (go/internal/mcp's SettingsView): the stored MCP toggles plus developerToolsAvailable, which reports whether this build offers the developer tools at all (the GLP_DEV_BUILD channel — allowDeveloperTools can only be stored true on such a build). */
+        McpSettings: {
+            /** @description Master switch for the /api/mcp endpoint */
+            enabled: boolean;
+            /** @description Register the write tools (annotate_shot, set_known_grind, mark_maintenance_done) */
+            allowWrite: boolean;
+            /** @description Register the developer tools; only effective on a dev build */
+            allowDeveloperTools: boolean;
+            /** @description Whether this build is a dev build, i.e. whether allowDeveloperTools can be enabled */
+            developerToolsAvailable: boolean;
+        };
+        /** @description POST /api/mcp/settings request body (go/internal/mcp's SettingsHandlers). All three toggles are required booleans; the body replaces the stored settings. allowDeveloperTools: true is rejected with 400 on a non-dev build. */
+        McpSettingsInput: {
+            enabled: boolean;
+            allowWrite: boolean;
+            allowDeveloperTools: boolean;
         };
     };
     responses: never;

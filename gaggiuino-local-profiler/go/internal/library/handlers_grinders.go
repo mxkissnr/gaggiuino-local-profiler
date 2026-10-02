@@ -8,7 +8,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
-// This file ports routes/library/grinders.js.
+// This file implements the grinder endpoints.
 
 func findGrinderIndex(lib Library, id int64) int {
 	for i, g := range lib.Grinders {
@@ -19,9 +19,8 @@ func findGrinderIndex(lib Library, id int64) int {
 	return -1
 }
 
-// createGrinder ports POST /api/library/grinder — a thin wrapper around
-// CreateGrinder (create.go), the same logic internal/web's "New grinder"
-// form also calls.
+// createGrinder handles POST /api/library/grinder — a thin wrapper around
+// CreateGrinder (create.go).
 func (h *Handlers) createGrinder(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitCreate(w, r) {
 		return
@@ -43,9 +42,8 @@ func (h *Handlers) createGrinder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, grinder)
 }
 
-// updateGrinder ports PUT /api/library/grinder/:id — a thin wrapper around
-// UpdateGrinder (update.go), the same logic internal/web's Edit grinder form
-// also calls.
+// updateGrinder handles PUT /api/library/grinder/:id — a thin wrapper around
+// UpdateGrinder (update.go).
 func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 	id, _ := parseIDParam(r.PathValue("id"))
 	body, ok := decodeJSONBody(w, r)
@@ -136,79 +134,86 @@ func (h *Handlers) deleteGrinderZeroPoint(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, grinder)
 }
 
-// resetBurrs ports POST /api/library/grinder/:id/reset-burrs.
+// resetBurrs handles POST /api/library/grinder/:id/reset-burrs.
 func (h *Handlers) resetBurrs(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
+	var grinder Entity
+	err := h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !noMatch {
+			idx = findGrinderIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		grinder = lib.Grinders[idx]
+		grinder["burrsResetAt"] = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+		lib.Grinders[idx] = grinder
+		return nil
+	})
 	if err != nil {
-		internalError(w, err)
-		return
-	}
-	idx := -1
-	if !noMatch {
-		idx = findGrinderIndex(lib, id)
-	}
-	if idx == -1 {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	grinder := lib.Grinders[idx]
-	grinder["burrsResetAt"] = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	lib.Grinders[idx] = grinder
-	if err := h.repo.SaveLibrary(lib); err != nil {
-		internalError(w, err)
+		writeUpdateError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, h.withWear(grinder))
 }
 
-// deleteGrinder ports POST /api/library/grinder/:id/delete: also removes
-// its photo and (Phase 1f, #901) its `grinder_{id}` row in the
-// `maintenance` table, via the onGrinderDelete callback SetOnGrinderDeleted
-// wires — see that method's doc comment for why this is a callback rather
-// than a direct internal/maintenance import. Best-effort: a callback error
-// is swallowed (logged nowhere further — this package has no logger
-// dependency of its own, matching every other best-effort call site here)
-// rather than failing the whole delete, since the grinder itself is
-// already gone from the library at that point and there's nothing left to
-// roll back.
+// deleteGrinder handles POST /api/library/grinder/:id/delete: also removes
+// its photo and its `grinder_{id}` row in the `maintenance` table, via the
+// onGrinderDelete callback SetOnGrinderDeleted wires — see that method's doc
+// comment for why this is a callback rather than a direct
+// internal/maintenance import. Best-effort: a callback error is swallowed
+// (logged nowhere further — this package has no logger dependency of its own,
+// matching every other best-effort call site here) rather than failing the
+// whole delete, since the grinder itself is already gone from the library at
+// that point and there's nothing left to roll back.
 func (h *Handlers) deleteGrinder(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	if !noMatch {
-		if idx := findGrinderIndex(lib, id); idx != -1 {
-			if ext, _ := lib.Grinders[idx]["image"].(string); ext != "" {
-				img.Delete(h.imageDir, id, ext, "grinder-")
+	var imgExt string
+	// The image file removal below is filesystem I/O: it must not run while
+	// Update holds the library write lock, so the closure only records the
+	// extension and the handler deletes the file once Update returns.
+	err := h.repo.Update(func(lib *Library) error {
+		if !noMatch {
+			if idx := findGrinderIndex(*lib, id); idx != -1 {
+				if ext, _ := lib.Grinders[idx]["image"].(string); ext != "" {
+					imgExt = ext
+				}
 			}
 		}
-	}
-	filtered := make([]Entity, 0, len(lib.Grinders))
-	for _, g := range lib.Grinders {
-		gid, ok := idOf(g, "id")
-		if !noMatch && ok && gid == id {
-			continue
+		filtered := make([]Entity, 0, len(lib.Grinders))
+		removed := false
+		for _, g := range lib.Grinders {
+			gid, ok := idOf(g, "id")
+			if !noMatch && ok && gid == id {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, g)
 		}
-		filtered = append(filtered, g)
-	}
-	lib.Grinders = filtered
-	if err := h.repo.SaveLibrary(lib); err != nil {
+		if !removed {
+			return ErrSkipSave
+		}
+		lib.Grinders = filtered
+		return nil
+	})
+	if err != nil && !errors.Is(err, ErrSkipSave) {
 		internalError(w, err)
 		return
 	}
-	// Matches routes/library/grinders.js's own unconditional attempt (even
-	// for a param that didn't match any real grinder — `grinder_NaN` simply
-	// isn't a key in `maint` either, a silent no-op there too).
+	if imgExt != "" {
+		img.Delete(h.imageDir, id, imgExt, "grinder-")
+	}
+	// Matches the unconditional attempt even for a param that didn't match any
+	// real grinder — grinder_NaN simply isn't a key in maint either, a silent
+	// no-op there too.
 	if h.onGrinderDelete != nil {
-		_ = h.onGrinderDelete(id) // best-effort, matches Node's `catch { /* ignore */ }`
+		_ = h.onGrinderDelete(id) // best-effort
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// getGrinderImage ports GET /api/library/grinder/:id/image.
+// getGrinderImage handles GET /api/library/grinder/:id/image.
 func (h *Handlers) getGrinderImage(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	lib, err := h.repo.GetLibrary()
@@ -225,22 +230,21 @@ func (h *Handlers) getGrinderImage(w http.ResponseWriter, r *http.Request) {
 	h.serveImage(w, r, ext, "grinder-", id)
 }
 
-// postGrinderImage ports POST /api/library/grinder/:id/image.
+// postGrinderImage handles POST /api/library/grinder/:id/image.
 func (h *Handlers) postGrinderImage(w http.ResponseWriter, r *http.Request) {
 	if !h.rateLimitImage(w, r) {
 		return
 	}
 	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
+	// Existence is decided before the upload is read/validated or any file is
+	// written: an unknown id 404s even when the image is also invalid, and no
+	// orphan file is ever written (matching dev's ordering).
+	exists, err := h.entityExists(id, noMatch, findGrinderIndex)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	idx := -1
-	if !noMatch {
-		idx = findGrinderIndex(lib, id)
-	}
-	if idx == -1 {
+	if !exists {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -253,15 +257,31 @@ func (h *Handlers) postGrinderImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported image")
 		return
 	}
-	grinder := lib.Grinders[idx]
-	if oldExt, _ := grinder["image"].(string); oldExt != "" && oldExt != ext {
-		img.Delete(h.imageDir, id, oldExt, "grinder-")
-	}
-	grinder["image"] = ext
-	lib.Grinders[idx] = grinder
-	if err := h.repo.SaveLibrary(lib); err != nil {
-		internalError(w, err)
+	var grinder Entity
+	var oldExt string
+	err = h.repo.Update(func(lib *Library) error {
+		idx := -1
+		if !noMatch {
+			idx = findGrinderIndex(*lib, id)
+		}
+		if idx == -1 {
+			return errNotFound
+		}
+		grinder = lib.Grinders[idx]
+		oldExt, _ = grinder["image"].(string)
+		grinder["image"] = ext
+		lib.Grinders[idx] = grinder
+		return nil
+	})
+	if err != nil {
+		// The entity was deleted between the existence check and the write;
+		// the just-saved file has no owner, so drop it.
+		img.Delete(h.imageDir, id, ext, "grinder-")
+		writeUpdateError(w, err)
 		return
+	}
+	if oldExt != "" && oldExt != ext {
+		img.Delete(h.imageDir, id, oldExt, "grinder-")
 	}
 	writeJSON(w, http.StatusOK, grinder)
 }

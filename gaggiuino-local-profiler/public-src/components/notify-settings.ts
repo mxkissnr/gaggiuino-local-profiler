@@ -1,7 +1,7 @@
 // Machine/library notification toggles — Settings page card (#614).
-// notify_preheat_ready (lib/preheat.js) and notify_low_stock
-// (lib/services/LibraryService.js) fire regardless of enable_orders, but
-// #603 originally placed their toggles inside the Orders admin panel's
+// notify_preheat_ready and notify_low_stock fire regardless of
+// enable_orders, but #603 originally placed their toggles inside the Orders
+// admin panel's
 // "Benachrichtigungstypen" section, which only renders when Orders is
 // enabled — users without Orders had no way to reach them. This card is
 // always visible and reads/writes the same /api/orders/settings blob as
@@ -11,7 +11,8 @@
 // so it doesn't depend on views/orders.js's code ever having run.
 import { getOrdersSettings, postOrdersSettings } from '../api/orders.js';
 import type { OrdersSettings, OrdersSettingsUpdate } from '../api/types.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
+import { html } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
 
 // The boolean toggles this card owns (the remaining order-specific ones live
@@ -47,7 +48,7 @@ export async function saveNotifySettings(): Promise<void> {
   await postOrdersSettings(body);
   const btn = document.getElementById('notifySettingsSaveBtn');
   if (btn) {
-    btn.innerHTML = `${CHECK_ICON_SVG} ${t('orders_types_saved')}`;
+    btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_types_saved')}`;
     setTimeout(() => { btn.textContent = t('orders_types_save'); }, 2000);
   }
 }

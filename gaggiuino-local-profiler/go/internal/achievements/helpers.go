@@ -12,45 +12,43 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// isGlobalMaintenanceTask ports lib/constants.js's isGlobalMaintenanceTask
-// (also in internal/maintenance, unexported there) — waterfilter and
-// grinder_* tasks track shared equipment and always live under machine 1.
+// isGlobalMaintenanceTask reports tasks that track shared equipment (also in
+// internal/maintenance, unexported there) — waterfilter and grinder_* always
+// live under machine 1.
 func isGlobalMaintenanceTask(key string) bool {
 	return key == "waterfilter" || strings.HasPrefix(key, "grinder_")
 }
 
-// This file ports lib/achievements/helpers.js: the small pure helpers the
-// badge check() functions in registry.go share. Kept separate from the
-// registry itself so that file stays a readable data list, exactly like
-// the Node split.
+// The small pure helpers the badge check() functions in registry.go share.
+// Kept separate from the registry itself so that file stays a readable data
+// list.
 
-// maxShotID mirrors lib/constants.js's MAX_SHOT_ID (shots.MaxShotID) — real
-// shot ids never exceed it, demo shots are namespaced far above.
+// maxShotID is the ceiling for real shot ids (shots.MaxShotID) — demo shots
+// are namespaced far above it.
 const maxShotID = shots.MaxShotID
 
-// demoIDBase mirrors lib/demo-seed.js's DEMO_ID_BASE (internal/system's
+// demoIDBase is the base of the demo-shot id range (internal/system's
 // demoIDBase, unexported there — every domain package redefines the
 // constants it needs, same pattern as internal/system/version.go's
 // glpVersion).
 const demoIDBase = 900_000_000
 
-// isDemoShot ports helpers.js's isDemoShot: a shot whose id is above the
-// real-id ceiling is a seeded demo shot.
+// isDemoShot reports whether a shot's id is above the real-id ceiling (a
+// seeded demo shot).
 func isDemoShot(shot shots.Shot) bool {
 	id, ok := asInt64(shot["id"])
 	if !ok {
-		return true // matches `!shot` / missing-id -> treated as demo/excluded
+		return true // missing id -> treated as demo/excluded
 	}
 	return id > maxShotID
 }
 
-// isDemoLibraryID ports helpers.js's isDemoLibraryId.
 func isDemoLibraryID(id int64) bool {
 	return id >= demoIDBase && id < demoIDBase*2
 }
 
-// stddev ports helpers.js's stddev (population standard deviation, 0 for
-// fewer than 2 samples).
+// stddev returns the population standard deviation (0 for fewer than 2
+// samples).
 func stddev(vals []float64) float64 {
 	if len(vals) < 2 {
 		return 0
@@ -67,8 +65,8 @@ func stddev(vals []float64) float64 {
 	return math.Sqrt(acc / float64(len(vals)))
 }
 
-// detectPreinfusionSeconds ports helpers.js's detectPreinfusionSeconds:
-// preinfusion duration in seconds, or nil when no clear transition shows.
+// detectPreinfusionSeconds returns the preinfusion duration in seconds, or
+// nil when no clear transition shows.
 func detectPreinfusionSeconds(times, pressures []float64) *float64 {
 	if len(times) == 0 || len(pressures) < 5 {
 		return nil
@@ -91,8 +89,8 @@ func detectPreinfusionSeconds(times, pressures []float64) *float64 {
 	return nil
 }
 
-// hasPressurePlateau ports helpers.js's hasPressurePlateau: true when some
-// >= windowSec stretch holds pressure within +/- tolerance bar.
+// hasPressurePlateau reports whether some >= windowSec stretch holds pressure
+// within +/- tolerance bar.
 func hasPressurePlateau(times, pressures []float64, windowSec, tolerance float64) bool {
 	if len(times) == 0 || len(times) != len(pressures) {
 		return false
@@ -120,9 +118,8 @@ func hasPressurePlateau(times, pressures []float64, windowSec, tolerance float64
 	return false
 }
 
-// datapointsScaled reads shot.datapoints[key] as a []float64 with each
-// value divided by div — the `(d.timeInShot || []).map(v => v / 10)` idiom
-// the registry uses everywhere.
+// datapointsScaled reads shot.datapoints[key] as a []float64 with each value
+// divided by div.
 func datapointsScaled(shot shots.Shot, key string, div float64) []float64 {
 	dp := shots.DatapointsMap(shot)
 	arr, _ := dp[key].([]any)
@@ -135,8 +132,7 @@ func datapointsScaled(shot shots.Shot, key string, div float64) []float64 {
 	return out
 }
 
-// finalWeightG ports helpers.js's finalWeightG: max of shotWeight (or
-// weight), tenths -> grams.
+// finalWeightG returns the max of shotWeight (or weight), tenths -> grams.
 func finalWeightG(shot shots.Shot) float64 {
 	w := datapointsScaled(shot, "shotWeight", 10)
 	if len(w) == 0 {
@@ -151,7 +147,7 @@ func finalWeightG(shot shots.Shot) float64 {
 	return mx
 }
 
-// shotRatio ports helpers.js's shotRatio: yield / dose, or nil.
+// shotRatio returns yield / dose, or nil.
 func shotRatio(shot shots.Shot) *float64 {
 	ann, _ := shot["annotation"].(map[string]any)
 	dose, ok := asFloat64(ann["dose"])
@@ -172,38 +168,7 @@ func beanID(bean library.Entity) (int64, bool) {
 	return asInt64(bean["id"])
 }
 
-// resolveBeanForShot ports helpers.js's resolveBeanForShot: beanId-first,
-// coffee-name fallback.
-func resolveBeanForShot(shot shots.Shot, beans []library.Entity) library.Entity {
-	ann, _ := shot["annotation"].(map[string]any)
-	if ann == nil {
-		return nil
-	}
-	if raw, present := ann["beanId"]; present && raw != nil {
-		if id, ok := asInt64(raw); ok {
-			for _, b := range beans {
-				if bid, ok := beanID(b); ok && bid == id {
-					return b
-				}
-			}
-		}
-	}
-	coffee, _ := ann["coffee"].(string)
-	if coffee == "" {
-		return nil
-	}
-	key := strings.ToLower(coffee)
-	for _, b := range beans {
-		name, _ := b["name"].(string)
-		if strings.ToLower(name) == key {
-			return b
-		}
-	}
-	return nil
-}
-
-// bagAtShotTime ports helpers.js's bagAtShotTime: which bag of `bean` was
-// open at shotTimestampSec.
+// bagAtShotTime returns which bag of `bean` was open at shotTimestampSec.
 func bagAtShotTime(bean library.Entity, shotTimestampSec int64) library.Entity {
 	bags, _ := bean["bags"].([]any)
 	if len(bags) == 0 {
@@ -241,8 +206,8 @@ func bagAtShotTime(bean library.Entity, shotTimestampSec int64) library.Entity {
 	return best
 }
 
-// currentDayStreak ports helpers.js's currentDayStreak: longest run of
-// consecutive local calendar days in dateSet ending today or yesterday.
+// currentDayStreak returns the longest run of consecutive local calendar days
+// in dateSet ending today or yesterday.
 func currentDayStreak(dateSet map[string]bool, nowMS int64) int {
 	const dayMS = int64(86_400_000)
 	now := time.UnixMilli(nowMS).UTC()
@@ -270,8 +235,8 @@ func currentDayStreak(dateSet map[string]bool, nowMS int64) int {
 	return streak
 }
 
-// textMatchesAny ports helpers.js's textMatchesAny: case-insensitive
-// substring match against any keyword.
+// textMatchesAny reports a case-insensitive substring match against any
+// keyword.
 func textMatchesAny(text string, keywords []string) bool {
 	if text == "" {
 		return false
@@ -285,10 +250,9 @@ func textMatchesAny(text string, keywords []string) bool {
 	return false
 }
 
-// maintenanceCleanStreakDays ports helpers.js's maintenanceCleanStreakDays:
-// "days without an overdue day-based maintenance task", re-derived from log
-// history + current thresholds. See the Node original's doc comment for the
-// documented approximation this is.
+// maintenanceCleanStreakDays returns "days without an overdue day-based
+// maintenance task", re-derived from log history + current thresholds. The
+// result is an approximation.
 func maintenanceCleanStreakDays(ctx *Context) int {
 	const dayMS = float64(86_400_000)
 	var latestResetMS *float64
@@ -353,14 +317,13 @@ func maintenanceCleanStreakDays(ctx *Context) int {
 	return int(math.Floor((nowMS - *latestResetMS) / dayMS))
 }
 
-// bagFirstUseAgesDays ports helpers.js's bagFirstUseAgesDays: for every
-// (bean, bag) pair brewed at least once, the age in days of the bag's
-// roast date at its EARLIEST use.
+// bagFirstUseAgesDays returns, for every (bean, bag) pair brewed at least
+// once, the age in days of the bag's roast date at its EARLIEST use.
 func bagFirstUseAgesDays(shotList []shots.Shot, beans []library.Entity) []float64 {
 	byBean := map[int64][]shots.Shot{}
 	order := []int64{}
 	for _, shot := range shotList {
-		bean := resolveBeanForShot(shot, beans)
+		bean := library.ResolveBeanForShot(shot, beans)
 		if bean == nil {
 			continue
 		}
@@ -508,9 +471,8 @@ func sameEntity(a, b library.Entity) bool {
 	return ao == bo && ar == br
 }
 
-// parseDateMS ports `new Date(str).getTime()` for the date shapes a bean/
-// bag roastDate holds: "YYYY-MM-DD" or a full ISO timestamp. ok=false
-// mirrors JS's NaN for anything else.
+// parseDateMS parses the date shapes a bean/bag roastDate holds: "YYYY-MM-DD"
+// or a full ISO timestamp. ok=false for anything else.
 func parseDateMS(s string) (int64, bool) {
 	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
 		if t, err := time.Parse(layout, s); err == nil {
@@ -520,8 +482,8 @@ func parseDateMS(s string) (int64, bool) {
 	return 0, false
 }
 
-// localParts ports registry.js's localParts(unixSeconds): server-local
-// calendar/clock parts of a Unix-seconds timestamp.
+// localParts returns the server-local calendar/clock parts of a Unix-seconds
+// timestamp.
 type dateParts struct {
 	year, month, day, hour, minute, weekday int
 }
@@ -530,15 +492,14 @@ func localParts(unixSeconds int64) dateParts {
 	d := time.Unix(unixSeconds, 0)
 	return dateParts{
 		year:    d.Year(),
-		month:   int(d.Month()) - 1, // JS months are 0-based
+		month:   int(d.Month()) - 1, // 0-based month
 		day:     d.Day(),
 		hour:    d.Hour(),
 		minute:  d.Minute(),
-		weekday: int(d.Weekday()), // JS: Sunday=0, same as Go
+		weekday: int(d.Weekday()), // Sunday=0
 	}
 }
 
-// isPalindrome ports registry.js's isPalindrome.
 func isPalindrome(n int64) bool {
 	s := strconv.FormatInt(n, 10)
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {

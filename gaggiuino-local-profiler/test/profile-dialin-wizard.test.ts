@@ -84,6 +84,6 @@ describe('profileDialinOverride / _sendUpdatedProfile (#521 race)', () => {
     // Only B's round should have been recorded — A's write lost the race and
     // bailed out via `if (!ok) return;` before pushing its round.
     expect(session.rounds).toHaveLength(1);
-    expect(session.rounds[0].appliedAdjustment.delta).toBe(4); // 96 - 92
+    expect(session.rounds.at(0)?.appliedAdjustment.delta).toBe(4); // 96 - 92
   });
 });

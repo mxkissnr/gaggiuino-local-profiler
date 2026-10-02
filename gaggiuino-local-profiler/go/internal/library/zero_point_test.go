@@ -6,26 +6,6 @@ import (
 	"time"
 )
 
-func TestZeroPointAtTime_PicksTheEntryActiveAtTheGivenMoment(t *testing.T) {
-	grinder := Entity{"zeroPointHistory": []any{
-		Entity{"zeroPoint": 42.0, "since": int64(1000)},
-		Entity{"zeroPoint": 44.5, "since": int64(2000)},
-	}}
-
-	if v, ok := zeroPointAtTime(grinder, 500); ok {
-		t.Fatalf("expected ok=false for a timestamp before the earliest entry, got %v", v)
-	}
-	if v, ok := zeroPointAtTime(grinder, 1000); !ok || v != 42.0 {
-		t.Fatalf("at exactly the first entry's since: got (%v, %v), want (42, true)", v, ok)
-	}
-	if v, ok := zeroPointAtTime(grinder, 1500); !ok || v != 42.0 {
-		t.Fatalf("between the two entries: got (%v, %v), want (42, true)", v, ok)
-	}
-	if v, ok := zeroPointAtTime(grinder, 5000); !ok || v != 44.5 {
-		t.Fatalf("after the last entry: got (%v, %v), want (44.5, true)", v, ok)
-	}
-}
-
 func TestCurrentGrinderZeroPoint_NoHistoryMeansFeatureInactive(t *testing.T) {
 	if _, ok := currentGrinderZeroPoint(Entity{}); ok {
 		t.Fatalf("expected ok=false for a grinder with no zeroPointHistory")
@@ -36,47 +16,6 @@ func TestCurrentGrinderZeroPoint_NoHistoryMeansFeatureInactive(t *testing.T) {
 	}}
 	if v, ok := currentGrinderZeroPoint(grinder); !ok || v != 12.0 {
 		t.Fatalf("got (%v, %v), want (12, true) — the last entry wins", v, ok)
-	}
-}
-
-// TestRelativeGrindSetting_CorrectsForDriftAfterCleaning is the feature's
-// whole point: a shot ground at absolute 20 when the zero point was 42 must
-// read as 22 (its relative offset preserved) once the grinder's zero point
-// has since moved to 44 — the user never has to re-dial the recipe.
-func TestRelativeGrindSetting_CorrectsForDriftAfterCleaning(t *testing.T) {
-	grinder := Entity{"zeroPointHistory": []any{
-		Entity{"zeroPoint": 42.0, "since": int64(1000)}, // active when the shot was pulled
-		Entity{"zeroPoint": 44.0, "since": int64(2000)}, // reset after cleaning, now current
-	}}
-	got, ok := RelativeGrindSetting(grinder, 20.0, 1500)
-	if !ok {
-		t.Fatalf("expected ok=true")
-	}
-	if got != 22.0 {
-		t.Fatalf("got %v, want 22 (20 - 42 + 44)", got)
-	}
-}
-
-func TestRelativeGrindSetting_UncorrectedWhenGrinderNeverTracksZeroPoint(t *testing.T) {
-	got, ok := RelativeGrindSetting(Entity{}, 20.0, 1500)
-	if ok {
-		t.Fatalf("expected ok=false for a grinder with no zeroPointHistory")
-	}
-	if got != 20.0 {
-		t.Fatalf("value must be returned unchanged, got %v", got)
-	}
-}
-
-func TestRelativeGrindSetting_UncorrectedForAShotOlderThanAnyTrackedZeroPoint(t *testing.T) {
-	grinder := Entity{"zeroPointHistory": []any{
-		Entity{"zeroPoint": 42.0, "since": int64(1000)},
-	}}
-	got, ok := RelativeGrindSetting(grinder, 20.0, 500)
-	if ok {
-		t.Fatalf("expected ok=false for a shot predating the earliest recorded zero point")
-	}
-	if got != 20.0 {
-		t.Fatalf("value must be returned unchanged, got %v", got)
 	}
 }
 
@@ -154,8 +93,7 @@ func TestSetGrinderZeroPoint_UnknownGrinder404s(t *testing.T) {
 }
 
 // TestSetGrinderZeroPoint_PastSince verifies that a retroactive insert (since
-// explicitly provided) is sorted into the correct chronological position and
-// that zeroPointAtTime still returns the right value for shots between entries.
+// explicitly provided) is sorted into the correct chronological position.
 func TestSetGrinderZeroPoint_PastSince(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)

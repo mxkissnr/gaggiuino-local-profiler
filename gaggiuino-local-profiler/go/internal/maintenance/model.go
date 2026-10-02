@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -16,17 +17,27 @@ import (
 // waterfilter have no machineSyncedAt).
 type Task = map[string]any
 
-// staticMaintenanceTasks mirrors lib/constants.js's
-// STATIC_MAINTENANCE_TASKS.
+// staticMaintenanceTasks are the program-owned static maintenance task keys.
 var staticMaintenanceTasks = map[string]bool{
 	"descaling": true, "backflush": true, "grouphead": true, "gaskets": true, "waterfilter": true,
 }
 
-// maintenanceDefaults mirrors lib/constants.js's MAINTENANCE_DEFAULTS — the
-// zero-value shape getMaintenance() fills in for a task that has no row in
-// the `maintenance` table yet. Returned as a fresh map on every call (like
-// the Node original's `JSON.parse(JSON.stringify(MAINTENANCE_DEFAULTS))`)
-// so callers can freely mutate their own copy.
+// StaticTaskKeys returns the program-owned static maintenance task keys in a
+// stable (sorted) order. These are the tasks canonicalTask accepts by name;
+// grinder_<id> and custom_* keys are dynamic (they depend on the current
+// library/machine state) and so cannot be enumerated here.
+func StaticTaskKeys() []string {
+	keys := make([]string, 0, len(staticMaintenanceTasks))
+	for key := range staticMaintenanceTasks {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// maintenanceDefaults is the zero-value shape getMaintenance() fills in for
+// a task that has no row in the `maintenance` table yet. Returned as a fresh
+// map on every call so callers can freely mutate their own copy.
 func maintenanceDefaults() map[string]Task {
 	return map[string]Task{
 		"descaling":   {"lastDate": nil, "threshold_shots": 200, "threshold_days": 60, "machineSyncedAt": nil},
@@ -37,9 +48,9 @@ func maintenanceDefaults() map[string]Task {
 	}
 }
 
-// isGlobalMaintenanceTask ports lib/constants.js's isGlobalMaintenanceTask:
-// waterfilter and grinder_* tasks track shared equipment (one water filter
-// / one grinder used across machines, #338) — they never split per machine
+// isGlobalMaintenanceTask reports whether waterfilter and grinder_* tasks
+// track shared equipment (one water filter / one grinder used across
+// machines, #338) — they never split per machine
 // and always live under the sentinel machine_id 1, regardless of which
 // machine is currently active.
 func isGlobalMaintenanceTask(key string) bool {
@@ -89,14 +100,12 @@ func slugifyLabel(label string) string {
 	return "custom_" + slug
 }
 
-// canonicalTask ports routes/maintenance.js's canonicalTask(raw): returns a
-// program-owned string for a valid task, or ("", false). Never returns the
-// raw request string for a grinder task — callers must index maps with the
-// returned value, not the request param, so the object key is never
-// attacker-derived (severs the prototype-pollution taint chain Node's own
-// comment flags; Go maps have no prototype-pollution equivalent, but the
-// "only ever a program-owned key" discipline is kept for parity and because
-// it's simply the correct thing to do regardless).
+// canonicalTask returns a program-owned string for a valid task, or
+// ("", false). Never returns the raw request string for a grinder task —
+// callers must index maps with the returned value, not the request param, so
+// the object key is never attacker-derived (Go maps have no
+// prototype-pollution risk, but keeping the object key program-owned is
+// simply the correct thing to do).
 //
 // maint is the caller's already-loaded (machine-scoped) maintenance map —
 // needed here because, unlike the static/grinder_N task families (whose

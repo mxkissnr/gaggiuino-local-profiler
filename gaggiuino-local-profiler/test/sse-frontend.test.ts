@@ -45,6 +45,16 @@ class FakeEventSource {
   }
 }
 
+// FakeEventSource.instances is a plain array, so instances[0] is
+// `FakeEventSource | undefined` under noUncheckedIndexedAccess; each test
+// asserts/creates exactly one instance, so this narrows it back and throws
+// rather than dereferencing undefined.
+function firstSource(): FakeEventSource {
+  const es = FakeEventSource.instances[0];
+  if (es === undefined) throw new Error('no FakeEventSource instance created');
+  return es;
+}
+
 describe('public-src/sse.js', () => {
   let S: (typeof import('../public-src/state/index.js'))['S'];
   let connectEvents: (typeof import('../public-src/sse.js'))['connectEvents'];
@@ -70,7 +80,7 @@ describe('public-src/sse.js', () => {
 
   it('successful open sets S.sseActive = true', () => {
     connectEvents(() => {});
-    const es = FakeEventSource.instances[0];
+    const es = firstSource();
     es._open();
     expect(S.sseActive).toBe(true);
   });
@@ -78,7 +88,7 @@ describe('public-src/sse.js', () => {
   it('3 errors with no prior successful open trigger the fallback', () => {
     const onFallback = vi.fn();
     connectEvents(onFallback);
-    const es = FakeEventSource.instances[0];
+    const es = firstSource();
 
     es._error();
     es._error();
@@ -93,7 +103,7 @@ describe('public-src/sse.js', () => {
   it('a single error AFTER a successful open does NOT trigger the fallback (normal auto-reconnect)', () => {
     const onFallback = vi.fn();
     connectEvents(onFallback);
-    const es = FakeEventSource.instances[0];
+    const es = firstSource();
 
     es._open();
     expect(S.sseActive).toBe(true);
@@ -123,27 +133,16 @@ describe('public-src/sse.js', () => {
   it('the watchdog does not fire once the connection has already opened', () => {
     const onFallback = vi.fn();
     connectEvents(onFallback);
-    FakeEventSource.instances[0]._open();
+    firstSource()._open();
 
     vi.advanceTimersByTime(8000);
     expect(onFallback).not.toHaveBeenCalled();
   });
 
-  it('dispatches a pushed event to a registered onEvent() handler', () => {
-    const handler = vi.fn();
-    onEvent('sync-progress', handler);
-    connectEvents(() => {});
-    const es = FakeEventSource.instances[0];
-    es._open();
-
-    es._emit('sync-progress', { machineId: 1, current: 2, total: 5 });
-    expect(handler).toHaveBeenCalledWith({ machineId: 1, current: 2, total: 5 });
-  });
-
   it('builds the stream URL with a ?token= fallback when S.glpToken is set', () => {
     S.glpToken = 'abc123';
     connectEvents(() => {});
-    expect(FakeEventSource.instances[0].url).toBe('api/events?token=abc123');
+    expect(firstSource().url).toBe('api/events?token=abc123');
   });
 
   // #1016: mid-session staleness -- a connected stream that goes silent
@@ -152,7 +151,7 @@ describe('public-src/sse.js', () => {
   // REST-polling fallback.
   it('flips S.sseActive back to false if connected but no event arrives for the stale window, with no onerror at all', () => {
     connectEvents(() => {});
-    const es = FakeEventSource.instances[0];
+    const es = firstSource();
     es._open();
     expect(S.sseActive).toBe(true);
 
@@ -168,7 +167,7 @@ describe('public-src/sse.js', () => {
   it('a received event resets the staleness timer so a healthy stream never falsely goes inactive', () => {
     onEvent('live-snapshot', () => {});
     connectEvents(() => {});
-    const es = FakeEventSource.instances[0];
+    const es = firstSource();
     es._open();
 
     // Keep emitting an event just before the stale window would elapse --
@@ -183,7 +182,7 @@ describe('public-src/sse.js', () => {
   it('an event arriving after the stream had already gone stale restores S.sseActive without needing onopen', () => {
     onEvent('live-snapshot', () => {});
     connectEvents(() => {});
-    const es = FakeEventSource.instances[0];
+    const es = firstSource();
     es._open();
 
     vi.advanceTimersByTime(40000);

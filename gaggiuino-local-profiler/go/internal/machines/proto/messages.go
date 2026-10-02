@@ -2,38 +2,37 @@ package proto
 
 import "fmt"
 
-// Every message below ports one lib/gaggiuino-proto.js MessageType
-// verbatim — same field numbers, same names (camelCased the same way),
-// same scalar-type/wire-kind mapping (protobuf-ts's `T:` code: 2=float,
-// 8=bool, 9=string, 12=bytes, 13=uint32 — see schema.proto's header
-// comment for the full FieldDescriptorProto.Type table this maps against).
+// Every message below mirrors one wire-schema MessageType verbatim — same
+// field numbers, same names (camelCased the same way), same scalar-type/
+// wire-kind mapping (the `T:` code: 2=float, 8=bool, 9=string, 12=bytes,
+// 13=uint32 — see schema.proto's header comment for the full
+// FieldDescriptorProto.Type table this maps against).
 //
 // Field types deliberately deviate from the wire's own bit width in one
 // place: every `float` (wire: 32-bit fixed-point) field is a Go float64,
-// not float32. This matches JavaScript, which has no float32 type either
-// — protobuf-ts always hands callers a float64 (JS Number) up-converted
-// from the wire's 32 bits, including that up-conversion's imprecision
-// (e.g. a wire value of 93.7f decodes to 93.69999694824219 in both
-// runtimes) — see node_vectors_test.go, which asserts this package
-// reproduces that exact imprecision, not a "cleaner" float32-native one.
-// The down-convert back to 32 bits happens only at the wire boundary
-// (wire.go's floatField).
+// not float32. This matches the reference implementation, which has no
+// float32 type either — callers always get a float64 up-converted from the
+// wire's 32 bits, including that up-conversion's imprecision (e.g. a wire
+// value of 93.7f decodes to 93.69999694824219) — see node_vectors_test.go,
+// which asserts this package reproduces that exact imprecision, not a
+// "cleaner" float32-native one. The down-convert back to 32 bits happens
+// only at the wire boundary (wire.go's floatField).
 //
 // Optional nested-message fields (PhaseDto.Target/StopConditions,
 // ProfileDto.GlobalStopConditions/Recipe) are Go pointers: nil means
 // "field absent from the wire" (and omitted from JSON via `omitempty`),
-// matching protobuf-ts's own `undefined` for an unset message field
-// (verified: JSON.stringify(ProfileDto.fromBinary(...)) omits
+// matching the wire format's own `undefined` for an unset message field
+// (verified: JSON.stringify of a decoded ProfileDto omits
 // globalStopConditions/recipe entirely when the source never set them,
 // rather than emitting an empty object). Repeated message fields
 // (ProfileDto.Phases, SavedProfilesDto.Profiles) are plain (never nil)
 // slices, initialized to length 0 by Unmarshal so JSON output is `[]`,
-// not `null`, matching protobuf-ts's own always-present-array behavior
+// not `null`, matching the wire format's own always-present-array behavior
 // for an empty repeated field.
 
 // ── Profile messages ────────────────────────────────────────────────────
 
-// PhaseStopConditionsDto ports lib/gaggiuino-proto.js's PhaseStopConditionsDto.
+// PhaseStopConditionsDto holds a phase's stop conditions.
 type PhaseStopConditionsDto struct {
 	Time               uint32  `json:"time"`
 	PressureAbove      float64 `json:"pressureAbove"`
@@ -103,7 +102,7 @@ func (m *PhaseStopConditionsDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// TransitionDto ports lib/gaggiuino-proto.js's TransitionDto.
+// TransitionDto describes a move from one phase's setpoint to the next.
 type TransitionDto struct {
 	Start  float64         `json:"start"`
 	End    float64         `json:"end"`
@@ -163,7 +162,7 @@ func (m *TransitionDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// PhaseDto ports lib/gaggiuino-proto.js's PhaseDto.
+// PhaseDto is one phase of a brew profile.
 type PhaseDto struct {
 	Type             PhaseType               `json:"type"`
 	Target           *TransitionDto          `json:"target,omitempty"`
@@ -251,7 +250,7 @@ func (m *PhaseDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// GlobalStopConditionsDto ports lib/gaggiuino-proto.js's GlobalStopConditionsDto.
+// GlobalStopConditionsDto holds a profile's global stop conditions.
 type GlobalStopConditionsDto struct {
 	Time                       uint32  `json:"time"`
 	Weight                     float64 `json:"weight"`
@@ -313,7 +312,7 @@ func (m *GlobalStopConditionsDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// BrewRecipeDto ports lib/gaggiuino-proto.js's BrewRecipeDto.
+// BrewRecipeDto is a profile's brew recipe.
 type BrewRecipeDto struct {
 	CoffeeIn  float64 `json:"coffeeIn"`
 	CoffeeOut float64 `json:"coffeeOut"`
@@ -357,7 +356,7 @@ func (m *BrewRecipeDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// ProfileDto ports lib/gaggiuino-proto.js's ProfileDto.
+// ProfileDto is a brew profile.
 type ProfileDto struct {
 	Name                 string                   `json:"name"`
 	Phases               []PhaseDto               `json:"phases"`
@@ -448,8 +447,7 @@ func (m *ProfileDto) Unmarshal(b []byte) error {
 
 // ── Envelope + saved-profile-list messages ──────────────────────────────
 
-// WebSocketProfileIdCommandDto ports lib/gaggiuino-proto.js's
-// WebSocketProfileIdCommandDto (the request payload for g_prof/c_del_prof).
+// WebSocketProfileIdCommandDto is the request payload for g_prof/c_del_prof.
 type WebSocketProfileIdCommandDto struct {
 	ID uint32 `json:"id"`
 }
@@ -482,12 +480,11 @@ func (m *WebSocketProfileIdCommandDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// WebSocketMessageDto ports lib/gaggiuino-proto.js's WebSocketMessageDto —
-// the envelope every frame in both directions is wrapped in (`action`
-// routes to a message type, `data` is that type's own independently
-// encoded bytes). Data is deliberately copied (not a subslice of the input
-// buffer) since callers decode-then-store this across the lifetime of a
-// WS read buffer that may be reused.
+// WebSocketMessageDto is the envelope every frame in both directions is
+// wrapped in (`action` routes to a message type, `data` is that type's own
+// independently encoded bytes). Data is deliberately copied (not a subslice
+// of the input buffer) since callers decode-then-store this across the
+// lifetime of a WS read buffer that may be reused.
 type WebSocketMessageDto struct {
 	Action string `json:"action"`
 	Data   []byte `json:"data,omitempty"`
@@ -529,9 +526,8 @@ func (m *WebSocketMessageDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// WebSocketResponseDto ports lib/gaggiuino-proto.js's WebSocketResponseDto
-// — the generic `d_resp` acknowledgement for c_* commands (see ws.go's
-// sendCommand).
+// WebSocketResponseDto is the generic `d_resp` acknowledgement for c_*
+// commands (see ws.go's wsSendCommand).
 type WebSocketResponseDto struct {
 	Action       string                  `json:"action"`
 	Result       WebSocketResponseResult `json:"result"`
@@ -581,8 +577,7 @@ func (m *WebSocketResponseDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// SavedProfileDto ports lib/gaggiuino-proto.js's SavedProfileDto (one
-// {id, name} entry in a profile-slot list).
+// SavedProfileDto is one {id, name} entry in a profile-slot list.
 type SavedProfileDto struct {
 	ID   uint32 `json:"id"`
 	Name string `json:"name"`
@@ -624,9 +619,8 @@ func (m *SavedProfileDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// SavedProfilesDto ports lib/gaggiuino-proto.js's SavedProfilesDto — the
-// d_prof_dict push (GetProfileDict/CreateNewProfile/UpdateProfile/
-// DeleteProfile all answer with this).
+// SavedProfilesDto is the d_prof_dict push (GetProfileDict/CreateNewProfile/
+// UpdateProfile/DeleteProfile all answer with this).
 type SavedProfilesDto struct {
 	Profiles []SavedProfileDto `json:"profiles"`
 }
@@ -666,9 +660,8 @@ func (m *SavedProfilesDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// NotificationDto ports lib/gaggiuino-proto.js's NotificationDto — the
-// `d_notif` push, notably the c_service_test completion signal (see
-// ws.go's sendCommand).
+// NotificationDto is the `d_notif` push, notably the c_service_test
+// completion signal (see ws.go's wsSendCommand).
 type NotificationDto struct {
 	Type    NotificationType `json:"type"`
 	Message string           `json:"message"`
@@ -712,9 +705,8 @@ func (m *NotificationDto) Unmarshal(b []byte) error {
 
 // ── #597 command / state messages ───────────────────────────────────────
 
-// UpdateSystemStateCommandDto ports lib/gaggiuino-proto.js's
-// UpdateSystemStateCommandDto — shared payload for c_opmode and
-// c_tare_pend (see ws.go's setOperationMode/tare).
+// UpdateSystemStateCommandDto is the shared payload for c_opmode and
+// c_tare_pend (see ws.go's wsSetOperationMode/wsTare).
 type UpdateSystemStateCommandDto struct {
 	OperationMode OperationMode `json:"operationMode"`
 	TarePending   bool          `json:"tarePending"`
@@ -756,7 +748,7 @@ func (m *UpdateSystemStateCommandDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// ServiceTestCommandDto ports lib/gaggiuino-proto.js's ServiceTestCommandDto.
+// ServiceTestCommandDto is the c_service_test request payload.
 type ServiceTestCommandDto struct {
 	Peripheral ServiceTestPeripheral `json:"peripheral"`
 }
@@ -789,8 +781,7 @@ func (m *ServiceTestCommandDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// SensorStateSnapshotDto ports lib/gaggiuino-proto.js's
-// SensorStateSnapshotDto — the continuous `d_sensor_snap` push, real
+// SensorStateSnapshotDto is the continuous `d_sensor_snap` push, real
 // (unscaled) numbers unlike the x10-scaled REST/shot wire formats.
 type SensorStateSnapshotDto struct {
 	BrewActive               bool    `json:"brewActive"`
@@ -1077,8 +1068,7 @@ func (m *SensorStateSnapshotDto) Unmarshal(b []byte) error {
 	return nil
 }
 
-// SystemStateDto ports lib/gaggiuino-proto.js's SystemStateDto — pushed on
-// change and in response to g_sys_state.
+// SystemStateDto is pushed on change and in response to g_sys_state.
 type SystemStateDto struct {
 	StartupInitFinished       bool          `json:"startupInitFinished"`
 	TofReady                  bool          `json:"tofReady"`

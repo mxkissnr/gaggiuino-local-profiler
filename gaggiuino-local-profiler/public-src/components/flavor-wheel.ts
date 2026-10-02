@@ -2,8 +2,9 @@ import { FLAVOR_WHEEL } from '../flavor-data.js';
 import type { FlavorNode } from '../flavor-data.js';
 import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
 import { S } from '../state/index.js';
-import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { t, tHtml } from '../i18n.js';
+import { esc, html, joinHtml } from '../utils.js';
+import type { Html } from '../utils.js';
 import { loadBeanImageBlobUrl } from '../bean-image.js';
 
 export { matchFlavors, normalizeFlavor } from '../flavor-match.js';
@@ -39,11 +40,17 @@ const WHEEL_ROOT_ID = '__flavor_wheel_root__'; // virtual root name (see Sunburs
 // Modal background the muted/unmatched fills blend toward — read once per
 // render from the actual modal box so it tracks the active dark/light theme
 // instead of a hardcoded guess.
+function _rgbChannels(m: RegExpExecArray | null): [string, string, string] | null {
+  if (!m) return null;
+  const [, r, g, b] = m;
+  return r !== undefined && g !== undefined && b !== undefined ? [r, g, b] : null;
+}
+
 function rgbStringToHex(rgbStr: string | null | undefined, fallback: string): string {
-  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgbStr || '');
-  if (!m) return fallback;
+  const ch = _rgbChannels(/rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgbStr || ''));
+  if (!ch) return fallback;
   const hex = (n: string): string => Number(n).toString(16).padStart(2, '0');
-  return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`;
+  return `#${hex(ch[0])}${hex(ch[1])}${hex(ch[2])}`;
 }
 
 function resolveModalBgHex(container: Element | null | undefined): string {
@@ -55,13 +62,11 @@ function resolveModalBgHex(container: Element | null | undefined): string {
 // Alpha-blends `hex` toward `bgHex` by `amount` (0 = unchanged, 1 = fully bg).
 function muteHex(hex: string, bgHex: string, amount: number): string {
   const c = (h: string): RegExpExecArray | null => /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h || '');
-  const m1 = c(hex);
-  const m2 = c(bgHex);
-  if (!m1 || !m2) return hex;
-  const [, r1, g1, b1] = m1;
-  const [, r2, g2, b2] = m2;
+  const ch1 = _rgbChannels(c(hex));
+  const ch2 = _rgbChannels(c(bgHex));
+  if (!ch1 || !ch2) return hex;
   const mix = (a: string, b: string): string => Math.round(parseInt(a, 16) * (1 - amount) + parseInt(b, 16) * amount).toString(16).padStart(2, '0');
-  return `#${mix(r1, r2)}${mix(g1, g2)}${mix(b1, b2)}`;
+  return `#${mix(ch1[0], ch2[0])}${mix(ch1[1], ch2[1])}${mix(ch1[2], ch2[2])}`;
 }
 
 function toSunburstData(node: FlavorNode, depth: number, lang: FlavorLang, bgHex: string): SunburstEntry {
@@ -136,14 +141,14 @@ let _renderReqToken = 0;
 function renderBreadcrumb(): void {
   if (!_breadcrumbEl) return;
   const ids = _rootId ? pathToNode(_rootId) : [];
-  const crumbs = [`<button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="">${esc(t('flavor_wheel_overview'))}</button>`];
+  const crumbs: Html[] = [html`<button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="">${esc(t('flavor_wheel_overview'))}</button>`];
   for (const id of ids) {
     const node = nodeById(id);
     if (!node) continue;
     const label = node[_lang] || node.en;
-    crumbs.push(`<span class="fw-crumb-sep">›</span><button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="${esc(id)}">${esc(label)}</button>`);
+    crumbs.push(html`<span class="fw-crumb-sep">›</span><button type="button" class="fw-crumb" data-action="zoom-flavor-wheel" data-zoom-id="${esc(id)}">${esc(label)}</button>`);
   }
-  _breadcrumbEl.innerHTML = crumbs.join('');
+  _breadcrumbEl.innerHTML = joinHtml(crumbs);
 }
 
 function zoomTo(id: string | null): void {
@@ -183,7 +188,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
   // that no longer belongs to this call.
   if (token !== _renderReqToken) return true;
 
-  container.innerHTML = ''; // clear the loading message before echarts takes over this node
+  container.innerHTML = html``; // clear the loading message before echarts takes over this node
   _chart = echarts.init(container) as unknown as FlavorChart;
   _chart.setOption({
     backgroundColor: 'transparent',
@@ -285,9 +290,9 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const { unmatched } = matchFlavors(bean.flavors);
   const unmatchedWrap = document.getElementById('flavorWheelUnmatched') as HTMLElement;
   unmatchedWrap.innerHTML = unmatched.length
-    ? `<div class="fw-unmatched-label">${t('flavor_wheel_unmatched')}</div>
-       <div class="fw-unmatched-chips">${unmatched.map(f => `<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`).join('')}</div>`
-    : '';
+    ? html`<div class="fw-unmatched-label">${tHtml('flavor_wheel_unmatched')}</div>
+       <div class="fw-unmatched-chips">${joinHtml(unmatched.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>`
+    : html``;
 
   modal.style.display = 'flex';
   const container = document.getElementById('flavorWheelCanvas') as HTMLElement;
@@ -295,11 +300,11 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const lang: FlavorLang = (['de', 'en', 'it', 'fr', 'es', 'nl'] as FlavorLang[]).includes(S.currentLang as FlavorLang) ? S.currentLang as FlavorLang : 'en';
   // echarts is a dynamic import now (#797) — show a loading state while its
   // chunk downloads instead of leaving the canvas blank.
-  container.innerHTML = `<p class="empty-note" style="text-align:center">${t('flavor_wheel_loading')}</p>`;
-  if (breadcrumbEl) breadcrumbEl.innerHTML = '';
+  container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_loading')}</p>`;
+  if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
-    container.innerHTML = `<p class="empty-note" style="text-align:center">${t('flavor_wheel_unavailable')}</p>`;
-    if (breadcrumbEl) breadcrumbEl.innerHTML = '';
+    container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_unavailable')}</p>`;
+    if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
   }
 }
 

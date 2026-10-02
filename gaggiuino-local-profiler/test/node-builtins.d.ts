@@ -3,8 +3,9 @@
 // "extraneous"), so `tsc --noEmit` has no declarations for Node's builtin
 // modules and a test importing `node:fs` fails to resolve it. vitest runs these
 // files on Node, so the specifiers are real at runtime; only the types are
-// missing. Declare the members the tests actually use — add to this file when a
-// later test migration needs more of the API rather than reaching for a
+// missing. Declare the members the tests and the root vite/vitest TypeScript
+// configs (compiled by the same tsc program) actually use — add to this file
+// when a later migration needs more of the API rather than reaching for a
 // file-level ts-expect-error.
 declare module 'node:child_process' {
     export function execFileSync(
@@ -24,6 +25,12 @@ declare module 'node:fs' {
     export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
     export function mkdtempSync(prefix: string): string;
     export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+    export function existsSync(path: string): boolean;
+    export function cpSync(
+        source: string,
+        destination: string,
+        options?: { recursive?: boolean },
+    ): void;
 }
 
 declare module 'node:os' {
@@ -38,6 +45,10 @@ declare module 'node:path' {
 
 declare module 'node:url' {
     export function fileURLToPath(url: string | URL): string;
+}
+
+declare module 'node:vm' {
+    export function runInNewContext(code: string, contextObject?: object): unknown;
 }
 
 // Node globals the tests read directly (vitest runs them on Node, where both

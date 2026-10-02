@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -16,13 +17,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
-// This file ports lib/geo.js + lib/services/LibraryService.js's geocodeBean
-// (Phase 2g, #901): resolve a bean's growing region ("region, country") to
-// lat/lon for the origin map, cached in the kv table so each distinct query
-// hits Nominatim at most once. Fire-and-forget after a bean create/update —
+// This file resolves a bean's growing region ("region, country") to lat/lon
+// for the origin map, cached in the kv table so each distinct query hits
+// Nominatim at most once. Fire-and-forget after a bean create/update —
 // GeocodeHook below is what cmd/server wires createBean/UpdateBean's
-// un-awaited call to, mirroring routes/library/beans.js's
-// `libraryService.geocodeBean(id).catch(() => {})`.
+// un-awaited call to.
 //
 // The outbound request goes through assertPublicHost (ssrf.go) exactly like
 // scan.go's Open Food Facts call: nominatimHost is a fixed literal, not user
@@ -42,26 +41,24 @@ const (
 	geoUserAgent = "GLP/3.2.0 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
 )
 
-// Location mirrors lib/geo.js's { lat, lon, label } result shape — the
-// object stored on bean.location and read by the origin-map view.
+// Location is the { lat, lon, label } result shape stored on bean.location
+// and read by the origin-map view.
 type Location struct {
 	Lat   float64 `json:"lat"`
 	Lon   float64 `json:"lon"`
 	Label string  `json:"label"`
 }
 
-// geoCacheEntry mirrors lib/geo.js's `{ result, ts }` cache value: result
-// is null for a cached miss (Node caches misses too, so a region Nominatim
-// can't resolve is never re-queried).
+// geoCacheEntry is the cache value: result is null for a cached miss (misses
+// are cached too, so a region Nominatim can't resolve is never re-queried).
 type geoCacheEntry struct {
 	Result *Location `json:"result"`
 	TS     int64     `json:"ts"`
 }
 
-// Geocoder ports lib/geo.js's module-level state (the request-serialization
-// queue + last-request timestamp) as a struct so cmd/server owns one
-// instance, the same pattern internal/system's Poller / ha.Client use
-// instead of Node's module singletons.
+// Geocoder holds the geocoding request-serialization queue + last-request
+// timestamp as a struct so cmd/server owns one instance, the same pattern
+// internal/system's Poller / ha.Client use.
 type Geocoder struct {
 	repo   *Repository
 	http   *http.Client
@@ -88,11 +85,8 @@ func NewGeocoder(repo *Repository) *Geocoder {
 
 // GeocodeHook, when set by cmd/server at startup, is invoked
 // fire-and-forget (in a goroutine) after a bean create or a region-changing
-// bean update whose region is non-empty — the Go port of
-// routes/library/beans.js's `libraryService.geocodeBean(id).catch(() =>
-// {})`. nil (the default, and in every test that doesn't set it) makes the
-// call a no-op, matching the pre-2g Go behavior doc.go documented as
-// deferred.
+// bean update whose region is non-empty. nil (the default, and in every test
+// that doesn't set it) makes the call a no-op.
 var GeocodeHook func(beanID int64, region, origin string)
 
 // maybeGeocode is the single call site create.go/update.go use so the
@@ -103,12 +97,10 @@ func maybeGeocode(beanID int64, region, origin string) {
 	}
 }
 
-// GeocodeBean ports LibraryService.js's geocodeBean(beanId): look the bean
-// up, resolve its region (with the origin country name appended for
-// precision), then write the result back onto a FRESH library read — the
-// bean may have been edited or deleted while the request was in flight, so
-// a region that no longer matches is discarded, exactly like the Node
-// original's re-read guard.
+// GeocodeBean looks the bean up, resolves its region (with the origin country
+// name appended for precision), then writes the result back onto a FRESH
+// library read — the bean may have been edited or deleted while the request
+// was in flight, so a region that no longer matches is discarded.
 func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
 	lib, err := g.repo.GetLibrary()
 	if err != nil {
@@ -133,38 +125,39 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
 		return
 	}
 
-	fresh, err := g.repo.GetLibrary()
+	var name string
+	err = g.repo.Update(func(fresh *Library) error {
+		fi := findBeanIndex(*fresh, beanID)
+		if fi == -1 {
+			return ErrSkipSave
+		}
+		if cur, _ := fresh.Beans[fi]["region"].(string); cur != region {
+			return ErrSkipSave // region changed under us — a newer geocode call owns it now
+		}
+		if loc != nil {
+			fresh.Beans[fi]["location"] = loc
+		} else {
+			fresh.Beans[fi]["location"] = nil
+		}
+		name, _ = fresh.Beans[fi]["name"].(string)
+		return nil
+	})
+	if errors.Is(err, ErrSkipSave) {
+		return
+	}
 	if err != nil {
-		log.Printf("library: geocodeBean: reloading library for bean %d: %v", beanID, err)
-		return
-	}
-	fi := findBeanIndex(fresh, beanID)
-	if fi == -1 {
-		return
-	}
-	if cur, _ := fresh.Beans[fi]["region"].(string); cur != region {
-		return // region changed under us — a newer geocode call owns it now
-	}
-	if loc != nil {
-		fresh.Beans[fi]["location"] = loc
-	} else {
-		fresh.Beans[fi]["location"] = nil
-	}
-	if err := g.repo.SaveLibrary(fresh); err != nil {
-		log.Printf("library: geocodeBean: saving library for bean %d: %v", beanID, err)
+		log.Printf("library: geocodeBean: updating library for bean %d: %v", beanID, err)
 		return
 	}
 	if loc != nil {
-		name, _ := fresh.Beans[fi]["name"].(string)
 		log.Printf("library: geocoded bean %q region %q -> %g,%g", name, region, loc.Lat, loc.Lon)
 	}
 }
 
-// GeocodeRegion ports lib/geo.js's geocodeRegion(region, countryName):
-// returns the cached result (including a cached nil for a known miss) when
-// the lower-cased "region, country" query is already in the kv cache,
-// otherwise makes one rate-limited, SSRF-guarded Nominatim call and caches
-// whatever it produced.
+// GeocodeRegion returns the cached result (including a cached nil for a known
+// miss) when the lower-cased "region, country" query is already in the kv
+// cache, otherwise makes one rate-limited, SSRF-guarded Nominatim call and
+// caches whatever it produced.
 func (g *Geocoder) GeocodeRegion(ctx context.Context, region, countryName string) (*Location, error) {
 	region = strings.TrimSpace(region)
 	if region == "" {
@@ -184,8 +177,7 @@ func (g *Geocoder) GeocodeRegion(ctx context.Context, region, countryName string
 
 	result, reqErr := g.request(ctx, query, region)
 
-	// Re-load: another request may have written meanwhile (matches Node's
-	// "re-load: another request may have written meanwhile" comment).
+	// Re-load: another request may have written meanwhile.
 	fresh := g.loadCache()
 	fresh[key] = geoCacheEntry{Result: result, TS: time.Now().UnixMilli()}
 	g.saveCache(fresh)
@@ -193,10 +185,8 @@ func (g *Geocoder) GeocodeRegion(ctx context.Context, region, countryName string
 }
 
 // request performs one Nominatim call, serialized with >= geoMinIntervalMS
-// between calls (lib/geo.js's enqueue()), and SSRF-guarded. A network/parse
-// failure is logged and returns (nil, nil) — a miss, cached like any other,
-// exactly as the Node original swallows its own axios error into `return
-// null`.
+// between calls, and SSRF-guarded. A network/parse failure is logged and
+// returns (nil, nil) — a miss, cached like any other.
 func (g *Geocoder) request(ctx context.Context, query, region string) (*Location, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -296,13 +286,11 @@ func (g *Geocoder) saveCache(cache map[string]geoCacheEntry) {
 	}
 }
 
-// countryNameForCode ports geocodeBean's `new Intl.DisplayNames(['en'],
-// { type: 'region' }).of(bean.origin)` lookup for the English country name
-// appended to the Nominatim query. Go has no built-in ISO-region name
-// table; this covers the coffee-growing set bean origins realistically hold
-// (lib/coffee-countries.js's COFFEE_COUNTRY_CODES) and returns "" for
-// anything else — the same result Node's own `catch` branch produces, where
-// the query then falls back to the bare region string.
+// countryNameForCode returns the English country name for an origin code,
+// appended to the Nominatim query. Go has no built-in ISO-region name table;
+// this covers the coffee-growing set bean origins realistically hold
+// (COFFEE_COUNTRY_CODES) and returns "" for anything else — the query then
+// falls back to the bare region string.
 func countryNameForCode(code string) string {
 	return coffeeCountryNames[strings.ToUpper(strings.TrimSpace(code))]
 }
@@ -323,22 +311,20 @@ var coffeeCountryNames = map[string]string{
 	"ZW": "Zimbabwe",
 }
 
-// IsCoffeeCountryCode ports lib/coffee-countries.js's
-// `COFFEE_COUNTRY_CODES.includes(code)` membership test — the coffee
-// -growing ISO 3166-1 alpha-2 set. coffeeCountryNames' keys ARE that list
-// (verified equal, 47 entries), so this reuses it rather than re-embedding
-// the codes a third time (importer/countries.go holds the localized-name
-// map, this file the English-name map).
+// IsCoffeeCountryCode is the coffee-growing ISO 3166-1 alpha-2 membership
+// test. coffeeCountryNames' keys ARE that list (verified equal, 47 entries),
+// so this reuses it rather than re-embedding the codes a third time
+// (importer/countries.go holds the localized-name map, this file the
+// English-name map).
 func IsCoffeeCountryCode(code string) bool {
 	_, ok := coffeeCountryNames[strings.ToUpper(strings.TrimSpace(code))]
 	return ok
 }
 
-// ResolveBeanOriginCode ports lib/card.js's resolveBeanOriginCode(coffeeName,
-// library): the first resolvable coffee-growing-country code for the bean
-// whose name matches coffeeName exactly (case-insensitively), or "" when
-// nothing matches. The share-card renderer (internal/shots) calls this
-// through a callback so it doesn't import this package directly — same
+// ResolveBeanOriginCode returns the first resolvable coffee-growing-country
+// code for the bean whose name matches coffeeName exactly (case-insensitively),
+// or "" when nothing matches. The share-card renderer (internal/shots) calls
+// this through a callback so it doesn't import this package directly — same
 // wiring style as the geocode hook above.
 func ResolveBeanOriginCode(coffeeName string, repo *Repository) string {
 	name := strings.ToLower(strings.TrimSpace(coffeeName))
@@ -354,8 +340,7 @@ func ResolveBeanOriginCode(coffeeName string, repo *Repository) string {
 			continue
 		}
 		// origins array first (blend-capable), then the legacy scalar
-		// origin — mirrors card.js's
-		// `Array.isArray(bean.origins) && bean.origins.length ? ... : (bean.origin ? [{code: bean.origin}] : [])`.
+		// origin.
 		var code string
 		if origins, ok := bean["origins"].([]any); ok && len(origins) > 0 {
 			if first, ok := origins[0].(map[string]any); ok {

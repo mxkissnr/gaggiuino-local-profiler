@@ -1,9 +1,3 @@
-// @ts-nocheck -- renamed from main.js (TypeScript migration package A1,
-// #1106) without converting its contents: it still imports untyped .js
-// modules, and strict mode's any-propagation would error on nearly every
-// line until those are migrated too. Remove once main.ts's own imports are
-// converted (a later package) -- see eslint.config.js's matching block.
-
 import './style.css';
 
 // One-time cleanup for the v1.102.0 service worker (reverted in v1.102.1):
@@ -42,10 +36,11 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 
 import { S } from './state/index.js';
 import { initToken, apiFetch } from './api/transport.js';
-import { t, setLang, applyTranslations } from './i18n.js';
+import type { Bean } from './api/types.js';
+import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { generateBeanQR } from './glp-qr.js';
-import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme } from './utils.js';
+import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
 import { openBackupExportModal, openBackupRestoreModal } from './components/backup-modal.js';
 
@@ -54,8 +49,7 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
          handleEdgeSwipeStart, handleEdgeSwipeEnd,
          toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
-import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb,
-         handleSyncProgressEvent, handleSyncCompleteEvent } from './components/status.js';
+import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
@@ -102,11 +96,13 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, deleteBean, toggleBeanActive, uploadBeanImage,
+         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
-         toggleBagHistory, openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
-         openBeanStockEdit, closeBeanStockEdit, saveBeanStock,
+         openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
+         openEditBag, closeEditBag, saveEditBag,
+         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags,
+         toggleBagCard, reorderBags,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
          openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
@@ -153,6 +149,7 @@ import { handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent,
 import { loadMqttSettings, renderMqttSettingsCard, setMqttTransport, saveMqttSettings, applyMqttToMachine } from './components/mqtt-settings.js';
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
+import { loadMcpSettingsCard, renderMcpSettingsCard, saveMcpSettings } from './components/mcp-settings.js';
 
 import { loadShotDefaultsSettingsCard, saveShotDefaultsSettings } from './components/shot-defaults-settings.js';
 
@@ -161,6 +158,12 @@ import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
 
+declare global {
+  interface Window {
+    scheduleAutoSave?: () => void;
+  }
+}
+
 // Profile creation/editing branches to the GaggiMate editor instead of the
 // Gaggiuino one for GaggiMate machines — checked at 3 call sites below.
 function _isActiveMachineGaggiMate() {
@@ -168,7 +171,7 @@ function _isActiveMachineGaggiMate() {
 }
 
 // ── Toast helper ──────────────────────────────────────────────────────────
-function showToast(msg, duration = 3000) {
+function showToast(msg: string, duration = 3000) {
   let el = document.getElementById('glpToast');
   if (!el) {
     el = document.createElement('div');
@@ -183,10 +186,11 @@ function showToast(msg, duration = 3000) {
     ].join(';');
     document.body.appendChild(el);
   }
-  el.textContent = msg;
-  el.style.opacity = '1';
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.opacity = '0'; }, duration);
+  const toast = el as HTMLElement & { _t?: ReturnType<typeof setTimeout> };
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
 
 // ── API token (Settings view) ──────────────────────────────────────────────
@@ -229,6 +233,13 @@ function copyApiToken() {
 // #1018: live re-resolution while 'auto' is selected -- see theme.js.
 watchSystemTheme();
 
+// Theme picker — exposed on window for HTML onclick handlers and called by
+// the #themeToggleGroup wiring inside DOMContentLoaded below.
+function setTheme(theme: string): void {
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  applyTheme(theme);
+}
+
 // ── Expose everything on window (for HTML onclick handlers) ───────────────
 Object.assign(window, {
   // state & i18n
@@ -238,11 +249,8 @@ Object.assign(window, {
   applyTranslations,
 
   // theme
-  setTheme: (theme) => {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-    applyTheme(theme);
-  },
-  setAccentTheme: (name) => {
+  setTheme,
+  setAccentTheme: (name: string) => {
     localStorage.setItem('glp_accent_theme', name);
     // #1019: the only thing that still applies --accent-* now -- the
     // [data-accent="..."] CSS blocks that used to pick this up on their own
@@ -259,7 +267,7 @@ Object.assign(window, {
     // preset the user actually picked, independent of this DOM attribute's
     // now-defunct original CSS purpose.
     document.documentElement.dataset.accent = name;
-    document.querySelectorAll('.accent-swatch').forEach(b =>
+    document.querySelectorAll<HTMLElement>('.accent-swatch').forEach(b =>
       b.classList.toggle('active', b.dataset.presetKey === name));
   },
 
@@ -411,6 +419,8 @@ Object.assign(window, {
   closeBeanForm,
   editBean,
   saveBean,
+  saveBeanNoBag,
+  saveBeanAddBag,
   deleteBean,
   openGrinderForm,
   closeGrinderForm,
@@ -419,14 +429,20 @@ Object.assign(window, {
   deleteGrinder,
   toggleBeanQR,
   generateBeanQR,
-  toggleBagHistory,
   openNewBagForm,
   closeNewBagForm,
   saveNewBag,
   deleteBag,
-  openBeanStockEdit,
-  closeBeanStockEdit,
-  saveBeanStock,
+  openEditBag,
+  closeEditBag,
+  saveEditBag,
+  openBagStockEdit,
+  closeBagStockEdit,
+  saveBagStock,
+  markBagEmpty,
+  togglePastBags,
+  toggleBagCard,
+  reorderBags,
   openFreezeForm,
   closeFreezeForm,
   saveFreezePortions,
@@ -521,20 +537,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const starRating = document.getElementById('starRating');
   if (starRating) {
     starRating.addEventListener('mouseover', e => {
-      const star = e.target.closest('.star');
+      const star = (e.target as HTMLElement).closest<HTMLElement>('.star');
       if (!star) return;
-      const val = parseInt(star.dataset.val);
-      starRating.querySelectorAll('.star').forEach(s => {
-        s.classList.toggle('hovered', parseInt(s.dataset.val) <= val);
+      const val = parseInt(star.dataset.val ?? '');
+      starRating.querySelectorAll<HTMLElement>('.star').forEach(s => {
+        s.classList.toggle('hovered', parseInt(s.dataset.val ?? '') <= val);
       });
     });
     starRating.addEventListener('mouseout', () => {
       starRating.querySelectorAll('.star').forEach(s => s.classList.remove('hovered'));
     });
     starRating.addEventListener('click', e => {
-      const star = e.target.closest('.star');
+      const star = (e.target as HTMLElement).closest<HTMLElement>('.star');
       if (!star) return;
-      const val = parseInt(star.dataset.val);
+      const val = parseInt(star.dataset.val ?? '');
       S.currentRating = S.currentRating === val ? 0 : val;
       renderStars(S.currentRating);
       if (window.scheduleAutoSave) window.scheduleAutoSave();
@@ -542,26 +558,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── annCoffee: auto-fill roast date + show bean age hint ───────────────
-  const annCoffee = document.getElementById('annCoffee');
+  const annCoffee = document.getElementById('annCoffee') as HTMLInputElement | null;
   if (annCoffee) {
     annCoffee.addEventListener('change', () => {
       const name = annCoffee.value.trim();
       const hintEl = document.getElementById('beanAgeHint');
       if (!name || !S.coffeeLibrary) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
-      const bean = S.coffeeLibrary.beans?.find(b => b.name === name);
+      const bean = S.coffeeLibrary.beans?.find((b): b is Bean => b.name === name);
       if (!bean) { if (hintEl) hintEl.style.display = 'none'; _renderFrozenPortionPills(null, Date.now(), null); return; }
 
       // Prefill grinder/grind setting/dose from this bean's own history
       // (best scored combo, then known-good grind, then its last shot) —
       // never the literal previous shot, which may have used a different bean.
       const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id });
-      const grinderEl = document.getElementById('annGrinder');
-      const grindEl   = document.getElementById('annGrindSetting');
-      const doseEl    = document.getElementById('annDose');
+      const grinderEl = document.getElementById('annGrinder') as HTMLInputElement | null;
+      const grindEl   = document.getElementById('annGrindSetting') as HTMLInputElement | null;
+      const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
       if (suggested.grinder      && grinderEl) grinderEl.value = suggested.grinder;
-      if (suggested.grindSetting && grindEl)   grindEl.value   = suggested.grindSetting;
-      if (suggested.dose         && doseEl)    doseEl.value    = suggested.dose;
+      if (suggested.grindSetting && grindEl)   grindEl.value   = String(suggested.grindSetting);
+      if (suggested.dose         && doseEl)    doseEl.value    = String(suggested.dose);
 
       // Find roast date from the active bag at shot time
       const shot   = S.primaryShotId ? S.shots?.find(s => s.id === S.primaryShotId) : null;
@@ -571,7 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (bags.length) {
         const activeBag = bags
           .filter(b => (b.openedAt || 0) <= shotMs)
-          .sort((a, b) => b.openedAt - a.openedAt)[0];
+          .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
         if (activeBag?.roastDate) roastDate = activeBag.roastDate;
       }
 
@@ -585,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Show bean age hint
       const ageDays = calcBeanAgeAtShot(name, shot?.timestamp, bean.id);
       if (hintEl && ageDays != null) {
-        hintEl.innerHTML = `${BEAN_ICON_SVG} ${t('bean_age_at_shot', ageDays)}`;
+        hintEl.innerHTML = html`${BEAN_ICON_SVG} ${tHtml('bean_age_at_shot', ageDays)}`;
         hintEl.style.display = '';
       } else if (hintEl) {
         hintEl.style.display = 'none';
@@ -627,8 +643,8 @@ document.addEventListener('DOMContentLoaded', () => {
   onThemeChange(() => {
     for (const key of ['chart', 'pqChart', 'fsChart', 'liveChart', 'trendChart',
                        'profileBarChart', 'profilePreviewChart', 'doseDistChart',
-                       'ratioDistChart', 'timeOfDayChart', 'dialinProgressionChart']) {
-      applyChartTheme(S[key]);
+                       'ratioDistChart', 'timeOfDayChart', 'dialinProgressionChart'] as const) {
+      applyChartTheme(S[key] as Parameters<typeof applyChartTheme>[0]);
     }
   });
 
@@ -651,48 +667,48 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAccentSwatches();
 
   // ── Static element wiring ──────────────────────────────────────────────
-  document.getElementById('collapseBtn').addEventListener('click', toggleDesktopSidebar);
-  document.getElementById('expandSidebarBtn').addEventListener('click', toggleDesktopSidebar);
+  document.getElementById('collapseBtn')!.addEventListener('click', toggleDesktopSidebar);
+  document.getElementById('expandSidebarBtn')!.addEventListener('click', toggleDesktopSidebar);
   // #969: filterShots() does 3 full DOM passes over the shot list; on a
   // large history that's too much work to redo synchronously on every
   // keystroke. Debounce so a fast typist only pays for it once per pause.
-  let _searchDebounce = null;
-  document.getElementById('shotSearch').addEventListener('input', e => {
-    const value = e.target.value;
+  let _searchDebounce: ReturnType<typeof setTimeout> | undefined;
+  document.getElementById('shotSearch')!.addEventListener('input', e => {
+    const value = (e.target as HTMLInputElement).value;
     clearTimeout(_searchDebounce);
     _searchDebounce = setTimeout(() => filterShots(value), 150);
   });
-  document.getElementById('sortNewest').addEventListener('click', () => setSortMode('newest'));
-  document.getElementById('sortScore').addEventListener('click', () => setSortMode('score'));
-  document.getElementById('sortRating').addEventListener('click', () => setSortMode('rating'));
-  document.getElementById('sortDur').addEventListener('click', () => setSortMode('duration'));
-  document.getElementById('trash-toggle').addEventListener('click', toggleTrash);
-  document.getElementById('powerBtn').addEventListener('click', toggleMachinePower);
+  document.getElementById('sortNewest')!.addEventListener('click', () => setSortMode('newest'));
+  document.getElementById('sortScore')!.addEventListener('click', () => setSortMode('score'));
+  document.getElementById('sortRating')!.addEventListener('click', () => setSortMode('rating'));
+  document.getElementById('sortDur')!.addEventListener('click', () => setSortMode('duration'));
+  document.getElementById('trash-toggle')!.addEventListener('click', toggleTrash);
+  document.getElementById('powerBtn')!.addEventListener('click', () => { void toggleMachinePower(); });
   // #914: mobile topbar duplicate of #powerBtn -- see index.html comment.
-  document.getElementById('railPowerBtn').addEventListener('click', toggleMachinePower);
-  document.getElementById('syncBtn').addEventListener('click', triggerSync);
-  document.getElementById('onboardingDemoBtn').addEventListener('click', loadDemoData);
-  document.getElementById('glpDemoEndBtn').addEventListener('click', endDemo);
+  document.getElementById('railPowerBtn')!.addEventListener('click', () => { void toggleMachinePower(); });
+  document.getElementById('syncBtn')!.addEventListener('click', () => { void triggerSync(); });
+  document.getElementById('onboardingDemoBtn')!.addEventListener('click', () => { void loadDemoData(); });
+  document.getElementById('glpDemoEndBtn')!.addEventListener('click', () => { void endDemo(); });
   // ── Desktop topbar nav (#424) — same ids as the old #rail/#mode-bar
   // buttons, just relocated+restyled markup, so switchMode()'s active-state
   // toggling and status.js's live/orders visibility gating both keep
   // working unchanged.
-  document.getElementById('btnLive').addEventListener('click', () => switchMode('live'));
-  document.getElementById('btnShots').addEventListener('click', () => switchMode('shots'));
-  document.getElementById('btnAnalytics').addEventListener('click', () => switchMode('analytics'));
-  document.getElementById('btnDialin').addEventListener('click', () => switchMode('dialin'));
-  document.getElementById('btnLibrary').addEventListener('click', () => switchMode('library'));
-  document.getElementById('btnMaintenance').addEventListener('click', () => switchMode('maintenance'));
-  document.getElementById('btnAchievements').addEventListener('click', () => switchMode('achievements'));
-  document.getElementById('btnOrders').addEventListener('click', () => switchMode('orders'));
-  document.getElementById('btnSettings').addEventListener('click', () => switchMode('settings'));
+  document.getElementById('btnLive')!.addEventListener('click', () => switchMode('live'));
+  document.getElementById('btnShots')!.addEventListener('click', () => switchMode('shots'));
+  document.getElementById('btnAnalytics')!.addEventListener('click', () => switchMode('analytics'));
+  document.getElementById('btnDialin')!.addEventListener('click', () => switchMode('dialin'));
+  document.getElementById('btnLibrary')!.addEventListener('click', () => switchMode('library'));
+  document.getElementById('btnMaintenance')!.addEventListener('click', () => switchMode('maintenance'));
+  document.getElementById('btnAchievements')!.addEventListener('click', () => switchMode('achievements'));
+  document.getElementById('btnOrders')!.addEventListener('click', () => switchMode('orders'));
+  document.getElementById('btnSettings')!.addEventListener('click', () => switchMode('settings'));
 
   // ── Mobile burger drawer (#425) — additive shot-list access from any
   // view; the bottom-nav Shots-primary-screen flow below is unaffected.
-  document.getElementById('mobileDrawerBtn').addEventListener('click', openShotDrawer);
-  document.getElementById('sidebar-drawer-backdrop').addEventListener('click', closeShotDrawer);
-  document.getElementById('sidebar').addEventListener('touchstart', handleDrawerTouchStart, { passive: true });
-  document.getElementById('sidebar').addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
+  document.getElementById('mobileDrawerBtn')!.addEventListener('click', openShotDrawer);
+  document.getElementById('sidebar-drawer-backdrop')!.addEventListener('click', closeShotDrawer);
+  document.getElementById('sidebar')!.addEventListener('touchstart', handleDrawerTouchStart, { passive: true });
+  document.getElementById('sidebar')!.addEventListener('touchend', handleDrawerTouchEnd, { passive: true });
   // #682: edge-swipe-to-open is bound to `document`, not #sidebar -- the
   // sidebar is transformed off-screen while closed and therefore can't
   // receive touch events itself.
@@ -710,344 +726,348 @@ document.addEventListener('DOMContentLoaded', () => {
   renderBottomNav();
   renderBottomNavSettings();
   renderWhatsNewCard();
-  document.getElementById('more-sheet-backdrop').addEventListener('click', closeMoreSheet);
-  document.getElementById('exportAllCsvBtn').addEventListener('click', exportAllCSV);
-  document.getElementById('exportShotBtn').addEventListener('click', exportShot);
-  document.getElementById('exportProfileBtn').addEventListener('click', exportProfile);
+  document.getElementById('more-sheet-backdrop')!.addEventListener('click', closeMoreSheet);
+  document.getElementById('exportAllCsvBtn')!.addEventListener('click', () => { void exportAllCSV(); });
+  document.getElementById('exportShotBtn')!.addEventListener('click', () => { void exportShot(); });
+  document.getElementById('exportProfileBtn')!.addEventListener('click', () => { void exportProfile(); });
   // Share-card format picker: toggle dropdown, pick format on option click
-  document.getElementById('shareCardBtn').addEventListener('click', () => {
-    const menu = document.getElementById('cardFmtMenu');
+  document.getElementById('shareCardBtn')!.addEventListener('click', () => {
+    const menu = document.getElementById('cardFmtMenu')!;
     menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
   });
-  document.getElementById('cardFmtMenu').addEventListener('click', e => {
-    const opt = e.target.closest('.card-fmt-opt');
+  document.getElementById('cardFmtMenu')!.addEventListener('click', e => {
+    const opt = (e.target as HTMLElement).closest<HTMLElement>('.card-fmt-opt');
     if (!opt) return;
-    document.getElementById('cardFmtMenu').style.display = 'none';
-    shareCard(opt.dataset.format);
+    document.getElementById('cardFmtMenu')!.style.display = 'none';
+    void shareCard(opt.dataset.format);
   });
   document.addEventListener('click', e => {
-    if (!document.getElementById('cardFmtWrap').contains(e.target))
-      document.getElementById('cardFmtMenu').style.display = 'none';
+    if (!document.getElementById('cardFmtWrap')!.contains(e.target as Node))
+      document.getElementById('cardFmtMenu')!.style.display = 'none';
   });
-  document.getElementById('tabZeit').addEventListener('click', () => switchChartTab('zeit'));
-  document.getElementById('tabPQ').addEventListener('click', () => switchChartTab('pq'));
-  document.getElementById('expandChartBtn').addEventListener('click', openChartFullscreen);
-  document.getElementById('fsTabZeit').addEventListener('click', () => switchFsTab('zeit'));
-  document.getElementById('fsTabPQ').addEventListener('click', () => switchFsTab('pq'));
-  document.getElementById('closeFullscreenBtn').addEventListener('click', closeChartFullscreen);
-  document.getElementById('quickCloneBtn').addEventListener('click', quickClone);
-  document.getElementById('annPhotoPickBtn').addEventListener('click', () => document.getElementById('annPhotoInput').click());
-  document.getElementById('annPhotoInput').addEventListener('change', function () { uploadShotImage(this); });
-  document.getElementById('annPhotoRemoveBtn').addEventListener('click', removeShotImage);
-  document.getElementById('annPhotoThumb').addEventListener('click', openShotPhotoLightbox);
+  document.getElementById('tabZeit')!.addEventListener('click', () => switchChartTab('zeit'));
+  document.getElementById('tabPQ')!.addEventListener('click', () => switchChartTab('pq'));
+  document.getElementById('expandChartBtn')!.addEventListener('click', openChartFullscreen);
+  document.getElementById('fsTabZeit')!.addEventListener('click', () => switchFsTab('zeit'));
+  document.getElementById('fsTabPQ')!.addEventListener('click', () => switchFsTab('pq'));
+  document.getElementById('closeFullscreenBtn')!.addEventListener('click', closeChartFullscreen);
+  document.getElementById('quickCloneBtn')!.addEventListener('click', quickClone);
+  document.getElementById('annPhotoPickBtn')!.addEventListener('click', () => document.getElementById('annPhotoInput')!.click());
+  document.getElementById('annPhotoInput')!.addEventListener('change', function (this: HTMLInputElement) { void uploadShotImage(this); });
+  document.getElementById('annPhotoRemoveBtn')!.addEventListener('click', () => { void removeShotImage(); });
+  document.getElementById('annPhotoThumb')!.addEventListener('click', openShotPhotoLightbox);
   // #430: no more explicit Save button — auto-save on input, flushed
   // immediately on blur (leaving the field) and on page hide/mode-switch
   // (below) so a pending debounced save is never silently dropped.
   ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
-    const el = document.getElementById(id);
+    const el = document.getElementById(id)!;
     el.addEventListener('input', scheduleAutoSave);
     el.addEventListener('blur', flushAutoSave);
   });
-  attachAutocomplete(document.getElementById('annGrinder'), () => S.coffeeLibrary.grinders.map(g => g.name));
+  attachAutocomplete(document.getElementById('annGrinder') as HTMLInputElement | null, () => S.coffeeLibrary.grinders.map(g => g.name));
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushAutoSave();
     // #733: the 30s setInterval(updateStatus, ...) below gets throttled by
-    // the browser while the tab is backgrounded -- a shot import that both
-    // starts and finishes while the tab is hidden can end up with zero
-    // polls landing while it was still active, so status.js's per-machine
-    // _lastSyncProgress map never records it as "seen active" and the
-    // completion toast never fires. Forcing one immediate poll on refocus
-    // catches an import that's still running by then; one that already
-    // finished fully in the background is a case no client-side poll can
-    // retroactively catch (nothing else was watching either).
+    // the browser while the tab is backgrounded, so force one immediate poll
+    // on refocus to refresh the status dot/hostname/sync time without waiting
+    // for the next tick.
     //
     // #734 review: must pass S.activeMachineId through, same as
     // applyActiveMachineChange() does (#464) -- an unscoped call hits the
     // default machine's /api/status and overwrites #railMachineName/
     // #railStatusDot even when a non-default machine is the active
     // selection, undoing #464's fix via this new trigger.
-    if (document.visibilityState === 'visible') updateStatus(S.activeMachineId);
+    if (document.visibilityState === 'visible') void updateStatus(S.activeMachineId);
   });
-  document.getElementById('topbarMachineIcon').addEventListener('click', handleTopbarMachineIconClick);
-  document.getElementById('openMaintLogBtn').addEventListener('click', openMaintLogForm);
-  document.getElementById('submitMaintLogBtn').addEventListener('click', submitMaintLogEntry);
-  document.getElementById('cancelMaintLogBtn').addEventListener('click', closeMaintLogForm);
-  document.getElementById('ordersEnabledToggle').addEventListener('change', e => setOrdersEnabled(e.target.checked));
-  document.getElementById('ordersMenuTitle').addEventListener('click', toggleOrdersMenu);
-  document.getElementById('ordersStatsTitle').addEventListener('click', toggleOrdersStats);
-  document.getElementById('ordersNotifyTitle').addEventListener('click', toggleOrdersNotify);
-  document.getElementById('addOrderMenuItemBtn').addEventListener('click', addOrderMenuItem);
-  document.getElementById('libTabBeans').addEventListener('click', () => switchLibTab('beans'));
-  document.getElementById('libTabGrinders').addEventListener('click', () => switchLibTab('grinders'));
-  document.getElementById('libTabRecipes').addEventListener('click', () => switchLibTab('recipes'));
-  document.getElementById('libTabMilk').addEventListener('click', () => switchLibTab('milk'));
-  document.getElementById('libTabProfiles').addEventListener('click', () => switchLibTab('profiles'));
-  document.getElementById('closeBeanFormBtn').addEventListener('click', closeBeanForm);
-  document.getElementById('saveBeanBtn').addEventListener('click', saveBean);
-  document.getElementById('beanAddTrigger').addEventListener('click', openBeanForm);
-  document.getElementById('openScanModalBtn').addEventListener('click', openScanModal);
-  document.getElementById('toggleUrlImportBtn').addEventListener('click', toggleUrlImport);
-  document.getElementById('urlImportInput').addEventListener('keydown', e => { if (e.key === 'Enter') importFromUrl(); });
-  document.getElementById('importFromUrlBtn').addEventListener('click', importFromUrl);
-  document.getElementById('toggleImportSettingsBtn').addEventListener('click', toggleImportSettings);
-  document.getElementById('importSettingsAddDomainBtn').addEventListener('click', addCustomShopifyDomain);
-  document.getElementById('importSettingsDomainInput').addEventListener('keydown', e => { if (e.key === 'Enter') addCustomShopifyDomain(); });
-  document.getElementById('closeGrinderFormBtn').addEventListener('click', closeGrinderForm);
-  document.getElementById('saveGrinderBtn').addEventListener('click', saveGrinder);
-  document.getElementById('grinderAddTrigger').addEventListener('click', openGrinderForm);
-  document.getElementById('grinderFormImagePickBtn').addEventListener('click', () => document.getElementById('grinderFormImage').click());
-  document.getElementById('grinderFormImage').addEventListener('change', function () {
-    if (S.grinderEditId) uploadGrinderImage(S.grinderEditId, this);
+  document.getElementById('topbarMachineIcon')!.addEventListener('click', handleTopbarMachineIconClick);
+  document.getElementById('openMaintLogBtn')!.addEventListener('click', openMaintLogForm);
+  document.getElementById('submitMaintLogBtn')!.addEventListener('click', () => { void submitMaintLogEntry(); });
+  document.getElementById('cancelMaintLogBtn')!.addEventListener('click', closeMaintLogForm);
+  document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => { void setOrdersEnabled((e.target as HTMLInputElement).checked); });
+  document.getElementById('ordersMenuTitle')!.addEventListener('click', toggleOrdersMenu);
+  document.getElementById('ordersStatsTitle')!.addEventListener('click', toggleOrdersStats);
+  document.getElementById('ordersNotifyTitle')!.addEventListener('click', toggleOrdersNotify);
+  document.getElementById('addOrderMenuItemBtn')!.addEventListener('click', () => { void addOrderMenuItem(); });
+  document.getElementById('libTabBeans')!.addEventListener('click', () => switchLibTab('beans'));
+  document.getElementById('libTabGrinders')!.addEventListener('click', () => switchLibTab('grinders'));
+  document.getElementById('libTabRecipes')!.addEventListener('click', () => switchLibTab('recipes'));
+  document.getElementById('libTabMilk')!.addEventListener('click', () => switchLibTab('milk'));
+  document.getElementById('libTabProfiles')!.addEventListener('click', () => switchLibTab('profiles'));
+  document.getElementById('closeBeanFormBtn')!.addEventListener('click', closeBeanForm);
+  document.getElementById('saveBeanBtn')!.addEventListener('click', () => { void saveBean(); });
+  document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', () => { void saveBeanNoBag(); });
+  document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', () => { void saveBeanAddBag(); });
+  document.getElementById('beanAddTrigger')!.addEventListener('click', () => openBeanForm());
+  document.getElementById('openScanModalBtn')!.addEventListener('click', () => { void openScanModal(); });
+  document.getElementById('toggleUrlImportBtn')!.addEventListener('click', toggleUrlImport);
+  document.getElementById('urlImportInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') void importFromUrl(); });
+  document.getElementById('importFromUrlBtn')!.addEventListener('click', () => { void importFromUrl(); });
+  document.getElementById('toggleImportSettingsBtn')!.addEventListener('click', () => { void toggleImportSettings(); });
+  document.getElementById('importSettingsAddDomainBtn')!.addEventListener('click', () => { void addCustomShopifyDomain(); });
+  document.getElementById('importSettingsDomainInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') void addCustomShopifyDomain(); });
+  document.getElementById('closeGrinderFormBtn')!.addEventListener('click', closeGrinderForm);
+  document.getElementById('saveGrinderBtn')!.addEventListener('click', () => { void saveGrinder(); });
+  document.getElementById('grinderAddTrigger')!.addEventListener('click', () => openGrinderForm());
+  document.getElementById('grinderFormImagePickBtn')!.addEventListener('click', () => document.getElementById('grinderFormImage')!.click());
+  document.getElementById('grinderFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
+    if (S.grinderEditId) void uploadGrinderImage(S.grinderEditId, this);
   });
-  document.getElementById('beanFormImagePickBtn').addEventListener('click', () => document.getElementById('beanFormImage').click());
-  document.getElementById('beanFormImage').addEventListener('change', function () {
-    if (S.beanEditId) uploadBeanImage(S.beanEditId, this);
+  document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => document.getElementById('beanFormImage')!.click());
+  document.getElementById('beanFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
+    if (S.beanEditId) void uploadBeanImage(S.beanEditId, this);
   });
-  document.getElementById('addRecipeStepBtn').addEventListener('click', addRecipeStep);
-  document.getElementById('closeRecipeFormBtn').addEventListener('click', closeRecipeForm);
-  document.getElementById('saveRecipeBtn').addEventListener('click', saveRecipe);
-  document.getElementById('recipeAddTrigger').addEventListener('click', openRecipeForm);
-  document.getElementById('closeMilkFormBtn').addEventListener('click', closeMilkForm);
-  document.getElementById('saveMilkBtn').addEventListener('click', saveMilk);
-  document.getElementById('milkAddTrigger').addEventListener('click', openMilkForm);
-  document.getElementById('libTabBaskets').addEventListener('click', () => switchLibTab('baskets'));
-  document.getElementById('libTabPuckScreens').addEventListener('click', () => switchLibTab('puckscreens'));
-  document.getElementById('closeBasketFormBtn').addEventListener('click', closeBasketForm);
-  document.getElementById('saveBasketBtn').addEventListener('click', saveBasket);
-  document.getElementById('basketAddTrigger').addEventListener('click', openBasketForm);
-  document.getElementById('basketFormImagePickBtn').addEventListener('click', () => document.getElementById('basketFormImage').click());
-  document.getElementById('basketFormImage').addEventListener('change', function () {
-    if (S.basketEditId) uploadBasketImage(S.basketEditId, this);
+  document.getElementById('addRecipeStepBtn')!.addEventListener('click', addRecipeStep);
+  document.getElementById('closeRecipeFormBtn')!.addEventListener('click', closeRecipeForm);
+  document.getElementById('saveRecipeBtn')!.addEventListener('click', () => { void saveRecipe(); });
+  document.getElementById('recipeAddTrigger')!.addEventListener('click', () => openRecipeForm());
+  document.getElementById('closeMilkFormBtn')!.addEventListener('click', closeMilkForm);
+  document.getElementById('saveMilkBtn')!.addEventListener('click', () => { void saveMilk(); });
+  document.getElementById('milkAddTrigger')!.addEventListener('click', openMilkForm);
+  document.getElementById('libTabBaskets')!.addEventListener('click', () => switchLibTab('baskets'));
+  document.getElementById('libTabPuckScreens')!.addEventListener('click', () => switchLibTab('puckscreens'));
+  document.getElementById('closeBasketFormBtn')!.addEventListener('click', closeBasketForm);
+  document.getElementById('saveBasketBtn')!.addEventListener('click', () => { void saveBasket(); });
+  document.getElementById('basketAddTrigger')!.addEventListener('click', () => openBasketForm());
+  document.getElementById('basketFormImagePickBtn')!.addEventListener('click', () => document.getElementById('basketFormImage')!.click());
+  document.getElementById('basketFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
+    if (S.basketEditId) void uploadBasketImage(S.basketEditId, this);
   });
-  document.getElementById('closePuckScreenFormBtn').addEventListener('click', closePuckScreenForm);
-  document.getElementById('savePuckScreenBtn').addEventListener('click', savePuckScreen);
-  document.getElementById('puckScreenAddTrigger').addEventListener('click', openPuckScreenForm);
-  document.getElementById('puckScreenFormImagePickBtn').addEventListener('click', () => document.getElementById('puckScreenFormImage').click());
-  document.getElementById('puckScreenFormImage').addEventListener('change', function () {
-    if (S.puckScreenEditId) uploadPuckScreenImage(S.puckScreenEditId, this);
+  document.getElementById('closePuckScreenFormBtn')!.addEventListener('click', closePuckScreenForm);
+  document.getElementById('savePuckScreenBtn')!.addEventListener('click', () => { void savePuckScreen(); });
+  document.getElementById('puckScreenAddTrigger')!.addEventListener('click', () => openPuckScreenForm());
+  document.getElementById('puckScreenFormImagePickBtn')!.addEventListener('click', () => document.getElementById('puckScreenFormImage')!.click());
+  document.getElementById('puckScreenFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
+    if (S.puckScreenEditId) void uploadPuckScreenImage(S.puckScreenEditId, this);
   });
-  document.getElementById('annBasket').addEventListener('change', scheduleAutoSave);
-  document.getElementById('annPuckScreen').addEventListener('change', scheduleAutoSave);
-  document.getElementById('profileAddTrigger').addEventListener('click', () => {
+  document.getElementById('annBasket')!.addEventListener('change', scheduleAutoSave);
+  document.getElementById('annPuckScreen')!.addEventListener('change', scheduleAutoSave);
+  document.getElementById('profileAddTrigger')!.addEventListener('click', () => {
     if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
     else openNewProfileForm();
   });
-  document.getElementById('closeProfileFormBtn').addEventListener('click', closeProfileForm);
-  document.getElementById('cancelProfileFormBtn').addEventListener('click', closeProfileForm);
-  document.getElementById('addProfilePhaseBtn').addEventListener('click', addProfilePhase);
-  document.getElementById('profileApplySuggestionBtn').addEventListener('click', applyBeanSuggestion);
-  document.getElementById('sendProfileToMachineBtn').addEventListener('click', sendProfileToMachine);
+  document.getElementById('closeProfileFormBtn')!.addEventListener('click', closeProfileForm);
+  document.getElementById('cancelProfileFormBtn')!.addEventListener('click', closeProfileForm);
+  document.getElementById('addProfilePhaseBtn')!.addEventListener('click', addProfilePhase);
+  document.getElementById('profileApplySuggestionBtn')!.addEventListener('click', applyBeanSuggestion);
+  document.getElementById('sendProfileToMachineBtn')!.addEventListener('click', () => { void sendProfileToMachine(); });
   // Live preview: any field/phase edit re-synthesizes the chart from the
   // current DOM state (same DOM-as-state source of truth as _collectPhases()).
-  document.getElementById('profileEditorModal').addEventListener('input', renderProfilePreviewChart);
-  document.getElementById('profileEditorModal').addEventListener('change', renderProfilePreviewChart);
-  document.getElementById('refShotSelect').addEventListener('change', e => onRefShotChange(e.target.value));
-  document.getElementById('refClearBtn').addEventListener('click', clearReferenceShot);
-  document.getElementById('trendBtn30').addEventListener('click', () => setTrendWindow(30));
-  document.getElementById('trendBtn90').addEventListener('click', () => setTrendWindow(90));
-  document.getElementById('trendBtnAll').addEventListener('click', () => setTrendWindow(0));
-  document.getElementById('dialinCount').addEventListener('change', e => {
-    localStorage.setItem('glp_dialin_count', e.target.value);
-    renderDialin();
+  document.getElementById('profileEditorModal')!.addEventListener('input', renderProfilePreviewChart);
+  document.getElementById('profileEditorModal')!.addEventListener('change', renderProfilePreviewChart);
+  document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
+  document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
+  document.getElementById('trendBtn30')!.addEventListener('click', () => setTrendWindow(30));
+  document.getElementById('trendBtn90')!.addEventListener('click', () => setTrendWindow(90));
+  document.getElementById('trendBtnAll')!.addEventListener('click', () => setTrendWindow(0));
+  document.getElementById('dialinCount')!.addEventListener('change', e => {
+    localStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
+    void renderDialin();
   });
   // #1018: scoped to #themeToggleGroup, not the bare .theme-btn class --
   // #mqttTransportToggle below reuses that same class for its own toggle and
   // has no data-theme-val, so an unscoped query used to also wire this click
   // handler onto it, calling setTheme(undefined) and silently corrupting the
   // stored theme (neither Dark nor Light showed .active afterwards).
-  document.querySelectorAll('#themeToggleGroup .theme-btn').forEach(btn => {
-    // eslint-disable-next-line no-undef -- setTheme is assigned onto window above (Object.assign), resolves as a global at runtime
-    btn.addEventListener('click', () => setTheme(btn.dataset.themeVal));
+  document.querySelectorAll<HTMLElement>('#themeToggleGroup .theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTheme(btn.dataset.themeVal!));
   });
-  document.querySelectorAll('.lang-option-btn').forEach(btn => {
-    btn.addEventListener('click', () => setLang(btn.dataset.lang));
+  document.querySelectorAll<HTMLElement>('.lang-option-btn').forEach(btn => {
+    btn.addEventListener('click', () => setLang(btn.dataset.lang!));
   });
   // Cancel/confirm handlers are wired fresh by openBackupExportModal()/
   // openBackupRestoreModal() every time the modal opens (see
   // components/backup-modal.js) -- no separate wiring needed here, same
   // convention #scanModal uses (its "Schließen" button is wired once, in
   // main.js, but this modal's actions depend on which flow opened it).
-  document.getElementById('backupRestoreInput').addEventListener('change', e => openBackupRestoreModal(e.target));
-  document.getElementById('backupDownloadBtn').addEventListener('click', openBackupExportModal);
-  document.getElementById('devExportDbBtn')?.addEventListener('click', exportDevDb);
+  document.getElementById('backupRestoreInput')!.addEventListener('change', e => { void openBackupRestoreModal(e.target as HTMLInputElement); });
+  document.getElementById('backupDownloadBtn')!.addEventListener('click', openBackupExportModal);
+  document.getElementById('devExportDbBtn')?.addEventListener('click', () => { void exportDevDb(); });
   document.getElementById('devImportDbInput')?.addEventListener('change', e => {
-    importDevDb(e.target.files[0]);
-    e.target.value = '';
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) void importDevDb(file);
+    input.value = '';
   });
-  document.getElementById('apiTokenCopyBtn').addEventListener('click', copyApiToken);
+  document.getElementById('apiTokenCopyBtn')!.addEventListener('click', copyApiToken);
   document.getElementById('addMachineBtn')?.addEventListener('click', () => openMachineForm(null));
   document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
-  document.getElementById('machineFormSaveBtn')?.addEventListener('click', saveMachineForm);
-  document.getElementById('machineFormTestBtn')?.addEventListener('click', testMachineForm);
+  document.getElementById('machineFormSaveBtn')?.addEventListener('click', () => { void saveMachineForm(); });
+  document.getElementById('machineFormTestBtn')?.addEventListener('click', () => { void testMachineForm(); });
   document.getElementById('restartSetupWizardBtn')?.addEventListener('click', () => openSetupWizard());
   document.getElementById('setupWizardModal')?.addEventListener('click', e => {
-    if (e.target.id === 'setupWizardModal') closeSetupWizard();
+    if ((e.target as HTMLElement).id === 'setupWizardModal') closeSetupWizard();
   });
   document.getElementById('machineFormType')?.addEventListener('change', onMachineTypeChange);
   document.getElementById('machineThemeCustomA')?.addEventListener('input', onThemeCustomColorAChange);
   document.getElementById('machineThemeCustomB')?.addEventListener('input', onThemeCustomColorBChange);
   document.getElementById('machineThemeGradientToggle')?.addEventListener('change', onThemeGradientToggleChange);
-  document.querySelectorAll('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
-    btn.addEventListener('click', () => setMqttTransport(btn.dataset.mqttTransport));
+  document.querySelectorAll<HTMLElement>('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
+    btn.addEventListener('click', () => setMqttTransport(btn.dataset.mqttTransport!));
   });
-  document.getElementById('mqttSaveBtn')?.addEventListener('click', saveMqttSettings);
-  document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', applyMqttToMachine);
-  document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', saveNotifySettings);
-  document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', saveShotDefaultsSettings);
-  document.getElementById('closeScanModalBtn').addEventListener('click', closeScanModal);
+  document.getElementById('mqttSaveBtn')?.addEventListener('click', () => { void saveMqttSettings(); });
+  document.getElementById('mqttApplyToMachineBtn')?.addEventListener('click', () => { void applyMqttToMachine(); });
+  document.getElementById('notifySettingsSaveBtn')?.addEventListener('click', () => { void saveNotifySettings(); });
+  document.getElementById('mcpSettingsSaveBtn')?.addEventListener('click', () => { void saveMcpSettings(); });
+  // #1288: write/developer tools only apply while the server is on, so their disabled state follows the master toggle.
+  document.getElementById('mcpEnabled')?.addEventListener('change', () => renderMcpSettingsCard());
+  document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', () => { void saveShotDefaultsSettings(); });
+  document.getElementById('closeScanModalBtn')!.addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
   document.getElementById('flavorWheelModal')?.addEventListener('click', e => {
-    if (e.target.id === 'flavorWheelModal') closeFlavorWheel();
+    if ((e.target as HTMLElement).id === 'flavorWheelModal') closeFlavorWheel();
   });
   document.getElementById('annRecipe')?.addEventListener('change', scheduleAutoSave);
 
   // ── Global click delegation for dynamic content ────────────────────────
   document.body.addEventListener('click', e => {
-    const el = e.target.closest('[data-action]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!el) return;
-    const action = el.dataset.action;
+    const action = el.dataset.action!;
     const numId = () => Number(el.dataset.id);
-    const strId = () => el.dataset.id;
+    const strId = (): string => el.dataset.id as string;
     // GaggiMate profile editor actions all share one prefix — route by that
     // instead of listing all 18 action names as switch cases.
     if (action.startsWith('gm-')) { handleGmEditorAction(action, el); return; }
     switch (action) {
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
-      case 'save-new-bag':       saveNewBag(numId()); break;
-      case 'toggle-bag-history':   toggleBagHistory(numId()); break;
+      case 'save-new-bag':       void saveNewBag(numId()); break;
       case 'toggle-month-group':  toggleMonthGroup(strId()); break;
-      case 'delete-bag':         deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
-      case 'open-stock-edit':    openBeanStockEdit(numId()); break;
-      case 'close-stock-edit':   closeBeanStockEdit(); break;
-      case 'save-stock-edit':    saveBeanStock(numId()); break;
+      case 'delete-bag':         void deleteBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'open-edit-bag':        openEditBag(Number(el.dataset.bagId)); break;
+      case 'close-edit-bag':       closeEditBag(); break;
+      case 'save-edit-bag':        void saveEditBag(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'open-bag-stock-edit':  openBagStockEdit(Number(el.dataset.bagId)); break;
+      case 'close-bag-stock-edit': closeBagStockEdit(); break;
+      case 'save-bag-stock-edit':  void saveBagStock(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'mark-bag-empty':       void markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
+      case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
+      case 'toggle-past-bags':     togglePastBags(numId()); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
-      case 'save-freeze-form':   saveFreezePortions(numId()); break;
-      case 'thaw-portion':       thawPortion(Number(el.dataset.beanId), Number(el.dataset.portionId)); break;
+      case 'save-freeze-form':   void saveFreezePortions(numId()); break;
+      case 'thaw-portion':       void thawPortion(Number(el.dataset.beanId), Number(el.dataset.portionId)); break;
       case 'open-edit-frozen-form':  openEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'close-edit-frozen-form': closeEditFrozenForm(Number(el.dataset.portionId)); break;
-      case 'save-edit-frozen-form':  saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
+      case 'save-edit-frozen-form':  void saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
       case 'filter-by-bean':     filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
       case 'edit-bean':          editBean(numId()); break;
-      case 'delete-bean':        deleteBean(numId()); break;
-      case 'toggle-bean-active': toggleBeanActive(numId()); break;
+      case 'delete-bean':        void deleteBean(numId()); break;
+      case 'toggle-bean-active': void toggleBeanActive(numId()); break;
       case 'edit-grinder':       editGrinder(numId()); break;
-      case 'delete-grinder':     deleteGrinder(numId()); break;
-      case 'reset-grinder-burrs': resetGrinderBurrs(numId()); break;
-      case 'delete-grinder-zero-point': deleteGrinderZeroPointEntry(numId(), Number(el.dataset.since)); break;
+      case 'delete-grinder':     void deleteGrinder(numId()); break;
+      case 'reset-grinder-burrs': void resetGrinderBurrs(numId()); break;
+      case 'delete-grinder-zero-point': void deleteGrinderZeroPointEntry(numId(), Number(el.dataset.since)); break;
       case 'edit-recipe':        editRecipe(numId()); break;
-      case 'delete-recipe':      deleteRecipe(numId()); break;
+      case 'delete-recipe':      void deleteRecipe(numId()); break;
       case 'remove-recipe-step': removeRecipeStep(Number(el.dataset.idx)); break;
-      case 'delete-milk':        deleteMilk(numId()); break;
-      case 'restock-milk':       restockMilk(numId()); break;
+      case 'delete-milk':        void deleteMilk(numId()); break;
+      case 'restock-milk':       void restockMilk(numId()); break;
       case 'edit-basket':        editBasket(numId()); break;
-      case 'delete-basket':      deleteBasket(numId()); break;
+      case 'delete-basket':      void deleteBasket(numId()); break;
       case 'edit-puckscreen':    editPuckScreen(numId()); break;
-      case 'delete-puckscreen':  deletePuckScreen(numId()); break;
+      case 'delete-puckscreen':  void deletePuckScreen(numId()); break;
       case 'edit-profile':
-        if (_isActiveMachineGaggiMate()) openGaggiMateProfileEditor(strId());
-        else editProfile(numId());
+        if (_isActiveMachineGaggiMate()) void openGaggiMateProfileEditor(strId());
+        else void editProfile(String(numId()));
         break;
       case 'duplicate-profile':
-        if (_isActiveMachineGaggiMate()) duplicateGaggiMateProfile(strId());
-        else duplicateProfile(numId());
+        if (_isActiveMachineGaggiMate()) void duplicateGaggiMateProfile(strId());
+        else void duplicateProfile(String(numId()));
         break;
-      case 'delete-profile':        deleteMachineProfile(strId()); break;
+      case 'delete-profile':        void deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
       case 'create-profile-from-bean':
         if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
         else createProfileFromBean(numId());
         break;
-      case 'restore-shot':       restoreShot(numId()); break;
-      case 'perm-delete-shot':   permanentDeleteShot(numId()); break;
+      case 'restore-shot':       void restoreShot(numId()); break;
+      case 'perm-delete-shot':   void permanentDeleteShot(numId()); break;
       case 'select-drink':       selectDrinkType(strId()); break;
       case 'select-milk':        selectMilkType(strId()); break;
       case 'select-frozen-portion': selectFrozenPortion(strId()); break;
-      case 'reload-data':        loadData(); break;
+      case 'reload-data':        void loadData(); break;
       // #807: the "why is this empty" notices (in-view block and app-wide
       // banner, components/api-port-notice.js) both link here.
       case 'goto-settings':      switchMode('settings'); break;
-      case 'set-maint-mode':     setMaintMode(el.dataset.task, el.dataset.mode, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
-      case 'mark-maint-done':    markMaintDone(el.dataset.task, el.dataset.machineId); break;
-      case 'open-guided-maint':  openGuidedMaint(el.dataset.task, el.dataset.machineId); break;
-      case 'toggle-maint-disabled': toggleMaintDisabled(el.dataset.task, el.dataset.machineId, el.dataset.disabled === 'true'); break;
-      case 'add-custom-maint-task':  addCustomMaintTask(el.dataset.machineId); break;
-      case 'delete-custom-maint-task': deleteCustomMaintTask(el.dataset.task, el.dataset.machineId); break;
-      case 'guided-maint-done':  submitGuidedMaint(); break;
+      case 'set-maint-mode':     void setMaintMode(el.dataset.task!, el.dataset.mode!, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
+      case 'mark-maint-done':    void markMaintDone(el.dataset.task!, el.dataset.machineId); break;
+      case 'open-guided-maint':  openGuidedMaint(el.dataset.task!, el.dataset.machineId!); break;
+      case 'toggle-maint-disabled': void toggleMaintDisabled(el.dataset.task!, el.dataset.machineId, el.dataset.disabled === 'true'); break;
+      case 'add-custom-maint-task':  void addCustomMaintTask(el.dataset.machineId); break;
+      case 'delete-custom-maint-task': void deleteCustomMaintTask(el.dataset.task!, el.dataset.machineId); break;
+      case 'guided-maint-done':  void submitGuidedMaint(); break;
       case 'guided-maint-cancel': closeGuidedMaint(); break;
-      case 'set-maint-scope':    setMaintScope(el.dataset.scope); break;
+      case 'set-maint-scope':    setMaintScope(el.dataset.scope!); break;
       case 'toggle-maint-detail': el.closest('.maint-card')?.classList.toggle('expanded'); break;
-      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key); break;
-      case 'open-flavor-wheel':   openFlavorWheel(numId()); break;
+      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key as Parameters<typeof setBeanRankSort>[0]); break;
+      case 'open-flavor-wheel':   void openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
-      case 'delete-maint-log':   deleteMaintLogEntry(numId()); break;
+      case 'delete-maint-log':   void deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
       case 'start-dialin':           openDialinWizard(); break;
       case 'start-dialin-from-bean': startDialinFromBean(numId()); break;
-      case 'dialin-confirm-shot':    dialinConfirmShot(numId(), el.dataset.match === '1'); break;
+      case 'dialin-confirm-shot':    void dialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'dialin-accept-next':     dialinAcceptNext(); break;
       case 'dialin-override':        dialinOverride(); break;
       case 'dialin-end':             dialinEnd(); break;
-      case 'dialin-save-known-grind': dialinSaveKnownGrind(); break;
+      case 'dialin-save-known-grind': void dialinSaveKnownGrind(); break;
       case 'dialin-close':           dialinClose(); break;
-      case 'start-profile-dialin':      startProfileDialinFromList(strId()); break;
+      case 'start-profile-dialin':      void startProfileDialinFromList(strId()); break;
       case 'profile-dialin-symptom':    profileDialinToggleSymptom(el.dataset.symptom); break;
       case 'profile-dialin-confirm-shot': profileDialinConfirmShot(numId(), el.dataset.match === '1'); break;
-      case 'profile-dialin-accept-next':  profileDialinAcceptNext(); break;
-      case 'profile-dialin-override':     profileDialinOverride(); break;
+      case 'profile-dialin-accept-next':  void profileDialinAcceptNext(); break;
+      case 'profile-dialin-override':     void profileDialinOverride(); break;
       case 'profile-dialin-end':          profileDialinEnd(); break;
       case 'profile-dialin-close':        profileDialinClose(); break;
       case 'setup-wizard-close':          closeSetupWizard(); break;
       case 'setup-wizard-get-started':    setupWizardGetStarted(); break;
-      case 'setup-wizard-skip-demo':      setupWizardSkipToDemo(); break;
+      case 'setup-wizard-skip-demo':      void setupWizardSkipToDemo(); break;
       case 'close-easter-egg':            closeEasterEggPanel(); break;
     }
   });
 
   document.body.addEventListener('change', e => {
-    if (e.target.classList?.contains('guided-maint-check')) { updateGuidedMaintDoneState(); return; }
-    const el = e.target.closest('[data-action]');
+    if ((e.target as HTMLElement).classList?.contains('guided-maint-check')) { updateGuidedMaintDoneState(); return; }
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'save-maint-threshold') {
-      saveMaintThreshold(el.dataset.task, el.dataset.field, el.value, el.dataset.machineId);
+      void saveMaintThreshold(el.dataset.task!, el.dataset.field!, (el as HTMLInputElement).value, el.dataset.machineId);
     }
     if (el.dataset.action === 'rename-maint-label') {
-      renameCustomMaintTask(el.dataset.task, el.value, el.dataset.machineId);
+      void renameCustomMaintTask(el.dataset.task!, (el as HTMLInputElement).value, el.dataset.machineId);
     }
     if (el.dataset.action === 'dialin-grinder-select') {
       dialinGrinderChange();
     }
     if (el.dataset.action === 'switch-machine') {
-      switchActiveMachine(el.value);
+      switchActiveMachine((el as HTMLInputElement).value);
     }
     if (el.dataset.action === 'dialin-progression-bean-change') {
-      setDialinProgressionBean(el.value);
+      setDialinProgressionBean((el as HTMLInputElement).value);
     }
   });
 
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
 
-  initToken().then(async () => {
-    // #735: opened once at app bootstrap, not per view-switch -- sync
-    // progress must keep updating regardless of which view/tab is
-    // currently open, same reasoning as the 30s updateStatus() interval
-    // below. Needs S.glpToken to already be populated (for the ?token=
-    // fallback EventSource itself can't send as a header), hence after
-    // initToken() resolves. `onFallback` is a no-op here -- the PR 2
-    // follow-up (Live view over the same stream) extends it.
-    onEvent(EVENTS.SYNC_PROGRESS, handleSyncProgressEvent);
-    onEvent(EVENTS.SYNC_COMPLETE, handleSyncCompleteEvent);
+  void initToken().then(async () => {
+    // #735: opened once at app bootstrap, not per view-switch -- SSE-driven
+    // updates must keep arriving regardless of which view/tab is currently
+    // open, same reasoning as the 30s updateStatus() interval below. Needs
+    // S.glpToken to already be populated (for the ?token= fallback
+    // EventSource itself can't send as a header), hence after initToken()
+    // resolves. `onFallback` is a no-op here -- the PR 2 follow-up (Live
+    // view over the same stream) extends it.
     // #736: Live view telemetry/preheat push -- same bootstrap-time wiring
-    // as the sync-progress events above.
-    onEvent(EVENTS.LIVE_SNAPSHOT, handleLiveSnapshotEvent);
-    onEvent(EVENTS.PREHEAT_UPDATE, handlePreheatUpdateEvent);
+    // as above.
+    onEvent(EVENTS.LIVE_SNAPSHOT, data => handleLiveSnapshotEvent(data as Parameters<typeof handleLiveSnapshotEvent>[0]));
+    onEvent(EVENTS.PREHEAT_UPDATE, data => handlePreheatUpdateEvent(data as Parameters<typeof handlePreheatUpdateEvent>[0]));
     // #837: the topbar's ambient machine icon -- a second, independent
     // listener for the same two event types (see components/
     // topbar-machine-icon.js's module doc comment for why it doesn't just
@@ -1065,10 +1085,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // nothing to display itself against. Now runs once the token is ready,
     // same as loadData()/loadLibrary() below.
     const machinesPromise = loadMachines();
-    loadMqttSettings();
-    loadNotifySettingsCard();
-    loadDrinkMenu();
-    loadMilkTypes();
+    void loadMqttSettings();
+    void loadNotifySettingsCard();
+    void loadMcpSettingsCard();
+    void loadDrinkMenu();
+    void loadMilkTypes();
     // Awaited (unlike the two loads above): loadData() below can render the
     // annotation panel for the initially-selected shot synchronously once
     // it resolves (updateView() -> renderAnnotationPanel()), which reads
@@ -1093,13 +1114,13 @@ document.addEventListener('DOMContentLoaded', () => {
     await machinesPromise;
     renderMqttSettingsCard();
     renderMachinesList();
-    loadMachineProfileList();
+    void loadMachineProfileList();
     // #750: awaited (was fire-and-forget) so the installId comparison inside
     // updateStatus() -> syncInstallId() has a chance to clear a stale
     // setup-wizard-completed flag before the shouldOpenSetupWizard() check
-    // below runs -- see setup-wizard.js's syncInstallId() comment.
+    // below runs -- see utils.js's syncInstallId() comment.
     await updateStatus();
-    checkForUpdate();
+    void checkForUpdate();
     renderApiTokenCard();
     // #744: first-run setup wizard — auto-opens once S.machines is actually
     // known (after machinesPromise resolves), not before, so a returning

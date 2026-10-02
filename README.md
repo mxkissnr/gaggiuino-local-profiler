@@ -57,6 +57,8 @@ Click the button above to add this repository directly to your Home Assistant �
 
 ## Screenshots
 
+**Try the demo in your browser: <https://mxkissnr.github.io/gaggiuino-local-profiler/> — sample data, nothing is saved.**
+
 <table>
   <tr>
     <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="100%"/></td>
@@ -83,6 +85,7 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single app instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (sync + live status, full profile editing (Standard + Pro/Extended, create/edit/delete, saved straight to the machine) with a phase-accurate preview chart matching GaggiMate's own; water level with optional ALBA sensor; BLE-scale vs. estimated weight distinction in shot chart). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. Gaggiuino machines show installed/available firmware right on their row in the machines list, with a one-click update trigger and progress bar; a stable/test/debug release-channel selector stays in the edit form. |
 | 📈 | **Shot Archive** | All shots with pressure, flow, weight and temperature curves |
 | 🔴 | **Live Mode** | Real-time display directly from the controller (`/api/system/status`); the Live tab, preheat/ready badge and the sidebar's shot counter push updates instantly over a live connection, falling back automatically to polling if one can't be established. While idle, the Live tab shows current temperature/target, pressure and water level instead of a bare "Ready to brew"; steam and flush mode get the same live treatment (timer, readouts, badge, animated machine icon) as brewing. Stale readings are cleared automatically if the machine drops off the network. |
+| 🎛️ | **Live Shot Setup** | Choose the next shot's bean, dose, grinder, grind setting, basket, puck screen and recipe on the Live view before you pull; the sticky per-machine selection is written onto the shot automatically once it finishes syncing — finished brews only (steam/flush sessions are ignored), and only while the shot is still unannotated. |
 | 📡 | **MQTT Live-Data Transport** | Alternative to the WebSocket connection for live sensor/system data — subscribes to the Gaggiuino's own MQTT-published topics instead, toggled in Settings ("Live connection: WebSocket / MQTT"). Broker connection is auto-discovered via the HA Supervisor's MQTT service when available, with manual entry as a fallback, plus a one-click "Apply to machine" that points the machine's own MQTT client at the same broker. Feeds the exact same live-state cache the WebSocket transport does — `glp-integration` needs zero changes either way. Applies to the default machine only. |
 | 🔄 | **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises; a backfill's progress now updates live with a reliable completion/failure notification, also falling back to polling automatically |
 | ⇄ | **Compare Mode** | Overlay two shots side by side |
@@ -122,10 +125,11 @@ More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-
 | 📷 | **Barcode / QR Scanner** | Scan coffee bag barcodes (EAN/UPC) via camera — name and roaster looked up on Open Food Facts; GLP QR schema for full bean import between installations; each bean card generates a shareable QR code |
 | 🔗 | **Roaster URL Import** | Paste a product URL from kaffeebraun.com, hoppenworth-ploch.de or elbgold.com (each toggleable in settings) — name, roaster, photo, aromas, origin country, variety, roast type, processing, growing region, altitude/importer/harvest/price (where the shop provides them) and decaf flag are imported automatically; any other shop falls back to a generic Shopify / JSON-LD / webpage-metadata parser, and custom Shopify domains can be added; the generic Shopify parser also does a bounded, SSRF-checked HTML fallback fetch to fill in process/variety/producer/region/origin/elevation/roast-type/brew-guide fields some shop themes only render into the page HTML, never overwriting a value already found in the shop's JSON; imported beans show source, import method and import date |
 | 🌙 | **Light / Dark / Auto theme** | Built-in theme toggle (Settings) with a third Auto option that follows the browser/OS colour-scheme preference and switches live if it changes; choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
-| 🆕 | **What's New** | Always-visible "What's New" card at the top of Settings, listing the last 8 releases newest-first with short highlight bullets — source-of-truth history stays in `CHANGELOG.md`, this is a curated in-app subset (`public-src/shared/whats-new.js`), so you don't have to leave the app to see what changed |
+| 🆕 | **What's New** | Always-visible "What's New" card at the top of Settings, listing the last 8 releases newest-first with short highlight bullets — source-of-truth history stays in `CHANGELOG.md`, this is a curated in-app subset (`public-src/shared/whats-new.ts`), so you don't have to leave the app to see what changed |
 | 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profiler_profile` (provided by GLP Integration v1.9.0+) |
 | 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); bean and milk variants offered only while actually in stock (milk is deducted automatically on order completion) and while manually enabled — a bean can be temporarily excluded from ordering without deleting it or touching its stock, with customer-facing bean descriptions (taste notes, origin, processing); companion Lovelace card for customers (bundled in the integration) |
-| 🧾 | **Kiosk Mode** | Self-contained ordering page at `/ui/kiosk` for a tablet that stays on a table — a guest enters a name, picks a drink plus optional variants and a note, places the order and sees the confirmation with the estimated time, then the page resets itself to the name step after 6 seconds; a queue panel lists the active orders (waiting / being prepared) with their estimated times and refreshes every 8 seconds; requires `enable_orders: true` and no separate login |
+| 🤖 | **AI assistants (MCP)** | Optionally expose a built-in Model Context Protocol server so Claude Code, Claude Desktop and other AI assistants can read your shots, beans, maintenance and analytics — off by default, with separate opt-ins for write and developer tools; see [AI assistants (MCP server)](gaggiuino-local-profiler/DOCS.md#ai-assistants-mcp-server). |
+| 🧾 | **Kiosk Mode** | Self-contained ordering page at `kiosk.html` for a tablet that stays on a table — a guest enters a name, picks a drink plus optional variants and a note, places the order and sees the confirmation with the estimated time, then the page resets itself to the name step after 6 seconds; a queue panel lists the active orders (waiting / being prepared) with their estimated times and refreshes every 8 seconds; it follows the app's light/dark theme and languages (the app's stored choice, else the system or browser) and `?eink=1` switches to a high-contrast black/white mode without animations for e-ink tablets; requires `enable_orders: true` and no separate login |
 | 🧭 | **First-Run Onboarding & Demo Mode** | Dismissible banner when the machine isn't reachable; first-run panel with setup steps plus a "Load demo data" button that seeds a sample dataset (shots, beans, a blend, a recipe) so the app can be evaluated before connecting hardware; "End demo" removes exactly the seeded rows |
 | 🧙 | **Guided Setup Wizard** | A first-time install with zero machines configured opens a 3-step modal automatically — welcome, connect your first machine (reusing the same add-machine/test-connect form as Settings), then done; "I don't have a machine yet" jumps straight to demo data; "Later" reopens it on the next launch until it's either completed or a machine exists; "Restart setup tour" in Settings → Machines reopens it anytime |
 | 📱 | **Installable App (PWA)** | Install GLP as a standalone app when accessed directly over HTTPS (own icon, no browser chrome, offline app shell); server-side gated so it's never offered inside the HA Companion App/Ingress panel, which keeps running as a normal embedded panel |
@@ -230,135 +234,140 @@ aspect_ratio: "16:9"
 The GLP ecosystem (top) and the app's internals (below), as diagrams:
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 60}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 70}}}%%
 flowchart LR
-  GGU["Gaggiuino controller"]
-  GM["GaggiMate controller"]
-  APP["GLP App<br/>Go, port 8099<br/>SQLite /data/glp.db"]
-  BR["Browser"]
-  HA["HA sensors & automations"]
-  subgraph INTG["GLP HA Integration"]
-    INT["Integration core"]
-    SC["GLP Shot Card"]
-    OC["GLP Order Card"]
+  subgraph MACHINES["Espresso machines"]
+    direction TB
+    GGU["Gaggiuino"]
+    GM["GaggiMate"]
   end
-  GGU -->|"REST /api/shots, /api/system/status, WebSocket or MQTT"| APP
-  GM -->|"WebSocket ws://host/ws, /api/history/*.slog"| APP
-  BR -->|"HA Ingress"| APP
-  INT -->|"port 8099"| APP
-  INT -->|"sensors / attributes"| SC
-  INT -->|"sensors / attributes"| OC
-  SC -->|"/api/glp/* proxy"| INT
-  OC -->|"/api/glp/* proxy (default)"| INT
-  OC -.->|"port 8099 (only with glp_url)"| APP
-  INT -->|"sensors / automations"| HA
 
-  classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-  classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
-  classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-  classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-  class APP toneIndigo
-  class GGU,GM toneAmber
-  class INT,SC,OC,HA toneTeal
-  class BR toneBlue
-  style INTG fill:#f8fafc10,stroke:#94a3b8
+  subgraph CLIENTS["Clients"]
+    direction TB
+    BR["Browser<br/>via HA Ingress"]
+    AI["AI assistant<br/>MCP client"]
+  end
+
+  APP["<b>GLP App</b><br/>Go · port 8099<br/>SQLite"]
+
+  subgraph HA["Home Assistant"]
+    direction TB
+    INT["GLP Integration"]
+    SC["Shot Card"]
+    OC["Order Card"]
+    AUTO["Sensors &amp; automations"]
+  end
+
+  GGU -->|"REST · WebSocket · MQTT"| APP
+  GM -->|"WebSocket"| APP
+  BR --> APP
+  AI -.->|"/api/mcp (opt-in)"| APP
+  APP -->|"polled on :8099"| INT
+  INT -->|"entities"| AUTO
+  INT -->|"entities · API proxy"| SC
+  INT -->|"entities · API proxy"| OC
+  OC -.->|"direct with glp_url"| APP
+
+  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  classDef app fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
+  classDef ha fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+  class GGU,GM machine
+  class BR,AI client
+  class APP app
+  class INT,SC,OC,AUTO ha
+  style MACHINES fill:#f8fafc10,stroke:#94a3b8
+  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
+  style HA fill:#f8fafc10,stroke:#94a3b8
 ```
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 60}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 18, "rankSpacing": 45, "padding": 10}}}%%
 flowchart TB
-  USER(("Home Assistant user"))
-  MACHINE(("Gaggiuino / GaggiMate"))
-  HASVC(("Home Assistant"))
-  ROAST(("Roaster web shops"))
-  BROKER(("MQTT broker"))
-
-  subgraph DASH["Dashboard"]
-    SPA["SPA<br/>[public-src]"]
-    LIVE["Live updates<br/>[sse.ts]"]
+  subgraph L1["1 · Machines"]
+    direction LR
+    GGU["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Gaggiuino&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    GM["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GaggiMate&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    BRK["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MQTT broker&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;optional&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+  end
+  subgraph L2["2 · Connectivity"]
+    direction LR
+    ADP["&nbsp;&nbsp;&nbsp;Machine adapters&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/machines&nbsp;&nbsp;&nbsp;"]
+    MQ["&nbsp;&nbsp;&nbsp;&nbsp;MQTT transport&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/mqtt&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    POLL["&nbsp;&nbsp;Poller &amp; shot sync&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/system&nbsp;&nbsp;&nbsp;&nbsp;"]
+  end
+  subgraph L3["3 · Domain & storage"]
+    direction LR
+    SHOTS["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Shots&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/shots&nbsp;&nbsp;&nbsp;&nbsp;"]
+    LIB["&nbsp;&nbsp;&nbsp;&nbsp;Coffee library&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/library&nbsp;&nbsp;&nbsp;"]
+    BK["&nbsp;&nbsp;&nbsp;Backup &amp; restore&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/backup&nbsp;&nbsp;&nbsp;&nbsp;"]
+    MNT["&nbsp;Maintenance, badges&nbsp;&nbsp;<br/>&nbsp;internal/maintenance&nbsp;"]
+    ORD["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Orders&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/orders&nbsp;&nbsp;&nbsp;&nbsp;"]
+    IMP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Bean import&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/importer&nbsp;&nbsp;&nbsp;"]
+    DB[("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SQLite&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/db&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")]
+  end
+  subgraph L4["4 · Interfaces"]
+    direction LR
+    API["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;REST API&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd/server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    SSE["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Event stream&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/sse&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    MCP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/mcp&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    WEB["&nbsp;&nbsp;Dashboard + kiosk&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/webapp&nbsp;&nbsp;&nbsp;"]
+    HAC["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HA client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/ha&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    NET["&nbsp;&nbsp;&nbsp;&nbsp;Outbound guard&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/netguard&nbsp;&nbsp;&nbsp;"]
+  end
+  subgraph L5["5 · Consumers"]
+    direction LR
+    SPA["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dashboard&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;browser&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    AI["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AI assistant&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    KIO["&nbsp;&nbsp;&nbsp;&nbsp;Kiosk display&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wall tablet&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    HA["&nbsp;&nbsp;&nbsp;&nbsp;Home Assistant&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Supervisor&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    RS["&nbsp;&nbsp;&nbsp;&nbsp;Roaster shops&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;web&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
   end
 
-  subgraph APP["Application"]
-    API["REST API<br/>[cmd/server + handlers]"]
-    SSE["Event stream<br/>[internal/sse]"]
-    BACKUP["Backup & Restore<br/>[internal/backup]"]
-    DB[("SQLite<br/>[internal/db]")]
-  end
-
-  subgraph CONN["Machine Connectivity"]
-    POLL["Poller & Shot Sync<br/>[internal/system]"]
-    MACH["Machine Registry & Adapters<br/>[internal/machines]"]
-    MQTT["MQTT Transport<br/>[internal/mqtt]"]
-  end
-
-  subgraph SHOTDATA["Shot Data"]
-    SHOTS["Shots<br/>[internal/shots]"]
-  end
-
-  subgraph COFFEE["Coffee Operations"]
-    LIB["Coffee Library<br/>[internal/library]"]
-    IMP["Bean Import<br/>[internal/importer]"]
-    ORD["Orders<br/>[internal/orders]"]
-    MAINT["Maintenance & Achievements<br/>[internal/maintenance, internal/achievements]"]
-  end
-
-  subgraph PLATFORM["Platform"]
-    HA["HA Supervisor client<br/>[internal/ha]"]
-    NET["Outbound guard<br/>[internal/netguard]"]
-  end
-
-  USER -->|"opens via HA Ingress"| SPA
-  SPA -->|"HTTP"| API
-  SSE -->|"push"| LIVE
-  LIVE --> SPA
-  API -->|"routes"| SHOTS
-  API -->|"routes"| LIB
-  API -->|"routes"| ORD
-  API -->|"routes"| MAINT
-  API -->|"routes"| BACKUP
-  API -->|"routes"| MACH
-  POLL -->|"polls"| MACH
-  MACH -->|"HTTP / WebSocket"| MACHINE
-  MQTT -.->|"subscribes"| BROKER
-  BROKER -.->|"publishes"| MACHINE
-  POLL -->|"syncs shots"| SHOTS
+  GGU -->|"HTTP · WS"| ADP
+  GM -->|"WebSocket"| ADP
+  BRK -.->|"MQTT"| MQ
+  ADP --> POLL
+  MQ --> POLL
+  POLL -->|"new shots"| SHOTS
   POLL -->|"live state"| SSE
-  MQTT -->|"live data"| POLL
-  IMP -->|"fetch"| NET
-  NET -.->|"HTTPS"| ROAST
-  ORD -->|"notify"| HA
-  POLL -->|"switch / sensors"| HA
-  HA -.->|"Supervisor API"| HASVC
-  SHOTS -->|"read / write"| DB
+  SHOTS --> DB
   LIB --> DB
+  BK --> DB
+  MNT --> DB
   ORD --> DB
-  MAINT --> DB
-  BACKUP --> DB
-  MACH --> DB
-
-  classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-  classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
-  classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-  classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-  class USER,SPA,LIVE toneBlue
-  class API,SSE,BACKUP,DB toneIndigo
-  class POLL,MACH,MQTT,MACHINE,BROKER toneAmber
-  class SHOTS toneMint
-  class LIB,IMP,ORD,MAINT,ROAST toneRose
-  class HA,NET,HASVC toneTeal
-  style DASH fill:#f8fafc10,stroke:#94a3b8
-  style APP fill:#f8fafc10,stroke:#94a3b8
-  style CONN fill:#f8fafc10,stroke:#94a3b8
-  style SHOTDATA fill:#f8fafc10,stroke:#94a3b8
-  style COFFEE fill:#f8fafc10,stroke:#94a3b8
-  style PLATFORM fill:#f8fafc10,stroke:#94a3b8
+  IMP --> DB
+  DB --> API
+  DB --> MCP
+  DB --> WEB
+  ORD -->|"notify"| HAC
+  IMP --> NET
+  API -->|"HTTP"| SPA
+  SSE -->|"push"| SPA
+  MCP -.->|"opt-in"| AI
+  WEB --> KIO
+  HAC -->|"Supervisor API"| HA
+  NET -->|"HTTPS"| RS
+  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef conn fill:#ffedd5,stroke:#ea580c,stroke-width:1.5px,color:#7c2d12
+  classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+  classDef store fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
+  classDef iface fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+  classDef consumer fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  class GGU,GM,BRK machine
+  class ADP,MQ,POLL conn
+  class SHOTS,LIB,ORD,MNT,BK,IMP domain
+  class DB store
+  class API,SSE,MCP,WEB,HAC,NET iface
+  class SPA,AI,KIO,HA,RS consumer
+  style L1 fill:#f8fafc10,stroke:#94a3b8
+  style L2 fill:#f8fafc10,stroke:#94a3b8
+  style L3 fill:#f8fafc10,stroke:#94a3b8
+  style L4 fill:#f8fafc10,stroke:#94a3b8
+  style L5 fill:#f8fafc10,stroke:#94a3b8
 ```
+
+Read the app diagram top to bottom, from the machine to the people and systems using the data: the connectivity layer turns what the machines send into shots and live state, the domain layer applies the rules and keeps everything in SQLite, and the interfaces serve it to the dashboard, AI assistants, the kiosk display, Home Assistant and roaster shops.
 
 Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
 
@@ -366,12 +375,15 @@ Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profil
 
 ## Development at a glance
 
-<p align="center">
-  <img src="docs/dev-stats/commits-per-repo.svg" alt="Commits per repo"/>
-</p>
-<p align="center">
-  <img src="docs/dev-stats/model-breakdown.svg" alt="AI model breakdown by commits"/>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/commits-per-repo-dark.svg">
+  <img src="docs/dev-stats/commits-per-repo-light.svg" alt="Commits per repo" width="100%">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/model-breakdown-dark.svg">
+  <img src="docs/dev-stats/model-breakdown-light.svg" alt="AI model breakdown by commits" width="100%">
+</picture>
 
 Full numbers (timeline, per-model breakdown, cost estimate) generated live from git history: see [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -399,7 +411,7 @@ Built on top of the [Gaggiuino](https://gaggiuino.github.io/) project. The machi
 
 Thanks also to Caffinnova S.r.l. and the [jniebuhr/gaggimate](https://github.com/jniebuhr/gaggimate) project for their openly documented WebSocket API and shot-history format, which made the GaggiMate adapter possible. The adapter was written from GaggiMate's public protocol documentation — no GaggiMate code is vendored in this repo.
 
-The in-app flavor wheel's category structure follows the SCA (Specialty Coffee Association) / WCR (World Coffee Research) *Coffee Taster's Flavor Wheel* (2016). `public-src/flavor-data.js` is our own derived dataset (labels in all 6 UI languages — DE, EN, IT, FR, ES, NL — and a German alias table) — no artwork from the original wheel is used or reproduced.
+The in-app flavor wheel's category structure follows the SCA (Specialty Coffee Association) / WCR (World Coffee Research) *Coffee Taster's Flavor Wheel* (2016). `public-src/flavor-data.ts` is our own derived dataset (labels in all 6 UI languages — DE, EN, IT, FR, ES, NL — and a German alias table) — no artwork from the original wheel is used or reproduced.
 
 ## Disclaimer
 

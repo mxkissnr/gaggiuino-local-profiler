@@ -7,7 +7,7 @@
 // balanced/bitter/watery/channeling), mapped to a concrete phase/field
 // adjustment via the coffee-expert skill's symptom→cause table — NOT
 // shot.profile.phases parsing, whose field shape is unverified against real
-// hardware. calcShotScore(shot) (lib/score.js) is the objective secondary
+// hardware. calcShotScore(shot) is the objective secondary
 // signal, used only for convergence detection, not for picking *which*
 // field to adjust.
 //
@@ -96,11 +96,14 @@ const SYMPTOM_PRIORITY: Record<string, number> = { channeling: 3, bitter: 2, sou
 function _resolvePrimarySymptom(symptom: unknown): string {
   const list = (Array.isArray(symptom) ? symptom : [symptom]).filter(Boolean) as string[];
   if (!list.length) return 'balanced';
-  if (list.length === 1) return list[0];
+  const first = list[0];
+  if (first === undefined) return 'balanced';
+  if (list.length === 1) return first;
   // Multiple picks: balanced never outranks a real symptom.
   const real = list.filter(s => s !== 'balanced');
-  if (!real.length) return 'balanced';
-  return real.reduce((best, s) => (SYMPTOM_PRIORITY[s] ?? 0) > (SYMPTOM_PRIORITY[best] ?? 0) ? s : best, real[0]);
+  const realFirst = real[0];
+  if (realFirst === undefined) return 'balanced';
+  return real.reduce((best, s) => (SYMPTOM_PRIORITY[s] ?? 0) > (SYMPTOM_PRIORITY[best] ?? 0) ? s : best, realFirst);
 }
 
 // ── Phase lookup (name-based, with structural fallback) ────────────────────
@@ -139,14 +142,14 @@ function _getPath(obj: unknown, path: string): unknown {
 
 function _setPath(obj: Record<string, unknown>, path: string, value: unknown): void {
   const keys = path.split('.');
+  const lastKey = keys.at(-1);
   let cur = obj;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i];
+  for (const key of keys.slice(0, -1)) {
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
     if (cur[key] == null) cur[key] = {};
     cur = cur[key] as Record<string, unknown>;
   }
-  const lastKey = keys[keys.length - 1];
+  if (lastKey === undefined) return;
   if (lastKey === '__proto__' || lastKey === 'constructor' || lastKey === 'prototype') return;
   cur[lastKey] = value;
 }
@@ -277,7 +280,13 @@ export function suggestPhaseAdjustment(symptom: unknown, currentProfile: unknown
   }
 
   const computed = candidates.map(c => _computeAdjustment(c, roundHistory));
-  const usable = computed.find(c => c.delta !== 0) || computed[0];
+  const usable = computed.find(c => c.delta !== 0) ?? computed[0];
+  if (!usable) {
+    return {
+      type: 'insufficient-data', symptom: primary, phaseIndex: null, phaseName: null, field: null,
+      unit: '', oldValue: null, newValue: null, delta: 0, reason: 'profile_dialin_no_rounds',
+    };
+  }
 
   return {
     type: usable.delta !== 0 ? 'adjust' : 'at-limit',

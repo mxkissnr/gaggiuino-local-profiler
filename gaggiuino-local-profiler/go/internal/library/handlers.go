@@ -1,6 +1,7 @@
 package library
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -11,18 +12,17 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports routes/library/{index,beans,grinders,baskets,puckscreens,
-// milks,recipes}.js's Express routers onto Go 1.22+'s method-and-wildcard
-// http.ServeMux, the same pattern shots/handlers.go established in Phase
-// 1c — see that file's header comment for the registration-order caveat
-// that doesn't apply here either (ServeMux always prefers the most
-// specific literal pattern, so e.g. "/api/library/beans-info" always wins
-// over "/api/library/bean/{id}" regardless of registration order).
+// This file registers the library router on Go 1.22+'s method-and-wildcard
+// http.ServeMux, the same pattern shots/handlers.go uses — see that file's
+// header comment for the registration-order caveat that doesn't apply here
+// either (ServeMux always prefers the most specific literal pattern, so e.g.
+// "/api/library/beans-info" always wins over "/api/library/bean/{id}"
+// regardless of registration order).
 //
 // scan.go's barcode-lookup handler registers through the same mux but lives
 // in its own file given its SSRF-guard-heavy shape.
 
-const jsonBodyLimit = 16 * 1024 // express.json({ limit: '16kb' }) — server.js's global default.
+const jsonBodyLimit = 16 * 1024 // 16kb default body limit.
 
 // Handlers wires Repository (+ a shots.Repository for grinder wear stats,
 // see service.go's ComputeGrinderWearStats doc comment) into net/http
@@ -33,24 +33,50 @@ type Handlers struct {
 	imageDir        string
 	limiter         *rateLimiter
 	onGrinderDelete func(grinderID int64) error
+
+	// onBeanRestocked runs after a new bag has been added to a bean
+	// successfully (newBag). wasEmpty reports whether the bean had no
+	// remaining stock before the bag was added — see newBag. Set via
+	// SetOnBeanRestocked by cmd/server, which uses it to drive the restock
+	// achievement (#1286 R2). A callback rather than a direct import for the
+	// same reason as onGrinderDelete: internal/achievements already imports
+	// internal/library, so the wiring has to run this direction. A nil hook
+	// (never wired, e.g. in this package's own unit tests) is a no-op.
+	onBeanRestocked func(wasEmpty bool)
 }
 
 // SetOnGrinderDeleted wires the maintenance domain's cleanup of a deleted
-// grinder's `grinder_{id}` maintenance-table row (LibraryService.js's
-// getMaintenance()/saveMaintenance() round trip in the Node original's
-// grinder-delete handler) as a callback rather than a direct import: this
-// package already gets imported BY internal/maintenance (for grinder
-// existence checks in canonicalTask() and grinder names in
+// grinder's `grinder_{id}` maintenance-table row as a callback rather than a
+// direct import: this package already gets imported BY internal/maintenance
+// (for grinder existence checks in canonicalTask() and grinder names in
 // getMaintenance()/getMaintenanceLog()), so importing internal/maintenance
-// back from here would close a cycle. cmd/server calls this once at
-// startup, after both packages' Handlers exist — see main.go. A nil hook
-// (never wired, e.g. in this package's own unit tests) is a no-op, matching
-// the deferred behavior deleteGrinder had before Phase 1f: deleting a
-// grinder leaves its `maintenance` row in place (harmless — getMaintenance
-// only iterates the library's actual grinders — but not the active Node
-// cleanup) — see this file's deleteGrinder doc comment.
+// back from here would close a cycle. cmd/server calls this once at startup,
+// after both packages' Handlers exist — see main.go. A nil hook (never wired,
+// e.g. in this package's own unit tests) is a no-op: deleting a grinder
+// leaves its `maintenance` row in place (harmless — getMaintenance only
+// iterates the library's actual grinders) — see this file's deleteGrinder doc
+// comment.
 func (h *Handlers) SetOnGrinderDeleted(fn func(grinderID int64) error) {
 	h.onGrinderDelete = fn
+}
+
+// SetOnBeanRestocked wires the side effect to run after a new bag has been
+// added to a bean successfully (#1286 R2). cmd/server uses it to let the
+// achievements service see a `bean-changed` event with reason `restock`,
+// which unlocks the restock badge when the bean had no stock left. wasEmpty
+// is computed before the write — see newBag. internal/achievements imports
+// internal/library, so wiring this as a callback here avoids the import
+// cycle a direct dependency would create. A nil hook is a no-op; the
+// callback never changes the response — the new-bag request itself already
+// succeeded.
+func (h *Handlers) SetOnBeanRestocked(fn func(wasEmpty bool)) {
+	h.onBeanRestocked = fn
+}
+
+func (h *Handlers) notifyBeanRestocked(wasEmpty bool) {
+	if h.onBeanRestocked != nil {
+		h.onBeanRestocked(wasEmpty)
+	}
 }
 
 // NewHandlers builds Handlers around repo and shotsDB (the same *sql.DB
@@ -70,9 +96,11 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/library/bean", h.createBean)
 	mux.HandleFunc("PUT /api/library/bean/{id}", h.updateBean)
 	mux.HandleFunc("POST /api/library/bean/{id}/new-bag", h.newBag)
+	mux.HandleFunc("POST /api/library/bean/{id}/reorder-bags", h.reorderBags)
 	mux.HandleFunc("POST /api/library/bean/{id}/freeze-portions", h.freezePortions)
 	mux.HandleFunc("POST /api/library/bean/{id}/thaw-portion", h.thawPortion)
 	mux.HandleFunc("POST /api/library/bean/{id}/adjust-frozen-portion", h.adjustFrozenPortion)
+	mux.HandleFunc("PUT /api/library/bean/{id}/bag/{bagId}", h.updateBag)
 	mux.HandleFunc("DELETE /api/library/bean/{id}/bag/{bagId}", h.deleteBag)
 	mux.HandleFunc("POST /api/library/bean/{id}/delete", h.deleteBean)
 	mux.HandleFunc("POST /api/library/bean/{id}/toggle-active", h.toggleBeanActive)
@@ -128,6 +156,60 @@ func internalError(w http.ResponseWriter, err error) {
 	httputil.InternalError(w, "library", err)
 }
 
+// apiError carries one of this handler layer's existing 4xx outcomes out of a
+// Repository.Update callback. Update runs its callback while holding the
+// library write lock and an HTTP response must not be written under it, so a
+// callback returns one of these instead and the handler writes the response
+// once Update has returned: writeUpdateError maps it back onto the exact
+// status/message the pre-Update code wrote directly.
+type apiError struct {
+	status  int
+	message string
+}
+
+func (e *apiError) Error() string { return e.message }
+
+var (
+	errNotFound              = &apiError{http.StatusNotFound, "not found"}
+	errNoActiveBag           = &apiError{http.StatusBadRequest, "no active bag"}
+	errPortionFieldsRequired = &apiError{http.StatusBadRequest, "portionCount and portionWeight_g required"}
+	errCannotDeleteLastBag   = &apiError{http.StatusBadRequest, "cannot delete last bag"}
+	errFrozenPortionNotFound = &apiError{http.StatusNotFound, "frozen portion not found"}
+	errInvalidPortionWeight  = &apiError{http.StatusBadRequest, "invalid portionWeight_g"}
+	errInvalidFrozenAt       = &apiError{http.StatusBadRequest, "invalid frozenAt"}
+	errInvalidRemainingCount = &apiError{http.StatusBadRequest, "invalid remainingCount"}
+)
+
+// writeUpdateError writes the response for an error returned by
+// Repository.Update: a callback-classified *apiError becomes its recorded
+// status/message, anything else the usual internalError.
+func writeUpdateError(w http.ResponseWriter, err error) {
+	var ae *apiError
+	if errors.As(err, &ae) {
+		writeError(w, ae.status, ae.message)
+		return
+	}
+	internalError(w, err)
+}
+
+// entityExists reports whether id names an existing entity of one library
+// kind. The *...Image handlers run this read-only check BEFORE reading or
+// writing the uploaded file, so an unknown id still 404s — and no file is
+// written — before any image validation, matching dev's original ordering.
+// GetLibrary is always called first (even for an unparseable id), so a
+// broken DB outranks the not-found response exactly as before; find is the
+// kind's findXIndex.
+func (h *Handlers) entityExists(id int64, noMatch bool, find func(Library, int64) int) (bool, error) {
+	lib, err := h.repo.GetLibrary()
+	if err != nil {
+		return false, err
+	}
+	if noMatch {
+		return false, nil
+	}
+	return find(lib, id) != -1, nil
+}
+
 func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
 	body, ok := httputil.DecodeJSONBody[Entity](w, r, jsonBodyLimit)
 	if !ok {
@@ -139,9 +221,8 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
 	return body, true
 }
 
-// rateLimitCreate ports the `if (!rateLimit(\`lib:${req.ip}\`, 30))` guard
-// every library create-endpoint (bean/grinder/basket/milk/puckscreen/
-// recipe) opens with.
+// rateLimitCreate applies the `lib:<ip>`-keyed guard every library
+// create-endpoint (bean/grinder/basket/milk/puckscreen/recipe) opens with.
 func (h *Handlers) rateLimitCreate(w http.ResponseWriter, r *http.Request) bool {
 	if h.limiter.allow("lib:"+auth.RemoteIP(r), 30) {
 		return true
@@ -157,12 +238,12 @@ func (h *Handlers) rateLimitCreate(w http.ResponseWriter, r *http.Request) bool 
 // most CPU-expensive authenticated route family in the app without a
 // feature limit before this. Set to the same ceiling rateLimitCreate
 // already uses for library creates, and matches the shot-card renderer's
-// own 30/min (internal/shots.cardRateLimitPerMin). DELIBERATELY STRICTER
-// THAN NODE: routes/library/*.js feature-limits creates/scans only, never
-// image uploads, relying on the shared 600/min backstop alone.
+// own 30/min (internal/shots.cardRateLimitPerMin). Deliberately stricter:
+// the shared 600/min backstop would otherwise be the only limit on image
+// uploads, since creates/scans are the only routes with a feature limit.
 const imageRateLimitPerMin = 30
 
-// rateLimitImage ports the same `lib:<ip>`-shaped guard as rateLimitCreate,
+// rateLimitImage applies the same `lib:<ip>`-shaped guard as rateLimitCreate,
 // scoped to its own `image:<ip>` key so image uploads don't share a budget
 // with entity creates.
 func (h *Handlers) rateLimitImage(w http.ResponseWriter, r *http.Request) bool {
@@ -175,7 +256,7 @@ func (h *Handlers) rateLimitImage(w http.ResponseWriter, r *http.Request) bool {
 
 // ── GET /api/library, GET /api/library/beans-info ─────────────────────────
 
-// getLibrary ports GET /api/library: the full Library object, grinders
+// getLibrary serves GET /api/library: the full Library object, grinders
 // enriched with a computed `wear` field on read (not stored) — see
 // service.go's ComputeGrinderWearStats.
 func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
@@ -198,15 +279,31 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 		grinders[i] = withWearEntity(g, shotsSince, gramsSince)
 	}
 	lib.Grinders = grinders
+
+	// Bags get the same read-time, non-persisted enrichment as grinders'
+	// wear above — consumedG/remainingG/current per bag, computed by
+	// SimulateBagQueue, so the frontend never replays doseRows itself (see
+	// #sortOrder rework, decorateBeanStatus).
+	if len(lib.Beans) > 0 {
+		doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		beans := make([]Entity, len(lib.Beans))
+		for i, b := range lib.Beans {
+			beans[i] = decorateBeanStatus(b, doseRows, lib.Beans)
+		}
+		lib.Beans = beans
+	}
 	writeJSON(w, http.StatusOK, lib)
 }
 
-// withWear ports `{ ...g, wear: libraryService.computeGrinderWearStats(g) }`.
-// Field names are shotsSinceBurrs/gramsSinceBurrs, matching
-// LibraryService.js's actual return shape — NOT openapi.yaml's Grinder.wear
-// schema (documented there as `{shots, grams}`), which drifted from the
-// real implementation; this package matches Node's real runtime behavior,
-// same "doc vs. code disagree, code wins" rule shots/doc.go states.
+// withWear attaches wear: computeGrinderWearStats(g). Field names are
+// shotsSinceBurrs/gramsSinceBurrs, the actual return shape — NOT
+// openapi.yaml's Grinder.wear schema (documented there as `{shots, grams}`),
+// which drifted from the implementation; the running behavior wins, same
+// "doc vs. code disagree, code wins" rule shots/doc.go states.
 func (h *Handlers) withWear(grinder Entity) Entity {
 	shotsSince, gramsSince, err := ComputeGrinderWearStats(h.shotsRepo, grinder)
 	if err != nil {
@@ -227,7 +324,7 @@ func withWearEntity(grinder Entity, shotsSince int, gramsSince float64) Entity {
 	return out
 }
 
-// getBeansInfo ports GET /api/library/beans-info.
+// getBeansInfo serves GET /api/library/beans-info.
 func (h *Handlers) getBeansInfo(w http.ResponseWriter, r *http.Request) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
@@ -239,7 +336,7 @@ func (h *Handlers) getBeansInfo(w http.ResponseWriter, r *http.Request) {
 
 // ── image handling shared by bean/grinder/basket/puckscreen ───────────────
 
-// serveImage ports the repeated `GET .../image` handler shape: 404 with
+// serveImage handles the repeated `GET .../image` shape: 404 with
 // {error:"no image"} when the entity/image is missing, otherwise serves the
 // file with a 24h cache header.
 func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefix string, id int64) {
@@ -261,12 +358,10 @@ func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefi
 	http.ServeFile(w, r, path)
 }
 
-// readUploadedImage ports the repeated `express.raw({type:
-// Object.keys(CONTENT_TYPE_EXT), limit: BEAN_IMAGE_MAX_BYTES})` body
-// handling every entity's `POST .../image` route uses: an unrecognized
-// Content-Type or an empty body is "no image data" (400); an oversized body
-// is rejected by MaxBytesReader before ever reaching img.Save's own size
-// check.
+// readUploadedImage handles the repeated raw-upload body handling every
+// entity's `POST .../image` route uses: an unrecognized Content-Type or an
+// empty body is "no image data" (400); an oversized body is rejected by
+// MaxBytesReader before ever reaching img.Save's own size check.
 func readUploadedImage(w http.ResponseWriter, r *http.Request) (data []byte, contentType string, ok bool) {
 	contentType = r.Header.Get("Content-Type")
 	_, typeKnown := img.ContentTypeKnown(contentType)

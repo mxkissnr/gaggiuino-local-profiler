@@ -1,24 +1,22 @@
-// Package proto is the Go port of lib/gaggiuino-proto.js: the wire schema
-// for the Gaggiuino machine's binary WebSocket protocol (real Protocol
-// Buffers, confirmed against the upstream docs — see go/RESEARCH.md's "The
-// wire format is real binary Protocol Buffers" section). It defines every
-// message type lib/gaggiuino-proto.js defines, plus a hand-written
-// binary encoder/decoder for each — not generated code.
+// Package proto is the wire schema for the Gaggiuino machine's binary
+// WebSocket protocol (real Protocol Buffers, confirmed against the upstream
+// docs' WebSocket section, docs/rest-api/websocket.md). It defines every
+// message type the protocol uses, plus a hand-written binary
+// encoder/decoder for each — not generated code.
 //
 // # Why hand-written instead of protoc-gen-go
 //
-// go/RESEARCH.md documents the blocker this package starts from: no
-// `.proto` source files exist in this repo, in node_modules, or in any
-// branch/tag of the firmware repo this spike could locate — the firmware
-// is closed-source and lib/gaggiuino-proto.js's own header comment says
-// its message definitions were "reconstructed field-for-field from the
-// machine's own web UI bundle... and verified live against a real
-// machine" (profile CRUD), with a documented subset transcribed from
-// Gaggiuino's own published API docs (#597, sensor/system-state/command
-// messages). RESEARCH.md's recommended fallback — cross-check the two
-// independent sources (the published websocket.md doc's inline schema
-// blocks and lib/gaggiuino-proto.js's own field descriptors) field-by-
-// field — is what schema.proto below records the result of.
+// The blocker this package starts from: no `.proto` source files exist in
+// this repo, in node_modules, or in any branch/tag of the firmware repo
+// that could be located — the firmware is closed-source and its message
+// definitions were "reconstructed field-for-field from the machine's own
+// web UI bundle... and verified live against a real machine" (profile
+// CRUD), with a documented subset
+// transcribed from Gaggiuino's own published API docs (#597, sensor/
+// system-state/command messages). The recommended fallback — cross-check
+// the two independent sources (the published websocket.md doc's inline
+// schema blocks and the reconstructed field descriptors) field-by-field —
+// is what schema.proto below records the result of.
 //
 // This environment additionally has no `protoc`/`protoc-gen-go` binary
 // installed (confirmed: `which protoc protoc-gen-go` finds neither), so
@@ -34,24 +32,23 @@
 //  2. messages_test.go's round-trip tests (Marshal then Unmarshal returns
 //     the original value) for every message type.
 //  3. node_vectors_test.go's cross-validation against the former
-//     lib/gaggiuino-proto.js: testdata/node_vectors.json is a fixture
-//     frozen from the Node baseline (archived at tag
-//     archive/node-backend-final), captured from the real
-//     @protobuf-ts/runtime-backed encoder/decoder the app shipped before
-//     the Go rewrite (not a reimplementation) — {hex, decoded} pairs for
-//     representative instances of every message type, deliberately
-//     including zero-valued fields, populated nested messages, and (for
-//     ProfileDto) a populated repeated field, since proto3's default-value
-//     wire omission makes the zero-value case the one most likely to hide
-//     an encoding bug. node_vectors_test.go decodes each hex blob with this
-//     package's own Unmarshal and asserts the result matches the recorded
-//     `decoded` JSON field-for-field, then re-encodes with this package's
-//     own Marshal and asserts the output hex is byte-identical. The Node
-//     encoder is gone, so this fixture is the frozen wire-format reference.
+//     implementation: testdata/node_vectors.json is a fixture frozen from
+//     the pre-Go baseline (archived at tag archive/node-backend-final),
+//     captured from the real @protobuf-ts/runtime-backed encoder/decoder the
+//     app shipped before the rewrite (not a reimplementation) — {hex,
+//     decoded} pairs for representative instances of every message type,
+//     deliberately including zero-valued fields, populated nested messages,
+//     and (for ProfileDto) a populated repeated field, since proto3's
+//     default-value wire omission makes the zero-value case the one most
+//     likely to hide an encoding bug. node_vectors_test.go decodes each hex
+//     blob with this package's own Unmarshal and asserts the result matches
+//     the recorded `decoded` JSON field-for-field, then re-encodes with this
+//     package's own Marshal and asserts the output hex is byte-identical.
+//     That encoder is gone, so this fixture is the frozen wire-format
+//     reference.
 //
-// No live-hardware verification happens in this package — go/RESEARCH.md's
-// caveat and the task that produced this package both note that a golden-
-// master test against a real machine is a separate, later step (Max has a
+// No live-hardware verification happens in this package — a golden-master
+// test against a real machine is a separate, later step (Max has a
 // real Gaggiuino to test against, but network access to it is not available
 // in this environment). See cmd/gaggiuino-ws-probe (go/cmd/gaggiuino-ws-probe)
 // for a small CLI this package ships specifically so that later step is a
@@ -62,11 +59,10 @@
 // # What's deliberately not modeled
 //
 // GaggiaSettingsDto (the REST-only settings payload) is not part of this
-// package, matching lib/gaggiuino-proto.js's own header comment: the
-// settings proxy (go/internal/machines's settings handlers) uses plain
-// JSON over REST, not this binary protocol, and is treated as opaque JSON
-// end-to-end specifically so the machine's inconsistent bool-as-string
-// quirk (some settings fields are JSON `"true"`/`"false"` strings, not
-// real JSON booleans — see go/internal/machines/doc.go) passes through
-// byte-identical rather than being normalized away by a typed struct.
+// package: the settings proxy (go/internal/machines's settings handlers)
+// uses plain JSON over REST, not this binary protocol, and is treated as
+// opaque JSON end-to-end specifically so the machine's inconsistent
+// bool-as-string quirk (some settings fields are JSON `"true"`/`"false"`
+// strings, not real JSON booleans — see go/internal/machines/doc.go) passes
+// through byte-identical rather than being normalized away by a typed struct.
 package proto

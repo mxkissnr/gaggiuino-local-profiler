@@ -1,13 +1,13 @@
 // Package httputil holds the tiny JSON-response helpers every REST domain
 // package (orders, backup, maintenance, machines, shots, library, system)
-// had copy-pasted verbatim across Phases 1c-1g — WriteJSON/WriteError were
-// byte-for-byte identical in all seven handlers.go files, and InternalError
-// differed only in whether/how it logged (orders and system domain-prefixed
-// their log line, backup/maintenance/machines/library either swallowed the
-// error silently or discarded it with a `_ = err` comment solely to satisfy
-// the compiler). Extracted per the Phase 1g code-review's finding #5 (#901):
-// one implementation, every domain package's own internalError now a
-// one-line wrapper passing its own domain prefix.
+// had copy-pasted verbatim — WriteJSON/WriteError were byte-for-byte
+// identical in all seven handlers.go files, and InternalError differed only
+// in whether/how it logged (orders and system domain-prefixed their log
+// line, backup/maintenance/machines/library either swallowed the error
+// silently or discarded it with a `_ = err` comment solely to satisfy the
+// compiler). Extracted to keep one implementation (#901 code review finding
+// #5), every domain package's own internalError now a one-line wrapper
+// passing its own domain prefix.
 package httputil
 
 import (
@@ -51,22 +51,21 @@ func InternalError(w http.ResponseWriter, domain string, err error) {
 
 // DecodeJSONBody decodes r's body (capped at limit bytes) into a value of
 // type T, tolerating a genuinely empty body (io.EOF) as T's zero value
-// instead of an error — matching Express's own req.body defaulting to {}
-// for a bodyless request under server.js's global express.json() middleware.
-// A non-empty but malformed body still writes 400 "Invalid JSON body"; an
-// oversized body writes 413 "request entity too large". This was
-// independently duplicated (byte-for-byte except for the EOF handling) in
-// every domain package's own decodeJSONBody(w, r) (map[string]any, bool) —
-// library, machines (see DecodeJSONBodyInto below for its pointer variant),
-// orders, shots, system, maintenance — until #901's Phase 3b code review
-// found the same latent "empty body 400s" bug (already fixed once for
-// maintenance's POST /api/maintenance/{task}/done, see that commit) waiting
-// to bite every other domain's optional-body endpoint. Callers whose
-// endpoint requires specific fields get no free validation from this —
-// same as Node, where express.json() never enforces required fields either
-// — so each such call site must keep checking for its own required fields
-// after a successful decode (see e.g. internal/library's "name required"
-// checks); decodeJSONBody returning {} on an empty body doesn't change that.
+// instead of an error — a bodyless request should behave like an absent or
+// empty object, not a 400. A non-empty but malformed body still writes 400
+// "Invalid JSON body"; an oversized body writes 413 "request entity too
+// large". This was independently duplicated (byte-for-byte except for the
+// EOF handling) in every domain package's own decodeJSONBody(w, r)
+// (map[string]any, bool) — library, machines (see DecodeJSONBodyInto below
+// for its pointer variant), orders, shots, system, maintenance — until
+// #901's code review found the same latent "empty body 400s" bug (already
+// fixed once for maintenance's POST /api/maintenance/{task}/done, see that
+// commit) waiting to bite every other domain's optional-body endpoint.
+// Callers whose endpoint requires specific fields get no free validation
+// from this — JSON decoding never enforces required fields — so each such
+// call site must keep checking for its own required fields after a
+// successful decode (see e.g. internal/library's "name required" checks);
+// decodeJSONBody returning {} on an empty body doesn't change that.
 func DecodeJSONBody[T any](w http.ResponseWriter, r *http.Request, limit int64) (T, bool) {
 	var body T
 	r.Body = http.MaxBytesReader(w, r.Body, limit)

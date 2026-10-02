@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 // Regenerates docs/screenshots/*.png for the README/wiki. Drives a headless
-// Chromium (Playwright) through each view of the throwaway, seeded instance
-// booted by scripts/e2e-harness.mjs (shared with test/e2e/smoke.test.mjs —
-// see that module for what "throwaway" means: its own tmp DATA_DIR and port,
-// never touches /data or 8099). Run on demand: `node scripts/screenshots.mjs`.
-// Requires `npx playwright install chromium` once beforehand.
+// Chromium (Playwright) through each view of the throwaway, seeded (or
+// backup-restored) instance booted by scripts/e2e-harness.mjs (shared with
+// test/e2e/smoke.test.mjs — see that module for what "throwaway" means: its
+// own tmp DATA_DIR and port, never touches /data or 8099). Run on demand:
+// `node scripts/screenshots.mjs`. Requires `npx playwright install chromium`
+// once beforehand.
+//
+// #1181: set GLP_SCREENSHOT_BACKUP=/path/to/glp-backup.zip to restore that
+// backup into the throwaway instance through POST /api/restore instead of
+// loading the built-in demo seed — real data makes the README/wiki views look
+// like actual use rather than the synthetic 12-shot seed. A restore that does
+// not succeed aborts the run with a non-zero exit. The backup is read into the
+// instance's tmp DATA_DIR, which is deleted along with the instance, and the
+// file itself must never be committed (`scripts/*.zip` is git-ignored); review
+// any screenshots made from personal data before committing them.
 //
 // #1032: every capture waits for a real readiness signal (a chart canvas
 // with non-blank pixels, an ECharts instance that has painted, images
@@ -12,13 +22,31 @@
 // (#957) and the dynamic-import ECharts bundle (#797) both resolve well
 // after the old fixed 400ms, so the pre-#1032 images caught half-rendered
 // views (empty shot chart, mid-render sunburst).
+//
+// Data source of each PNG (#1185). "backup" means the instance restored from
+// GLP_SCREENSHOT_BACKUP in backup mode, or the built-in demo seed when the
+// env var is unset:
+//
+//   shots.png, library.png, flavor-wheel.png, analytics.png,
+//   analytics-machines.png, maintenance.png, dialin.png, settings.png
+//       -> backup/seed (captured from whichever instance was loaded).
+//   live.png, orders.png
+//       -> ALWAYS the seeded instance. A real backup typically has only
+//          completed orders and an unreachable machine, which renders those
+//          two views empty, so in backup mode they are left unchanged rather
+//          than regenerated from misleading data.
 
 import { mkdirSync, cpSync, existsSync } from 'fs';
 import path from 'path';
 import { chromium } from 'playwright';
-import { appRoot, bootServer, seed, stopServer } from './e2e-harness.mjs';
+import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harness.mjs';
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
+
+// #1181: opt-in real-backup mode. Set to a GLP backup .zip path to restore it
+// via POST /api/restore instead of seeding the demo dataset.
+const backupPath = process.env.GLP_SCREENSHOT_BACKUP;
+const fromBackup = !!backupPath;
 
 /* eslint-disable no-undef -- the callbacks below are serialised and run
    inside the Chromium tab via Playwright's page.waitForFunction/evaluate,
@@ -79,6 +107,39 @@ async function waitForPaint(page, sel, { timeout = 20000, quietMs = 500 } = {}) 
     }
 }
 
+// Waits until every image matching `sel` has decoded. A thumb with no src yet
+// is not treated as ready: a blob fetch that 404'd never assigns a src, and an
+// image mid-load reports complete===true with naturalWidth===0 — both used to
+// count as ready and screenshot blank (#1184).
+async function waitForImages(page, sel, { timeout = 10000 } = {}) {
+    await page.waitForFunction((selector) => {
+        const imgs = [...document.querySelectorAll(selector)];
+        return imgs.every(i => i.hasAttribute('src') && i.complete && i.naturalWidth > 0);
+    }, sel, { timeout }).catch(() => {
+        console.warn(`waitForImages: ${sel} not decoded within ${timeout}ms — capturing anyway`);
+    });
+}
+
+// #1185: after the library wait, name every thumbnail that is still blank — an
+// <img> whose blob fetch never resolved has no src (or resolved to
+// naturalWidth 0), which screenshots as an empty dark square with no warning.
+// Reports each entity id so a backed-up-but-unserved photo is visible in the
+// run log instead of silently shipping a blank screenshot.
+async function reportUnhydratedThumbs(page) {
+    const missing = await page.evaluate(() => {
+        const sels = '.lib-bean-thumb, .lib-grinder-thumb, .lib-basket-thumb, .lib-puckscreen-thumb';
+        return [...document.querySelectorAll(sels)]
+            .filter(img => !img.hasAttribute('src') || img.naturalWidth === 0)
+            .map(img => ({
+                kind: img.className,
+                id: img.dataset.beanId || img.dataset.grinderId || img.dataset.basketId || img.dataset.puckscreenId || '?',
+            }));
+    });
+    if (missing.length) {
+        console.warn(`library: ${missing.length} thumbnail(s) not hydrated (photo missing/unserved) — capturing anyway: ${JSON.stringify(missing)}`);
+    }
+}
+
 // Scrolls `viewSel`'s own overflow:auto box so that `targetSel` (or the
 // .analytics-card wrapping it) sits flush at the top of the frame — exact,
 // unlike Element.scrollIntoView() which stops a scroll-padding short.
@@ -131,11 +192,37 @@ async function main() {
     mkdirSync(outDir, { recursive: true });
 
     const baseUrl = await bootServer();
-    await seed(baseUrl);
+    if (fromBackup) {
+        const result = await restoreBackup(baseUrl, path.resolve(backupPath));
+        console.log(`Restored backup ${backupPath} (${result.shots ?? 0} shots)`);
+    } else {
+        await seed(baseUrl);
+    }
 
     const browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    // #1184: browser.newPage() inherits the host OS locale, so every PNG came
+    // out in the desktop's language on a non-English machine. Pin an English
+    // locale for browser-level strings (Intl dates/numbers, navigator.language)
+    // and seed glp_lang before any page script runs, since the SPA reads
+    // navigator.language and a restored backup can carry its own preference. A
+    // fixed timezone keeps relative dates stable across machines.
+    const context = await browser.newContext({
+        viewport: { width: 1400, height: 900 },
+        locale: 'en-US',
+        timezoneId: 'Europe/Berlin',
+    });
+    await context.addInitScript(() => {
+        try { localStorage.setItem('glp_lang', 'en'); } catch { /* ignore */ }
+    });
+    const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
+    // Prove the SPA rendered English, not the German default the static HTML
+    // ships with: nav_analytics is 'Analytics' in English and 'Statistiken' in
+    // German (public-src/i18n/en.ts / de.ts).
+    await page.waitForFunction(() => {
+        const el = document.querySelector('[data-i18n="nav_analytics"]');
+        return localStorage.getItem('glp_lang') === 'en' && !!el && el.textContent === 'Analytics';
+    });
     // The update-check banner does a real GitHub API call and renders whenever
     // the checked-out version is ahead of the latest published release (the
     // normal case mid-release, before this version's own tag exists yet) —
@@ -156,6 +243,18 @@ async function main() {
     await page.waitForSelector('#chart-area', { state: 'visible' });
     await waitForPaint(page, '#espressoShotChart');
     await page.waitForTimeout(150); // let the phase-band overlay settle on top of the lines
+    // #1184: the shot photo's blob URL is assigned after an async fetch, and a
+    // 404'd image stays complete with naturalWidth 0, so wait for it to decode
+    // when the selected shot has one. Seed shots carry no photo, so only wait
+    // when the view indicates one — never hang on its absence.
+    await page.waitForFunction(() => {
+        const hero = document.getElementById('shotHeroPhoto');
+        const thumb = document.getElementById('shotHeaderThumb');
+        const indicated = !!(hero && hero.classList.contains('has-photo')) || !!(thumb && thumb.style.display !== 'none');
+        if (!indicated) return true;
+        const decoded = el => !!el && el.hasAttribute('src') && el.complete && el.naturalWidth > 0;
+        return decoded(hero) || decoded(thumb);
+    }, undefined, { timeout: 10000 }).catch(() => console.warn('shots: shot photo not decoded within 10000ms — capturing anyway'));
     await page.screenshot({ path: path.join(outDir, 'shots.png') });
 
     // Each remaining capture is scoped to its view container (#<tab>-view)
@@ -164,15 +263,20 @@ async function main() {
 
     // ── Library ────────────────────────────────────────────────────────
     await page.click('#btnLibrary');
+    // The seeded library always contains the 'Yirgacheffe' demo bean; a real
+    // backup has arbitrary beans, so wait for the rendered bean list instead.
     await page.waitForFunction(
-        () => (document.getElementById('beanListUI')?.textContent || '').includes('Yirgacheffe'),
+        fromBackup
+            ? () => document.querySelectorAll('#beanListUI .lib-item').length > 0
+            : () => (document.getElementById('beanListUI')?.textContent || '').includes('Yirgacheffe'),
         undefined, { timeout: 15000 },
     );
-    // Any bean/roaster thumbnails must be decoded, or they screenshot blank.
-    await page.waitForFunction(() => {
-        const imgs = [...document.querySelectorAll('#library-view img')];
-        return imgs.every(i => i.complete && (i.naturalWidth > 0 || i.getAttribute('src') === null));
-    }, undefined, { timeout: 10000 }).catch(() => {});
+    // Any bean/roaster/product thumbnails must be decoded, or they screenshot
+    // blank. Only the thumbnails are waited on (the view also holds the hidden
+    // flavor-wheel image, whose src stays unset until that modal opens).
+    await waitForImages(page, '#library-view .lib-bean-thumb, #library-view .lib-grinder-thumb, #library-view .lib-basket-thumb, #library-view .lib-puckscreen-thumb');
+    // A restored backup's photos must all be served; name any that are not.
+    if (fromBackup) await reportUnhydratedThumbs(page);
     await shootView(page, '#library-view', path.join(outDir, 'library.png'));
 
     // ── Flavor wheel ───────────────────────────────────────────────────
@@ -201,7 +305,9 @@ async function main() {
 
     // Capture 2: bean ranking + machine comparison + dial-in progression
     // (#394) — the machine-comparison card only renders once >=2 machines
-    // exist, which seed() sets up. Scroll toward the bean-ranking card (it
+    // exist, which seed() sets up. A real backup may restore only one machine,
+    // so the comparison card can be absent in backup mode; the capture still
+    // happens, just without that card. Scroll toward the bean-ranking card (it
     // ends up near the top, clamped by the view's own scroll extent) and
     // clip-shoot the frame at that position.
     await alignToTop(page, '#analytics-view', '#beanRanking');
@@ -218,34 +324,53 @@ async function main() {
 
     // ── Dial-in ────────────────────────────────────────────────────────
     await page.click('#btnDialin');
+    // The dial-in grid is populated from shot/dial-in history; a real backup
+    // without dial-in data leaves it empty, so don't abort the whole run there
+    // — capture what's rendered and warn.
     await page.waitForFunction(() => {
         const grid = document.getElementById('dialinGrid');
         return !!grid && grid.children.length > 0 && !grid.querySelector('.dialin-empty');
-    }, undefined, { timeout: 15000 });
+    }, undefined, { timeout: 15000 }).catch(err => {
+        if (fromBackup) {
+            console.warn('dialin: no dial-in data in backup — capturing anyway');
+            return;
+        }
+        throw err;
+    });
     await shootView(page, '#dialin-view', path.join(outDir, 'dialin.png'));
 
     // ── Live / Orders / Settings (previously undocumented tabs) ─────────
-    await page.click('#btnLive');
-    await page.waitForFunction(() => {
-        const badge = document.getElementById('live-status-badge');
-        return !!badge && !badge.classList.contains('connecting');
-    }, undefined, { timeout: 15000 });
-    await shootView(page, '#live-view', path.join(outDir, 'live.png'));
+    // #1185: Live and Orders are kept from the seeded run in backup mode. A
+    // real backup is all completed orders against a machine the throwaway
+    // instance cannot reach (no HA/machine connection), so those two captures
+    // would show an empty view and overwrite the useful seeded PNGs.
+    if (fromBackup) {
+        console.log('live.png/orders.png left unchanged (seeded data; backup mode skips them)');
+    } else {
+        await page.click('#btnLive');
+        await page.waitForFunction(() => {
+            const badge = document.getElementById('live-status-badge');
+            return !!badge && !badge.classList.contains('connecting');
+        }, undefined, { timeout: 15000 });
+        await shootView(page, '#live-view', path.join(outDir, 'live.png'));
 
-    await page.click('#btnOrders');
-    await page.waitForFunction(
-        () => !!document.getElementById('ordersEnabledLabel')?.textContent,
-        undefined, { timeout: 15000 },
-    );
-    await shootView(page, '#orders-view', path.join(outDir, 'orders.png'));
+        await page.click('#btnOrders');
+        await page.waitForFunction(
+            () => !!document.getElementById('ordersEnabledLabel')?.textContent,
+            undefined, { timeout: 15000 },
+        );
+        await shootView(page, '#orders-view', path.join(outDir, 'orders.png'));
+    }
 
     await page.click('#btnSettings');
+    // seed() adds a second machine; a real backup may hold just one.
     await page.waitForFunction(
-        () => document.querySelectorAll('#machinesList .machine-row').length >= 2,
-        undefined, { timeout: 15000 },
+        (min) => document.querySelectorAll('#machinesList .machine-row').length >= min,
+        fromBackup ? 1 : 2, { timeout: 15000 },
     );
     await shootView(page, '#settings-view', path.join(outDir, 'settings.png'));
 
+    await context.close();
     await browser.close();
     console.log(`Screenshots written to ${outDir}`);
 
@@ -259,8 +384,8 @@ async function main() {
 
 }
 
-/* eslint-enable no-undef */
-
 main()
     .then(() => { stopServer(); process.exit(0); })
     .catch(err => { console.error(err); stopServer(); process.exit(1); });
+
+/* eslint-enable no-undef */

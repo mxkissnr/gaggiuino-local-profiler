@@ -1,6 +1,7 @@
 const js = require('@eslint/js');
 const globals = require('globals');
 const tseslint = require('typescript-eslint');
+const { htmlSinkRule } = require('./eslint-rules/html-sink.js');
 
 const commonRules = {
   'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
@@ -13,26 +14,54 @@ const commonRules = {
   ],
 };
 
+const localPlugin = {
+  rules: {
+    // #1104 L1.
+    'html-sink': htmlSinkRule,
+  },
+};
+
 module.exports = [
   {
-    // go/ is Go, not JS — except the browser scripts under
-    // internal/web/static/ (the no-JS /ui/ fallback pages, embedded via
-    // assets.go), which are linted by the dedicated block below. The
-    // minified vendor bundles next to them, and the transient staged Vite
-    // build under internal/webapp/dist/, stay ignored.
+    // go/ is Go, not JS. The transient staged Vite build under
+    // internal/webapp/dist/ stays ignored.
     ignores: [
       'public/**', 'node_modules/**', 'docs/**', 'graphify-out/**',
-      'go/internal/web/static/vendor/**', 'go/internal/webapp/dist/**',
+      'go/internal/webapp/dist/**',
+      // Deliberately-bad lint fixtures for the rule test; typed by tsc, never
+      // linted as project code.
+      'test/fixtures/**',
     ],
+  },
+  {
+    // #1104 L1: local rules (eslint-rules/), available to every file.
+    plugins: { local: localPlugin },
   },
   js.configs.recommended,
   {
-    files: ['eslint.config.js', 'vite.config.js', 'vitest.config.js'],
+    files: ['eslint.config.js', 'eslint-rules/**/*.js'],
     languageOptions: {
       globals: globals.node,
     },
     rules: commonRules,
   },
+  ...tseslint.config({
+    // Root build/test tooling configs (#1270): TypeScript files run in Node, so
+    // node globals only (unlike the browser-scoped public-src/ block below).
+    files: ['vite.config.ts', 'vitest.config.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+    },
+  }),
   {
     files: ['scripts/**/*.js', 'scripts/**/*.mjs'],
     languageOptions: {
@@ -47,12 +76,34 @@ module.exports = [
     },
     rules: commonRules,
   },
+  {
+    // Demo service worker sources (#1193): classic scripts copied verbatim
+    // into demo-dist/ rather than bundled, so they run in the serviceworker
+    // global scope instead of a module or a window.
+    files: ['demo/sw/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.serviceworker,
+        self: 'readonly',
+        clients: 'readonly',
+        importScripts: 'readonly',
+        caches: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
+        ReadableStream: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+      },
+    },
+    rules: commonRules,
+  },
   // TypeScript sources migrate file-by-file (#1102): scoped to the .ts globs so
   // the type-aware rules don't touch the .js files still in flight.
   ...tseslint.config({
     files: ['public-src/**/*.ts'],
-    // main.ts is the not-yet-converted entry point — see its own block below.
-    ignores: ['public-src/main.ts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.browser,
@@ -64,37 +115,11 @@ module.exports = [
     rules: {
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+      // #1104 L1: every innerHTML/outerHTML write and insertAdjacentHTML call
+      // must carry an Html-branded value; the rule checks the RHS type.
+      'local/html-sink': 'error',
     },
   }),
-  // public-src/main.ts was only renamed from main.js (#1106), not converted: it
-  // still imports untyped .js modules, so recommendedTypeChecked's
-  // any-propagation rules would error on nearly every line. It carries a
-  // file-level @ts-nocheck for the same reason and is linted like its JavaScript
-  // siblings until a later package converts it, at which point this block folds
-  // into the one above.
-  ...tseslint.config({
-    files: ['public-src/main.ts'],
-    extends: [...tseslint.configs.recommended],
-    languageOptions: {
-      globals: globals.browser,
-    },
-    rules: {
-      ...commonRules,
-      'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
-      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-nocheck': 'allow-with-description' }],
-    },
-  }),
-  {
-    // go/internal/web/static/**: hand-written browser scripts embedded via
-    // internal/web/assets.go and loaded by the no-JS /ui/ fallback pages —
-    // same runtime as public-src/, hence browser globals.
-    files: ['go/internal/web/static/**/*.js'],
-    languageOptions: {
-      globals: globals.browser,
-    },
-    rules: commonRules,
-  },
   {
     files: ['test/**/*.js'],
     languageOptions: {
@@ -117,6 +142,13 @@ module.exports = [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   }),
+  {
+    // #1104 L1: the fixture linted by test/html-sink-lint.test.ts. It is globally
+    // ignored above, so `eslint .` never sees its deliberate violations; the test
+    // re-lints it through the ESLint API with ignore disabled.
+    files: ['test/fixtures/**/*.ts'],
+    rules: { 'local/html-sink': 'error' },
+  },
   {
     // test/e2e/*.mjs runs on node:test (Playwright), not vitest — see
     // test:e2e in package.json (#798) — so it gets node globals only, not

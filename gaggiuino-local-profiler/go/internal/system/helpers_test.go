@@ -51,11 +51,23 @@ func newTestDB(t *testing.T) *sql.DB {
 // stub that would fail loudly (panic) if this package's code path ever
 // changed to call it, rather than silently returning zero values.
 type fakeAdapter struct {
-	mu         sync.Mutex
-	status     machines.Status
-	statusErr  error
-	sensorSnap *proto.SensorStateSnapshotDto
-	sysState   *proto.SystemStateDto
+	mu            sync.Mutex
+	status        machines.Status
+	statusErr     error
+	sensorSnap    *proto.SensorStateSnapshotDto
+	sysState      *proto.SystemStateDto
+	profiles      []machines.ProfileSummary
+	profilesOK    bool
+	profilesErr   error
+	profileBodies map[string]json.RawMessage
+	profileErrs   map[string]error
+
+	// Opt-in stubs for the three profile-mutation methods — nil means
+	// "this test never expects a call", same notImplemented-panics
+	// convention as every other unset field here (profile_sync_test.go).
+	createProfileFn func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error)
+	updateProfileFn func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error)
+	deleteProfileFn func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error)
 }
 
 var _ machines.Adapter = (*fakeAdapter)(nil)
@@ -103,13 +115,22 @@ func (f *fakeAdapter) ListProfiles(context.Context, *machines.Machine) ([]machin
 func (f *fakeAdapter) GetProfile(context.Context, *machines.Machine, string) (json.RawMessage, error) {
 	return nil, f.notImplemented("GetProfile")
 }
-func (f *fakeAdapter) CreateProfile(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+func (f *fakeAdapter) CreateProfile(ctx context.Context, m *machines.Machine, in machines.ProfileInput) (machines.ProfileSummary, error) {
+	if f.createProfileFn != nil {
+		return f.createProfileFn(ctx, m, in)
+	}
 	return machines.ProfileSummary{}, f.notImplemented("CreateProfile")
 }
-func (f *fakeAdapter) UpdateProfile(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+func (f *fakeAdapter) UpdateProfile(ctx context.Context, m *machines.Machine, in machines.ProfileInput) (machines.ProfileSummary, error) {
+	if f.updateProfileFn != nil {
+		return f.updateProfileFn(ctx, m, in)
+	}
 	return machines.ProfileSummary{}, f.notImplemented("UpdateProfile")
 }
-func (f *fakeAdapter) DeleteProfile(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error) {
+func (f *fakeAdapter) DeleteProfile(ctx context.Context, m *machines.Machine, id string) ([]machines.ProfileSummary, error) {
+	if f.deleteProfileFn != nil {
+		return f.deleteProfileFn(ctx, m, id)
+	}
 	return nil, f.notImplemented("DeleteProfile")
 }
 func (f *fakeAdapter) SelectProfile(context.Context, *machines.Machine, string) error {
@@ -142,7 +163,7 @@ func (f *fakeAdapter) TriggerFirmwareUpdate(context.Context, *machines.Machine) 
 	return nil, f.notImplemented("TriggerFirmwareUpdate")
 }
 
-// fakeAdapterProvider ports this package's AdapterProvider around a single
+// fakeAdapterProvider wraps this package's AdapterProvider around a single
 // fakeAdapter, regardless of which machine is asked for — every test here
 // only ever has the one default machine.
 type fakeAdapterProvider struct{ adapter *fakeAdapter }
@@ -153,9 +174,9 @@ func (p fakeAdapterProvider) GetAdapter(m *machines.Machine) (machines.Adapter, 
 
 // okStatus builds a machines.Status with the given JSON status body as its
 // Raw field (poll.go's rawStatusFrom decodes waterLevel/upTime straight
-// off Raw) plus the already-parsed fields Node's own adapter would have
-// extracted — mirrors gaggiuino_adapter.go's GetStatus so a test can set up
-// a fake response as tersely as the real one would produce it.
+// off Raw) plus the pre-parsed fields — mirrors gaggiuino_adapter.go's
+// GetStatus so a test can set up a fake response as tersely as the real one
+// would produce it.
 func okStatus(t *testing.T, rawJSON string, temp, targetTemp, pressure float64, weight float64, brewing bool, profileName string, profileID int) machines.Status {
 	t.Helper()
 	pn := profileName

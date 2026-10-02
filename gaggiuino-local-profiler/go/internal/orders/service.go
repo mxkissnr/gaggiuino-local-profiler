@@ -3,6 +3,7 @@ package orders
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"strconv"
@@ -15,11 +16,8 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports lib/services/OrderService.js.
-
-// randomToken ports the trailing `Math.random().toString(36).slice(2, 6)`
-// half of OrderService.js's id generation: 4 lowercase base-36 characters,
-// disambiguating two orders placed in the same millisecond.
+// randomToken returns 4 random lowercase base-36 characters, disambiguating
+// two orders placed in the same millisecond.
 func randomToken(n int) string {
 	const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
 	b := make([]byte, n)
@@ -29,12 +27,12 @@ func randomToken(n int) string {
 	return string(b)
 }
 
-// defaultPrepTime mirrors OrderService.js's DEFAULT_PREP_TIME (minutes per
-// order, used when there's no historical completed-order data yet).
+// defaultPrepTime is the fallback minutes per order, used when there's no
+// historical completed-order data yet.
 const defaultPrepTime = 4.0
 
 // Service composes Repository with the shots/library/machines repositories
-// OrderService.js's lifecycle methods cross-call, plus the HA client the
+// the lifecycle methods cross-call, plus the HA client the
 // customer status-change notification (notifyOrderStatus below) needs.
 type Service struct {
 	repo      *Repository
@@ -42,27 +40,6 @@ type Service struct {
 	libRepo   *library.Repository
 	registry  *machines.Registry
 	ha        *ha.Client
-
-	// OnQueueChanged, if set, is called after PlaceOrder/AcceptOrder/
-	// CompleteOrder/DeclineOrder successfully change which orders are
-	// active or what state one is in — internal/web's OrdersHandlers wires
-	// this (#901) to re-render and SSE-publish the barista queue fragment,
-	// the same "callback field, not a direct import" seam
-	// internal/library's SetOnGrinderDeleted and internal/system's
-	// PreheatInfoFunc already establish for the identical reason: this
-	// package can't import internal/web (which already imports this one)
-	// without a cycle. nil is a valid, common case (no live-update
-	// consumer wired, e.g. every test in this package) — every call site
-	// below is nil-checked.
-	OnQueueChanged func()
-}
-
-// fireQueueChanged calls OnQueueChanged if set — shared by every lifecycle
-// method's success path below.
-func (s *Service) fireQueueChanged() {
-	if s.OnQueueChanged != nil {
-		s.OnQueueChanged()
-	}
 }
 
 // NewService wires repo against the cross-domain repositories every
@@ -72,20 +49,19 @@ func (s *Service) fireQueueChanged() {
 // decline notification every consumer of AcceptOrder/CompleteOrder/
 // DeclineOrder gets for free — #901 code review: this used to be a private
 // method on internal/orders' own REST *Handlers, which meant
-// internal/web's separate *OrdersHandlers had no way to call it and
-// silently shipped without customer notifications).
+// any other caller had no way to call it and silently shipped without
+// customer notifications).
 func NewService(repo *Repository, shotsRepo *shots.Repository, libRepo *library.Repository, registry *machines.Registry, haClient *ha.Client) *Service {
 	return &Service{repo: repo, shotsRepo: shotsRepo, libRepo: libRepo, registry: registry, ha: haClient}
 }
 
-// notifyOrderStatus ports routes/orders.js's _notifyOrderStatus: shared by
-// AcceptOrder/CompleteOrder/DeclineOrder below, gated by the single
-// notify_order_status toggle (#603). Best-effort — fired in a goroutine,
-// matching Node's fire-and-forget sendHaNotify() (no caller awaits it
-// either). Lives on Service (not the REST-only *Handlers it used to be a
-// method of) so every caller of these three lifecycle methods — the REST
-// API and internal/web's htmx queue actions alike — gets the same customer
-// notification without having to remember to trigger it separately.
+// notifyOrderStatus is shared by AcceptOrder/CompleteOrder/DeclineOrder
+// below, gated by the single notify_order_status toggle (#603). Best-effort
+// — fired in a goroutine (fire-and-forget; no caller awaits it). Lives on
+// Service (not the REST-only *Handlers it used to be a method of) so every
+// caller of these three lifecycle methods — the REST API and any other
+// caller alike — gets the same customer notification without having to
+// remember to trigger it separately.
 func (s *Service) notifyOrderStatus(order Order, title, body string) {
 	if s.ha == nil {
 		return
@@ -110,9 +86,8 @@ func (s *Service) notifyOrderStatus(order Order, title, body string) {
 	go s.ha.SendNotify(context.Background(), svc, title, body, id)
 }
 
-// OrderError carries an HTTP status the way ShotService's ErrShotNotFound /
-// OrderService.js's `Object.assign(new Error(...), {status})` pattern does
-// — handlers.go type-asserts this to pick the response code.
+// OrderError carries an HTTP status the way ShotService's ErrShotNotFound
+// does — handlers.go type-asserts this to pick the response code.
 type OrderError struct {
 	Status  int
 	Message string
@@ -124,8 +99,8 @@ func newOrderError(status int, message string) *OrderError {
 	return &OrderError{Status: status, Message: message}
 }
 
-// resolveMachineID ports OrderService.js's resolveMachineId(machineName)
-// (#326): resolves an order's `machine` display name/slug into the
+// resolveMachineID (#326) resolves an order's `machine` display name/slug
+// into the
 // registry's actual numeric id, case-insensitively, falling back to the
 // default machine (never 0) when unmatched/empty.
 func (s *Service) resolveMachineID(machineName string) (int64, error) {
@@ -151,8 +126,8 @@ func (s *Service) resolveMachineID(machineName string) (int64, error) {
 	return fallback, nil
 }
 
-// resolveBeanID ports OrderService.js's resolveBeanId(rawBeanId) (#563): a
-// stale/fabricated bean id silently becomes (0, false) rather than failing
+// resolveBeanID (#563) makes a stale/fabricated bean id silently become
+// (0, false) rather than failing
 // order placement.
 func (s *Service) resolveBeanID(raw any) (int64, bool, error) {
 	id, ok := jsParseIntAny(raw)
@@ -182,8 +157,8 @@ func beanIDOf(b library.Entity) (int64, bool) {
 }
 
 // jsParseIntAny handles both a JSON-decoded number (float64) and a string
-// query/body value, mirroring JS's `parseInt(rawBeanId, 10)` being called
-// on either shape depending on caller (body field vs. query param).
+// query/body value: callers pass either shape depending on whether the value
+// came from a body field or a query param.
 func jsParseIntAny(v any) (int64, bool) {
 	switch t := v.(type) {
 	case nil:
@@ -208,7 +183,7 @@ func jsParseIntAny(v any) (int64, bool) {
 	}
 }
 
-// QueueEta mirrors computeQueueEta's return shape.
+// QueueEta is the shape ComputeQueueEta returns.
 type QueueEta struct {
 	AcceptedRemaining float64                  `json:"acceptedRemaining"`
 	PendingCount      int                      `json:"pendingCount"`
@@ -216,14 +191,14 @@ type QueueEta struct {
 	Positions         map[string]QueuePosition `json:"positions"`
 }
 
-// QueuePosition mirrors one entry of computeQueueEta's `positions` map.
+// QueuePosition is one entry of ComputeQueueEta's `positions` map.
 type QueuePosition struct {
 	Position     int `json:"position"`
 	SuggestedEta int `json:"suggestedEta"`
 }
 
-// ComputeQueueEta ports OrderService.js's computeQueueEta(orders, now):
-// pure over its inputs, no I/O — queue position + suggested ETA for every
+// ComputeQueueEta(orders, now) is pure over its inputs, no I/O — queue
+// position + suggested ETA for every
 // pending order, plus a rolling prep-time estimate from the last 10
 // completed orders.
 func ComputeQueueEta(orders []Order, now time.Time) QueueEta {
@@ -316,9 +291,8 @@ func sortByCreatedAt(orders []Order) {
 
 // PlaceOrderInput mirrors POST /api/orders's request body fields, already
 // picked apart by the handler (item/customer presence + menu-item lookup
-// are request-shape checks the handler owns — see routes/orders.js's own
-// split between route validation and OrderService.placeOrder's domain
-// logic).
+// are request-shape checks the handler owns — the handler splits route
+// validation from PlaceOrder's domain logic).
 type PlaceOrderInput struct {
 	Item          string
 	Note          string
@@ -330,8 +304,7 @@ type PlaceOrderInput struct {
 	BeanID        any
 }
 
-// PlaceOrder ports OrderService.js's placeOrder(...): builds and persists
-// a new pending order.
+// PlaceOrder builds and persists a new pending order.
 func (s *Service) PlaceOrder(in PlaceOrderInput) (Order, error) {
 	active, err := s.repo.FindActive()
 	if err != nil {
@@ -370,7 +343,6 @@ func (s *Service) PlaceOrder(in PlaceOrderInput) (Order, error) {
 	if err := s.repo.SaveAll(active); err != nil {
 		return nil, err
 	}
-	s.fireQueueChanged()
 	return order, nil
 }
 
@@ -396,8 +368,8 @@ func truncate(s string, max int) string {
 	return s
 }
 
-// AcceptOrder ports OrderService.js's acceptOrder(id, rawEta). Reads and
-// writes only this one order row (#901 code review) rather than
+// AcceptOrder reads and writes only this one order row (#901 code review)
+// rather than
 // FindActive()+SaveAll()'s whole-queue read-modify-write, which scaled
 // every accept/complete/decline with the total size of the active queue.
 func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
@@ -408,12 +380,9 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
-	if status, _ := order["status"].(string); status != "pending" {
-		return nil, newOrderError(400, "not pending")
-	}
-	// Mirrors JS's `parseInt(rawEta) || 5`: 0 is falsy in JS too, so an
-	// explicit `eta: 0` must also default to 5, not merely an
-	// unparseable/absent value (#901 code review).
+	// An explicit `eta: 0` must default to 5, not merely an
+	// unparseable/absent value (#901 code review): 0 means "no ETA
+	// given" here.
 	eta, ok := jsParseIntAny(rawEta)
 	if !ok || eta == 0 {
 		eta = 5
@@ -424,23 +393,41 @@ func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	if eta > 60 {
 		eta = 60
 	}
+	// #1199: claim pending -> accepted atomically; the losing side of a
+	// race (or an already-accepted order) gets the same 400 it always did.
+	acceptedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending"}, "accepted", acceptedAt, "acceptedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, newOrderError(400, "not pending")
+	}
 	order["status"] = "accepted"
 	order["eta"] = eta
-	order["acceptedAt"] = time.Now().UnixMilli()
-	if err := s.repo.Save(order); err != nil {
+	order["acceptedAt"] = acceptedAt
+	// Write back only the eta: a full-row Save would replay the pre-claim
+	// snapshot and could undo a status another transition just claimed (see
+	// Repository.UpdateFields).
+	if err := s.repo.UpdateFields(id, map[string]any{"eta": eta}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)
 	s.notifyOrderStatus(order, "☕ "+item+" wird zubereitet", "Fertig in ~"+strconv.FormatInt(eta, 10)+" Min!")
-	s.fireQueueChanged()
 	return order, nil
 }
 
-// CompleteOrder ports OrderService.js's completeOrder(id): status, milk
-// stock deduction, matching the latest shot on the order's own target
-// machine (#326), and writing an orderedBy annotation back onto that shot.
-// Each side effect is independently best-effort, matching Node's try/catch-
-// per-step structure — a failure in one must not stop the order from
+// orderShotToleranceSec is how far a shot may predate an order's reference
+// time and still count as "its" shot: the barista may pull the shot just
+// before tapping accept, so the shot's Unix-seconds timestamp can sit
+// slightly before acceptedAt. #1197 — without a floor here, completing an
+// order with no shot of its own attached an unrelated older shot instead.
+const orderShotToleranceSec = 120
+
+// CompleteOrder completes an order: status, milk stock deduction, matching
+// the latest shot on the order's own target machine (#326), and writing an
+// orderedBy annotation back onto that shot. Each side effect is
+// independently best-effort — a failure in one must not stop the order from
 // completing.
 func (s *Service) CompleteOrder(id string) (Order, error) {
 	order, err := s.repo.FindActiveByID(id)
@@ -450,8 +437,27 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
+	// #1199: claim the transition atomically before any side effect. A second
+	// complete of the same order — a double tap, or an automation and the
+	// dashboard at the same moment — loses the claim and must not deduct the
+	// milk again.
+	completedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending", "accepted"}, "done", completedAt, "completedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, newOrderError(400, "cannot complete")
+	}
+	// Re-read after the claim: a concurrent AcceptOrder may have won the
+	// pending->accepted claim and written acceptedAt between our lookup and
+	// our claim. The shot-tolerance window below must use the acceptedAt
+	// that actually landed in the row, not the pre-claim snapshot.
+	if fresh, ferr := s.repo.FindByID(id); ferr == nil && fresh != nil {
+		order = fresh
+	}
 	order["status"] = "done"
-	order["completedAt"] = time.Now().UnixMilli()
+	order["completedAt"] = completedAt
 
 	if variant, _ := order["variant"].(string); variant != "" {
 		item, _ := order["item"].(string)
@@ -470,29 +476,43 @@ func (s *Service) CompleteOrder(id string) (Order, error) {
 		}
 	}
 
-	if shotID, ok, err := s.shotsRepo.GetLatestID(orderMachineID(order)); err == nil && ok {
+	// #1197: only a shot at/after (acceptedAt − tolerance) counts as this
+	// order's; completing straight from pending has no acceptedAt, so fall
+	// back to createdAt. Integers are Unix milliseconds on the order but
+	// Unix seconds on the shot, hence the /1000.
+	var sinceSec int64
+	if refMs, ok := jsNumber(order["acceptedAt"]); ok {
+		sinceSec = int64(refMs)/1000 - orderShotToleranceSec
+	} else if refMs, ok := jsNumber(order["createdAt"]); ok {
+		sinceSec = int64(refMs)/1000 - orderShotToleranceSec
+	}
+	if shotID, ok, err := s.shotsRepo.GetLatestID(orderMachineID(order), sinceSec); err == nil && ok {
 		order["shotId"] = shotID
-		if ann, err := s.shotsRepo.GetAnnotation(shotID); err == nil {
+		if _, err := s.shotsRepo.UpdateAnnotation(shotID, func(ann map[string]any) error {
 			ann["orderedBy"] = map[string]any{
 				"customer": order["customer"], "haUserId": order["haUserId"], "orderId": order["id"],
 				"item": order["item"], "variant": order["variant"], "note": order["note"],
 			}
-			s.shotsRepo.SaveAnnotation(shotID, ann)
+			return nil
+		}); err != nil {
+			log.Printf("orders: writing orderedBy for shot %d: %v", shotID, err)
 		}
 	} else {
 		order["shotId"] = nil
 	}
 
-	if err := s.repo.Save(order); err != nil {
+	// Write back only the shotId: status/completedAt were set atomically by
+	// the claim, and a full-row Save would replay the pre-claim snapshot,
+	// erasing an accept that won the race (see Repository.UpdateFields).
+	if err := s.repo.UpdateFields(id, map[string]any{"shotId": order["shotId"]}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)
 	s.notifyOrderStatus(order, "✓ "+item+" ist fertig!", "Hol dir deinen "+item+" ab — guten Genuss!")
-	s.fireQueueChanged()
 	return order, nil
 }
 
-// DeclineOrder ports OrderService.js's declineOrder(id, rawReason).
+// DeclineOrder declines an order with the given reason.
 func (s *Service) DeclineOrder(id string, rawReason string) (Order, error) {
 	order, err := s.repo.FindActiveByID(id)
 	if err != nil {
@@ -501,14 +521,22 @@ func (s *Service) DeclineOrder(id string, rawReason string) (Order, error) {
 	if order == nil {
 		return nil, newOrderError(404, "not found")
 	}
-	status, _ := order["status"].(string)
-	if status != "pending" && status != "accepted" {
+	// #1199: claim pending|accepted -> declined atomically; only the winner
+	// writes the decline reason.
+	completedAt := time.Now().UnixMilli()
+	claimed, err := s.repo.ClaimTransition(id, []string{"pending", "accepted"}, "declined", completedAt, "completedAt")
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
 		return nil, newOrderError(400, "cannot decline")
 	}
+	reason := truncate(rawReason, 200)
 	order["status"] = "declined"
-	order["declineReason"] = truncate(rawReason, 200)
-	order["completedAt"] = time.Now().UnixMilli()
-	if err := s.repo.Save(order); err != nil {
+	order["declineReason"] = reason
+	order["completedAt"] = completedAt
+	// Only the reason is written back — see AcceptOrder's note above.
+	if err := s.repo.UpdateFields(id, map[string]any{"declineReason": reason}); err != nil {
 		return nil, err
 	}
 	item, _ := order["item"].(string)
@@ -518,13 +546,11 @@ func (s *Service) DeclineOrder(id string, rawReason string) (Order, error) {
 		msg = "Grund: " + declineReason
 	}
 	s.notifyOrderStatus(order, "✕ "+item+" abgelehnt", msg)
-	s.fireQueueChanged()
 	return order, nil
 }
 
-// matchesMachine ports routes/orders.js's _matchesMachine(order,
-// machineIdParam): machineIdParam == 0 means "no filter" (query param
-// omitted).
+// matchesMachine keeps an order when machineIdParam == 0, meaning "no
+// filter" (query param omitted).
 func matchesMachine(order Order, machineIDParam int64) bool {
 	if machineIDParam == 0 {
 		return true

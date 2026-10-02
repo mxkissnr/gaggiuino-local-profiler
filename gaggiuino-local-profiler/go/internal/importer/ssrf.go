@@ -7,19 +7,17 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
-// This file wires lib/ssrf-guard.js's assertPublicHost for GET /api/import/url,
-// which fetches an arbitrary user-pasted URL. It does NOT define a new SSRF
-// predicate: the private/loopback/link-local check is netguard.IsPrivateAddress
-// (promoted out of internal/library in #901 Phase 2c — same threat model as
-// that package's barcode-scan guard). This file keeps only what's genuinely
-// per-package: the lookupIPAddr test seam every netguard consumer has, and
-// the thin wrappers.
+// This file wires SSRF checks for GET /api/import/url, which fetches an
+// arbitrary user-pasted URL. It does NOT define a new SSRF predicate: the
+// private/loopback/link-local check is netguard.IsPrivateAddress (same threat
+// model as internal/library's barcode-scan guard). This file keeps only what's
+// genuinely per-package: the lookupIPAddr test seam every netguard consumer
+// has, and the thin wrappers.
 
 // lookupIPAddr is a package-level var so tests can substitute a fake
 // resolver, exactly as internal/library/ssrf.go does.
 var lookupIPAddr = net.DefaultResolver.LookupIPAddr
 
-// assertPublicHost ports ssrf-guard.js's assertPublicHost(hostname).
 func assertPublicHost(ctx context.Context, hostname string) error {
 	return netguard.AssertHost(ctx, hostname, netguard.IsPrivateAddress, lookupIPAddr)
 }

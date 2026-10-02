@@ -1,23 +1,25 @@
 package backup
 
 import (
+	"sort"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 )
 
-// This file ports the "gather the small stuff" half of routes/backup.js's
-// gatherBackupData: every backup section EXCEPT shots, annotations and
-// images. Shots stream one page at a time (shots.Repository.
-// ForEachShotForBackup), annotations accumulate during that stream, and
-// images travel as real zip entries / a streamed base64 map — all in
-// stream.go's writeBundleJSON, which composes the bundle JSON object
-// incrementally so peak memory is O(one shot + one image), independent of
-// dataset size (#959).
+// This file handles the "gather the small stuff" half of backup export:
+// every backup section EXCEPT shots, annotations and images. Shots stream one
+// page at a time (shots.Repository.ForEachShotForBackup), annotations
+// accumulate during that stream, and images travel as real zip entries / a
+// streamed base64 map — all in stream.go's writeBundleJSON, which composes
+// the bundle JSON object incrementally so peak memory is O(one shot + one
+// image), independent of dataset size (#959).
 
 // glpVersion is stamped into the backup bundle metadata. config.yaml's
 // `version:` is canonical; this const must match it and is bumped alongside
 // it at release time (CLAUDE.md's Versioning section). Enforced by
 // test/version-sync.test.js and scripts/release-check.mjs.
-const glpVersion = "3.2.0"
+const glpVersion = "3.3.0"
 
 // gatherSmallSections collects every bundle section that is small
 // regardless of shot/image count: coffee_library, blocklist, trash (via
@@ -80,6 +82,14 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
+	shotDefaults, err := d.ShotsRepo.GetShotDefaults()
+	if err != nil {
+		return nil, err
+	}
+	allAchievements, err := d.AchievementsRepo.GetAll()
+	if err != nil {
+		return nil, err
+	}
 
 	out := map[string]any{
 		"coffee_library":  lib,
@@ -89,9 +99,11 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 		"maintenance_log": maintLogRaw,
 		"orders":          allOrders,
 		"machines":        allMachines,
+		"achievements":    achievementsForBundle(allAchievements),
 		"kv": map[string]any{
 			"menu": menu, "orders_settings": ordersSettings, "notify_mapping": notifyMapping,
 			"import_settings": importSettings, "mqtt_settings": safeMqtt,
+			"shot_defaults": shotDefaults,
 		},
 	}
 
@@ -126,4 +138,28 @@ var bundleCreatedNow = time.Now
 
 func bundleCreated() string {
 	return bundleCreatedNow().UTC().Format(time.RFC3339Nano)
+}
+
+// achievementsForBundle renders achievements.Repository.GetAll's map as the
+// bundle's `achievements` array, sorted by id so the output is stable. A nil
+// UnlockedAt/Progress stays JSON null rather than becoming 0.
+func achievementsForBundle(rows map[string]achievements.Row) []map[string]any {
+	ids := make([]string, 0, len(rows))
+	for id := range rows {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		r := rows[id]
+		entry := map[string]any{"id": r.ID, "unlockedAt": nil, "progress": nil}
+		if r.UnlockedAt != nil {
+			entry["unlockedAt"] = *r.UnlockedAt
+		}
+		if r.Progress != nil {
+			entry["progress"] = *r.Progress
+		}
+		out = append(out, entry)
+	}
+	return out
 }

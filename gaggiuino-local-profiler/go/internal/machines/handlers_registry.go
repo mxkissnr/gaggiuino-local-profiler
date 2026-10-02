@@ -5,14 +5,13 @@ import (
 	"net/http"
 )
 
-// This file ports routes/machines.js: the machine-registry CRUD + probe
-// endpoints (#317). NOT ported: the #729/#731 catch-up shot-history sync
-// every save/update triggers (syncSoonAfterSave, lib/sync.js) — that's the
-// shots-sync domain, which doesn't run as a background process in this Go
-// binary yet (see go/README.md's "not wired into a running add-on"
-// status). The `?sync=0` query param (#731) is still parsed and accepted
-// for request-shape compatibility, but is currently a no-op either way
-// since there's no sync to suppress.
+// This file is the machine-registry CRUD + probe endpoints (#317). NOT
+// implemented: the #729/#731 catch-up shot-history sync every save/update
+// would trigger — that's the shots-sync domain, which doesn't run as a
+// background process in this binary yet (see go/README.md's "not wired
+// into a running add-on" status). The `?sync=0` query param (#731) is still
+// parsed and accepted for request-shape compatibility, but is currently a
+// no-op either way since there's no sync to suppress.
 
 func (h *Handlers) registerRegistryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/machines", h.listMachines)
@@ -36,9 +35,9 @@ func (h *Handlers) listMachines(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
-// createMachine ports POST /api/machines — a thin wrapper around
-// CreateMachineChecked (create.go), the same validate/SSRF-check/create
-// sequence internal/web's "New machine" form also calls.
+// createMachine serves POST /api/machines — a thin wrapper around
+// CreateMachineChecked (create.go), the validate/SSRF-check/create
+// sequence.
 func (h *Handlers) createMachine(w http.ResponseWriter, r *http.Request) {
 	var in MachineInput
 	if !decodeJSONBody(w, r, &in) {
@@ -58,24 +57,20 @@ func (h *Handlers) createMachine(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, machine)
 }
 
-// updateMachine ports routes/machines.js's PUT /api/machines/:id.
+// updateMachine serves PUT /api/machines/{id}.
 //
 // #901 code review flagged this handler's up-front GetMachine as a
 // "redundant" duplicate of the GetMachine Registry.UpdateMachine already
 // does internally, suggesting it be dropped and 404 left to
-// UpdateMachine's own not-found return. Verified against the Node
-// original (routes/machines.js's own PUT handler) instead of removing it
-// blindly: Node does the exact same "redundant" existence check first,
-// specifically so an unknown id 404s even when the request body also
-// fails schema validation — routes/machines.js:78-82 checks `existing`
-// before `machineSchema.partial().safeParse(req.body)`, i.e. 404 always
-// wins over 400 for a bad id + bad body. Registry.UpdateMachine's own
-// internal GetMachine (registry.go) can't cover that ordering — it only
-// runs after this handler has already decoded and validated the body — so
-// dropping this check would flip that combination's response from 404 to
-// 400, a real behavior change despite the duplicate-looking query. Kept
-// as-is; the "redundant" DB round trip is a single indexed lookup by
-// primary key, not a meaningful cost.
+// UpdateMachine's own not-found return. It is kept deliberately: the
+// existence check must run first so an unknown id 404s even when the
+// request body also fails validation — 404 always wins over 400 for a bad
+// id + bad body. Registry.UpdateMachine's own internal GetMachine
+// (registry.go) can't cover that ordering — it only runs after this handler
+// has already decoded and validated the body — so dropping this check
+// would flip that combination's response from 404 to 400, a real behavior
+// change despite the duplicate-looking query. The "redundant" DB round
+// trip is a single indexed lookup by primary key, not a meaningful cost.
 func (h *Handlers) updateMachine(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID64(r)
 	if !ok {

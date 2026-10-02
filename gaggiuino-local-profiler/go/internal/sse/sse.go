@@ -3,78 +3,41 @@ package sse
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 )
 
-// PingInterval ports routes/sse.js's PING_INTERVAL_MS: how often a bare
-// keepalive comment line is written to an idle connection.
+// PingInterval is how often a bare keepalive comment line is written to an
+// idle connection.
 const PingInterval = 20 * time.Second
 
-// paddingBytes ports routes/sse.js's #740 workaround: a 2048-space
-// leading comment line (any line starting with ':' is a no-op per the SSE
-// spec) written immediately after headers, to force a flush past whichever
-// intermediate layer between the browser and this process is buffering the
-// response (see doc.go).
+// paddingBytes is the #740 workaround: a 2048-space leading comment line
+// (any line starting with ':' is a no-op per the SSE spec) written
+// immediately after headers, to force a flush past whichever intermediate
+// layer between the browser and this process is buffering the response (see
+// doc.go).
 const paddingBytes = 2048
 
-// Event types this package's Handler multiplexes over /api/events — the
-// exact set routes/sse.js forwards: SYNC_PROGRESS/SYNC_COMPLETE (#735),
-// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736); EventOrdersUpdate is new in this Go
-// rewrite (#901, no Node equivalent — see below). See doc.go for the events
-// this endpoint deliberately does NOT carry.
+// Event types this package's Handler multiplexes over /api/events:
+// LIVE_SNAPSHOT/PREHEAT_UPDATE (#736). See doc.go for the events this
+// endpoint deliberately does NOT carry.
 const (
-	EventSyncProgress  = "sync-progress"
-	EventSyncComplete  = "sync-complete"
 	EventLiveSnapshot  = "live-snapshot"
 	EventPreheatUpdate = "preheat-update"
-
-	// EventOrdersUpdate carries a pre-rendered HTML fragment (Data must be
-	// an HTML value, see below), not JSON — internal/web's Orders page
-	// hx-swaps it straight into the barista queue via the vendored htmx
-	// SSE extension's sse-swap, replacing that page's original 10s
-	// hx-trigger="every 10s" poll. See HTML's own doc comment for why this
-	// needed a new Data shape, not just a new event name.
-	EventOrdersUpdate = "orders-update"
 )
 
-// HTML marks an Event's Data as a pre-rendered HTML fragment to be sent
-// through the SSE stream unmarshaled (raw bytes, not JSON.stringify'd) —
-// the fix for the second of the two concrete blockers go/README.md's
-// Status section documents against using SSE for live updates:
-// `internal/sse.Handler`'s `send()` used to unconditionally
-// `json.Marshal()` every event's Data, but the htmx SSE extension's
-// `sse-swap` attribute (unlike `hx-trigger="sse:*"`, dead code in the
-// vendored 2.0.10 build — see that same section) expects an event's raw
-// data to already BE the HTML it swaps in, not a JSON string of it. A
-// producer that wants that behavior sets Data to an HTML value (a plain
-// string conversion, `sse.HTML(rendered)`); Handler's send() type-switches
-// on it and skips json.Marshal entirely for that one event — every other
-// event type (live-snapshot, preheat-update, sync-progress/complete) is
-// unaffected, since none of them are HTML and Node's own live.js JSON
-// consumers depend on that encoding staying JSON (see this file's own
-// EventOrdersUpdate doc comment for the one current producer).
-type HTML string
-
-// Event is one push through a Hub. Data is marshaled to JSON the same way
-// routes/sse.js's send(type, data) calls JSON.stringify(data) — Data should
-// be whatever value a future producer would otherwise have passed straight
-// to JSON.stringify (a plain map or struct, not a pre-encoded string) —
-// UNLESS Data is an HTML value (see that type's own doc comment), in which
-// case it's sent through unmarshaled instead.
+// Event is one push through a Hub. Data is marshaled to JSON — it should be
+// a plain map or struct, not a pre-encoded string.
 type Event struct {
 	Type string
 	Data any
 }
 
-// Hub is the Go port of lib/events.js's `bus` EventEmitter: a minimal
-// in-process pub/sub every open SSE connection subscribes to, and any later
-// domain package (Phase 1c+) publishes onto via Publish. Node's
-// bus.setMaxListeners(50) has no Go equivalent needed — Go channels don't
-// warn on listener/subscriber count.
+// Hub is a minimal in-process pub/sub every open SSE connection subscribes
+// to, and any domain package publishes onto via Publish. There is no
+// listener-count cap to mirror — Go channels don't warn on subscriber count.
 type Hub struct {
 	mu   sync.Mutex
 	subs map[chan Event]struct{}
@@ -88,10 +51,9 @@ func NewHub() *Hub {
 // Publish fans ev out to every current subscriber. Delivery to each
 // subscriber is non-blocking: a slow/stuck client's channel buffer (see
 // Subscribe) filling up drops that one event for that subscriber only,
-// rather than blocking every other subscriber or the publisher — Node's
-// EventEmitter.emit is synchronous and unbuffered so this failure mode has
-// no direct equivalent there, but an unbounded blocking send here would let
-// one wedged HTTP connection stall event delivery to every other open tab.
+// rather than blocking every other subscriber or the publisher. An unbounded
+// blocking send here would let one wedged HTTP connection stall event
+// delivery to every other open tab.
 func (h *Hub) Publish(ev Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -105,16 +67,13 @@ func (h *Hub) Publish(ev Event) {
 
 // subscriberBuffer bounds how many undelivered events a single subscriber
 // channel holds before Publish starts dropping for it — generous for this
-// app's actual event rates (at most a few pushes per second, see
-// lib/middleware/rateLimit.js's traffic-budget comment for the same
-// ballpark reasoning applied to HTTP requests).
+// app's actual event rates (at most a few pushes per second).
 const subscriberBuffer = 16
 
 // Subscribe registers a new listener and returns its event channel plus an
-// unsubscribe function the caller must call exactly once — the Go
-// equivalent of routes/sse.js's req.on('close', ...) bus.off() cleanup.
-// Calling unsubscribe closes the channel; callers must stop reading from it
-// once they've called unsubscribe.
+// unsubscribe function the caller must call exactly once. Calling
+// unsubscribe closes the channel; callers must stop reading from it once
+// they've called unsubscribe.
 func (h *Hub) Subscribe() (<-chan Event, func()) {
 	ch := make(chan Event, subscriberBuffer)
 	h.mu.Lock()
@@ -133,52 +92,27 @@ func (h *Hub) Subscribe() (<-chan Event, func()) {
 	return ch, unsubscribe
 }
 
-// Handler serves GET /api/events, the Go port of routes/sse.js: same
-// headers, same padding comment, same connect-time priming, same 20s
-// keepalive, same event multiplexing. It does not perform auth itself — see
-// doc.go — callers must wrap it with internal/auth.RequireToken the same
-// way cmd/server does.
+// Handler serves GET /api/events: same headers, same padding comment, same
+// connect-time priming, same 20s keepalive, same event multiplexing. It does
+// not perform auth itself — see doc.go — callers must wrap it with
+// internal/auth.RequireToken the same way cmd/server does.
 type Handler struct {
 	// Hub is the pub/sub broker this handler subscribes new connections to.
 	// Required.
 	Hub *Hub
 
 	// Prime, if set, is called once per new connection (after the padding
-	// line, before subscribing to Hub — matching routes/sse.js's ordering)
-	// to obtain the connect-time snapshot events Node sends before
-	// registering its bus listeners (the syncProgress-map loop,
-	// buildPreheatResponse(), buildLiveDataResponse()). Phase 1c's domain
-	// packages own that state; this field lets them supply it without this
-	// package importing them. nil means no priming, which is only correct
-	// until a real Prime func is wired in.
+	// line, before subscribing to Hub) to obtain the connect-time snapshot
+	// events a fresh connection should see (the syncProgress-map loop,
+	// buildPreheatResponse(), buildLiveDataResponse()). The domain packages
+	// own that state; this field lets them supply it without this package
+	// importing them. nil means no priming, which is only correct until a
+	// real Prime func is wired in.
 	Prime func() []Event
 
 	// PingInterval overrides PingInterval for tests that don't want to wait
 	// 20 real seconds. Zero means use PingInterval.
 	PingInterval time.Duration
-}
-
-// sendHTML writes one SSE event whose data is raw HTML, not JSON — an SSE
-// "data:" field can't itself contain a bare newline (the blank line ends
-// the event), so a multi-line payload needs one "data: " line per line of
-// html, exactly as the SSE spec requires and as sse-swap's own htmx
-// extension expects to receive (it joins consecutive data: lines back
-// together with "\n" before swapping). See HTML's own doc comment for why
-// this bypasses json.Marshal entirely.
-func sendHTML(w http.ResponseWriter, flusher http.Flusher, eventType, html string) bool {
-	var b strings.Builder
-	fmt.Fprintf(&b, "event: %s\n", eventType)
-	for _, line := range strings.Split(html, "\n") {
-		b.WriteString("data: ")
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	b.WriteByte('\n')
-	if _, err := io.WriteString(w, b.String()); err != nil {
-		return false
-	}
-	flusher.Flush()
-	return true
 }
 
 // drainBuffered returns first plus every event already sitting in ch's
@@ -247,9 +181,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	send := func(ev Event) bool {
-		if html, ok := ev.Data.(HTML); ok {
-			return sendHTML(w, flusher, ev.Type, string(html))
-		}
 		payload, err := json.Marshal(ev.Data)
 		if err != nil {
 			// A future producer's Data must always be JSON-marshalable;
@@ -264,8 +195,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return true
 	}
 
-	// Priming runs before Subscribe, same ordering as routes/sse.js (its
-	// priming loop/sends run before the bus.on() registrations).
+	// Priming runs before Subscribe, so a fresh connection's snapshots are
+	// sent before any event published after it subscribes.
 	if h.Prime != nil {
 		for _, ev := range h.Prime() {
 			if !send(ev) {

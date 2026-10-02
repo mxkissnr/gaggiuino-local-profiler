@@ -17,6 +17,8 @@
 
 // ── Pure filtering logic (kept separate from DOM so it's unit-testable
 // under vitest's node environment) ──────────────────────────────────────
+import { html } from '../utils.js';
+
 export function filterSuggestions(list: unknown, query: unknown, limit = 8): string[] {
   const source = Array.isArray(list) ? list : [];
   const pool = Array.from(new Set(source.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)));
@@ -100,7 +102,7 @@ export function attachAutocomplete(
 
   function render(): void {
     if (!items.length) { close(); return; }
-    list.innerHTML = '';
+    list.innerHTML = html``;
     items.forEach((val, i) => {
       const li = doc.createElement('li');
       li.className = 'autocomplete-item';
@@ -143,10 +145,11 @@ export function attachAutocomplete(
     const opts_ = [...list.children];
     opts_.forEach(el => el.classList.remove('active'));
     activeIndex = i;
-    if (i >= 0 && opts_[i]) {
-      opts_[i].classList.add('active');
-      input.setAttribute('aria-activedescendant', opts_[i].id);
-      opts_[i].scrollIntoView?.({ block: 'nearest' });
+    const opt = opts_[i];
+    if (i >= 0 && opt) {
+      opt.classList.add('active');
+      input.setAttribute('aria-activedescendant', opt.id);
+      opt.scrollIntoView?.({ block: 'nearest' });
     } else {
       input.removeAttribute('aria-activedescendant');
     }
@@ -176,7 +179,7 @@ export function attachAutocomplete(
     }
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(activeIndex + 1, items.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(activeIndex - 1, 0)); }
-    else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); select(items[activeIndex]); } else close(); }
+    else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); const val = items[activeIndex]; if (val !== undefined) select(val); } else close(); }
     else if (e.key === 'Escape') { close(); }
   });
 

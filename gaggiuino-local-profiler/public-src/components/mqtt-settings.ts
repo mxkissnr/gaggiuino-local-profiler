@@ -10,10 +10,11 @@ import {
   saveMqttSettings as saveMqttSettingsRequest,
   applyMqttToMachine as applyMqttToMachineRequest,
 } from '../api/mqtt.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
+import { html } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
 import { S } from '../state/index.js';
-import type { MqttSettings } from '../api/types.js';
+import type { MqttSettings, MqttSettingsInput } from '../api/types.js';
 
 interface MqttDiscovery {
   available?: boolean;
@@ -23,7 +24,7 @@ interface MqttDiscovery {
   password?: string;
 }
 
-let _selectedTransport = 'websocket';
+let _selectedTransport: MqttSettings['transport'] = 'websocket';
 let _discovery: MqttDiscovery = {};
 // #1050/#1062: GET /api/mqtt/settings no longer echoes the stored broker
 // password back (it reports `hasPassword` instead), so the form cannot
@@ -61,7 +62,7 @@ export async function loadMqttSettings(): Promise<void> {
     (document.getElementById('mqttPrefix') as HTMLInputElement).value    = settings.prefix || 'gaggiuino';
 
     const hint = document.getElementById('mqttDiscoveryHint');
-    if (hint) hint.innerHTML = _discovery.available ? `${CHECK_ICON_SVG} ${t('settings_mqtt_discovered')}` : t('settings_mqtt_not_discovered');
+    if (hint) hint.innerHTML = _discovery.available ? html`${CHECK_ICON_SVG} ${tHtml('settings_mqtt_discovered')}` : tHtml('settings_mqtt_not_discovered');
 
     renderMqttSettingsCard();
   } catch { /* offline/first-run — card just stays at its default state */ }
@@ -81,13 +82,13 @@ export function renderMqttSettingsCard(): void {
 }
 
 export function setMqttTransport(value: string): void {
-  _selectedTransport = value;
+  _selectedTransport = value as MqttSettings['transport'];
   renderMqttSettingsCard();
 }
 
 export async function saveMqttSettings(): Promise<void> {
   const resultEl = document.getElementById('mqttSettingsResult');
-  const payload: MqttSettings = {
+  const payload: MqttSettingsInput = {
     transport: _selectedTransport,
     host:      (document.getElementById('mqttHost') as HTMLInputElement).value.trim(),
     port:      parseInt((document.getElementById('mqttPort') as HTMLInputElement).value, 10) || 1883,
@@ -110,7 +111,7 @@ export async function saveMqttSettings(): Promise<void> {
   }
   try {
     const r = await saveMqttSettingsRequest(payload);
-    if (r.ok) { if (resultEl) resultEl.innerHTML = `${CHECK_ICON_SVG} ${t('settings_mqtt_saved')}`; return; }
+    if (r.ok) { if (resultEl) resultEl.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('settings_mqtt_saved')}`; return; }
     const data = await r.json().catch(() => ({})) as { error?: string };
     if (resultEl) resultEl.textContent = t('settings_mqtt_save_error', data.error || r.status);
   } catch {
@@ -123,7 +124,7 @@ export async function applyMqttToMachine(): Promise<void> {
   if (resultEl) resultEl.textContent = t('settings_mqtt_applying');
   try {
     const r = await applyMqttToMachineRequest();
-    if (r.ok) { if (resultEl) resultEl.innerHTML = `${CHECK_ICON_SVG} ${t('settings_mqtt_applied')}`; return; }
+    if (r.ok) { if (resultEl) resultEl.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('settings_mqtt_applied')}`; return; }
     const data = await r.json().catch(() => ({})) as { error?: string };
     if (resultEl) resultEl.textContent = t('settings_mqtt_apply_error', data.error || r.status);
   } catch {

@@ -22,7 +22,7 @@ import (
 // this is exactly the substitute the task brief asked for: a
 // fully-scripted fake server standing in for the real protocol,
 // distinct from proto/node_vectors_test.go's ground-truth wire-format
-// cross-check against lib/gaggiuino-proto.js).
+// cross-check against the frozen testdata/node_vectors.json fixture).
 type fakeGaggiuinoMachine struct {
 	*httptest.Server
 

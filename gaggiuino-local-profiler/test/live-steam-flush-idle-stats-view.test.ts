@@ -1,0 +1,165 @@
+// #902: views/live.js's handleLiveData()/setLiveBadge() coverage for the
+// new steam/flush live-content branches and the always-current idle stats
+// row -- resolveMachineIconState()'s own mode-resolution logic is already
+// covered directly in test/machine-icon.test.js, so machine-icon.js is
+// mocked out here to keep this file focused on the DOM wiring under test.
+// Same minimal-fake-document pattern as
+// test/live-stream-sse-fallback-gating.test.js/
+// test/machine-reachable-offline-signal.test.js.
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the sibling live tests use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+
+vi.mock('../public-src/machine-icon.js', () => ({
+  machineIconAnimatedSvg: () => '',
+  setMachineIconMode: () => {},
+  updateMachineIconBrewReadout: () => {},
+  resolveMachineIconState: () => ({ mode: 'hot', heatFraction: 1 }),
+  MACHINE_ICON_LIVE_CLASS: 'machine-icon-live',
+}));
+
+const { S } = await import('../public-src/state/index.js');
+const { handleLiveData, setLiveBadge } = await import('../public-src/views/live.js');
+
+// The DOM stand-in these tests touch: only the members the live view reads
+// off each element.
+interface FakeElement {
+  className: string;
+  textContent: string;
+  style: Record<string, string>;
+  firstChild: null;
+  classList: { add: () => void; remove: () => void; contains: () => boolean };
+  querySelector: () => null;
+}
+
+function makeFakeDocument() {
+  const registry = new Map<string, FakeElement>();
+  function makeElement(): FakeElement {
+    return {
+      className: '', textContent: '', style: {}, firstChild: null,
+      classList: { add() {}, remove() {}, contains: () => false },
+      querySelector: () => null,
+    };
+  }
+  return {
+    getElementById: (id: string): FakeElement => {
+      if (!registry.has(id)) registry.set(id, makeElement());
+      return registry.get(id)!;
+    },
+  };
+}
+
+describe('setLiveBadge() steaming/flushing labels (#902)', () => {
+  let doc: ReturnType<typeof makeFakeDocument>;
+
+  beforeEach(() => {
+    doc = makeFakeDocument();
+    g.document = doc;
+    S.currentLang = 'en';
+  });
+
+  it('sets the steaming badge class/label', () => {
+    setLiveBadge('steaming');
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge steaming');
+    expect(doc.getElementById('live-status-text').textContent).toBe('Steaming …');
+  });
+
+  it('sets the flushing badge class/label', () => {
+    setLiveBadge('flushing');
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge flushing');
+    expect(doc.getElementById('live-status-text').textContent).toBe('Flushing …');
+  });
+
+  // #983: descale mirrors steaming/flushing's own badge treatment.
+  it('sets the descaling badge class/label', () => {
+    setLiveBadge('descaling');
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge descaling');
+    expect(doc.getElementById('live-status-text').textContent).toBe('Descaling …');
+  });
+});
+
+describe('handleLiveData() steam/flush live-content branches (#902)', () => {
+  let doc: ReturnType<typeof makeFakeDocument>;
+
+  beforeEach(() => {
+    doc = makeFakeDocument();
+    g.document = doc;
+    S.currentLang = 'en';
+    S.liveTimerTick = null;
+    S.liveBrewStartWall = null;
+  });
+
+  it('shows the steaming badge/content with duration+pressure+temp from steamDatapoints, blank flow/weight', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false, isSteaming: true, isFlushing: false,
+      steamDatapoints: { timeInMode: [0, 50], pressure: [0, 12], temperature: [1400, 1450] },
+      temperature: 91, targetTemperature: 93, pressure: 0.1, waterLevel: 70,
+    });
+
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge steaming');
+    expect(doc.getElementById('live-meta').textContent).toBe('Steaming …');
+    expect(doc.getElementById('live-content').style.display).toBe('block');
+    expect(doc.getElementById('live-idle').style.display).toBe('none');
+    expect(doc.getElementById('livePressure').textContent).toBe('1.2');
+    expect(doc.getElementById('liveTemp').textContent).toBe('145.0');
+    expect(doc.getElementById('liveFlow').textContent).toBe('–');
+    expect(doc.getElementById('liveWeight').textContent).toBe('–');
+  });
+
+  it('shows the flushing badge/content from flushDatapoints', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false, isSteaming: false, isFlushing: true,
+      flushDatapoints: { timeInMode: [0], pressure: [5], temperature: [930] },
+      temperature: 93, targetTemperature: 93, pressure: 0.5, waterLevel: 70,
+    });
+
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge flushing');
+    expect(doc.getElementById('live-meta').textContent).toBe('Flushing …');
+    expect(doc.getElementById('live-content').style.display).toBe('block');
+    expect(doc.getElementById('livePressure').textContent).toBe('0.5');
+    expect(doc.getElementById('liveTemp').textContent).toBe('93.0');
+  });
+
+  // #983: descale mirrors flush's own DOM-wiring test above.
+  it('shows the descaling badge/content from descaleDatapoints', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false, isSteaming: false, isFlushing: false, isDescaling: true,
+      descaleDatapoints: { timeInMode: [0], pressure: [2], temperature: [800] },
+      temperature: 80, targetTemperature: 93, pressure: 0.2, waterLevel: 70,
+    });
+
+    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge descaling');
+    expect(doc.getElementById('live-meta').textContent).toBe('Descaling …');
+    expect(doc.getElementById('live-content').style.display).toBe('block');
+    expect(doc.getElementById('livePressure').textContent).toBe('0.2');
+    expect(doc.getElementById('liveTemp').textContent).toBe('80.0');
+  });
+
+  it('updates the idle stats row (temp/target/pressure/water) even while true idle (no mode running)', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false, isSteaming: false, isFlushing: false,
+      datapoints: null, temperature: 91.5, targetTemperature: 93, pressure: 0.1, waterLevel: 64,
+    });
+
+    expect(doc.getElementById('liveIdleTemp').textContent).toBe('91.5°');
+    expect(doc.getElementById('liveIdleTargetTemp').textContent).toBe(' / 93°');
+    expect(doc.getElementById('liveIdlePressure').textContent).toBe('0.1 bar');
+    expect(doc.getElementById('liveIdleWaterLevel').textContent).toBe('64%');
+  });
+
+  it('idle stats show a dash for each field that is null (e.g. before any poll has run)', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false, isSteaming: false, isFlushing: false,
+      datapoints: null, temperature: null, targetTemperature: null, pressure: null, waterLevel: null,
+    });
+
+    expect(doc.getElementById('liveIdleTemp').textContent).toBe('–');
+    expect(doc.getElementById('liveIdleTargetTemp').textContent).toBe('');
+    expect(doc.getElementById('liveIdlePressure').textContent).toBe('–');
+    expect(doc.getElementById('liveIdleWaterLevel').textContent).toBe('–');
+  });
+});

@@ -1,33 +1,29 @@
-// Command server is the Go rewrite's HTTP bootstrap: it wires internal/db,
-// internal/auth, internal/ratelimit, internal/sse, internal/shots (Phase
-// 1c), internal/library (Phase 1d), internal/machines (Phase 1e),
-// internal/orders, internal/maintenance, internal/backup, internal/ha
-// (Phase 1f), and internal/system (Phase 1g, issue #901) together into a
-// real net/http server, in the same middleware order server.js actually
-// registers its own (read that file, not a paraphrase of it — see the
-// comment on the handler chain below).
+// Command server is the HTTP bootstrap: it wires internal/db, internal/auth,
+// internal/ratelimit, internal/sse, internal/shots, internal/library,
+// internal/machines, internal/orders, internal/maintenance, internal/backup,
+// internal/ha, and internal/system together into a real net/http server; the
+// handler chain below documents the middleware order.
 //
-// Every REST domain package the original Migrationsplan named now exists
-// and is registered: GET /api/events (Phase 1b), /shots.json + /api/shots/*
-// (Phase 1c), /api/library/* (Phase 1d), the machine-registry +
-// machine-control + machine-profile domain (Phase 1e), /api/orders/*,
-// /api/maintenance/*, GET/POST /api/backup + POST /api/restore (Phase 1f),
-// and internal/system's GET /api/machine/status, GET /api/live/data,
-// GET/POST /api/preheat*, GET /api/version, POST /api/demo/{seed,end}
-// plus the background polling loop that backs them (Phase 1g). A handful
-// of routes/system.js routes remain unrouted by design — see
-// go/internal/system/doc.go's "Scope" section for exactly which and why
-// (none of them are depended on by anything this phase ported). #977: this
-// binary is now the repo-root Dockerfile's own CMD (glp-server) — it is
-// the sole shipping entrypoint for every real install as of this cutover;
-// server.js remains in the tree but is no longer built or run in the
-// production image.
+// Every REST domain package now exists and is registered: GET /api/events,
+// /shots.json + /api/shots/*, /api/library/*, the machine-registry +
+// machine-control + machine-profile domain, /api/orders/*,
+// /api/maintenance/*, GET/POST /api/backup + POST /api/restore, and
+// internal/system's GET /api/machine/status, GET /api/live/data,
+// GET/POST /api/preheat*, GET /api/version, POST /api/demo/{seed,end} plus
+// the background polling loop that backs them. A handful of system routes
+// remain unrouted by design — see go/internal/system/doc.go's "Scope"
+// section for exactly which and why (none of them are depended on by
+// anything shipped). #977: this binary is now the repo-root Dockerfile's own
+// CMD (glp-server) — it is the sole shipping entrypoint for every real
+// install as of this cutover; the legacy server is no longer built or run in
+// the production image.
 package main
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -48,22 +44,23 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/importer"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mqtt"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/web"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/webapp"
 )
 
-// defaultPort matches lib/constants.js's DEFAULT_PORT (8099) — the port the
-// Node app listens on today, confirmed against config.yaml's exposed add-on
-// port. Overridable via GLP_PORT for local/dev runs of this binary outside
-// the add-on container, same pattern as dbPath/tokenPath below.
+// defaultPort is the port the add-on exposes (8099), confirmed against
+// config.yaml's exposed add-on port. Overridable via GLP_PORT for local/dev
+// runs of this binary outside the add-on container, same pattern as
+// dbPath/tokenPath below.
 const defaultPort = "8099"
 
 // shutdownTimeout bounds how long main() waits for in-flight requests to
@@ -81,6 +78,10 @@ type appConfig struct {
 	port            string
 	rateLimitWindow time.Duration
 	rateLimitMax    int
+	// logs is the in-memory ring of the app's own recent log output that
+	// main() tees stderr into, handed to the MCP get_diagnostics tool. Nil in
+	// tests that build appConfig directly, which the tool tolerates.
+	logs mcp.LogSource
 }
 
 func configFromEnv() appConfig {
@@ -94,7 +95,13 @@ func configFromEnv() appConfig {
 }
 
 func main() {
+	// Keep the app's own recent output in memory for the get_diagnostics MCP
+	// developer tool while writing every line to stderr exactly as before.
+	logs := logbuf.New(500)
+	log.SetOutput(io.MultiWriter(os.Stderr, logs))
+
 	cfg := configFromEnv()
+	cfg.logs = logs
 
 	handler, sqlDB, err := buildApp(context.Background(), cfg)
 	if err != nil {
@@ -134,11 +141,13 @@ func main() {
 	}
 }
 
+// onMux lets tests inspect the fully-registered mux (openapi_routes_test.go).
+var onMux func(*http.ServeMux)
+
 // buildApp wires every internal/* domain into the full net/http handler
-// chain server.js registers, exactly as main() did inline before Phase 3
-// (#901) split it out so cmd/server's HA-ingress smoke test can exercise
-// the real middleware stack + real handlers end to end. ctx bounds the
-// background poller's tickers — cancelling it shuts the poller (and its
+// chain. Extracted from main() so cmd/server's HA-ingress smoke test can
+// exercise the real middleware stack + real handlers end to end. ctx bounds
+// the background poller's tickers — cancelling it shuts the poller (and its
 // live-poll goroutine) down cleanly. The returned *sql.DB is the caller's
 // to Close.
 func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error) {
@@ -160,55 +169,36 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	hub := sse.NewHub()
 	sseHandler := &sse.Handler{Hub: hub}
-	// Prime is wired below, once poller exists — routes/sse.js primes a
-	// newly-connected client with the current preheat-update/live-snapshot
-	// snapshot (buildPreheatResponse()/buildLiveDataResponse(), both
-	// synchronous reads) before subscribing it to the Hub. The
-	// sync-progress priming loop Node also does has no Go equivalent yet
-	// (state.syncProgress isn't ported — see internal/system/doc.go).
+	// Prime is wired below, once poller exists: it primes a newly-connected
+	// client with the current preheat-update/live-snapshot snapshot
+	// (buildPreheatResponse()/buildLiveDataResponse(), both synchronous reads)
+	// before subscribing it to the Hub. The sync-progress priming loop has no
+	// equivalent yet (state.syncProgress isn't implemented — see
+	// internal/system/doc.go).
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/events", sseHandler)
-
-	// Phase 1 (#901): internal/web's templ pages are no longer the app's
-	// primary UI — internal/webapp serves the production Vite SPA at the
-	// root (see below). The templ pages are frozen as a no-JS fallback view
-	// and move behind a /ui/ prefix: they register on this dedicated
-	// sub-mux, which mux mounts under /ui/ via http.StripPrefix after every
-	// web.*Handlers has registered. StripPrefix removes the "/ui" segment
-	// before the sub-mux matches, so "GET /shots" inside internal/web is
-	// reached as GET /ui/shots, "GET /web/static/..." as GET
-	// /ui/web/static/..., etc. — every relative href/hx-* in those templates
-	// still resolves correctly because the whole route subtree moved one
-	// segment deeper together (see internal/web.Handlers.RegisterRoutes).
-	uiMux := http.NewServeMux()
-	// Bare GET /ui/ -> the first templ page, via a genuinely relative
-	// Location so the browser resolves it against its own address bar
-	// (Ingress prefix included), not the origin root — the same reasoning
-	// internal/web/static/glp-token.js's doc comment spells out. After
-	// StripPrefix this handler sees the path as "/".
-	uiMux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Location", "shots")
-		w.WriteHeader(http.StatusFound)
-	})
 
 	shotsRepo := shots.NewRepository(sqlDB)
 	shotsHandlers := shots.NewHandlers(shotsRepo)
 	shotsHandlers.RegisterRoutes(mux)
 
-	// Phase 2a (#901): the Go frontend foundation — GET /shots plus its two
-	// htmx trash/restore actions, built on the same shots.Service the JSON
-	// API above uses. Not yet reachable in production (this binary isn't
-	// wired into the Docker image/CI — see go/README.md). Registered
-	// outside /api/ so the read-only GET falls through auth.RequireToken's
-	// static-asset bypass; the two POST actions do NOT get that bypass
-	// (RequireToken scopes it to GET/HEAD) and require the same
-	// token/Ingress trust the JSON API does — see internal/web/doc.go's
-	// "Auth model" section.
-	webHandlers := web.NewHandlers(shots.NewService(shotsRepo))
-	webHandlers.RegisterRoutes(uiMux)
-
 	libRepo := library.NewRepository(sqlDB)
+	// #1198: server-side scoring resolves each shot's own library bean
+	// (beanId-first, coffee-name fallback) so the list, share card and API
+	// agree with what the achievement badges assume. internal/shots can't
+	// import internal/library (library imports shots), so the lookup is
+	// injected here; without it scoring keeps the generic fixed bands.
+	shots.SetBeanSource(func() (func(shots.Shot) *shots.Bean, error) {
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
+		}
+		beans := lib.Beans
+		return func(s shots.Shot) *shots.Bean {
+			return library.ScoreBean(s, beans)
+		}, nil
+	})
 	libraryHandlers := library.NewHandlers(libRepo, shotsRepo)
 	libraryHandlers.RegisterRoutes(mux)
 
@@ -226,10 +216,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		)
 	})
 
-	// Phase 2f (#901): wire the share-card renderer's two cross-domain
-	// lookups (lib/card.js does both through a lazy require + try/catch).
-	// Closures keep internal/shots from importing internal/db or
-	// internal/library.
+	// Wire the share-card renderer's two cross-domain lookups. Closures keep
+	// internal/shots from importing internal/db or internal/library.
 	shotsHandlers.SetCardDeps(
 		func() string {
 			id, err := db.EnsureInstallID(sqlDB)
@@ -241,30 +229,19 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		func(coffeeName string) string { return library.ResolveBeanOriginCode(coffeeName, libRepo) },
 	)
 
-	// Phase 2g (#901): fire-and-forget bean-region geocoding
-	// (lib/geo.js + LibraryService.geocodeBean). library.CreateBean/
-	// UpdateBean call library.GeocodeHook un-awaited when a bean's region
-	// is set/changed — the Go equivalent of routes/library/beans.js's
-	// `libraryService.geocodeBean(id).catch(() => {})`. Set here (nil in
-	// tests) to keep those functions' signatures unchanged.
+	// Fire-and-forget bean-region geocoding: library.CreateBean/UpdateBean
+	// call library.GeocodeHook without waiting when a bean's region is
+	// set/changed. Set here (nil in tests) to keep those functions'
+	// signatures unchanged.
 	geocoder := library.NewGeocoder(libRepo)
 	library.GeocodeHook = func(beanID int64, _, _ string) {
 		geocoder.GeocodeBean(context.Background(), beanID)
 	}
 
-	// Phase 2b (#901): the Library domain's Go frontend pages — Beans (plus
-	// its one htmx write action, toggle-active) and read-only lists for
-	// Grinders/Baskets/Puck Screens/Milks/Recipes, built on the same
-	// library.Repository/shots.Repository the JSON API above uses. Same
-	// registration-outside-/api/ auth model as webHandlers above — see
-	// internal/web/doc.go's "Auth model" section.
-	webLibraryHandlers := web.NewLibraryHandlers(libRepo, shotsRepo)
-	webLibraryHandlers.RegisterRoutes(uiMux)
-
-	// Phase 2c (#901): the bean-import domain — GET /api/import/url plus
-	// GET/POST /api/import/settings. beans is the loadLibrary().beans lookup
-	// routes/import.js's duplicate-warning check needs, passed as a callback
-	// (not a library import) the same way library.GeocodeHook is wired below.
+	// The bean-import domain — GET /api/import/url plus GET/POST
+	// /api/import/settings. beans is the loadLibrary().beans lookup the
+	// duplicate-warning check needs, passed as a callback (not a library
+	// import) the same way library.GeocodeHook is wired above.
 	importerHandlers := importer.NewHandlers(importer.NewRepository(sqlDB), func() []map[string]any {
 		lib, err := libRepo.GetLibrary()
 		if err != nil {
@@ -275,32 +252,27 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	importerHandlers.RegisterRoutes(mux)
 
 	registry := machines.NewRegistry(sqlDB)
-	// ports server.js's startup registry.logRegistrySnapshot() (#714) --
-	// behind debug_logging (#977 follow-up), so it's a no-op unless that
-	// option is on. Unlike Node, nothing has necessarily called
-	// EnsureDefaultMachine yet at this point (it's a lazy, per-request call
-	// in this Go port — see its own doc comment), so a genuinely fresh /data
-	// can log "(none)" here even though the default machine appears a
-	// moment later on the first real request.
+	// Startup logRegistrySnapshot() (#714) — behind debug_logging (#977
+	// follow-up), so it's a no-op unless that option is on. Nothing has
+	// necessarily called EnsureDefaultMachine yet at this point (it's a lazy,
+	// per-request call — see its own doc comment), so a genuinely fresh /data
+	// can log "(none)" here even though the default machine appears a moment
+	// later on the first real request.
 	registry.LogRegistrySnapshot()
-	machinesHandlers := machines.NewHandlers(registry, hub)
+	profilesRepo := machines.NewProfilesRepository(sqlDB)
+	machinesHandlers := machines.NewHandlers(registry, hub, profilesRepo)
 	machinesHandlers.RegisterRoutes(mux)
 
-	// Phase 2e (#901): routes/debug.js — GET /api/debug/export-db,
-	// POST /api/debug/import-db — plus routes/system.js's H2 GET
-	// /api/debug/machine. All three (and the two ingress routes below) are
-	// gated on GLP_DEV_BUILD (#1051: previously /api/debug/machine and the
-	// ingress routes used a NODE_ENV != production check instead, but
-	// nothing in the shipped image ever sets NODE_ENV, so they were live on
-	// every real install). importDB's own http.MaxBytesReader is the
-	// route-scoped 500 MB body ceiling server.js:192 sets with
-	// express.raw({ limit: '500mb' }) — see the handler-chain comment below
-	// and go/internal/debug/debug.go.
-	//
-	// Phase 3 (#901): GET /api/debug/ingress (+ /sse-probe) — a Go-only
-	// HA-ingress self-diagnostic for opening through the real HA panel, same
-	// GLP_DEV_BUILD gating as /api/debug/machine. See
-	// go/internal/debug/ingress.go.
+	// The debug domain — GET /api/debug/export-db, POST /api/debug/import-db,
+	// GET /api/debug/machine, and GET /api/debug/ingress (+ /sse-probe), a
+	// Go-only HA-ingress self-diagnostic for opening through the real HA
+	// panel. All of them (and the two ingress routes below) are gated on
+	// GLP_DEV_BUILD (#1051: previously /api/debug/machine and the ingress
+	// routes used a NODE_ENV != production check instead, but nothing in the
+	// shipped image ever sets NODE_ENV, so they were live on every real
+	// install). importDB's own http.MaxBytesReader is the route-scoped 500 MB
+	// body ceiling — see the handler-chain comment below and
+	// go/internal/debug/debug.go.
 	debug.NewHandlers(sqlDB, dbPath, registry).RegisterRoutes(mux)
 
 	haClient := ha.NewClientFromEnv()
@@ -308,65 +280,31 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
 	ordersHandlers.RegisterRoutes(mux)
 
-	// Phase 2d (#901): the Orders domain's Go frontend pages — the barista
-	// queue (GET /orders, with accept/complete/decline htmx actions) and the
-	// customer ordering form (GET /menu, with its one write action) — built
-	// on the same orders.Repository/Service dependencies the JSON API above
-	// uses, via its own *orders.Service instance (see
-	// internal/web/handlers_orders.go's own doc comment for why a second
-	// instance, not ordersHandlers' internal one). Same
-	// registration-outside-/api/ auth model as every other web.*Handlers.
-	// hub (the same one wired into sseHandler above) lets that second
-	// Service instance's OnQueueChanged callback push a live orders-update
-	// SSE event to every open /orders tab (#901, a later pass — see
-	// templates/orders.templ's own doc comment).
-	webOrdersHandlers := web.NewOrdersHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient, hub)
-	webOrdersHandlers.RegisterRoutes(uiMux)
-
-	// #901 code review (CONFIRMED finding #2): ordersHandlers (REST, above)
-	// and webOrdersHandlers each own an independent *orders.Service — only
-	// the web one had OnQueueChanged wired, so an order mutated through the
-	// REST API alone (glp-integration, or any other external client) never
-	// published a live orders-update event. Wire the same publish function
-	// onto the REST instance's Service too, closing that gap without
-	// collapsing the two Service instances into one — see
-	// orders.Handlers.Service's and web.OrdersHandlers.PublishQueueUpdate's
-	// own doc comments for why two instances sharing one publish function is
-	// the chosen fix, not a shared-instance refactor.
-	ordersHandlers.Service().OnQueueChanged = webOrdersHandlers.PublishQueueUpdate
-
-	// GET /ui/kiosk: standalone tablet ordering kiosk, self-contained
-	// HTML/JS hitting the same JSON API as above — see internal/web/kiosk.go's
-	// own doc comment for why it's a separate page from GET /ui/menu.
-	// Registered on uiMux (not mux) for the same reason every other
-	// web.*Handlers page is: its relative "web/static/..." asset path only
-	// resolves correctly once StripPrefix("/ui", uiMux) below puts it one
-	// path segment deep, matching where that static handler is actually
-	// mounted (/ui/web/static/..., not /web/static/...).
-	web.RegisterKioskRoute(uiMux)
-
-	// Phase 1g (#901): the background polling loop that backs
-	// GET /api/machine/status, GET /api/live/data, GET/POST /api/preheat*,
-	// and the live-snapshot/preheat-update SSE events — see
-	// internal/system/doc.go for the full scope and what it deliberately
-	// doesn't port. poller.Start launches its own 30s HA-check/preheat
-	// tickers bound to ctx; the process runs until the OS kills it (no
-	// graceful-shutdown signal handling exists in this binary yet, same as
-	// every other domain package here), so ctx is background — cancelling
-	// it would only matter for a future clean-shutdown path.
+	// The background polling loop that backs GET /api/machine/status,
+	// GET /api/live/data, GET/POST /api/preheat*, and the
+	// live-snapshot/preheat-update SSE events — see internal/system/doc.go
+	// for the full scope and what it deliberately leaves out. poller.Start
+	// launches its own 30s HA-check/preheat tickers bound to ctx; the process
+	// runs until the OS kills it (no graceful-shutdown signal handling exists
+	// in this binary yet, same as every other domain package here), so ctx is
+	// background — cancelling it would only matter for a future
+	// clean-shutdown path.
 	poller := system.NewPoller(registry, machinesHandlers, hub, haClient)
-	// Phase 2a (#901): POST /api/sync's manual shot-history pull loop
-	// persists through shotsRepo — see go/internal/system/sync.go.
+	// POST /api/sync's manual shot-history pull loop persists through
+	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)
+	// Offline profile editor (2026-09-09): pushes locally-saved profile
+	// edits to the machine on reconnect/after a brew/periodically — see
+	// go/internal/system/profile_sync.go.
+	poller.SetProfilesRepo(profilesRepo)
 
-	// Phase 2d (#901): MQTT live-data transport (#608). mqttRepo is the
-	// Settings-page toggle + broker connection (kv.key = 'mqtt_settings', no
-	// migration needed). mqttTransport is lib/live-transport.js's dispatch
-	// seam — wired into the poller so the default machine's live reads go to
-	// the MQTT subscription instead of the adapter's WS session whenever the
-	// toggle selects it. The 4 /api/mqtt/* routes reuse machinesHandlers'
-	// GetAdapter (apply-to-machine) and haClient's Supervisor access
-	// (discovery).
+	// MQTT live-data transport (#608). mqttRepo is the Settings-page toggle +
+	// broker connection (kv.key = 'mqtt_settings', no migration needed).
+	// mqttTransport is the transport dispatch seam — wired into the poller so
+	// the default machine's live reads go to the MQTT subscription instead of
+	// the adapter's WS session whenever the toggle selects it. The 4
+	// /api/mqtt/* routes reuse machinesHandlers' GetAdapter
+	// (apply-to-machine) and haClient's Supervisor access (discovery).
 	mqttRepo := mqtt.NewRepository(sqlDB)
 	mqttTransport := mqtt.NewTransport(mqtt.NewClient(), mqttRepo)
 	poller.SetLiveTransport(mqttTransport)
@@ -374,9 +312,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	poller.Start(ctx)
 
-	// #1152: Node ran purgeExpiredTrash once at startup and then every 24h
-	// (server.js's startup call + its setInterval). StartTrashPurge mirrors
-	// both — the immediate purge plus a 24h ticker bound to ctx.
+	// #1152: purge expired trash once at startup and then every 24h —
+	// StartTrashPurge does the immediate purge plus a 24h ticker bound to ctx.
 	shots.StartTrashPurge(ctx, shots.NewService(shotsRepo), 24*time.Hour)
 
 	// Closes internal/orders' shop-broadcast deferral (see
@@ -388,35 +325,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	systemHandlers := system.NewHandlers(poller, demoService, token)
 	systemHandlers.RegisterRoutes(mux)
 
-	// Phase 2c (#901): the Machines domain's Go frontend pages — the
-	// machines list (default/reachable badges, set-default and delete htmx
-	// actions) plus GET /live, the live shot chart page whose actual chart
-	// is a standalone vanilla-JS SSE consumer (static/live.js), not an htmx
-	// fragment page — see internal/web/handlers_machines.go and
-	// templates/live.templ's own doc comments. poller is passed so the
-	// machines list can show the default machine's live reachable status
-	// (internal/system.Poller.StatusInfo) and GET /live can name the
-	// current default machine. Same registration-outside-/api/ auth model
-	// as every other web.*Handlers above.
-	webMachinesHandlers := web.NewMachinesHandlers(registry, poller)
-	webMachinesHandlers.RegisterRoutes(uiMux)
-
-	// Phase 2e (#901): GET /settings, the default machine's Gaggiuino
-	// settings categories (read-only boiler/led/scales/system, editable
-	// display), built on machines.Adapter's GetSettings/UpdateSettings via
-	// machinesHandlers.GetAdapter — the same *machines.Handlers instance
-	// internal/system's poller (above) already shares, not a second one.
-	// Same registration-outside-/api/ auth model as every other
-	// web.*Handlers. See internal/web/handlers_settings.go's own doc
-	// comment for the full scope (one editable category, no per-machine
-	// switcher, raw-JSON round trip to preserve the settings bool-as-string
-	// quirk unchanged).
-	webSettingsHandlers := web.NewSettingsHandlers(registry, machinesHandlers)
-	webSettingsHandlers.RegisterRoutes(uiMux)
-
-	// routes/sse.js primes a newly-connected client with the current
-	// preheat/live snapshot before subscribing it to future pushes — see
-	// the Prime field's doc comment above.
+	// Prime a newly-connected client with the current preheat/live snapshot
+	// before subscribing it to future pushes — see the Prime field's doc
+	// comment above.
 	sseHandler.Prime = func() []sse.Event {
 		return []sse.Event{
 			{Type: sse.EventPreheatUpdate, Data: poller.PreheatStatus()},
@@ -427,27 +338,57 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	maintenanceRepo := maintenance.NewRepository(sqlDB, libRepo)
 	maintenanceHandlers := maintenance.NewHandlers(maintenanceRepo, shotsRepo, libRepo, registry)
 	maintenanceHandlers.RegisterRoutes(mux)
-	// #901 (Phase 1f): closes the Phase 1d gap flagged in
-	// internal/library/doc.go — deleting a grinder now also removes its
-	// `grinder_{id}` maintenance-table row, via a callback (not a direct
-	// import) since internal/maintenance already imports internal/library.
+	// Deleting a grinder now also removes its `grinder_{id}` maintenance-table
+	// row, via a callback (not a direct import) since internal/maintenance
+	// already imports internal/library (the gap flagged in
+	// internal/library/doc.go).
 	libraryHandlers.SetOnGrinderDeleted(maintenanceRepo.DeleteGrinderTask)
 
 	// #1136: a firmware update triggered from the app shows up in the
 	// machine's maintenance log. Wired as a callback (not a direct import)
 	// for the same import-cycle reason as the grinder-delete hook above --
-	// internal/maintenance already imports internal/machines.
-	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine) error {
-		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", "", m.Host, 0, m.ID)
+	// internal/maintenance already imports internal/machines. The note records
+	// the from/to firmware versions (best-effort: either may be blank) and the
+	// shot count is scoped to the machine like every other non-global task,
+	// reusing maintenance.ShotCountFor rather than duplicating the logic.
+	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine, from, to string) error {
+		notes := maintenance.FirmwareUpdateNote(from, to)
+		shotCount := maintenance.ShotCountFor(shotsRepo, "firmware_update", m.ID)
+		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID)
 		return err
 	})
 
-	// Phase 2b (#901): the achievements ("stamp card") domain —
-	// GET /api/achievements. A pure-logic port reading across shots,
-	// library, orders, maintenance, machines and the cached version check
-	// (systemHandlers.CachedVersion, via a callback — no cross-domain
-	// import). See go/internal/achievements/doc.go, incl. the documented
-	// "no event bus" deviation (evaluate-before-read instead).
+	// MCP (#1196, #1288): the Model Context Protocol server is always mounted
+	// under /api/ so auth.RequireToken guards it with X-GLP-Token like every
+	// other API route. Whether it answers is decided per request from the
+	// app-database-backed 'mcp_settings' row: while disabled it 404s, and
+	// enabling it (or its write/developer opt-ins) via GET/POST
+	// /api/mcp/settings takes effect without a restart. Registered here —
+	// after the library, registry, poller and maintenance wiring — so the
+	// read-only library/status/analytics tools get their dependencies.
+	mcpRepo := mcp.NewRepository(sqlDB)
+	mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
+		Shots:           shots.NewService(shotsRepo),
+		ShotsRepo:       shotsRepo,
+		Library:         libRepo,
+		Maintenance:     maintenanceRepo,
+		Registry:        registry,
+		Poller:          poller,
+		Logs:            cfg.logs,
+		Sync:            poller,
+		Preheat:         poller,
+		Version:         system.Version(),
+		RateLimitWindow: rateLimitWindow,
+		RateLimitMax:    rateLimitMax,
+		Settings:        mcpRepo,
+	}))
+	mcp.NewSettingsHandlers(mcpRepo).RegisterRoutes(mux)
+
+	// The achievements ("stamp card") domain — GET /api/achievements. Pure
+	// logic reading across shots, library, orders, maintenance, machines and
+	// the cached version check (systemHandlers.CachedVersion, via a callback
+	// — no cross-domain import). See go/internal/achievements/doc.go, incl.
+	// the documented "no event bus" design (evaluate-before-read instead).
 	achievementsRepo := achievements.NewRepository(sqlDB)
 	achievementsSvc := achievements.NewService(achievementsRepo, achievements.Deps{
 		Shots:       shotsRepo,
@@ -462,23 +403,38 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	})
 	achievements.NewHandlers(achievementsSvc).RegisterRoutes(mux)
 
-	// Phase 2e (#901): the Maintenance domain's Go frontend page —
-	// GET /maintenance (per-machine task list + a machine switcher) plus
-	// its one htmx write action, "mark done", built on
-	// maintenance.MarkTaskDone (service.go) — the same function
-	// maintenanceHandlers' own REST taskDone handler now calls too, so both
-	// paths write the identical maintenance_log side effect. Same
-	// registration-outside-/api/ auth model as every other web.*Handlers.
-	webMaintenanceHandlers := web.NewMaintenanceHandlers(maintenanceRepo, shotsRepo, libRepo, registry)
-	webMaintenanceHandlers.RegisterRoutes(uiMux)
+	// #1286: the achievements domain has no event bus, so the four live-moment
+	// badges are driven by explicit callbacks. R1 wired the two profile badges
+	// (first_profile/profile_edit) from the machines handlers once a profile
+	// create/update has fully succeeded; R2 wires the backup and restock badges
+	// from the backup/library handlers (see those packages' SetOn* setters).
+	// Best-effort: an EvaluateEvent failure is logged only -- the originating
+	// request itself already succeeded and must not be affected.
+	machinesHandlers.SetOnProfileSaved(func(action string) {
+		if _, err := achievementsSvc.EvaluateEvent(&achievements.Event{
+			Type:    "profile-saved",
+			Payload: map[string]any{"action": action},
+		}); err != nil {
+			log.Printf("achievements: evaluating profile-saved %q failed: %v", action, err)
+		}
+	})
+	libraryHandlers.SetOnBeanRestocked(func(wasEmpty bool) {
+		if _, err := achievementsSvc.EvaluateEvent(&achievements.Event{
+			Type:    "bean-changed",
+			Payload: map[string]any{"reason": "restock", "wasEmpty": wasEmpty},
+		}); err != nil {
+			log.Printf("achievements: evaluating bean-changed restock (wasEmpty=%t) failed: %v", wasEmpty, err)
+		}
+	})
 
 	backupHandlers := backup.NewHandlers(backup.Dependencies{
-		DB:              sqlDB,
-		ShotsRepo:       shotsRepo,
-		LibRepo:         libRepo,
-		OrdersRepo:      ordersRepo,
-		MaintenanceRepo: maintenanceRepo,
-		Registry:        registry,
+		DB:               sqlDB,
+		ShotsRepo:        shotsRepo,
+		LibRepo:          libRepo,
+		OrdersRepo:       ordersRepo,
+		MaintenanceRepo:  maintenanceRepo,
+		Registry:         registry,
+		AchievementsRepo: achievementsRepo,
 		// Token/TokenFile: a restored API token is persisted to
 		// tokenPath but does NOT take effect in this already-running
 		// process — see backup.Dependencies.Token's doc comment.
@@ -486,52 +442,39 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		TokenFile: tokenPath,
 	})
 	backupHandlers.RegisterRoutes(mux)
+	backupHandlers.SetOnExported(func() {
+		if _, err := achievementsSvc.EvaluateEvent(&achievements.Event{Type: "backup-exported"}); err != nil {
+			log.Printf("achievements: evaluating backup-exported failed: %v", err)
+		}
+	})
 
-	// Phase 2e (#901): GET /backup — a download link for the GET /api/backup
-	// export above, plus an explicit note that restore isn't built into
-	// this page yet. No dependencies: this page only links to the existing
-	// backup REST handler, it doesn't call into internal/backup itself. See
-	// internal/web/handlers_backup.go's own doc comment for why a full
-	// upload+restore UI is deliberately out of this phase's scope.
-	webBackupHandlers := web.NewBackupHandlers()
-	webBackupHandlers.RegisterRoutes(uiMux)
-
-	// Phase 1 (#901): mount the frozen templ pages under /ui/ now that every
-	// web.*Handlers has registered on uiMux. http.StripPrefix("/ui", ...)
-	// trims the segment before uiMux matches; ServeMux redirects a bare
-	// "/ui" to "/ui/" on its own because of this "/ui/" subtree pattern.
-	mux.Handle("/ui/", http.StripPrefix("/ui", uiMux))
-
-	// Phase 1 (#901): the production frontend. internal/webapp embeds and
-	// serves the existing Vite SPA bundle (gaggiuino-local-profiler/
-	// public-src, built to public/) — byte-for-byte the UI the Node app
-	// serves today, REST+SSE only, all relative paths. Registered last so
-	// its catch-all "GET /" only ever runs for paths no more-specific
-	// pattern (every /api/*, /shots.json, the /ui/ subtree above) claimed.
-	// Same registration-outside-/api/ auth model as the templ pages: GET
-	// falls through auth.RequireToken's static-asset bypass, exactly as the
-	// Node app's own express.static frontend does. See internal/webapp/doc.go.
+	// The production frontend. internal/webapp embeds and serves the existing
+	// Vite SPA bundle (gaggiuino-local-profiler/public-src, built to public/)
+	// — REST+SSE only, all relative paths. Registered last so its catch-all
+	// "GET /" only ever runs for paths no more-specific pattern (every /api/*
+	// route, /shots.json) claimed. Same registration-outside-/api/ auth model
+	// as those: GET falls through auth.RequireToken's static-asset bypass,
+	// exactly as the static frontend always has. See internal/webapp/doc.go.
 	webapp.NewHandlers().RegisterRoutes(mux)
+
+	if onMux != nil {
+		onMux(mux)
+	}
 
 	limiter := ratelimit.New(rateLimitWindow, rateLimitMax)
 
-	// server.js's ACTUAL app.use() order — security headers (lines ~83-98),
-	// then the app-level rate limiter (line 104, deliberately ahead of auth
-	// so it also caps unauthenticated login/token-probing traffic, per
-	// lib/middleware/rateLimit.js's own comment), then token auth
-	// (lines ~144-173). Read from the innermost handler outward, this chain
-	// applies auth first, rate-limit second, security headers last, which
-	// is the correct nesting to make requests experience them in that
-	// server.js order.
+	// The middleware order: security headers, then the app-level rate limiter
+	// (deliberately ahead of auth so it also caps unauthenticated
+	// login/token-probing traffic), then token auth. Read from the innermost
+	// handler outward, this chain applies auth first, rate-limit second,
+	// security headers last, which is the correct nesting to make requests
+	// experience them in that order.
 	//
-	// server.js's body-parser step (lines ~178-193) has no Go equivalent to
-	// slot in here: net/http reads a request body lazily per-handler, not
-	// through a chained global middleware, so there is nothing to add yet.
-	// Phase 1c's handlers each bound their own request body size per-route
-	// the way routes/backup.js's /api/restore and routes/debug.js's
-	// /api/debug/import-db use route-scoped express.json()/express.raw()
-	// limits today — internal/debug's importDB, for one, wraps its body in
-	// http.MaxBytesReader at server.js:192's exact 500 MB ceiling.
+	// There is no global body-parser step to slot in here: net/http reads a
+	// request body lazily per-handler, not through a chained global
+	// middleware, so there is nothing to add. Instead each handler bounds its
+	// own request body size per-route — internal/debug's importDB, for one,
+	// wraps its body in http.MaxBytesReader at the 500 MB ceiling.
 	handler := auth.SecurityHeaders(
 		limiter.Middleware(
 			auth.RequireToken(token)(mux),
@@ -548,13 +491,10 @@ func getEnv(name, def string) string {
 	return def
 }
 
-// getEnvNumber ports lib/middleware/rateLimit.js's
-// `Number(process.env.X) || default` pattern for GLP_RATE_LIMIT_WINDOW_MS/
-// GLP_RATE_LIMIT_MAX: an unset env var, one that fails to parse as a number
-// (JS's Number() returns NaN, which is falsy), or one that parses to 0
-// (also falsy in JS) all fall back to def — matching the Node original's
-// behavior exactly, including that a literal "0" override is treated the
-// same as no override.
+// getEnvNumber parses GLP_RATE_LIMIT_WINDOW_MS/GLP_RATE_LIMIT_MAX: an unset
+// env var, one that fails to parse as a number, or one that parses to 0 all
+// fall back to def, including that a literal "0" override is treated the same
+// as no override.
 func getEnvNumber(name string, def float64) float64 {
 	v, ok := os.LookupEnv(name)
 	if !ok {
@@ -568,14 +508,11 @@ func getEnvNumber(name string, def float64) float64 {
 }
 
 // tcpNoDelayListener explicitly disables Nagle's algorithm on every
-// accepted connection. routes/sse.js's #740 fix (res.socket.setNoDelay(true))
-// has no real equivalent to port here: Go's net.TCPConn already defaults
-// NoDelay to true for every connection Go's own net package creates (see
-// net.TCPConn.SetNoDelay's doc comment) — Node's net.Socket defaults the
-// other way, which is the only reason that explicit call exists there. This
-// wrapper is defense-in-depth that makes the guarantee explicit at the
-// listener level for every connection this process accepts, rather than a
-// port of Node's per-connection workaround (see internal/sse/doc.go).
+// accepted connection. Go's net.TCPConn already defaults NoDelay to true for
+// every connection Go's own net package creates (see
+// net.TCPConn.SetNoDelay's doc comment), so this wrapper is defense-in-depth
+// that makes the guarantee explicit at the listener level for every
+// connection this process accepts (see internal/sse/doc.go).
 type tcpNoDelayListener struct{ net.Listener }
 
 func (l tcpNoDelayListener) Accept() (net.Conn, error) {

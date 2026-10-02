@@ -8,16 +8,16 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
-// GaggiMateAdapter ports lib/machines/gaggimate/adapter.js. Experimental,
-// same as Node: no real device was available to verify against in this
-// environment either (see doc.go) — built strictly from the protocol
-// description ws-client.js/profiles.js document. Live status, profile
-// read/select, and full profile create/update/delete are all supported —
-// GaggiMate profiles live only on the machine itself (no local copy in
-// GLP's DB), so create/update/delete forward straight to req:profiles:save/
-// delete over the live WS connection (gaggimate_profiles.go). Capabilities().
-// ProfileEdit is true; requireProfileEditSupport (handlers.go) still gates
-// every write route on it, same check as for Gaggiuino.
+// GaggiMateAdapter is the GaggiMate machine adapter. Experimental: no real
+// device was available to verify against in this environment (see doc.go) —
+// built strictly from the documented GaggiMate WS/profiles protocol. Live
+// status, profile read/select, and full profile create/update/delete are all
+// supported — GaggiMate profiles live only on the machine itself (no local
+// copy in GLP's DB), so create/update/delete forward straight to
+// req:profiles:save/delete over the live WS connection
+// (gaggimate_profiles.go). Capabilities().ProfileEdit is true;
+// requireProfileEditSupport (handlers.go) still gates every write route on
+// it, same check as for Gaggiuino.
 type GaggiMateAdapter struct {
 	// live is the persistent evt:status cache (#952). GetStatus reads it
 	// instead of opening a fresh WebSocket per call — the live-poll loop
@@ -57,6 +57,15 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 			return Status{}, err
 		}
 	}
+	// The field mapping below is intentionally unchanged (#1303). On firmware
+	// v1.9.0 the partial fast/slow frames are already merged upstream —
+	// mergeGaggiMateStatus is called from the live session's read loop and from
+	// gaggimateWaitForStatus — so evt is the union of the slow state keys (m, p,
+	// bc, cw, ...) and the latest fast readings (ct, pr, fl, process, ...) on
+	// both the cached and the fallback path. On full-frame firmware the merge is
+	// a no-op. No mapping change is needed, and gating the cache on ct here
+	// would push callers onto gaggimateWaitForStatus's second dial, which the
+	// firmware's single-client WebSocket limit rejects.
 	raw, _ := json.Marshal(evt)
 
 	// m==1 (BREW mode) means "brew screen selected", not "pump running".
@@ -217,11 +226,10 @@ func (a *GaggiMateAdapter) Capabilities() Capabilities {
 	}
 }
 
-// ── #597 settings/control proxy: unsupported for GaggiMate (no exports in
-// lib/machines/gaggimate/adapter.js at all) — every method below only
-// exists to satisfy the Adapter interface; Capabilities().SettingsProxy
-// == false means handlers.go's requireSettingsProxySupport 501s every
-// caller before any of these could ever run. ───────────────────────────
+// ── #597 settings/control proxy: unsupported for GaggiMate — every method
+// below only exists to satisfy the Adapter interface; Capabilities().
+// SettingsProxy == false means handlers.go's requireSettingsProxySupport
+// 501s every caller before any of these could ever run. ────────────────
 
 func (a *GaggiMateAdapter) GetSettings(ctx context.Context, m *Machine, category string) (json.RawMessage, error) {
 	return nil, errSettingsProxyUnsupported

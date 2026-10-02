@@ -1,3 +1,63 @@
+## [3.3.0] – 2026-10-02
+### Added
+- **The coffee library view is now fully type-checked.**
+- **Beans can now hold several bags at once as a queue, with a drag-reorderable upcoming list and per-bag stock.** (thanks @Paul-Lukas, #1122)
+- **Machine profiles can now be created, edited and deleted while the machine is unreachable, and are pushed to it automatically once it is reachable again.** Part of #1125 Thanks @Paul-Lukas (#1119).
+- **The live view has a shot setup panel: pick bean, dose, grinder, grind setting, basket, puck screen and recipe before you pull, and they are saved to the shot automatically.** Part of #1125 Thanks @Paul-Lukas.
+- **A browser demo with sample data now runs on GitHub Pages, including a simulated live shot.** Closes #1193
+- **AI assistants such as Claude can now read your shots, beans and analytics through an optional built-in MCP server, which is now switched on in the app's Settings page, with developer tools available only on the dev channel.** Part of #1288 Closes #1196
+### Fixed
+- **GaggiMate machines on firmware v1.9.0 show the profile name, steaming, scale weight and live readings again.** Closes #1303
+- **The "First Profile" and "Tinkerer" achievements unlock again when you create or edit a brew profile.** Part of #1286
+- **The "Backup" and "Restocked" achievements unlock again when you export a backup or add a bag to an empty bean.** Part of #1286
+- **Editing a shot no longer wipes its order attribution, rating or notes when only some fields are saved.** Part of #1273
+- **Settings → What's New shows v3.2.0 again, and a release without a What's New entry now fails the tests.** Closes #1240
+- **The bean picker now shows a bean as empty based on the stock the server calculated, not only the shots loaded in the browser.** Closes #1225
+- **The machine icon in the top bar now shows whether the selected machine is on, not the default machine's state.** Part of #1201
+- **With several machines, each one now shows its own reachability, last error and firmware version, and a shot is stamped with the firmware of the machine that pulled it.** Part of #1201
+- **Tapping complete twice on an order (or an automation and the dashboard at the same moment) no longer deducts the milk twice.** Closes #1199
+- **Backups now also keep the water-sensor setting, the default shot values and your unlocked badges with their original dates.** Closes #1197
+- **Library changes made at the same moment (for example a milk deduction from a completed order while you edit a bean) no longer overwrite each other.** Part of #1199
+- **Order, dial-in wizard and machine settings screens escape every machine and server value they display.** Part of #1104
+- **The bean-age hint and the shot list's translated labels now escape every value they display.** Part of #1104
+- **The same no-lost-updates fix now covers every library endpoint — bags, frozen portions, milk stock, grinder resets and image uploads can no longer overwrite a concurrent change.** Part of #1199
+- **Adding a new bean, grinder, basket, puck screen, milk or recipe at the same moment as another library change no longer discards either one.** Part of #1199
+- **Completing an order no longer attaches it to an older, unrelated shot when no new shot was pulled for it.** Part of #1197
+- **The newest shot is no longer skipped for good when the machine reports it a moment before it can be read.** Part of #1197
+- **Shot scores in the list, share card and API now use the bean's own target temperature and ratio, like the badges already did.** Closes #1198
+- **A firmware update recorded in the maintenance log now shows which version was replaced by which and the shot count at the time.** Closes #1172
+- **The screenshot tool now renders in English regardless of the host locale, and a backup restored into its throwaway instance keeps its photos instead of serving blank ones.** Closes #1184
+- **The Orders and Live screenshots now keep the seeded demo data when the screenshot tool restores a real backup, and a restore reports how many photos it wrote.** Closes #1185
+
+### Security
+- **The generated API token file is now readable only by the app itself.** Closes #1057
+- **A machine's last error in the status API is now only sent to authenticated callers, like the existing machine error field, so an anonymous request can no longer see a machine's address.** Part of #1201
+- **Values read from a GaggiMate machine are now escaped in the profile editor.** Part of #1115
+- **The library sub-views and both profile editors now build their markup through the type-checked HTML builder, so library and machine values can no longer be injected as markup.** Part of #1104
+- **The coffee library's bean list and the shot annotation panel now build their markup through the type-checked HTML builder, so every bean, bag and annotation value they display is escaped.** Part of #1104
+
+### Changed
+- **The old kiosk address (`/ui/kiosk`) now redirects to the rebuilt kiosk page, so existing tablet bookmarks keep working.** Part of #1267
+- **The ordering kiosk now uses the app's look and languages, follows light/dark mode, and has an e-ink mode via `?eink=1`** — reachable at `kiosk.html`, while the old `/ui/kiosk` address keeps working for now. Part of #1267
+- **The API description now documents every response the app uses, checked by tests against the real server.**
+- **The API description now distinguishes the MQTT settings request body from its redacted response, and marks the machine and order fields that are actually optional.** Part of #1103
+- **The analytics screens now build their markup through the type-checked HTML builder, so every bean, grinder, profile and machine name they display is escaped.** Part of #1104
+- **The machine settings, status and setup-wizard modules no longer import each other in a circle, with no behavior change.** Part of #1102
+- **The unused shot-import progress tracking and its progress bar have been removed from the frontend, with no behavior change.** Part of #1200
+- **The whole frontend, including the remaining views and the whole test suite, is now type-checked with the stricter indexed-access rule enabled project-wide.** Part of #1105
+- **The library import, dial-in wizard, flavor matching, shot utilities, maintenance, grinder, machine-settings and recipe modules are now type-checked under the stricter indexed-access rule.** Part of #1105
+- **The coffee library's basket and puck-screen collections are now typed with the real API shapes.** Part of #1105
+- **The frontend's entry point is now linted with the same strict type-checked rules as every other TypeScript file.** Part of #1115
+- **The live view is now type-checked.**
+- **The screenshot tool can restore a real GLP backup instead of the demo seed, so the README/wiki views can be captured from actual data.** Closes #1181
+- **The README now shows the GLP ecosystem and the app's internals as diagrams, and GaggiMate is documented as fully supported.** Closes #1176
+- **The app architecture diagram now shows the importer and backup/restore paths through the REST API.** Part of #1176
+- **The README's architecture diagrams are now coloured and readable, and the README's AI note credits DeepSeek alongside Claude.** Closes #1180
+- **The README's architecture diagrams are now grouped into named areas and toned for readability in both GitHub themes.** Part of #1180
+
+### Removed
+- **Removed the old server-rendered fallback pages under `/ui/` (left over from the Go migration); the app itself and the kiosk are unaffected, and `/ui/kiosk` still redirects to the kiosk.** Part of #1200
+
 ## [3.2.0] – 2026-09-26
 ### Added
 - **Added a kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.** Part of #1125

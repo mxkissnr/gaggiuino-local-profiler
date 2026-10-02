@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// This file pins routes/mqtt.js's wire contract (#608) — the "pin the
-// essential shape" check orders/shots/library's contract_test.go
-// established. Transport-dispatch and payload-mapping assertions live in
-// mqtt_test.go; this file pins what the four routes guarantee on the wire.
+// This file pins the MQTT routes' wire contract (#608) — the "pin the
+// essential shape" check the other contract_test.go files established.
+// Transport-dispatch and payload-mapping assertions live in mqtt_test.go;
+// this file pins what the four routes guarantee on the wire.
 
 // TestContract_MQTTSettings_RoundTripShape: GET returns a settings object
 // with transport/host/port/prefix; POST persists and echoes it; an

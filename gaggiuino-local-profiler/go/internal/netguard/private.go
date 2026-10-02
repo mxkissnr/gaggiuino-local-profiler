@@ -2,12 +2,13 @@ package netguard
 
 import "net"
 
-// IsPrivateAddress ports lib/ssrf-guard.js's isPrivateAddress predicate:
-// net.isIPv4(ip) ? isPrivateIPv4(ip) : isPrivateIPv6(ip). It blocks
-// private/loopback/link-local/CGNAT space — the "used against untrusted
-// external hosts" threat model this package's header comment describes.
+// IsPrivateAddress reports whether ip is private, routing IPv4 and
+// v4-mapped addresses through isPrivateIPv4 and the rest through
+// isPrivateIPv6. It blocks private/loopback/link-local/CGNAT space — the
+// "used against untrusted external hosts" threat model this package's
+// header comment describes.
 //
-// It lived in internal/library/ssrf.go until #901's Phase 2c: internal/importer
+// It lived in internal/library/ssrf.go until #901: internal/importer
 // (GET /api/import/url, which fetches an arbitrary user-pasted URL) needs the
 // exact same predicate as internal/library's barcode-scan guard — same threat
 // model, not a new one — so the predicate is promoted here rather than
@@ -28,7 +29,6 @@ func IsPrivateAddress(ip net.IP) bool {
 	return isPrivateIPv6(ip)
 }
 
-// isPrivateIPv4 ports ssrf-guard.js's isPrivateIPv4.
 func isPrivateIPv4(ip net.IP) bool {
 	v4 := ip.To4()
 	if v4 == nil {
@@ -53,10 +53,9 @@ func isPrivateIPv4(ip net.IP) bool {
 	return false
 }
 
-// isPrivateIPv6 ports ssrf-guard.js's isPrivateIPv6 — only reached for a
-// genuine (non-v4-mapped) IPv6 address; IsPrivateAddress routes v4-mapped
-// addresses (::ffff:a.b.c.d) through isPrivateIPv4 instead, the same branch
-// ssrf-guard.js's own isPrivateIPv6 takes internally.
+// isPrivateIPv6 is only reached for a genuine (non-v4-mapped) IPv6 address;
+// IsPrivateAddress routes v4-mapped addresses (::ffff:a.b.c.d) through
+// isPrivateIPv4 instead.
 func isPrivateIPv6(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsUnspecified() {
 		return true

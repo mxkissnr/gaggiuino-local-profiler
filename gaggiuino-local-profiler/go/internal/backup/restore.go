@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -19,12 +21,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports routes/backup.js's POST /api/restore: the single
-// largest handler in the Node app, so this port is split across a few
-// helper functions the handler (postRestore, in handlers.go's sibling —
-// see below) composes, roughly mirroring the Node function's own
-// top-to-bottom structure (parse request -> validate -> sanitize/preview
-// -> [dry-run: return] -> apply -> side effects -> respond).
+// This file implements POST /api/restore: the largest handler, split
+// across a few helper functions the handler (postRestore, in handlers.go)
+// composes, following a top-to-bottom structure (parse request -> validate
+// -> sanitize/preview -> [dry-run: return] -> apply -> side effects ->
+// respond).
 //
 // # Streaming (#959)
 //
@@ -38,18 +39,18 @@ import (
 //
 // # Atomicity: narrowed, not eliminated
 //
-// routes/backup.js wraps every DB write in one getDb().transaction(...).
-// This Go port's structured shots restore (wipe + every shot upsert +
-// annotations + trash + blocklist + library-save) now commits as ONE
-// transaction via shots.Repository.RestoreShots — a mid-restore failure in
-// that section rolls the whole section back, leaving the pre-restore shots
-// intact. Orders restore is one tx (orders.ReplaceAll); the two
-// maintenance restores, machines and kv are each their own tx. What is
-// still NOT Node-identical: atomicity *across* those sections — a failure
-// after the shots tx commits but during, say, the maintenance write leaves
-// shots restored and maintenance not. Threading a shared *sql.Tx through
-// every repository across five packages (the only way to close that last
-// gap in-process) remains out of scope. Flagged again in doc.go and
+// Each section commits in its own transaction, so a failure partway through
+// a restore can leave earlier sections applied and later ones not. The
+// structured shots restore (wipe + every shot upsert + annotations + trash +
+// blocklist + library-save) commits as ONE transaction via
+// shots.Repository.RestoreShots — a mid-restore failure in that section
+// rolls the whole section back, leaving the pre-restore shots intact. Orders
+// restore is one tx (orders.ReplaceAll); the two maintenance restores,
+// machines and kv are each their own tx. Atomicity remains per-section only:
+// a failure after the shots tx commits but during, say, the maintenance write
+// leaves shots restored and maintenance not. Threading a shared *sql.Tx
+// through every repository across five packages (the only way to close that
+// last gap in-process) remains out of scope. Flagged again in doc.go and
 // go/README.md.
 const maxShotID = shots.MaxShotID
 
@@ -63,7 +64,7 @@ type shotMeta struct {
 	tsOK    bool
 }
 
-// postRestore ports POST /api/restore end to end, streamed (#959): body ->
+// postRestore handles POST /api/restore end to end, streamed (#959): body ->
 // temp file, two-pass streaming bundle parse, batched transactional shots
 // restore.
 func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
@@ -230,6 +231,10 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "shots": shotCount * boolToInt(wantsShots),
+		// images mirrors preview()'s `images` count so a caller (the E2E /
+		// screenshot harness in particular) can verify the queued images were
+		// actually written instead of silently screenshotting 404s (#1185).
+		"images":         len(plan.pending),
 		"secretsPresent": plan.secretsPresent, "secretsRestored": plan.secretsRestored,
 	})
 }
@@ -272,6 +277,12 @@ type restorePlan struct {
 	validTrash       map[string]int64
 	blocklist        []string // non-nil (possibly empty) = wipe+rewrite the blocklist
 
+	// achievements belong to the shots section; ReplaceAll runs in its own tx
+	// after RestoreShots. restoreAchievements is false when the key is absent
+	// (old backup) or present-but-entirely-unusable.
+	restoreAchievements bool
+	validAchievements   []achievements.Row
+
 	validMaintenance    []maintenance.RawRow
 	maintenanceTotal    int
 	validMaintenanceLog []maintenance.RawLogRow
@@ -291,9 +302,9 @@ type restorePlan struct {
 	restoredToken    string
 }
 
-// buildRestorePlan ports the "Every 'what would actually be written'
-// computation" block of routes/backup.js's POST /api/restore, from
-// `sections := normaliseSections(...)` through `restoredToken`.
+// buildRestorePlan computes everything that would actually be written for
+// POST /api/restore, from `sections := normaliseSections(...)` through
+// `restoredToken`.
 func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) restorePlan {
 	sec := normaliseSections(b["sections"])
 	wantsShots := sec.has("shots")
@@ -363,6 +374,25 @@ func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) res
 			}
 			plan.blocklist = list
 		}
+		if arr, ok := b["achievements"].([]any); ok {
+			valid := make([]achievements.Row, 0, len(arr))
+			for _, v := range arr {
+				m, ok := v.(map[string]any)
+				if !ok {
+					continue
+				}
+				if row, ok := sanitizeAchievementRow(m); ok {
+					valid = append(valid, row)
+				}
+			}
+			// Skip, don't destroy: a present-but-entirely-unusable array must
+			// not wipe the target's achievements (an empty array is a real
+			// "no badges" source and does clear them).
+			if len(arr) == 0 || len(valid) > 0 {
+				plan.restoreAchievements = true
+				plan.validAchievements = valid
+			}
+		}
 	}
 
 	if sec.has("maintenance") {
@@ -423,8 +453,8 @@ func decodeEncryptedSecrets(m map[string]any) *EncryptedSecrets {
 	return &enc
 }
 
-// sanitizeToken ports `decryptedSecrets?.apiToken.replace(/[\r\n\0]/g,
-// ”).trim().slice(0, 200)`.
+// sanitizeToken strips CR/LF/NUL from the token, trims it, and caps it at
+// 200 chars.
 func sanitizeToken(s string) string {
 	out := make([]rune, 0, len(s))
 	for _, r := range s {
@@ -435,6 +465,45 @@ func sanitizeToken(s string) string {
 	}
 	trimmed := trimString(string(out))
 	return truncateRunes(trimmed, 200)
+}
+
+// maxAchievementIDLen bounds a restored badge id, matching the id lengths the
+// achievements registry uses.
+const maxAchievementIDLen = 64
+
+// sanitizeAchievementRow validates one entry of a restored backup's
+// `achievements` array, returning ok=false so the caller can skip it. The id
+// must be a non-empty string of at most 64 bytes; unlockedAt and progress must
+// each be absent/null or a finite, non-negative integer — a restored bundle is
+// untrusted input.
+func sanitizeAchievementRow(m map[string]any) (achievements.Row, bool) {
+	id, _ := m["id"].(string)
+	if id == "" || len(id) > maxAchievementIDLen {
+		return achievements.Row{}, false
+	}
+	unlockedAt, ok := optionalNonNegativeInt(m["unlockedAt"])
+	if !ok {
+		return achievements.Row{}, false
+	}
+	progress, ok := optionalNonNegativeInt(m["progress"])
+	if !ok {
+		return achievements.Row{}, false
+	}
+	return achievements.Row{ID: id, UnlockedAt: unlockedAt, Progress: progress}, true
+}
+
+// optionalNonNegativeInt decodes an optional JSON number that must be absent
+// or null, or a finite non-negative integer — the shape of an achievement's
+// unlockedAt/progress. A present-but-invalid value returns ok=false.
+func optionalNonNegativeInt(v any) (*int64, bool) {
+	if v == nil {
+		return nil, true
+	}
+	n, ok := jsIntStrict(v)
+	if !ok || n < 0 {
+		return nil, false
+	}
+	return &n, true
 }
 
 func toRawRow(m map[string]any) maintenance.RawRow {
@@ -469,7 +538,7 @@ func reDecode(v any, out any) error {
 	return json.Unmarshal(b, out)
 }
 
-// preview ports the dry-run response's `preview` object.
+// preview builds the dry-run response's `preview` object.
 func (p restorePlan) preview() map[string]any {
 	shotsCount := 0
 	if p.wantsShots {
@@ -503,8 +572,8 @@ func machineCountForPreview(p restorePlan) int {
 	return 0
 }
 
-// sectionsPresent ports `Object.keys(SECTION_PRESENCE_BUNDLE_KEYS).filter(key
-// => SECTION_PRESENCE_BUNDLE_KEYS[key].some(k => k in b))`.
+// sectionsPresent returns the section names for which any presence key is
+// present in b.
 func sectionsPresent(b map[string]any) []string {
 	out := []string{}
 	for _, name := range sectionOrder {
@@ -518,11 +587,11 @@ func sectionsPresent(b map[string]any) []string {
 	return out
 }
 
-// applyRestore ports the real (non-dry-run) restore. The shots section
+// applyRestore performs the real (non-dry-run) restore. The shots section
 // (wipe + every shot upsert + annotations + trash + blocklist + library)
-// now commits as ONE transaction via shots.Repository.RestoreShots
-// (#959); the remaining sections stay their own internal txs — see this
-// file's header comment for the narrowed atomicity gap.
+// commits as ONE transaction via shots.Repository.RestoreShots (#959); the
+// remaining sections stay their own internal txs — see this file's header
+// comment for the narrowed atomicity gap.
 func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Shot) error) error) error {
 	d := h.deps
 	if p.wantsShots {
@@ -534,6 +603,11 @@ func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Sh
 			LibraryJSON: p.libraryJSON,
 		}); err != nil {
 			return err
+		}
+		if p.restoreAchievements {
+			if err := d.AchievementsRepo.ReplaceAll(p.validAchievements); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -621,6 +695,13 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 			return err
 		}
 	}
+	if s, ok := kv["shot_defaults"].(map[string]any); ok {
+		if defaults, ok := shots.SanitizeShotDefaultsForRestore(s); ok {
+			if err := d.ShotsRepo.SaveShotDefaults(defaults); err != nil {
+				return err
+			}
+		}
+	}
 	if s, ok := kv["import_settings"].(map[string]any); ok {
 		if err := saveImportSettings(d.DB, s); err != nil {
 			return err
@@ -648,10 +729,10 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 // element conversion below needs no per-element type conversion syntax.
 // mapToLibrary converts the generic decoded coffee_library object into a
 // typed library.Library, THEN re-sanitizes every entity's fields via
-// SanitizeLibraryForRestore — routes/backup.js's sanitizeRestoredLibrary()
-// call, which must run on every restored library regardless of section
-// scope, since a restored library bypasses the regular POST/PUT bean/
-// grinder/recipe routes entirely (see restore_sanitize.go's doc comment).
+// SanitizeLibraryForRestore — which must run on every restored library
+// regardless of section scope, since a restored library bypasses the regular
+// POST/PUT bean/grinder/recipe routes entirely (see restore_sanitize.go's
+// doc comment).
 func mapToLibrary(m map[string]any) library.Library {
 	raw := library.Library{
 		Beans: entityList(m["beans"]), Grinders: entityList(m["grinders"]),
@@ -683,7 +764,7 @@ func entityList(v any) []library.Entity {
 // Dependencies.Token's doc comment: this does NOT take effect in the
 // already-running process (internal/auth.RequireToken closes over a fixed
 // token string at startup) until the process restarts — a documented,
-// deliberate gap from Node's live state.apiToken.
+// deliberate gap.
 func (h *Handlers) applyRestoredToken(token string) {
 	if token == "" {
 		return
@@ -710,9 +791,11 @@ func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImage
 	for _, w := range pending {
 		buf, ok := imgs.getForWrite(w.srcName)
 		if !ok || len(buf) == 0 || len(buf) > imageMaxBytes {
+			log.Printf("backup: restore skipped image %s (source %q unreadable/empty/oversized)", w.path, w.srcName)
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
+			log.Printf("backup: restore skipped image %s (mkdir: %v)", w.path, err)
 			continue
 		}
 		srcExt := strings.TrimPrefix(filepath.Ext(w.path), ".")

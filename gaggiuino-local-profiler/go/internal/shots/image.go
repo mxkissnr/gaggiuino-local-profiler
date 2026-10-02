@@ -13,8 +13,9 @@ import (
 // now live in internal/img, shared with internal/library and
 // internal/backup — see that package's doc.go. DefaultImageDir stays
 // re-exported here because Handlers takes it as an injectable field and
-// tests reference shots.DefaultImageDir.
-const DefaultImageDir = img.DefaultImageDir
+// tests reference shots.DefaultImageDir. A var so it picks up img's
+// GLP_IMAGE_DIR override (see internal/img/img.go).
+var DefaultImageDir = img.DefaultImageDir
 
 // MoveShotImageFiles (#1162) is the best-effort other half of moving a
 // misfiled shot: it renames the shot's photo files in dir from the old id to

@@ -17,13 +17,11 @@
 // documented in machines-settings.js all apply here for free.
 import { S, subscribe } from '../state/index.js';
 import type { MachineRecord } from '../state/index.js';
-import { t } from '../i18n.js';
-import { esc } from '../utils.js';
+import { tHtml } from '../i18n.js';
+import { html, COMPLETED_KEY } from '../utils.js';
+import type { Html } from '../utils.js';
 import { openMachineForm } from '../components/machines-settings.js';
 import { loadDemoData } from '../components/onboarding.js';
-
-const COMPLETED_KEY  = 'glp_setup_wizard_completed';
-const INSTALL_ID_KEY = 'glp_install_id';
 
 // Captured once, the first time the wizard ever reaches the connect step —
 // #machineFormCard's original position in the Settings "Machines" card, so
@@ -36,7 +34,7 @@ let _formOrigNextSibling: Node | null = null;
 // S.machines without needing a real document.
 //
 // #746: triggers on "no machine has a configured host", not "zero machine
-// rows" — registry.ensureDefaultMachine() (lib/machines/registry.js) always
+// rows" — registry.ensureDefaultMachine() always
 // seeds an empty-host default machine #1 on a fresh DB, called on every
 // GET /api/machines, so a real fresh install's S.machines is never actually
 // empty by the time the frontend checks it.
@@ -44,38 +42,11 @@ export function shouldOpenSetupWizard(machines: MachineRecord[] | null | undefin
   return (machines || []).every(m => !m?.host) && !localStorage.getItem(COMPLETED_KEY);
 }
 
-// #750: glp_setup_wizard_completed lives in the browser, not the app's DB —
-// an HA Supervisor-level "uninstall + delete add-on data" wipes /data/glp.db
-// server-side but leaves the browser's localStorage untouched, so a user who
-// completed the wizard once and later wipes the add-on's data for a genuine
-// fresh start never sees it again; the stale flag silently suppresses it
-// forever. installId (lib/db.js's ensureInstallId(), served on every
-// GET /api/status) is a random id generated once per DB file — a mismatch
-// against the locally-remembered one means "this isn't the DB this browser
-// last saw", so the stale completed flag gets cleared before
-// shouldOpenSetupWizard() runs. A normal user whose DB file is untouched
-// keeps a stable installId, so this is a no-op for them on every call.
-//
-// #757: comparison must be unconditional (`stored !== installId`, not
-// `stored && stored !== installId`) -- glp_install_id never existed in any
-// browser before this feature shipped, so `stored` is always null on the
-// very first status poll after deploying it. The old guard treated that as
-// "nothing to compare, skip" and just recorded the current installId as the
-// new baseline -- a no-op for exactly the case this was built for (a browser
-// with an already-stale completed flag from before this fix existed, hitting
-// a genuine data wipe). A missing stored value is never equal to a real
-// installId string, so the unconditional comparison clears it here too; this
-// stays safe for an already-configured install because
-// shouldOpenSetupWizard()'s own host check keeps the wizard closed
-// regardless of the completed flag once a real host exists.
-export function syncInstallId(installId?: string | null): void {
-  if (!installId) return;
-  const stored = localStorage.getItem(INSTALL_ID_KEY);
-  if (stored !== installId) {
-    try { localStorage.removeItem(COMPLETED_KEY); } catch { /* ignore */ }
-  }
-  try { localStorage.setItem(INSTALL_ID_KEY, installId); } catch { /* ignore */ }
-}
+// #750: syncInstallId() now lives in public-src/utils.js —
+// components/status.js calls it from updateStatus() without importing this
+// wizard module back (import-cycle #1102). Re-exported here for existing
+// importers (e.g. test/setup-wizard.test.js).
+export { syncInstallId } from '../utils.js';
 
 export function openSetupWizard(): void {
   S.setupWizardStep = 'welcome';
@@ -177,31 +148,31 @@ function _leaveConnectStep(): void {
   origParent.insertBefore(card, _formOrigNextSibling);
 }
 
-function _renderWelcome(): string {
-  return `<div class="dw-summary">
-    <div class="dw-summary-title">${esc(t('setup_wizard_welcome_title'))}</div>
-    <div class="dw-summary-reason">${esc(t('setup_wizard_welcome_body'))}</div>
+function _renderWelcome(): Html {
+  return html`<div class="dw-summary">
+    <div class="dw-summary-title">${tHtml('setup_wizard_welcome_title')}</div>
+    <div class="dw-summary-reason">${tHtml('setup_wizard_welcome_body')}</div>
     <div class="dw-actions">
-      <button class="lib-save-btn" data-action="setup-wizard-get-started">${esc(t('setup_wizard_get_started'))}</button>
-      <button class="lib-btn-sm" data-action="setup-wizard-close">${esc(t('setup_wizard_later'))}</button>
+      <button class="lib-save-btn" data-action="setup-wizard-get-started">${tHtml('setup_wizard_get_started')}</button>
+      <button class="lib-btn-sm" data-action="setup-wizard-close">${tHtml('setup_wizard_later')}</button>
     </div>
   </div>`;
 }
 
-function _renderConnectShell(): string {
-  return `<div class="dw-setup">
-    <div class="dw-summary-reason">${esc(t('setup_wizard_connect_body'))}</div>
+function _renderConnectShell(): Html {
+  return html`<div class="dw-setup">
+    <div class="dw-summary-reason">${tHtml('setup_wizard_connect_body')}</div>
     <div id="swConnectFormSlot"></div>
-    <button type="button" class="lib-btn-sm" data-action="setup-wizard-skip-demo">${esc(t('setup_wizard_demo_link'))}</button>
+    <button type="button" class="lib-btn-sm" data-action="setup-wizard-skip-demo">${tHtml('setup_wizard_demo_link')}</button>
   </div>`;
 }
 
-function _renderDone(): string {
-  return `<div class="dw-summary">
-    <div class="dw-summary-title">${esc(t('setup_wizard_done_title'))}</div>
-    <div class="dw-summary-reason">${esc(t('setup_wizard_done_body'))}</div>
+function _renderDone(): Html {
+  return html`<div class="dw-summary">
+    <div class="dw-summary-title">${tHtml('setup_wizard_done_title')}</div>
+    <div class="dw-summary-reason">${tHtml('setup_wizard_done_body')}</div>
     <div class="dw-actions">
-      <button class="lib-save-btn" data-action="setup-wizard-close">${esc(t('setup_wizard_done_btn'))}</button>
+      <button class="lib-save-btn" data-action="setup-wizard-close">${tHtml('setup_wizard_done_btn')}</button>
     </div>
   </div>`;
 }

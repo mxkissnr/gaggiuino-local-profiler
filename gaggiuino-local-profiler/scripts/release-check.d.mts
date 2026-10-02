@@ -9,3 +9,7 @@ export function checkScreenshotFreshness(
 export function stripJsLikeComments(src: string): string;
 export function stripHtmlComments(src: string): string;
 export function stripCssComments(src: string): string;
+export function checkAcceptanceProtocol(
+    markdown: string,
+    version: string | null,
+): string[];

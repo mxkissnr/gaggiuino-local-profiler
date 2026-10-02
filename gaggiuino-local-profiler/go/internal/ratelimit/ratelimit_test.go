@@ -88,7 +88,7 @@ func TestLimiter_Middleware_AssetsExempt(t *testing.T) {
 
 func TestLimiter_Middleware_KeyIsSocketAddressOnly(t *testing.T) {
 	// A spoofed X-Forwarded-For must not let a client dodge its own bucket
-	// — the limiter must key purely on RemoteAddr, matching server.js never
+	// — the limiter must key purely on RemoteAddr, never
 	// trusting XFF (see doc.go).
 	l := New(time.Minute, 1)
 	handler := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

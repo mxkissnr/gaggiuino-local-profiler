@@ -1,17 +1,18 @@
-// Command frontend-build bundles the public-src/ SPA with esbuild's Go API
+// Command frontend-build bundles the public-src/ pages with esbuild's Go API
 // and writes the result to internal/webapp/dist/ (or -out), replacing the
 // npm/Vite build formerly run in the Dockerfile's Node stage and invoked by
 // go/Makefile's `frontend` target (#1033). It reproduces the parts of
-// vite.config.js that matter for internal/webapp's //go:embed all:dist and
+// vite.config.ts that matter for internal/webapp's //go:embed all:dist and
 // for running behind HA Ingress's dynamic path prefix (#797):
 //   - relative asset URLs (no leading `/`, no absolute PublicPath)
 //   - hashed, content-addressed output filenames
 //   - code-splitting on the app's three dynamic import() boundaries
 //     (echarts+topojson-client in analytics.js/flavor-wheel.js, qrcode in
 //     library.js) so their ~1.1MB/7KB/24KB stay off the first-load path
-//   - public-src/index.html's single module <script> tag replaced with the
-//     hashed entry script, its modulepreload-able static-import chunks, and
-//     its bundled stylesheet — the same shape Vite's HTML plugin produces,
+//   - each page's source module <script> tag (public-src/index.html's
+//     main.ts and public-src/kiosk.html's kiosk.ts, #1267) replaced with its
+//     own hashed entry script, modulepreload-able static-import chunks, and
+//     bundled stylesheet — the same shape Vite's HTML plugin produces,
 //     hand-rolled here since esbuild has no HTML entry point support (see
 //     the issue's "bit that needs hand-work")
 //
@@ -59,30 +60,38 @@ func main() {
 	}
 }
 
-// run is the whole build: validate the inputs, bundle public-src/main.ts with
-// esbuild, copy public-src/public/ verbatim, then rewrite index.html's script
-// tag into the hashed entry script + modulepreload links + stylesheet link.
+// page pairs an HTML template with the TypeScript entry point its module
+// <script> tag references. Both filenames are relative to -src.
+type page struct {
+	html   string
+	script string
+}
+
+// pages is the fixed set of frontend entry points this command builds: the
+// SPA (index.html/main.ts) and the standalone kiosk bundle (kiosk.html/
+// kiosk.ts, #1267). The kiosk is deliberately its own small bundle — it must
+// not pick up the SPA's bootstrap — so it is a second entry point rather than
+// a route in the SPA.
+var pages = []page{
+	{html: "index.html", script: "main.ts"},
+	{html: "kiosk.html", script: "kiosk.ts"},
+}
+
+// scriptTag is the exact module <script> tag a source page must carry for its
+// own entry point; writePageHTML strips it and injects the built output in
+// its place.
+func scriptTag(script string) string {
+	return fmt.Sprintf(`<script type="module" src="./%s"></script>`, script)
+}
+
+// run is the whole build: validate every page's inputs, bundle the pages'
+// entry points with esbuild, copy public-src/public/ verbatim, then rewrite
+// each page's script tag into the hashed entry script + modulepreload links +
+// stylesheet link.
 func run(srcDir, outDir, nodeModulesFlag string) error {
 	srcAbs, err := filepath.Abs(srcDir)
 	if err != nil {
 		return fmt.Errorf("resolve source dir: %w", err)
-	}
-	entryAbs := filepath.Join(srcAbs, "main.ts")
-	indexAbs := filepath.Join(srcAbs, "index.html")
-	for _, required := range []string{entryAbs, indexAbs} {
-		if _, err := os.Stat(required); err != nil {
-			return fmt.Errorf("required source file: %w", err)
-		}
-	}
-	// Validated before any build work so a template that lost its entry tag
-	// fails immediately, with a message naming the file, instead of after a
-	// full bundle pass.
-	srcHTML, err := os.ReadFile(indexAbs)
-	if err != nil {
-		return fmt.Errorf("read index.html: %w", err)
-	}
-	if !strings.Contains(string(srcHTML), origScriptTag) {
-		return fmt.Errorf("%s: expected script tag %q not found", indexAbs, origScriptTag)
 	}
 
 	// The frontend root is the directory public-src/ lives in — Vite's former
@@ -91,9 +100,39 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 	// depend on the process's working directory: `go run ./cmd/frontend-build`
 	// and `go test` (which runs with the package dir as CWD) behave the same.
 	rootAbs := filepath.Dir(srcAbs)
-	entryRel, err := filepath.Rel(rootAbs, entryAbs)
-	if err != nil {
-		return fmt.Errorf("resolve entry point relative to %s: %w", rootAbs, err)
+
+	// Every page is validated before any build work so a missing file or a
+	// template that lost its entry tag fails immediately, with a message
+	// naming the file, instead of after a full bundle pass.
+	type pageSource struct {
+		page
+		srcHTML []byte
+		entry   string // entry script path, relative to rootAbs
+	}
+	sources := make([]pageSource, 0, len(pages))
+	entries := make([]string, 0, len(pages))
+	for _, p := range pages {
+		scriptAbs := filepath.Join(srcAbs, p.script)
+		htmlAbs := filepath.Join(srcAbs, p.html)
+		for _, required := range []string{scriptAbs, htmlAbs} {
+			if _, err := os.Stat(required); err != nil {
+				return fmt.Errorf("required source file: %w", err)
+			}
+		}
+		srcHTML, err := os.ReadFile(htmlAbs)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", p.html, err)
+		}
+		tag := scriptTag(p.script)
+		if !strings.Contains(string(srcHTML), tag) {
+			return fmt.Errorf("%s: expected script tag %q not found", htmlAbs, tag)
+		}
+		entry, err := filepath.Rel(rootAbs, scriptAbs)
+		if err != nil {
+			return fmt.Errorf("resolve entry point relative to %s: %w", rootAbs, err)
+		}
+		sources = append(sources, pageSource{page: p, srcHTML: srcHTML, entry: entry})
+		entries = append(entries, entry)
 	}
 
 	nodeModulesAbs, err := nodeModulesDir(rootAbs, nodeModulesFlag)
@@ -119,7 +158,7 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 	}
 
 	result := api.Build(api.BuildOptions{
-		EntryPoints:   []string{entryRel},
+		EntryPoints:   entries,
 		AbsWorkingDir: rootAbs,
 		// Explicit rather than relying on esbuild's own node_modules walk: in
 		// the image the tree is COPYed in from the deps stage, and this keeps
@@ -177,8 +216,10 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 		return fmt.Errorf("copy public assets: %w", err)
 	}
 
-	if err := writeIndexHTML(string(srcHTML), outAbs, meta, rootAbs, entryAbs); err != nil {
-		return fmt.Errorf("write index.html: %w", err)
+	for _, src := range sources {
+		if err := writePageHTML(string(src.srcHTML), src.html, scriptTag(src.script), outAbs, meta, rootAbs, src.entry); err != nil {
+			return fmt.Errorf("write %s: %w", src.html, err)
+		}
 	}
 
 	return nil
@@ -305,7 +346,7 @@ func (m *metafile) staticImportClosure(outputPath string) []string {
 
 // relFromOutDir returns p (an output path from the metafile, relative to
 // base/AbsWorkingDir) as a "./"-prefixed relative URL from outDir's own root
-// — the same relative-path convention vite.config.js's `base: './'`
+// — the same relative-path convention vite.config.ts's `base: './'`
 // produced, required for HA Ingress's dynamic path prefix.
 func relFromOutDir(base, outDir, p string) (string, error) {
 	outAbs, err := filepath.Abs(outDir)
@@ -336,19 +377,15 @@ func copyPublicDir(publicDir, outDir string) error {
 	return os.CopyFS(outDir, os.DirFS(publicDir))
 }
 
-// origScriptTag is the single module entry point in public-src/index.html
-// (public-src/main.ts's own `import './style.css'` is what esbuild extracts
-// into the cssBundle output instead).
-const origScriptTag = `<script type="module" src="./main.ts"></script>`
-
-// writeIndexHTML mirrors what Vite's HTML plugin does to public-src/index.html:
-// strip the source module <script> tag and inject, just before </head>, the
-// hashed entry script, modulepreload links for its static-import closure, and
-// a stylesheet link for its CSS bundle. srcHTML is the source file run() has
-// already validated to carry origScriptTag; entry and the metafile paths are
-// resolved against base (AbsWorkingDir) when they're relative.
-func writeIndexHTML(srcHTML, outDir string, meta *metafile, base, entry string) error {
-	html := strings.Replace(srcHTML, origScriptTag, "", 1)
+// writePageHTML mirrors what Vite's HTML plugin does to a source page: strip
+// the source module <script> tag and inject, just before </head>, the hashed
+// entry script, modulepreload links for its static-import closure, and a
+// stylesheet link for its CSS bundle. srcHTML is the source file run() has
+// already validated to carry tag; htmlName names the output file (and the
+// file in errors); entry and the metafile paths are resolved against base
+// (AbsWorkingDir) when they're relative.
+func writePageHTML(srcHTML, htmlName, tag, outDir string, meta *metafile, base, entry string) error {
+	html := strings.Replace(srcHTML, tag, "", 1)
 
 	outputPath, out, ok := meta.entryOutput(base, entry)
 	if !ok {
@@ -379,9 +416,9 @@ func writeIndexHTML(srcHTML, outDir string, meta *metafile, base, entry string) 
 	}
 
 	if !strings.Contains(html, "</head>") {
-		return fmt.Errorf("index.html has no </head> to inject build output before")
+		return fmt.Errorf("%s has no </head> to inject build output before", htmlName)
 	}
 	html = strings.Replace(html, "</head>", b.String()+"</head>", 1)
 
-	return os.WriteFile(filepath.Join(outDir, "index.html"), []byte(html), 0o644)
+	return os.WriteFile(filepath.Join(outDir, htmlName), []byte(html), 0o644)
 }

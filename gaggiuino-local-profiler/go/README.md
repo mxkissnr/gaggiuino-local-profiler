@@ -22,8 +22,7 @@ cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
   `machines` (+ `machines/proto` for the Gaggiuino binary WS codec),
   `orders`, `maintenance`, `backup`, `importer`, `db`, `auth`,
   `ratelimit`, `sse`, `system` (status/preheat/version/demo), `ha`,
-  `mqtt`, `img`, `achievements`, `netguard`, `webapp` (SPA embed + serve),
-  `web` (frozen no-JS templ fallback under `/ui/`).
+  `mqtt`, `img`, `achievements`, `netguard`, `webapp` (SPA embed + serve).
 - Each package has a `doc.go` that is the authoritative description of what
   it does and why. The Node → Go migration history lives in
   [`docs/history/go-migration.md`](../../docs/history/go-migration.md).
@@ -41,7 +40,7 @@ precedence over the env fallbacks.
 The version string served from `GET /api/version` lives in
 `internal/system/version.go` (`glpVersion`); it and
 `internal/backup/bundle.go`'s copy must match `../config.yaml`'s canonical
-`version:` — enforced by `../test/version-sync.test.js`.
+`version:` — enforced by `../test/version-sync.test.ts`.
 
 ## Why
 
@@ -73,8 +72,7 @@ approximated — see `internal/auth/doc.go`.
 go/
   go.mod
   README.md              — this file
-  RESEARCH.md            — Phase 0 research spikes (historical: protobuf sources, image/QR libs)
-  Makefile               `make generate`/`build`/`vet`/`test`/`fmt-check`; `make frontend` bundles the SPA into `internal/webapp/dist` via `cmd/frontend-build`
+  Makefile               `make build`/`vet`/`test`/`fmt-check`; `make frontend` bundles the SPA into `internal/webapp/dist` via `cmd/frontend-build`
   cmd/
     server/                main() — opens the DB, wires every `internal/<domain>` package together, and serves the REST/SSE API
     frontend-build/        bundles `../public-src` into `internal/webapp/dist` (esbuild's Go API, #1033)
@@ -101,9 +99,6 @@ go/
     shots/         shot history + scoring
     sse/           `/api/events` Server-Sent Events hub
     system/        status/preheat/version/demo + background polling
-    web/           frozen no-JS templ fallback, mounted under `/ui/`
-      templates/     `.templ` sources (own package — see `internal/web/doc.go`)
-      static/        vendored htmx/Alpine/Chart.js + `style.css` + `live.js`, embedded via `embed.FS`
     webapp/        the SPA from `../public-src`, embedded via `//go:embed` and served at `/`
   scripts/
     smoke-test.sh            native-binary + Docker-image smoke test
@@ -124,106 +119,13 @@ Every backend package under `internal/` is implemented — see
 
 ## Frontend
 
-The shipping UI is the Vite SPA in `../public-src/`. `cmd/frontend-build`
-bundles it (esbuild's Go API, #1033) into `internal/webapp/dist`, which
-`internal/webapp` embeds with `//go:embed` and serves at `/`. Only a
-placeholder `internal/webapp/dist/index.html` is committed, so a plain
-`go build` resolves the embed with no npm step; the Docker image and
-`make frontend` supply the real bundle.
-
-`internal/web` is a frozen, no-JS fallback built with
-[`templ`](https://templ.guide) (typesafe, compiled server templates) +
-[htmx](https://htmx.org) (server-driven fragment swaps for
-CRUD/navigation/forms, including the htmx SSE extension for non-high-
-frequency live updates) + [Alpine.js](https://alpinejs.dev) (declarative
-local UI interactivity — dropdowns, modals, filters — no bespoke JS for
-that). `cmd/server` mounts it under `/ui/`. Its one page that needs a live
-chart (pressure/flow during a pull, several updates a second over SSE)
-keeps a thin vanilla-JS canvas component, `static/live.js` (Chart.js under
-the hood), consuming SSE directly. All vendored assets — htmx, Alpine,
-Chart.js — are served locally, never loaded from a CDN.
-
-One known gap remains: `machines.ValidateSettingsPayload` in
-`internal/machines/validation.go` still only checks that the REST settings
-payload is valid JSON, while the web UI uses field-level validation
-(`internal/machines/settings_validation.go`).
-
-**Codegen:** `.templ` sources live under `internal/web/templates/` and are
-NOT valid Go until `templ generate` runs, which writes a `_templ.go` next
-to each `.templ` file. Those generated files are git-ignored (see the
-repo-root `.gitignore`'s `gaggiuino-local-profiler/go/**/*_templ.go` entry)
-— run codegen before building/testing.
-
-`templ generate` is a separate CLI binary, not something `go.mod`/`go.sum`
-pull in on their own (those only give you the `github.com/a-h/templ`
-*runtime library* `internal/web/templates` imports, not the codegen tool).
-Install it once per machine/CI runner before running `make generate` or
-`go generate ./...`:
-
-```
-go install github.com/a-h/templ/cmd/templ@latest
-```
-
-(`$(go env GOPATH)/bin` — where that installs `templ` — needs to be on
-`PATH`, same as any other `go install`ed tool.) Without this step, `make
-generate`/`go generate ./...` fails with `templ: command not found` even
-though `go.mod`/`go.sum` look complete. `go/Makefile`'s `generate` target
-also auto-installs `templ` via the same command if it isn't already on
-`PATH`, so this manual step is a fallback for anyone invoking `templ`
-directly rather than through `make`.
-
-```
-cd go
-make generate   # or: go generate ./...
-go build ./...
-```
-
-`make build`/`make vet`/`make test`/`make fmt-check` (see `go/Makefile`)
-all run `generate` first automatically, so CI or a fresh checkout never
-needs a separate manual step.
-
-**Assets:** `internal/web/static/` holds the vendored, unmodified htmx +
-htmx-SSE-extension + Alpine files (see
-`internal/web/static/vendor/NOTICE.md` for exact versions/licenses/sources)
-plus `style.css` and `glp-token.js` (first-party, see "Auth model" below),
-all embedded into the binary via `embed.FS` (`internal/web/assets.go`) and
-served at `/web/static/*` — no separate asset directory needs to ship
-alongside the binary at runtime. Alpine is vendored as `@alpinejs/csp`, not
-plain `alpinejs`: core Alpine's expression evaluator needs `script-src
-'unsafe-eval'`, which `internal/auth.SecurityHeaders`'s CSP intentionally
-doesn't grant — see that NOTICE.md for the full reasoning.
-
-**Auth model:** `GET /shots` (and `/web/static/*`) are registered outside
-`/api/`, so they fall through `internal/auth.RequireToken`'s bypass for
-non-API GET/HEAD requests — the same trust boundary `public-src/`'s static
-HTML/JS/CSS already relies on (HA Ingress's own auth, or LAN/port
-access in standalone mode), not a new session/cookie scheme. The two htmx
-write actions (`POST /shots/{id}/trash`, `POST /shots/{id}/restore`) do
-NOT get that bypass — `RequireToken` scopes it to GET/HEAD specifically (a
-#901 code-review fix; it originally matched any non-`/api/` path
-regardless of method, which let any page in the user's browser trigger
-these writes with a plain unauthenticated POST — a CSRF hole), so they
-require the same `X-GLP-Token`/Ingress trust the JSON API does.
-
-That header is wired into htmx structurally, not per button:
-`templates/layout.templ` loads `static/glp-token.js` once, globally, for
-every templ page. It fetches the token from the already-public
-`GET /api/token` (mirroring `public-src/api.js`'s
-`initToken()` for the existing SPA) and attaches it as `X-GLP-Token` to
-every htmx request via htmx's `htmx:configRequest` event — no per-page
-wiring, no SSR-embedded token in `GET /shots`' own (deliberately
-unauthenticated) HTML. See `internal/web/doc.go`'s "Auth model" section and
-`glp-token.js`'s own doc comment for the full reasoning, including why
-fetch-and-attach was chosen over an SSR meta tag. The fetch itself is
-relative (`api/token`, not `/api/token`) — a #901 code-review fix, mirroring
-`public-src/api.js`'s `initToken()` — so it resolves correctly against the
-HA Ingress-prefixed page URL and reaches the app's own handler on the
-primary access path; a root-absolute fetch would resolve against the
-origin root instead and miss it. Standalone mode with `expose_api_port`
-explicitly set to `false` still 401s a non-Ingress Trash/Restore click —
-`GET /api/token` itself refuses that caller — but that's the same
-`isApiPortBlocked()` state the SPA already surfaces today, not a new gap,
-and it's the only caller this fetch is expected to fail for.
+The shipping UI is the SPA in `../public-src/`. `cmd/frontend-build` bundles
+it (esbuild's Go API, #1033) into `internal/webapp/dist`, which
+`internal/webapp` embeds via `//go:embed all:dist` and serves at `/`.
+`kiosk.html` is a second entry of the same bundle; `GET /ui/kiosk` redirects
+to it for old bookmarks. Only a placeholder `internal/webapp/dist/index.html`
+is committed, so a plain `go build` resolves the embed with no npm step; the
+Docker image and `make frontend` supply the real bundle.
 
 ## Contract
 
@@ -236,10 +138,6 @@ shapes it documents.
 
 ```
 cd go
-make generate   # templ codegen — required before build/vet/test, see "Frontend"
-                # (needs the `templ` CLI on PATH; `make generate` auto-installs
-                # it via `go install github.com/a-h/templ/cmd/templ@latest`
-                # if missing — see "Frontend"'s "Codegen" section)
 make frontend   # OPTIONAL: runs cmd/frontend-build (esbuild's Go API, #1033),
                 # which bundles ../public-src into internal/webapp/dist for the
                 # //go:embed — no npm/Vite involved. Skip it and the binary

@@ -9,11 +9,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 )
 
-// This file ports lib/machines/adapter-base.js's documented interface (the
-// method contract every machine-type adapter implements) as a real Go
-// interface, plus lib/machines/index.js's getAdapter() dispatch.
+// This file defines the documented interface (the method contract every
+// machine-type adapter implements) as a real Go interface, plus
+// per-machine-type dispatch.
 
-// Status ports adapter-base.js's getStatus(machine) return shape.
+// Status is an adapter's GetStatus return shape.
 // TargetTemperature/Weight/SteamOn/ProfileID/ProfileName are pointers
 // because the GaggiMate adapter reports several as null (evt:status has no
 // weight field at all, no profile id, etc. — see gaggimate_adapter.go).
@@ -31,7 +31,7 @@ type Status struct {
 	Raw               json.RawMessage `json:"raw"`
 }
 
-// ProfileSummary ports the {id, name} shape SavedProfileDto and the
+// ProfileSummary is the {id, name} shape saved-profile DTOs and the
 // machine's own REST profile-list endpoints both use.
 // ID is a string to accommodate both Gaggiuino (integer IDs like "5") and
 // GaggiMate (string IDs like "lever", "adapt"). The custom UnmarshalJSON
@@ -68,7 +68,7 @@ func jsonRawToProfileID(raw json.RawMessage) string {
 	return s
 }
 
-// Capabilities ports adapter-base.js's capabilities() return shape.
+// Capabilities is an adapter's Capabilities() return shape.
 // Preheat/Volumetric are pointers since GaggiMate reports them as an
 // explicit `null` ("not modeled yet" / "determined per-shot", not simply
 // false) — see gaggimate_adapter.go's capabilities().
@@ -82,17 +82,15 @@ type Capabilities struct {
 	SettingsProxy        bool  `json:"settingsProxy,omitempty"`
 }
 
-// Adapter is the Go port of adapter-base.js's documented per-machine-type
-// contract, extended with the #597 settings/control-proxy methods
-// (getSettings/updateSettings/saveSettings/setOperationMode/tare/
-// serviceTest/saveActiveProfile/getFirmwareProgress/triggerFirmwareUpdate/
-// getLiveSensorSnapshot/getLiveSystemState) lib/machines/gaggiuino/adapter.js
-// and lib/machines/gaggimate/adapter.js both also export, gated by
-// Capabilities().SettingsProxy the same way routes/machine-control.js's
-// requireSettingsProxySupport() gates them in Node — GaggiMate's
-// implementation of every settings-proxy method below simply returns an
-// error, since capability-gated handlers never call them, matching that
-// adapter's own missing exports in Node (it never defines them at all).
+// Adapter is the documented per-machine-type contract, extended with the
+// #597 settings/control-proxy methods (getSettings/updateSettings/
+// saveSettings/setOperationMode/tare/serviceTest/saveActiveProfile/
+// getFirmwareProgress/triggerFirmwareUpdate/getLiveSensorSnapshot/
+// getLiveSystemState). Both machine types export these, gated by
+// Capabilities().SettingsProxy the same way requireSettingsProxySupport()
+// gates them — GaggiMate's implementation of every settings-proxy method
+// below simply returns an error, since capability-gated handlers never
+// call them.
 type Adapter interface {
 	GetStatus(ctx context.Context, m *Machine) (Status, error)
 	ListProfiles(ctx context.Context, m *Machine) ([]ProfileSummary, error)
@@ -116,7 +114,7 @@ type Adapter interface {
 	GetLiveSystemState(ctx context.Context, m *Machine) (*proto.SystemStateDto, error)
 }
 
-// GetAdapter ports lib/machines/index.js's getAdapter(machine).
+// GetAdapter returns the adapter for a machine record's type.
 func (h *Handlers) GetAdapter(m *Machine) (Adapter, error) {
 	if m == nil || m.Type == "" {
 		return nil, fmt.Errorf("getAdapter requires a machine record with a type")

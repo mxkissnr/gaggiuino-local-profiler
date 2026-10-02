@@ -4,23 +4,24 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
 
-// This file ports lib/repositories/OrderRepository.js's DB access — the
-// `orders` table plus the three kv-table keys (menu/orders_settings/
-// notify_mapping) this domain owns.
+// This file holds the orders DB access — the `orders` table plus the three
+// kv-table keys (menu/orders_settings/notify_mapping) this domain owns.
 
-// ordersHistoryTTL mirrors lib/constants.js's ORDERS_HISTORY_TTL_MS (7
-// days): findActive()'s cutoff for how long a done/declined order stays in
-// the "live queue" view before FindActive stops returning it (FindAll
-// still returns it — see that method's doc comment).
+// ordersHistoryTTL is 7 days: FindActive's cutoff for how long a
+// done/declined order stays in the "live queue" view before FindActive
+// stops returning it (FindAll still returns it — see that method's doc
+// comment).
 const ordersHistoryTTL = 7 * 24 * time.Hour
 
 // Order is one order record: a map, not a struct, for the same reason
-// shots.Shot and library.Entity are maps — routes/orders.js and
-// OrderService.js never declare a fixed shape either, they read/write
-// plain JS objects straight into/out of the `orders` table's JSON blob.
+// shots.Shot and library.Entity are maps — it has no fixed schema, so
+// whatever JSON object is stored in the `orders` table's blob is what
+// callers read and write.
 type Order = map[string]any
 
 // Repository wraps an already-open *sql.DB (see internal/db.Open).
@@ -41,7 +42,7 @@ func decodeOrder(data string) (Order, error) {
 	return o, nil
 }
 
-// FindActive ports OrderRepository.js's findActive(): pending/accepted
+// FindActive returns pending/accepted
 // orders, plus done/declined orders completed within the last
 // ordersHistoryTTL — the "live queue" view every route except stats/
 // history-delete reads from.
@@ -75,15 +76,15 @@ func isActiveOrder(o Order) bool {
 	return completedAt > float64(cutoff)
 }
 
-// FindActiveByID ports the "locate one order within the same active-queue
-// view FindActive returns" lookup AcceptOrder/CompleteOrder/DeclineOrder
-// each need (#901 code review): a single indexed SELECT by id followed by
-// isActiveOrder's check, instead of loading and decoding the whole active
-// set just to find one row by id. An id that exists in the table but has
-// aged out of the active window (done/declined beyond ordersHistoryTTL)
-// still reports as "not found" here, matching OrderService.js's own
-// `repo.findActive().find(o => o.id === id)` lookup exactly — this is a
-// narrower, indexed version of that same check, not a behavior change.
+// FindActiveByID performs the "locate one order within the same
+// active-queue view FindActive returns" lookup AcceptOrder/CompleteOrder/
+// DeclineOrder each need (#901 code review): a single indexed SELECT by id
+// followed by isActiveOrder's check, instead of loading and decoding the
+// whole active set just to find one row by id. An id that exists in the
+// table but has aged out of the active window (done/declined beyond
+// ordersHistoryTTL) still reports as "not found" here, matching the
+// active-queue view's own lookup exactly — this is a narrower, indexed
+// version of that same check, not a behavior change.
 func (r *Repository) FindActiveByID(id string) (Order, error) {
 	o, err := r.FindByID(id)
 	if err != nil || o == nil {
@@ -93,6 +94,72 @@ func (r *Repository) FindActiveByID(id string) (Order, error) {
 		return nil, nil
 	}
 	return o, nil
+}
+
+// ClaimTransition atomically moves one order from any status in from to
+// to, stamping atField with atMs, in a single UPDATE ... WHERE. Two
+// concurrent callers can therefore never both win the same check-then-write
+// (the #1199 double-completion race): SQLite serialises the writes, so the
+// second caller's WHERE re-evaluates the already-updated status and matches
+// nothing. Reports true only for the caller whose UPDATE changed the row.
+//
+// json_set/json_extract are SQLite's built-in JSON functions, always
+// available in modernc.org/sqlite (this repo already relies on json_extract
+// in internal/shots). atField is an internal constant ("completedAt"/
+// "acceptedAt"), never request input, and is bound as a parameter rather
+// than concatenated into the statement.
+func (r *Repository) ClaimTransition(id string, from []string, to string, atMs int64, atField string) (bool, error) {
+	placeholders := make([]string, len(from))
+	args := make([]any, 0, len(from)+4)
+	args = append(args, to, atField, atMs, id)
+	for i, s := range from {
+		placeholders[i] = "?"
+		args = append(args, s)
+	}
+	query := `UPDATE orders SET data = json_set(data, '$.status', ?, '$.'||?, ?) WHERE id = ? AND json_extract(data, '$.status') IN (` + strings.Join(placeholders, ",") + `)`
+	res, err := r.db.Exec(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("orders: claiming %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("orders: claiming %s: %w", id, err)
+	}
+	return n == 1, nil
+}
+
+// UpdateFields atomically sets the given JSON fields on one order without
+// touching its status. It is the follow-up write AcceptOrder/DeclineOrder
+// makes after a successful ClaimTransition (eta, declineReason); using
+// Save's whole-row overwrite instead would replay the pre-claim snapshot
+// and could resurrect a status a concurrent transition had just claimed.
+// Values are json.Marshal'd and bound through json(?) so a text value like
+// "123" is stored as a string, not mis-typed as a JSON number by json_set.
+func (r *Repository) UpdateFields(id string, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	set := "json_set(data"
+	args := make([]any, 0, 2*len(keys)+1)
+	for _, k := range keys {
+		encoded, err := json.Marshal(fields[k])
+		if err != nil {
+			return fmt.Errorf("orders: encoding %s: %w", k, err)
+		}
+		set += ", '$.'||?, json(?)"
+		args = append(args, k, string(encoded))
+	}
+	set += ")"
+	args = append(args, id)
+	if _, err := r.db.Exec("UPDATE orders SET data = "+set+" WHERE id = ?", args...); err != nil {
+		return fmt.Errorf("orders: updating %s: %w", id, err)
+	}
+	return nil
 }
 
 func jsNumber(v any) (float64, bool) {
@@ -105,7 +172,7 @@ func jsNumber(v any) (float64, bool) {
 	return 0, false
 }
 
-// FindAll ports OrderRepository.js's findAll(): every order, unfiltered by
+// FindAll returns every order, unfiltered by
 // age — used by /api/orders/stats (#321, true lifetime totals) and
 // /api/orders/history's delete (which must reach done/declined orders
 // older than the 7-day TTL window FindActive applies).
@@ -130,7 +197,7 @@ func (r *Repository) FindAll() ([]Order, error) {
 	return out, rows.Err()
 }
 
-// FindByID ports OrderRepository.js's findById.
+// FindByID returns the order with the given id, or nil when none exists.
 func (r *Repository) FindByID(id string) (Order, error) {
 	var data string
 	err := r.db.QueryRow(`SELECT data FROM orders WHERE id = ?`, id).Scan(&data)
@@ -150,23 +217,7 @@ func orderMachineID(o Order) int64 {
 	return 1
 }
 
-// Save ports OrderRepository.js's save(order): upserts one order.
-func (r *Repository) Save(order Order) error {
-	data, err := json.Marshal(order)
-	if err != nil {
-		return fmt.Errorf("orders: encoding order: %w", err)
-	}
-	id, _ := order["id"].(string)
-	if _, err := r.db.Exec(
-		`INSERT OR REPLACE INTO orders (id, data, machine_id) VALUES (?,?,?)`,
-		id, string(data), orderMachineID(order),
-	); err != nil {
-		return fmt.Errorf("orders: saving %s: %w", id, err)
-	}
-	return nil
-}
-
-// SaveAll ports OrderRepository.js's saveAll(orders): upserts every order
+// SaveAll upserts every order
 // in one transaction — used by the lifecycle mutations (place/accept/
 // complete/decline), each of which reads the whole active set, mutates one
 // entry, and writes the whole set back.
@@ -199,7 +250,7 @@ func (r *Repository) SaveAll(orders []Order) error {
 	return nil
 }
 
-// Delete ports OrderRepository.js's delete(id).
+// Delete removes the order with the given id.
 func (r *Repository) Delete(id string) error {
 	if _, err := r.db.Exec(`DELETE FROM orders WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("orders: deleting %s: %w", id, err)
@@ -207,11 +258,10 @@ func (r *Repository) Delete(id string) error {
 	return nil
 }
 
-// ReplaceAll ports OrderRepository.js's replaceAll(orders): restore-only —
-// wipes the whole table and re-inserts, unlike SaveAll's upsert-only
-// semantics, so an order that existed locally but isn't in the restored
-// set is actually removed. Used by the backup domain (see
-// go/internal/backup/doc.go); not called by anything in this phase's own
+// ReplaceAll is restore-only — wipes the whole table and re-inserts,
+// unlike SaveAll's upsert-only semantics, so an order that existed locally
+// but isn't in the restored set is actually removed. Used by the backup
+// domain (see go/internal/backup/doc.go); not called by this package's own
 // handlers.
 func (r *Repository) ReplaceAll(orders []Order) error {
 	tx, err := r.db.Begin()
@@ -246,7 +296,7 @@ func (r *Repository) ReplaceAll(orders []Order) error {
 	return nil
 }
 
-// defaultMenu mirrors lib/constants.js's DEFAULT_MENU — the seed menu a
+// defaultMenu is the seed menu a
 // fresh install (no `menu` kv row yet) returns.
 func defaultMenu() []MenuItem {
 	return []MenuItem{
@@ -289,7 +339,7 @@ func (r *Repository) saveKV(key string, v any) error {
 	return nil
 }
 
-// GetMenu ports OrderRepository.js's getMenu(): DEFAULT_MENU when no
+// GetMenu returns the default menu when no
 // `menu` kv row exists yet.
 func (r *Repository) GetMenu() ([]MenuItem, error) {
 	var menu []MenuItem
@@ -303,7 +353,7 @@ func (r *Repository) GetMenu() ([]MenuItem, error) {
 	return menu, nil
 }
 
-// SaveMenu ports OrderRepository.js's saveMenu(menu).
+// SaveMenu persists the menu.
 func (r *Repository) SaveMenu(menu []MenuItem) error {
 	return r.saveKV("menu", menu)
 }
@@ -317,7 +367,7 @@ func defaultSettings() Settings {
 	return Settings{"enabled": true, "broadcastRecipients": []any{}}
 }
 
-// GetSettings ports OrderRepository.js's getSettings().
+// GetSettings returns the stored settings, defaulting when no row exists yet.
 func (r *Repository) GetSettings() (Settings, error) {
 	var s Settings
 	found, err := r.getKV("orders_settings", &s)
@@ -330,7 +380,7 @@ func (r *Repository) GetSettings() (Settings, error) {
 	return s, nil
 }
 
-// SaveSettings ports OrderRepository.js's saveSettings(settings).
+// SaveSettings persists the settings.
 func (r *Repository) SaveSettings(s Settings) error {
 	return r.saveKV("orders_settings", s)
 }
@@ -339,7 +389,7 @@ func (r *Repository) SaveSettings(s Settings) error {
 // service name.
 type NotifyMapping = map[string]string
 
-// GetNotifyMapping ports OrderRepository.js's getNotifyMapping().
+// GetNotifyMapping returns the stored mapping, empty when none exists yet.
 func (r *Repository) GetNotifyMapping() (NotifyMapping, error) {
 	var m NotifyMapping
 	found, err := r.getKV("notify_mapping", &m)
@@ -352,7 +402,7 @@ func (r *Repository) GetNotifyMapping() (NotifyMapping, error) {
 	return m, nil
 }
 
-// SaveNotifyMapping ports OrderRepository.js's saveNotifyMapping(mapping).
+// SaveNotifyMapping persists the mapping.
 func (r *Repository) SaveNotifyMapping(m NotifyMapping) error {
 	return r.saveKV("notify_mapping", m)
 }

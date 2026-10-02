@@ -25,7 +25,7 @@ export const TRANSLATIONS: Record<string, unknown> = { de, en, it, fr, es, nl };
 // not just German ones. Falls back to English instead, matching the same
 // fallback fix applied to S.currentLang itself (state.js) and t() (i18n.js).
 export function localeFor(lang: string): string {
-  return LOCALE_MAP[lang] || LOCALE_MAP.en;
+  return LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
 }
 
 // ── Coffee origin countries (ISO 3166-1 alpha-2 + numeric for topojson) ───
@@ -118,9 +118,9 @@ export const GUIDED_MAINT_STEPS: Record<string, string[]> = {
 // phases[] -> {name, phaseType, t0, t1} ranges for phasePlugin's
 // gaggimatePhases option. Shared by the profile editor and shot chart.
 export interface GmPhaseInput {
-  duration?: number;
-  name?: string;
-  phase?: string;
+  duration?: number | undefined;
+  name?: string | undefined;
+  phase?: string | undefined;
 }
 
 export interface GmPhaseRange {
@@ -169,7 +169,9 @@ export interface PhasePluginOptions {
 export const phasePlugin: Plugin<ChartType, PhasePluginOptions> = {
   id: 'phases',
   beforeDatasetsDraw(chart, _args, opts) {
-    const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+    const { ctx, chartArea: { top, bottom, left, right } } = chart;
+    const x = chart.scales.x;
+    if (!x) return;
 
     // GaggiMate: shade one region per named phase, before the datasets draw.
     const gmPhases = opts?.gaggimatePhases;
@@ -239,15 +241,16 @@ export const phasePlugin: Plugin<ChartType, PhasePluginOptions> = {
     const gmPhases = opts?.gaggimatePhases;
     if (!gmPhases || !Array.isArray(gmPhases) || gmPhases.length === 0) return;
 
-    const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+    const { ctx, chartArea: { top, bottom, left, right } } = chart;
+    const x = chart.scales.x;
+    if (!x) return;
     const ink = _currentInk();
 
     // Dividers + labels, drawn after the lines so they sit on top.
     ctx.save();
     ctx.font = '600 10px Figtree, sans-serif';
 
-    for (let i = 0; i < gmPhases.length; i++) {
-      const ph  = gmPhases[i];
+    for (const [i, ph] of gmPhases.entries()) {
       const px0 = Math.min(Math.max(x.getPixelForValue(ph.t0), left), right);
       const px1 = Math.min(Math.max(x.getPixelForValue(ph.t1), left), right);
       const w   = px1 - px0;

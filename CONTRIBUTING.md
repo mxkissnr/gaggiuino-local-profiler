@@ -97,6 +97,58 @@ git checkout -- gaggiuino-local-profiler/go/internal/webapp/dist
 `scripts/e2e-harness.mjs` does both halves on its own (builds the bundle, boots the real server,
 restores the placeholder), which is why the E2E job asserts against the real bundle.
 
+## Screenshots
+
+`gaggiuino-local-profiler/scripts/screenshots.mjs` regenerates `docs/screenshots/*.png` for the
+README and wiki from the built-in demo seed; run it from `gaggiuino-local-profiler/`:
+
+```sh
+node scripts/screenshots.mjs [path/to/wiki-repo]
+```
+
+It needs `npx playwright install chromium` once beforehand. With the optional wiki-repo argument
+it also copies the PNGs into that repo's `images/`.
+
+To build the screenshots from real data instead of the synthetic seed, point the script at a GLP
+backup zip (created via Settings → Backup in the app):
+
+```sh
+GLP_SCREENSHOT_BACKUP=/path/to/backup.zip node scripts/screenshots.mjs
+```
+
+The zip is restored into the throwaway instance through the app's own `POST /api/restore`; a
+restore that fails aborts the run. `gaggiuino-local-profiler/scripts/*.zip` is git-ignored, so keep
+the backup there or outside the repo — never commit it. Review the resulting PNGs for personal
+data before committing them.
+
+In backup mode every screenshot except `live.png` and `orders.png` comes from the restored backup:
+`shots.png`, `library.png`, `flavor-wheel.png`, `analytics.png`, `analytics-machines.png`,
+`maintenance.png`, `dialin.png` and `settings.png`. `live.png` and `orders.png` always come from the
+seeded demo instance — a real backup is normally all completed orders against a machine the
+throwaway instance cannot reach, so those two views would render empty, and backup mode leaves the
+seeded PNGs in place instead of regenerating them.
+
+## Demo fixtures
+
+`gaggiuino-local-profiler/scripts/demo-fixtures.mjs` records a static snapshot of every API
+response the SPA needs, so the demo can later be served from GitHub Pages with a service worker
+instead of the Go backend (#1193). Run it from `gaggiuino-local-profiler/`:
+
+```sh
+npm run demo:fixtures
+```
+
+It boots the same throwaway server as the screenshots, restores the sanitized
+`demo/glp-demo-backup.zip` (override with `GLP_DEMO_BACKUP=/path/to/backup.zip`), places a few
+pending orders so the Orders view is not empty, and then drives headless Chromium through every
+view at desktop and phone width. Anything the SPA did not request is filled in from the GET
+operations in `go/internal/system/openapi.yaml`. The result goes to `demo/fixtures/`: a
+`manifest.json` plus one file per response. That directory is git-ignored — it is a regenerated
+artifact, not source. Before writing anything the script scans every text response for leaked
+personal data (IP literals, e-mail addresses, long hex blobs) and aborts on a hit, so a run that
+passes is safe to serve but never committed. Like `screenshots.mjs` it needs
+`npx playwright install chromium` once.
+
 ## Versioning
 
-`MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.js` and `scripts/release-check.mjs` enforce the match.
+`MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.ts` and `scripts/release-check.mjs` enforce the match.

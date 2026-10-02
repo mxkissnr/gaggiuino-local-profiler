@@ -1,0 +1,851 @@
+import Chart from 'chart.js/auto';
+import type { ChartConfiguration } from 'chart.js';
+import { S } from '../state/index.js';
+import * as chartRegistry from '../state/charts.js';
+import * as timerRegistry from '../state/timers.js';
+import { t, tHtml } from '../i18n.js';
+import { isApiPortBlocked } from '../api/transport.js';
+import { getPreheat, getLiveData } from '../api/system.js';
+import { annotateShot } from '../api/shots.js';
+import type { Bean, ShotAnnotation } from '../api/types.js';
+import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, html } from '../utils.js';
+import type { ShotSeries } from '../utils.js';
+import { getShotCurve } from '../shot-curves.js';
+import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
+         resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
+import { getDefaultMachineId } from '../components/machines-settings.js';
+import { localeFor } from '../constants.js';
+import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
+         _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
+
+// GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
+// view reads off the poll payload. Named locally rather than reusing
+// openapi.yaml's generated LiveData, which types `datapoints` as an array of
+// empty records and doesn't model the machine's cross-repo curve shape at all.
+interface LiveModeDatapoints {
+  timeInMode?: number[];
+  pressure?: number[];
+  temperature?: number[];
+}
+
+interface LiveDatapoints {
+  timeInShot?: number[];
+  pressure?: number[];
+  pumpFlow?: number[];
+  shotWeight?: number[];
+  weight?: number[];
+  temperature?: number[];
+}
+
+interface LiveMessage {
+  isLive?: boolean;
+  profileName?: string;
+  seq?: number;
+  machineReachable?: boolean | null;
+  isSteaming?: boolean;
+  isFlushing?: boolean;
+  isDescaling?: boolean;
+  steamDatapoints?: LiveModeDatapoints | null;
+  flushDatapoints?: LiveModeDatapoints | null;
+  descaleDatapoints?: LiveModeDatapoints | null;
+  datapoints?: LiveDatapoints | null;
+  temperature?: number | null;
+  targetTemperature?: number | null;
+  pressure?: number | null;
+  waterLevel?: number | null;
+}
+
+// GET /api/preheat — the fields updatePreheatWidget() reads. `ready`/`remaining`
+// are always present in the payload, hence required.
+interface PreheatData {
+  ready: boolean;
+  remaining: number;
+  pct?: number;
+  preheatTime?: number;
+}
+
+// The sticky, per-machine pre-shot setup draft persisted to localStorage.
+interface LiveSetupDraft {
+  coffee?: string;
+  beanId?: number | null;
+  basketId?: number | null;
+  puckScreenId?: number | null;
+  recipeId?: number | null;
+  grinder?: string;
+  grindSetting?: string;
+  dose?: number | null;
+}
+
+// state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
+// an index signature); this alias names the annotation fields this view reads,
+// same pattern as views/shots/annotation.ts.
+interface LiveShotAnnotation {
+  coffee?: string | null;
+  beanId?: number | null;
+  grinder?: string | null;
+  grindSetting?: string | null;
+  dose?: number | null;
+  basketId?: number | null;
+  puckScreenId?: number | null;
+  recipeId?: number | null;
+  score?: number | null;
+}
+
+// Multi-machine live gating (#325, #341) — shot sync now covers every
+// registered machine, but real-time live status/brew-detection is
+// still hardcoded to the default machine only — deferred, not built yet.
+// 'all' and a not-yet-loaded activeMachineId both count as "assume default
+// machine" so single-machine installs (the vast majority) are unaffected.
+function _isActiveMachineLiveCapable(): boolean {
+  const active = S.activeMachineId;
+  if (active == null || active === 'all') return true;
+  const defaultId = getDefaultMachineId();
+  return defaultId == null || active === defaultId;
+}
+
+// #1120 review: whether the live session last observed was a brew. The live
+// payload reports a brew via msg.isLive (poll.go's liveAccum, brew-only) and
+// steam/flush/descale sessions via msg.isSteaming/isFlushing/isDescaling with
+// their own *Seq counters. Tracking it here lets the post-brew draft apply
+// below gate explicitly on "a brew finished" instead of trusting the comment
+// that steam/flush sessions never create Shot rows. null = no live session
+// observed yet (treated as brew, so a synthetic live→idle transition with no
+// recorded mode isn't blocked).
+let _liveSessionIsBrew: boolean | null = null;
+
+// ── Pre-shot setup (bean/dose/grinder/grind/basket/puckscreen/recipe) ──────
+// Lets the user pick the upcoming shot's setup right on the Live/idle screen
+// instead of only after the fact on the Shots detail view. The draft is
+// sticky per machine (most sessions pull several shots in a row with the
+// same bean/grinder/basket) and gets written onto the next shot's annotation
+// automatically once that shot finishes syncing (see fetchLiveData's "brew
+// just ended" branch below) — same POST api/shots/{id}/annotate endpoint and
+// field shape shots/annotation.js's own auto-save uses, just triggered from
+// here instead of from the annotation panel's own fields.
+function _liveSetupStorageKey(): string {
+  return `glp_live_shot_setup_${S.activeMachineId ?? 'default'}`;
+}
+
+function _loadLiveSetupDraft(): LiveSetupDraft {
+  try {
+    return (JSON.parse(localStorage.getItem(_liveSetupStorageKey()) ?? 'null') || {}) as LiveSetupDraft;
+  } catch {
+    return {};
+  }
+}
+
+function _saveLiveSetupDraft(draft: LiveSetupDraft): void {
+  try {
+    localStorage.setItem(_liveSetupStorageKey(), JSON.stringify(draft));
+  } catch (e) {
+    // Quota exceeded / private-browsing storage restrictions — the draft
+    // just doesn't persist across reloads this time; every field is still
+    // live in the DOM for the current session, so this is a degraded
+    // experience, not a broken one.
+    console.error('[GLP] saving live shot setup draft failed:', e);
+  }
+}
+
+let _lsWired = false;
+
+export function renderLiveShotSetupPanel(): void {
+  const draft = _loadLiveSetupDraft();
+  _renderBeanSelect(draft.coffee || '', draft.beanId ?? null, 'lsBean');
+  _renderBasketSelect(draft.basketId ?? null, 'lsBasket');
+  _renderPuckScreenSelect(draft.puckScreenId ?? null, 'lsPuckScreen');
+  _renderRecipeSelect(draft.recipeId ?? null, 'lsRecipeField', 'lsRecipe');
+  renderGrinderField('lsGrinder', 'lsGrinderOther', draft.grinder || '');
+  // The tests' fake DOM records the raw assigned value (no <input> string
+  // coercion), so these two fields stay number-or-string when assigned;
+  // a real input stringifies on assignment.
+  const doseEl = document.getElementById('lsDose') as (HTMLElement & { value: number | string }) | null;
+  const grindEl = document.getElementById('lsGrindSetting') as (HTMLElement & { value: number | string }) | null;
+  if (doseEl)  doseEl.value  = draft.dose ?? '';
+  if (grindEl) grindEl.value = draft.grindSetting || '';
+
+  if (_lsWired) return;
+  _lsWired = true;
+
+  document.getElementById('lsToggle')?.addEventListener('click', () => {
+    document.getElementById('live-shot-setup')?.classList.toggle('open');
+  });
+
+  const beanSelect = document.getElementById('lsBean') as HTMLSelectElement | null;
+  beanSelect?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    d.coffee = beanSelect.value;
+    const opt = beanSelect.selectedOptions[0];
+    d.beanId = opt?.dataset.beanId ? parseInt(opt.dataset.beanId, 10) : null;
+    // Prefill grinder/grind setting from the bean's known-grind-setting
+    // record (dial-in-wizard's own prefill source, see library.js) — only
+    // when the user hasn't already typed something into those fields, so
+    // this never clobbers a manual override.
+    if (!d.grinder && !d.grindSetting && d.beanId != null) {
+      const bean = (S.coffeeLibrary?.beans || []).find((b): b is Bean => b.id === d.beanId);
+      const known = bean?.knownGrindSettings?.[0];
+      if (known) { d.grinder = known.grinder || ''; d.grindSetting = known.grindSetting || ''; }
+    }
+    _saveLiveSetupDraft(d);
+    renderLiveShotSetupPanel();
+  });
+
+  document.getElementById('lsGrinder')?.addEventListener('change', () => {
+    handleGrinderFieldChange('lsGrinder', 'lsGrinderOther');
+    const d = _loadLiveSetupDraft();
+    d.grinder = getGrinderFieldValue('lsGrinder', 'lsGrinderOther');
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsGrinderOther')?.addEventListener('input', () => {
+    const d = _loadLiveSetupDraft();
+    d.grinder = getGrinderFieldValue('lsGrinder', 'lsGrinderOther');
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsGrindSetting')?.addEventListener('input', () => {
+    const d = _loadLiveSetupDraft();
+    d.grindSetting = (document.getElementById('lsGrindSetting') as HTMLInputElement).value.trim();
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsDose')?.addEventListener('input', () => {
+    const d = _loadLiveSetupDraft();
+    d.dose = parseFloat((document.getElementById('lsDose') as HTMLInputElement).value) || null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsBasket')?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    const sel = document.getElementById('lsBasket') as HTMLSelectElement;
+    const opt = sel.selectedOptions[0];
+    d.basketId = opt?.dataset.basketId ? parseInt(opt.dataset.basketId, 10) : null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsPuckScreen')?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    const sel = document.getElementById('lsPuckScreen') as HTMLSelectElement;
+    const opt = sel.selectedOptions[0];
+    d.puckScreenId = opt?.dataset.puckscreenId ? parseInt(opt.dataset.puckscreenId, 10) : null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsRecipe')?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    d.recipeId = parseInt((document.getElementById('lsRecipe') as HTMLSelectElement).value, 10) || null;
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsReset')?.addEventListener('click', () => {
+    localStorage.removeItem(_liveSetupStorageKey());
+    renderLiveShotSetupPanel();
+  });
+}
+
+// Writes the current draft onto shotId's annotation — called once a shot
+// that started while this draft was active finishes syncing. Only sends
+// the fields the draft actually has a value for (an empty draft sends
+// nothing — no-ops rather than a POST) and only when the shot's annotation
+// is still blank: by the time this runs (4s after brew end + sync delay),
+// the backend's shot-defaults auto-fill (#654) may already have populated
+// it from the bean/grinder library defaults for this machine, and blindly
+// overwriting here would silently clobber that instead of merging with it
+// — this feature only ever fills a shot that would otherwise stay
+// unannotated, same as #654 itself.
+async function _applyLiveSetupToShot(shotId: number): Promise<void> {
+  const draft = _loadLiveSetupDraft();
+  if (!Object.keys(draft).length) return;
+  const shot = S.shots.find(s => s.id === shotId);
+  const existing: LiveShotAnnotation = (shot?.annotation as LiveShotAnnotation | undefined) || {};
+  const alreadyAnnotated = !!(existing.coffee || existing.beanId != null || existing.grinder ||
+    existing.grindSetting || existing.dose != null || existing.basketId != null ||
+    existing.puckScreenId != null || existing.recipeId != null);
+  if (alreadyAnnotated) return;
+
+  const payload: ShotAnnotation = {};
+  if (draft.coffee) { payload.coffee = draft.coffee; payload.beanId = draft.beanId ?? null; }
+  if (draft.grinder) payload.grinder = draft.grinder;
+  if (draft.grindSetting) payload.grindSetting = draft.grindSetting;
+  if (draft.dose != null) payload.dose = draft.dose;
+  if (draft.basketId != null) payload.basketId = draft.basketId;
+  if (draft.puckScreenId != null) payload.puckScreenId = draft.puckScreenId;
+  if (draft.recipeId != null) payload.recipeId = draft.recipeId;
+  if (!Object.keys(payload).length) return;
+
+  try {
+    const r = await annotateShot(shotId, payload);
+    if (r.ok) {
+      const idx = S.shots.findIndex(s => s.id === shotId);
+      const shotRow = idx !== -1 ? S.shots[idx] : undefined;
+      if (shotRow) shotRow.annotation = { ...(shotRow.annotation as Record<string, unknown>), ...payload };
+    }
+  } catch (e) {
+    // Best-effort — the shot still exists, just unannotated — but log it
+    // rather than swallowing silently, matching every other network-call
+    // catch in this file.
+    console.error('[GLP] applying live shot setup to shot', shotId, 'failed:', e);
+  }
+}
+
+// ── Live chart init ───────────────────────────────────────────────────────
+export function initLiveChart(): void {
+  // #814: resolved per render, never at module load — the value has to be
+  // whatever the ACTIVE theme resolves to right now.
+  const C = chartColors();
+  const ctx = document.getElementById('liveChart') as HTMLCanvasElement;
+  chartRegistry.dispose('liveChart');
+
+  // Chart.js infers the dataset data type from the (empty) arrays below as
+  // never[], so the config is asserted to the line shape once, same convention
+  // as views/shots/index.ts's full chart config.
+  chartRegistry.set('liveChart', new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: t('chart_pressure'), data: [], yAxisID: 'y',  borderWidth: 2.5, tension: 0.1, borderColor: '#3498db', backgroundColor: 'transparent', pointStyle: false },
+        { label: t('chart_flow'),     data: [], yAxisID: 'y',  borderWidth: 2,   tension: 0.1, borderColor: '#f39c12', backgroundColor: 'transparent', pointStyle: false },
+        { label: t('chart_weight'),   data: [], yAxisID: 'y1', borderWidth: 2,   tension: 0.1, borderColor: '#2ecc71', backgroundColor: 'transparent', pointStyle: false },
+        { label: t('chart_temp'),     data: [], yAxisID: 'y1', borderWidth: 2.5, tension: 0.1, borderColor: '#e74c3c', backgroundColor: 'transparent', pointStyle: false },
+        // Reference datasets (4-7) — dashed, semi-transparent
+        { label: t('ref_pressure'), data: [], yAxisID: 'y',  borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(52,152,219,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
+        { label: t('ref_flow'),     data: [], yAxisID: 'y',  borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(243,156,18,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
+        { label: t('ref_weight'),   data: [], yAxisID: 'y1', borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(46,204,113,0.4)',  borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false },
+        { label: t('ref_temp'),     data: [], yAxisID: 'y1', borderWidth: 1.5, tension: 0.1, borderColor: 'rgba(231,76,60,0.4)',   borderDash: [6,3], backgroundColor: 'transparent', pointStyle: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
+        tooltip: { callbacks: { title: (ctx: { parsed: { x: number } }[]) => t('chart_time', formatTimeLabel(ctx[0]?.parsed.x ?? 0)) } }
+      },
+      scales: {
+        x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, callback: (v: number) => formatTimeLabel(v), stepSize: 5 }, grid: { color: C.grid } },
+        y:  { type: 'linear', position: 'left',  min: 0, max: 12, ticks: { color: C.tick }, grid: { color: C.grid } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: C.tick }, grid: { drawOnChartArea: false } }
+      }
+    }
+  } as ChartConfiguration<'line'>));
+
+  // Re-apply reference shot after chart re-init
+  if (S.refShotId) void _applyRefShotById(S.refShotId);
+}
+
+// #957: reference-overlay curves are lazy per shot now — fetch through the
+// curve cache, then feed _applyRefDatasets the mapped XY form.
+async function _applyRefShotById(shotId: number): Promise<void> {
+  const dp = await getShotCurve(shotId);
+  if (S.refShotId !== shotId) return; // ref changed while we were fetching
+  _applyRefDatasets(mapShotDatapoints(dp));
+}
+
+function _applyRefDatasets(d: ShotSeries): void {
+  const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
+  if (!liveChart) return;
+  const datasets = liveChart.data.datasets;
+  const ds4 = datasets[4], ds5 = datasets[5], ds6 = datasets[6], ds7 = datasets[7];
+  if (ds4) ds4.data = d.pressure;
+  if (ds5) ds5.data = d.flow;
+  if (ds6) ds6.data = d.weight;
+  if (ds7) ds7.data = d.temp;
+  liveChart.update('none');
+}
+
+export function populateRefSelector(): void {
+  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = html`<option value="">${tHtml('ref_none')}</option>`;
+  S.shots.filter(s => s.hasChartData)
+    .slice().reverse().slice(0, 40)
+    .forEach(s => {
+      const date    = new Date(s.timestamp * 1000).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
+      const ann     = (s.annotation as LiveShotAnnotation | undefined) || {};
+      const score   = ann.score != null ? ` · ${ann.score}` : '';
+      const coffee  = ann.coffee ? ` — ${ann.coffee}` : '';
+      const opt = document.createElement('option');
+      opt.value       = String(s.id);
+      opt.textContent = `${date} · ${profile}${coffee}${score}`;
+      if (String(s.id) === String(prev)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+}
+
+export function autoApplyRefShot(profileName: string): void {
+  const match = S.shots
+    .filter(s => ((s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '') === profileName && s.hasChartData)
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
+  if (!match) return;
+  S.refShotId = match.id;
+  void _applyRefShotById(match.id);
+  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
+  if (sel) sel.value = String(match.id);
+  const btn = document.getElementById('refClearBtn');
+  if (btn) btn.style.display = '';
+}
+
+export function onRefShotChange(val: string): void {
+  if (!val) { clearReferenceShot(); return; }
+  S.refShotId = parseInt(val);
+  const shot = S.shots.find(s => s.id === S.refShotId);
+  if (!shot) return;
+  void _applyRefShotById(shot.id);
+  const btn = document.getElementById('refClearBtn');
+  if (btn) btn.style.display = '';
+}
+
+export function clearReferenceShot(): void {
+  S.refShotId = null;
+  const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
+  if (liveChart) {
+    [4, 5, 6, 7].forEach(i => {
+      const ds = liveChart.data.datasets[i];
+      if (ds) ds.data = [];
+    });
+    liveChart.update('none');
+  }
+  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
+  if (sel) sel.value = '';
+  const btn = document.getElementById('refClearBtn');
+  if (btn) btn.style.display = 'none';
+}
+
+export function connectLiveStream(): void {
+  const banner  = document.getElementById('liveMachineUnavailableBanner');
+  const content = document.getElementById('live-content');
+  if (!_isActiveMachineLiveCapable()) {
+    disconnectLiveStream();
+    if (banner)  banner.style.display  = '';
+    if (content) content.style.display = 'none';
+    setLiveBadge('error', t('live_machine_unavailable'));
+    return;
+  }
+  if (banner)  banner.style.display  = 'none';
+  if (content) content.style.display = '';
+  disconnectLiveStream();
+  initLiveChart();
+  renderLiveShotSetupPanel();
+  setLiveBadge('connecting');
+  S.liveLastSeq = -1;
+  S.liveWasLive = false;
+  _liveSessionIsBrew = null;
+  void fetchLiveData();
+  void fetchPreheatData();
+  // #736 review: SSE push (handleLiveSnapshotEvent/handlePreheatUpdateEvent,
+  // wired once in main.js's bootstrap) covers both once connected -- these
+  // polling intervals are only needed as the fallback for whenever SSE
+  // hasn't (yet, or ever) taken over for this session. A one-time
+  // `if (!S.sseActive)` check here (at the moment the tab opens) isn't
+  // enough: EventSource can take up to sse.js's WATCHDOG_MS (8s, longer
+  // still over HA Ingress per #738/#740) to actually open, so S.sseActive
+  // can still be null/false right now even though it flips true moments
+  // later -- these intervals must always start, and instead self-correct on
+  // every tick, same convention as status.js's own 30s updateStatus()
+  // interval, which likewise always fires rather than deciding once at
+  // startup.
+  timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) void fetchLiveData(); }, 1000));
+  timerRegistry.set('preheatPollInterval', setInterval(() => { if (!S.sseActive) void fetchPreheatData(); }, 10000));
+}
+
+export async function fetchPreheatData(): Promise<void> {
+  try {
+    const r = await getPreheat();
+    if (!r.ok) return;
+    updatePreheatWidget(await r.json() as PreheatData);
+  } catch { /* ignore */ }
+}
+
+// #811: the animated machine icon in the Live view's idle panel. Built once
+// and then only switched between states — rebuilding the SVG on every poll
+// tick (once a second) would restart every animation mid-cycle, so the
+// element is only re-created when the machine itself changes.
+let _machineIconFor: number | null = null;   // machine id the current SVG was built for
+
+function machineIconEl(): HTMLElement | null {
+  const host = document.getElementById('liveMachineIcon');
+  if (!host) return null;
+  const machine = (S.machines || []).find(m => m.id === S.activeMachineId)
+               || (S.machines || []).find(m => m.isDefault)
+               || (S.machines || [])[0];
+  const id = machine?.id ?? null;
+  if (_machineIconFor !== id || !host.firstChild) {
+    host.className = `idle-icon ${MACHINE_ICON_LIVE_CLASS}`;
+    host.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
+    _machineIconFor = id;
+  }
+  return host;
+}
+
+let _lastPreheat: PreheatData | null = null;
+
+// #837: raw-data-to-icon-state translation itself now lives in
+// resolveMachineIconState() (machine-icon.js) — shared with the topbar's
+// own ambient icon instance (components/topbar-machine-icon.js) — this stays
+// the Live view's own wiring: which element to drive and which preheat
+// snapshot to translate against.
+export function syncMachineIcon(msg: LiveMessage | null): void {
+  const el = machineIconEl();
+  if (!el) return;
+  const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
+  setMachineIconMode(el, mode, heatFraction);
+}
+
+export function updatePreheatWidget(d: PreheatData): void {
+  const readyBadge  = document.getElementById('preheat-ready-badge');
+  const warmingWrap = document.getElementById('preheat-warming-wrap') as HTMLElement;
+  const barFill     = document.getElementById('preheat-bar-fill') as HTMLElement;
+  const countdown   = document.getElementById('preheat-countdown') as HTMLElement;
+  if (!readyBadge) return;
+  // #811: remembered so the icon can show heat progress on poll ticks that
+  // carry live data but no preheat payload.
+  _lastPreheat = d;
+  syncMachineIcon(null);
+
+  if (d.ready) {
+    readyBadge.style.display  = '';
+    warmingWrap.style.display = 'none';
+  } else if (d.remaining > 0) {
+    readyBadge.style.display  = 'none';
+    warmingWrap.style.display = '';
+    barFill.style.width       = `${Math.round((d.pct || 0) * 100)}%`;
+    const m = Math.floor(d.remaining / 60);
+    const s = d.remaining % 60;
+    countdown.textContent     = t('preheat_remain', m, s);
+    const statusEl = document.getElementById('preheat-status-text');
+    if (statusEl && d.preheatTime) statusEl.textContent = `${t('preheat_warming')} · ${d.preheatTime} min`;
+  } else {
+    readyBadge.style.display  = 'none';
+    warmingWrap.style.display = 'none';
+  }
+}
+
+export async function fetchLiveData(): Promise<void> {
+  try {
+    const r = await getLiveData();
+    if (!r.ok) {
+      // #807: same reasoning as the Shots view -- a bare "HTTP 401" in the
+      // Live badge says nothing about the deliberately-closed direct port.
+      setLiveBadge('error', isApiPortBlocked(r.status) ? t('api_port_closed_badge') : `HTTP ${r.status}`);
+      return;
+    }
+    const msg = await r.json() as LiveMessage;
+
+    // First successful response — mark as ready
+    const statusEl = document.getElementById('live-status-text');
+    if (timerRegistry.get('livePollInterval') && statusEl && statusEl.textContent === t('live_connecting')) {
+      setLiveBadge('ready');
+    }
+
+    // #1120 review: record whether this live session is a brew, so the
+    // draft-apply branch below only ever fires for a finished brew. A brew is
+    // msg.isLive; steam/flush/descale sessions (msg.isSteaming/isFlushing/
+    // isDescaling) are a different mode and must never seed the draft.
+    const liveMode = msg.isLive ? 'brew'
+      : (msg.isSteaming || msg.isFlushing || msg.isDescaling) ? 'other'
+      : null;
+    if (liveMode) _liveSessionIsBrew = liveMode === 'brew';
+    // Brew just started → auto-select last same-profile shot as reference
+    if (!S.liveWasLive && msg.isLive && msg.profileName) {
+      autoApplyRefShot(msg.profileName);
+    }
+
+    // Brew just ended → reload shot list after sync delay, then write the
+    // pre-shot setup panel's draft (bean/dose/grinder/grind/basket/
+    // puckscreen/recipe) onto the freshly-synced shot. Snapshotting via
+    // _applyLiveSetupToShot's own read happens after loadData resolves, not
+    // captured here, since a sticky draft is expected to still be current a
+    // few seconds later — see that function's own doc comment.
+    //
+    // The target shot is picked by machine + id, not S.shots[length-1]:
+    // machineId is captured now (S.activeMachineId can change during the
+    // 4s wait in a multi-machine setup — the draft that's about to be
+    // applied belongs to whichever machine was live when the brew ended,
+    // not whichever machine happens to be selected when the timer fires),
+    // and priorNewestId is the highest id already synced for that machine
+    // before this brew — after loadData() reloads, the highest id above
+    // that watermark is unambiguously "the shot this brew produced", never
+    // an older shot the sync happened to reorder and never a steam/flush
+    // session (those never create shots.Shot rows at all, so they can't
+    // satisfy `id > priorNewestId` regardless of timing).
+    // Explicit brew-only gate: `_liveSessionIsBrew !== false` is false after a
+    // steam/flush/descale session, so its finish can never apply the draft
+    // even if S.liveWasLive was somehow set.
+    if (S.liveWasLive && !msg.isLive && _liveSessionIsBrew !== false && msg.seq !== S.liveLastSeq) {
+      S.liveLastSeq = msg.seq!;
+      const machineId = S.activeMachineId;
+      const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
+      setTimeout(async () => {
+        if (window.loadData) await window.loadData();
+        const newest = S.shots
+          .filter(s => s.machineId === machineId && s.id > priorNewestId)
+          .sort((a, b) => b.id - a.id)[0];
+        if (newest) void _applyLiveSetupToShot(newest.id);
+      }, 4000);
+    }
+    S.liveWasLive = msg.isLive!;
+
+    handleLiveData(msg);
+  } catch {
+    // #913: a network-level failure (e.g. the machine lost power and dropped
+    // off the network entirely, not just an HTTP error) used to only flip
+    // the badge -- the previously-rendered live values (preheat countdown,
+    // pressure/weight, machine-icon state) stayed frozen on screen
+    // indefinitely. Route through the same unreachable path as the explicit
+    // msg.machineReachable === false branch below so this failure mode
+    // clears the panel exactly like the other two already do.
+    handleLiveData({ machineReachable: false, datapoints: {} });
+  }
+}
+
+export function disconnectLiveStream(): void {
+  timerRegistry.dispose('livePollInterval');
+  timerRegistry.dispose('preheatPollInterval');
+  timerRegistry.dispose('liveTimerTick');
+  chartRegistry.dispose('liveChart');
+  S.liveBrewStartWall = null;
+}
+
+export function setLiveBadge(state: string, detail = ''): void {
+  const badge   = document.getElementById('live-status-badge') as HTMLElement;
+  const textEl  = document.getElementById('live-status-text') as HTMLElement;
+  const liveBtn = document.getElementById('btnLive') as HTMLElement;
+
+  badge.className = `live-status-badge ${state}`;
+  liveBtn.classList.remove('live-brewing', 'live-ready');
+
+  const labels: Record<string, string> = {
+    connecting:  t('live_connecting'),
+    ready:       t('live_ready_status'),
+    brewing:     t('live_brewing'),
+    // #902: steam/flush get their own badge labels/status-dot color (see
+    // style.css's #live-status-badge.steaming/.flushing) -- distinct from
+    // brewing (a shot) even though both are "something is actively running".
+    steaming:    t('live_steaming'),
+    flushing:    t('live_flushing'),
+    // #983: descale mirrors steam/flush's own badge treatment.
+    descaling:   t('live_descaling'),
+    error:       detail || t('live_error_status'),
+    idle:        t('live_ready_status'),
+    unreachable: detail || t('live_unreachable_status')
+  };
+  textEl.textContent = labels[state] || state;
+
+  if (state === 'brewing') liveBtn.classList.add('live-brewing');
+  if (state === 'ready' || state === 'idle') liveBtn.classList.add('live-ready');
+}
+
+// #902: shared elapsed-timer pair, used by all three "something is
+// currently running" branches in handleLiveData() below (brewing/steaming/
+// flushing) instead of each inlining its own setInterval -- the three modes
+// are mutually exclusive (one physical operation mode at a time), so one
+// shared S.liveBrewStartWall/`liveTimerTick` timer pair is enough; no per-mode
+// state needed.
+function startElapsedTimer(startWall: number, elId: string): void {
+  S.liveBrewStartWall = startWall;
+  if (!timerRegistry.get('liveTimerTick')) {
+    timerRegistry.set('liveTimerTick', setInterval(() => {
+      if (S.liveBrewStartWall) {
+        const s = (Date.now() - S.liveBrewStartWall) / 1000;
+        document.getElementById(elId)!.textContent = formatTimeLabel(s);
+      }
+    }, 100));
+  }
+}
+
+function stopElapsedTimer(elId: string | null, finalElapsedSec: number | null): void {
+  timerRegistry.dispose('liveTimerTick');
+  S.liveBrewStartWall = null;
+  if (elId != null && finalElapsedSec != null) {
+    document.getElementById(elId)!.textContent = formatTimeLabel(finalElapsedSec);
+  }
+}
+
+// #736: SSE push handlers -- registered once in main.js's bootstrap
+// (connectEvents()/onEvent()), independent of whichever view is currently
+// open. Both payloads are already the identical shape their REST
+// counterparts (GET /api/live/data, GET /api/preheat) return -- so these
+// are thin passthroughs, not adapters.
+export function handleLiveSnapshotEvent(payload: LiveMessage): void {
+  handleLiveData(payload);
+}
+
+export function handlePreheatUpdateEvent(payload: PreheatData): void {
+  updatePreheatWidget(payload);
+}
+
+export function handleLiveData(msg: LiveMessage): void {
+  const dp: LiveDatapoints = msg.datapoints || {};
+  const times   = dp.timeInShot  || [];
+  const lastIdx = times.length - 1;
+
+  const metaEl      = document.getElementById('live-meta') as HTMLElement;
+  const contentEl   = document.getElementById('live-content') as HTMLElement;
+  const idleEl      = document.getElementById('live-idle') as HTMLElement;
+  const idleTitleEl = document.getElementById('liveIdleTitle');
+  const idleTextEl  = document.getElementById('liveIdleText');
+
+  // #655: machineReachable === false is the authoritative "machine is off/
+  // unreachable" signal (the 1s backend poll) and must win over
+  // the isLive-based "ready" fallback below — otherwise a powered-off
+  // machine renders identically to an idle-but-reachable one (state.liveAccum
+  // is null in both cases) and the live tab keeps showing "Ready to brew"
+  // indefinitely, which was the reported bug.
+  syncMachineIcon(msg);   // #811
+
+  if (msg.machineReachable === false) {
+    setLiveBadge('unreachable');
+    metaEl.textContent = '–';
+    contentEl.style.display = 'none';
+    idleEl.style.display    = 'flex';
+    idleEl.classList.add('unreachable');
+    if (idleTitleEl) idleTitleEl.textContent = t('machine_unreachable_title');
+    if (idleTextEl)  idleTextEl.textContent  = t('live_unreachable_text');
+    // #902: the idle-stats row (temp/target/pressure/water-level) must be
+    // cleared here too -- otherwise the last-known numbers stay visible
+    // under the red "machine unreachable" message as if still live, same
+    // stale-data trap #655 originally fixed for the rest of this panel.
+    const idleTempEl       = document.getElementById('liveIdleTemp');
+    const idleTargetTempEl = document.getElementById('liveIdleTargetTemp');
+    const idlePressureEl   = document.getElementById('liveIdlePressure');
+    const idleWaterEl      = document.getElementById('liveIdleWaterLevel');
+    if (idleTempEl)       idleTempEl.textContent       = '–';
+    if (idleTargetTempEl) idleTargetTempEl.textContent = '';
+    if (idlePressureEl)   idlePressureEl.textContent   = '–';
+    if (idleWaterEl)       idleWaterEl.textContent      = '–';
+    return;
+  }
+  idleEl.classList.remove('unreachable');
+  // #811: "machine_ready" means REACHABLE, but it reads as "ready to brew" —
+  // and while preheating it sat directly under a widget counting down "heating
+  // ... 20 min", flatly contradicting it. The animated icon made that obvious
+  // by showing the heating state right between the two. Reuses the existing
+  // preheat_warming key rather than adding a seventh translation of the same
+  // idea.
+  // machineReachable == null means "never polled yet" (startup) — show
+  // connecting rather than "Maschine bereit" which implies confirmed reachability.
+  const stillWarming = _lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0;
+  const neverPolled  = msg.machineReachable == null;
+  if (idleTitleEl) idleTitleEl.textContent = neverPolled ? t('live_connecting') : stillWarming ? t('preheat_warming') : t('machine_ready');
+  if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
+
+  // #902: idle stats row -- always kept current (not gated behind the true-
+  // idle branch below), same reasoning as syncMachineIcon(msg) above, so the
+  // numbers are already fresh the moment the idle panel becomes visible.
+  const idleTempEl       = document.getElementById('liveIdleTemp');
+  const idleTargetTempEl = document.getElementById('liveIdleTargetTemp');
+  const idlePressureEl   = document.getElementById('liveIdlePressure');
+  const idleWaterEl      = document.getElementById('liveIdleWaterLevel');
+  if (idleTempEl)       idleTempEl.textContent       = msg.temperature       != null ? `${msg.temperature.toFixed(1)}°`         : '–';
+  if (idleTargetTempEl) idleTargetTempEl.textContent = msg.targetTemperature != null ? ` / ${msg.targetTemperature.toFixed(0)}°` : '';
+  if (idlePressureEl)   idlePressureEl.textContent   = msg.pressure          != null ? `${msg.pressure.toFixed(1)} bar`          : '–';
+  if (idleWaterEl)       idleWaterEl.textContent      = msg.waterLevel        != null ? `${msg.waterLevel}%`                     : '–';
+
+  {
+    const waterStat = document.getElementById('liveIdleWaterStat');
+    if (waterStat) waterStat.style.display = msg.waterLevel != null ? '' : 'none';
+  }
+
+  // #902/#983: steam/flush/descale live sessions -- same live-content
+  // readout the brew branch below uses (duration/pressure/temperature),
+  // sourced from steamDatapoints/flushDatapoints/descaleDatapoints instead
+  // of the brew shot's datapoints. No flow/weight equivalent for any mode
+  // (none moves the scale), so those two tiles stay blank. Checked ahead of
+  // the pure-idle fallback below since each of these is itself a non-idle
+  // state.
+  if (msg.isSteaming || msg.isFlushing || msg.isDescaling) {
+    const badgeState  = msg.isSteaming ? 'steaming' : msg.isFlushing ? 'flushing' : 'descaling';
+    const modeDp: LiveModeDatapoints = msg.isSteaming ? (msg.steamDatapoints || {})
+      : msg.isFlushing  ? (msg.flushDatapoints || {})
+      : (msg.descaleDatapoints || {});
+    const modeTimes    = modeDp.timeInMode || [];
+    const modeLastIdx  = modeTimes.length - 1;
+
+    setLiveBadge(badgeState);
+    metaEl.textContent       = t(`live_${badgeState}`);
+    contentEl.style.display  = 'block';
+    idleEl.style.display     = 'none';
+
+    if (modeLastIdx >= 0) {
+      const elapsed = (modeTimes[modeLastIdx] ?? 0) / 10;
+      const modePressure = modeDp.pressure?.[modeLastIdx];
+      const modeTemp     = modeDp.temperature?.[modeLastIdx];
+      const pressure = modePressure != null ? modePressure / 10 : null;
+      const temp     = modeTemp     != null ? modeTemp / 10     : null;
+
+      startElapsedTimer(Date.now() - elapsed * 1000, 'liveTime');
+
+      document.getElementById('livePressure')!.textContent = pressure != null ? pressure.toFixed(1) : '–';
+      document.getElementById('liveFlow')!.textContent     = '–';
+      document.getElementById('liveWeight')!.textContent   = '–';
+      document.getElementById('liveTemp')!.textContent     = temp != null ? temp.toFixed(1) : '–';
+    }
+    return;
+  }
+
+  if (!msg.isLive && times.length === 0) {
+    setLiveBadge('ready');
+    metaEl.textContent = '–';
+    contentEl.style.display = 'none';
+    idleEl.style.display    = 'flex';
+    return;
+  }
+
+  contentEl.style.display = 'block';
+  idleEl.style.display    = 'none';
+
+  if (msg.isLive) {
+    setLiveBadge('brewing');
+    metaEl.textContent = msg.profileName || '–';
+  } else {
+    setLiveBadge('idle');
+    metaEl.textContent = (msg.profileName || '–') + ' · abgeschlossen';
+  }
+
+  if (lastIdx >= 0) {
+    const elapsed = (times[lastIdx] ?? 0) / 10;
+    const rawPressure = dp.pressure?.[lastIdx];
+    const rawFlow     = dp.pumpFlow?.[lastIdx];
+    const weightSrc   = dp.shotWeight || dp.weight;
+    const rawWeight   = weightSrc?.[lastIdx];
+    const rawTemp     = dp.temperature?.[lastIdx];
+    const pressure = rawPressure != null ? rawPressure / 10 : null;
+    const flow     = rawFlow     != null ? rawFlow / 10     : null;
+    const weight   = rawWeight   != null ? rawWeight / 10   : null;
+    const temp     = rawTemp     != null ? rawTemp / 10     : null;
+
+    if (msg.isLive) {
+      // #811: the icon's on-device readout mirrors the real shot.
+      const iconEl = document.getElementById('liveMachineIcon');
+      if (iconEl) updateMachineIconBrewReadout(iconEl, {
+        weightG: weight ?? 0, elapsedSec: elapsed ?? 0, pressureBar: pressure,
+      });
+      // Re-sync wall clock so timer stays accurate
+      startElapsedTimer(Date.now() - elapsed * 1000, 'liveTime');
+    } else {
+      stopElapsedTimer('liveTime', elapsed);
+    }
+
+    document.getElementById('livePressure')!.textContent = pressure != null ? pressure.toFixed(1) : '–';
+    document.getElementById('liveFlow')!.textContent     = flow     != null ? flow.toFixed(1)     : '–';
+    document.getElementById('liveWeight')!.textContent   = weight   != null ? weight.toFixed(1)   : '–';
+    document.getElementById('liveTemp')!.textContent     = temp     != null ? temp.toFixed(1)     : '–';
+  }
+
+  const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
+  if (liveChart) {
+    const maxTime = times.length > 0 ? (times[times.length - 1] ?? 0) / 10 : 60;
+    const datasets = liveChart.data.datasets;
+    const ds0 = datasets[0], ds1 = datasets[1], ds2 = datasets[2], ds3 = datasets[3];
+    if (ds0) ds0.data = mapToXY(times, dp.pressure);
+    if (ds1) ds1.data = mapToXY(times, dp.pumpFlow);
+    if (ds2) ds2.data = mapToXY(times, dp.shotWeight || dp.weight);
+    if (ds3) ds3.data = mapToXY(times, dp.temperature);
+    const scales = liveChart.options.scales;
+    if (scales) {
+      scales.x!.max  = Math.max(maxTime + 5, 30);
+
+      const maxTemp = dp.temperature?.length
+        ? dp.temperature.reduce((m, v) => v > m ? v : m, 0) / 10 : 0;
+      scales.y1!.max = Math.ceil(maxTemp + 5) || 100;
+    }
+
+    liveChart.update('none');
+  }
+}

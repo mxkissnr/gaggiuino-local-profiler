@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing element at index ${i}`);
+  return v;
+}
+
 // Same window/localStorage/navigator stubbing as analytics-new-charts.test.js
 // — analytics.js calls window.calcShotScore/window.getShotData at runtime
 // (main.js's real window-exposure pattern) and pulls in echarts transitively.
@@ -11,13 +17,13 @@ let _computeEquipmentStats: Analytics['_computeEquipmentStats'];
 type ShotRow = Parameters<Analytics['_computeEquipmentStats']>[0][number];
 
 interface ShotOverrides {
-  id?: number;
-  timestamp?: number;
-  duration?: number;
-  score?: number;
-  basketId?: number | null;
-  puckScreenId?: number | null;
-  grinder?: string | null;
+  id?: number | undefined;
+  timestamp?: number | undefined;
+  duration?: number | undefined;
+  score?: number | undefined;
+  basketId?: number | null | undefined;
+  puckScreenId?: number | null | undefined;
+  grinder?: string | null | undefined;
 }
 
 beforeAll(async () => {
@@ -50,7 +56,7 @@ const shot = (overrides: ShotOverrides = {}): ShotRow => ({
 const baskets     = [{ id: 1, name: 'IMS Precision' }, { id: 2, name: 'VST' }];
 const puckScreens = [{ id: 5, name: 'Slayer mesh' }];
 
-// #635/routes/library/baskets.js: basket/puck-screen names have no
+// #635: basket/puck-screen names have no
 // uniqueness constraint — two distinct library entries can share a name.
 const duplicateNameBaskets = [{ id: 10, name: 'Standard' }, { id: 11, name: 'Standard' }];
 
@@ -100,8 +106,8 @@ describe('_computeEquipmentStats (#668, generalized in #674 for grinder too)', (
       shot({ basketId: 1, score: 80 }), shot({ basketId: 1, score: 80 }), shot({ basketId: 1, score: 80 }),
     ];
     const rows = basketStats(shots);
-    expect(rows[0].name).toBe('IMS Precision');
-    expect(rows[0].count).toBe(3);
+    expect(at(rows, 0).name).toBe('IMS Precision');
+    expect(at(rows, 0).count).toBe(3);
   });
 
   it('returns null avgScore/bestScore/avgDuration for entries with no scored/timed shots', () => {
@@ -113,7 +119,7 @@ describe('_computeEquipmentStats (#668, generalized in #674 for grinder too)', (
   it('never touches calcShotScore\'s own formula — reuses it as-is via window.calcShotScore', () => {
     const shots = [shot({ basketId: 1, score: 77 })];
     const rows = basketStats(shots);
-    expect(rows[0].avgScore).toBe(77);
+    expect(at(rows, 0).avgScore).toBe(77);
   });
 
   it('keeps two same-named baskets as separate cards, grouped by id not by name', () => {
@@ -154,8 +160,8 @@ describe('_computeEquipmentStats (#668, generalized in #674 for grinder too)', (
     it('avgDuration is a number, not a string (fixes the pre-#674 type drift)', () => {
       const shots = [shot({ grinder: 'Niche Zero', duration: 283 }), shot({ grinder: 'Niche Zero', duration: 277 })]; // 28.3s, 27.7s
       const rows = grinderStats(shots);
-      expect(rows[0].avgDuration).toBe(28);
-      expect(typeof rows[0].avgDuration).toBe('number');
+      expect(at(rows, 0).avgDuration).toBe(28);
+      expect(typeof at(rows, 0).avgDuration).toBe('number');
     });
 
     it('sorts by shot count descending, same as basket/puck screen', () => {
@@ -164,8 +170,8 @@ describe('_computeEquipmentStats (#668, generalized in #674 for grinder too)', (
         shot({ grinder: 'Niche Zero', score: 80 }), shot({ grinder: 'Niche Zero', score: 80 }),
       ];
       const rows = grinderStats(shots);
-      expect(rows[0].name).toBe('Niche Zero');
-      expect(rows[0].count).toBe(2);
+      expect(at(rows, 0).name).toBe('Niche Zero');
+      expect(at(rows, 0).count).toBe(2);
     });
   });
 });

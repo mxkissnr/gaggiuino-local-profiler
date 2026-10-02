@@ -8,22 +8,18 @@ import (
 	"strings"
 )
 
-// This file (#901, design pass 4 follow-up) ports public-src/views/shots/
-// grind.js's calcComparativeGrindAdvice: "which grind setting scores best
-// among this shot's comparable siblings" — deliberately NOT ported
-// alongside internal/shots/detail.go's own ComputeGrindAdvice (single-shot
-// dial-in heuristic) because, per that file's own doc comment, this needs
-// the full shot history, not just one shot. Now that internal/web's Shots
-// page has a natural place to fetch that history (the same machine's
-// FindAllExcludingTrashByMachine internal/web already loads for the list
-// column), that gap closes here.
+// This file computes the comparative grind advice: "which grind setting
+// scores best among this shot's comparable siblings". It is deliberately
+// separate from internal/shots/detail.go's own ComputeGrindAdvice (single-shot
+// dial-in heuristic) because, per that file's own doc comment, this needs the
+// full shot history, not just one shot, so a caller supplies the same
+// machine's FindAllExcludingTrashByMachine result.
 
-// grindNumRe ports grind.js's _parseGrindNum regex: the first
-// integer-or-decimal numeric substring in a free-text grind setting string
-// ("Setting 3.5" -> 3.5, "3,5" -> 3.5 via the comma-to-dot swap below).
+// grindNumRe is the regex for the first integer-or-decimal numeric substring
+// in a free-text grind setting string ("Setting 3.5" -> 3.5, "3,5" -> 3.5 via
+// the comma-to-dot swap below).
 var grindNumRe = regexp.MustCompile(`\d+(?:[.,]\d+)?`)
 
-// parseGrindNum ports grind.js's _parseGrindNum(s).
 func parseGrindNum(s string) (float64, bool) {
 	if s == "" {
 		return 0, false
@@ -39,10 +35,9 @@ func parseGrindNum(s string) (float64, bool) {
 	return f, true
 }
 
-// ComparativeGrindAdvice mirrors calcComparativeGrindAdvice's return shape
-// — Type/Icon/Text follow the same convention as GrindAdvice
-// (detail.go), plus the sample count and the best-scoring grind
-// setting/score the advice text quotes.
+// ComparativeGrindAdvice is the advice plus its evidence: Type/Icon/Text
+// follow the same convention as GrindAdvice (detail.go), plus the sample count
+// and the best-scoring grind setting/score the advice text quotes.
 type ComparativeGrindAdvice struct {
 	// Type is "finer" | "coarser" | "ok".
 	Type string
@@ -54,11 +49,11 @@ type ComparativeGrindAdvice struct {
 	BestScore        int
 }
 
-// comparativeSameBean mirrors calcComparativeGrindAdvice's own sameBean
-// closure: beanId-first match when both sides have one (a row whose beanId
-// points at a different bean is NOT rescued by a name match — same #456
-// convention library.ComputeBeanRemaining already follows), else a
-// case-insensitive coffee-name comparison.
+// comparativeSameBean reports whether two annotations describe the same bean:
+// beanId-first match when both sides have one (a row whose beanId points at a
+// different bean is NOT rescued by a name match — the same #456 convention
+// library.ComputeBeanRemaining already follows), else a case-insensitive
+// coffee-name comparison.
 func comparativeSameBean(annA, annB map[string]any) bool {
 	beanIDA, hasA := annA["beanId"]
 	beanIDB, hasB := annB["beanId"]
@@ -74,11 +69,13 @@ func comparativeSameBean(annA, annB map[string]any) bool {
 	return coffeeA != "" && strings.EqualFold(strings.TrimSpace(coffeeA), strings.TrimSpace(coffeeB))
 }
 
-// ComputeComparativeGrindAdvice ports calcComparativeGrindAdvice(shot,
-// allShots) — allShots should be every other shot on shot's own machine
-// (internal/shots.Repository.FindAllExcludingTrashByMachine), matching
-// Node's own S.shots (already machine-filtered upstream by
-// filterShotsByMachine before ever reaching this function).
+// ComputeComparativeGrindAdvice computes the advice for shot from allShots —
+// every other shot on shot's own machine
+// (internal/shots.Repository.FindAllExcludingTrashByMachine), already
+// machine-filtered before reaching this function. Each comparable shot is
+// scored against its own bean target (one loadBeanLookup snapshot for the
+// whole pass), so the ranking matches the bean-aware list and detail scores
+// rather than the generic bands.
 func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrindAdvice {
 	ann := toMap(shot["annotation"])
 	coffee := strings.ToLower(strings.TrimSpace(annotationStr(ann, "coffee")))
@@ -95,6 +92,7 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 		grind float64
 		score int
 	}
+	lookup := loadBeanLookup()
 	var comparable []comparableShot
 	for _, s := range allShots {
 		if s.id() == shotID {
@@ -120,7 +118,7 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 		if !ok {
 			continue
 		}
-		score := CalcShotScore(s, nil)
+		score := CalcShotScore(s, lookup(s))
 		if score == nil {
 			continue
 		}
@@ -136,19 +134,15 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 		byGrind[key] = append(byGrind[key], c.score)
 	}
 
-	// #901 code review (CONFIRMED finding #3): Go's map iteration order is
-	// randomized per-run, so picking the best bucket via `for key := range
-	// byGrind` made the result nondeterministic whenever two grind-setting
-	// buckets landed on the exact same average score (realistic — avg is
-	// sum(int)/len(int), a common rational) — the same shot's page could
-	// recommend a different "best" grind setting on different loads. Sort
-	// the keys first and iterate in that fixed order, with a strict `>`
-	// comparison so the first (lowest) key seen wins any exact tie — a
-	// pragmatic, explicit tiebreak (favor the finer/lower setting) rather
-	// than Node's own `Object.entries` order, which for this function's
-	// non-integer-string keys ("3.5" etc.) was itself just whatever
-	// insertion order happened to produce, not a rule this port could
-	// faithfully carry over.
+	// Go's map iteration order is randomized per-run, so picking the best
+	// bucket via `for key := range byGrind` would make the result
+	// nondeterministic whenever two grind-setting buckets landed on the exact
+	// same average score (realistic — avg is sum(int)/len(int), a common
+	// rational) — the same shot's page could recommend a different "best"
+	// grind setting on different loads. Sort the keys first and iterate in
+	// that fixed order, with a strict `>` comparison so the first (lowest) key
+	// seen wins any exact tie — a pragmatic, explicit tiebreak favoring the
+	// finer/lower setting.
 	keys := make([]float64, 0, len(byGrind))
 	for key := range byGrind {
 		keys = append(keys, key)
@@ -211,10 +205,7 @@ func comparativeOkText(n int, bestSetting float64, bestScore int) string {
 	return fmt.Sprintf("%d comparable shots confirm your grind setting (avg score %d)", n, bestScore)
 }
 
-// annotationStr reads ann[key] as a string, or "" if absent/not a string —
-// this package's own equivalent of internal/web's annotationString (kept
-// local, not shared, matching that file's own note about
-// small-enough-not-to-share helpers).
+// annotationStr reads ann[key] as a string, or "" if absent/not a string.
 func annotationStr(ann map[string]any, key string) string {
 	v, _ := ann[key].(string)
 	return v
@@ -227,15 +218,15 @@ func abs(v float64) float64 {
 	return v
 }
 
-// roundToHalf ports JS's `Math.round(g * 2) / 2` grind-setting bucketing.
+// roundToHalf buckets a grind setting to the nearest half: Math.round(g*2)/2.
 func roundToHalf(v float64) float64 {
 	return roundHalfAwayFromZero(v*2) / 2
 }
 
-// roundHalfAwayFromZero ports JS's Math.round (half-up, not Go's
-// round-half-to-even default) — only matters at exact .5 boundaries, but
-// grind settings land there often enough (whole and half increments) that
-// the distinction is worth getting right.
+// roundHalfAwayFromZero rounds half away from zero (half-up), not Go's
+// round-half-to-even default — only matters at exact .5 boundaries, but grind
+// settings land there often enough (whole and half increments) that the
+// distinction is worth getting right.
 func roundHalfAwayFromZero(v float64) float64 {
 	if v < 0 {
 		return -roundHalfAwayFromZero(-v)

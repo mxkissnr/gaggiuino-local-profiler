@@ -12,13 +12,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 )
 
-// This file ports routes/library/scan.js: a server-side proxy to Open Food
-// Facts (the browser can't call it directly — server.js's CSP pins
-// connect-src to 'self'), guarded by the same SSRF check
-// (assertPublicHost, ssrf.go) the Node original applies before ever
-// dialing out, even though the target host is a fixed literal (DNS
-// rebinding defense, not user-input validation — see ssrf.go's doc
-// comment).
+// This file handles the barcode-scan endpoint: a server-side proxy to Open Food
+// Facts (the browser can't call it directly — the app's CSP pins connect-src
+// to 'self'), guarded by an SSRF check (assertPublicHost, ssrf.go) before
+// ever dialing out, even though the target host is a fixed literal (DNS
+// rebinding defense, not user-input validation — see ssrf.go's doc comment).
 
 const offHost = "world.openfoodfacts.org"
 
@@ -31,7 +29,7 @@ var offBaseURL = "https://" + offHost
 
 var barcodeRe = regexp.MustCompile(`^(\d{8}|\d{12}|\d{13}|\d{14})$`)
 
-// scanFetchMaxBytes mirrors lib/constants.js's SCAN_FETCH_MAX_BYTES.
+// scanFetchMaxBytes caps the response size of a scan fetch.
 const scanFetchMaxBytes = 1 * 1024 * 1024
 
 var scanHTTPClient = &http.Client{
@@ -45,7 +43,7 @@ func (h *Handlers) registerScanRoute(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/library/scan/{barcode}", h.scanBarcode)
 }
 
-// scanBarcode ports GET /api/library/scan/:barcode.
+// scanBarcode handles GET /api/library/scan/:barcode.
 func (h *Handlers) scanBarcode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if !h.limiter.allow("scan:"+auth.RemoteIP(r), 20) {
@@ -53,10 +51,9 @@ func (h *Handlers) scanBarcode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	barcode := r.PathValue("barcode")
-	// scanBarcodeSchema (lib/validation/schemas.js) runs as request-level
-	// middleware in Node, ahead of the handler; ported inline here since
-	// this package has no equivalent middleware chain — same 400 shape
-	// (Validation failed / issues[]) as validate() would have produced.
+	// The barcode is validated inline, ahead of the handler — there is no
+	// equivalent middleware chain here — producing the same 400 shape
+	// (Validation failed / issues[]) a schema validator would.
 	if !barcodeRe.MatchString(barcode) {
 		writeJSON(w, http.StatusBadRequest, Entity{
 			"error": "Validation failed",
@@ -118,7 +115,7 @@ func (h *Handlers) scanBarcode(w http.ResponseWriter, r *http.Request) {
 		} `json:"product"`
 	}
 	if len(body) > 0 {
-		_ = json.Unmarshal(body, &payload) // malformed/empty body -> nil product, same "not_found" branch as Node's r.data?.product being undefined
+		_ = json.Unmarshal(body, &payload) // malformed/empty body -> nil product, "not_found"
 	}
 
 	if resp.StatusCode == http.StatusNotFound || payload.Product == nil {

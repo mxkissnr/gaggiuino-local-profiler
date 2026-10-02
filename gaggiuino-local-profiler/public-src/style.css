@@ -1,207 +1,4 @@
-        :root {
-            /* ── Radius ── #811: two radii, not eight. --radius-sm is for
-               controls (inputs, chips, small buttons), --radius for
-               containers. Anything that reached for a third value was
-               picking a number, not making a decision. */
-            --radius: 10px;
-            --radius-sm: 4px;
-
-            /* ── Type scale ── #811: six steps, replacing 53 distinct
-               font-size literals that stepped in 0.02rem increments. A size
-               not on this ladder is a regression, not a nuance — the tail of
-               near-identical sizes is one of the clearest signs of a UI that
-               was assembled rather than designed. --fs-1 is deliberately
-               0.8125rem and not the 0.58rem the app used to reach for: the
-               border diet below removes boxes as a grouping device, and that
-               must not come back as hairline micro-typography. */
-            --fs-1: 0.8125rem;
-            --fs-2: 0.875rem;
-            --fs-3: 1rem;
-            --fs-4: 1.25rem;
-            --fs-5: 1.625rem;
-            --fs-6: 2.25rem;
-
-            /* ── Spacing ladder ── #811: replaces the loose gap/padding
-               literals. Same rule: a value off the ladder is a regression. */
-            --sp-1: 4px;
-            --sp-2: 8px;
-            --sp-3: 12px;
-            --sp-4: 16px;
-            --sp-5: 24px;
-            --sp-6: 32px;
-
-            /* ── Gray scale (dark theme) ──
-               #811: cool graphite, replacing the previous Tailwind-zinc
-               values. The scale is ROLE-based, not brightness-based, and it
-               inverts under [data-theme="light"] below: --gray-200 is always
-               "primary text" and --gray-900 always "page background",
-               whichever theme is active. Reading these names as brightness
-               levels and "fixing" them accordingly breaks the light theme.
-               Roles, from how they are actually used in this file:
-                 100  strongest text (KPI values, large figures)
-                 200  primary text          (82 uses as `color`)
-                 300  strong secondary text
-                 400  soft text
-                 500  muted text            (97 uses, the most common label)
-                 600  muted, weakest        (48 uses)
-                 700  LINES (91 uses as `border`) — not a text colour
-                 800  card / sidebar surface (53 uses as `background`)
-                 900  page background       (46 uses)
-                 950  deepest surface
-               --gray-100 and --gray-300 were USED but never defined until
-               now, so they silently inherited whatever colour was in scope.
-               Every text role clears 4.5:1 against every surface in this
-               table; worst case is --err on --raised at 4.82:1. */
-            --gray-100: #f7f8f8;
-            --gray-200: #eceded;
-            --gray-300: #d0d3d5;
-            --gray-400: #b6babd;
-            --gray-500: #a4a9ad;
-            --gray-600: #93989c;
-            --gray-700: #2b2f33;
-            --gray-800: #1a1c1f;
-            --gray-900: #131416;
-            --gray-950: #0d0e10;
-            /* #811: the nesting level that used to be drawn as a card inside
-               a card inside a card, each with its own 1px border. A surface
-               step carries that hierarchy without the boxes — which is what
-               makes the border diet possible at all. */
-            --raised:   #232629;
-
-            /* ── Functional ──
-               #811: recomputed. The previous values (#22c55e/#eab308/#ef4444,
-               Tailwind's 500 series) were never checked against the surfaces
-               they actually sit on — #397 audited the gray scale only. --err
-               measured 3.96:1 on --gray-800 in the dark theme, and in the
-               light theme --ok measured 3.00:1 against every surface. Those
-               were pre-existing WCAG failures, not something this redesign
-               introduced; they are fixed here because the values were being
-               touched anyway. */
-            --ok:     #5cb98a;
-            --warn:   #d3a03f;
-            --err:    #e0705f;
-
-            /* ── Accent (amber-americano default) ──
-               #1019: these are amber-americano's own values (see
-               lib/machines/theme-presets.js's THEME_PRESETS, the single
-               source of truth both the per-machine theme picker and the
-               Settings -> Farbschema picker now share) — this block only
-               exists so <html> already has a sensible accent painted before
-               JS runs applyActiveMachineAccentTheme() (machines-settings.js)
-               and overrides it inline with the actual resolved value. The
-               old per-swatch [data-accent="..."] blocks that used to live
-               here for the other 5 legacy swatches (plus Crema's warm-
-               neutral grayscale override) are retired entirely along with
-               them — every preset, including this default, now only ever
-               reaches the page via that one inline-style mechanism. */
-            --accent:      #f59e0b;
-            --accent-from: #f59e0b;
-            --accent-to:   #f59e0b;
-            --accent-text: #000;
-            --accent-glow: rgba(245,158,11,.15);
-            /* --on-fill: text/number sitting ON a full-strength semantic fill
-               (--ok/--warn/--err/--gray-600 used as a background rather than
-               as a text colour, e.g. the dial-in score chip).
-               It is BLACK in the dark theme and white in the light one, which
-               is the opposite of the intuition: the dark theme's semantic
-               colours are the light, saturated ones, so white on them
-               measures 2.37-3.16:1 while black measures 6.65-8.87:1. The
-               light theme's are the dark ones and it reverses. Same reasoning
-               as --accent-text above; these fills were simply never audited,
-               because #397/#404 only ever checked these tokens as TEXT ON a
-               surface, never as a surface UNDER text. */
-            --on-fill: #000;
-            /* --accent-ink: the accent used as TEXT or an icon, as opposed to
-               a fill. On dark surfaces the accent itself is readable, so this
-               is simply the accent. In the light theme it is not — #1021's
-               per-preset overrides for the 8 THEME_PRESETS are applied here
-               as an inline style by applyActiveMachineAccentTheme()
-               (components/machines-settings.js), not a CSS selector — see
-               the comment below where the old [data-accent]-scoped overrides
-               used to live. Splitting the two is what lets the fill stay
-               exactly the configured brand colour while the text form stays
-               legible. */
-            --accent-ink:  var(--accent);
-        }
-
-        /* ── Light theme ── */
-        [data-theme="light"] {
-            /* #811: the same role scale, inverted — 100/200 are the darkest
-               here because they are TEXT, 900/950 the lightest because they
-               are SURFACES. Note the light theme's own convention, which is
-               kept: a raised element gets DARKER here (800 sits below 900),
-               the opposite of the dark theme, so --raised continues in that
-               same direction. Every text role clears 4.5:1 on every surface;
-               worst case --gray-600 on --raised at 4.51:1. */
-            --gray-100: #0e0f10;
-            --gray-200: #1b1d1f;
-            --gray-300: #303438;
-            --gray-400: #4a4e52;
-            /* #397 kept: 500/600 exist to clear 4.5:1 as label text on the
-               card surface. Recomputed for the new surfaces above. */
-            --gray-500: #585d61;
-            --gray-600: #63686c;
-            --gray-700: #dcdcd8;
-            --gray-800: #eeeeec;
-            --gray-900: #f7f7f6;
-            --gray-950: #ffffff;
-            --raised:   #e6e6e3;
-            /* #811: --ok was #16a34a, which measured 3.00:1 against every
-               light surface — a pre-existing failure the gray-scale audit in
-               #397 never covered, because it only checked the grays. */
-            --ok:     #2f7350;
-            --warn:   #7d5510;
-            --err:    #a83526;
-            --on-fill: #fff;
-        }
-        /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
-           Crema's whole separate warm-paper light block) was retired along
-           with the old 6-swatch [data-accent="..."] set, and those
-           selectors deliberately stay retired (#1021 does not reintroduce
-           them). #1021 redid the audit for the 8 new THEME_PRESETS instead —
-           same #397/#404/#811 precedent, same 4.5:1 floor against all four
-           light surfaces above, same "darken along the accent's own hue"
-           method — but applied through the inline-CSS-variable mechanism
-           applyActiveMachineAccentTheme() already uses for --accent itself
-           (see LIGHT_ACCENT_INK_OVERRIDES in components/machines-settings.js
-           and its test/theme-contrast.test.js coverage) rather than a new
-           CSS selector per preset. --accent-ink here in :root/[data-theme=
-           "light"] stays a plain var(--accent) alias either way — the
-           override, when one applies, always wins as an inline style. */
-
-        /* #404: bundled locally (public-src/fonts/) so it renders fully
-           offline / behind HA ingress — no external font CDN. Applied ONLY
-           via .serif-display: bean names in the Bibliothek view and the
-           shot-card share image (lib/card.js registers the same file for
-           server-side rendering). Never on numeric/data displays —
-           tabular-nums UI stays sans-serif everywhere else, regardless of
-           theme. */
-        @font-face {
-            font-family: 'Fraunces';
-            font-style: normal;
-            font-weight: 600;
-            font-display: swap;
-            src: url('./fonts/fraunces-600-latin.woff2') format('woff2');
-        }
-        .serif-display { font-family: 'Fraunces', Georgia, serif; }
-
-        /* Bundled locally same as Fraunces above (fonts.bunny.net removed —
-           was the app's last external CDN dependency). 400/600 latin only,
-           matching the two weights the app actually uses. */
-        @font-face {
-            font-family: 'Figtree';
-            font-style: normal;
-            font-weight: 400;
-            font-display: swap;
-            src: url('./fonts/figtree-400-latin.woff2') format('woff2');
-        }
-        @font-face {
-            font-family: 'Figtree';
-            font-style: normal;
-            font-weight: 600;
-            font-display: swap;
-            src: url('./fonts/figtree-600-latin.woff2') format('woff2');
-        }
+@import './tokens.css';
 
         * { box-sizing: border-box; }
 
@@ -1128,6 +925,68 @@
         .annotation-field textarea { resize: vertical; min-height: 58px; }
         .annotation-field.full-width { grid-column: 1 / -1; }
         .annotation-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+
+        /* ── Live pre-shot setup panel (Material Design card) ─────── */
+        #live-shot-setup {
+            margin-top: var(--sp-4);
+            background: var(--gray-900);
+            border: 1px solid var(--gray-700);
+            border-radius: 12px;
+            overflow: hidden;
+            /* overflow:hidden clears min-size in flex layout, allowing the panel
+               to shrink to 0. flex-shrink:0 when open prevents this so all
+               fields remain visible — the parent flex container scrolls instead.
+               min-height ensures the toggle button is always fully visible even
+               when the parent flex container squeezes the closed panel. */
+            min-height: calc(var(--sp-3) * 2 + 1.2 * 0.875rem + 2px);
+        }
+        #live-shot-setup.open { flex-shrink: 0; }
+        #lsToggle {
+            width: 100%;
+            display: flex; align-items: center; gap: var(--sp-3);
+            padding: var(--sp-3) var(--sp-4);
+            background: transparent; border: none;
+            color: var(--gray-300); font-size: var(--fs-2); font-weight: 500;
+            cursor: pointer; text-align: left;
+            transition: background .15s, color .15s;
+        }
+        #lsToggle:hover { background: rgba(255,255,255,.04); color: var(--gray-100); }
+        .ls-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--gray-500); }
+        .ls-chevron { width: 16px; height: 16px; flex-shrink: 0; margin-left: auto; color: var(--gray-600); transition: transform .2s; }
+        #live-shot-setup.open #lsToggle {
+            color: var(--accent);
+            border-bottom: 1px solid var(--gray-700);
+        }
+        #live-shot-setup.open .ls-icon { color: var(--accent); }
+        #live-shot-setup.open .ls-chevron { transform: rotate(180deg); color: var(--accent); }
+        #lsToggle span { flex: 1; }
+
+        #lsFields {
+            display: none;
+            padding: var(--sp-4);
+        }
+        #live-shot-setup.open #lsFields { display: block; }
+        .ls-fields-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--sp-3);
+        }
+        .ls-fields-footer {
+            display: flex; justify-content: flex-end;
+            margin-top: var(--sp-3); padding-top: var(--sp-3);
+            border-top: 1px solid var(--gray-800);
+        }
+        #lsReset {
+            background: transparent;
+            border: 1px solid var(--gray-700);
+            border-radius: var(--radius);
+            color: var(--gray-500);
+            font-size: var(--fs-1);
+            padding: var(--sp-1) var(--sp-3);
+            cursor: pointer;
+            transition: border-color .15s, color .15s;
+        }
+        #lsReset:hover { border-color: var(--gray-500); color: var(--gray-300); }
         .ordered-by-badge { font-size: var(--fs-1); color: #a16207; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.25); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; gap: var(--sp-1); }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
@@ -1193,6 +1052,33 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
+        /* Bean card header: name + meta-actions toolbar on one row, anchored
+           at the top of the card instead of the old .lib-item-actions,
+           which sat as a flex sibling of .lib-item-info and vertically
+           centered on the WHOLE card — floating in empty space next to
+           whatever content happened to be tallest (usually the bag list). */
+        .lib-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
+        .lib-item-header .lib-item-name { min-width: 0; flex: 1; }
+        .lib-item-toolbar { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
+        .lib-toolbar-sep { width: 1px; align-self: stretch; margin: 2px var(--sp-1); background: rgba(255,255,255,.08); }
+        @media (max-width: 640px) {
+          .lib-item-header { flex-wrap: wrap; }
+          .lib-item-toolbar { width: 100%; justify-content: flex-end; }
+        }
+        /* Bag-level quick actions (new bag / freeze), grouped with the
+           inventory display right above them instead of mixed into the
+           bean's own meta-actions toolbar — they act on the packaging,
+           not the bean record. */
+        .lib-bag-toolbar { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
+        /* Material 3 button hierarchy: "Neue Packung" is the primary action
+           on this row (filled tonal — accent-tinted fill, no border),
+           "Einfrieren" is secondary (outlined — border only, transparent
+           fill). Keyed off data-action so no new classes/markup are needed. */
+        .lib-bag-toolbar-btn { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 4px var(--sp-3); font-size: var(--fs-1); font-weight: 600; transition: background .15s, border-color .15s; }
+        .lib-bag-toolbar-btn[data-action="open-new-bag"] { background: color-mix(in srgb, var(--accent) 16%, var(--gray-800)); color: var(--accent-ink); border: 1px solid transparent; }
+        .lib-bag-toolbar-btn[data-action="open-new-bag"]:hover { background: color-mix(in srgb, var(--accent) 26%, var(--gray-800)); }
+        .lib-bag-toolbar-btn[data-action="open-freeze-form"] { background: transparent; border: 1px solid var(--gray-600); color: var(--gray-300); }
+        .lib-bag-toolbar-btn[data-action="open-freeze-form"]:hover { background: rgba(255,255,255,.06); border-color: var(--gray-500); }
         /* Machine-profile list (library-profile-editor.js renderProfileList):
            name + optional utility badge on one row — badge sits outside the
            name's own ellipsis-truncation so it never gets clipped away. */
@@ -1221,7 +1107,23 @@
         }
         .lib-grinder-wear { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; white-space: normal; }
         .lib-grinder-wear > span:first-child { display: inline-flex; align-items: center; gap: var(--sp-1); }
-        .lib-grinder-reset-burrs { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius:var(--radius); font-size: var(--fs-1); padding: 2px var(--sp-2); }
+        .lib-grinder-reset-burrs { background: var(--gray-800); border: 1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-300); font-size: var(--fs-1); padding: 2px var(--sp-2); cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
+        .lib-grinder-reset-burrs:hover { background:var(--gray-700); color:var(--gray-100); border-color:var(--gray-600); }
+        /* ── Inventory block (Material 3 linear progress indicator) ─────────── */
+        .lib-inv-block { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-1); }
+        .lib-inv-bar-row { display: flex; align-items: center; gap: var(--sp-2); }
+        .lib-stock-bar-md { flex: 1; height: 6px; border-radius: 999px; background: var(--gray-700); overflow: hidden; }
+        .lib-stock-bar-fill-md { height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
+        .lib-stock-bar-fill-md.low { background: var(--err); }
+        .lib-inv-pct { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); min-width: 3ch; text-align: right; }
+        .lib-inv-pct.low { color: var(--err); }
+        .lib-inv-nums { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-1); }
+        .lib-inv-remaining { color: var(--gray-300); font-weight: 600; }
+        .lib-inv-remaining.low { color: var(--err); }
+        .lib-inv-consumed { color: var(--gray-500); }
+        .lib-inv-sep { color: var(--gray-700); }
+        .lib-inv-total { color: var(--gray-600); }
+        /* legacy compat */
         .lib-inv-stats { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-1); display: flex; gap: var(--sp-2); flex-wrap: wrap; }
         .lib-inv-remaining { color: var(--gray-500); }
         .lib-inv-remaining.low { color: var(--err); }
@@ -1303,9 +1205,99 @@
         .lib-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; }
         .lib-new-bag-form { margin-top: var(--sp-2); padding: var(--sp-3) var(--sp-3); background: rgba(255,255,255,.03); border: 1px solid var(--gray-800); border-radius:var(--radius); }
         .lib-new-bag-fields { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap; }
-        .lib-new-bag-input { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline: none; flex: 1; min-width: 120px; }
-        .lib-new-bag-input:focus { border-color: var(--gray-600); }
-        .lib-bag-history { margin-top: var(--sp-2); font-size: var(--fs-1); }
+        /* Material 3 "filled text field": tinted fill + flat top corners +
+           an underline that thickens/accents on focus, instead of a plain
+           all-round outlined box. Used by both the new/edit-bag dialog and
+           the per-bag "Bestand anpassen" quick-edit row. */
+        .lib-new-bag-input { background: var(--gray-900); border: none; border-bottom: 2px solid var(--gray-700); border-radius: var(--radius-sm) var(--radius-sm) 0 0; color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); outline: none; flex: 1; min-width: 120px; transition: border-color .15s, background .15s; }
+        .lib-new-bag-input:hover { background: var(--gray-800); }
+        .lib-new-bag-input:focus { border-bottom-color: var(--accent); background: var(--gray-800); }
+        /* ── Bag history cards (Material Design) ──────────────────────────── */
+        .lib-bag-history { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
+        .lib-bag-history-single { margin-top: var(--sp-2); }
+        /* Material 3 "elevated card": resting shadow instead of a flat
+           border, deepens slightly on expand — gives the collapsed/expanded
+           states a tactile sense of depth instead of just a color swap. */
+        .lib-bag-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-1); box-shadow: 0 1px 2px rgba(0,0,0,.28); transition: box-shadow .2s ease, background .2s ease, border-color .2s ease; }
+        .lib-bag-card.expanded { box-shadow: 0 3px 10px rgba(0,0,0,.32); }
+        /* was rgba(var(--accent-rgb,...)) — --accent-rgb was never defined
+           anywhere, so this always silently fell back to indigo (99,102,241)
+           regardless of theme/accent color. color-mix() reads the real
+           --accent custom property directly, no parallel RGB token needed. */
+        .lib-bag-card.active { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 7%, var(--gray-800)); }
+        /* Dragged card (bagDragPointerDown, library.js) — pure visual
+           feedback, the actual reorder happens by swapping DOM position on
+           pointermove, no transform/translate involved. */
+        .lib-bag-card.dragging { opacity: .5; border-style: dashed; box-shadow: none; }
+        /* Collapsed by default (space-saving, especially on mobile) — header
+           row stays visible and clickable, body toggles via inline
+           display:none/'' (toggleBagCard). Header needs a real touch
+           target height since it's now the primary interaction surface. */
+        .lib-bag-card-header { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; min-height: 32px; }
+        .lib-bag-card-body { margin-top: var(--sp-1); display: flex; flex-direction: column; gap: var(--sp-1); }
+        .lib-bag-date { font-size: var(--fs-1); font-weight: 600; color: var(--gray-300); }
+        .lib-bag-pct { margin-left: auto; font-size: var(--fs-1); font-weight: 600; color: var(--gray-400); }
+        .lib-bag-chevron { color: var(--gray-600); font-size: var(--fs-1); width: 1em; text-align: center; transition: color .15s; }
+        .lib-bag-card-header:hover .lib-bag-chevron { color: var(--gray-300); }
+        /* Drag handle: unified mouse+touch via Pointer Events (see
+           bagDragPointerDown) — touch-action:none stops the browser's own
+           scroll gesture from fighting the drag on mobile. Rounded hover
+           state layer gives it the same "this is a control" affordance as
+           the icon buttons below, not just a static glyph. */
+        .lib-bag-drag-handle { cursor: grab; color: var(--gray-600); font-size: 16px; line-height: 1; touch-action: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; transition: background .15s, color .15s; }
+        .lib-bag-drag-handle:hover { background: rgba(255,255,255,.06); color: var(--gray-400); }
+        .lib-bag-drag-handle:active { cursor: grabbing; }
+        .lib-bag-drag-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+        /* State badges as Material 3 assist chips: tonal fill, no border,
+           full pill shape — color-mix() keyed to each state's semantic
+           color (--accent for current, --ok for upcoming/"has stock",
+           neutral gray for past) instead of the old bordered-outline look
+           with hand-picked hex greens that ignored the active theme. */
+        .lib-bag-active-badge, .lib-bag-upcoming-badge, .lib-bag-past-badge { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px var(--sp-2); letter-spacing: .03em; text-transform: uppercase; border: none; }
+        .lib-bag-active-badge { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
+        .lib-bag-upcoming-badge { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+        .lib-bag-past-badge { background: var(--gray-700); color: var(--gray-500); }
+        .lib-bag-card-actions-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
+        .lib-bag-card-actions { margin-left: auto; display: flex; gap: var(--sp-1); }
+        /* Icon buttons get a proper circular state layer on hover (Material
+           "standard icon button") instead of just a color change on the
+           glyph itself. */
+        .lib-bag-edit-btn, .lib-bag-del { background: none; border: none; color: var(--gray-600); cursor: pointer; width: 32px; height: 32px; border-radius: 999px; transition: background .15s, color .15s; display: flex; align-items: center; justify-content: center; }
+        .lib-bag-edit-btn:hover { background: rgba(255,255,255,.08); color: var(--gray-200); }
+        .lib-bag-del { font-size: var(--fs-1); }
+        .lib-bag-del:hover { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
+        .lib-bag-card-details { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-1); }
+        .lib-bag-detail { display: flex; flex-direction: column; gap: 1px; }
+        .lib-bag-detail-label { font-size: 10px; color: var(--gray-600); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+        .lib-bag-detail-val { color: var(--gray-300); font-weight: 500; }
+        .lib-bag-empty-note { display: inline-flex; color: var(--gray-500); font-size: var(--fs-1); margin-top: var(--sp-1); }
+        /* Material 3 "expansion panel" trigger for the Vergangene section —
+           a proper chip-style row (chevron rotates via transform, count as
+           a tonal badge) instead of the old plain text-link button with a
+           hand-swapped ▸/▾ character. */
+        .lib-bag-history-toggle { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; padding: var(--sp-2) var(--sp-3); border-radius: 999px; margin-top: var(--sp-2); color: var(--gray-400); font-size: var(--fs-1); font-weight: 600; transition: background .15s, color .15s; }
+        .lib-bag-history-toggle:hover { background: rgba(255,255,255,.05); color: var(--gray-200); }
+        .lib-bag-history-toggle .lib-bag-chevron { transition: transform .2s ease; }
+        .lib-bag-history-toggle.expanded .lib-bag-chevron { transform: rotate(90deg); }
+        .lib-bag-past-count { margin-left: auto; background: var(--gray-700); color: var(--gray-400); border-radius: 999px; padding: 1px var(--sp-2); font-size: 10px; font-weight: 700; }
+        /* grid-template-rows 0fr -> 1fr is the standard modern trick for
+           animating to "auto" height — the inner element's own
+           overflow:hidden is what actually clips it mid-transition. */
+        .lib-bag-history-past-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s cubic-bezier(.4,0,.2,1); }
+        .lib-bag-history-past-wrap.expanded { grid-template-rows: 1fr; }
+        .lib-bag-history-past { overflow: hidden; display: flex; flex-direction: column; gap: var(--sp-2); }
+        .lib-bag-history-past-wrap.expanded .lib-bag-history-past { padding-top: var(--sp-2); }
+        /* ── Bean form bag section divider ────────────────────────────────── */
+        .lib-bag-section-divider { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-4) 0 var(--sp-2); }
+        .lib-bag-section-divider::before, .lib-bag-section-divider::after { content: ''; flex: 1; height: 1px; background: var(--gray-800); }
+        .lib-bag-section-label { font-size: var(--fs-1); font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+        /* ── Bag dialog overlay ────────────────────────────────────────────── */
+        .bag-dialog-modal { max-width: 380px; width: 100%; }
+        .bag-dialog-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); align-items: start; }
+        .bag-dialog-label { font-size: var(--fs-1); color: var(--gray-500); font-weight: 600; margin-bottom: 2px; }
+        .bag-dialog-input { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-3); outline: none; width: 100%; box-sizing: border-box; }
+        .bag-dialog-input:focus { border-color: var(--accent); }
+        /* ── legacy bag row compat ─────────────────────────────────────────── */
         .lib-bag-history-title { color: var(--gray-500); font-weight: 600; margin-bottom: var(--sp-1); }
         .lib-bag-row { display: flex; gap: var(--sp-4); align-items: center; color: var(--gray-600); padding: 2px 0; }
         .lib-bag-row.active { color: var(--gray-400); }
@@ -1343,6 +1335,9 @@
         @media (max-width: 640px) { .lib-form-grid { grid-template-columns: 1fr; } }
         .lib-form-field { display: flex; flex-direction: column; gap: var(--sp-1); }
         .lib-form-field label { font-size: var(--fs-1); color: var(--gray-400); }
+        /* Native title-attribute tooltip on the label itself, this icon is
+           just the visual affordance that there's more to read on hover. */
+        .gm-field-hint { cursor: help; opacity: .6; }
         .lib-form-field input, .lib-form-field select { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .lib-form-field select { cursor: pointer; }
         .lib-form-field input:focus, .lib-form-field select:focus { outline: none; border-color: var(--gray-500); }
@@ -2275,7 +2270,6 @@
             }
             .shot-wrapper      { padding-right: var(--sp-4); }
             #sidebar h2        { padding: var(--sp-4) var(--sp-4); }
-            #syncProgressBar   { padding: 0 var(--sp-4) var(--sp-3); }
 
             /* Annotation panel — mobile improvements */
             .annotation-panel  { padding: var(--sp-4); margin-top: var(--sp-4); }
@@ -2496,7 +2490,16 @@
         .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
         .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
         .gm-dropdown { position:relative; display:inline-block; }
-        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index:200; background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+        /* This is a <ul> — list-style/margin were never reset, so its
+           default browser bullet/indent showed next to every item (2026-
+           09-09 bug report). max-height+overflow-y is a safety net for a
+           very long stop-conditions list even after the up/down flip below. */
+        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index:200; background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; margin:0; list-style:none; box-shadow:0 4px 16px rgba(0,0,0,.4); max-height:min(60vh, 320px); overflow-y:auto; }
+        /* Toggled on by the gm-pro-target-menu handler (gaggimate-profile-
+           editor.js) when opening downward would push the menu past the
+           viewport bottom — anchors it above the trigger instead, the same
+           flip any standard dropdown/select does. */
+        .gm-dropdown-menu.gm-dropdown-menu-up { top:auto; bottom:100%; }
         .gm-dropdown-item { display:block; width:100%; text-align:left; background:none; border:none; color:var(--gray-300); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-3); cursor:pointer; }
         .gm-dropdown-item:hover { background:var(--gray-700); color:var(--gray-100); }
 
@@ -2756,16 +2759,6 @@
         .shot-count-num { font-weight: 600; margin-right: var(--sp-2); }
         .shot-count-label { font-size: var(--fs-1); font-weight: normal; color: var(--gray-500); }
 
-        /* ── Shot-import progress bar (#729, own row under the sidebar
-           header — #730 review: was squeezed inline next to the shot
-           counter, moved out to its own line below) ── */
-        #syncProgressBar {
-            display: flex;
-            align-items: center;
-            gap: var(--sp-2);
-            padding: 0 var(--sp-5) var(--sp-3);
-        }
-        #syncProgressLabel { font-size: var(--fs-1); color: var(--gray-500); white-space: nowrap; }
         .sync-progress-track {
             width: 100px;
             height: 4px;
@@ -2781,7 +2774,7 @@
             transition: width .2s ease;
         }
 
-        /* ── Backup/restore modal progress (#960) — reuses the shot-import
+        /* ── Backup/restore modal progress (#960) — reuses the shared
            track/fill above; adds an indeterminate mode for transfers whose
            size is genuinely unknown (Node backend sends no estimate header,
            or the server-side restore phase after the upload completes). ── */

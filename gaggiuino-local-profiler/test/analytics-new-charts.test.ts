@@ -21,14 +21,14 @@ let _computeMachineComparison: Analytics['_computeMachineComparison'];
 type ShotRow = Parameters<Analytics['_computeBeanRanking']>[0][number];
 
 interface ShotOverrides {
-  id?: number;
-  timestamp?: number;
-  duration?: number;
-  machineId?: number | null;
-  score?: number;
-  coffee?: string | null;
-  grindSetting?: string | number | null;
-  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null;
+  id?: number | undefined;
+  timestamp?: number | undefined;
+  duration?: number | undefined;
+  machineId?: number | null | undefined;
+  score?: number | undefined;
+  coffee?: string | null | undefined;
+  grindSetting?: string | number | null | undefined;
+  datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null | undefined;
 }
 
 beforeAll(async () => {
@@ -54,7 +54,7 @@ const shot = (overrides: ShotOverrides = {}): ShotRow => ({
   id: overrides.id ?? 1,
   timestamp: overrides.timestamp ?? 0,
   duration: overrides.duration ?? 280, // 28.0s
-  machineId: overrides.machineId,
+  ...(overrides.machineId !== undefined && { machineId: overrides.machineId }),
   score: overrides.score,
   annotation: { coffee: overrides.coffee, grindSetting: overrides.grindSetting },
   datapoints: overrides.datapoints,
@@ -88,7 +88,7 @@ describe('_computeBeanRanking (#394)', () => {
       shot({ coffee: 'Bean A', grindSetting: undefined, timestamp: 200, score: 80 }),
     ];
     const [row] = _computeBeanRanking(shots);
-    expect(row.lastGrind).toBe('19.5');
+    expect(row?.lastGrind).toBe('19.5');
   });
 
   it('computes a null trend with fewer than 4 scored shots', () => {
@@ -97,14 +97,14 @@ describe('_computeBeanRanking (#394)', () => {
       shot({ coffee: 'Bean A', score: 82, timestamp: 2 }),
       shot({ coffee: 'Bean A', score: 84, timestamp: 3 }),
     ];
-    expect(_computeBeanRanking(shots)[0].trend).toBeNull();
+    expect(_computeBeanRanking(shots)[0]?.trend).toBeNull();
   });
 
   it('computes trend as last-5 average minus previous-5 average', () => {
     // 10 scored shots: first 5 average 70, last 5 average 90 -> trend +20
     const shots = [70, 70, 70, 70, 70, 90, 90, 90, 90, 90].map((score, i) =>
       shot({ coffee: 'Bean A', score, timestamp: i }));
-    expect(_computeBeanRanking(shots)[0].trend).toBe(20);
+    expect(_computeBeanRanking(shots)[0]?.trend).toBe(20);
   });
 });
 

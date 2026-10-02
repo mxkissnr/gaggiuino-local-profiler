@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -35,14 +36,15 @@ func newTestHandlers(t *testing.T) (*Handlers, Dependencies, *sql.DB) {
 
 	libRepo := library.NewRepository(sqlDB)
 	deps := Dependencies{
-		DB:              sqlDB,
-		ShotsRepo:       shots.NewRepository(sqlDB),
-		LibRepo:         libRepo,
-		OrdersRepo:      orders.NewRepository(sqlDB),
-		MaintenanceRepo: maintenance.NewRepository(sqlDB, libRepo),
-		Registry:        machines.NewRegistry(sqlDB),
-		Token:           "test-token-value",
-		TokenFile:       filepath.Join(t.TempDir(), "api_token.txt"),
+		DB:               sqlDB,
+		ShotsRepo:        shots.NewRepository(sqlDB),
+		LibRepo:          libRepo,
+		OrdersRepo:       orders.NewRepository(sqlDB),
+		MaintenanceRepo:  maintenance.NewRepository(sqlDB, libRepo),
+		Registry:         machines.NewRegistry(sqlDB),
+		AchievementsRepo: achievements.NewRepository(sqlDB),
+		Token:            "test-token-value",
+		TokenFile:        filepath.Join(t.TempDir(), "api_token.txt"),
 	}
 	h := NewHandlers(deps)
 	return h, deps, sqlDB

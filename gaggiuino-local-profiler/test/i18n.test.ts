@@ -127,7 +127,9 @@ describe('index.html i18n wiring', () => {
         const re = /<(\w+)((?:(?!data-i18n-)[^>])*\sdata-i18n="[^"]+"[^>]*)>([\s\S]*?)<\/\1>/g;
         const offenders = [];
         for (const m of html.matchAll(re)) {
-            if (/<\w+/.test(m[3])) offenders.push(m[0].slice(0, 100));
+            const inner = m[3] ?? '';
+            const full = m[0] ?? '';
+            if (/<\w+/.test(inner)) offenders.push(full.slice(0, 100));
         }
         expect(offenders, `child elements inside [data-i18n] nodes:\n${offenders.join('\n')}`).toEqual([]);
     });

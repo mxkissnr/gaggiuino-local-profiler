@@ -8,12 +8,11 @@ import (
 	"time"
 )
 
-// card_model.go ports lib/card.js's generateShareCard body: the data
-// extraction from the shot's datapoints/annotation, then the layout draw
-// calls (as SVG elements). See card.go for the overall approach and the
-// list of deliberate deviations.
+// card_model.go holds the share card's data extraction (from the shot's
+// datapoints/annotation) and its layout draw calls, emitted as SVG elements.
+// See card.go for the overall approach and the list of deliberate deviations.
 
-const cardPX = 52.0 // lib/card.js's PX
+const cardPX = 52.0 // card design's base px unit
 
 type cardModel struct {
 	shot   Shot
@@ -43,7 +42,7 @@ func newCardModel(shot Shot, score *int, format, accent, theme string, deps card
 	return c
 }
 
-// ── datapoint / annotation extraction (lib/card.js "── Data ──") ────────
+// ── datapoint / annotation extraction ────────
 
 func (c *cardModel) datapoints() map[string]any {
 	return DatapointsMap(c.shot)
@@ -56,9 +55,8 @@ func (c *cardModel) annotation() map[string]any {
 	return map[string]any{}
 }
 
-// tenthsSeries reads dp[key] as a number array and divides each by 10
-// (lib/card.js's `(dp.x || []).map(v => v / 10)`) — reuses score.go's
-// floatSlice/divAll.
+// tenthsSeries reads dp[key] as a number array and divides each by 10 —
+// reuses score.go's floatSlice/divAll.
 func tenthsSeries(dp map[string]any, key string) []float64 {
 	return divAll(floatSlice(dp[key]), 10)
 }
@@ -97,10 +95,10 @@ func numField(m map[string]any, key string) (float64, bool) {
 	return 0, false
 }
 
-// ── small numeric formatting (lib/card.js parity) ──────────────────────
+// ── small numeric formatting ──────────────────────
 
-// num1 mirrors JS `+(+x).toFixed(1)` -> a number, so 4.0 prints "4", 4.5
-// prints "4.5".
+// num1 renders x to at most one decimal, so 4.0 prints "4" and 4.5 prints
+// "4.5".
 func num1(x float64) string {
 	r := math.Round(x*10) / 10
 	s := strconv.FormatFloat(r, 'f', 1, 64)
@@ -108,7 +106,7 @@ func num1(x float64) string {
 	return s
 }
 
-// fixed1 always keeps one decimal (lib/card.js's ratio uses raw toFixed(1)).
+// fixed1 always keeps one decimal.
 func fixed1(x float64) string {
 	return strconv.FormatFloat(math.Round(x*10)/10, 'f', 1, 64)
 }
@@ -187,7 +185,6 @@ func lastPositive(vals []float64) (float64, bool) {
 	return 0, false
 }
 
-// detectPreinfusionEnd ports lib/card.js's detectPreinfusionEnd(pressure).
 func detectPreinfusionEnd(pressure []float64) (int, bool) {
 	if len(pressure) < 10 {
 		return 0, false
@@ -669,8 +666,8 @@ func starPolygon(cx, cy, outerR float64, fill string) string {
 	return fmt.Sprintf(`<polygon points="%s" fill="%s"/>`, strings.Join(pts, " "), fill)
 }
 
-// seriesPath ports lib/card.js's polyline(): an SVG path from a value
-// array, skipping NaN gaps, nil if fewer than 2 usable points.
+// seriesPath builds an SVG path from a value array, skipping NaN gaps; empty
+// if fewer than 2 usable points.
 func seriesPath(vals []float64, xFn func(int) float64, yFn func(float64) float64) string {
 	if len(vals) < 2 {
 		return ""
@@ -754,8 +751,7 @@ func mapString(v any, key string) string {
 	return ""
 }
 
-// germanDate ports lib/card.js's toLocaleDateString('de-DE', { day:'2-digit',
-// month:'short', year:'numeric' }) — e.g. "16. Aug. 2026".
+// germanDate formats a Unix timestamp as a German date, e.g. "16. Aug. 2026".
 func germanDate(unixSec int64) string {
 	t := time.Unix(unixSec, 0).UTC()
 	months := []string{"Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."}
