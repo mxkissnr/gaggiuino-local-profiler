@@ -3,8 +3,7 @@
 // previewing exactly what a file would change before anything is written.
 // A single shared implementation instead of two separate ones keeps the
 // section list and its labels from drifting apart between export and
-// restore, the same reasoning `lib/machines/options-adoption.js` documents
-// for tracked options.
+// restore.
 import { t, tHtml } from '../i18n.js';
 import { initToken } from '../api/transport.js';
 import { requestBackup, postRestore } from '../api/system.js';
@@ -15,7 +14,7 @@ const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 
 
 // Filename-safe local-time timestamp, e.g. "2026-08-06_08-32-05" -- mirrors
 // go/internal/backup's timestamp helper (kept as two copies rather than
-// one shared module since one runs in the browser and one in Node, same
+// one shared module since one runs in the browser and one in the backend, same
 // reasoning SECTION_PRESENCE_KEYS/SECTION_PRESENCE_BUNDLE_KEYS already
 // accept). A bare date collapsed every backup taken the same day into one
 // filename, forcing the browser to append "(1)"/"(2)" or overwrite silently.
@@ -127,7 +126,7 @@ function els(): BackupEls {
 }
 
 // Progress row (#960). A null `pct` means "size unknown" — an indeterminate
-// bar (Node backend sends no X-GLP-Backup-Estimate; or the server-side
+// bar (when no X-GLP-Backup-Estimate header is sent; or the server-side
 // restore phase after the upload bytes are all sent). Both the confirm and
 // the cancel button are disabled for the whole transfer (setBusy) so an
 // in-flight stream/XHR is never orphaned — there is no abort path.
@@ -281,9 +280,9 @@ export function openBackupExportModal(): void {
             // The response is already the zip binary (backup.json + real
             // image files, see go/internal/backup's bundle builder) -- no
             // re-serialization needed, unlike the old JSON.stringify(bundle).
-            // X-GLP-Backup-Estimate is an approximate size for the bar; the
-            // Go backend sends it, the Node backend doesn't (then the bar
-            // stays indeterminate). requestBackup() buffers the whole zip in
+            // X-GLP-Backup-Estimate is an approximate size for the bar; when
+            // it's absent the bar stays indeterminate. requestBackup()
+            // buffers the whole zip in
             // memory before the download — fine for these file sizes.
             const res = await requestBackup({
                 sections,
@@ -310,9 +309,9 @@ export function openBackupExportModal(): void {
     };
 }
 
-// Zip files always start with this 4-byte local-file-header signature (see
-// lib/zip.js) -- sniffed instead of trusting the file's extension/MIME type,
-// which a rename or a picky OS file picker can't be relied on for.
+// Zip files always start with this 4-byte local-file-header signature --
+// sniffed instead of trusting the file's extension/MIME type, which a rename
+// or a picky OS file picker can't be relied on for.
 function looksLikeZip(bytes: Uint8Array): boolean {
     return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04;
 }
@@ -330,8 +329,8 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
     if (looksLikeZip(bytes)) {
         // A zip's backup.json can't be inspected locally the way a plain
         // .json file's contents can (no zip reader on the frontend --
-        // deliberately, see lib/zip.js's module doc comment: keeping zip
-        // parsing in exactly one place, Node-only, was the whole point).
+        // deliberately: keeping zip parsing in exactly one place, on the
+        // server, was the whole point).
         // One dry-run round trip against the full file (no sections header,
         // so the backend falls back to "everything the file itself has")
         // gets the same section-presence information the legacy .json path

@@ -91,9 +91,9 @@ export function getActiveMachine(): MachineView | null {
   return machines.find(m => m.id === active) || defaultMachine;
 }
 
-// #604: parses a validated "#rrggbb" hex string (see machineSchema in
-// lib/validation/schemas.js — theme.a/b are guaranteed hex by the time they
-// reach here) into {r,g,b}, or null for anything else.
+// #604: parses a validated "#rrggbb" hex string (theme.a/b are guaranteed
+// hex by validation by the time they reach here) into {r,g,b}, or null for
+// anything else.
 const HEX_RE = /^#([0-9a-f]{6})$/i;
 function hexToRgb(hex: string | null | undefined): { r: number; g: number; b: number } | null {
   const m = HEX_RE.exec(hex || '');
@@ -664,8 +664,8 @@ function startFirmwarePolling(machineId: number, row: HTMLElement): void {
 async function _pollFirmwareProgressTick(machineId: number, row: HTMLElement, poll: FirmwarePoll): Promise<void> {
   // A stale cycle (row replaced by a later renderMachinesList() call, or a
   // second trigger click that restarted polling for this machine) must not
-  // keep writing into now-irrelevant DOM/state -- mirrors _testMachine()'s
-  // own still-current-machine guard.
+  // keep writing into now-irrelevant DOM/state -- mirrors the connection
+  // test's own still-current-machine guard.
   if (_firmwarePolls.get(machineId) !== poll) return;
   let ok = false;
   let progress: FirmwareProgress | null = null;
@@ -812,8 +812,8 @@ function themeForSave(theme: ThemeSelection | null): NonNullable<MachineSaveInpu
 // "Verbindung testen" needs a saved machine id to test against, but that
 // implicit save must not itself start an import. Carried to the server as
 // a `?sync=0` query param rather than a body field: machineSchema/
-// machineSchema.partial() (lib/validation/schemas.js) validate the body
-// strictly, so an extra JSON field would be unclean at best.
+// machineSchema.partial() validate the body strictly, so an extra JSON
+// field would be unclean at best.
 async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = {}): Promise<string | number | null> {
   const id = (document.getElementById('machineFormId') as HTMLInputElement).value;
   const type = (document.getElementById('machineFormType') as HTMLSelectElement).value as 'gaggiuino' | 'gaggimate';

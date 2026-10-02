@@ -1,7 +1,7 @@
 // Machine/library notification toggles — Settings page card (#614).
-// notify_preheat_ready (lib/preheat.js) and notify_low_stock
-// (lib/services/LibraryService.js) fire regardless of enable_orders, but
-// #603 originally placed their toggles inside the Orders admin panel's
+// notify_preheat_ready and notify_low_stock fire regardless of
+// enable_orders, but #603 originally placed their toggles inside the Orders
+// admin panel's
 // "Benachrichtigungstypen" section, which only renders when Orders is
 // enabled — users without Orders had no way to reach them. This card is
 // always visible and reads/writes the same /api/orders/settings blob as

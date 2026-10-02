@@ -217,7 +217,7 @@ export async function shareOrDownloadBlob(
 // server-side but leaves the browser's localStorage untouched, so a user who
 // completed the wizard once and later wipes the add-on's data for a genuine
 // fresh start never sees it again; the stale flag silently suppresses it
-// forever. installId (lib/db.js's ensureInstallId(), served on every
+// forever. installId (served on every
 // GET /api/status) is a random id generated once per DB file — a mismatch
 // against the locally-remembered one means "this isn't the DB this browser
 // last saw", so the stale completed flag gets cleared before

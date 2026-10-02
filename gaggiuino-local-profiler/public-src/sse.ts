@@ -7,11 +7,10 @@ import { S } from './state/index.js';
 // see the fallback detection below -- callers keep their existing polling
 // code path as a fallback for whenever it doesn't connect cleanly.
 
-// Mirrors lib/events.js's EVENTS on the backend -- kept here (not just as
+// Event names for the backend's /api/events stream -- kept here (not just as
 // string literals at each onEvent() call site) so a future rename only
-// needs updating in one frontend spot. The two files can't share a single
-// JS module (CommonJS backend vs. bundled ESM frontend), so this is a
-// values-must-match-lib/events.js contract, not true DRY.
+// needs updating in one spot. The backend and frontend can't share a single
+// module, so this is a values-must-match-the-backend contract, not true DRY.
 export const EVENTS = {
   LIVE_SNAPSHOT: 'live-snapshot',
   PREHEAT_UPDATE: 'preheat-update',
@@ -19,7 +18,7 @@ export const EVENTS = {
 
 const WATCHDOG_MS = 8000;
 const MAX_STRIKES = 3;
-// #1016: lib/preheat.js's startPreheatWatcher() unconditionally emits a
+// #1016: the backend unconditionally emits a
 // PREHEAT_UPDATE every 30s regardless of machine/live state -- the one named
 // event the backend guarantees no matter what. STALE_MS sits comfortably
 // above that floor so normal jitter never false-positives, while still

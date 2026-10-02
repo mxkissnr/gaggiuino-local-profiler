@@ -98,7 +98,7 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     const timeEl = document.getElementById('syncTime') as HTMLElement;
     // #681: while the machine is on, show how long it's been on instead of
     // the last shot-sync clock time -- machineOnSince is the same
-    // runtime.switchOnAt lib/preheat.js already tracks for its elapsed-time
+    // runtime.switchOnAt the backend already tracks for its elapsed-time
     // math, reused here rather than adding a second timestamp. Falls back
     // to the previous last-sync display whenever the machine is off (or on
     // a GLP version too old to send these fields, since they're only new
@@ -113,9 +113,9 @@ export async function updateStatus(machineId?: string | number | null): Promise<
         .toLocaleTimeString(localeFor(S.currentLang), { hour: '2-digit', minute: '2-digit' });
     }
     // #655: machineReachable === false is the strongest, most direct signal
-    // (the 1s backend poll in lib/poll.js) and must win regardless of
+    // (the 1s backend poll) and must win regardless of
     // lastSync/lastSyncError — those two are only updated by the 5-minute
-    // shot sync (lib/sync.js's syncShots()), which short-circuits without
+    // shot sync, which short-circuits without
     // touching either field whenever a configured switch entity reports the
     // machine off. Without this, the dot stayed green for days after the
     // machine was switched off. machineReachable === true does NOT force

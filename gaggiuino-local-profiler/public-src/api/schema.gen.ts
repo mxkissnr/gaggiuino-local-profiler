@@ -6224,7 +6224,7 @@ export interface paths {
         };
         /**
          * Add-on version and whether an update is available
-         * @description Cached/rate-limited by lib/version-check.js — see also the `up_to_date` achievement badge.
+         * @description Cached/rate-limited — see also the `up_to_date` achievement badge.
          */
         get: {
             parameters: {
@@ -6287,7 +6287,7 @@ export interface paths {
                         "application/json": {
                             /** @description Card layout key order */
                             cards?: string[];
-                            /** @description Open badges carry name/description/stamp; secret badges omit stamp/name/description until unlocked (see lib/achievements/secrets.js). */
+                            /** @description Open badges carry name/description/stamp; secret badges omit stamp/name/description until unlocked. */
                             badges?: Record<string, never>[];
                         };
                     };
@@ -6850,7 +6850,7 @@ export interface components {
             /** @example not found */
             error: string;
         };
-        /** @description Mirrors the Gaggiuino machine's own profile shape 1:1 (see lib/gaggiuino-proto.js). `type`/`curve` accept either the machine's enum name strings ("PRESSURE"/"FLOW"/"MANUAL", "LINEAR"/"EASE_IN"/"EASE_OUT"/"EASE_IN_OUT"/"INSTANT") or their numeric wire values. */
+        /** @description Mirrors the Gaggiuino machine's own profile shape 1:1. `type`/`curve` accept either the machine's enum name strings ("PRESSURE"/"FLOW"/"MANUAL", "LINEAR"/"EASE_IN"/"EASE_OUT"/"EASE_IN_OUT"/"INSTANT") or their numeric wire values. */
         MachineProfileInput: {
             name: string;
             phases: {
