@@ -22,12 +22,12 @@ import (
 // var so it picks up img's GLP_IMAGE_DIR override (see internal/img/img.go).
 var DefaultImageDir = img.DefaultImageDir
 
-// allowedImageHosts mirrors lib/constants.js's ALLOWED_IMAGE_HOSTS
-// (ALLOWED_IMPORT_HOSTS plus cdn.shopify.com): bean images are only ever
-// downloaded from an import source's own host or its CDN, never an
-// arbitrary URL a client sends — this exact allowlist, not a generic SSRF
-// DNS-resolution guard (unlike assertPublicHost in ssrf.go, used by the
-// barcode-scan endpoint instead), is what fetchBeanImage below checks.
+// allowedImageHosts is the allowlist (ALLOWED_IMPORT_HOSTS plus
+// cdn.shopify.com): bean images are only ever downloaded from an import
+// source's own host or its CDN, never an arbitrary URL a client sends — this
+// exact allowlist, not a generic SSRF DNS-resolution guard (unlike
+// assertPublicHost in ssrf.go, used by the barcode-scan endpoint instead), is
+// what fetchBeanImage below checks.
 var allowedImageHosts = map[string]bool{
 	"kaffeebraun.com":          true,
 	"www.kaffeebraun.com":      true,
@@ -38,8 +38,8 @@ var allowedImageHosts = map[string]bool{
 	"cdn.shopify.com":          true,
 }
 
-// normalizeImageURL ports ImageService.js's normalizeImageUrl: a
-// protocol-relative shop CDN URL ("//cdn.shopify.com/...") becomes https.
+// normalizeImageURL turns a protocol-relative shop CDN URL
+// ("//cdn.shopify.com/...") into https.
 func normalizeImageURL(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if strings.HasPrefix(trimmed, "//") {
@@ -48,8 +48,8 @@ func normalizeImageURL(raw string) string {
 	return trimmed
 }
 
-// isAllowedImageURL ports ImageService.js's isAllowedImageUrl: http(s) only,
-// exact hostname match against allowedImageHosts.
+// isAllowedImageURL accepts http(s) only, with exact hostname match against
+// allowedImageHosts.
 func isAllowedImageURL(raw string) bool {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -58,10 +58,9 @@ func isAllowedImageURL(raw string) bool {
 	return (u.Scheme == "http" || u.Scheme == "https") && allowedImageHosts[u.Hostname()]
 }
 
-// fetchImageClient never follows redirects (maxRedirects: 0 in the Node
-// original) — a redirect target isn't re-checked against the allowlist, so
-// following it would reopen the exact SSRF surface the allowlist exists to
-// close.
+// fetchImageClient never follows redirects — a redirect target isn't
+// re-checked against the allowlist, so following it would reopen the exact
+// SSRF surface the allowlist exists to close.
 var fetchImageClient = &http.Client{
 	Timeout: 8 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -69,17 +68,15 @@ var fetchImageClient = &http.Client{
 	},
 }
 
-// fetchBeanImage ports ImageService.js's fetchBeanImage: downloads a bean
-// image once, validating against the exact-hostname allowlist above (not
-// assertPublicHost's DNS-resolution guard — see allowedImageHosts' doc
-// comment), no redirect following, a size cap, and a content-type
-// whitelist. The filename is derived from the (already-numeric) bean id,
-// never from the URL. The downloaded bytes run through img.Save
-// (ModeUpload), so the stored image is downscaled + metadata-stripped and
-// gets a thumbnail, and a non-JPEG/PNG source may be converted. Returns the
-// FINAL extension on success, "" on any failure (never an error — every
-// caller treats this as best-effort, matching the Node original's
-// `.catch(() => {})` fire-and-forget callers).
+// fetchBeanImage downloads a bean image once, validating against the
+// exact-hostname allowlist above (not assertPublicHost's DNS-resolution guard
+// — see allowedImageHosts' doc comment), no redirect following, a size cap,
+// and a content-type whitelist. The filename is derived from the
+// (already-numeric) bean id, never from the URL. The downloaded bytes run
+// through img.Save (ModeUpload), so the stored image is downscaled +
+// metadata-stripped and gets a thumbnail, and a non-JPEG/PNG source may be
+// converted. Returns the FINAL extension on success, "" on any failure (never
+// an error — every caller treats this as best-effort).
 func fetchBeanImage(dir string, beanID int64, imageURL string) string {
 	u := normalizeImageURL(imageURL)
 	if u == "" || !isAllowedImageURL(u) {
@@ -92,10 +89,10 @@ func fetchBeanImage(dir string, beanID int64, imageURL string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	// The exact-hostname allowlist above (isAllowedImageURL) is the primary
-	// SSRF defense here, same as ImageService.js — but a compromised/rebound
-	// DNS answer for an otherwise-trusted host could still resolve to an
-	// internal address, so this is the same assertPublicHost DNS-rebinding
-	// guard scan.go applies before its own outbound request.
+	// SSRF defense here — but a compromised/rebound DNS answer for an
+	// otherwise-trusted host could still resolve to an internal address, so this
+	// is the same assertPublicHost DNS-rebinding guard scan.go applies before its
+	// own outbound request.
 	if err := assertPublicHost(ctx, parsed.Hostname()); err != nil {
 		return ""
 	}

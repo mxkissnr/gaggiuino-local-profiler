@@ -80,12 +80,12 @@ func TestBean_CreateRequiresName(t *testing.T) {
 	}
 }
 
-// TestBean_CreateRequiresName_EmptyBody guards against a Go-migration
-// regression (#901): a genuinely empty request body (no bytes at all,
-// distinct from TestBean_CreateRequiresName's literal `{}` above) must
-// still 400 with "name required" -- httputil.DecodeJSONBody's io.EOF
-// tolerance must not let the required-field check get skipped just
-// because there was nothing to parse.
+// TestBean_CreateRequiresName_EmptyBody guards against a regression: a
+// genuinely empty request body (no bytes at all, distinct from
+// TestBean_CreateRequiresName's literal `{}` above) must still 400 with
+// "name required" -- httputil.DecodeJSONBody's io.EOF tolerance must not let
+// the required-field check get skipped just because there was nothing to
+// parse.
 func TestBean_CreateRequiresName_EmptyBody(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
@@ -271,8 +271,8 @@ func createTestBean(t *testing.T, mux *http.ServeMux, extra map[string]any) (int
 
 // TestNewBag_RestockCallbackReportsWasEmpty pins #1286 R2: newBag drives the
 // restock badge through SetOnBeanRestocked, reporting whether the bean had
-// no remaining stock before the new bag was added — Node's
-// `computeBeanRemaining() !== null && <= 0` computed on the pre-push
+// no remaining stock before the new bag was added — the
+// `computeBeanRemaining() !== null && <= 0` check computed on the pre-push
 // snapshot. A bean with stock left reports false; a tracked bean a logged
 // dose has consumed to zero reports true.
 func TestNewBag_RestockCallbackReportsWasEmpty(t *testing.T) {
@@ -949,9 +949,8 @@ func TestBasket_CRUD(t *testing.T) {
 
 // TestBasket_EnumFieldsRejectNonStringValues guards #901: a wallType/shape
 // value that decodes to something other than a JSON string (e.g. a number)
-// used to silently fall back to Go's zero value "" and sail past
-// validation instead of getting rejected like the Node original rejects any
-// truthy, non-matching value.
+// used to silently fall back to Go's zero value "" and sail past validation
+// instead of getting rejected like any truthy, non-matching value.
 func TestBasket_EnumFieldsRejectNonStringValues(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)

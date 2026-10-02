@@ -9,36 +9,32 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports the LibraryService.js methods the Phase 1f orders domain
-// needs (getActiveBeans, getActiveMilks, deductMilkByName,
-// computeBeanRemaining) — deferred out of Phase 1d's scope (see doc.go),
-// now needed by internal/orders/service.go for GET /api/orders/active-beans,
+// This file holds the library methods the orders domain needs (getActiveBeans,
+// getActiveMilks, deductMilkByName, computeBeanRemaining) — needed by
+// internal/orders/service.go for GET /api/orders/active-beans,
 // GET /api/orders/active-milks, and the milk-stock deduction
-// OrderService.completeOrder runs. Kept in this package (not orders' own)
-// for the same reason ComputeGrinderWearStats lives in service.go: only
-// this package has direct Repository access to the `library` table.
+// OrderService.completeOrder runs. Kept in this package (not orders' own) for
+// the same reason ComputeGrinderWearStats lives in service.go: only this
+// package has direct Repository access to the `library` table.
 
-// ComputeBeanRemaining ports LibraryService.js's computeBeanRemaining with
-// the same signature, beanId-first-with-name-fallback matching,
-// FIFO-across-tracked-bags accumulation and double-round. It is the single
-// source of the "remaining" value: the bean-returning endpoints attach its
-// result as remainingG, which the SPA reads directly, and the
-// SSR/achievements/orders low-stock paths call it too.
+// ComputeBeanRemaining returns the bean's remaining stock, with beanId-first
+// with name-fallback matching, FIFO-across-tracked-bags accumulation and
+// double-round. It is the single source of the "remaining" value: the
+// bean-returning endpoints attach its result as remainingG, which the SPA
+// reads directly, and the SSR/achievements/orders low-stock paths call it too.
 //
 // "Tracked bags" are every bag with a positive stock_g (falling back to
 // bean["stock_g"] for the last bag when it has none of its own, for bags
 // predating per-bag stock tracking) — not just the single last/active bag
-// the pre-#sortOrder-rework version assumed. A dose is attributed to
-// whichever bag was open at the shot's timestamp (bagAtTime) and only
-// counts against the total when that bag is itself tracked; there's no
-// per-bag clamp, so a dose recorded against one tracked bag's period can
-// still draw down a later tracked bag's stock in the running total (true
-// FIFO).
+// a simpler model assumed. A dose is attributed to whichever bag was open at
+// the shot's timestamp (bagAtTime) and only counts against the total when
+// that bag is itself tracked; there's no per-bag clamp, so a dose recorded
+// against one tracked bag's period can still draw down a later tracked bag's
+// stock in the running total (true FIFO).
 //
 // The canonical cases live in testdata/bean_remaining_cases.json, loaded by
 // TestComputeBeanRemaining_SharedFixture here — add new behaviour there
 // first (#1122).
-func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) (int64, bool) {
 	bags := bagsOf(bean)
 	name := lowerOrEmpty(strOf(bean["name"]))
 	beanID, hasBeanID := idOf(bean, "id")
@@ -133,7 +129,7 @@ func ComputeBeanRemaining(bean Entity, doseRows []shots.AnnotatedDose, allBeans 
 	return remaining, true
 }
 
-// mathRoundInt ports JS's Math.round as an int64 result: round-half-up
+// mathRoundInt implements JS's Math.round as an int64 result: round-half-up
 // (ties round toward +Infinity), unlike Go's math.Round (round-half-away-
 // from-zero). Doses and stock are never negative in practice (parseFloat
 // (dose)||0, stock_g is a non-negative field), so this only needs to be
@@ -145,7 +141,7 @@ func mathRoundInt(f float64) int64 {
 	return -int64(-f + 0.5)
 }
 
-// bagAtTime ports the "which bag was active at this shot's time" resolution
+// bagAtTime is the "which bag was active at this shot's time" resolution
 // duplicated in computeBeanRemaining: the most recently opened bag whose
 // openedAt is <= shotMs, falling back to the oldest bag on record (bags[0])
 // for a shot that predates every recorded bag.
@@ -174,19 +170,18 @@ func bagAtTime(bags []any, shotMs int64) Entity {
 	return nil
 }
 
-// sameBag ports the Node original's object-reference identity check (`bag
-// === activeBag`), NOT a value comparison of the bags' fields. Comparing by
-// openedAt value instead (#901 code review) is wrong: two bags of the same
-// bean that both predate #456's openedAt tracking share the zero value for
-// that field and would be misidentified as the same bag, corrupting
-// ComputeBeanRemaining's per-bag dose matching. Entity is a map, so `==`
-// isn't usable directly (maps aren't comparable in Go); reflect.Pointer
-// compares the two maps' underlying data pointers instead, which is
-// reference identity for exactly the same reason JS's `===` is on two
-// object bindings — every bag in a bean's `bags` slice is a distinct map
-// value (decoded from JSON, or built by a copying helper), so this only
-// ever reports true when a and b are literally the same bag, never a
-// same-shaped clone of it.
+// sameBag is an object-reference identity check (`bag === activeBag`), NOT a
+// value comparison of the bags' fields. Comparing by openedAt value instead
+// (#901 code review) is wrong: two bags of the same bean that both predate
+// #456's openedAt tracking share the zero value for that field and would be
+// misidentified as the same bag, corrupting ComputeBeanRemaining's per-bag
+// dose matching. Entity is a map, so `==` isn't usable directly (maps aren't
+// comparable in Go); reflect.Pointer compares the two maps' underlying data
+// pointers instead, which is reference identity for exactly the same reason
+// JS's `===` is on two object bindings — every bag in a bean's `bags` slice
+// is a distinct map value (decoded from JSON, or built by a copying helper),
+// so this only ever reports true when a and b are literally the same bag,
+// never a same-shaped clone of it.
 func sameBag(a, b Entity) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
@@ -203,20 +198,18 @@ func lowerOrEmptyAny(v any) string {
 	return lowerOrEmpty(strOf(v))
 }
 
-// GetActiveBeans ports LibraryService.js's getActiveBeans(): stock-tracked
-// beans still in stock (remaining > 0) and not manually disabled, shaped
-// for the order card.
+// GetActiveBeans returns stock-tracked beans still in stock (remaining > 0)
+// and not manually disabled, shaped for the order card.
 func GetActiveBeans(lib Library, doseRows []shots.AnnotatedDose) []Entity {
 	out := make([]Entity, 0, len(lib.Beans))
 	for _, bean := range lib.Beans {
 		remaining, ok := ComputeBeanRemaining(bean, doseRows, lib.Beans)
-		// `bean.enabled !== false` — a strict inequality check against the
-		// literal boolean false, not sanitizeEnabled's broader "falsy-ish"
-		// coercion (which also treats the strings 'false'/'0' and the
-		// number 0 as disabled): getActiveBeans() in Node uses the
-		// narrower check, and bean.enabled is already normalized to a real
-		// boolean by sanitizeEnabled at every write path, so the two only
-		// diverge for a hand-edited DB row — matched exactly here anyway.
+		// `bean.enabled !== false` — a strict inequality check against the literal
+		// boolean false, not sanitizeEnabled's broader "falsy-ish" coercion (which
+		// also treats the strings 'false'/'0' and the number 0 as disabled):
+		// getActiveBeans() uses the narrower check, and bean.enabled is already
+		// normalized to a real boolean by sanitizeEnabled at every write path, so the
+		// two only diverge for a hand-edited DB row — matched exactly here anyway.
 		if !ok || remaining <= 0 || bean["enabled"] == false {
 			continue
 		}
@@ -253,8 +246,8 @@ func categoryOrDefault(bean Entity) string {
 	return c
 }
 
-// GetActiveMilks ports LibraryService.js's getActiveMilks(): milks with
-// positive stock, shaped for the order card.
+// GetActiveMilks returns milks with positive stock, shaped for the order
+// card.
 func GetActiveMilks(lib Library) []Entity {
 	out := make([]Entity, 0, len(lib.Milks))
 	for _, m := range lib.Milks {
@@ -272,10 +265,9 @@ func GetActiveMilks(lib Library) []Entity {
 	return out
 }
 
-// DeductMilkByName ports LibraryService.js's deductMilkByName(name, ml):
-// case-insensitive name match, clamped at 0, no-op if no match or the
-// deduction amount isn't positive. Returns (Entity, true) for the updated
-// milk on success.
+// DeductMilkByName deducts ml from the named milk: case-insensitive name
+// match, clamped at 0, no-op if no match or the deduction amount isn't
+// positive. Returns (Entity, true) for the updated milk on success.
 func DeductMilkByName(repo *Repository, name string, ml float64) (Entity, bool, error) {
 	if name == "" || !(ml > 0) {
 		return nil, false, nil
