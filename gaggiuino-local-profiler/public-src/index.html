@@ -1342,7 +1342,7 @@
     <!-- Settings view -->
     <div id="settings-view">
         <!-- "What's New" in-app changelog (#610) — always visible, newest
-             release first. Entries come from lib/whats-new.js (hand-
+             release first. Entries come from shared/whats-new.ts (hand-
              maintained, English-only, capped at 8), rendered by
              renderWhatsNewCard() (components/whats-new.js). Only the card
              title/description are translated; highlight text stays
@@ -1387,10 +1387,10 @@
         <!-- Machine/library notification toggles (#614) — moved out of the
              Orders admin panel (which only exists when enable_orders: true)
              since notify_preheat_ready/notify_low_stock fire regardless of
-             Orders being enabled (lib/preheat.js, lib/services/
-             LibraryService.js). Always visible; reads/writes the same
-             /api/orders/settings blob as the Orders panel's remaining 3
-             order-specific toggles (components/notify-settings.js). -->
+             Orders being enabled (internal/system's preheat notifier,
+             internal/library's low-stock scan). Always visible; reads/writes
+             the same /api/orders/settings blob as the Orders panel's
+             remaining 3 order-specific toggles (components/notify-settings.js). -->
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_notify_title">Benachrichtigungen</h3>
             <p class="settings-card-desc" data-i18n="settings_notify_desc">Welche automatischen Benachrichtigungen der Maschine und der Kaffee-Bibliothek sollen gesendet werden?</p>
@@ -1593,7 +1593,7 @@
              when /api/status reports devBuild (see components/status.js) --
              same signal the version-badge suffix and "UNSTABLE DEV BUILD"
              banner already use, never present on a real install. The route
-             itself (routes/debug.js) independently 404s for anyone who hits
+             itself (internal/debug) independently 404s for anyone who hits
              it without GLP_DEV_BUILD set -- this hidden-by-default markup is
              just UI hygiene, not the actual safety mechanism. -->
         <div class="settings-card" id="devToolsCard" style="display:none">
