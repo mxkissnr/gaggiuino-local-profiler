@@ -23,6 +23,11 @@
 //     touching go/ or public-src/
 //  5. DOCS.md and DOCS.de.md have different heading level+order sequences
 //     (a translation-parity proxy — heading text itself is not compared)
+//  6. the release's acceptance protocol (docs/acceptance/v<version>.md, format
+//     in docs/acceptance/README.md) is missing, records a failing or
+//     still-pending case, waives a case without a reason, uses an unknown
+//     result, or leaks private infrastructure (RFC1918 IPv4, .local/.lan
+//     hostnames, JWT-like strings, GitHub token prefixes)
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { execFileSync } from 'child_process';
@@ -448,6 +453,101 @@ export function checkScreenshotFreshness(gitRoot, publicSrcRel, screenshotsDirRe
     return failures;
 }
 
+// ── Check 6: acceptance protocol ────────────────────────────────────────
+//
+// The release's public acceptance protocol lives at
+// docs/acceptance/v<version>.md (format: docs/acceptance/README.md). This is
+// a shape-only gate: it does not run the acceptance pass, it rejects a
+// protocol that recorded a failure or an unfinished case, and it keeps
+// private infrastructure out of a public file. Pure — takes the protocol
+// Markdown and the release version, returns one message per problem — so it
+// can be exercised in tests without touching the file system.
+export function checkAcceptanceProtocol(markdown, version) {
+    const failures = [];
+    const versionLabel = version ? `v${version}` : 'the release';
+
+    // A table row is a line whose first non-space character is "|". Split on
+    // the pipes and trim each cell; the outer pipes drop as empty edge cells.
+    const splitRow = (line) => {
+        let s = line.trim();
+        if (s.startsWith('|')) s = s.slice(1);
+        if (s.endsWith('|')) s = s.slice(0, -1);
+        return s.split('|').map((c) => c.trim());
+    };
+
+    // Locate the results table by its header row (the first table row with a
+    // "Result" cell) and note which cells hold Result and Case.
+    const lines = markdown.split('\n');
+    let headerIdx = -1;
+    let resultCol = -1;
+    let caseCol = -1;
+    for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].trim().startsWith('|')) continue;
+        const cells = splitRow(lines[i]);
+        const rIdx = cells.findIndex((c) => /\bresult\b/i.test(c));
+        if (rIdx === -1) continue;
+        headerIdx = i;
+        resultCol = rIdx;
+        caseCol = cells.findIndex((c) => /\bcase\b/i.test(c));
+        break;
+    }
+
+    if (headerIdx === -1) {
+        failures.push(`Check 6 (acceptance protocol): no table with a "Result" column found in the ${versionLabel} protocol`);
+    } else {
+        let dataRows = 0;
+        for (let i = headerIdx + 1; i < lines.length; i++) {
+            if (!lines[i].trim().startsWith('|')) break; // table ends here
+            const cells = splitRow(lines[i]);
+            // The header's separator row ("| --- | --- |") is not a case.
+            if (cells.every((c) => c === '' || /^:?-{2,}:?$/.test(c))) continue;
+            if (cells.length <= resultCol) continue;
+
+            dataRows++;
+            const id = (cells[0] || '').trim();
+            const caseName = caseCol !== -1 ? (cells[caseCol] || '').trim() : '';
+            const label = caseName ? `${id} "${caseName}"` : id;
+            const raw = cells[resultCol].trim();
+            const result = raw.toLowerCase();
+
+            if (result === 'pass') {
+                // A passing case needs no message.
+            } else if (result === 'fail') {
+                failures.push(`Check 6 (acceptance protocol): case ${label} failed`);
+            } else if (result === 'manual-pending') {
+                failures.push(`Check 6 (acceptance protocol): case ${label} is still manual-pending`);
+            } else if (result.startsWith('waived:')) {
+                if (!raw.slice(raw.indexOf(':') + 1).trim()) {
+                    failures.push(`Check 6 (acceptance protocol): case ${label} is waived without a reason`);
+                }
+            } else {
+                failures.push(`Check 6 (acceptance protocol): case ${label} has an unknown result "${raw}"`);
+            }
+        }
+        if (dataRows === 0) {
+            failures.push(`Check 6 (acceptance protocol): the table in the ${versionLabel} protocol has no data rows`);
+        }
+    }
+
+    // Public-content leak check, one failure per finding type, quoting the
+    // match. Only the private ranges are listed (a public address is fine),
+    // and a bare version number like 3.2.0 matches none of these.
+    const leakPatterns = [
+        { type: 'private IPv4 address', re: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/ },
+        { type: '.local/.lan hostname', re: /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:local|lan)\b/i },
+        { type: 'JWT-like string', re: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/ },
+        { type: 'GitHub token', re: /\b(?:ghp_|gho_|ghs_|ghu_|ghr_|github_pat_)[A-Za-z0-9_]+/ },
+    ];
+    for (const { type, re } of leakPatterns) {
+        const match = markdown.match(re);
+        if (match) {
+            failures.push(`Check 6 (acceptance protocol): leaked ${type} "${match[0]}"`);
+        }
+    }
+
+    return failures;
+}
+
 function main() {
     const failures = [];
 
@@ -548,6 +648,19 @@ function main() {
 
     if (!sameOrder) {
         failures.push(`Check 5 (docs heading parity): DOCS.md heading sequence [${seqEn.join(',')}] does not match DOCS.de.md [${seqDe.join(',')}]`);
+    }
+
+    // ── Check 6: acceptance protocol ─────────────────────────────────────
+    // The file is named after the release version; its absence is a hard
+    // failure (check 1 already reported an unreadable config version).
+    if (glpVersion) {
+        const acceptanceRel = path.join(pkgRelDir, 'docs', 'acceptance', `v${glpVersion}.md`);
+        const acceptanceAbs = path.join(repoRoot, acceptanceRel);
+        if (!existsSync(acceptanceAbs)) {
+            failures.push(`Check 6 (acceptance protocol): ${acceptanceRel} does not exist — add the release's acceptance protocol (format: docs/acceptance/README.md)`);
+        } else {
+            failures.push(...checkAcceptanceProtocol(readFileSync(acceptanceAbs, 'utf8'), glpVersion));
+        }
     }
 
     // ── Report ───────────────────────────────────────────────────────────
