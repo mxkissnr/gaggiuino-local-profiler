@@ -57,8 +57,8 @@ components:
       type: object
       required: [name, phases]
       description: >
-        Mirrors the Gaggiuino machine's own profile shape 1:1 (see
-        lib/gaggiuino-proto.js). `type`/`curve` accept either the machine's
+        Mirrors the Gaggiuino machine's own profile shape 1:1. `type`/`curve`
+        accept either the machine's
         enum name strings ("PRESSURE"/"FLOW"/"MANUAL",
         "LINEAR"/"EASE_IN"/"EASE_OUT"/"EASE_IN_OUT"/"INSTANT") or their
         numeric wire values.
@@ -3164,7 +3164,7 @@ paths:
     get:
       tags: [System]
       summary: Add-on version and whether an update is available
-      description: Cached/rate-limited by lib/version-check.js — see also the `up_to_date` achievement badge.
+      description: Cached/rate-limited — see also the `up_to_date` achievement badge.
       responses:
         "200":
           description: Version info
@@ -3197,8 +3197,7 @@ paths:
                     type: array
                     description: >
                       Open badges carry name/description/stamp; secret badges
-                      omit stamp/name/description until unlocked (see
-                      lib/achievements/secrets.js).
+                      omit stamp/name/description until unlocked.
                     items: { type: object }
 
   /api/debug/machine:
