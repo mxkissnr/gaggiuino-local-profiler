@@ -7,7 +7,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 )
 
-// This file pins routes/orders.js's responses against openapi.yaml's Order
+// This file pins the orders API's responses against openapi.yaml's Order
 // (required: [id, createdAt, customer, item, status], status enum
 // [pending, accepted, done, declined]) and MenuItem (required: [id, name,
 // emoji]) schemas — the same "pin the essential shape, not the whole
