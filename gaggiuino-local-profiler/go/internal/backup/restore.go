@@ -21,12 +21,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// This file ports routes/backup.js's POST /api/restore: the single
-// largest handler in the Node app, so this port is split across a few
-// helper functions the handler (postRestore, in handlers.go's sibling —
-// see below) composes, roughly mirroring the Node function's own
-// top-to-bottom structure (parse request -> validate -> sanitize/preview
-// -> [dry-run: return] -> apply -> side effects -> respond).
+// This file implements POST /api/restore: the largest handler, split
+// across a few helper functions the handler (postRestore, in handlers.go)
+// composes, following a top-to-bottom structure (parse request -> validate
+// -> sanitize/preview -> [dry-run: return] -> apply -> side effects ->
+// respond).
 //
 // # Streaming (#959)
 //
@@ -40,14 +39,14 @@ import (
 //
 // # Atomicity: narrowed, not eliminated
 //
-// routes/backup.js wraps every DB write in one getDb().transaction(...).
-// This Go port's structured shots restore (wipe + every shot upsert +
-// annotations + trash + blocklist + library-save) now commits as ONE
-// transaction via shots.Repository.RestoreShots — a mid-restore failure in
-// that section rolls the whole section back, leaving the pre-restore shots
-// intact. Orders restore is one tx (orders.ReplaceAll); the two
-// maintenance restores, machines and kv are each their own tx. What is
-// still NOT Node-identical: atomicity *across* those sections — a failure
+// Every DB write is wrapped in a transaction. The structured shots restore
+// (wipe + every shot upsert + annotations + trash + blocklist +
+// library-save) commits as ONE transaction via
+// shots.Repository.RestoreShots — a mid-restore failure in that section
+// rolls the whole section back, leaving the pre-restore shots intact. Orders
+// restore is one tx (orders.ReplaceAll); the two maintenance restores,
+// machines and kv are each their own tx. What is still not covered:
+// atomicity *across* those sections — a failure
 // after the shots tx commits but during, say, the maintenance write leaves
 // shots restored and maintenance not. Threading a shared *sql.Tx through
 // every repository across five packages (the only way to close that last
@@ -65,7 +64,7 @@ type shotMeta struct {
 	tsOK    bool
 }
 
-// postRestore ports POST /api/restore end to end, streamed (#959): body ->
+// postRestore handles POST /api/restore end to end, streamed (#959): body ->
 // temp file, two-pass streaming bundle parse, batched transactional shots
 // restore.
 func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
@@ -303,9 +302,9 @@ type restorePlan struct {
 	restoredToken    string
 }
 
-// buildRestorePlan ports the "Every 'what would actually be written'
-// computation" block of routes/backup.js's POST /api/restore, from
-// `sections := normaliseSections(...)` through `restoredToken`.
+// buildRestorePlan computes everything that would actually be written for
+// POST /api/restore, from `sections := normaliseSections(...)` through
+// `restoredToken`.
 func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) restorePlan {
 	sec := normaliseSections(b["sections"])
 	wantsShots := sec.has("shots")
@@ -454,8 +453,8 @@ func decodeEncryptedSecrets(m map[string]any) *EncryptedSecrets {
 	return &enc
 }
 
-// sanitizeToken ports `decryptedSecrets?.apiToken.replace(/[\r\n\0]/g,
-// ”).trim().slice(0, 200)`.
+// sanitizeToken strips CR/LF/NUL from the token, trims it, and caps it at
+// 200 chars.
 func sanitizeToken(s string) string {
 	out := make([]rune, 0, len(s))
 	for _, r := range s {
@@ -539,7 +538,7 @@ func reDecode(v any, out any) error {
 	return json.Unmarshal(b, out)
 }
 
-// preview ports the dry-run response's `preview` object.
+// preview builds the dry-run response's `preview` object.
 func (p restorePlan) preview() map[string]any {
 	shotsCount := 0
 	if p.wantsShots {
@@ -573,8 +572,8 @@ func machineCountForPreview(p restorePlan) int {
 	return 0
 }
 
-// sectionsPresent ports `Object.keys(SECTION_PRESENCE_BUNDLE_KEYS).filter(key
-// => SECTION_PRESENCE_BUNDLE_KEYS[key].some(k => k in b))`.
+// sectionsPresent returns the section names for which any presence key is
+// present in b.
 func sectionsPresent(b map[string]any) []string {
 	out := []string{}
 	for _, name := range sectionOrder {
@@ -588,11 +587,11 @@ func sectionsPresent(b map[string]any) []string {
 	return out
 }
 
-// applyRestore ports the real (non-dry-run) restore. The shots section
+// applyRestore performs the real (non-dry-run) restore. The shots section
 // (wipe + every shot upsert + annotations + trash + blocklist + library)
-// now commits as ONE transaction via shots.Repository.RestoreShots
-// (#959); the remaining sections stay their own internal txs — see this
-// file's header comment for the narrowed atomicity gap.
+// commits as ONE transaction via shots.Repository.RestoreShots (#959); the
+// remaining sections stay their own internal txs — see this file's header
+// comment for the narrowed atomicity gap.
 func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Shot) error) error) error {
 	d := h.deps
 	if p.wantsShots {
@@ -730,10 +729,10 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 // element conversion below needs no per-element type conversion syntax.
 // mapToLibrary converts the generic decoded coffee_library object into a
 // typed library.Library, THEN re-sanitizes every entity's fields via
-// SanitizeLibraryForRestore — routes/backup.js's sanitizeRestoredLibrary()
-// call, which must run on every restored library regardless of section
-// scope, since a restored library bypasses the regular POST/PUT bean/
-// grinder/recipe routes entirely (see restore_sanitize.go's doc comment).
+// SanitizeLibraryForRestore — which must run on every restored library
+// regardless of section scope, since a restored library bypasses the regular
+// POST/PUT bean/grinder/recipe routes entirely (see restore_sanitize.go's
+// doc comment).
 func mapToLibrary(m map[string]any) library.Library {
 	raw := library.Library{
 		Beans: entityList(m["beans"]), Grinders: entityList(m["grinders"]),
@@ -765,7 +764,7 @@ func entityList(v any) []library.Entity {
 // Dependencies.Token's doc comment: this does NOT take effect in the
 // already-running process (internal/auth.RequireToken closes over a fixed
 // token string at startup) until the process restarts — a documented,
-// deliberate gap from Node's live state.apiToken.
+// deliberate gap.
 func (h *Handlers) applyRestoredToken(token string) {
 	if token == "" {
 		return

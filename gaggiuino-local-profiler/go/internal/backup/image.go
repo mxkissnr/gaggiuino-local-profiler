@@ -5,19 +5,17 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 )
 
-// This file ports routes/backup.js's validateEntityImages/
-// validateRestoredLibraryImages — the path-traversal / integrity guard a
-// restored entity's `.image` field must pass before its bytes are ever
-// written to a real filesystem path. The filename / path / magic-byte
-// helpers it used to carry now live in internal/img, shared with
+// This file holds validateEntityImages/validateRestoredLibraryImages — the
+// path-traversal / integrity guard a restored entity's `.image` field must
+// pass before its bytes are ever written to a real filesystem path. The
+// filename / path / magic-byte helpers live in internal/img, shared with
 // internal/shots and internal/library (see that package's doc.go).
 
-// imageDir mirrors lib/constants.js's BEAN_IMAGE_DIR. A var, not a const,
-// purely so the tests can point export/import at a throwaway directory of
-// synthetic images.
+// imageDir is the bean image directory. A var, not a const, purely so the
+// tests can point export/import at a throwaway directory of synthetic images.
 var imageDir = library.DefaultImageDir
 
-// imageMaxBytes mirrors lib/constants.js's BEAN_IMAGE_MAX_BYTES.
+// imageMaxBytes is the per-image size cap.
 const imageMaxBytes = img.MaxBytes
 
 // imagePath is the package-local shorthand for img.Path bound to imageDir
@@ -34,25 +32,23 @@ func extAllowed(ext string) bool {
 }
 
 // pendingImageWrite is one validated image queued to be written to disk
-// after the DB transaction commits — mirrors routes/backup.js's
-// pendingImageWrites array. It holds only the target path and the source
-// entry name (never the bytes): writePendingImages streams the bytes from
-// the restore image source zip-entry -> disk, so many restored images
+// after the DB transaction commits. It holds only the target path and the
+// source entry name (never the bytes): writePendingImages streams the bytes
+// from the restore image source zip-entry -> disk, so many restored images
 // never sum up in memory (#959).
 type pendingImageWrite struct {
 	path    string
 	srcName string
 }
 
-// validateEntityImages ports validateEntityImages(list, prefix, imagesMap,
-// pendingImageWrites): validates one entity list's id/image fields against
+// validateEntityImages validates one entity list's id/image fields against
 // the actual restored image bytes and appends a pendingImageWrite for each
 // image that survives every check. Any entity whose image fails validation
 // for any reason has its `.image` field cleared (set to nil) rather than
 // left pointing at a file that will never exist — list entries are mutated
-// in place, matching the Node original. The image bytes are read once here
-// (capped at imageMaxBytes) for the magic-byte + size checks and dropped;
-// writePendingImages re-reads them lazily to write.
+// in place. The image bytes are read once here (capped at imageMaxBytes) for
+// the magic-byte + size checks and dropped; writePendingImages re-reads them
+// lazily to write.
 func validateEntityImages(list []map[string]any, prefix string, imgs restoreImages, pending *[]pendingImageWrite) {
 	for _, entity := range list {
 		if entity == nil {
@@ -81,9 +77,8 @@ func validateEntityImages(list []map[string]any, prefix string, imgs restoreImag
 	}
 }
 
-// libraryImageEntityTypes mirrors IMAGE_ENTITY_TYPES: the library entity
-// types that can carry an uploaded image, and the filename prefix each
-// uses.
+// libraryImageEntityTypes lists the library entity types that can carry an
+// uploaded image, and the filename prefix each uses.
 var libraryImageEntityTypes = []struct {
 	key    string
 	prefix string
@@ -94,8 +89,7 @@ var libraryImageEntityTypes = []struct {
 	{"puckScreens", "puckscreen-"},
 }
 
-// validateRestoredLibraryImages ports validateRestoredLibraryImages(lib,
-// imagesMap, pendingImageWrites): one validateEntityImages call per
+// validateRestoredLibraryImages runs one validateEntityImages call per
 // library entity type. lib is the map-of-lists JSON shape produced by
 // decoding the backup's raw `coffee_library` field (not library.Library —
 // this runs before/independent of SanitizeLibraryForRestore's typed pass).
