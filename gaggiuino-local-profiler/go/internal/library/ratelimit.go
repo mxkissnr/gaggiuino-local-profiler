@@ -42,11 +42,11 @@ func newRateLimiterWithInterval(interval time.Duration) *rateLimiter {
 }
 
 // gcLoop is the sweep loop: every rl.interval, drop windows whose entry is
-// older than rl.interval. Nothing in cmd/server calls Stop() today — main.go's
+// older than rl.interval. In production nothing stops it — main.go's
 // srv.Serve(...) blocks forever with no signal handling or graceful-shutdown
-// path yet, so in production this goroutine simply lives (and dies) with the
-// process. Stop exists so tests, and a future shutdown path, can tear it down
-// cleanly instead of leaking it.
+// path, so this goroutine simply lives (and dies) with the process. The
+// test-only Stop helper (ratelimit_test.go) lets a test tear it down cleanly
+// instead of leaking it.
 func (rl *rateLimiter) gcLoop() {
 	ticker := time.NewTicker(rl.interval)
 	defer ticker.Stop()
@@ -70,11 +70,6 @@ func (rl *rateLimiter) gc(now time.Time) {
 			delete(rl.windows, k)
 		}
 	}
-}
-
-// Stop terminates the background GC goroutine. Safe to call more than once.
-func (rl *rateLimiter) Stop() {
-	rl.stopOnce.Do(func() { close(rl.stop) })
 }
 
 // allow applies the per-key count check.

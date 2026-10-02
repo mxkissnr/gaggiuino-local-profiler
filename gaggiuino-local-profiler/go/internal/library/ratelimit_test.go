@@ -71,3 +71,8 @@ func TestRateLimiter_StopIsIdempotent(t *testing.T) {
 	rl.Stop()
 	rl.Stop()
 }
+
+// Stop terminates the background GC goroutine. Safe to call more than once.
+func (rl *rateLimiter) Stop() {
+	rl.stopOnce.Do(func() { close(rl.stop) })
+}

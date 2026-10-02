@@ -268,10 +268,3 @@ func ParseReleaseChannel(v any) *int {
 		return nil
 	}
 }
-
-// resetCacheForTests clears the cache — test-only helper.
-func (c *FirmwareChecker) resetCacheForTests() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.cache = make(map[int]firmwareCacheEntry)
-}

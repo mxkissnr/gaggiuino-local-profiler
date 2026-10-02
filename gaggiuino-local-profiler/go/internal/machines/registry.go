@@ -523,14 +523,6 @@ func (g *guardVar[F]) get() F {
 	return *g.p.Load()
 }
 
-// set stores f and returns the previous value, so a test can restore it
-// via t.Cleanup(func() { v.set(prev) }).
-func (g *guardVar[F]) set(f F) F {
-	prev := g.get()
-	g.p.Store(&f)
-	return prev
-}
-
 // machineHostGuard is assertMachineHost by default — a package-level var
 // (same testing seam pattern as ssrf.go's lookupIPAddr) so tests exercising
 // an adapter end-to-end against an httptest.Server (which only ever binds
