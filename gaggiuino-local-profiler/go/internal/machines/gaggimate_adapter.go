@@ -57,6 +57,15 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 			return Status{}, err
 		}
 	}
+	// The field mapping below is intentionally unchanged (#1303). On firmware
+	// v1.9.0 the partial fast/slow frames are already merged upstream —
+	// mergeGaggiMateStatus is called from the live session's read loop and from
+	// gaggimateWaitForStatus — so evt is the union of the slow state keys (m, p,
+	// bc, cw, ...) and the latest fast readings (ct, pr, fl, process, ...) on
+	// both the cached and the fallback path. On full-frame firmware the merge is
+	// a no-op. No mapping change is needed, and gating the cache on ct here
+	// would push callers onto gaggimateWaitForStatus's second dial, which the
+	// firmware's single-client WebSocket limit rejects.
 	raw, _ := json.Marshal(evt)
 
 	// m==1 (BREW mode) means "brew screen selected", not "pump running".
