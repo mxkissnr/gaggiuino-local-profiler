@@ -1,25 +1,21 @@
-// Package debug is the Go port of routes/debug.js (Phase 2e, issue #901)
-// plus routes/system.js's one debug helper:
+// Package debug implements the development-only debug helpers:
 //
 //   - GET  /api/debug/export-db  — stream the raw glp.db file as a download
 //   - POST /api/debug/import-db  — replace glp.db 1:1 from an uploaded file
 //   - GET  /api/debug/machine    — raw dump of the default machine's
-//     /api/system/status (routes/system.js, gated on GLP_DEV_BUILD)
+//     /api/system/status (gated on GLP_DEV_BUILD)
 //
-// The two DB routes are gated on GLP_DEV_BUILD exactly the way
-// routes/debug.js gates them: the flag check is the first thing each
-// handler does, and a non-dev build answers 404 with an empty body — the
-// same response an unregistered route would give, so a real install can't
-// even tell the route exists (routes/debug.js's own comment).
+// The two DB routes are gated on GLP_DEV_BUILD: the flag check is the first
+// thing each handler does, and a non-dev build answers 404 with an empty
+// body — the same response an unregistered route would give, so a real
+// install can't even tell the route exists.
 //
-// server.js:192 sets a route-scoped raw body parser for /api/debug/import-db
-// (express.raw({ type: 'application/octet-stream', limit: '500mb' })). Go's
-// net/http has no global body-parser middleware chain, so importDB bounds
-// its own body with http.MaxBytesReader(w, r.Body, importDBMaxBytes) —
-// that reader IS the route-scoped 500 MB ceiling (see cmd/server/main.go's
-// handler-chain comment, which anticipated exactly this).
+// /api/debug/import-db's body is bounded with
+// http.MaxBytesReader(w, r.Body, importDBMaxBytes) — that reader IS the
+// route-scoped 500 MB ceiling (see cmd/server/main.go's handler-chain
+// comment, which anticipated exactly this).
 //
-// The DB-replace path mirrors routes/debug.js's #755 safety mechanism
+// The DB-replace path implements #755's safety mechanism
 // step for step, plus #959's streaming + validation hardening: the upload
 // is streamed straight to a temp file in the DB directory (never
 // io.ReadAll'd into a ~500 MB slice), then validated BEFORE anything
@@ -32,15 +28,13 @@
 // against the mismatched new main file on the next startup otherwise). A
 // corrupt or wrong-schema upload is rejected with 400 and the live DB is
 // left completely untouched. The running process keeps its already-open
-// file descriptor pinned to the old inode through POSIX rename semantics
-// — modernc.org/sqlite is no different from better-sqlite3 here — so only
-// a restart picks up the new file, which is why the 200 response says
-// restartRequired (no in-process pool drain / reopen).
+// file descriptor pinned to the old inode through POSIX rename semantics,
+// so only a restart picks up the new file, which is why the 200 response
+// says restartRequired (no in-process pool drain / reopen).
 //
 // GET /api/debug/export-db additionally carries a dedicated
 // "export-db:<ip>" feature rate limit (exportDBRateLimitPerMin, 5/min) on
-// top of the app-wide 600/min backstop — a tightening the Node route
-// (routes/debug.js) does not have, since the export streams the whole
+// top of the app-wide 600/min backstop, since the export streams the whole
 // SQLite file and checkpoints the WAL on every hit. See exportDB and
 // #999 / security audit #977 round 3 finding 3.2.
 package debug
@@ -66,25 +60,23 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// importDBMaxBytes mirrors server.js:192's express.raw({ limit: '500mb' })
-// for /api/debug/import-db — 500 * 1024 * 1024, the same generous ceiling
-// server.js documents for a DB with years of shot history. A var, not a
-// const, purely so debug_test.go can lower it to exercise the 413 path
-// without sending half a gigabyte through httptest.
+// importDBMaxBytes is the 500 * 1024 * 1024 ceiling for
+// /api/debug/import-db — generous enough for a DB with years of shot
+// history. A var, not a const, purely so debug_test.go can lower it to
+// exercise the 413 path without sending half a gigabyte through httptest.
 var importDBMaxBytes int64 = 500 * 1024 * 1024
 
-// sqliteMagic is routes/debug.js's SQLITE_MAGIC: the 16-byte header every
-// SQLite 3 database file starts with, trailing NUL included
-// (Buffer.from('SQLite format 3\0')).
+// sqliteMagic is the 16-byte header every SQLite 3 database file starts
+// with, trailing NUL included ("SQLite format 3\0").
 var sqliteMagic = []byte("SQLite format 3\x00")
 
 // debugMachineHTTPClient is the machine handler's default httpGet
 // transport (#1049) — package-level so it's built once, not per request.
 var debugMachineHTTPClient = machines.NewGuardedHTTPClient(5 * time.Second)
 
-// execer is the only DB capability this package needs: routes/debug.js runs
-// getDb().pragma('wal_checkpoint(TRUNCATE)') before both the export
-// download and the pre-import backup. *sql.DB satisfies it.
+// execer is the only DB capability this package needs: a
+// wal_checkpoint(TRUNCATE) runs before both the export download and the
+// pre-import backup. *sql.DB satisfies it.
 type execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
@@ -93,27 +85,23 @@ type execer interface {
 // GET /api/debug/export-db (#999, security audit #977 round 3 finding 3.2).
 // The export streams the entire SQLite file, so it is both a bandwidth
 // amplifier and a WAL-checkpoint trigger on every hit. It gets its own
-// feature limiter on top of the app-wide 600/min backstop. This is
-// DELIBERATELY STRICTER THAN NODE: routes/debug.js feature-limits neither
-// this route nor /api/shots/{id}/card, relying on the shared backstop
-// alone. 5/min per IP is ample for a human pulling a manual DB backup.
+// feature limiter on top of the app-wide 600/min backstop. 5/min per IP is
+// ample for a human pulling a manual DB backup.
 const exportDBRateLimitPerMin = 5
 
-// Handlers ports routes/debug.js's router plus routes/system.js's
-// /api/debug/machine handler.
+// Handlers wires the debug routes, including /api/debug/machine.
 type Handlers struct {
 	db       execer
 	dbPath   string
 	registry *machines.Registry
 	rl       *ratelimit.KeyedLimiter
 
-	// devBuild is captured at construction from the environment, matching
-	// routes/debug.js reading process.env on a value that never changes for
-	// a process lifetime. #1051: this single flag now gates every debug
-	// route (export-db/import-db already used it; machine/ingress/
-	// ingress/sse-probe used a separate NODE_ENV != production check that
-	// GLP_DEV_BUILD's sibling build-dev.yaml workflow never actually set,
-	// so those three routes were live on every real install — see this
+	// devBuild is captured at construction from the environment (a value
+	// that never changes for a process lifetime). #1051: this single flag
+	// now gates every debug route (export-db/import-db already used it;
+	// machine/ingress/sse-probe used a separate production-only env check
+	// that GLP_DEV_BUILD's sibling build-dev.yaml workflow never actually
+	// set, so those three routes were live on every real install — see this
 	// package's doc comment and RegisterRoutes below).
 	devBuild bool
 
@@ -160,7 +148,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	}
 }
 
-// exportDB ports routes/debug.js's GET /api/debug/export-db.
+// exportDB serves GET /api/debug/export-db.
 func (h *Handlers) exportDB(w http.ResponseWriter, r *http.Request) {
 	if !h.devBuild {
 		w.WriteHeader(http.StatusNotFound)
@@ -176,8 +164,8 @@ func (h *Handlers) exportDB(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-		// routes/debug.js returns the raw err.message here (a 500 with
-		// { error: <message> }, not the generic body) — matched.
+		// A checkpoint failure returns the raw error message (a 500 with
+		// { error: <message> }, not the generic body).
 		httputil.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -195,9 +183,9 @@ func (h *Handlers) exportDB(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := fmt.Sprintf("glp-db-export-%s.db", h.clock().Format("2006-01-02_15-04-05"))
-	// res.download(): Content-Disposition attachment + a by-extension
-	// Content-Type (.db has no registered MIME, so express falls back to
-	// application/octet-stream) + Content-Length.
+	// Content-Disposition attachment + a by-extension Content-Type (.db has
+	// no registered MIME, so it falls back to application/octet-stream) +
+	// Content-Length.
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
@@ -206,7 +194,7 @@ func (h *Handlers) exportDB(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// importDB ports routes/debug.js's POST /api/debug/import-db.
+// importDB serves POST /api/debug/import-db.
 func (h *Handlers) importDB(w http.ResponseWriter, r *http.Request) {
 	if !h.devBuild {
 		w.WriteHeader(http.StatusNotFound)
@@ -234,9 +222,8 @@ func (h *Handlers) importDB(w http.ResponseWriter, r *http.Request) {
 		_ = os.Remove(tmpPath)
 		var mbe *http.MaxBytesError
 		if errors.As(copyErr, &mbe) {
-			// server.js:192's express.raw({ limit: '500mb' }) rejects an
-			// oversized body with a 413 before the handler runs;
-			// lib/middleware/error.js turns that into { error: <message> }.
+			// An oversized body is rejected with a 413 before the handler
+			// runs, as { error: <message> }.
 			httputil.WriteError(w, http.StatusRequestEntityTooLarge, "request entity too large")
 			return
 		}
@@ -303,9 +290,8 @@ func (h *Handlers) importDB(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// machine ports routes/system.js's GET /api/debug/machine (H2). Always 200:
-// both the success and the failure branch answer with a JSON body, exactly
-// as the Node original does (`res.json({ ok, ... })` in the catch too).
+// machine serves GET /api/debug/machine (H2). Always 200: both the success
+// and the failure branch answer with a JSON body (`{ ok, ... }`).
 func (h *Handlers) machine(w http.ResponseWriter, r *http.Request) {
 	baseURL, err := h.defaultMachineBaseURL(r.Context())
 	if err != nil {
@@ -354,8 +340,7 @@ func (h *Handlers) machine(w http.ResponseWriter, r *http.Request) {
 // defaultMachineBaseURL resolves registry.baseUrlFor() (no machineId) — the
 // default machine's SSRF-guarded base URL. On any failure it returns a
 // best-effort host string alongside the error so the caller can still
-// report { ok:false, baseUrl, error } the way Node's always-a-string
-// getMachineBaseUrl() lets it.
+// report { ok:false, baseUrl, error } with a non-empty baseUrl.
 func (h *Handlers) defaultMachineBaseURL(ctx context.Context) (string, error) {
 	if h.registry == nil {
 		return "", errors.New("machine registry unavailable")
@@ -371,9 +356,8 @@ func (h *Handlers) defaultMachineBaseURL(ctx context.Context) (string, error) {
 	return baseURL, nil
 }
 
-// fileHasSQLiteMagic checks the first 16 bytes of path against
-// sqliteMagic without reading the whole file — routes/debug.js's
-// SQLITE_MAGIC guard, moved off the (now streamed) in-memory buffer.
+// fileHasSQLiteMagic checks the first 16 bytes of path against sqliteMagic
+// without reading the whole file.
 func fileHasSQLiteMagic(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -432,8 +416,8 @@ func validateUploadedDB(path string) error {
 	return nil
 }
 
-// copyFile mirrors routes/debug.js's fs.copyFileSync(DB_PATH, backupPath):
-// a plain whole-file copy of the current database before it is replaced.
+// copyFile makes a plain whole-file copy of the current database before it
+// is replaced.
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
