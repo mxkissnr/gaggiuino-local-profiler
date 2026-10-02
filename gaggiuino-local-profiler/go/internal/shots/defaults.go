@@ -6,11 +6,11 @@ import (
 	"fmt"
 )
 
-// This file ports lib/repositories/ShotDefaultsRepository.js (#654):
-// per-install defaults auto-prefilled into a new shot's annotation panel,
-// stored as one JSON blob under kv.key = 'shot_defaults'.
+// This file implements per-install shot defaults (#654): values auto-prefilled
+// into a new shot's annotation panel, stored as one JSON blob under
+// kv.key = 'shot_defaults'.
 
-// shotDefaultsZero mirrors ShotDefaultsRepository.js's DEFAULTS.
+// shotDefaultsZero is the default shot-defaults set: every field unset.
 func shotDefaultsZero() map[string]any {
 	return map[string]any{
 		"drinkType":    nil,
@@ -23,10 +23,8 @@ func shotDefaultsZero() map[string]any {
 	}
 }
 
-// GetShotDefaults ports ShotDefaultsRepository.js's getDefaults: DEFAULTS
-// merged with whatever's stored, falling back to DEFAULTS whole-sale on a
-// missing row or malformed stored JSON (mirrors the `catch { return {
-// ...DEFAULTS } }` in the Node original).
+// GetShotDefaults returns the defaults merged with whatever's stored, falling
+// back to the defaults whole-sale on a missing row or malformed stored JSON.
 func (r *Repository) GetShotDefaults() (map[string]any, error) {
 	var value string
 	err := r.db.QueryRow(`SELECT value FROM kv WHERE key = 'shot_defaults'`).Scan(&value)
@@ -47,7 +45,6 @@ func (r *Repository) GetShotDefaults() (map[string]any, error) {
 	return out, nil
 }
 
-// SaveShotDefaults ports ShotDefaultsRepository.js's saveDefaults.
 func (r *Repository) SaveShotDefaults(defaults map[string]any) error {
 	b, err := json.Marshal(defaults)
 	if err != nil {

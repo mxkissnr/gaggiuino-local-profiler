@@ -7,18 +7,17 @@ import (
 	"strings"
 )
 
-// This file ports lib/card.js's colour layer: buildPalette(accent, theme)
-// and everything it composes (ACCENTS, the per-theme gray scales, the
-// semantic ok/warn/err sets, and the WCAG-1.4.11 line-contrast lift).
+// This file is the share card's colour layer: buildPalette(accent, theme)
+// and everything it composes (the accent pairs, the per-theme gray scales,
+// the semantic ok/warn/err sets, and the WCAG-1.4.11 line-contrast lift).
 //
-// One deliberate deviation from lib/card.js, documented in card.go's header
-// too: buildPalette("", "") does NOT return the frozen LEGACY_GLP snapshot
-// here. The Go renderer always draws the current "Instrument" design, so a
-// bare /card call with neither ?accent= nor ?theme= is treated as
-// amber/dark (the palette the frontend always sends anyway). The legacy
-// boxed/ring layout for pre-#462 cached links is not reproduced — a
-// cosmetic regression on years-old bookmarks, deemed acceptable for the
-// migration (see card.go).
+// One deliberate deviation, documented in card.go's header too:
+// buildPalette("", "") does NOT return the frozen LEGACY_GLP snapshot here.
+// The renderer always draws the current "Instrument" design, so a bare /card
+// call with neither ?accent= nor ?theme= is treated as amber/dark (the
+// palette the frontend always sends anyway). The legacy boxed/ring layout for
+// pre-#462 cached links is not reproduced — a cosmetic regression on
+// years-old bookmarks, deemed acceptable (see card.go).
 
 type palette struct {
 	bg, bgCard, bgChart           string
@@ -36,9 +35,9 @@ func (p palette) accentTint(alpha string) string {
 	return fmt.Sprintf("rgba(%s,%s)", p.accentTintRGB, alpha)
 }
 
-// accentPair mirrors lib/card.js's ACCENTS: accent-from/accent-to per
-// accent and theme (public-src/style.css [data-accent] blocks). Only amber
-// and crema define a light-specific override.
+// accentPairs holds accent-from/accent-to per accent and theme
+// (public-src/style.css [data-accent] blocks). Only amber and crema define a
+// light-specific override.
 var accentPairs = map[string]map[string][2]string{
 	"amber":  {"dark": {"#f59e0b", "#f97316"}, "light": {"#d97706", "#ea580c"}},
 	"ocean":  {"dark": {"#3b82f6", "#06b6d4"}, "light": {"#3b82f6", "#06b6d4"}},
@@ -48,10 +47,10 @@ var accentPairs = map[string]map[string][2]string{
 	"crema":  {"dark": {"#d4a24c", "#b8823a"}, "light": {"#8b5e34", "#6b3f1d"}},
 }
 
-// grayScales mirrors CARD_TOKENS.gray: the gray roles this card reads,
-// keyed by theme (and by accent for crema, the only accent that warms the
-// neutral scale). Roles: 200 text / 400 soft / 500 muted / 700 line / 800
-// card-chart surface / 900 card surface / 950 page background.
+// grayScales holds the gray roles this card reads, keyed by theme (and by
+// accent for crema, the only accent that warms the neutral scale). Roles:
+// 200 text / 400 soft / 500 muted / 700 line / 800 card-chart surface / 900
+// card surface / 950 page background.
 var grayScales = map[string]map[int]string{
 	"dark":        {200: "#eceded", 400: "#b6babd", 500: "#a4a9ad", 700: "#2b2f33", 800: "#1a1c1f", 900: "#131416", 950: "#0d0e10"},
 	"dark-crema":  {200: "#f2e6d8", 400: "#c9b8a4", 500: "#b0a08d", 700: "#4e3a2b", 800: "#2e2118", 900: "#1e1611", 950: "#14100c"},
@@ -59,7 +58,7 @@ var grayScales = map[string]map[int]string{
 	"light-crema": {200: "#2a1b0f", 400: "#55442f", 500: "#5f4c38", 700: "#d4b48c", 800: "#ead5b5", 900: "#f3e4ce", 950: "#fbf3e7"},
 }
 
-// semanticColors mirrors CARD_TOKENS.semantic (--ok/--warn/--err).
+// semanticColors holds the semantic ok/warn/err colours per theme.
 var semanticColors = map[string]map[string]string{
 	"dark":        {"ok": "#5cb98a", "warn": "#d3a03f", "err": "#e0705f"},
 	"dark-crema":  {"ok": "#5cb98a", "warn": "#d3a03f", "err": "#e17363"},
@@ -106,9 +105,8 @@ func contrastRatio(r1, g1, b1, r2, g2, b2 float64) float64 {
 	return (a + 0.05) / (b + 0.05)
 }
 
-// liftLineTowardText ports lib/card.js's liftLineTowardText: blend a line
-// colour toward the text colour in 5% steps until it clears 3:1 against
-// the worse of the two surfaces it's drawn on.
+// liftLineTowardText blends a line colour toward the text colour in 5% steps
+// until it clears 3:1 against the worse of the two surfaces it's drawn on.
 func liftLineTowardText(lineHex, worstBgHex, textHex string) string {
 	lr, lg, lb := hexToRGB(lineHex)
 	br, bg, bb := hexToRGB(worstBgHex)
@@ -131,8 +129,8 @@ func liftLineTowardText(lineHex, worstBgHex, textHex string) string {
 	return rgbToHex(or, og, ob)
 }
 
-// lineColorFor ports LINE_COLORS[key]: per theme, pick the worse of
-// gray[700]-on-gray[800] / gray[700]-on-gray[900] and lift toward gray[200].
+// lineColorFor picks, per theme, the worse of gray[700]-on-gray[800] /
+// gray[700]-on-gray[900] and lifts toward gray[200].
 func lineColorFor(key string) string {
 	g := grayScales[key]
 	r7, g7, b7 := hexToRGB(g[700])
@@ -147,9 +145,9 @@ func lineColorFor(key string) string {
 
 func i2f(i int) float64 { return float64(i) }
 
-// buildPalette ports lib/card.js's buildPalette(accent, theme) — the
-// computed (non-legacy) path only. An unknown/empty accent falls back to
-// "amber"; any theme other than "light" is "dark".
+// buildPalette computes the palette for accent/theme (the non-legacy path
+// only). An unknown/empty accent falls back to "amber"; any theme other than
+// "light" is "dark".
 func buildPalette(accent, theme string) palette {
 	a := accent
 	if _, ok := accentPairs[a]; !ok {
@@ -184,8 +182,8 @@ func buildPalette(accent, theme string) palette {
 	}
 }
 
-// scoreColor ports lib/card.js's scoreColor for the computed palette:
-// ok >=90 / warn >=70 / err below. A nil score is textMute.
+// scoreColor maps score to the palette's ok/warn/err colour: ok >=90 /
+// warn >=70 / err below. A nil score is textMute.
 func scoreColor(score *int, p palette) string {
 	if score == nil {
 		return p.textMute
@@ -200,7 +198,7 @@ func scoreColor(score *int, p palette) string {
 	}
 }
 
-// scoreTierPhrase ports lib/card.js's scoreTierPhrase (German, unchanged).
+// scoreTierPhrase returns the German tier phrase for score.
 func scoreTierPhrase(score *int) string {
 	if score == nil {
 		return ""

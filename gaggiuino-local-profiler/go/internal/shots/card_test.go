@@ -164,7 +164,7 @@ func TestGetCard_HonorsAccent(t *testing.T) {
 
 func TestGetCard_RendersWithoutDeps(t *testing.T) {
 	// Unwired cardDeps (no install code, no origin resolver) must still
-	// produce a valid card — lib/card.js's try/catch omits those pieces.
+	// produce a valid card — the optional pieces are simply omitted.
 	h, _, sqlDB := newTestHandlers(t)
 	mux := newMux(h)
 	dur := int64(280)
