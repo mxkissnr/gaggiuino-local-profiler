@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// This file is the HA-ingress smoke test (#901, Phase 3). It boots the
+// This file is the HA-ingress smoke test (#901). It boots the
 // real handler chain (buildApp: SecurityHeaders -> rate limiter ->
 // RequireToken -> the full domain mux, exactly what main() serves) and
 // drives the three ingress traps that hit the templ branch three times
