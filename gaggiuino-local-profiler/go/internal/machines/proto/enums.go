@@ -5,22 +5,21 @@ import (
 	"fmt"
 )
 
-// Every enum below ports one lib/gaggiuino-proto.js `const XxxDto = {0:
-// 'NAME', NAME: 0, ...}` map verbatim — same names, same numeric values.
-// Each type's UnmarshalJSON accepts either its wire-enum name (a JSON
-// string) or its numeric value (a JSON number), matching
-// gaggiuino-ws-client.js's own `typeof x === 'string' ? EnumDto[x] : x`
-// convention for every enum field a caller can set (toWireProfile's
-// type/curve, setOperationMode's mode, serviceTest's peripheral). A plain
-// number is otherwise how encoding/json already marshals a defined int32
-// type with no custom MarshalJSON — deliberately not overridden, since
-// lib/gaggiuino-proto.js's own fromBinary()+JSON.stringify() output (the
-// shape go/internal/machines's handlers must match for decoded
-// machine-pushed data) is a plain number too, never the enum name string
-// (verified directly: ProfileDto.fromBinary(...) round-tripped through
-// JSON.stringify emits `"type":1`, not `"type":"PRESSURE"`).
+// Every enum below corresponds to one `const XxxDto = {0: 'NAME', NAME: 0,
+// ...}` map in the wire schema — same names, same numeric values. Each
+// type's UnmarshalJSON accepts either its wire-enum name (a JSON string) or
+// its numeric value (a JSON number), since a caller may set every enum field
+// either way (ToWireProfile's type/curve, SetOperationMode's mode,
+// ServiceTest's peripheral). A plain number is otherwise how encoding/json
+// already marshals a defined int32 type with no custom MarshalJSON —
+// deliberately not overridden, since the machine's own
+// fromBinary()+JSON.stringify() output (the shape go/internal/machines's
+// handlers must match for decoded machine-pushed data) is a plain number
+// too, never the enum name string (verified directly:
+// ProfileDto.fromBinary(...) round-tripped through JSON.stringify emits
+// `"type":1`, not `"type":"PRESSURE"`).
 
-// PhaseType ports PhaseTypeDto.
+// PhaseType is the profile phase type.
 type PhaseType int32
 
 const (
@@ -40,7 +39,7 @@ func (p *PhaseType) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// TransitionCurve ports TransitionCurveDto.
+// TransitionCurve is the profile transition curve.
 type TransitionCurve int32
 
 const (
@@ -65,9 +64,9 @@ func (c *TransitionCurve) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// WebSocketResponseResult ports WebSocketResponseResultDto — decode-only
-// (a d_resp field, never sent by this app), so no UnmarshalJSON is needed,
-// but one is provided anyway for symmetry/testability.
+// WebSocketResponseResult is decode-only (a d_resp field, never sent by this
+// app), so no UnmarshalJSON is needed, but one is provided anyway for
+// symmetry/testability.
 type WebSocketResponseResult int32
 
 const (
@@ -86,11 +85,10 @@ func (r *WebSocketResponseResult) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// OperationMode ports OperationModeDto. BREW_MANUAL (1) is a valid wire
-// value here (this package models the full wire enum) — rejecting it as
+// OperationMode is the machine's operation mode. BREW_MANUAL (1) is a valid
+// wire value here (this package models the full wire enum) — rejecting it as
 // unusable through the settings/control proxy is a go/internal/machines
-// validation-layer concern (mirrors operationModeSchema.js's `.refine()`),
-// not something this low-level type enforces.
+// validation-layer concern, not something this low-level type enforces.
 type OperationMode int32
 
 const (
@@ -129,22 +127,21 @@ var operationModeCanonicalNames = func() map[OperationMode]string {
 	return out
 }()
 
-// NormalizeOperationMode ports lib/gaggiuino-proto.js's
-// normalizeOperationMode(raw): SystemStateDto.operationMode arrives as a
-// numeric wire value from a WS d_sys_state push but as the enum's string
-// name (e.g. "BREW_AUTO") from an MQTT <prefix>/system payload. Both
-// transports decode into this typed OperationMode before reaching a caller
-// here (the WS decoder maps the varint directly; the MQTT port's JSON
-// decode goes through UnmarshalJSON above, which accepts either form), so
-// this only has to turn the reconciled value into its canonical wire-enum
-// name. Returns "" for an unrecognized value — the Go equivalent of Node
-// returning null, including the no-live-transport case where a caller has
-// no SystemStateDto to pass at all.
+// NormalizeOperationMode maps an operation mode to its canonical wire-enum
+// name: SystemStateDto.operationMode arrives as a numeric wire value from a
+// WS d_sys_state push but as the enum's string name (e.g. "BREW_AUTO") from
+// an MQTT <prefix>/system payload. Both transports decode into this typed
+// OperationMode before reaching a caller here (the WS decoder maps the
+// varint directly; the MQTT port's JSON decode goes through UnmarshalJSON
+// above, which accepts either form), so this only has to turn the reconciled
+// value into its name. Returns "" for an unrecognized value (callers must
+// treat that as absent), including the no-live-transport case where a caller
+// has no SystemStateDto to pass at all.
 func NormalizeOperationMode(m OperationMode) string {
 	return operationModeCanonicalNames[m]
 }
 
-// ServiceTestPeripheral ports ServiceTestPeripheralDto.
+// ServiceTestPeripheral is the peripheral a service-test command targets.
 type ServiceTestPeripheral int32
 
 const (
@@ -167,8 +164,8 @@ func (p *ServiceTestPeripheral) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// NotificationType ports NotificationTypeDto — decode-only (a d_notif
-// field), see WebSocketResponseResult's comment above.
+// NotificationType is decode-only (a d_notif field), see
+// WebSocketResponseResult's comment above.
 type NotificationType int32
 
 const (
@@ -193,9 +190,7 @@ func (t *NotificationType) UnmarshalJSON(b []byte) error {
 
 // unmarshalEnumJSON is the shared body of every enum's UnmarshalJSON above:
 // try a JSON string first (looked up in names), fall back to a JSON number
-// (used as the raw wire value directly, no range check — matching
-// gaggiuino-ws-client.js's own untyped passthrough for a numeric enum
-// input).
+// (used as the raw wire value directly, no range check).
 func unmarshalEnumJSON[E ~int32](b []byte, names map[string]E, typeName string) (E, error) {
 	var s string
 	if err := json.Unmarshal(b, &s); err == nil {
