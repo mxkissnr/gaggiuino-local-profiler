@@ -7,8 +7,8 @@ import (
 )
 
 // TestOrdersDisabled_404 verifies the isOrdersEnabled gate: every
-// /api/orders* route 404s when the feature is off, matching
-// routes/orders.js's router.use('/api/orders', ...) guard.
+// /api/orders* route 404s when the feature is off, matching the guard the
+// router applies to the whole subtree.
 func TestOrdersDisabled_404(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	t.Setenv("GLP_ENABLE_ORDERS", "false")
@@ -94,8 +94,8 @@ func TestMenu_CreateRequiresName(t *testing.T) {
 	}
 }
 
-// TestMenu_CreateRequiresName_EmptyBody guards against a Go-migration
-// regression (#901, the same class of bug fixed for POST
+// TestMenu_CreateRequiresName_EmptyBody guards against a regression (#901,
+// the same class of bug fixed for POST
 // /api/maintenance/{task}/done): a genuinely empty request body (no bytes
 // at all, distinct from `mustMarshal(t, map[string]any{})`'s literal `{}`
 // above) must still 400 with "name required" for an endpoint with a
@@ -113,8 +113,7 @@ func TestMenu_CreateRequiresName_EmptyBody(t *testing.T) {
 
 // TestMenu_Update_MilkMl pins #1154: the menu PUT's milkMl accepts a numeric
 // JSON string (external callers such as Home Assistant templates send one),
-// while an unparseable value — and, like Node's `parseFloat(v) || null`, an
-// explicit 0 — stores null.
+// while an unparseable value — and an explicit 0 — stores null.
 func TestMenu_Update_MilkMl(t *testing.T) {
 	cases := []struct {
 		name string
@@ -346,9 +345,9 @@ func TestOrderLifecycle_AcceptCompleteDecline(t *testing.T) {
 	}
 }
 
-// TestAcceptOrder_ExplicitEtaZeroDefaultsTo5 (#901 code review): mirrors
-// JS's `parseInt(rawEta) || 5` — 0 is falsy in JS, so an explicit `eta: 0`
-// must default to 5 like an absent/unparseable eta does, not clamp to 1.
+// TestAcceptOrder_ExplicitEtaZeroDefaultsTo5 (#901 code review): an explicit
+// `eta: 0` must default to 5 like an absent/unparseable eta does, not clamp
+// to 1.
 func TestAcceptOrder_ExplicitEtaZeroDefaultsTo5(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
