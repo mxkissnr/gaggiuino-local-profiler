@@ -2,7 +2,7 @@
 // backstop against a runaway client or bug, not a real abuse defense, sized
 // against a 600 req/min budget.
 //
-// Two deliberate behaviours, not oversights:
+// Two deliberate behaviors, not oversights:
 //
 //   - The bucket key is the raw socket address only (internal/auth.RemoteIP)
 //     — never X-Forwarded-For — because trusting a client-supplied header
