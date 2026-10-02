@@ -10,11 +10,10 @@ import (
 	"golang.org/x/crypto/scrypt"
 )
 
-// This file ports lib/backup-crypto.js: encrypts the two genuinely
-// sensitive fields a full backup can optionally carry (the API token and
-// MQTT broker credentials) with a passphrase supplied at export time.
-// Everything else in a backup stays plaintext JSON — this is deliberately
-// narrow, not whole-file encryption.
+// This file encrypts the two genuinely sensitive fields a full backup can
+// optionally carry (the API token and MQTT broker credentials) with a
+// passphrase supplied at export time. Everything else in a backup stays
+// plaintext JSON — this is deliberately narrow, not whole-file encryption.
 
 const (
 	algorithm = "aes-256-gcm-scrypt-v1" // versioned so a future KDF/cipher change can coexist with old blobs
@@ -23,10 +22,10 @@ const (
 	saltLen   = 16
 )
 
-// scryptN/scryptR/scryptP mirror lib/backup-crypto.js's SCRYPT_OPTS: N=2^14
-// is scrypt's own recommended interactive-use minimum (RFC 7914) — this
-// runs synchronously in an HTTP handler goroutine (no worker offload), so
-// it's deliberately not raised higher.
+// scryptN/scryptR/scryptP are the scrypt parameters. N=2^14 is scrypt's own
+// recommended interactive-use minimum (RFC 7914) — this runs synchronously
+// in an HTTP handler goroutine (no worker offload), so it's deliberately not
+// raised higher.
 const (
 	scryptN = 16384
 	scryptR = 8
@@ -48,8 +47,8 @@ func deriveKey(passphrase string, salt []byte) ([]byte, error) {
 	return scrypt.Key([]byte(passphrase), salt, scryptN, scryptR, scryptP, keyLen)
 }
 
-// EncryptSecrets ports encryptSecrets(payload, passphrase): payload is
-// marshaled to JSON, then AES-256-GCM encrypted under a scrypt-derived key.
+// EncryptSecrets marshals payload to JSON, then AES-256-GCM encrypts it
+// under a scrypt-derived key.
 func EncryptSecrets(payload any, passphrase string) (*EncryptedSecrets, error) {
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {
@@ -75,11 +74,9 @@ func EncryptSecrets(payload any, passphrase string) (*EncryptedSecrets, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Go's GCM Seal appends the auth tag to the ciphertext; Node's
-	// createCipheriv keeps them separate (cipher.final() +
-	// cipher.getAuthTag()) — split them back apart here so the on-disk/
-	// wire shape (separate authTag/ciphertext base64 fields) matches the
-	// Node original's byte for byte.
+	// Go's GCM Seal appends the auth tag to the ciphertext, but the stored
+	// blob shape (separate authTag/ciphertext base64 fields) is fixed — split
+	// them back apart here so existing backups stay byte-compatible.
 	sealed := gcm.Seal(nil, iv, plaintext, nil)
 	ciphertext := sealed[:len(sealed)-gcm.Overhead()]
 	authTag := sealed[len(sealed)-gcm.Overhead():]
@@ -93,13 +90,12 @@ func EncryptSecrets(payload any, passphrase string) (*EncryptedSecrets, error) {
 	}, nil
 }
 
-// DecryptSecrets ports decryptSecrets(blob, passphrase): returns the
-// decrypted payload (as a generic map, further picked apart by the
-// restore handler), or nil for anything that doesn't yield trustworthy
-// plaintext — wrong passphrase, a corrupted/hand-edited blob, or an
-// unknown algorithm version. GCM's auth-tag check is what actually rejects
-// a wrong passphrase; every error path below collapses to a nil return,
-// matching the Node original's blanket try/catch.
+// DecryptSecrets returns the decrypted payload (as a generic map, further
+// picked apart by the restore handler), or nil for anything that doesn't
+// yield trustworthy plaintext — wrong passphrase, a corrupted/hand-edited
+// blob, or an unknown algorithm version. GCM's auth-tag check is what
+// actually rejects a wrong passphrase; every error path below collapses to a
+// nil return.
 func DecryptSecrets(blob *EncryptedSecrets, passphrase string) map[string]any {
 	if blob == nil || blob.Alg != algorithm || passphrase == "" {
 		return nil
