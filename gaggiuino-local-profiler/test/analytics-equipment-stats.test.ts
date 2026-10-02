@@ -56,7 +56,7 @@ const shot = (overrides: ShotOverrides = {}): ShotRow => ({
 const baskets     = [{ id: 1, name: 'IMS Precision' }, { id: 2, name: 'VST' }];
 const puckScreens = [{ id: 5, name: 'Slayer mesh' }];
 
-// #635/routes/library/baskets.js: basket/puck-screen names have no
+// #635: basket/puck-screen names have no
 // uniqueness constraint — two distinct library entries can share a name.
 const duplicateNameBaskets = [{ id: 10, name: 'Standard' }, { id: 11, name: 'Standard' }];
 

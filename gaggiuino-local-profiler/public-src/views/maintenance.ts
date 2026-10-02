@@ -88,8 +88,8 @@ function taskIconSvg(task: string): Html {
   return html`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">${path}</svg>`;
 }
 
-// Mirrors lib/constants.js's isGlobalMaintenanceTask() — waterfilter and
-// grinder_* tasks are shared equipment, never split per machine.
+// waterfilter and grinder_* tasks are shared equipment, never split per
+// machine.
 function isGlobalTask(task: string): boolean {
   return task === 'waterfilter' || task.startsWith('grinder_');
 }
@@ -138,7 +138,7 @@ export function setMaintScope(scope: string): void {
 // scope has no single target, so falls back to the first registered machine
 // (irrelevant for global tasks anyway: the backend always redirects
 // waterfilter/grinder_* writes to the shared sentinel machine regardless of
-// which machineId is passed, see isGlobalMaintenanceTask() server-side).
+// which machineId is passed).
 function _writeMachineId(explicit?: string | number | null): string | number {
   if (explicit !== undefined && explicit !== null && explicit !== '') return explicit;
   const scope = _effectiveScope();

@@ -34,7 +34,7 @@ let _formOrigNextSibling: Node | null = null;
 // S.machines without needing a real document.
 //
 // #746: triggers on "no machine has a configured host", not "zero machine
-// rows" — registry.ensureDefaultMachine() (lib/machines/registry.js) always
+// rows" — registry.ensureDefaultMachine() always
 // seeds an empty-host default machine #1 on a fresh DB, called on every
 // GET /api/machines, so a real fresh install's S.machines is never actually
 // empty by the time the frontend checks it.

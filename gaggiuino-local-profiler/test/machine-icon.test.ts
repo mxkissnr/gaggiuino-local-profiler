@@ -35,7 +35,7 @@ describe('machineIconSvg / machineIconMiniSvg theme rendering (#594)', () => {
     });
 
     // XSS safety: theme.a/b are meant to be validated #rrggbb hex by
-    // machineSchema (see lib/validation/schemas.js) before ever reaching the
+    // machineSchema before ever reaching the
     // DB, but this module has its own defense-in-depth guard (HEX_RE in
     // machine-icon.js) — a value that somehow bypassed validation (corrupt
     // DB row, future caller that forgets to validate) must never be
