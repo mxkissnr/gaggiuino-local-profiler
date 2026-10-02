@@ -14,11 +14,11 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
-// This file ports routes/import.js's safeGet(startUrl, opts): a bounded,
-// SSRF-hardened fetch applied to every hop — https-only, a
-// private/loopback/link-local check before each request (initial URL and
-// every redirect target; redirects are never auto-followed), an 8s timeout,
-// and the 5 MiB IMPORT_FETCH_MAX_BYTES size cap (lib/constants.js).
+// This file implements safeGet: a bounded, SSRF-hardened fetch applied to
+// every hop — https-only, a private/loopback/link-local check before each
+// request (initial URL and every redirect target; redirects are never
+// auto-followed), an 8s timeout, and the 5 MiB importFetchMaxBytes size
+// cap.
 
 const (
 	importFetchMaxBytes = 5 * 1024 * 1024
@@ -35,8 +35,8 @@ type fetchResult struct {
 	body   []byte
 }
 
-// data ports axios's default transformResponse: try JSON.parse, fall back to
-// the raw string. Returns map[string]any / []any for JSON, or a string.
+// data tries to parse the body as JSON, falling back to the raw string.
+// Returns map[string]any / []any for JSON, or a string.
 func (r fetchResult) data() any {
 	var v any
 	if err := json.Unmarshal(r.body, &v); err == nil {
@@ -45,7 +45,7 @@ func (r fetchResult) data() any {
 	return string(r.body)
 }
 
-// dataString mirrors the Node HTML paths' `typeof r.data === 'string' ? r.data : ”`.
+// dataString returns the body as a string when it parsed as one, else "".
 func (r fetchResult) dataString() string {
 	if s, ok := r.data().(string); ok {
 		return s
@@ -110,8 +110,7 @@ func (f *fetcher) safeGet(ctx context.Context, startURL string) (fetchResult, er
 }
 
 // doOnce performs one hop. A 3xx returns ("", redirectURL, nil); a 2xx
-// returns (result, "", nil); anything else returns an error (axios
-// validateStatus: s < 400).
+// returns (result, "", nil); anything else (status >= 400) returns an error.
 func (f *fetcher) doOnce(ctx context.Context, rawURL string, base *url.URL) (fetchResult, string, error) {
 	// safeGet already checked this hop's host before calling doOnce, but the
 	// check is repeated here, immediately before the request it guards, so
@@ -158,8 +157,8 @@ func (f *fetcher) doOnce(ctx context.Context, rawURL string, base *url.URL) (fet
 	return fetchResult{status: resp.StatusCode, body: body}, "", nil
 }
 
-// hostForImport ports routes/import.js's
-// `parsed.hostname.replace(/^www\./, ”).toLowerCase()`.
+// hostForImport returns the hostname lowercased with a leading "www."
+// stripped.
 func hostForImport(u *url.URL) string {
 	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 }

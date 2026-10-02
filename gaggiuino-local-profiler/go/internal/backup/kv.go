@@ -6,16 +6,13 @@ import (
 	"fmt"
 )
 
-// This file ports the two lib/repositories/*SettingsRepository.js files
-// nothing else in this Go rewrite has ported yet (MqttSettingsRepository,
-// ImportSettingsRepository) — narrowly, just the get/save round trip
-// GET/POST /api/backup's `kv` block needs, the same "duplicate a small
-// slice rather than block on a whole not-yet-ported domain" trade-off
-// internal/orders/options.go already made for isOrdersEnabled(). Neither
-// Settings-page feature (MQTT transport config, import-provider toggles)
-// has any other Phase 1f-scoped consumer.
+// This file holds a narrow get/save round trip for the two settings blobs
+// GET/POST /api/backup's `kv` block needs (MQTT transport config and
+// import-provider toggles) — the same "duplicate a small slice rather than
+// block on a whole domain" trade-off internal/orders/options.go already made
+// for isOrdersEnabled().
 
-// mqttDefaults mirrors MqttSettingsRepository.js's DEFAULTS.
+// mqttDefaults is the default MQTT settings blob.
 func mqttDefaults() map[string]any {
 	return map[string]any{
 		"transport": "websocket", "host": "", "port": float64(1883),
@@ -34,7 +31,7 @@ func getKV(db *sql.DB, key string) (map[string]any, bool, error) {
 	}
 	var m map[string]any
 	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		return nil, false, nil // matches Node's `catch { return {...DEFAULTS} }`
+		return nil, false, nil // malformed JSON falls back to the defaults
 	}
 	return m, true, nil
 }
@@ -50,8 +47,8 @@ func saveKV(db *sql.DB, key string, v map[string]any) error {
 	return nil
 }
 
-// getMqttSettings ports MqttSettingsRepository.js's getSettings():
-// DEFAULTS merged with whatever's actually stored.
+// getMqttSettings returns the defaults merged with whatever's actually
+// stored.
 func getMqttSettings(db *sql.DB) (map[string]any, error) {
 	out := mqttDefaults()
 	saved, found, err := getKV(db, "mqtt_settings")
@@ -66,11 +63,10 @@ func getMqttSettings(db *sql.DB) (map[string]any, error) {
 	return out, nil
 }
 
-// saveMqttSettings ports MqttSettingsRepository.js's saveSettings(settings):
-// merges into the currently stored settings, never overwrites wholesale —
-// load-bearing for restore's decrypted-secrets path, which must not erase
-// a locally configured password when the backup carried no secrets block
-// at all.
+// saveMqttSettings merges into the currently stored settings, never
+// overwrites wholesale — load-bearing for restore's decrypted-secrets
+// path, which must not erase a locally configured password when the backup
+// carried no secrets block at all.
 func saveMqttSettings(db *sql.DB, patch map[string]any) error {
 	current, err := getMqttSettings(db)
 	if err != nil {
@@ -82,12 +78,13 @@ func saveMqttSettings(db *sql.DB, patch map[string]any) error {
 	return saveKV(db, "mqtt_settings", current)
 }
 
-// importSettingsDefaults mirrors ImportSettingsRepository.js's DEFAULTS.
+// importSettingsDefaults is the default import-provider settings blob.
 func importSettingsDefaults() map[string]any {
 	return map[string]any{"disabledProviders": []any{}, "customShopifyDomains": []any{}}
 }
 
-// getImportSettings ports ImportSettingsRepository.js's getSettings().
+// getImportSettings returns the stored import-provider settings, or the
+// defaults when absent.
 func getImportSettings(db *sql.DB) (map[string]any, error) {
 	saved, found, err := getKV(db, "import_settings")
 	if err != nil {
@@ -106,8 +103,8 @@ func getImportSettings(db *sql.DB) (map[string]any, error) {
 	return out, nil
 }
 
-// saveImportSettings ports ImportSettingsRepository.js's
-// saveSettings(settings): overwrites wholesale, unlike MQTT's merge.
+// saveImportSettings overwrites the stored settings wholesale, unlike
+// MQTT's merge.
 func saveImportSettings(db *sql.DB, settings map[string]any) error {
 	return saveKV(db, "import_settings", settings)
 }

@@ -2,30 +2,28 @@ package achievements
 
 import "encoding/base64"
 
-// This file ports lib/achievements/secrets.js: the 6 secret badges' name/
-// description text, deliberately kept out of registry.go and out of the
-// public i18n bundle.
+// The 6 secret badges' name/description text, deliberately kept out of
+// registry.go and out of the public i18n bundle.
 //
-// What the base64 here does and does NOT do (verbatim from the Node file's
-// header): GLP is open source, so nothing server-side is secret from anyone
-// willing to run the code and call decode() themselves — this is
-// obfuscation, not encryption. What it DOES stop is the common way a stamp
-// card spoils itself: the name/description sitting in plaintext in the
-// public i18n bundle that ships to every browser on every page load. Keeping
-// the encoded copy server-side and only decoding it into an API response
-// after the handler confirms the badge is unlocked (see service.go's
-// getState) means the browser never receives the bytes until that's true.
+// What the base64 here does and does NOT do: GLP is open source, so nothing
+// server-side is secret from anyone willing to run the code and call decode()
+// themselves — this is obfuscation, not encryption. What it DOES stop is the
+// common way a stamp card spoils itself: the name/description sitting in
+// plaintext in the public i18n bundle that ships to every browser on every
+// page load. Keeping the encoded copy server-side and only decoding it into
+// an API response after the handler confirms the badge is unlocked (see
+// service.go's getState) means the browser never receives the bytes until
+// that's true.
 
 type secretCopy struct {
 	stamp string
-	// per-lang name/desc, base64-encoded exactly as secrets.js stores them.
+	// per-lang name/desc, base64-encoded.
 	langs map[string][2]string // lang -> {name, desc}
 }
 
-// secretsTable is generated verbatim from lib/achievements/secrets.js's
-// SECRETS object (a one-off transcription — see secrets_test.go, which
-// re-decodes the whole table and asserts every string is valid UTF-8 and
-// non-empty). Keep in sync with the Node source by hand.
+// secretsTable holds the secret badges' copy (a one-off transcription — see
+// secrets_test.go, which re-decodes the whole table and asserts every string
+// is valid UTF-8 and non-empty).
 var secretsTable = map[string]secretCopy{
 	"secret_leap_day": {stamp: "leaf", langs: map[string][2]string{
 		"de": {"U2NoYWx0amFocmVza2luZA==", "RWluIEJlenVnIGFuIGVpbmVtIDI5LiBGZWJydWFyLg=="},
@@ -87,9 +85,9 @@ type SecretCopy struct {
 	Description string
 }
 
-// getSecretCopy ports secrets.js's getSecretCopy(id, lang): decoded name/
-// description in the given language, English fallback for an
-// unrecognised/missing lang. ok=false when id isn't a known secret.
+// getSecretCopy returns the decoded name/description in the given language,
+// English fallback for an unrecognised/missing lang. ok=false when id isn't a
+// known secret.
 func getSecretCopy(id, lang string) (SecretCopy, bool) {
 	entry, ok := secretsTable[id]
 	if !ok {

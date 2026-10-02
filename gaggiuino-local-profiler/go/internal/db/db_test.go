@@ -77,11 +77,10 @@ func TestEnsureInstallID_StableAcrossCalls(t *testing.T) {
 // TestEnsureInstallID_TolerantOfMalformedStoredValue pins #901: a
 // syntactically valid but wrongly-shaped kv.value for install_id (e.g. "{}"
 // or "123" instead of a JSON-encoded string, which is what a hand-edited or
-// corrupted DB might contain) must not make Open() fail. lib/db.js's
-// `JSON.parse(row.value)` never type-checks its result either -- it just
-// returns whatever JSON.parse produced, so this pins the Go port to the same
-// "never abort the server on this" behavior instead of propagating a
-// json.UnmarshalTypeError up through Open().
+// corrupted DB might contain) must not make Open() fail. The stored value is
+// never type-checked, so this pins the "never abort the server on this"
+// behavior instead of propagating a json.UnmarshalTypeError up through
+// Open().
 func TestEnsureInstallID_TolerantOfMalformedStoredValue(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "glp.db")
 
@@ -117,12 +116,12 @@ func TestEnsureInstallID_TolerantOfMalformedStoredValue(t *testing.T) {
 }
 
 // TestMigrateMachineColumns_LegacySchema builds a pre-#317 database by hand
-// (the shape lib/db.js's initSchema produced before machine_id existed) and
-// checks MigrateMachineColumns brings it up to the current shape: additive
-// machine_id columns on shots/orders/maintenance_log, the idx_shots_machine
-// index, maintenance rebuilt onto a (machine_id, key) composite primary key
-// with its one existing row preserved under machine_id=1, and a
-// pre-migration backup file written next to the DB.
+// (a schema without machine_id) and checks MigrateMachineColumns brings it up
+// to the current shape: additive machine_id columns on
+// shots/orders/maintenance_log, the idx_shots_machine index, maintenance
+// rebuilt onto a (machine_id, key) composite primary key with its one existing
+// row preserved under machine_id=1, and a pre-migration backup file written
+// next to the DB.
 func TestMigrateMachineColumns_LegacySchema(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "glp.db")

@@ -7,14 +7,14 @@ import (
 
 func nowMillis() int64 { return time.Now().UnixMilli() }
 
-// This file ports routes/backup.js's restore-time row sanitizers:
-// sanitizeMaintenanceRow, sanitizeMaintenanceLogRow, sanitizeOrderRow, and
-// the image path-traversal/integrity guard (validateEntityImages /
+// This file holds the restore-time row sanitizers: sanitizeMaintenanceRow,
+// sanitizeMaintenanceLogRow, sanitizeOrderRow, and the image
+// path-traversal/integrity guard (validateEntityImages /
 // validateRestoredLibraryImages).
 
-// sanitizeMaintenanceRow ports sanitizeMaintenanceRow(r): loosely
-// validates one raw `maintenance` export row ({machineId, key, data}).
-// Returns (nil, false) for anything that doesn't pass.
+// sanitizeMaintenanceRow loosely validates one raw `maintenance` export row
+// ({machineId, key, data}). Returns (nil, false) for anything that doesn't
+// pass.
 func sanitizeMaintenanceRow(r map[string]any) (map[string]any, bool) {
 	if r == nil {
 		return nil, false
@@ -46,18 +46,18 @@ func sanitizeMaintenanceRow(r map[string]any) (map[string]any, bool) {
 			data[k] = truncateRunes(t, 500)
 		}
 		// booleans/objects/arrays aren't part of any known maintenance
-		// task's shape — dropped, matching the Node original.
+		// task's shape — dropped.
 	}
 	return map[string]any{"machineId": machineID, "key": truncateRunes(key, 100), "data": data}, true
 }
 
 var dateOnlyRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
-// sanitizeMaintenanceLogRow ports sanitizeMaintenanceLogRow(r), including
-// maintenanceLogSchema's constraints (task 1-100 chars; notes/machine
-// optional strings capped at 1000/200 chars, defaulting to "" when absent
-// — but REJECTING the whole row, like zod's .max(), if present and over
-// length, never silently truncating).
+// sanitizeMaintenanceLogRow loosely validates one raw `maintenance_log` row
+// under the schema's constraints (task 1-100 chars; notes/machine optional
+// strings capped at 1000/200 chars, defaulting to "" when absent — but
+// REJECTING the whole row if present and over length, never silently
+// truncating).
 func sanitizeMaintenanceLogRow(r map[string]any) (map[string]any, bool) {
 	if r == nil {
 		return nil, false
@@ -95,11 +95,11 @@ func sanitizeMaintenanceLogRow(r map[string]any) (map[string]any, bool) {
 	}, true
 }
 
-// zodString ports a z.string().min(min).max(max).optional().default(def)
+// zodString implements a z.string().min(min).max(max).optional().default(def)
 // field: absent/nil -> (def, true); present but not a string, or a string
-// outside [min,max] -> (_, false) (fails validation, unlike trimMax's
-// silent truncation elsewhere in this codebase — zod's .max() genuinely
-// rejects an over-length value rather than truncating it).
+// outside [min,max] -> (_, false). Unlike trimMax's silent truncation
+// elsewhere in this codebase, an over-length value is rejected rather than
+// truncated.
 func zodString(v any, min, max int, def string) (string, bool) {
 	if v == nil {
 		return def, true
@@ -115,12 +115,12 @@ func zodString(v any, min, max int, def string) (string, bool) {
 	return s, true
 }
 
-// orderStatuses mirrors backup.js's ORDER_STATUSES.
+// orderStatuses is the set of valid order statuses.
 var orderStatuses = map[string]bool{"pending": true, "accepted": true, "done": true, "declined": true}
 
-// sanitizeOrderRow ports sanitizeOrderRow(o): loosely validates one raw
-// order row on restore, mirroring the field set/length caps POST
-// /api/orders and its lifecycle actions already accept.
+// sanitizeOrderRow loosely validates one raw order row on restore, using the
+// field set/length caps POST /api/orders and its lifecycle actions already
+// accept.
 func sanitizeOrderRow(o map[string]any) (map[string]any, bool) {
 	if o == nil {
 		return nil, false

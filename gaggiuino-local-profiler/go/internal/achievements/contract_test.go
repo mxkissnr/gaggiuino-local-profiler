@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-// This file pins routes/achievements.js's GET /api/achievements wire
-// contract — the "pin the essential shape, not the whole grammar" check
-// orders/shots/library's contract_test.go established. The per-badge
-// value-level parity against the captured Node fixture lives in
-// service_test.go's TestContract_EmptyState; this file pins the invariants
-// that hold for every response regardless of DB state.
+// This file pins the GET /api/achievements wire contract — the "pin the
+// essential shape, not the whole grammar" check orders/shots/library's
+// contract_test.go established. The per-badge value-level parity against the
+// captured fixture lives in service_test.go's TestContract_EmptyState; this
+// file pins the invariants that hold for every response regardless of DB
+// state.
 
 // TestContract_AchievementsResponseShape: { cards: [7 keys], badges: [54] },
 // every badge carries id/card/secret/unlocked, every badge's card is one of
@@ -86,7 +86,7 @@ func TestContract_AchievementsResponseShape(t *testing.T) {
 }
 
 // TestContract_AchievementsLangFallback: an unsupported/absent ?lang= must
-// not 500 or empty the response — routes/achievements.js falls back to 'en'.
+// not 500 or empty the response — it falls back to 'en'.
 func TestContract_AchievementsLangFallback(t *testing.T) {
 	env := newTestEnv(t)
 	for _, lang := range []string{"", "en", "de", "it", "fr", "es", "nl", "klingon"} {
