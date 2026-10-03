@@ -16,7 +16,7 @@ const diagramsDir = path.join(__dirname, '..', '..', 'docs', 'diagrams');
 
 // Markers that only appear with HTML labels or leftover HTML padding; a
 // native SVG viewer like the GitHub mobile app renders none of them.
-const HTML_MARKERS: readonly string[] = ['<foreignObject>', '&amp;nbsp;', '&lt;b&gt;'];
+const HTML_MARKERS: readonly string[] = ['<foreignObject', '&amp;nbsp;', '&lt;b&gt;'];
 
 function prepare(text: string): string {
   // mermaid.ink renders HTML labels poorly: drop the HTML the README used for
