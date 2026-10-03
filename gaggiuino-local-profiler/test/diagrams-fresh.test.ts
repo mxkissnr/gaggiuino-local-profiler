@@ -14,10 +14,10 @@ const STALE_MESSAGE =
     'diagram SVG is stale: run `npm run diagrams:render` in gaggiuino-local-profiler/';
 
 const mmdFiles = readdirSync(diagramsDir).filter((file) => file.endsWith('.mmd'));
-const variants = [
+const variants: ReadonlyArray<readonly [string, string]> = [
     ['light', ''],
     ['dark', '-dark'],
-] as const;
+];
 
 describe('README architecture diagrams are fresh (#1239)', () => {
     it('has .mmd sources to check', () => {
