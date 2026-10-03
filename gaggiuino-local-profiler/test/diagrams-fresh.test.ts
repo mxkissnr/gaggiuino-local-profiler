@@ -27,7 +27,7 @@ describe('README architecture diagrams are fresh (#1239)', () => {
     for (const mmdFile of mmdFiles) {
         const name = mmdFile.slice(0, -'.mmd'.length);
         const sha256 = createHash('sha256')
-            .update(readFileSync(join(diagramsDir, mmdFile)))
+            .update(readFileSync(join(diagramsDir, mmdFile), 'utf8'))
             .digest('hex');
         const marker = `<!-- source-sha256: ${sha256} -->`;
 

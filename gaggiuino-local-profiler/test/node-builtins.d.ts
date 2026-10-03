@@ -19,8 +19,17 @@ declare module 'node:child_process' {
     ): string;
 }
 
+declare module 'node:crypto' {
+    interface Hash {
+        update(data: string | Uint8Array): Hash;
+        digest(encoding: 'hex'): string;
+    }
+    export function createHash(algorithm: string): Hash;
+}
+
 declare module 'node:fs' {
     export function readFileSync(path: string, encoding: string): string;
+    export function readdirSync(path: string): string[];
     export function writeFileSync(path: string, data: string | Uint8Array): void;
     export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
     export function mkdtempSync(prefix: string): string;
