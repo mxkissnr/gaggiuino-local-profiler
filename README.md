@@ -233,139 +233,17 @@ aspect_ratio: "16:9"
 
 The GLP ecosystem (top) and the app's internals (below), as diagrams:
 
-```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 70}}}%%
-flowchart LR
-  subgraph MACHINES["Espresso machines"]
-    direction TB
-    GGU["Gaggiuino"]
-    GM["GaggiMate"]
-  end
+Interactive versions of these diagrams are on the [Architecture wiki page](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki/Architecture).
 
-  subgraph CLIENTS["Clients"]
-    direction TB
-    BR["Browser<br/>via HA Ingress"]
-    AI["AI assistant<br/>MCP client"]
-  end
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/ecosystem-dark.svg">
+  <img src="docs/diagrams/ecosystem.svg" alt="GLP ecosystem: machines, the GLP app, Home Assistant and clients">
+</picture>
 
-  APP["<b>GLP App</b><br/>Go · port 8099<br/>SQLite"]
-
-  subgraph HA["Home Assistant"]
-    direction TB
-    INT["GLP Integration"]
-    SC["Shot Card"]
-    OC["Order Card"]
-    AUTO["Sensors &amp; automations"]
-  end
-
-  GGU -->|"REST · WebSocket · MQTT"| APP
-  GM -->|"WebSocket"| APP
-  BR --> APP
-  AI -.->|"/api/mcp (opt-in)"| APP
-  APP -->|"polled on :8099"| INT
-  INT -->|"entities"| AUTO
-  INT -->|"entities · API proxy"| SC
-  INT -->|"entities · API proxy"| OC
-  OC -.->|"direct with glp_url"| APP
-
-  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef app fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
-  classDef ha fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-  class GGU,GM machine
-  class BR,AI client
-  class APP app
-  class INT,SC,OC,AUTO ha
-  style MACHINES fill:#f8fafc10,stroke:#94a3b8
-  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
-  style HA fill:#f8fafc10,stroke:#94a3b8
-```
-
-```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 18, "rankSpacing": 45, "padding": 10}}}%%
-flowchart TB
-  subgraph L1["1 · Machines"]
-    direction LR
-    GGU["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Gaggiuino&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    GM["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GaggiMate&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    BRK["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MQTT broker&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;optional&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-  end
-  subgraph L2["2 · Connectivity"]
-    direction LR
-    ADP["&nbsp;&nbsp;&nbsp;Machine adapters&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/machines&nbsp;&nbsp;&nbsp;"]
-    MQ["&nbsp;&nbsp;&nbsp;&nbsp;MQTT transport&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/mqtt&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    POLL["&nbsp;&nbsp;Poller &amp; shot sync&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/system&nbsp;&nbsp;&nbsp;&nbsp;"]
-  end
-  subgraph L3["3 · Domain & storage"]
-    direction LR
-    SHOTS["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Shots&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/shots&nbsp;&nbsp;&nbsp;&nbsp;"]
-    LIB["&nbsp;&nbsp;&nbsp;&nbsp;Coffee library&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/library&nbsp;&nbsp;&nbsp;"]
-    BK["&nbsp;&nbsp;&nbsp;Backup &amp; restore&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/backup&nbsp;&nbsp;&nbsp;&nbsp;"]
-    MNT["&nbsp;Maintenance, badges&nbsp;&nbsp;<br/>&nbsp;internal/maintenance&nbsp;"]
-    ORD["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Orders&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/orders&nbsp;&nbsp;&nbsp;&nbsp;"]
-    IMP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Bean import&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/importer&nbsp;&nbsp;&nbsp;"]
-    DB[("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SQLite&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/db&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")]
-  end
-  subgraph L4["4 · Interfaces"]
-    direction LR
-    API["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;REST API&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd/server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    SSE["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Event stream&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/sse&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    MCP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/mcp&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    WEB["&nbsp;&nbsp;Dashboard + kiosk&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/webapp&nbsp;&nbsp;&nbsp;"]
-    HAC["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HA client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/ha&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    NET["&nbsp;&nbsp;&nbsp;&nbsp;Outbound guard&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/netguard&nbsp;&nbsp;&nbsp;"]
-  end
-  subgraph L5["5 · Consumers"]
-    direction LR
-    SPA["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dashboard&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;browser&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    AI["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AI assistant&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    KIO["&nbsp;&nbsp;&nbsp;&nbsp;Kiosk display&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wall tablet&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    HA["&nbsp;&nbsp;&nbsp;&nbsp;Home Assistant&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Supervisor&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    RS["&nbsp;&nbsp;&nbsp;&nbsp;Roaster shops&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;web&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-  end
-
-  GGU -->|"HTTP · WS"| ADP
-  GM -->|"WebSocket"| ADP
-  BRK -.->|"MQTT"| MQ
-  ADP --> POLL
-  MQ --> POLL
-  POLL -->|"new shots"| SHOTS
-  POLL -->|"live state"| SSE
-  SHOTS --> DB
-  LIB --> DB
-  BK --> DB
-  MNT --> DB
-  ORD --> DB
-  IMP --> DB
-  DB --> API
-  DB --> MCP
-  DB --> WEB
-  ORD -->|"notify"| HAC
-  IMP --> NET
-  API -->|"HTTP"| SPA
-  SSE -->|"push"| SPA
-  MCP -.->|"opt-in"| AI
-  WEB --> KIO
-  HAC -->|"Supervisor API"| HA
-  NET -->|"HTTPS"| RS
-  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef conn fill:#ffedd5,stroke:#ea580c,stroke-width:1.5px,color:#7c2d12
-  classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef store fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
-  classDef iface fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-  classDef consumer fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  class GGU,GM,BRK machine
-  class ADP,MQ,POLL conn
-  class SHOTS,LIB,ORD,MNT,BK,IMP domain
-  class DB store
-  class API,SSE,MCP,WEB,HAC,NET iface
-  class SPA,AI,KIO,HA,RS consumer
-  style L1 fill:#f8fafc10,stroke:#94a3b8
-  style L2 fill:#f8fafc10,stroke:#94a3b8
-  style L3 fill:#f8fafc10,stroke:#94a3b8
-  style L4 fill:#f8fafc10,stroke:#94a3b8
-  style L5 fill:#f8fafc10,stroke:#94a3b8
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/app-dark.svg">
+  <img src="docs/diagrams/app.svg" alt="GLP app internals, from machine connectivity through domain and storage to the interfaces and consumers">
+</picture>
 
 Read the app diagram top to bottom, from the machine to the people and systems using the data: the connectivity layer turns what the machines send into shots and live state, the domain layer applies the rules and keeps everything in SQLite, and the interfaces serve it to the dashboard, AI assistants, the kiosk display, Home Assistant and roaster shops.
 
