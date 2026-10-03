@@ -14,7 +14,7 @@
     "release:check": "node scripts/release-check.mjs",
     "demo:fixtures": "node scripts/demo-fixtures.mjs",
     "demo:smoke": "node scripts/demo-smoke.mjs",
-    "diagrams:render": "node scripts/render-diagrams.mjs"
+    "diagrams:render": "node scripts/render-diagrams.ts"
   },
   "dependencies": {
     "chart.js": "4.5.1",

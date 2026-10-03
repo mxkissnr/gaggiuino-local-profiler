@@ -16,9 +16,9 @@ const diagramsDir = path.join(__dirname, '..', '..', 'docs', 'diagrams');
 
 // Markers that only appear with HTML labels or leftover HTML padding; a
 // native SVG viewer like the GitHub mobile app renders none of them.
-const HTML_MARKERS = ['<foreignObject>', '&amp;nbsp;', '&lt;b&gt;'];
+const HTML_MARKERS: readonly string[] = ['<foreignObject>', '&amp;nbsp;', '&lt;b&gt;'];
 
-function prepare(text) {
+function prepare(text: string): string {
   // mermaid.ink renders HTML labels poorly: drop the HTML the README used for
   // width padding, then tidy the whitespace it leaves inside labels.
   return text
@@ -29,7 +29,7 @@ function prepare(text) {
     .replace(/\s*<br\/>\s*/g, '<br/>');
 }
 
-function encodePayload(code, theme) {
+function encodePayload(code: string, theme: string): string {
   const body = {
     code,
     mermaid: {
@@ -43,7 +43,13 @@ function encodePayload(code, theme) {
   return 'pako:' + deflateSync(JSON.stringify(body)).toString('base64url');
 }
 
-async function render(name, text, sha, theme, bg) {
+async function render(
+  name: string,
+  text: string,
+  sha: string,
+  theme: string,
+  bg: string,
+): Promise<string> {
   const url = `https://mermaid.ink/svg/${encodePayload(prepare(text), theme)}?bgColor=${bg}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`mermaid.ink returned ${res.status} for ${name} (${theme})`);
@@ -53,12 +59,12 @@ async function render(name, text, sha, theme, bg) {
   return svg.replace(/<svg\b[^>]*>/, (tag) => `${tag}\n<!-- source-sha256: ${sha} -->`);
 }
 
-const variants = [
+const variants: ReadonlyArray<readonly [string, string, string]> = [
   ['default', 'ffffff', ''],
   ['dark', '0d1117', '-dark'],
 ];
 
-const files = readdirSync(diagramsDir).filter((f) => f.endsWith('.mmd'));
+const files: string[] = readdirSync(diagramsDir).filter((f: string) => f.endsWith('.mmd'));
 if (files.length === 0) throw new Error(`no .mmd files found in ${diagramsDir}`);
 
 for (const file of files) {
