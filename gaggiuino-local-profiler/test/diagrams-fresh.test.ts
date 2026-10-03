@@ -1,6 +1,6 @@
 // #1239: README.md embeds the architecture diagrams as SVG images, not
 // Mermaid source. Each SVG carries a source-sha256 comment written by
-// scripts/render-diagrams.mjs; if a .mmd changes without re-rendering, the
+// scripts/render-diagrams.ts; if a .mmd changes without re-rendering, the
 // committed SVG goes stale and this test fails.
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
