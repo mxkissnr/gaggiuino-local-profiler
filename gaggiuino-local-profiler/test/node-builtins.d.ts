@@ -20,11 +20,9 @@ declare module 'node:child_process' {
 }
 
 declare module 'node:crypto' {
-    interface Hash {
-        update(data: string | Uint8Array): Hash;
-        digest(encoding: 'hex'): string;
-    }
-    export function createHash(algorithm: string): Hash;
+    export function createHash(algorithm: string): {
+        update(data: string): { digest(encoding: 'hex'): string };
+    };
 }
 
 declare module 'node:fs' {
