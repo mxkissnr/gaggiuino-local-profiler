@@ -1,0 +1,45 @@
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 70}}}%%
+flowchart LR
+  subgraph MACHINES["Espresso machines"]
+    direction TB
+    GGU["Gaggiuino"]
+    GM["GaggiMate"]
+  end
+
+  subgraph CLIENTS["Clients"]
+    direction TB
+    BR["Browser<br/>via HA Ingress"]
+    AI["AI assistant<br/>MCP client"]
+  end
+
+  APP["<b>GLP App</b><br/>Go · port 8099<br/>SQLite"]
+
+  subgraph HA["Home Assistant"]
+    direction TB
+    INT["GLP Integration"]
+    SC["Shot Card"]
+    OC["Order Card"]
+    AUTO["Sensors &amp; automations"]
+  end
+
+  GGU -->|"REST · WebSocket · MQTT"| APP
+  GM -->|"WebSocket"| APP
+  BR --> APP
+  AI -.->|"/api/mcp (opt-in)"| APP
+  APP -->|"polled on :8099"| INT
+  INT -->|"entities"| AUTO
+  INT -->|"entities · API proxy"| SC
+  INT -->|"entities · API proxy"| OC
+  OC -.->|"direct with glp_url"| APP
+
+  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+  classDef app fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
+  classDef ha fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+  class GGU,GM machine
+  class BR,AI client
+  class APP app
+  class INT,SC,OC,AUTO ha
+  style MACHINES fill:#f8fafc10,stroke:#94a3b8
+  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
+  style HA fill:#f8fafc10,stroke:#94a3b8
