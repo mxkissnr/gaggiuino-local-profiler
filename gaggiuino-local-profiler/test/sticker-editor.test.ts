@@ -225,7 +225,7 @@ g.createImageBitmap = () => Promise.resolve({ width: 120, height: 90 });
 const segmentModule = await import('../public-src/components/sticker/segment.js');
 const editorModule = await import('../public-src/components/sticker/editor.js');
 
-const { maskBounds, paddedAspectCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround } = editorModule;
+const { maskBounds, paddedAspectCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround, progressPercent, nextStage } = editorModule;
 const { autoCutout, resetCutout, tapMask } = segmentModule;
 const autoCutoutMock = vi.mocked(autoCutout);
 const resetCutoutMock = vi.mocked(resetCutout);
@@ -434,6 +434,44 @@ describe('zoomAround', () => {
   });
 });
 
+describe('progressPercent', () => {
+  it('maps each stage to its own share of the bar', () => {
+    expect(progressPercent('download', 0, 0)).toBe(0);
+    expect(progressPercent('download', 0.5, 0)).toBe(15);
+    expect(progressPercent('download', 1, 0)).toBe(30);
+    expect(progressPercent('background', null, 0)).toBe(30);
+    expect(progressPercent('subject', null, 0)).toBe(65);
+  });
+
+  it('eases forward inside a compute stage and caps just below its end', () => {
+    const early = progressPercent('background', null, 1000);
+    const later = progressPercent('background', null, 4000);
+    expect(early).toBeGreaterThan(30);
+    expect(later).toBeGreaterThan(early);
+    expect(progressPercent('background', null, Number.MAX_SAFE_INTEGER)).toBeLessThan(65);
+    expect(progressPercent('subject', null, Number.MAX_SAFE_INTEGER)).toBeLessThan(95);
+  });
+
+  it('clamps a download fraction into its range', () => {
+    expect(progressPercent('download', 2, 0)).toBe(30);
+    expect(progressPercent('download', -1, 0)).toBe(0);
+  });
+});
+
+describe('nextStage', () => {
+  it('advances to a later stage and stays put on the same one', () => {
+    expect(nextStage('download', 'background')).toBe('background');
+    expect(nextStage('background', 'subject')).toBe('subject');
+    expect(nextStage('background', 'background')).toBe('background');
+  });
+
+  it('keeps the current stage when an earlier one arrives', () => {
+    expect(nextStage('background', 'download')).toBe('background');
+    expect(nextStage('subject', 'download')).toBe('subject');
+    expect(nextStage('subject', 'background')).toBe('subject');
+  });
+});
+
 describe('openStickerEditor overlay', () => {
   let doc: FakeDocument;
 
@@ -597,6 +635,16 @@ describe('openStickerEditor overlay', () => {
     await expect(promise).resolves.toBeNull();
     expect(doc.body.children.length).toBe(0);
     expect(resetCutoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a progress bar that is hidden once the cut-out is ready', async () => {
+    const { overlay } = await openReady();
+
+    const bar = node(overlay, '.sticker-progress');
+    expect(bar.getAttribute('role')).toBe('progressbar');
+    expect(bar.getAttribute('aria-valuemin')).toBe('0');
+    expect(bar.getAttribute('aria-valuemax')).toBe('100');
+    expect(bar.style.display).toBe('none');
   });
 
   it('shows the failure line and only Close when the model fails', async () => {

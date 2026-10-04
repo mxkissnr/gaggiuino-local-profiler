@@ -3,12 +3,18 @@
  *
  * The model work itself runs in segment.worker.ts, so the page stays responsive
  * while IS-Net and the SAM encoder run. This module only owns the worker's
- * lifetime and the request/response plumbing; the exported API is unchanged, so
- * editor.ts and views/library.ts need no change. Terminating the worker is what
- * returns the WebAssembly heap to the browser; on editor close it is deferred by
- * a short idle window so a quick reopen reuses the worker instead of racing a
- * new one against the OS reclaiming the old heap.
+ * lifetime and the request/response plumbing; the exported API only gained an
+ * optional progress callback, so views/library.ts needs no change. Terminating
+ * the worker is what returns the WebAssembly heap to the browser; on editor
+ * close it is deferred by a short idle window so a quick reopen reuses the
+ * worker instead of racing a new one against the OS reclaiming the old heap.
  */
+
+import type { CutoutProgress } from './segment-core.js';
+
+// Re-exported so editor.ts can type its onProgress callback without importing
+// the worker-only segment-core module (and its onnxruntime-web dependency).
+export type { CutoutProgress };
 
 // Injected by go/cmd/frontend-build (the image path) as the hashed worker
 // file; undefined under the Vite dev server, where the .ts source is served.
@@ -48,6 +54,7 @@ export function isStickerCutoutAvailable(): Promise<boolean> {
 interface Pending {
   resolve: (mask: Uint8Array) => void;
   reject: (err: unknown) => void;
+  onProgress?: (progress: CutoutProgress) => void;
 }
 
 let worker: Worker | null = null;
@@ -90,10 +97,23 @@ function createWorker(): Worker {
     typeof __GLP_SEGMENT_WORKER__ === 'string' ? __GLP_SEGMENT_WORKER__ : './segment.worker.ts';
   const created = new Worker(new URL(workerUrl, import.meta.url), { type: 'module' });
   created.onmessage = (event: MessageEvent): void => {
-    const msg = event.data as { id?: number; mask?: Uint8Array; error?: string };
+    const msg = event.data as {
+      id?: number;
+      mask?: Uint8Array;
+      error?: string;
+      progress?: CutoutProgress;
+    };
     if (typeof msg.id !== 'number') return;
     const entry = pending.get(msg.id);
     if (!entry) return;
+    if (msg.progress !== undefined) {
+      try {
+        entry.onProgress?.(msg.progress);
+      } catch {
+        // A broken progress listener must not break the request plumbing.
+      }
+      return;
+    }
     pending.delete(msg.id);
     if (msg.error !== undefined) entry.reject(new Error(msg.error));
     else entry.resolve(msg.mask ?? new Uint8Array());
@@ -133,10 +153,14 @@ interface TapMessage {
 
 type WorkerMessage = AutoMessage | TapMessage;
 
-function request(message: WorkerMessage, transfer: Transferable[] = []): Promise<Uint8Array> {
+function request(
+  message: WorkerMessage,
+  transfer: Transferable[] = [],
+  onProgress?: (progress: CutoutProgress) => void,
+): Promise<Uint8Array> {
   const target = workerFor();
   return new Promise<Uint8Array>((resolve, reject) => {
-    pending.set(message.id, { resolve, reject });
+    pending.set(message.id, onProgress ? { resolve, reject, onProgress } : { resolve, reject });
     target.postMessage(message, transfer);
   });
 }
@@ -145,6 +169,7 @@ export async function autoCutout(
   rgba: Uint8ClampedArray,
   w: number,
   h: number,
+  onProgress?: (progress: CutoutProgress) => void,
 ): Promise<Uint8Array> {
   clearIdleTimer();
   // The worker takes ownership of the pixel copy; transfer instead of cloning.
@@ -152,6 +177,7 @@ export async function autoCutout(
   const mask = await request(
     { id: nextId++, type: 'auto', rgba: copy, w, h, modelsBase: modelsBase() },
     [copy.buffer],
+    onProgress,
   );
   hasEmbeddings = true;
   return mask;

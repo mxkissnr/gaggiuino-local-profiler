@@ -83,7 +83,13 @@ vi.mock('onnxruntime-web/wasm', () => {
     env: shared.env,
     Tensor: FakeTensor,
     InferenceSession: {
-      create: (uri: string, options?: unknown): Promise<ReturnType<typeof makeSession>> => {
+      create: (
+        source: string | Uint8Array,
+        options?: unknown,
+      ): Promise<ReturnType<typeof makeSession>> => {
+        // Production hands over the raw model bytes; the fetch stub below makes
+        // those bytes spell the model URL, so a session stays identifiable.
+        const uri = typeof source === 'string' ? source : new TextDecoder().decode(source);
         shared.created.push(uri);
         shared.createdOptions.push(options);
         shared.log.push(`create:${uri}`);
@@ -97,6 +103,51 @@ const MODELS_BASE = 'https://example.test/glp/models/';
 const ISNET = `${MODELS_BASE}isnet-general-use-int8.onnx`;
 const ENCODER = `${MODELS_BASE}slimsam-vision-encoder-q8.onnx`;
 const DECODER = `${MODELS_BASE}slimsam-decoder-q8.onnx`;
+
+/**
+ * A streamed fetch Response whose bytes spell `url`; the ort mock decodes them
+ * back to the URL. `chunks` splits the body for byte-progress tests, and
+ * `contentLength: false` drops the header so the whole-file fallback is used.
+ */
+function streamedResponse(
+  url: string,
+  chunks?: Uint8Array[],
+  contentLength = true,
+): Response {
+  const parts = chunks ?? [new TextEncoder().encode(url)];
+  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  return {
+    ok: true,
+    status: 200,
+    headers: {
+      get: (name: string) =>
+        contentLength && name.toLowerCase() === 'content-length' ? String(total) : null,
+    },
+    body: {
+      getReader: () => {
+        let index = 0;
+        return {
+          read: () =>
+            Promise.resolve(
+              index < parts.length ? { done: false, value: parts[index++] } : { done: true },
+            ),
+        };
+      },
+    },
+    arrayBuffer: () => Promise.resolve(new TextEncoder().encode(url).buffer),
+  } as unknown as Response;
+}
+
+/** A streamed response with no Content-Length header. */
+function noLengthResponse(bytes: Uint8Array): Response {
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    body: { getReader: () => ({ read: () => Promise.resolve({ done: true }) }) },
+    arrayBuffer: () => Promise.resolve(bytes.buffer.slice(0)),
+  } as unknown as Response;
+}
 
 type Core = typeof import('../public-src/components/sticker/segment-core.js');
 
@@ -128,6 +179,7 @@ beforeEach(() => {
   shared.env.wasm.wasmPaths = undefined;
   shared.env.wasm.numThreads = undefined;
   shared.env.wasm.proxy = undefined;
+  vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(streamedResponse(url))));
 });
 
 afterEach(() => {
@@ -184,6 +236,71 @@ describe('autoCutout', () => {
         enableMemPattern: false,
       });
     }
+  });
+});
+
+describe('autoCutout progress', () => {
+  const w = 8;
+  const h = 6;
+
+  it('reports the download fraction, then background and subject in order', async () => {
+    const core = await freshCore();
+    const updates: { stage: string; fraction: number | null }[] = [];
+    await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE, (p) => {
+      updates.push({ stage: p.stage, fraction: p.fraction });
+    });
+
+    // The stub streams each file in one chunk, so its download fraction is 1.
+    expect(updates[0]).toEqual({ stage: 'download', fraction: 1 });
+    const background = updates.findIndex((update) => update.stage === 'background');
+    const subject = updates.findIndex((update) => update.stage === 'subject');
+    expect(background).toBeGreaterThan(0);
+    expect(subject).toBeGreaterThan(background);
+    expect(updates[background]!.fraction).toBeNull();
+    expect(updates[subject]!.fraction).toBeNull();
+  });
+
+  it('still cuts out when the progress callback throws', async () => {
+    const core = await freshCore();
+    const mask = await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE, () => {
+      throw new Error('listener boom');
+    });
+    expect(mask.length).toBe(w * h);
+  });
+});
+
+describe('fetchModelBytes', () => {
+  it('reports increasing fractions as the body streams', async () => {
+    const core = await freshCore();
+    const url = `${MODELS_BASE}chunked.onnx`;
+    const bytes = new Uint8Array(10).fill(3);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(streamedResponse(url, [bytes.slice(0, 4), bytes.slice(4)]))),
+    );
+
+    const fractions: number[] = [];
+    const out = await core.fetchModelBytes(url, (loaded, total) => fractions.push(loaded / total));
+
+    expect(Array.from(out)).toEqual(Array.from(bytes));
+    expect(fractions).toEqual([0.4, 1]);
+  });
+
+  it('reads the whole file when the total size is unknown', async () => {
+    const core = await freshCore();
+    const bytes = new Uint8Array([5, 6, 7]);
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(noLengthResponse(bytes))));
+
+    const out = await core.fetchModelBytes(`${MODELS_BASE}unknown.onnx`);
+
+    expect(Array.from(out)).toEqual([5, 6, 7]);
+  });
+
+  it('throws when the response is not ok', async () => {
+    const core = await freshCore();
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 } as Response)));
+
+    await expect(core.fetchModelBytes(`${MODELS_BASE}missing.onnx`)).rejects.toThrow(/404/);
   });
 });
 
