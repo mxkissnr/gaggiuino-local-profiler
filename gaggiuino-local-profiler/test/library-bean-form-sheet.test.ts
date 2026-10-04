@@ -11,7 +11,11 @@ type Listener = (event: FakeEvent) => void;
 interface FakeEvent { target?: unknown; key?: string; preventDefault?: () => void }
 
 class FakeClassList {
-  constructor(private readonly host: FakeElement) {}
+  private readonly host: FakeElement;
+
+  constructor(host: FakeElement) {
+    this.host = host;
+  }
 
   private names(): Set<string> {
     return new Set(this.host.className.split(' ').filter(Boolean));
@@ -58,8 +62,10 @@ class FakeElement {
   readonly attributes = new Map<string, string>();
   readonly listeners = new Map<string, Listener[]>();
   readonly classList: FakeClassList;
+  private readonly docRef: FakeDocument;
 
-  constructor(private readonly docRef: FakeDocument) {
+  constructor(docRef: FakeDocument) {
+    this.docRef = docRef;
     this.classList = new FakeClassList(this);
   }
 
