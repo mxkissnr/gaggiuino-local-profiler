@@ -599,6 +599,7 @@ const it: Partial<Translations> = {
     'demo.getApp':"Installa l'app",
     photo_pick_btn:'Scegli foto', photo_change_btn:'Cambia foto',
     crop_editor_title:'Ritaglia foto', crop_editor_apply:'Applica', crop_editor_zoom:'Zoom',
+    sticker_title:'Ritaglia come adesivo', sticker_working_1:'Sto selezionando i chicchi...', sticker_working_2:'Stacco l\'etichetta...', sticker_working_3:'Quasi fatto, pressiamo i bordi...', sticker_add:'Aggiungi', sticker_remove:'Togli', sticker_brush:'Pennello', sticker_brush_size:'Dimensione pennello', sticker_undo:'Annulla', sticker_reset:'Ricomincia', sticker_original:'Originale', sticker_apply:'Usa adesivo', sticker_failed:'Questa foto non si stacca. Puoi comunque usarla così.', sticker_close:'Chiudi',
 
     // Machine profile editor (#307)
     lib_profiles:'Profili', lib_add_profile:'+ Nuovo profilo', lib_empty_profiles:'Ancora nessun profilo',
