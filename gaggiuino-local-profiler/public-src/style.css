@@ -1444,6 +1444,7 @@
         .lib-shelf-bag { position:relative; display:block; }
         .lib-shelf-bag::after { content:''; display:block; height:3px; margin-top:2px; border-radius:2px; background: var(--gray-700); }
         .lib-shelf-img, .lib-shelf-ph { display:block; aspect-ratio:3/4; width:100%; object-fit:cover; border-radius: var(--radius-sm); background: var(--gray-800); }
+        .lib-shelf-img.is-sticker, .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; filter: drop-shadow(0 0 1px var(--gray-100)) drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
         .lib-shelf-ph { display:flex; align-items:center; justify-content:center; background: var(--raised); color: var(--gray-500); font-size: var(--fs-3); font-weight:600; letter-spacing:.05em; }
         .lib-shelf-name { font-size: var(--fs-1); color: var(--gray-200); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .lib-shelf-roaster { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1464,6 +1465,8 @@
         @media (prefers-reduced-motion: no-preference) {
             .lib-shelf-tile .lib-shelf-bag { transition: transform 180ms ease; }
             .lib-shelf-tile:hover .lib-shelf-bag, .lib-shelf-tile:focus-visible .lib-shelf-bag { transform: translateY(-4px) rotate(-1.5deg); }
+            .lib-shelf-tile .is-sticker { transition: transform 150ms ease; }
+            .lib-shelf-tile:hover .is-sticker, .lib-shelf-tile:focus-visible .is-sticker { transform: translateY(-2px) rotate(-1deg); }
         }
         /* Shelf toolbar (#1329 part 2): search, filter chips and sort. */
         .lib-shelf-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
@@ -2637,7 +2640,7 @@
         .crop-editor-actions { display:flex; justify-content:flex-end; gap: var(--sp-2); width:100%; }
 
         /* Sticker editor overlay (#1336) */
-        .sticker-viewport { overflow:hidden; border-radius:var(--radius); max-width:100%; touch-action:none; line-height:0; }
+        .sticker-viewport { overflow:hidden; border-radius:var(--radius); max-width:100%; touch-action:none; line-height:0; width: fit-content; margin-inline: auto; }
         .sticker-canvas { max-width:100%; border-radius:var(--radius); background:var(--gray-950); transform-origin:0 0; }
         .sticker-overlay .lib-btn-sm, .sticker-overlay .lib-save-btn { min-height:44px; }
         .sticker-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap: var(--sp-2); width:100%; }
