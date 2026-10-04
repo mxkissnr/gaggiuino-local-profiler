@@ -191,7 +191,10 @@ export async function autoCutout(
   const encOut = await encoder.run({
     pixel_values: new ort.Tensor('float32', samInput(samRgba, rw, rh), [1, 3, SAM_SIZE, SAM_SIZE]),
   });
-  // Kept for tapMask(), so deliberately not disposed.
+  // Replace the previous image's embeddings (releasing their wasm memory)
+  // with this one, kept for tapMask() and so deliberately not disposed below.
+  embeddings?.image.dispose?.();
+  embeddings?.positional.dispose?.();
   const samEmbeddings: SamEmbeddings = {
     image: encOut['image_embeddings']!,
     positional: encOut['image_positional_embeddings']!,
