@@ -76,4 +76,12 @@ describe('topbar machine icon follows the selected machine (#1201)', () => {
     expect(el.has('is-on')).toBe(false);
     expect(el.has('is-heating')).toBe(false);
   });
+
+  // #1385: unknown reachability (undefined) must leave the fallback dark too.
+  it('non-default machine: unknown reachability keeps the fallback off', () => {
+    state.activeMachineId = 2;
+    renderTopbarMachineIcon();
+    syncTopbarMachineIconFallback(undefined);
+    expect(el.has('is-on')).toBe(false);
+  });
 });

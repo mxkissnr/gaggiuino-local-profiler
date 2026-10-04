@@ -147,8 +147,8 @@ describe('resolveMachineIconState() steam/flush (#902)', () => {
         expect(resolveMachineIconState({ machineReachable: false, isSteaming: true }, null)).toEqual({ mode: 'off', heatFraction: 0 });
     });
 
-    it('falls through to hot/heating when neither isSteaming nor isFlushing is set', () => {
-        expect(resolveMachineIconState({}, null)).toEqual({ mode: 'hot', heatFraction: 1 });
+    it('unknown reachability with neither isSteaming nor isFlushing resolves off (#1385)', () => {
+        expect(resolveMachineIconState({}, null)).toEqual({ mode: 'off', heatFraction: 0 });
     });
 });
 
@@ -194,5 +194,24 @@ describe('machineIconAnimatedSvg() descale display group (#983)', () => {
     it('renders a .d-descale group alongside .d-flush for both machine kinds', () => {
         expect(machineIconAnimatedSvg(null, 'gaggiuino')).toContain('class="d-descale"');
         expect(machineIconAnimatedSvg(null, 'gaggimate')).toContain('class="d-descale"');
+    });
+});
+
+// #1385: a default machine can report machineReachable as null (not false)
+// while its preheat status is still running -- unknown reachability must
+// resolve off, the follow-up to #1383's machineReachable:false fix.
+describe('resolveMachineIconState() unknown reachability (#1385)', () => {
+    const preheat = { ready: false, remaining: 1200, pct: 0 };
+
+    it('null reachability with an active preheat resolves off, not heating', () => {
+        expect(resolveMachineIconState({ machineReachable: null }, preheat)).toEqual({ mode: 'off', heatFraction: 0 });
+    });
+
+    it('reachable:true with the same preheat resolves heating', () => {
+        expect(resolveMachineIconState({ machineReachable: true }, preheat)).toEqual({ mode: 'heating', heatFraction: 0 });
+    });
+
+    it('isLive without reachability still resolves brewing (positive evidence)', () => {
+        expect(resolveMachineIconState({ isLive: true }, null)).toEqual({ mode: 'brewing', heatFraction: 1 });
     });
 });
