@@ -176,7 +176,7 @@ const de: Partial<Translations> = {
     lib_grinder_zero_point_delete:'Nullpunkt-Eintrag löschen',
     lib_cancel:'Abbrechen', lib_save:'Speichern',
     lib_empty_beans:'Noch keine Bohnen gespeichert', lib_empty_grinders:'Noch keine Mühlen gespeichert',
-    lib_shelf_in_use:'Im Einsatz', lib_shelf_stock:'Vorrat', lib_shelf_archive:'Leer & Archiv', lib_shelf_archived_tag:'Archiviert', lib_shelf_search_ph:'Bohne, Röster, Herkunft', lib_shelf_all:'Alle', lib_shelf_sort_fresh:'Frischeste', lib_shelf_sort_name:'Name', lib_shelf_sort_remaining:'Meiste übrig', lib_shelf_no_match:'Keine passende Bohne', lib_shelf_full:'Dein Regal füllt sich',
+    lib_shelf_stock:'Vorrat', lib_shelf_archive:'Leer & Archiv', lib_shelf_archived_tag:'Archiviert', lib_shelf_search_ph:'Bohne, Röster, Herkunft', lib_shelf_all:'Alle', lib_shelf_sort_fresh:'Frischeste', lib_shelf_sort_name:'Name', lib_shelf_sort_remaining:'Meiste übrig', lib_shelf_no_match:'Keine passende Bohne', lib_shelf_full:'Dein Regal füllt sich', lib_shelf_open_badge:'offen', lib_shelf_full_bags:(n)=>`+${n} voll`, lib_shelf_view_shelf:'Regal', lib_shelf_view_list:'Liste',
     lib_btn_edit:'Bearbeiten', lib_btn_delete:'Löschen',
     lib_btn_disable:'Für Bestellungen deaktivieren', lib_btn_enable:'Für Bestellungen aktivieren',
     lib_bean_disabled_badge:'Deaktiviert',
