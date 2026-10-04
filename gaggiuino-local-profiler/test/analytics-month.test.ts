@@ -148,7 +148,7 @@ describe('buildMonthDays', () => {
     expect(day(buildMonthDays(shots, 2024, 2, noScore), '2024-03-10').shotIds).toEqual([1, 2, 3]);
   });
 
-  it('marks firstOfBean only on the main bean's first day in the input', () => {
+  it("marks firstOfBean only on the main bean's first day in the input", () => {
     const shots = [
       shot({ id: 1, timestamp: ts(2024, 2, 10, 8), beanId: 5, coffee: 'Gamma' }),
       shot({ id: 2, timestamp: ts(2024, 2, 12, 8), beanId: 5, coffee: 'Gamma' }),
