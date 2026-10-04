@@ -176,6 +176,7 @@ const en: Translations = {
     lib_grinder_zero_point_delete:'Delete zero-point entry',
     lib_cancel:'Cancel', lib_save:'Save',
     lib_empty_beans:'No beans saved yet', lib_empty_grinders:'No grinders saved yet',
+    lib_shelf_in_use:'In use', lib_shelf_stock:'Stock', lib_shelf_archive:'Empty & archive', lib_shelf_archived_tag:'Archived',
     lib_btn_edit:'Edit', lib_btn_delete:'Delete',
     lib_btn_disable:'Disable for ordering', lib_btn_enable:'Enable for ordering',
     lib_bean_disabled_badge:'Disabled',

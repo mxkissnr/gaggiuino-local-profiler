@@ -51,6 +51,7 @@ const bean = {
   id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun',
   origin: 'ET', variety: 'Heirloom', process: 'Washed', roastType: 'filter',
   flavors: ['Jasmin', 'Zitrone', 'Bergamotte', 'Schwarzer Tee'],
+  bags: [{ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true }],
 };
 
 describe('loadLibrary (#526 render race)', () => {

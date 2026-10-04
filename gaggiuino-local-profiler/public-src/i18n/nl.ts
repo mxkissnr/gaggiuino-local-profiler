@@ -176,6 +176,7 @@ const nl: Partial<Translations> = {
     lib_grinder_zero_point_delete:'Nulpunt-invoer verwijderen',
     lib_cancel:'Annuleren', lib_save:'Opslaan',
     lib_empty_beans:'Nog geen bonen opgeslagen', lib_empty_grinders:'Nog geen molens opgeslagen',
+    lib_shelf_in_use:'In gebruik', lib_shelf_stock:'Voorraad', lib_shelf_archive:'Leeg & archief', lib_shelf_archived_tag:'Gearchiveerd',
     lib_btn_edit:'Bewerken', lib_btn_delete:'Verwijderen',
     lib_btn_disable:'Uitschakelen voor bestellingen', lib_btn_enable:'Inschakelen voor bestellingen',
     lib_bean_disabled_badge:'Uitgeschakeld',

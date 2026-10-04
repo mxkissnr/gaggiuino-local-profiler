@@ -57,7 +57,7 @@ describe('togglePastBags (#1122 bag queue)', () => {
         bags: [
           // consumedG/remainingG/current are backend-computed (SimulateBagQueue)
           // and attached to every tracked bag on load.
-          { id: 1, roastDate: '2026-01-01', stock_g: 250, consumedG: 0, remainingG: 250, current: true },
+          { id: 1, roastDate: '2026-01-01', stock_g: 250, consumedG: 100, remainingG: 150, current: true },
           { id: 2, roastDate: '2019-01-01', stock_g: 250, consumedG: 250, remainingG: 0 },
         ],
       }],

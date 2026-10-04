@@ -176,6 +176,7 @@ const fr: Partial<Translations> = {
     lib_grinder_zero_point_delete:"Supprimer l'entrée de point zéro",
     lib_cancel:'Annuler', lib_save:'Enregistrer',
     lib_empty_beans:'Aucun grain enregistré', lib_empty_grinders:'Aucun moulin enregistré',
+    lib_shelf_in_use:'En cours', lib_shelf_stock:'Réserve', lib_shelf_archive:'Vides et archives', lib_shelf_archived_tag:'Archivé',
     lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
     lib_btn_disable:'Désactiver pour les commandes', lib_btn_enable:'Activer pour les commandes',
     lib_bean_disabled_badge:'Désactivé',
