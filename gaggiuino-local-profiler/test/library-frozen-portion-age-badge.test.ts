@@ -10,10 +10,9 @@ g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
-  renderBeanList: () => void;
-  toggleShelfBean: (beanId: number) => void;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
 }
-const { renderBeanList, toggleShelfBean } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { renderBeanCard } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 // Roast dates below are built with todayIsoDate() (local YYYY-MM-DD, not
 // Date#toISOString()'s UTC date): roastAgeDays() reparses the stored date in
 // local time, so a UTC date string rolls a day early/late outside UTC.
@@ -77,8 +76,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
       grinders: [],
     };
 
-    renderBeanList();
-    toggleShelfBean(1);
+    beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     const html = beanListUI.innerHTML;
     expect(html).toContain('lib-frozen-badge');
@@ -111,8 +109,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
       grinders: [],
     };
 
-    renderBeanList();
-    toggleShelfBean(2);
+    beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     const html = beanListUI.innerHTML;
     expect(html).toContain('lib-frozen-badge thawed');

@@ -12,9 +12,9 @@ g.navigator ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   loadLibrary: () => Promise<void>;
-  toggleShelfBean: (beanId: number) => void;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
 }
-const { loadLibrary, toggleShelfBean } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { loadLibrary, renderBeanCard } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #526: loadLibrary()'s fetch is fired unawaited from main.js's init
 // sequence and races switchMode('library') (mode.js), which renders the
@@ -70,11 +70,12 @@ describe('loadLibrary (#526 render race)', () => {
 
     g.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ beans: [bean], grinders: [] }) });
     await loadLibrary();
-    // One-shelf layout (#1330): the in-use bean renders as a tile now, so
-    // expand it to reach the full card this #526 assertion is about.
-    toggleShelfBean(1);
-
-    expect(beanListUI.innerHTML).toContain('data-action="open-flavor-wheel"');
+    // One-shelf layout (#1330): the bean renders as a tile that opens the
+    // detail sheet, where the flavor-wheel action now lives. A rendered tile
+    // proves the fetch re-rendered the list (#526); the card is rendered
+    // directly to pin that the action is still reachable.
+    expect(beanListUI.innerHTML).toContain('data-action="open-bean-sheet"');
+    expect(renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans)).toContain('data-action="open-flavor-wheel"');
   });
 
   it('is a harmless no-op re-render when the Library view is not the current DOM (elements absent)', async () => {
