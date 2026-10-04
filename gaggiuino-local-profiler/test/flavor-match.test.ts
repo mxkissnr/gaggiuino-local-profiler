@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FLAVOR_WHEEL, FLAVOR_ALIASES, type FlavorNode } from '../public-src/flavor-data.js';
 import { SCA_FLAVOR_COLORS } from '../public-src/sca-flavor-colors.js';
-import { matchFlavors, normalizeFlavor, colorForNode, muteHex, contrastTextColor, markLit, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../public-src/flavor-match.js';
+import { matchFlavors, normalizeFlavor, colorForNode, muteHex, contrastTextColor, parentIdOf, nodeById, pathToNode } from '../public-src/flavor-match.js';
 
 function collectIds(nodes: FlavorNode[], seen: Set<string> = new Set()): Set<string> {
   for (const n of nodes) {
@@ -175,34 +175,5 @@ describe('parentIdOf / pathToNode / nodeById', () => {
     expect(nodeById('cherry')?.en).toBe('Cherry');
     expect(nodeById('fruity')?.en).toBe('Fruity');
     expect(nodeById('does_not_exist')).toBe(null);
-  });
-});
-
-describe('findAutoZoomTarget', () => {
-  // markLit mutates FLAVOR_WHEEL's own nodes; each call fully re-derives
-  // _lit from the matched set passed in, so tests don't need manual reset.
-  function litCategories(flavors: string[]): FlavorNode[] {
-    const { matched } = matchFlavors(flavors);
-    FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
-    return FLAVOR_WHEEL;
-  }
-
-  it('zooms to the deepest node that still has children (not the leaf itself — a sunburst can\'t zoom into an empty leaf)', () => {
-    expect(findAutoZoomTarget(litCategories(['Kirsche']))).toBe('other_fruit');
-  });
-
-  it('stops at the lowest branch containing every match (two leaves, same subcategory chain diverges)', () => {
-    // cherry -> fruity>other_fruit>cherry, raspberry -> fruity>berry>raspberry:
-    // both under "fruity" but in different depth-2 branches.
-    expect(findAutoZoomTarget(litCategories(['Kirsche', 'Himbeere']))).toBe('fruity');
-  });
-
-  it('returns null when matches span more than one top-level category', () => {
-    // cherry -> fruity, hazelnut -> nutty_cocoa
-    expect(findAutoZoomTarget(litCategories(['Kirsche', 'Haselnuss']))).toBe(null);
-  });
-
-  it('returns null when nothing matched', () => {
-    expect(findAutoZoomTarget(litCategories([]))).toBe(null);
   });
 });

@@ -1182,6 +1182,22 @@
         .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .lib-flavor-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-1); }
+        /* #1350: "Aromas" block in the bean detail sheet — the inline mini
+           wheel next to highlight chips coloured from each flavour's segment. */
+        .lib-sheet-aromas { margin-top: var(--sp-2); }
+        .lib-sheet-aromas-title { font-size: var(--fs-1); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: var(--sp-2); }
+        .lib-sheet-aromas-body { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+        .lib-aroma-wheel { flex: 0 0 auto; width: min(168px, 45vw); padding: 0; background: none; border: none; line-height: 0; cursor: pointer; }
+        .lib-aroma-svg { display: block; width: 100%; height: auto; }
+        .lib-aroma-seg { stroke: var(--gray-700); stroke-width: .6; }
+        .lib-aroma-svg.has-hl .lib-aroma-seg { opacity: .35; }
+        .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px rgba(255,255,255,.65)); }
+        .lib-aroma-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); flex: 1 1 120px; }
+        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--chip-color); cursor: pointer; }
+        @media (prefers-reduced-motion: no-preference) {
+            .lib-aroma-seg.is-hl { animation: aroma-pulse 500ms ease-out; }
+            @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
+        }
         .lib-bean-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: var(--sp-3); background: var(--gray-800); cursor: pointer; }
         .lib-grinder-thumb, .lib-basket-thumb, .lib-puckscreen-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: var(--sp-3); background: var(--gray-800); cursor: pointer; }
         .lib-rating-row { display: flex; align-items: center; gap: 1px; margin-top: var(--sp-1); }
@@ -2702,10 +2718,27 @@
         .fw-crumb:last-child { color:var(--gray-200); }
         .fw-crumb:hover, .fw-crumb:focus-visible { background:var(--gray-800); color:var(--gray-200); }
         .fw-crumb-sep { color:var(--gray-600); }
-        /* flex:1 + min-height:0 lets the chart shrink to whatever space is left
-           after the fixed-size header/breadcrumb/credit, instead of forcing
-           the modal to overflow and scroll on short viewports. */
-        .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; position:relative; }
+    /* #1350: wheel left, legend + unmatched right from 900 px; one column
+    below. The wheel column keeps the flex growth (header/breadcrumb/credit
+    stay fixed-size) so the canvas always has a positive size for echarts to
+    init() against, instead of the modal having to scroll. */
+    .fw-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap: var(--sp-2); }
+    .fw-main { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
+    .fw-canvas-wrap { position:relative; flex:1 1 auto; min-height:0; }
+    .fw-canvas { width:100%; height:100%; cursor:pointer; position:relative; }
+    .fw-side { flex:0 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-2); }
+    /* Bean photo in the wheel centre; tapping it zooms back to the overview. */
+    .fw-center-photo { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:24%; aspect-ratio:1; padding:0; border:2px solid var(--gray-600); border-radius:50%; overflow:hidden; background:var(--gray-800); cursor:pointer; pointer-events:auto; }
+    .fw-center-photo img { display:block; width:100%; height:100%; object-fit:cover; }
+    .fw-legend { display:flex; flex-direction:column; gap:2px; overflow-y:auto; min-height:0; }
+    .fw-legend-row { display:flex; align-items:center; gap: var(--sp-2); width:100%; padding: var(--sp-1) var(--sp-2); background:none; border:none; border-radius:var(--radius); color:var(--gray-300); font:inherit; font-size:var(--fs-1); text-align:left; cursor:pointer; }
+    .fw-legend-row:hover, .fw-legend-row:focus-visible { background:var(--gray-800); color:var(--gray-100); }
+    .fw-legend-dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+    .fw-legend-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    @media (min-width: 900px) {
+        .flavor-wheel-modal { max-width: min(960px, 96vw); }
+        .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); gap: var(--sp-4); }
+    }
 
         /* Photo picker button (replaces native <input type=file>, #286) */
         .photo-picker-row { display:flex; align-items:center; gap: var(--sp-2); flex-wrap:wrap; }

@@ -85,7 +85,8 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, s
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
          toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask } from './views/maintenance.js';
 import { loadAchievementsView } from './views/achievements.js';
-import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo } from './components/flavor-wheel.js';
+import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from './components/flavor-wheel.js';
+import { highlightSheetFlavor } from './components/flavor-mini-wheel.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
          toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
@@ -1017,6 +1018,8 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-flavor-wheel':   void openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
+      case 'highlight-flavor':        highlightSheetFlavor(el.dataset.flavorNode || null, el); break;
+      case 'highlight-flavor-wheel':  highlightFlavorWheelNode(el.dataset.nodeId || null); break;
       case 'delete-maint-log':   void deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;

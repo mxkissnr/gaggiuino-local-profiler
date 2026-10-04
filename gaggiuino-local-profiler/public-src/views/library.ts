@@ -15,6 +15,7 @@ import { loadBeanImageBlobUrl, invalidateBeanImage } from '../bean-image.js';
 import { apiFetch } from '../api/transport.js';
 import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
+import { miniWheelSvg, flavorChipsHtml, applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../components/flavor-mini-wheel.js';
 import { generateBeanQR } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
@@ -441,6 +442,25 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
     <span class="lib-toolbar-sep"></span>
     <button class="lib-btn-sm del lib-btn-icon" data-action="delete-bean" data-id="${esc(b.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
   </div>`;
+
+  // #1350: inside the detail sheet the flavours become an "Aromas" block — the
+  // inline mini wheel plus chips that highlight their segment — instead of the
+  // plain chip row the shelf card keeps.
+  const flavorBlockHtml: Html = (() => {
+    const flavors = b.flavors;
+    if (!Array.isArray(flavors) || flavors.length === 0) return esc('');
+    if (!inSheet) {
+      return html`<div class="lib-flavor-row">${joinHtml(flavors.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>`;
+    }
+    return html`<div class="lib-sheet-aromas">
+      <div class="lib-sheet-aromas-title">${tHtml('lib_sheet_aromas')}</div>
+      <div class="lib-sheet-aromas-body">
+        <button type="button" class="lib-aroma-wheel" data-action="open-flavor-wheel" data-id="${esc(b.id)}" aria-label="${tHtml('flavor_wheel_btn')}">${miniWheelSvg(flavors, 168)}</button>
+        <div class="lib-aroma-chips">${flavorChipsHtml(flavors)}</div>
+      </div>
+    </div>`;
+  })();
+
   return html`<div class="lib-item${esc(disabled ? ' lib-item-disabled' : '')}${esc(inSheet ? ' lib-item-in-sheet' : '')}">
     ${!inSheet && b.image ? html`<img class="lib-bean-thumb${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">` : esc('')}
     <div class="lib-item-info">
@@ -457,7 +477,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
       ${ratingHtml}
       ${bestComboHtml}
       ${lastGrindHtml}
-      ${Array.isArray(b.flavors) && b.flavors.length ? html`<div class="lib-flavor-row">${joinHtml(b.flavors.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>` : esc('')}
+      ${flavorBlockHtml}
       ${invHtml}
       ${inSheet ? esc('') : bagActionsHtml}
       ${frozenHtml}
@@ -767,7 +787,6 @@ function _sheetMenu(b: BeanListRow): Html {
       <button type="button" class="lib-sheet-menu-btn" data-action="create-profile-from-bean" data-id="${esc(b.id)}">${SLIDERS_ICON_SVG} ${tHtml('profile_create_from_bean')}</button>
       <button type="button" class="lib-sheet-menu-btn" data-action="start-dialin-from-bean" data-id="${esc(b.id)}">${TARGET_ICON_SVG} ${tHtml('dialin_wizard_start_from_bean')}</button>
       <button type="button" class="lib-sheet-menu-btn" data-action="toggle-bean-qr" data-id="${esc(b.id)}">${ICON_QR} ${tHtml('bean_qr_label')}</button>
-      ${Array.isArray(b.flavors) && b.flavors.length ? html`<button type="button" class="lib-sheet-menu-btn" data-action="open-flavor-wheel" data-id="${esc(b.id)}">${FLAVOR_WHEEL_ICON_SVG} ${tHtml('flavor_wheel_btn')}</button>` : esc('')}
       <span class="lib-sheet-menu-sep"></span>
       <button type="button" class="lib-sheet-menu-btn" data-action="toggle-bean-active" data-id="${esc(b.id)}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
       <span class="lib-sheet-menu-sep"></span>
@@ -845,6 +864,9 @@ function renderBeanSheet(enter = false): void {
       <div class="lib-sheet-body">${renderBeanCard(bean, beans, { inSheet: true })}</div>
     </section>`;
   host.classList?.add('open');
+  // Re-apply an aroma highlight that was active before this rebuild (the fresh
+  // SVG has no is-hl classes of its own).
+  applySheetFlavorHighlight(host);
   _sheetRenderedBeanId = id;
   // Restore the previous offset on the freshly built scroll container. Only a
   // positive value matters; 0 is the default the new element already has.
@@ -962,6 +984,7 @@ export function closeBeanSheet(): void {
   _sheetBeanId = null;
   _sheetRenderedBeanId = null;
   _sheetMoreOpen = false;
+  resetSheetFlavorHighlight();
   _unwireSheetKeys();
   if (typeof document !== 'undefined') document.body?.classList?.remove('lib-sheet-open');
   const back = _sheetReturnFocus;

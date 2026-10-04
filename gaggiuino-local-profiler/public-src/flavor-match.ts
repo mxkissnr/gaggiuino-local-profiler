@@ -120,30 +120,6 @@ export function pathToNode(nodeId: string): string[] {
   return path;
 }
 
-// Finds the deepest node (that still has children of its own — a sunburst
-// zoomed into a childless leaf has nothing to draw) which contains every
-// matched flavor, so the wheel can open already zoomed into the relevant
-// branch instead of the full 9-category overview. `categories` must already
-// have `_lit` set (markLit). Returns null when matches span more than one
-// top-level category — zooming to any single one would hide the others.
-export function findAutoZoomTarget(categories: FlavorNode[]): string | null {
-  const litTop = categories.filter(c => c._lit);
-  if (litTop.length !== 1) return null;
-  const [firstTop] = litTop;
-  if (!firstTop) return null;
-  let current = firstTop;
-  let target: string | null = null;
-  while (true) {
-    if (current.children?.length) target = current.id;
-    const litChildren = (current.children || []).filter(c => c._lit);
-    if (litChildren.length !== 1) break;
-    const [next] = litChildren;
-    if (!next) break;
-    current = next;
-  }
-  return target;
-}
-
 // ── Sunburst color helpers ───────────────────────────────────────────────
 // Pure (no DOM/ECharts dependency), kept here alongside the other
 // wheel-adjacent pure logic so they stay unit-testable — flavor-wheel.js
