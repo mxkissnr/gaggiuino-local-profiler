@@ -1,6 +1,7 @@
 import { apiFetch } from './fetch.js';
 import { apiFetchToBlob, apiUpload } from './transport.js';
 import type { ApiFetchToBlobResult, ApiUploadResult } from './transport.js';
+import type { UiPrefs } from './types.js';
 
 // Catch-all typed client for the `system` domain (go/internal/system — the
 // routes that package registers outside dedicated feature packages) plus the
@@ -99,13 +100,16 @@ export function saveImportSettings(payload: unknown): Promise<Response> {
 
 // ── Shared UI preferences (#1375) ────────────────────────────────────────
 
-/** GET /api/ui-prefs — the per-install UI choices (a flat key/value object). */
+/**
+ * GET /api/ui-prefs — the per-install UI choices (a flat key/value object).
+ * The response body is the generated `UiPrefs` map (schema.gen.ts).
+ */
 export function getUiPrefs(): Promise<Response> {
   return apiFetch('api/ui-prefs');
 }
 
 /** PUT /api/ui-prefs — partial update; a `null` value deletes that key. */
-export function saveUiPrefs(payload: Record<string, unknown>): Promise<Response> {
+export function saveUiPrefs(payload: UiPrefs): Promise<Response> {
   return apiFetch('api/ui-prefs', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

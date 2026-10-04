@@ -3,16 +3,17 @@
 // of truth, so the same choices follow you to another device. Changed keys are
 // PUT in one debounced request and stay queued until a request succeeds.
 import { getUiPrefs, saveUiPrefs } from './api/system.js';
+import type { UiPrefs } from './api/types.js';
 
 const STORAGE_KEY = 'glp_ui_prefs';
 const FLUSH_DELAY_MS = 600;
 
-let _prefs: Record<string, unknown> = {};
+let _prefs: UiPrefs = {};
 try {
   const raw = localStorage.getItem(STORAGE_KEY);
   const parsed = raw ? (JSON.parse(raw) as unknown) : null;
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    _prefs = parsed as Record<string, unknown>;
+    _prefs = parsed as UiPrefs;
   }
 } catch {
   _prefs = {};
@@ -47,7 +48,7 @@ export function setUiPref(key: string, value: unknown): void {
 async function _flush(): Promise<void> {
   if (!_queue.size) return;
   const keys = [..._queue];
-  const payload: Record<string, unknown> = {};
+  const payload: UiPrefs = {};
   for (const key of keys) payload[key] = _prefs[key];
   try {
     const r = await saveUiPrefs(payload);
@@ -63,10 +64,10 @@ async function _flush(): Promise<void> {
  * once, which migrates an existing device. Pure so it can be unit-tested.
  */
 export function mergeUiPrefs(
-  local: Record<string, unknown>,
-  server: Record<string, unknown>,
-): { merged: Record<string, unknown>; pushUp: string[] } {
-  const merged: Record<string, unknown> = { ...local };
+  local: UiPrefs,
+  server: UiPrefs,
+): { merged: UiPrefs; pushUp: string[] } {
+  const merged: UiPrefs = { ...local };
   const pushUp: string[] = [];
   for (const [key, value] of Object.entries(server)) merged[key] = value;
   for (const key of Object.keys(local)) {
@@ -86,7 +87,7 @@ export async function loadUiPrefsFromServer(): Promise<boolean> {
     if (!r.ok) return false;
     const body = (await r.json()) as unknown;
     const server = body && typeof body === 'object' && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
+      ? (body as UiPrefs)
       : {};
     const { merged, pushUp } = mergeUiPrefs(_prefs, server);
     const changed = JSON.stringify(merged) !== JSON.stringify(_prefs);
