@@ -1,5 +1,5 @@
 // Coffee history (#1351): the hidden topbar machine panel's spiral of every
-// shot ever pulled, with the emptied bags standing on a little shelf. Built
+// shot ever pulled, with a bag for every bean used standing on a little shelf. Built
 // entirely from data already in memory (S.allShots, S.coffeeLibrary) — nothing
 // is computed or fetched until openEasterEggPanel() calls renderCoffeeHistory().
 import { S } from '../state/index.js';
@@ -138,17 +138,42 @@ function tileLabel(tile: HistoryTile): string {
   return parts.join(' · ');
 }
 
-interface EmptiedBag {
+export interface ShelfBean {
   beanId: number | null;
   name: string;
 }
 
-function emptiedBags(beans: readonly HistoryBean[]): EmptiedBag[] {
-  const out: EmptiedBag[] = [];
+/**
+ * One entry per bean the history stands on its shelf: every bean used by at
+ * least one shot (the bean whose first shot is oldest leads), then every bean
+ * that has an emptied bag but no shot. Keyed by id, so a bean with several
+ * bags still gets a single bag on the shelf; shots whose beanId is missing or
+ * points outside the library are ignored.
+ */
+export function shelfBeans(shots: readonly HistoryShot[], beans: readonly HistoryBean[]): ShelfBean[] {
+  const byId = new Map<number, HistoryBean>();
   for (const bean of beans) {
-    for (const bag of bean.bags ?? []) {
-      if (isEmptiedBag(bag)) out.push({ beanId: bean.id ?? null, name: bean.name ?? '' });
-    }
+    if (bean.id != null) byId.set(bean.id, bean);
+  }
+
+  const firstShotAt = new Map<number, number>();
+  for (const shot of shots) {
+    const beanId = shot.annotation?.beanId;
+    if (typeof beanId !== 'number' || !byId.has(beanId)) continue;
+    const previous = firstShotAt.get(beanId);
+    if (previous == null || shot.timestamp < previous) firstShotAt.set(beanId, shot.timestamp);
+  }
+
+  const out: ShelfBean[] = [...firstShotAt.entries()]
+    .sort((a, b) => a[1] - b[1] || a[0] - b[0])
+    .map(([beanId]) => ({ beanId, name: byId.get(beanId)?.name ?? '' }));
+
+  const seen = new Set(out.map(bean => bean.beanId));
+  for (const bean of beans) {
+    if (bean.id != null && seen.has(bean.id)) continue;
+    if (!(bean.bags ?? []).some(isEmptiedBag)) continue;
+    if (bean.id != null) seen.add(bean.id);
+    out.push({ beanId: bean.id ?? null, name: bean.name ?? '' });
   }
   return out;
 }
@@ -174,7 +199,7 @@ export function renderCoffeeHistory(host: HTMLElement): () => void {
   const beans = S.coffeeLibrary.beans as unknown as HistoryBean[];
   const stats = historyStats(shots, beans);
   const tiles = historyTiles(shots, PHOTO_CAP);
-  const bags = emptiedBags(beans);
+  const bags = shelfBeans(shots, beans);
   const reduced = prefersReducedMotion();
 
   let stopped = false;
