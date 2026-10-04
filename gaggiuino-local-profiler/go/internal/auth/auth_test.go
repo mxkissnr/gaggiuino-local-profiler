@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -438,7 +439,7 @@ func TestSecurityHeaders(t *testing.T) {
 		"Referrer-Policy":        "same-origin",
 		"Permissions-Policy":     "camera=(self), microphone=(), geolocation=()",
 		"Content-Security-Policy": "default-src 'self'; " +
-			"script-src 'self'; " +
+			"script-src 'self' 'wasm-unsafe-eval'; " +
 			"style-src 'self' 'unsafe-inline'; " +
 			"font-src 'self' data:; " +
 			"img-src 'self' data: blob:; " +
@@ -448,6 +449,16 @@ func TestSecurityHeaders(t *testing.T) {
 	for header, expected := range want {
 		if got := rec.Header().Get(header); got != expected {
 			t.Errorf("header %s = %q, want %q", header, got, expected)
+		}
+	}
+
+	// The WebAssembly allowance must not widen into the general eval source:
+	// check the token itself, not a substring ('wasm-unsafe-eval' contains
+	// "unsafe-eval").
+	csp := rec.Header().Get("Content-Security-Policy")
+	for _, token := range strings.Fields(csp) {
+		if token == "'unsafe-eval'" {
+			t.Errorf("Content-Security-Policy allows 'unsafe-eval' as a standalone source: %q", csp)
 		}
 	}
 }

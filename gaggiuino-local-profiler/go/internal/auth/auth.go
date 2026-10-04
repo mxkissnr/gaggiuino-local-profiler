@@ -150,6 +150,11 @@ func writeTokenFile(path, content string) error {
 // the CSP. frame-ancestors 'self' is added as defense-in-depth alongside the
 // header fix above — belt-and-braces, not required, since X-Frame-Options
 // already governs when frame-ancestors is absent.
+//
+// script-src also carries 'wasm-unsafe-eval': the on-device photo cut-out
+// compiles onnxruntime-web as WebAssembly, which that source permits on its
+// own while still forbidding the general 'unsafe-eval' the bundle does not
+// need.
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -159,7 +164,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		h.Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self'; "+
+				"script-src 'self' 'wasm-unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"font-src 'self' data:; "+
 				"img-src 'self' data: blob:; "+

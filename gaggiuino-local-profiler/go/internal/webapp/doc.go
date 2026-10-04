@@ -48,11 +48,12 @@
 // # CSP
 //
 // internal/auth.SecurityHeaders's Content-Security-Policy is NOT relaxed
-// for these routes. The built bundle was checked against the strict policy
-// (script-src 'self', no 'unsafe-inline'/'unsafe-eval'): the emitted
-// index.html loads only external same-origin <script type="module"> /
-// <link rel="stylesheet"> tags (no inline script, no inline event
-// handlers); grepping every chunk in public/assets/ for `eval(` /
+// for these routes beyond the one 'wasm-unsafe-eval' source the on-device
+// cut-out runtime needs: script-src still allows neither 'unsafe-inline' nor
+// the general 'unsafe-eval'. The built bundle was checked against that
+// policy: the emitted index.html loads only external same-origin
+// <script type="module"> / <link rel="stylesheet"> tags (no inline script, no
+// inline event handlers); grepping every chunk in public/assets/ for `eval(` /
 // `new Function` / `WebAssembly` / `new Worker` came back empty — modern
 // chart.js and ECharts builds need none of them. Dynamic import() of the
 // echarts/topojson/qrcode chunks is same-origin and covered by
