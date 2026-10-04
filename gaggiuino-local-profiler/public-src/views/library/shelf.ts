@@ -4,7 +4,7 @@
 // under vitest's node environment.
 import type { Html } from '../../utils.js';
 import { esc, html, joinHtml, roastAgeDays } from '../../utils.js';
-import { t, tHtml } from '../../i18n.js';
+import { tHtml } from '../../i18n.js';
 import { SNOWFLAKE_ICON_SVG } from '../../icons.js';
 import { countryName } from '../../constants.js';
 import { S } from '../../state/index.js';
@@ -186,14 +186,11 @@ export function icicleSvg(frozenG: number, seed: number): Html {
 
 // One bag standing on the shelf. A button so a tap opens the bean's detail
 // sheet (views/library.ts wires data-action="open-bean-sheet"). The open badge
-// is no longer drawn over the photo, so its word moves into the tile's
-// accessible name to keep an opened bag announced.
+// is no longer drawn over the photo; its word stays in the markup visually
+// hidden, so the tile keeps the accessible name its inner text already gave it.
 export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
   const { opened, openG, pct, sealedBags, frozenG } = shelfStock(b);
   const archived = b.enabled === false;
-  const label = [b.name, b.roaster, opened ? t('lib_shelf_open_badge') : '', openG != null ? `${openG} g` : '']
-    .filter((v): v is string => !!v)
-    .join(', ');
 
   // Up to two decorative copies peek out behind the photo to hint at the
   // unopened bags waiting in the cupboard; the badge carries the count.
@@ -201,12 +198,13 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
     ? html`<span class="lib-shelf-stack" aria-hidden="true">${sealedBags > 1 ? html`<span class="lib-shelf-stack-layer"></span>` : esc('')}<span class="lib-shelf-stack-layer"></span></span>`
     : esc('');
 
-  return html`<button type="button" class="lib-shelf-tile${esc(opts.muted ? ' muted' : '')}" data-action="open-bean-sheet" data-id="${esc(b.id)}" aria-haspopup="dialog" aria-label="${esc(label)}">
+  return html`<button type="button" class="lib-shelf-tile${esc(opts.muted ? ' muted' : '')}" data-action="open-bean-sheet" data-id="${esc(b.id)}" aria-haspopup="dialog">
     <span class="lib-shelf-bag${esc(frozenG > 0 ? ' has-icicles' : '')}">
       ${stack}
       ${shelfBagImage(b)}
       ${frozenG > 0 ? icicleSvg(frozenG, b.id) : esc('')}
       ${sealedBags > 0 ? html`<span class="lib-shelf-sealed-badge">+${esc(sealedBags)}</span>` : esc('')}
+      ${opened ? html`<span class="lib-shelf-open-label">${tHtml('lib_shelf_open_badge')}</span>` : esc('')}
       ${archived ? html`<span class="lib-shelf-archived-tag">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}
     </span>
     <span class="lib-shelf-name serif-display">${esc(b.name)}</span>

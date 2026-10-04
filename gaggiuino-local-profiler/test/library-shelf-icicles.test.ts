@@ -95,12 +95,37 @@ describe('frozen shelf tile (#1350)', () => {
       id: 11,
       name: 'Red Brick',
       roaster: 'Square Mile',
+      bags: [
+        {
+          id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true,
+          frozenPortions: [{ id: 1, frozenAt: 1, portionCount: 4, portionWeight_g: 18, remainingCount: 2 }],
+        },
+        { id: 2, stock_g: 250, remainingG: 250, sortOrder: 2 },
+      ],
+    });
+    const tile = renderShelfTile(b, { muted: false });
+    // The tile keeps its inner text as the accessible name (no aria-label), so
+    // the sealed count and the frozen grams are still announced, alongside the
+    // open word that moved into the visually hidden span.
+    expect(tile).not.toContain('lib-shelf-open-badge');
+    expect(tile).not.toContain('aria-label');
+    expect(tile).toContain('class="lib-shelf-open-label"');
+    expect(tile).toContain('>open</span>');
+    expect(tile).toContain('+1 full');
+    expect(tile).toContain('36 g');
+    expect(renderShelfRow(b, { muted: false })).toContain('lib-shelf-open-badge');
+  });
+
+  it('keeps the archived tag in the tile text as well', () => {
+    const b = bean({
+      id: 12,
+      name: 'Old Bean',
+      enabled: false,
       bags: [{ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true }],
     });
     const tile = renderShelfTile(b, { muted: false });
-    expect(tile).not.toContain('lib-shelf-open-badge');
-    // The badge's word is preserved in the tile's accessible name.
-    expect(tile).toContain('aria-label="Red Brick, Square Mile, open, 150 g"');
-    expect(renderShelfRow(b, { muted: false })).toContain('lib-shelf-open-badge');
+    expect(tile).not.toContain('aria-label');
+    expect(tile).toContain('lib-shelf-archived-tag');
+    expect(tile).toContain('Archived');
   });
 });
