@@ -8,6 +8,7 @@ import { esc, html, joinHtml, scoreClass, chartColors, themeColor, onThemeChange
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
+import { renderMonthCalendar, summaryLine } from './analytics-month.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
 import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
 import type { ChartConfiguration, TooltipItem } from 'chart.js';
@@ -189,37 +190,36 @@ const _bgColor = (sc: number | null): string => sc == null ? 'rgba(63,63,70,.5)'
   : sc >= 88 ? 'rgba(34,197,94,.7)' : sc >= 75 ? 'rgba(132,204,22,.7)'
   : sc >= 60 ? 'rgba(234,179,8,.7)'  : sc >= 45 ? 'rgba(249,115,22,.7)' : 'rgba(239,68,68,.7)';
 
-// ── Summary KPIs ──────────────────────────────────────────────────────────
+// ── Summary line ──────────────────────────────────────────────────────────
 export function buildSummaryKpis() {
   const el = document.getElementById('summaryKpis');
   if (!el) return;
 
-  const total   = _shots().length;
-  const scored  = _shots().filter(s => window.calcShotScore && window.calcShotScore(s) != null);
-  const avgScore = scored.length
-    ? Math.round(scored.reduce((a, s) => a + (window.calcShotScore!(s) ?? 0), 0) / scored.length)
-    : null;
+  const summary = summaryLine(
+    _shots(),
+    s => (window.calcShotScore ? window.calcShotScore(s) : null),
+    Date.now(),
+  );
 
-  const totalG = _shots().reduce((sum, s) => sum + (s.annotation?.dose || 0), 0);
-  const totalCoffee = totalG >= 1000 ? (totalG / 1000).toFixed(1) + ' kg' : Math.round(totalG) + ' g';
+  // The score numbers keep the shared colour scale inside their translated
+  // phrase; scoreNum() returns markup the i18n formatters interpolate verbatim.
+  const scoreNum = (n: number): Html => html`<span class="${esc(scoreClass(n))}">${esc(n)}</span>`;
+  const parts: Html[] = [];
+  const addPart = (part: Html): void => {
+    if (parts.length) parts.push(esc(' · '));
+    parts.push(part);
+  };
 
-  const _now = new Date();
-  const weekStartMs = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() - (_now.getDay() + 6) % 7).getTime();
-  const thisWeek = _shots().filter(s => s.timestamp * 1000 >= weekStartMs).length;
-  const streak   = calcLongestStreak(_shots());
+  const verdict = summary.verdict;
+  addPart(tHtml('analytics_summary_verdict', verdict.shots, verdict.avgScore !== null ? scoreNum(verdict.avgScore) : esc('—')));
+  if (summary.delta) addPart(tHtml(`analytics_summary_delta_${summary.delta.bucket}`, scoreNum(summary.delta.avg7)));
+  if (summary.context) addPart(tHtml('analytics_summary_best', esc(summary.context.name), scoreNum(summary.context.avgScore)));
+  if (summary.streakNote) addPart(tHtml('analytics_summary_streak', summary.streak));
 
-  const kpis = [
-    { val: esc(total),  lbl: tHtml('analytics_total_shots') },
-    { val: esc(avgScore !== null ? avgScore : '—'), lbl: tHtml('analytics_avg_score'), cls: avgScore !== null ? scoreClass(avgScore) : '' },
-    { val: esc(total > 0 ? totalCoffee : '—'), lbl: tHtml('analytics_total_coffee') },
-    { val: esc(thisWeek), lbl: tHtml('analytics_this_week') },
-    { val: streak > 0 ? tHtml('analytics_days', streak) : esc('—'), lbl: tHtml('analytics_streak') },
-  ];
-  el.innerHTML = joinHtml(kpis.map(k =>
-    html`<div class="kpi-tile"><div class="kpi-val ${esc(k.cls || '')}">${k.val}</div><div class="kpi-lbl">${k.lbl}</div></div>`
-  ));
+  el.innerHTML = joinHtml(parts);
 
   // Trend warning: check last 5 scored shots for declining trend
+  const scored = _shots().filter(s => window.calcShotScore && window.calcShotScore(s) != null);
   const warnEl = document.getElementById('trendWarning');
   if (warnEl) {
     const recent = scored.slice(-5);
@@ -573,6 +573,9 @@ export function buildTrendChart() {
 }
 
 export function buildCalendar() {
+  const monthEl = document.getElementById('shotMonthCalendar');
+  if (monthEl) renderMonthCalendar(monthEl);
+
   const el = document.getElementById('shotCalendar');
   if (!el) return;
 
