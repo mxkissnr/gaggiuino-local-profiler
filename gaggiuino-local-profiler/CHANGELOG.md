@@ -3,6 +3,7 @@
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **The bean sheet and flavour wheel fit the window on desktop: the header stays visible, the large wheel no longer overflows, the form uses the extra width, and the small wheel marks the bean's notes.** (#1372)
 - **The bean stock line no longer shows the gram unit twice, and the shelf sort by roast date now reads naturally in German.** (#1373)
 - **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
 - **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day.** Closes #1357
