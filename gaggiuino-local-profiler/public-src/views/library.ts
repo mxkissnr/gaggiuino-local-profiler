@@ -1532,7 +1532,12 @@ export function closeBeanForm(): void {
   _beanFormDirty = false;
   const returnId = _formReturnBeanId;
   _formReturnBeanId = null;
-  if (returnId != null && _beanList().some(b => b.id === returnId)) openBeanSheet(returnId);
+  if (returnId != null && _beanList().some(b => b.id === returnId)) {
+    openBeanSheet(returnId);
+    // The form's Save button is hidden again now; don't hand focus back to it
+    // when this detail sheet is later closed.
+    _sheetReturnFocus = null;
+  }
 }
 
 // Dirty-aware close: a form with unsaved edits asks before discarding.
