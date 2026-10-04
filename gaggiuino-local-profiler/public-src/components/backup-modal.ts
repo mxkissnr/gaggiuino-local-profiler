@@ -245,7 +245,7 @@ async function refreshRestorePreview(): Promise<void> {
 
 function scheduleRestorePreview(): void {
     if (previewDebounce != null) clearTimeout(previewDebounce);
-    previewDebounce = setTimeout(refreshRestorePreview, 250);
+    previewDebounce = setTimeout(() => { void refreshRestorePreview(); }, 250);
 }
 
 export function openBackupExportModal(): void {

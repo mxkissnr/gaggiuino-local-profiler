@@ -18,6 +18,7 @@
   "dependencies": {
     "chart.js": "4.5.1",
     "echarts": "6.1.0",
+    "onnxruntime-web": "1.30.0",
     "qrcode": "1.5.4",
     "topojson-client": "3.1.0"
   },

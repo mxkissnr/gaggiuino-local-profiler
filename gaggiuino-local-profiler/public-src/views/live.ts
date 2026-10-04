@@ -571,13 +571,13 @@ export async function fetchLiveData(): Promise<void> {
       S.liveLastSeq = msg.seq!;
       const machineId = S.activeMachineId;
       const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
-      setTimeout(async () => {
+      setTimeout(() => { void (async () => {
         if (window.loadData) await window.loadData();
         const newest = S.shots
           .filter(s => s.machineId === machineId && s.id > priorNewestId)
           .sort((a, b) => b.id - a.id)[0];
         if (newest) void _applyLiveSetupToShot(newest.id);
-      }, 4000);
+      })(); }, 4000);
     }
     S.liveWasLive = msg.isLive!;
 

@@ -75,15 +75,15 @@ export interface ShotsSlice {
 }
 
 export interface LiveSlice {
-  livePollInterval: number | null;
-  preheatPollInterval: number | null;
+  livePollInterval: ReturnType<typeof setInterval> | null;
+  preheatPollInterval: ReturnType<typeof setInterval> | null;
   liveChart: Chart | null;
   refShotId: number | null;
   liveIsActive: boolean;
   liveLastSeq: number;
   liveWasLive: boolean;
   liveBrewStartWall: number | null;
-  liveTimerTick: number | null;
+  liveTimerTick: ReturnType<typeof setInterval> | null;
   machinePowerState: boolean | null;
   machineReachable: boolean | null;
 }
@@ -109,7 +109,7 @@ export interface LibrarySlice {
 
 export interface OrdersSlice {
   _ordersMenuOpen: boolean;
-  _ordersPollTimer: number | null;
+  _ordersPollTimer: ReturnType<typeof setInterval> | null;
   // Keyed by order id as a string (the ids arrive as dataset strings); object
   // keys are strings at runtime anyway, so Record<string, …> is the honest type.
   _ordersEtaSelected: Record<string, number>;

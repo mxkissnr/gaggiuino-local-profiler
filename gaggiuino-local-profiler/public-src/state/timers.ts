@@ -25,7 +25,7 @@ export function dispose(name: TimerName): void {
     case 'preheatPollInterval':
     case 'liveTimerTick':
     case '_ordersPollTimer': {
-      const id: number | null = S[name];
+      const id = S[name];
       if (id != null) clearInterval(id);
       break;
     }
