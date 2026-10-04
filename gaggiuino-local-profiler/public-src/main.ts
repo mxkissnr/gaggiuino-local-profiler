@@ -35,6 +35,7 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 }
 
 import { S } from './state/index.js';
+import { getUiPref, loadUiPrefsFromServer } from './ui-prefs.js';
 import { initToken, apiFetch } from './api/transport.js';
 import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
@@ -96,7 +97,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients, saveBaristaNotify,
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
-import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
+import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, resetShelfPrefs, renderGrinderList,
          openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
@@ -1098,6 +1099,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // nothing to display itself against. Now runs once the token is ready,
     // same as loadData()/loadLibrary() below.
     const machinesPromise = loadMachines();
+    // #1375: the shared UI choices live on this instance's own server, so the
+    // stable and dev apps no longer overwrite each other through the shared
+    // browser origin — the localStorage copy is only a cache. Fired without
+    // blocking the first render; a change re-reads the shelf prefs and applies
+    // the shared machine selection (which loadMachines() re-validates against
+    // the real list, #1323).
+    void loadUiPrefsFromServer().then(changed => {
+      if (!changed) return;
+      resetShelfPrefs();
+      const activeId = getUiPref<number | 'all'>('machine.active');
+      if (activeId !== undefined && activeId !== S.activeMachineId) setActiveMachine(activeId);
+    });
     void loadMqttSettings();
     void loadNotifySettingsCard();
     void loadMcpSettingsCard();
