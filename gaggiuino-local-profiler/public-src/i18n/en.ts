@@ -599,7 +599,7 @@ const en: Translations = {
     'demo.getApp':'Get the app',
     photo_pick_btn:'Choose photo', photo_change_btn:'Change photo',
     crop_editor_title:'Crop photo', crop_editor_apply:'Apply', crop_editor_zoom:'Zoom',
-    sticker_title:'Cut out as sticker', sticker_working_1:'Sorting the beans...', sticker_working_2:'Peeling the label...', sticker_working_3:'Almost there, tamping down the edges...', sticker_add:'Add', sticker_remove:'Remove', sticker_brush:'Brush', sticker_brush_size:'Brush size', sticker_undo:'Undo', sticker_reset:'Start over', sticker_original:'Original', sticker_apply:'Use sticker', sticker_failed:'This photo would not peel. You can still use it as it is.', sticker_fit:'Fit', sticker_close:'Close',sticker_done:'Peeled off and stuck on the shelf.',
+    sticker_title:'Cut out as sticker', sticker_working_1:'Sorting the beans...', sticker_working_2:'Peeling the label...', sticker_working_3:'Almost there, tamping down the edges...', sticker_add:'Add', sticker_remove:'Remove', sticker_brush:'Brush', sticker_brush_size:'Brush size', sticker_undo:'Undo', sticker_reset:'Start over', sticker_original:'Original', sticker_apply:'Use sticker', sticker_failed:'This photo would not peel. You can still use it as it is.', sticker_fit:'Fit', sticker_close:'Close', sticker_done:'Peeled off and stuck on the shelf.',
 
     // Machine profile editor (#307)
     lib_profiles:'Profiles', lib_add_profile:'+ New profile', lib_empty_profiles:'No profiles yet',

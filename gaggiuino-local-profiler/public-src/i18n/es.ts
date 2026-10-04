@@ -599,7 +599,7 @@ const es: Partial<Translations> = {
     'demo.getApp':'Instalar la app',
     photo_pick_btn:'Elegir foto', photo_change_btn:'Cambiar foto',
     crop_editor_title:'Recortar foto', crop_editor_apply:'Aplicar', crop_editor_zoom:'Zoom',
-    sticker_title:'Recortar como pegatina', sticker_working_1:'Seleccionando los granos...', sticker_working_2:'Despegando la etiqueta...', sticker_working_3:'Casi listo, prensando los bordes...', sticker_add:'Añadir', sticker_remove:'Quitar', sticker_brush:'Pincel', sticker_brush_size:'Tamaño del pincel', sticker_undo:'Deshacer', sticker_reset:'Empezar de nuevo', sticker_original:'Original', sticker_apply:'Usar pegatina', sticker_failed:'Esta foto no se quiere despegar. Puedes usarla tal cual.', sticker_fit:'Ajustar', sticker_close:'Cerrar',sticker_done:'Despegado y pegado en la estantería.',
+    sticker_title:'Recortar como pegatina', sticker_working_1:'Seleccionando los granos...', sticker_working_2:'Despegando la etiqueta...', sticker_working_3:'Casi listo, prensando los bordes...', sticker_add:'Añadir', sticker_remove:'Quitar', sticker_brush:'Pincel', sticker_brush_size:'Tamaño del pincel', sticker_undo:'Deshacer', sticker_reset:'Empezar de nuevo', sticker_original:'Original', sticker_apply:'Usar pegatina', sticker_failed:'Esta foto no se quiere despegar. Puedes usarla tal cual.', sticker_fit:'Ajustar', sticker_close:'Cerrar', sticker_done:'Despegado y pegado en la estantería.',
 
     // Machine profile editor (#307)
     lib_profiles:'Perfiles', lib_add_profile:'+ Nuevo perfil', lib_empty_profiles:'Aún no hay perfiles',
