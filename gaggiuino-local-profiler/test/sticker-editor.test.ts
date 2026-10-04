@@ -456,15 +456,16 @@ describe('openStickerEditor overlay', () => {
     viewport.dispatch('pointermove', { pointerId: 1, clientX: 55, clientY: 40 });
     // A second finger switches to gesture mode and aborts the stroke.
     viewport.dispatch('pointerdown', { pointerId: 2, clientX: 100, clientY: 40 });
-    viewport.dispatch('pointermove', { pointerId: 2, clientX: 220, clientY: 40 });
+    // The finger span goes from 45px (100 - 55) to 90px, doubling the scale.
+    viewport.dispatch('pointermove', { pointerId: 2, clientX: 145, clientY: 40 });
 
-    expect(readScale(canvas)).toBe(3);
+    expect(readScale(canvas)).toBe(2);
     // The aborted stroke was rolled back, so nothing was committed to history.
     expect(undo.disabled).toBe(true);
 
     // Lifting one finger after a pinch fires no tap; the gesture lasts until
     // every pointer is up.
-    viewport.dispatch('pointerup', { pointerId: 2, clientX: 220, clientY: 40 });
+    viewport.dispatch('pointerup', { pointerId: 2, clientX: 145, clientY: 40 });
     viewport.dispatch('pointerup', { pointerId: 1, clientX: 40, clientY: 40 });
     expect(tapMaskMock).not.toHaveBeenCalled();
   });
