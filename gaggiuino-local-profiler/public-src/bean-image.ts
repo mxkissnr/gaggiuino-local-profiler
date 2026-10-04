@@ -12,7 +12,8 @@ function _load(key: string, url: string): Promise<string | null> {
   if (_cache.has(key)) return _cache.get(key)!;
   const p = (async () => {
     try {
-      const r = await apiFetch(url);
+      // no-cache: a photo a browser stored under the old 24 h lifetime must be revalidated, not served from that still-fresh entry (an unchanged photo just costs a 304).
+      const r = await apiFetch(url, { cache: 'no-cache' });
       if (!r.ok) return null;
       return URL.createObjectURL(await r.blob());
     } catch { return null; }
