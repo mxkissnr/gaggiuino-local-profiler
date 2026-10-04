@@ -87,7 +87,7 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
   }
 
   const bag: Html = b.image
-    ? html`<img class="lib-shelf-img" data-bean-id="${esc(b.id)}" alt="">`
+    ? html`<img class="lib-shelf-img${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">`
     : html`<span class="lib-shelf-ph" aria-hidden="true">${esc(beanInitials(b.roaster || b.name || ''))}</span>`;
 
   return html`<button type="button" class="lib-shelf-tile${esc(opts.muted ? ' muted' : '')}" data-action="toggle-shelf-bean" data-id="${esc(b.id)}" aria-expanded="${esc(expanded ? 'true' : 'false')}">

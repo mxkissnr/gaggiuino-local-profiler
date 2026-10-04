@@ -599,7 +599,7 @@ const fr: Partial<Translations> = {
     'demo.getApp':"Installer l'appli",
     photo_pick_btn:'Choisir une photo', photo_change_btn:'Changer la photo',
     crop_editor_title:'Recadrer la photo', crop_editor_apply:'Appliquer', crop_editor_zoom:'Zoom',
-    sticker_title:'Détourer en sticker', sticker_working_1:'Tri des grains...', sticker_working_2:'On décolle l\'étiquette...', sticker_working_3:'Presque fini, on tasse les bords...', sticker_add:'Ajouter', sticker_remove:'Retirer', sticker_brush:'Pinceau', sticker_brush_size:'Taille du pinceau', sticker_undo:'Annuler', sticker_reset:'Recommencer', sticker_original:'Original', sticker_apply:'Utiliser le sticker', sticker_failed:'Cette photo ne veut pas se décoller. Tu peux quand même l\'utiliser telle quelle.', sticker_fit:'Ajuster', sticker_close:'Fermer',
+    sticker_title:'Détourer en sticker', sticker_working_1:'Tri des grains...', sticker_working_2:'On décolle l\'étiquette...', sticker_working_3:'Presque fini, on tasse les bords...', sticker_add:'Ajouter', sticker_remove:'Retirer', sticker_brush:'Pinceau', sticker_brush_size:'Taille du pinceau', sticker_undo:'Annuler', sticker_reset:'Recommencer', sticker_original:'Original', sticker_apply:'Utiliser le sticker', sticker_failed:'Cette photo ne veut pas se décoller. Tu peux quand même l\'utiliser telle quelle.', sticker_fit:'Ajuster', sticker_close:'Fermer', sticker_done:'Décollé et collé sur l\'étagère.',
 
     // Machine profile editor (#307)
     lib_profiles:'Profils', lib_add_profile:'+ Nouveau profil', lib_empty_profiles:'Aucun profil pour le moment',

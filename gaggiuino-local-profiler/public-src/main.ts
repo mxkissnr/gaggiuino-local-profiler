@@ -96,7 +96,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage,
+         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
@@ -819,6 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (S.beanEditId) void uploadBeanImage(S.beanEditId, this);
     else void stageNewBeanImage(this);
   });
+  document.getElementById('beanFormStickerBtn')!.addEventListener('click', () => { void cutOutBeanSticker(); });
   document.getElementById('addRecipeStepBtn')!.addEventListener('click', addRecipeStep);
   document.getElementById('closeRecipeFormBtn')!.addEventListener('click', closeRecipeForm);
   document.getElementById('saveRecipeBtn')!.addEventListener('click', () => { void saveRecipe(); });
