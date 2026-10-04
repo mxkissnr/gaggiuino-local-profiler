@@ -291,8 +291,8 @@ export function loadShelfPrefs(): ShelfPrefs {
 // Reads the shared store, falling back once to the old per-device key and
 // migrating its value up (#1375). The old key is removed either way.
 function _storedShelfPrefs(): Partial<ShelfPrefs> | null {
-  const shared = getUiPref<unknown>(SHELF_PREF_STORE_KEY);
-  if (shared && typeof shared === 'object') return shared as Partial<ShelfPrefs>;
+  const shared = getUiPref<Partial<ShelfPrefs>>(SHELF_PREF_STORE_KEY);
+  if (shared && typeof shared === 'object') return shared;
   try {
     const raw = localStorage.getItem(SHELF_PREFS_KEY);
     if (raw) {

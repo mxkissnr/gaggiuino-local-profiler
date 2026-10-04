@@ -25,7 +25,8 @@ function cachedPrefs(): Record<string, unknown> {
 
 function sentBody(call: readonly unknown[] | undefined): Record<string, unknown> {
   const opts = call?.[1] as RequestInit | undefined;
-  return JSON.parse(String(opts?.body)) as Record<string, unknown>;
+  const body = opts?.body;
+  return JSON.parse(typeof body === 'string' ? body : '{}') as Record<string, unknown>;
 }
 
 async function loadModule() {
