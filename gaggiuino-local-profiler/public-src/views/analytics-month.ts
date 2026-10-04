@@ -357,13 +357,24 @@ function _dayCell(day: MonthDay, today: Date, locale: string): Html {
   return html`<div class="cal-month-cell"><button type="button" class="cal-month-thumb cal-month-${esc(size)} ${esc(ring)}${day.firstOfBean ? html` is-new-bag` : esc('')}" data-action="analytics-month-day" data-day="${esc(day.key)}"${day.mainBeanId != null ? html` data-bean-id="${esc(day.mainBeanId)}"` : esc('')} aria-label="${esc(label)}" title="${esc(label)}">${inner}</button></div>`;
 }
 
+// A bean without a stored photo has nothing to fetch, and requesting it would
+// 404 and log a console error (the E2E smoke test fails on that).
+export function beanHasPhoto(
+  beans: readonly { id: number; image?: string | null }[] | undefined,
+  id: number,
+): boolean {
+  return !!beans?.some(b => b.id === id && !!b.image);
+}
+
 // Bean photos need the auth token, so <img src> can't point at the API
 // directly (see bean-image.ts) — set the blob-url src after render and only
 // then reveal it over the initials fallback.
 function _loadThumbs(root: HTMLElement): void {
+  const beans = S.coffeeLibrary.beans;
   root.querySelectorAll<HTMLElement>('.cal-month-thumb[data-bean-id]').forEach(btn => {
     const id = Number(btn.dataset.beanId);
     if (!Number.isFinite(id)) return;
+    if (!beanHasPhoto(beans, id)) return;
     void loadBeanImageBlobUrl(id).then(url => {
       if (!url) return;
       const img = btn.querySelector<HTMLImageElement>('img.cal-month-img');

@@ -9,6 +9,7 @@ let buildMonthDays: MonthModule['buildMonthDays'];
 let dotSize: MonthModule['dotSize'];
 let shiftMonth: MonthModule['shiftMonth'];
 let summaryLine: MonthModule['summaryLine'];
+let beanHasPhoto: MonthModule['beanHasPhoto'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -19,7 +20,7 @@ beforeAll(async () => {
     value: {},
     configurable: true, writable: true,
   });
-  ({ buildMonthDays, dotSize, shiftMonth, summaryLine } = await import('../public-src/views/analytics-month.js'));
+  ({ buildMonthDays, dotSize, shiftMonth, summaryLine, beanHasPhoto } = await import('../public-src/views/analytics-month.js'));
 });
 
 function at<T>(arr: readonly T[], i: number): T {
@@ -67,6 +68,23 @@ describe('dotSize', () => {
     expect(dotSize(2)).toBe('m');
     expect(dotSize(3)).toBe('l');
     expect(dotSize(12)).toBe('l');
+  });
+});
+
+describe('beanHasPhoto', () => {
+  it('is false for an unknown bean id', () => {
+    expect(beanHasPhoto([{ id: 1, image: 'jpg' }], 2)).toBe(false);
+  });
+  it('is false for a bean without a stored photo', () => {
+    const beans = [{ id: 1 }, { id: 2, image: null }];
+    expect(beanHasPhoto(beans, 1)).toBe(false);
+    expect(beanHasPhoto(beans, 2)).toBe(false);
+  });
+  it('is true for a bean with a stored photo', () => {
+    expect(beanHasPhoto([{ id: 1 }, { id: 2, image: 'jpg' }], 2)).toBe(true);
+  });
+  it('is false without a bean list', () => {
+    expect(beanHasPhoto(undefined, 1)).toBe(false);
   });
 });
 
