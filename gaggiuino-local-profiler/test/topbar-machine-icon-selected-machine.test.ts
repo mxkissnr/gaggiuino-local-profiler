@@ -8,7 +8,7 @@ g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} 
 g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { renderTopbarMachineIcon, handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent, syncTopbarMachineIconFallback } =
+const { renderTopbarMachineIcon, handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent, syncTopbarMachineIconFallback, openEasterEggPanel } =
   await import('../public-src/components/topbar-machine-icon.js');
 
 function makeHost() {
@@ -75,5 +75,32 @@ describe('topbar machine icon follows the selected machine (#1201)', () => {
     handleTopbarPreheatUpdateEvent({ ready: false, remaining: 120, pct: 0 });
     expect(el.has('is-on')).toBe(false);
     expect(el.has('is-heating')).toBe(false);
+  });
+
+  // #1385: unknown reachability (undefined) must leave the fallback dark too.
+  it('non-default machine: unknown reachability keeps the fallback off', () => {
+    state.activeMachineId = 2;
+    renderTopbarMachineIcon();
+    syncTopbarMachineIconFallback(undefined);
+    expect(el.has('is-on')).toBe(false);
+  });
+
+  // #1383 review: the easter-egg panel renders its own icon from a null live
+  // snapshot plus the last preheat. Unknown reachability now resolves off,
+  // which this decorative, always-coloured panel renders as its steady 'hot'
+  // look -- never dark and no longer the old `heating` animation.
+  it('easter-egg panel icon shows the steady hot look for a null snapshot with an active preheat', () => {
+    const panelIcon = makeHost();
+    const panel = { style: {} as Record<string, string> };
+    g.document = {
+      getElementById: (id: string) => (id === 'easterEggPanel' ? panel : id === 'easterEggPanelIcon' ? panelIcon : null),
+    };
+
+    handleTopbarPreheatUpdateEvent({ ready: false, remaining: 1200, pct: 0 });
+    openEasterEggPanel();
+
+    expect(panelIcon.has('is-on')).toBe(true);
+    expect(panelIcon.has('is-hot')).toBe(true);
+    expect(panelIcon.has('is-heating')).toBe(false);
   });
 });

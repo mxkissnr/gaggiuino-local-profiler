@@ -70,4 +70,17 @@ describe('Live view machine icon stays off through a preheat event (#1383)', () 
     expect(host.has('is-on')).toBe(false);
     expect(host.has('is-heating')).toBe(false);
   });
+
+  // #1383: the reported install reports the default machine with no
+  // reachability value at all (null, not false) while preheat is still
+  // running. Unknown reachability is off, so the preheat update must not
+  // re-light the accent layer here either.
+  it('a null-reachability default machine followed by a preheat update stays off', () => {
+    syncMachineIcon({ machineReachable: null });
+    expect(host.has('is-on')).toBe(false);
+
+    updatePreheatWidget({ ready: false, remaining: 1200, pct: 0 });
+    expect(host.has('is-on')).toBe(false);
+    expect(host.has('is-heating')).toBe(false);
+  });
 });
