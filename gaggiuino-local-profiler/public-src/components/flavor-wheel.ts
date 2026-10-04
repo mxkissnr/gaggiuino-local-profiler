@@ -210,7 +210,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
     animationEasing: 'cubicOut',
     tooltip: { formatter: (params: { name?: string }) => (params.name === WHEEL_ROOT_ID ? '' : esc(params.name)) },
     series: [{
-      type: 'sunburst', name: WHEEL_ROOT_ID, radius: ['14%', '92%'], center: ['50%', '50%'],
+      type: 'sunburst', name: WHEEL_ROOT_ID, radius: ['22%', '92%'], center: ['50%', '50%'],
       data, sort: null,
       // Zoom is driven entirely by our own click handler below (so the
       // breadcrumb always matches what's on screen, including zoom-out).
@@ -227,7 +227,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
         // from `series.name` + our 9-category array) — it has no data of its
         // own, so it gets no itemStyle/label from toSunburstData and falls
         // back to echarts' theme defaults (a visible blue fill + its raw
-        // name as a label). Invisible by default (tiny sliver at 0-14%
+        // name as a label). Invisible by default (tiny sliver at 0-22%
         // radius) but once zoomed in it's redistributed into a big, very
         // visible ring unless explicitly zeroed out here — same for the
         // emphasis state, since clicking triggers focus:'ancestor' up to it.
@@ -239,7 +239,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
         // names (e.g. "Nussig / Kakao") unreadable. `overflow:'break'` with
         // a fixed `width` wraps those long names onto a second line instead
         // of clipping or squeezing them.
-        { r0: '14%', r: '38%', label: { rotate: 0, overflow: 'break', width: 64 } },
+        { r0: '22%', r: '38%', label: { rotate: 0, overflow: 'break', width: 64 } },
         // Radial (spoke-pointing) labels on the outer two rings, matching
         // the real SCA/WCR wheel's signature look — you tilt the wheel to
         // read the far side, same as the paper original. `minAngle` keeps a

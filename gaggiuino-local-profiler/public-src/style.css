@@ -1132,7 +1132,7 @@
         .lib-stock-bar { display: inline-block; width: 42px; height: 5px; border-radius: 3px; background: var(--gray-700); overflow: hidden; vertical-align: middle; margin-left: var(--sp-2); }
         .lib-stock-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
         .lib-stock-bar-fill.low { background: var(--err); }
-        .lib-inv-reorder { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: var(--err); border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; }
+        .lib-inv-reorder { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: var(--err); border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; text-decoration: none; }
         .lib-inv-total { color: var(--gray-700); font-size: var(--fs-1); }
         .lib-decaf-badge { display: inline-block; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
         .lib-fresh-badge { display: inline-block; border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
@@ -1190,12 +1190,14 @@
         .lib-aroma-wheel { flex: 0 0 auto; width: min(168px, 45vw); padding: 0; background: none; border: none; line-height: 0; cursor: pointer; }
         .lib-aroma-svg { display: block; width: 100%; height: auto; }
         .lib-aroma-seg { stroke: var(--gray-700); stroke-width: .6; }
+        /* #1372: lit segments carry the same white outline as the large wheel. */
+        .lib-aroma-seg.is-lit { stroke: #fff; stroke-width: 1.6; }
         .lib-aroma-svg.has-hl .lib-aroma-seg { opacity: .35; }
         .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px rgba(255,255,255,.65)); }
         .lib-aroma-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); flex: 1 1 120px; }
         .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--chip-color); cursor: pointer; }
         @media (prefers-reduced-motion: no-preference) {
-            .lib-aroma-seg.is-hl { animation: aroma-pulse 500ms ease-out; }
+            .lib-aroma-seg.is-pulse { animation: aroma-pulse 500ms ease-out; }
             @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
         }
         .lib-bean-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: var(--sp-3); background: var(--gray-800); cursor: pointer; }
@@ -1536,8 +1538,11 @@
         body.lib-sheet-open { overflow: hidden; }
         .lib-sheet-host { display: none; }
         .lib-sheet-host.open { display: block; }
-        .lib-sheet-backdrop { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.55); }
-        .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: 88dvh; overflow-y: auto; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
+        /* #1372: fixed overlays start below the dev-build banner (--dev-banner-h
+           is set on :root by components/dev-banner.ts; it stays unset, so 0px,
+           on real installs). */
+        .lib-sheet-backdrop { position: fixed; top: var(--dev-banner-h, 0px); left: 0; right: 0; bottom: 0; z-index: 900; background: rgba(0,0,0,.55); }
+        .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: calc(88dvh - var(--dev-banner-h, 0px)); overflow-y: auto; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
         .lib-sheet-head { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--sp-3); align-items: start; }
         .lib-sheet-photo { width: 72px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
         .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -1565,7 +1570,11 @@
         .lib-sheet-body .lib-item-in-sheet { display: block; background: none; padding: 0; }
         /* Bean form in a sheet (#1349): the same static form, moved in. */
         .lib-form-sheet .lib-add-form { display: block; background: none; padding: 0; margin: 0; }
-        .lib-form-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+        /* #1372: keep the form's title + close button in view while the sheet
+           scrolls. The sheet carries var(--sp-4) top padding and is the scroll
+           container, so the header sticks at the negative offset of that
+           padding to stay flush with the sheet's top edge. */
+        .lib-form-sheet-head { position: sticky; top: calc(-1 * var(--sp-4)); z-index: 3; background: var(--gray-900); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-4) 0 var(--sp-2); margin-top: calc(-1 * var(--sp-4)); margin-bottom: var(--sp-3); }
         .lib-form-sheet-head-actions { display: flex; align-items: center; gap: var(--sp-1); }
         .lib-form-sheet-body { min-width: 0; }
         .lib-form-sheet .lib-form-actions { position: sticky; bottom: 0; z-index: 2; padding: var(--sp-2) 0; background: var(--gray-900); }
@@ -1582,8 +1591,22 @@
             .lib-shelf-drop { animation: lib-shelf-drop 450ms cubic-bezier(.34,1.56,.64,1); }
         }
         @media (min-width: 900px) {
-            .lib-sheet { left: auto; right: 0; top: 0; bottom: 0; width: min(440px, 100%); height: 100%; max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
+            .lib-sheet { left: auto; right: 0; top: var(--dev-banner-h, 0px); bottom: 0; width: min(440px, 100%); max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
             @keyframes lib-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        }
+        /* #1372: desktop has spare width — widen the sheet, lay the bean form
+           out in three columns and place the wheel beside the aromas so the
+           form needs little or no scrolling. */
+        @media (min-width: 1200px) {
+            .lib-sheet { width: min(720px, 50vw); }
+            .lib-form-sheet .lib-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            /* The base odd-last-child rule spans a lone last field across the
+               whole row (right for the 2-column grid); in the 3-column form a
+               lone field stays in its own column. Explicit full-width fields
+               (.lib-form-field-wide) keep spanning. */
+            .lib-form-sheet .lib-form-grid .lib-form-field:not(.lib-form-field-wide):last-child:nth-child(odd) { grid-column: auto; }
+            .lib-sheet-aromas-body { flex-wrap: nowrap; }
+            .lib-sheet-aromas-body .lib-aroma-wheel { width: 200px; }
         }
         .lib-form-hint-staged { color: var(--ok); }
 
@@ -2593,7 +2616,7 @@
         .maint-disabled-row .icon svg { width:14px; height:14px; }
         .maint-disabled-row span:nth-child(2) { flex:1; }
         /* Guided maintenance walkthrough */
-        .guided-maint-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding: var(--sp-4); }
+        .guided-maint-overlay { position:fixed; top: var(--dev-banner-h, 0px); left:0; right:0; bottom:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding: var(--sp-4); }
         .guided-maint-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:440px; width:100%; max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-3); }
         .guided-maint-step { display:flex; align-items:flex-start; gap: var(--sp-3); padding: var(--sp-2) var(--sp-2); border-bottom:1px solid var(--gray-800); cursor:pointer; font-size: var(--fs-2); color:var(--gray-300); }
         .guided-maint-step:last-child { border-bottom:none; }
@@ -2609,7 +2632,7 @@
            remaining space, but a flex column sized by `height:auto` (content)
            never has positive free space to grow into — the canvas would
            collapse to 0px before echarts even has a size to init() against. */
-        .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, 92dvh); max-height:92dvh; overflow-y:hidden; }
+        .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); max-height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); overflow-y:hidden; }
 
         /* Machine profile editor modal (#307) — same fixed-height/flex-child
            pattern as .flavor-wheel-modal above, but wider (dense 2-column
@@ -2724,11 +2747,11 @@
     init() against, instead of the modal having to scroll. */
     .fw-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap: var(--sp-2); }
     .fw-main { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
-    .fw-canvas-wrap { position:relative; flex:1 1 auto; min-height:0; }
+    .fw-canvas-wrap { position:relative; flex:1 1 auto; min-height:0; container-type: size; }
     .fw-canvas { width:100%; height:100%; cursor:pointer; position:relative; }
     .fw-side { flex:0 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-2); }
     /* Bean photo in the wheel centre; tapping it zooms back to the overview. */
-    .fw-center-photo { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:24%; aspect-ratio:1; padding:0; border:2px solid var(--gray-600); border-radius:50%; overflow:hidden; background:var(--gray-800); cursor:pointer; pointer-events:auto; }
+    .fw-center-photo { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:20cqmin; height:20cqmin; padding:0; border:2px solid var(--gray-600); border-radius:50%; overflow:hidden; background:var(--gray-800); cursor:pointer; pointer-events:auto; }
     .fw-center-photo img { display:block; width:100%; height:100%; object-fit:cover; }
     .fw-legend { display:flex; flex-direction:column; gap:2px; overflow-y:auto; min-height:0; }
     .fw-legend-row { display:flex; align-items:center; gap: var(--sp-2); width:100%; padding: var(--sp-1) var(--sp-2); background:none; border:none; border-radius:var(--radius); color:var(--gray-300); font:inherit; font-size:var(--fs-1); text-align:left; cursor:pointer; }
@@ -2737,7 +2760,7 @@
     .fw-legend-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     @media (min-width: 900px) {
         .flavor-wheel-modal { max-width: min(960px, 96vw); }
-        .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); gap: var(--sp-4); }
+        .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); grid-template-rows: minmax(0, 1fr); gap: var(--sp-4); }
     }
 
         /* Photo picker button (replaces native <input type=file>, #286) */
