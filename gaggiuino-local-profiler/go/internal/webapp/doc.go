@@ -53,9 +53,12 @@
 // the general 'unsafe-eval'. The built bundle was checked against that
 // policy: the emitted index.html loads only external same-origin
 // <script type="module"> / <link rel="stylesheet"> tags (no inline script, no
-// inline event handlers); grepping every chunk in public/assets/ for `eval(` /
-// `new Function` / `WebAssembly` / `new Worker` came back empty — modern
-// chart.js and ECharts builds need none of them. Dynamic import() of the
+// inline event handlers); grepping the eagerly-loaded chunks in public/assets/
+// for `eval(` / `new Function` / `new Worker` came back empty — modern
+// chart.js and ECharts builds need none of them. The build's only
+// `WebAssembly` is the lazily imported onnxruntime-web cut-out chunk, which is
+// same-origin and gated by the 'wasm-unsafe-eval' source above (it compiles
+// WebAssembly without enabling general eval). Dynamic import() of the
 // echarts/topojson/qrcode chunks is same-origin and covered by
 // script-src 'self'. The SPA's fetch/XHR/EventSource targets are all
 // same-origin /api/* (connect-src 'self'); its Blob()/createObjectURL use
