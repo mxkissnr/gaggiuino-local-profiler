@@ -57,7 +57,7 @@ describe('renderBeanList (#648 bag-history roastDate escaping)', () => {
           // consumedG/remainingG/current are backend-computed (SimulateBagQueue)
           // and attached to every bag on load — this bag must be "current" (not
           // lazily-rendered "past") for the escaping path below to be exercised.
-          { id: 2, roastDate: '<img src=x onerror=alert(1)>', stock_g: 250, consumedG: 0, remainingG: 250, current: true },
+          { id: 2, roastDate: '<img src=x onerror=alert(1)>', stock_g: 250, consumedG: 100, remainingG: 150, current: true },
         ],
       }],
       grinders: [],

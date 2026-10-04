@@ -54,7 +54,7 @@ function fakeDocument(): FakeDocument {
 
 describe('renderBeanList last-used grind setting (#829)', () => {
   beforeEach(() => {
-    S.coffeeLibrary = { beans: [{ id: 1, name: 'Yirgacheffe Chelelektu' }], grinders: [] };
+    S.coffeeLibrary = { beans: [{ id: 1, name: 'Yirgacheffe Chelelektu', bags: [{ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true }] }], grinders: [] };
   });
 
   it('shows the most recent shot\'s grind setting, then the new one after a grind-setting change', () => {
