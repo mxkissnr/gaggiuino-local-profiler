@@ -133,8 +133,6 @@ Every commit that ships a feature or fix needs:
 3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
 4. `README.md` features table update if it's a new feature
 
-**Easter eggs (hidden panels, secret gestures, secret badges) are never mentioned in CHANGELOG.md, whats-new, DOCS/README, release notes or PR titles that end up in release notes — finding them is the point.**
-
 Do **not** bump the version (`config.yaml`/`package.json`/the two Go
 consts) or touch `public-src/shared/whats-new.ts` in a feature/fix commit —
 both happen once, together, at release time (see Versioning above and the
@@ -156,6 +154,8 @@ gh release create v<version> --title "v<version>" --notes "..."
 - **Keep README screenshots current** when the UI changes: `node scripts/screenshots.mjs` regenerates `docs/screenshots/*.png`.
 - **Regenerate dev-stats at every release, not just when they look stale.** Run whatever the current dev-stats script is (see `scripts/`) and re-check DOCS.md/DOCS.de.md/README.md against the actual feature set shipped in that release — stale stats and stale feature docs are a recurring failure mode here.
 - **Every commit involving Claude/an AI agent — including release/chore commits, not just feature commits — must carry a `Co-Authored-By:` trailer naming the SPECIFIC model, not a bare "Claude".** Format: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`, e.g. `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` or `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` — whichever model actually authored that commit. `DEVELOPMENT.md`'s model-breakdown table groups commits by this exact string, so a generic "Claude" silently pollutes the stats as an unidentifiable bucket. This has been silently skipped/genericized multiple times; every dispatch prompt (release agents included) must explicitly state which model string to use.
+
+- **Easter eggs (hidden panels, secret gestures, secret badges) are never mentioned in CHANGELOG.md, whats-new, DOCS/README, release notes or PR titles that end up in release notes — finding them is the point.**
 
 ## Gaggiuino project boundaries
 
