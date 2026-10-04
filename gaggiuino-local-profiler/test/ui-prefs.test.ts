@@ -23,8 +23,9 @@ function cachedPrefs(): Record<string, unknown> {
   return JSON.parse(_store.get('glp_ui_prefs') ?? '{}') as Record<string, unknown>;
 }
 
-function sentBody(call: [string, RequestInit | undefined] | undefined): Record<string, unknown> {
-  return JSON.parse(String(call?.[1]?.body)) as Record<string, unknown>;
+function sentBody(call: readonly unknown[] | undefined): Record<string, unknown> {
+  const opts = call?.[1] as RequestInit | undefined;
+  return JSON.parse(String(opts?.body)) as Record<string, unknown>;
 }
 
 async function loadModule() {
