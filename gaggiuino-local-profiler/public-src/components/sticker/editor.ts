@@ -6,7 +6,7 @@
 //
 // Nothing imports this module yet — slice 3b wires it into the photo flow — so
 // it never reaches the first-load bundle.
-import { t } from '../i18n.js';
+import { t } from '../../i18n.js';
 import { applyTap, featherAlpha, paintBrush } from './mask.js';
 import { autoCutout, resetCutout, tapMask } from './segment.js';
 
