@@ -304,12 +304,12 @@ describe('staged new-bean photo (#1329 part 2)', () => {
   it('uploads a staged photo after the bean is created', async () => {
     const { doc } = fakeLibraryDom('New Bean');
     g.document = doc;
-    mocks.crop.mockResolvedValue({} as Blob);
+    mocks.crop.mockResolvedValue({});
     mocks.saveBean.mockResolvedValue({ id: 42, name: 'New Bean', bags: [] });
     mocks.uploadBeanImage.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ id: 42, name: 'New Bean', image: 'jpg', bags: [] }),
-    } as unknown as Response);
+    });
 
     const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
     await library.stageNewBeanImage(input);
@@ -322,7 +322,7 @@ describe('staged new-bean photo (#1329 part 2)', () => {
   it('does not upload after closeBeanForm() cleared the staged photo', async () => {
     const { doc } = fakeLibraryDom('Another Bean');
     g.document = doc;
-    mocks.crop.mockResolvedValue({} as Blob);
+    mocks.crop.mockResolvedValue({});
     mocks.saveBean.mockResolvedValue({ id: 43, name: 'Another Bean', bags: [] });
 
     const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;

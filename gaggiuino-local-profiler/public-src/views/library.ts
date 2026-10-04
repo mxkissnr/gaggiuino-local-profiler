@@ -490,7 +490,7 @@ let _shelfArchiveOpen = false;
 // Active shelf toolbar state. Only filter/sort are persisted (shelf.ts's
 // saveShelfPrefs); the query is intentionally session-only so a stale search
 // can't silently hide beans after a reload.
-let _shelfPrefs: ShelfPrefs = loadShelfPrefs();
+const _shelfPrefs: ShelfPrefs = loadShelfPrefs();
 
 function _shelfHeading(key: string, count?: number): Html {
   return html`<div class="lib-shelf-heading"><span>${tHtml(key)}</span>${count != null ? html`<span class="lib-shelf-count">${esc(count)}</span>` : esc('')}</div>`;
