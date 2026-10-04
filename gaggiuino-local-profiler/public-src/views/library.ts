@@ -235,7 +235,7 @@ function beanFreshBadge(b: BeanListRow): Html {
     : esc('');
 }
 
-function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: BeanCardOpts): Html {
+export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: BeanCardOpts): Html {
   const inSheet = opts?.inSheet === true;
   const bags = Array.isArray(b.bags) ? b.bags : [];
   // consumedG/remainingG (bean-level totals) and every bag's own

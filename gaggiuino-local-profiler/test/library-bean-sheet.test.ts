@@ -69,7 +69,10 @@ function setup(over: Record<string, unknown> = {}) {
       roaster: 'Kaffee Braun',
       origin: 'ET',
       flavors: ['Jasmin'],
-      bags: [{ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true, roastDate: '2026-01-01' }],
+      bags: [
+        { id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true, roastDate: '2026-01-01' },
+        { id: 2, stock_g: 250, consumedG: 250, remainingG: 0, roastDate: '2019-01-01' },
+      ],
       ...over,
     }],
     grinders: [],
@@ -100,7 +103,7 @@ describe('bean detail sheet (#1330 part 2)', () => {
     expect(html).toContain('data-action="open-new-bag"');     // Bag +
     expect(html).toContain('data-action="open-freeze-form"'); // Freeze
     expect(html).toContain('data-action="toggle-bean-active"');
-    expect(html).toContain(t('lib_btn_archive'));
+    expect(html).toContain('>' + t('lib_btn_archive') + '<');
     expect(html).toContain(t('lib_sheet_shot_log'));
     expect(html).toContain('data-action="close-bean-sheet"');
   });
@@ -110,8 +113,8 @@ describe('bean detail sheet (#1330 part 2)', () => {
     openBeanSheet(1);
 
     const html = sheetHtml(elements);
-    expect(html).toContain(t('lib_btn_restore'));
-    expect(html).not.toContain(t('lib_btn_archive'));
+    expect(html).toContain('>' + t('lib_btn_restore') + '<');
+    expect(html).not.toContain('>' + t('lib_btn_archive') + '<');
   });
 
   it('renders the embedded card without the toolbar but with the bag history', () => {
