@@ -1544,6 +1544,8 @@
         .lib-sheet-backdrop { position: fixed; top: var(--dev-banner-h, 0px); left: 0; right: 0; bottom: 0; z-index: 900; background: rgba(0,0,0,.55); }
         .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: calc(88dvh - var(--dev-banner-h, 0px)); overflow-y: auto; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
         .lib-sheet-head { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--sp-3); align-items: start; }
+        /* #1374: the grab pill drags the sheet down to close it on phones. */
+        .lib-sheet-grab { width: 36px; height: 4px; margin: 0 auto var(--sp-3); border-radius: 999px; background: var(--gray-600); }
         .lib-sheet-photo { width: 72px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
         .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
         .lib-sheet-photo .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; }
@@ -1555,6 +1557,13 @@
         .lib-sheet-head-actions { display: flex; align-items: center; gap: var(--sp-1); }
         .lib-sheet-close { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: none; border-radius: 50%; background: var(--gray-800); color: var(--gray-200); cursor: pointer; }
         .lib-sheet-close:hover { background: var(--gray-700); }
+        /* #1374: on a phone the X is out of the way (the grab handle and the
+           backdrop close the sheet), but it stays focusable and reachable for
+           keyboard and screen readers, and shows again on focus. */
+        @media (max-width: 899px) {
+            .lib-sheet-close { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+            .lib-sheet-close:focus-visible { position: static; width: 40px; height: 40px; overflow: visible; clip-path: none; }
+        }
         .lib-sheet-more { position: relative; }
         .lib-sheet-more > summary { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--gray-800); color: var(--gray-200); cursor: pointer; list-style: none; font-size: var(--fs-3); line-height: 1; }
         .lib-sheet-more > summary::-webkit-details-marker { display: none; }
@@ -1592,6 +1601,7 @@
         }
         @media (min-width: 900px) {
             .lib-sheet { left: auto; right: 0; top: var(--dev-banner-h, 0px); bottom: 0; width: min(440px, 100%); max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
+            .lib-sheet-grab { display: none; }
             @keyframes lib-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         }
         /* #1372: desktop has spare width — widen the sheet, lay the bean form
@@ -2761,6 +2771,16 @@
     @media (min-width: 900px) {
         .flavor-wheel-modal { max-width: min(960px, 96vw); }
         .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); grid-template-rows: minmax(0, 1fr); gap: var(--sp-4); }
+    }
+    /* #1374: on a phone the wheel takes the whole screen (minus the dev-build
+       banner) and grows out of the small wheel in the bean sheet through a
+       shared-element view transition. */
+    @media (max-width: 899px) {
+        #flavorWheelModal { padding: 0; }
+        .flavor-wheel-modal { width:100%; max-width:none; height: calc(100dvh - var(--dev-banner-h, 0px)); max-height:none; border-radius:0; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        ::view-transition-group(flavor-wheel) { animation-duration: 320ms; animation-timing-function: cubic-bezier(.2,0,0,1); }
     }
 
         /* Photo picker button (replaces native <input type=file>, #286) */

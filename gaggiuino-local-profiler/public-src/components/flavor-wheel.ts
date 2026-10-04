@@ -316,11 +316,43 @@ function renderLegend(flavors: unknown, lang: FlavorLang): Html {
   return joinHtml(rows);
 }
 
+// ── Shared-element growth (#1374) ─────────────────────────────────────────
+
+interface WheelViewTransition {
+  updateCallbackDone?: Promise<void>;
+  finished?: Promise<void>;
+}
+
+// The wheel grows out of the small wheel only when View Transitions are
+// available, the user has not asked for reduced motion, and there is a small
+// wheel to grow from. Otherwise it opens and closes directly.
+export function shouldGrowWheelFrom(hasViewTransition: boolean, motionOk: boolean, fromSmallWheel: boolean): boolean {
+  return hasViewTransition && motionOk && fromSmallWheel;
+}
+
+function startWheelViewTransition(cb: () => void): WheelViewTransition | null {
+  if (typeof document === 'undefined') return null;
+  const doc = document as unknown as { startViewTransition?: (cb: () => void) => WheelViewTransition };
+  return typeof doc.startViewTransition === 'function' ? doc.startViewTransition(cb) : null;
+}
+
+function setWheelTransitionName(el: HTMLElement | null, on: boolean): void {
+  if (!el) return;
+  if (on) el.style.setProperty('view-transition-name', 'flavor-wheel');
+  else el.style.removeProperty('view-transition-name');
+}
+
 export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const bean = S.coffeeLibrary?.beans?.find(b => b.id === beanId);
   if (!bean) return;
   const modal = document.getElementById('flavorWheelModal');
   if (!modal) return;
+  // #1374: below 640px #main is position:fixed and so a stacking context, which
+  // trapped the overlay's own z-index inside it; the body-level bean sheet
+  // (z-index 901) therefore always painted above the wheel on a phone. One move
+  // to <body> puts the wheel back into the page's stacking context. The click
+  // delegation (document.body) and the backdrop handler follow the element.
+  if (document.body && modal.parentElement !== document.body) document.body.appendChild(modal);
 
   (document.getElementById('flavorWheelTitle') as HTMLElement).textContent = bean.name as string;
   // #1350: the bean's photo now sits in the wheel's centre (tapping it zooms
@@ -349,13 +381,41 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const legendEl = document.getElementById('flavorWheelLegend');
   if (legendEl) legendEl.innerHTML = renderLegend(bean.flavors, lang);
 
-  modal.style.display = 'flex';
   const container = document.getElementById('flavorWheelCanvas') as HTMLElement;
   const breadcrumbEl = document.getElementById('flavorWheelBreadcrumb');
   // echarts is a dynamic import now (#797) — show a loading state while its
   // chunk downloads instead of leaving the canvas blank.
   container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_loading')}</p>`;
   if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
+
+  const canvasWrap = modal.querySelector<HTMLElement>('.fw-canvas-wrap');
+  const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
+  const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
+  const grow = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!smallWheel && !!canvasWrap);
+
+  const showModal = (): void => {
+    setWheelTransitionName(smallWheel, false);
+    setWheelTransitionName(canvasWrap, true);
+    modal.style.display = 'flex';
+  };
+
+  if (grow) {
+    // Grow out of the small wheel: the old snapshot is the sheet's wheel, the
+    // new one the full-screen modal.
+    setWheelTransitionName(smallWheel, true);
+    const transition = startWheelViewTransition(showModal);
+    if (transition) {
+      // Render only after the DOM update has been snapshotted, so the echarts
+      // chunk download never blocks the growth.
+      if (transition.updateCallbackDone) await transition.updateCallbackDone;
+      else showModal();
+    } else {
+      showModal();
+    }
+  } else {
+    showModal();
+  }
+
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
     container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_unavailable')}</p>`;
     if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
@@ -364,6 +424,32 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
 
 export function closeFlavorWheel(): void {
   const modal = document.getElementById('flavorWheelModal');
-  if (modal) modal.style.display = 'none';
-  disposeFlavorWheel();
+  if (!modal) { disposeFlavorWheel(); return; }
+  const canvasWrap = modal.querySelector<HTMLElement>('.fw-canvas-wrap');
+  const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
+  const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
+  const shrink = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!smallWheel && !!canvasWrap);
+
+  const hideModal = (): void => {
+    setWheelTransitionName(canvasWrap, false);
+    setWheelTransitionName(smallWheel, true);
+    modal.style.display = 'none';
+  };
+
+  if (shrink) {
+    setWheelTransitionName(canvasWrap, true);
+    const transition = startWheelViewTransition(() => { hideModal(); disposeFlavorWheel(); });
+    if (transition) {
+      const clearNames = (): void => { setWheelTransitionName(canvasWrap, false); setWheelTransitionName(smallWheel, false); };
+      const done = transition.finished ?? transition.updateCallbackDone;
+      if (done) void done.then(clearNames, clearNames);
+      else clearNames();
+    } else {
+      hideModal();
+      disposeFlavorWheel();
+    }
+  } else {
+    modal.style.display = 'none';
+    disposeFlavorWheel();
+  }
 }
