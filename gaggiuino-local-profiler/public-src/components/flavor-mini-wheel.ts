@@ -170,5 +170,5 @@ export function applySheetFlavorHighlight(root: ParentNode | null): void {
 export function highlightSheetFlavor(nodeId: string | null, chipEl?: Element | null): void {
   _sheetHlNode = nodeId && _sheetHlNode !== nodeId ? nodeId : null;
   const root = chipEl && typeof chipEl.closest === 'function' ? chipEl.closest('.lib-sheet') : null;
-  applySheetFlavorHighlight(root as ParentNode | null);
+  applySheetFlavorHighlight(root);
 }

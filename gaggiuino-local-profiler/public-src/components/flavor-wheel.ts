@@ -327,7 +327,7 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   // back to the overview), so the small header image stays hidden.
   const imgEl = document.getElementById('flavorWheelImage') as HTMLImageElement | null;
   if (imgEl) imgEl.style.display = 'none';
-  const centerBtn = document.getElementById('flavorWheelCenter') as HTMLElement | null;
+  const centerBtn = document.getElementById('flavorWheelCenter');
   const centerImg = document.getElementById('flavorWheelCenterImg') as HTMLImageElement | null;
   if (centerBtn) {
     centerBtn.style.display = 'none';
@@ -346,7 +346,7 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
        <div class="fw-unmatched-chips">${joinHtml(unmatched.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>`
     : html``;
 
-  const legendEl = document.getElementById('flavorWheelLegend') as HTMLElement | null;
+  const legendEl = document.getElementById('flavorWheelLegend');
   if (legendEl) legendEl.innerHTML = renderLegend(bean.flavors, lang);
 
   modal.style.display = 'flex';
