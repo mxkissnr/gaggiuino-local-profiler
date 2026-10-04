@@ -6,11 +6,6 @@ import { shotImageUrl } from './api/shots.js';
 // instead. Cached per entity for the page lifetime; photos can be
 // re-uploaded/removed, so invalidate*Image() clears a stale cache entry.
 // 'bean:<id>' | 'grinder:<id>' | 'shot:<id>' -> Promise<string|null>
-//
-// The Statistics month calendar (#1331) reuses loadBeanImageBlobUrl() for its
-// day thumbnails: the per-bean cache means a month with many days of the same
-// bean still issues a single request, and a bean without a photo resolves to
-// null so the caller keeps its initials fallback.
 const _cache = new Map<string, Promise<string | null>>();
 
 function _load(key: string, url: string): Promise<string | null> {

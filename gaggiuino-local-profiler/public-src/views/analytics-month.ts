@@ -181,7 +181,6 @@ let _escHandler: ((e: KeyboardEvent) => void) | null = null;
 function _switchTo(year: number, month: number): void {
   _viewYear = year;
   _viewMonth = month;
-  _openDay = null;
   const el = document.getElementById('shotMonthCalendar');
   if (el) renderMonthCalendar(el);
 }
@@ -308,6 +307,10 @@ function _renderPopover(el: HTMLElement): void {
 export function renderMonthCalendar(el: HTMLElement, year?: number, month?: number): void {
   if (typeof year === 'number') _viewYear = year;
   if (typeof month === 'number') _viewMonth = month;
+  // A rebuild (language change, data reload, machine filter) is a fresh
+  // render: close any open day popover instead of leaving it pointing at a
+  // day whose shot list may have changed underneath it.
+  _openDay = null;
 
   const locale = localeFor(S.currentLang);
   const shots = _shots();
