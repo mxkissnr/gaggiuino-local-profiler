@@ -883,10 +883,6 @@ function _focusablesWithin(host: HTMLElement | null): HTMLElement[] {
   ));
 }
 
-function _sheetFocusables(): HTMLElement[] {
-  return _focusablesWithin(_sheetHost());
-}
-
 // True while an overlay sits above a sheet: a lightbox, the crop/sticker
 // editor or the barcode scan modal owns Escape until it is gone.
 function _overlayShieldsSheets(): boolean {
