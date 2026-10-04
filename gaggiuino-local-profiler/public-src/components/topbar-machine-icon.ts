@@ -208,8 +208,8 @@ export function handleTopbarMachineIconClick(): void {
 // long as the panel stays open instead of the burst's fade-out/auto-stop —
 // the panel itself is the "off switch" (closeEasterEggPanel() stops it). No
 // new persistent state, no analytics, nothing recorded — see this module's
-// top-of-file note and #845: it stays out of whats-new.js and is meant to stay
-// a secret; the CHANGELOG only ever names the hidden panel, never the trigger.
+// top-of-file note and #845: intentionally never mentioned in
+// CHANGELOG.md/whats-new.js, DOCS or release notes, it's meant to stay a secret.
 let _panelIconFor: unknown = null;
 let _panelRainbow: RainbowHandle | null = null;
 let _coffeeHistoryStop: (() => void) | null = null;
