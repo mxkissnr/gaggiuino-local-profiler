@@ -95,7 +95,7 @@ async function _flush(): Promise<void> {
 export function mergeUiPrefs(
   local: UiPrefs,
   server: UiPrefs,
-  pending: ReadonlySet<string> = new Set(),
+  pending: ReadonlySet<string> = new Set<string>(),
 ): { merged: UiPrefs; pushUp: string[] } {
   const merged: UiPrefs = { ...local };
   const pushUp: string[] = [];
