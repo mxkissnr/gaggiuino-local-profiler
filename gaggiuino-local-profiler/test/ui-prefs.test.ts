@@ -67,6 +67,22 @@ describe('mergeUiPrefs (#1375)', () => {
       pushUp: ['a', 'b'],
     });
   });
+
+  it('a local write still queued beats the server value (finding 3)', async () => {
+    const { mergeUiPrefs } = await loadModule();
+    expect(mergeUiPrefs({ a: 1, b: 2 }, { a: 9, c: 3 }, new Set(['a']))).toEqual({
+      merged: { a: 1, b: 2, c: 3 },
+      pushUp: ['b'],
+    });
+  });
+
+  it('a queued local-only key is not pushed up twice', async () => {
+    const { mergeUiPrefs } = await loadModule();
+    expect(mergeUiPrefs({ a: 1 }, {}, new Set(['a']))).toEqual({
+      merged: { a: 1 },
+      pushUp: [],
+    });
+  });
 });
 
 describe('setUiPref (#1375)', () => {
@@ -110,6 +126,30 @@ describe('setUiPref (#1375)', () => {
       'machine.active': 7,
     });
   });
+
+  it('does not drop a change made while a PUT is in flight (finding 2)', async () => {
+    const mod = await loadModule();
+    let resolvePut: ((r: Response) => void) | undefined;
+    const fetchMock = vi.fn<FetchFn>(() => new Promise<Response>(res => { resolvePut = res; }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    mod.setUiPref('lib.shelf', { filter: 'v1' });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sentBody(fetchMock.mock.calls[0])).toEqual({ 'lib.shelf': { filter: 'v1' } });
+
+    // The user changes the same key before the first PUT has settled.
+    mod.setUiPref('lib.shelf', { filter: 'v2' });
+
+    resolvePut?.(okJson({}));
+    // Run the follow-up flush whichever microtask ordering settles the in-flight
+    // PUT first (the version check must keep the key queued either way).
+    await vi.runAllTimersAsync();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentBody(fetchMock.mock.calls[1])).toEqual({ 'lib.shelf': { filter: 'v2' } });
+  });
 });
 
 describe('loadUiPrefsFromServer (#1375)', () => {
@@ -149,5 +189,29 @@ describe('loadUiPrefsFromServer (#1375)', () => {
 
     expect(await mod.loadUiPrefsFromServer()).toBe(false);
     expect(mod.getUiPref('lib.shelf')).toEqual({ filter: 'espresso' });
+  });
+
+  it('a local write still queued is not overwritten by the server (finding 3)', async () => {
+    const mod = await loadModule();
+    const calls: [string, RequestInit | undefined][] = [];
+    const fetchMock = vi.fn<FetchFn>((url, opts) => {
+      calls.push([url, opts]);
+      if (opts?.method === 'PUT') return Promise.resolve(okJson({}));
+      return Promise.resolve(okJson({ 'machine.active': 99 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    // A local choice (e.g. the #1323 fallback to 'all') is queued but not sent.
+    mod.setUiPref('machine.active', 'all');
+
+    const changed = await mod.loadUiPrefsFromServer();
+
+    expect(mod.getUiPref('machine.active')).toBe('all'); // server's 99 is skipped
+    expect(changed).toBe(false);
+    await vi.runAllTimersAsync(); // the queued local write still reaches the server
+    const put = calls.find(([, o]) => o?.method === 'PUT');
+    expect(put).toBeTruthy();
+    expect(sentBody(put)).toEqual({ 'machine.active': 'all' });
   });
 });

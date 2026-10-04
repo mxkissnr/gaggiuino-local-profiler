@@ -137,7 +137,7 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
-import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, setActiveMachine, renderMachinesList,
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, setActiveMachine, resolveActiveMachineId, renderMachinesList,
          onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange,
          applyActiveMachineAccentTheme, renderAccentSwatches } from './components/machines-settings.js';
 
@@ -1103,13 +1103,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // stable and dev apps no longer overwrite each other through the shared
     // browser origin — the localStorage copy is only a cache. Fired without
     // blocking the first render; a change re-reads the shelf prefs and applies
-    // the shared machine selection (which loadMachines() re-validates against
-    // the real list, #1323).
+    // the shared machine selection through the same validation loadMachines()
+    // uses, so a stale id from the server cannot filter the history to nothing
+    // (#1323) whichever of the two requests finishes first.
     void loadUiPrefsFromServer().then(changed => {
       if (!changed) return;
       resetShelfPrefs();
       const activeId = getUiPref<number | 'all'>('machine.active');
-      if (activeId !== undefined && activeId !== S.activeMachineId) setActiveMachine(activeId);
+      if (activeId === undefined) return;
+      const resolved = resolveActiveMachineId(activeId);
+      if (resolved !== S.activeMachineId) setActiveMachine(resolved);
     });
     void loadMqttSettings();
     void loadNotifySettingsCard();

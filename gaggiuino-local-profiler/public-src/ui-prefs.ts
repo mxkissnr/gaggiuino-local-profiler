@@ -20,7 +20,13 @@ try {
 }
 
 const _queue = new Set<string>();
+// Bumped on every write to a key, so a failed/deferred flush can tell whether
+// the value it sent is still the current one (finding: an in-flight PUT must
+// not drop a change made while it was in flight).
+const _version = new Map<string, number>();
 let _timer: ReturnType<typeof setTimeout> | null = null;
+let _flushing = false;
+let _flushAgain = false;
 
 /** Reads a memoised choice. Missing keys resolve to `undefined`. */
 export function getUiPref<T>(key: string): T | undefined {
@@ -38,6 +44,7 @@ function _persist(): void {
 /** Records a choice: cache it synchronously, then queue it for the server. */
 export function setUiPref(key: string, value: unknown): void {
   _prefs[key] = value;
+  _version.set(key, (_version.get(key) ?? 0) + 1);
   _persist();
   _queue.add(key);
   if (_timer == null) {
@@ -46,32 +53,58 @@ export function setUiPref(key: string, value: unknown): void {
 }
 
 async function _flush(): Promise<void> {
+  if (_flushing) {
+    // A change arrived while a PUT was in flight; re-run once it settles so the
+    // newer value is not dropped.
+    _flushAgain = true;
+    return;
+  }
   if (!_queue.size) return;
-  const keys = [..._queue];
-  const payload: UiPrefs = {};
-  for (const key of keys) payload[key] = _prefs[key];
+  _flushing = true;
   try {
+    const keys = [..._queue];
+    const payload: UiPrefs = {};
+    const sentVersions = new Map<string, number>();
+    for (const key of keys) {
+      payload[key] = _prefs[key];
+      sentVersions.set(key, _version.get(key) ?? 0);
+    }
     const r = await saveUiPrefs(payload);
     if (!r.ok) return; // keep queued for the next change / next start
-    for (const key of keys) _queue.delete(key);
+    for (const key of keys) {
+      // Keep the key queued if its value changed while this PUT was in flight.
+      if (_version.get(key) === sentVersions.get(key)) _queue.delete(key);
+    }
   } catch {
     // Network failure: keep queued; the next change or the next start re-sends.
+  } finally {
+    _flushing = false;
+    if (_flushAgain && _queue.size && _timer == null) {
+      _flushAgain = false;
+      _timer = setTimeout(() => { _timer = null; void _flush(); }, FLUSH_DELAY_MS);
+    }
   }
 }
 
 /**
- * Server wins for every key it has; keys only present locally are pushed up
- * once, which migrates an existing device. Pure so it can be unit-tested.
+ * Server wins for every key it has, except keys with a local write still queued
+ * (`pending`), which are newer than the server's value. Keys only present
+ * locally (and not pending) are pushed up once, which migrates an existing
+ * device. Pure so it can be unit-tested.
  */
 export function mergeUiPrefs(
   local: UiPrefs,
   server: UiPrefs,
+  pending: ReadonlySet<string> = new Set(),
 ): { merged: UiPrefs; pushUp: string[] } {
   const merged: UiPrefs = { ...local };
   const pushUp: string[] = [];
-  for (const [key, value] of Object.entries(server)) merged[key] = value;
+  for (const [key, value] of Object.entries(server)) {
+    if (pending.has(key)) continue;
+    merged[key] = value;
+  }
   for (const key of Object.keys(local)) {
-    if (!(key in server)) pushUp.push(key);
+    if (!(key in server) && !pending.has(key)) pushUp.push(key);
   }
   return { merged, pushUp };
 }
@@ -89,7 +122,7 @@ export async function loadUiPrefsFromServer(): Promise<boolean> {
     const server = body && typeof body === 'object' && !Array.isArray(body)
       ? (body as UiPrefs)
       : {};
-    const { merged, pushUp } = mergeUiPrefs(_prefs, server);
+    const { merged, pushUp } = mergeUiPrefs(_prefs, server, _queue);
     const changed = JSON.stringify(merged) !== JSON.stringify(_prefs);
     _prefs = merged;
     _persist();

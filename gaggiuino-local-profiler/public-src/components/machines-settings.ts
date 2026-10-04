@@ -82,6 +82,19 @@ export function setActiveMachine(id: number | 'all'): void {
   setUiPref('machine.active', id);
 }
 
+/**
+ * A machine id that is safe to select. A numeric id is kept only when the
+ * loaded machine list contains it, otherwise it falls back to 'all' (#1323).
+ * While the list is still empty (not loaded yet) the id is returned unchanged
+ * so loadMachines() can validate it once the list arrives. This is the single
+ * check shared by loadMachines() and the start-up ui-prefs callback, so a
+ * server-supplied id can never bypass it.
+ */
+export function resolveActiveMachineId(id: number | 'all'): number | 'all' {
+  if (typeof id !== 'number' || !S.machines.length) return id;
+  return S.machines.some(m => m.id === id) ? id : 'all';
+}
+
 // The default machine's id, or null before /api/machines has ever loaded —
 // used by views/live.js to decide whether the currently active machine has
 // real live-polling support (only the default machine does, in this round).
@@ -240,9 +253,12 @@ export async function loadMachines(): Promise<void> {
     setState('machines', machines);
     // #1323: a remembered machine that is no longer registered (deleted, or
     // pulled in from another device via the shared ui_prefs) must not keep
-    // filtering the shot history down to nothing — fall back to "all".
-    if (typeof S.activeMachineId === 'number' && !machines.some(m => m.id === S.activeMachineId)) {
-      setActiveMachine('all');
+    // filtering the shot history down to nothing — fall back to "all". Uses the
+    // same check as the start-up ui-prefs callback so a late server answer
+    // cannot slip a stale id past it.
+    if (typeof S.activeMachineId === 'number') {
+      const resolved = resolveActiveMachineId(S.activeMachineId);
+      if (resolved !== S.activeMachineId) setActiveMachine(resolved);
     }
     if (!S.activeMachineId) {
       const [firstMachine] = machines;
