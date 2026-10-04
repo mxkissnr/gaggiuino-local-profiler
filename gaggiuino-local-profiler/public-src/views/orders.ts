@@ -125,7 +125,7 @@ export function startOrdersPolling(): void {
   }
   SO._knownPendingIds = null; // reset so first load doesn't trigger notify
   void loadOrdersView();
-  timerRegistry.set('_ordersPollTimer', window.setInterval(() => { void loadOrdersView(); }, 10000));
+  timerRegistry.set('_ordersPollTimer', setInterval(() => { void loadOrdersView(); }, 10000));
 }
 
 export function stopOrdersPolling(): void {
