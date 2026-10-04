@@ -12,8 +12,9 @@ g.navigator ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   loadLibrary: () => Promise<void>;
+  toggleShelfBean: (beanId: number) => void;
 }
-const { loadLibrary } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { loadLibrary, toggleShelfBean } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #526: loadLibrary()'s fetch is fired unawaited from main.js's init
 // sequence and races switchMode('library') (mode.js), which renders the
@@ -69,6 +70,9 @@ describe('loadLibrary (#526 render race)', () => {
 
     g.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ beans: [bean], grinders: [] }) });
     await loadLibrary();
+    // One-shelf layout (#1330): the in-use bean renders as a tile now, so
+    // expand it to reach the full card this #526 assertion is about.
+    toggleShelfBean(1);
 
     expect(beanListUI.innerHTML).toContain('data-action="open-flavor-wheel"');
   });
