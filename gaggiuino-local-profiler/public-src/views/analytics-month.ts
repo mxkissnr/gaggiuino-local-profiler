@@ -19,9 +19,11 @@ import type { ShotMeta } from '../state/index.js';
 export interface MonthShot extends ShotMeta {
   profileName?: string | null;
   profile?: { name?: string | null } | null;
+  // `| undefined` mirrors views/analytics.ts's ShotAnnotation so its ShotRow
+  // stays assignable here under exactOptionalPropertyTypes.
   annotation?: {
-    beanId?: number | null;
-    coffee?: string | null;
+    beanId?: number | null | undefined;
+    coffee?: string | null | undefined;
   } | null;
 }
 
