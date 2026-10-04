@@ -256,7 +256,7 @@ describe('featherAlpha', () => {
     const m = new Uint8Array(9);
     m[4] = 1;
     const out = featherAlpha(m, 3, 3);
-    expect(out[4]).toBeCloseTo(255 / 9, 3);
-    expect(out[0]).toBeCloseTo(255 / 4, 3);
+    expect(out[4]).toBe(28);
+    expect(out[0]).toBe(64);
   });
 });
