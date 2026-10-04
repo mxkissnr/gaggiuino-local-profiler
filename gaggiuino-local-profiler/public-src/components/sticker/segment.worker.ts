@@ -34,7 +34,19 @@ interface ResetRequest {
 
 type Request = AutoRequest | TapRequest | ResetRequest;
 
-const ctx = self as unknown as DedicatedWorkerGlobalScope;
+/**
+ * The slice of DedicatedWorkerGlobalScope this module uses. tsconfig only pulls
+ * in the DOM lib, which does not declare DedicatedWorkerGlobalScope (that is in
+ * the WebWorker lib), so the shape is declared locally rather than referencing
+ * the lib and having its globals collide with DOM.
+ */
+interface WorkerScope {
+  onmessage: ((event: MessageEvent) => void) | null;
+  postMessage(message: unknown, transfer: Transferable[]): void;
+  postMessage(message: unknown): void;
+}
+
+const ctx = self as unknown as WorkerScope;
 
 function reply(id: number, mask: Uint8Array): void {
   ctx.postMessage({ id, mask }, [mask.buffer as ArrayBuffer]);
