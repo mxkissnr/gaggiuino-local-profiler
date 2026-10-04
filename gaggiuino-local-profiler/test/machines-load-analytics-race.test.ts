@@ -68,4 +68,17 @@ describe('loadMachines (#526 render race)', () => {
 
     expect(win.initAnalytics).not.toHaveBeenCalled();
   });
+
+  // #1323: a remembered machine that no longer exists (deleted, or pulled in
+  // from another device through the shared ui_prefs) used to keep filtering
+  // the shot history to nothing. It must fall back to "all".
+  it('falls back to "all" when the remembered machine id is not in the loaded list', async () => {
+    S.currentMode = 'shots';
+    S.activeMachineId = 99; // stale id: no machine with this id exists any more
+    stubFetch([{ id: 1, name: 'Gaggiuino', isDefault: true }]);
+
+    await loadMachines();
+
+    expect(S.activeMachineId).toBe('all');
+  });
 });
