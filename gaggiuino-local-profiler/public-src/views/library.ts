@@ -1265,9 +1265,12 @@ let _beanFormDirty = false;
 let _beanFormDirtyBound = false;
 
 function _rememberFormHome(): void {
-  if (_formHomeParent) return;
   const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
   if (!form || !form.parentNode) return;
+  // While the form sits in our own sheet body there is no home to learn;
+  // re-recording on every other open also keeps the reference valid if the
+  // library markup around the form is ever rebuilt.
+  if (_formSheetBody && form.parentNode === _formSheetBody) return;
   _formHomeParent = form.parentNode;
   _formHomeNext = form.nextSibling;
 }
