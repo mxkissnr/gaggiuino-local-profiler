@@ -96,7 +96,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
+         openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
@@ -795,7 +795,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('libTabRecipes')!.addEventListener('click', () => switchLibTab('recipes'));
   document.getElementById('libTabMilk')!.addEventListener('click', () => switchLibTab('milk'));
   document.getElementById('libTabProfiles')!.addEventListener('click', () => switchLibTab('profiles'));
-  document.getElementById('closeBeanFormBtn')!.addEventListener('click', closeBeanForm);
+  // Cancel is an explicit discard: close without the unsaved-changes prompt.
+  document.getElementById('closeBeanFormBtn')!.addEventListener('click', discardBeanForm);
   document.getElementById('saveBeanBtn')!.addEventListener('click', () => { void saveBean(); });
   document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', () => { void saveBeanNoBag(); });
   document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', () => { void saveBeanAddBag(); });
@@ -951,6 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'toggle-past-bags':     togglePastBags(numId()); break;
       case 'open-bean-sheet':     openBeanSheet(numId()); break;
       case 'close-bean-sheet':    closeBeanSheet(); break;
+    case 'close-bean-form-sheet': requestCloseBeanForm(); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
       case 'save-freeze-form':   void saveFreezePortions(numId()); break;
@@ -961,7 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'filter-by-bean':     closeBeanSheet(); filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
-      case 'edit-bean':          closeBeanSheet(); editBean(numId()); break;
+      case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        void deleteBean(numId()); break;
       case 'toggle-bean-active': void toggleBeanActive(numId()); break;
       case 'edit-grinder':       editGrinder(numId()); break;
