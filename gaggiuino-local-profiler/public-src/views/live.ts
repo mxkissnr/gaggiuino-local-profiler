@@ -480,7 +480,12 @@ let _lastPreheat: PreheatData | null = null;
 // own ambient icon instance (components/topbar-machine-icon.js) — this stays
 // the Live view's own wiring: which element to drive and which preheat
 // snapshot to translate against.
+// #1383: a preheat event carries no reachability of its own, so remember the
+// last live message to resolve against instead of dropping what we know.
+let _lastLiveMsg: LiveMessage | null = null;
+
 export function syncMachineIcon(msg: LiveMessage | null): void {
+  if (msg) _lastLiveMsg = msg;
   const el = machineIconEl();
   if (!el) return;
   const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
@@ -494,9 +499,11 @@ export function updatePreheatWidget(d: PreheatData): void {
   const countdown   = document.getElementById('preheat-countdown') as HTMLElement;
   if (!readyBadge) return;
   // #811: remembered so the icon can show heat progress on poll ticks that
-  // carry live data but no preheat payload.
+  // carry live data but no preheat payload. #1383: resolve against the last
+  // live message rather than null, so a machine we already know is off stays
+  // off instead of flipping to the heating state (heat 0) and showing accent.
   _lastPreheat = d;
-  syncMachineIcon(null);
+  syncMachineIcon(_lastLiveMsg);
 
   if (d.ready) {
     readyBadge.style.display  = '';
