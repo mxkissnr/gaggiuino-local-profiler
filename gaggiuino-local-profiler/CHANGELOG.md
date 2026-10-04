@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **The hidden machine panel now tells your coffee story: every shot in a spiral, every emptied bag on a shelf.** (#1351)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
 - **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
