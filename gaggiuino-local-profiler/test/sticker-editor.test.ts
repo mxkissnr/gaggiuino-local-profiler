@@ -225,7 +225,7 @@ g.createImageBitmap = () => Promise.resolve({ width: 120, height: 90 });
 const segmentModule = await import('../public-src/components/sticker/segment.js');
 const editorModule = await import('../public-src/components/sticker/editor.js');
 
-const { maskBounds, paddedSquareCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround } = editorModule;
+const { maskBounds, paddedAspectCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround } = editorModule;
 const { autoCutout, resetCutout, tapMask } = segmentModule;
 const autoCutoutMock = vi.mocked(autoCutout);
 const resetCutoutMock = vi.mocked(resetCutout);
@@ -262,23 +262,46 @@ describe('maskBounds', () => {
   });
 });
 
-describe('paddedSquareCrop', () => {
-  it('makes a square crop and pads it by padFrac of the longer edge', () => {
-    const crop = paddedSquareCrop({ x0:50, y0:50, x1:149, y1:99 }, 200, 200);
+describe('paddedAspectCrop', () => {
+  // aspect = 1 must reproduce the historical square results exactly.
+  it('aspect 1 makes a square crop and pads it by padFrac of the longer edge', () => {
+    const crop = paddedAspectCrop({ x0:50, y0:50, x1:149, y1:99 }, 200, 200, 1);
     expect(crop).toEqual({ x:46, y:21, width:108, height:108 });
   });
 
-  it('clamps at the image edge instead of running off it', () => {
-    const crop = paddedSquareCrop({ x0:80, y0:80, x1:99, y1:99 }, 100, 100);
+  it('aspect 1 clamps at the image edge instead of running off it', () => {
+    const crop = paddedAspectCrop({ x0:80, y0:80, x1:99, y1:99 }, 100, 100, 1);
     expect(crop.x + crop.width).toBe(100);
     expect(crop.y + crop.height).toBe(100);
     expect(crop.width).toBe(21);
   });
 
-  it('clamps a crop that would start above the top-left corner', () => {
-    const crop = paddedSquareCrop({ x0:10, y0:10, x1:59, y1:39 }, 100, 100);
+  it('aspect 1 clamps a crop that would start above the top-left corner', () => {
+    const crop = paddedAspectCrop({ x0:10, y0:10, x1:59, y1:39 }, 100, 100, 1);
     expect(crop.y).toBe(0);
     expect(crop.x).toBe(8);
+  });
+
+  it('gives a wide mask a 3:4 box that is taller than the mask', () => {
+    const crop = paddedAspectCrop({ x0:100, y0:100, x1:199, y1:119 }, 400, 400);
+    expect(crop.height).toBeGreaterThan(crop.width);
+    expect(crop.height).toBeGreaterThan(20);
+    expect(crop.width / crop.height).toBeCloseTo(3 / 4, 6);
+  });
+
+  it('keeps a 3:4 box for a tall mask', () => {
+    const crop = paddedAspectCrop({ x0:100, y0:100, x1:149, y1:299 }, 400, 400);
+    expect(crop.width / crop.height).toBeCloseTo(3 / 4, 6);
+  });
+
+  it('pads the 3:4 box beyond the mask bounds', () => {
+    const crop = paddedAspectCrop({ x0:100, y0:100, x1:149, y1:149 }, 400, 400);
+    expect(crop).toEqual({ x:98, y:89, width:54, height:72 });
+  });
+
+  it('clamps the 3:4 box at the image edges instead of running off it', () => {
+    const crop = paddedAspectCrop({ x0:350, y0:350, x1:399, y1:399 }, 400, 400);
+    expect(crop).toEqual({ x:348, y:339, width:52, height:61 });
   });
 });
 
