@@ -13,7 +13,6 @@
 - **Photos cached by the browser before the previous fix are re-checked too, so a replaced photo appears after a normal reload.** (#1357)
 - **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
-- **The coffee history panel now stands a bag for every bean that has pulled a shot, and it is larger on desktop.** Closes #1386
 - **On a phone a bean closes with a swipe down, and the flavour wheel grows out of the small wheel to full screen instead of opening behind the bean.** (#1374)
 - **The flavour wheel now sits right in a bean's details, and the large wheel opens on the full overview with readable labels and a legend.** (#1350)
 - **Adding or editing a bean now happens in the same sheet as its details, with the photo on top and Save always in reach.** (#1349)
