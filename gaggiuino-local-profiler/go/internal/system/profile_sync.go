@@ -24,6 +24,13 @@ import (
 // so a test can shrink it.
 var profilesSyncInterval = 60 * time.Second
 
+// profilePushTimeout bounds each individual adapter call inside pushOneProfile.
+// PushDirtyProfiles' own 60s ceiling spans the whole batch; without a per-call
+// bound one unresponsive machine would eat that entire budget on the first row
+// and starve the rest. A var (mirrors profilesSyncInterval) so a test can
+// shrink it.
+var profilePushTimeout = 10 * time.Second
+
 // SetProfilesRepo wires the offline-profile local cache/outbox — mirrors
 // SetShotsRepo's rationale (sync.go): a separate setter rather than a
 // NewPoller parameter keeps every existing call site unchanged.
@@ -100,7 +107,9 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 				return err
 			}
 		}
-		created, err := adapter.CreateProfile(ctx, machine, in)
+		createCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+		created, err := adapter.CreateProfile(createCtx, machine, in)
+		cancel()
 		if err != nil {
 			return err
 		}
@@ -117,7 +126,9 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 					return err
 				}
 			}
-			created, err := adapter.CreateProfile(ctx, machine, in)
+			createCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+			created, err := adapter.CreateProfile(createCtx, machine, in)
+			cancel()
 			if err != nil {
 				return err
 			}
@@ -137,7 +148,10 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 			}
 			in.ID = &parsedID
 		}
-		if _, err := adapter.UpdateProfile(ctx, machine, in); err != nil {
+		updateCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+		_, err := adapter.UpdateProfile(updateCtx, machine, in)
+		cancel()
+		if err != nil {
 			return err
 		}
 		return p.profilesRepo.MarkSynced(row.LocalID, row.UpdatedAt)
@@ -145,7 +159,10 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 		if row.RemoteID == nil {
 			return p.profilesRepo.HardDelete(row.LocalID)
 		}
-		if _, err := adapter.DeleteProfile(ctx, machine, *row.RemoteID); err != nil {
+		deleteCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+		_, err := adapter.DeleteProfile(deleteCtx, machine, *row.RemoteID)
+		cancel()
+		if err != nil {
 			return err
 		}
 		return p.profilesRepo.HardDelete(row.LocalID)
