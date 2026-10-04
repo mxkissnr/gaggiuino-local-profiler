@@ -50,8 +50,9 @@ describe('clampOffset', () => {
   });
 
   it('clamps a square box offset back into range on both axes', () => {
-    expect(clampOffset(20, 20, 100, 100, 3.2, 320, 320)).toEqual({ x: 0, y: 0 });
-    expect(clampOffset(-999, -999, 100, 100, 3.2, 320, 320)).toEqual({ x: -320, y: -320 });
+    // 100x100 zoomed to scale 4.8 => 480x480; both mins are 320 - 480 = -160.
+    expect(clampOffset(20, 20, 100, 100, 4.8, 320, 320)).toEqual({ x: 0, y: 0 });
+    expect(clampOffset(-999, -999, 100, 100, 4.8, 320, 320)).toEqual({ x: -160, y: -160 });
   });
 
   it('clamps a landscape image in a 240x320 box to [box - scaled, 0]', () => {

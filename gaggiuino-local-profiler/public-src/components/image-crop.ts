@@ -79,13 +79,14 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
   let offsetY = (previewH - naturalH * baseScale) / 2;
 
   const guideClass = shape === 'square' ? 'square' : 'circle';
-  const aspectClass = aspect === 'portrait' ? ' crop-editor-canvas-portrait' : '';
+  const portraitClass = aspect === 'portrait' ? ' crop-editor-canvas-portrait' : '';
+  const canvasClass = `crop-editor-canvas crop-editor-canvas-${guideClass}${portraitClass}`;
   const overlay = document.createElement('div');
   overlay.className = 'crop-editor-overlay';
   overlay.innerHTML = html`
     <div class="crop-editor-modal">
       <h3 class="crop-editor-title">${esc(t('crop_editor_title'))}</h3>
-      <canvas class="crop-editor-canvas crop-editor-canvas-${esc(guideClass)}${aspectClass}"
+      <canvas class="${esc(canvasClass)}"
               width="${esc(previewW)}" height="${esc(previewH)}"></canvas>
       <div class="crop-editor-zoom-row">
         <span class="crop-editor-zoom-icon">−</span>
