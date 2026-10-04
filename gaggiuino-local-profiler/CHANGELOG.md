@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Changed
+- **Closing the sticker editor while a cut-out is still running now releases the worker straight away, so a quick reopen cannot overlap two cut-outs.** Part of #1347
 - **Cutting out a sticker no longer freezes the app or runs the browser out of memory, and the memory is given back when the editor closes.** Closes #1347
 - **Bean photos are cropped in the bag's 3:4 shape, and cut-out stickers keep it, so tall bags are no longer clipped.** Closes #1346
 - **Bean photos can now be cut out as stickers right in the bean form, on your own device, and stand on the shelf without a background.** Closes #1336

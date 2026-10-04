@@ -158,17 +158,37 @@ describe('resetCutout', () => {
   it('sends reset, keeps the worker, and terminates it after the idle window', async () => {
     vi.useFakeTimers();
     const segment = await freshClient();
-    const promise = segment.autoCutout(RGBA, W, H);
+    const auto = segment.autoCutout(RGBA, W, H);
     const worker = latestWorker();
+    worker.reply({ id: worker.sent[0]!.message.id, mask: new Uint8Array([1]) });
+    await auto;
 
     segment.resetCutout();
 
     expect(worker.terminated).toBe(false);
     expect(worker.sent.at(-1)!.message.type).toBe('reset');
-    await expect(promise).rejects.toThrow(/cancelled/);
 
     vi.advanceTimersByTime(20_000);
     expect(worker.terminated).toBe(true);
+  });
+
+  it('terminates the worker at once when a request is still in flight', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    segment.resetCutout();
+
+    await expect(promise).rejects.toThrow(/cancelled/);
+    expect(worker.terminated).toBe(true);
+    expect(worker.sent.map((entry) => entry.message.type)).toEqual(['auto']);
+
+    const next = segment.autoCutout(RGBA, W, H);
+    expect(FakeWorker.instances).toHaveLength(2);
+    const second = latestWorker();
+    second.reply({ id: second.sent[0]!.message.id, mask: new Uint8Array([2]) });
+    await expect(next).resolves.toEqual(new Uint8Array([2]));
   });
 
   it('reuses the worker when autoCutout runs within the idle window', async () => {

@@ -162,15 +162,20 @@ export async function tapMask(
 }
 
 /**
- * Close the current image: reject anything still in flight and tell the worker
- * to drop its embeddings and sessions. The worker itself is kept for a short
- * idle window so an immediate reopen reuses it; the idle timer then terminates
- * it to return the wasm heap. A worker error still drops it at once.
+ * Close the current image: reject anything still in flight. A worker that was
+ * mid-request is terminated at once, because its session and embedding state is
+ * shared and cannot be handed to a second run; an idle worker is told to drop
+ * its embeddings and kept for a short idle window so an immediate reopen reuses
+ * it, then the idle timer terminates it to return the wasm heap.
  */
 export function resetCutout(): void {
+  const busy = pending.size > 0;
   hasEmbeddings = false;
   rejectPending(new Error('segment: cancelled'));
-  if (!worker) return;
+  if (busy || !worker) {
+    dropWorker();
+    return;
+  }
   worker.postMessage({ type: 'reset' });
   scheduleIdleTermination();
 }
