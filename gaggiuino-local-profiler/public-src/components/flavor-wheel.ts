@@ -111,9 +111,15 @@ interface FlavorChart {
   dispatchAction(action: Record<string, unknown>): void;
   off(event: string): void;
   on(event: string, handler: (params: FlavorChartClickParams) => void): void;
+  resize(): void;
 }
 
 let _chart: FlavorChart | null = null;
+// #1381: the canvas wrap can change size after init (the breadcrumb line
+// appears below it, the window resizes, the phone rotates, the mobile grow
+// transition ends) and echarts does not follow on its own, which left the
+// CSS-centred centre photo off the wheel. Watch the container and resize.
+let _resizeObserver: ResizeObserver | null = null;
 let _rootId: string | null = null; // currently zoomed-to node id, or null for the full overview
 let _lang: FlavorLang = 'en';
 let _breadcrumbEl: HTMLElement | null = null;
@@ -181,6 +187,10 @@ export function highlightFlavorWheelNode(nodeId: string | null | undefined): voi
   _chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: node[_lang] || node.en });
 }
 
+function disconnectResizeObserver(): void {
+  if (_resizeObserver) { _resizeObserver.disconnect(); _resizeObserver = null; }
+}
+
 export async function renderFlavorWheel(container: HTMLElement, flavors: unknown, lang: FlavorLang, breadcrumbEl: HTMLElement | null): Promise<boolean> {
   const { matched } = matchFlavors(flavors);
   FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
@@ -190,6 +200,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
   _lang = lang;
   _breadcrumbEl = breadcrumbEl || null;
   _hlNode = null;
+  disconnectResizeObserver();
   if (_chart) { _chart.dispose(); _chart = null; }
 
   const token = ++_renderReqToken;
@@ -208,6 +219,13 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
 
   container.innerHTML = html``; // clear the loading message before echarts takes over this node
   _chart = echarts.init(container) as unknown as FlavorChart;
+  // #1381: the breadcrumb is filled after this render and the wrap changes
+  // size with the window/phone, so keep the canvas in step with its container
+  // (the chart itself never resizes on its own).
+  if (typeof ResizeObserver !== 'undefined') {
+    _resizeObserver = new ResizeObserver(() => _chart?.resize());
+    _resizeObserver.observe(container);
+  }
   _chart.setOption({
     backgroundColor: 'transparent',
     animation: wheelMotionOk(),
@@ -289,6 +307,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
 
 export function disposeFlavorWheel(): void {
   ++_renderReqToken; // invalidate a still-pending renderFlavorWheel() chunk load, if any
+  disconnectResizeObserver();
   if (_chart) { _chart.dispose(); _chart = null; }
   _rootId = null;
   _breadcrumbEl = null;
