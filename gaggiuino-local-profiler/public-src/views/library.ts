@@ -895,8 +895,8 @@ function renderBeanSheet(enter = false): void {
   // #1374: the rebuilt sheet gets fresh drag surfaces, so re-attach the
   // swipe-to-close each render (the old elements were discarded).
   const sheetEl = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
-  const grab = sheetEl?.querySelector<HTMLElement>('.lib-sheet-grab') ?? null;
-  const head = sheetEl?.querySelector<HTMLElement>('.lib-sheet-head') ?? null;
+  const grab = sheetEl && typeof sheetEl.querySelector === 'function' ? sheetEl.querySelector<HTMLElement>('.lib-sheet-grab') : null;
+  const head = sheetEl && typeof sheetEl.querySelector === 'function' ? sheetEl.querySelector<HTMLElement>('.lib-sheet-head') : null;
   if (sheetEl && grab) attachSheetSwipe(sheetEl, grab, closeBeanSheet);
   if (sheetEl && head) attachSheetSwipe(sheetEl, head, closeBeanSheet);
   loadBeanThumbnails();
