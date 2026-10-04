@@ -3,11 +3,11 @@
  *
  * The model work itself runs in segment.worker.ts, so the page stays responsive
  * while IS-Net and the SAM encoder run. This module only owns the worker's
- * lifetime and the request/response plumbing; the exported API is unchanged, so
- * editor.ts and views/library.ts need no change. Terminating the worker is what
- * returns the WebAssembly heap to the browser; on editor close it is deferred by
- * a short idle window so a quick reopen reuses the worker instead of racing a
- * new one against the OS reclaiming the old heap.
+ * lifetime and the request/response plumbing; the exported API only gained an
+ * optional progress callback, so views/library.ts needs no change. Terminating
+ * the worker is what returns the WebAssembly heap to the browser; on editor
+ * close it is deferred by a short idle window so a quick reopen reuses the
+ * worker instead of racing a new one against the OS reclaiming the old heap.
  */
 
 import type { CutoutProgress } from './segment-core.js';
