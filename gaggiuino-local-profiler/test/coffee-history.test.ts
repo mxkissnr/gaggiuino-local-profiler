@@ -3,8 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 // The shelf must not fetch a bean photo that does not exist (the request would
 // 404 and log a console error), so stub the image loader and count its calls.
 vi.mock('../public-src/bean-image.js', () => ({
-  loadBeanImageBlobUrl: vi.fn(async () => null),
-  loadShotThumbBlobUrl: vi.fn(async () => null),
+  loadBeanImageBlobUrl: vi.fn(() => Promise.resolve(null)),
+  loadShotThumbBlobUrl: vi.fn(() => Promise.resolve(null)),
 }));
 
 import { loadBeanImageBlobUrl } from '../public-src/bean-image.js';
@@ -194,7 +194,7 @@ describe('renderCoffeeHistory shelf photos (#1351)', () => {
         { id: 2, name: 'Photo', image: 'photo.jpg' },
       ],
       grinders: [],
-    } as unknown as typeof S.coffeeLibrary;
+    };
 
     renderCoffeeHistory(fakeEl() as unknown as HTMLElement);
 
