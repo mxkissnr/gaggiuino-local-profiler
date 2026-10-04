@@ -3,9 +3,11 @@
 // and click plumbing. Keeping this module DOM-free lets it be unit-tested
 // under vitest's node environment.
 import type { Html } from '../../utils.js';
-import { esc, html } from '../../utils.js';
+import { esc, html, roastAgeDays } from '../../utils.js';
 import { tHtml } from '../../i18n.js';
 import { SNOWFLAKE_ICON_SVG } from '../../icons.js';
+import { countryName } from '../../constants.js';
+import { S } from '../../state/index.js';
 import type { BeanRow } from './bags.js';
 import { classifyBeanBags } from './bags.js';
 
@@ -98,4 +100,108 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
     <span class="lib-shelf-name serif-display">${esc(b.name)}</span>
     ${b.roaster ? html`<span class="lib-shelf-roaster">${esc(b.roaster)}</span>` : esc('')}
   </button>`;
+}
+
+// ── Shelf search / filter / sort (#1329 part 2) ───────────────────────────
+// Pure helpers shared by views/library.ts's toolbar and the unit tests. The
+// module stays DOM-free; the toolbar owns the actual inputs.
+export type ShelfFilter = 'all' | 'espresso' | 'filter' | 'decaf';
+export type ShelfSort = 'fresh' | 'name' | 'remaining';
+
+export interface ShelfPrefs {
+  query: string;
+  filter: ShelfFilter;
+  sort: ShelfSort;
+}
+
+export const SHELF_PREFS_KEY = 'glp.libShelf';
+export const DEFAULT_SHELF_PREFS: ShelfPrefs = { query: '', filter: 'all', sort: 'fresh' };
+
+// Origin codes plus their localized display names (e.g. BR -> "Brazil"), so a
+// query matches either what the user typed in the picker or what they see.
+function originTerms(b: ShelfBean): string[] {
+  const origins = Array.isArray(b.origins) && b.origins.length
+    ? b.origins
+    : (b.origin ? [{ code: b.origin }] : []);
+  const terms: string[] = [];
+  for (const o of origins) {
+    if (!o.code) continue;
+    terms.push(o.code);
+    terms.push(countryName(o.code, S.currentLang));
+  }
+  return terms;
+}
+
+export function matchesShelfQuery(b: ShelfBean, query: string): boolean {
+  const q = String(query ?? '').trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [b.name, b.roaster, b.origin, ...originTerms(b)]
+    .filter((v): v is string => typeof v === 'string')
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+export function matchesShelfFilter(b: ShelfBean, filter: ShelfFilter): boolean {
+  switch (filter) {
+    case 'espresso': return b.roastType === 'espresso' || b.roastType === 'omni';
+    case 'filter':   return b.roastType === 'filter' || b.roastType === 'omni';
+    case 'decaf':    return b.decaf === true;
+    default:         return true;
+  }
+}
+
+function shelfRoastAge(b: ShelfBean): number | null {
+  const { current } = classifyBeanBags(b);
+  return roastAgeDays(current?.bg.roastDate || b.roastDate);
+}
+
+// Returns a new array; the input is never mutated. Array.prototype.sort is
+// stable per spec, so equal keys keep the classifier's order.
+export function sortShelf(beans: readonly ShelfBean[], sort: ShelfSort): ShelfBean[] {
+  const out = [...beans];
+  if (sort === 'name') {
+    return out.sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? '')));
+  }
+  if (sort === 'remaining') {
+    return out.sort((a, b) => {
+      const ar = a.remainingG ?? null;
+      const br = b.remainingG ?? null;
+      if (ar == null && br == null) return 0;
+      if (ar == null) return 1;
+      if (br == null) return -1;
+      return br - ar;
+    });
+  }
+  return out.sort((a, b) => {
+    const aa = shelfRoastAge(a);
+    const ba = shelfRoastAge(b);
+    if (aa == null && ba == null) return 0;
+    if (aa == null) return 1;
+    if (ba == null) return -1;
+    return aa - ba;
+  });
+}
+
+// Only filter/sort survive a reload — a stale query would silently hide beans.
+export function loadShelfPrefs(): ShelfPrefs {
+  try {
+    const raw = localStorage.getItem(SHELF_PREFS_KEY);
+    if (!raw) return { ...DEFAULT_SHELF_PREFS };
+    const parsed = JSON.parse(raw) as Partial<ShelfPrefs>;
+    const filter: ShelfFilter = parsed.filter === 'espresso' || parsed.filter === 'filter' || parsed.filter === 'decaf'
+      ? parsed.filter : 'all';
+    const sort: ShelfSort = parsed.sort === 'name' || parsed.sort === 'remaining' ? parsed.sort : 'fresh';
+    return { query: '', filter, sort };
+  } catch {
+    return { ...DEFAULT_SHELF_PREFS };
+  }
+}
+
+export function saveShelfPrefs(prefs: ShelfPrefs): void {
+  try {
+    localStorage.setItem(SHELF_PREFS_KEY, JSON.stringify({ filter: prefs.filter, sort: prefs.sort }));
+  } catch {
+    // Private-mode/quota failures just mean the prefs don't persist.
+  }
 }
