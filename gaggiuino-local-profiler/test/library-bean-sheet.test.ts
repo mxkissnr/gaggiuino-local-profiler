@@ -173,4 +173,36 @@ describe('bean detail sheet (#1330 part 2)', () => {
     renderBeanList();
     expect(sheetHtml(elements)).not.toContain('lib-sheet-enter');
   });
+
+  it('shows the Aromas block with the inline wheel and highlight chips', () => {
+    const { elements } = setup();
+    openBeanSheet(1);
+
+    const html = sheetHtml(elements);
+    expect(html).toContain('lib-sheet-aromas');
+    expect(html).toContain(t('lib_sheet_aromas'));
+    expect(html).toContain('lib-aroma-wheel');
+    expect(html).toContain('lib-aroma-svg');
+    expect(html).toContain('data-action="highlight-flavor"');
+    // The plain chip row is the shelf card's now, not the sheet's.
+    expect(html).not.toContain('lib-flavor-row');
+  });
+
+  it('omits the Aromas block when the bean has no flavours', () => {
+    const { elements } = setup({ flavors: [] });
+    openBeanSheet(1);
+
+    const html = sheetHtml(elements);
+    expect(html).not.toContain('lib-sheet-aromas');
+    expect(html).not.toContain('data-action="open-flavor-wheel"');
+  });
+
+  it('no longer lists the flavour wheel in the sheet overflow menu', () => {
+    const { elements } = setup();
+    openBeanSheet(1);
+
+    const html = sheetHtml(elements);
+    // One inline wheel button in the aroma block, none in the ⋯ menu.
+    expect(html.match(/data-action="open-flavor-wheel"/g)?.length).toBe(1);
+  });
 });
