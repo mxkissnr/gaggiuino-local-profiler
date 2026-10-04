@@ -1225,7 +1225,7 @@ export async function updateStickerButton(): Promise<void> {
   try {
     const { isStickerCutoutAvailable } = await stickerSegmentModule();
     available = await isStickerCutoutAvailable();
-  } catch { available = false; }
+  } catch { /* probe failed: stay with the initial "not available" */ }
   // Re-read after the await: the form may have been closed or its photo
   // changed while the availability probe was in flight.
   const stillId = S.beanEditId;
