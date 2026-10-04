@@ -427,7 +427,7 @@ function buildEditor(
   }
 
   async function handleTap(clientX: number, clientY: number): Promise<void> {
-    if (working || busy || !current) return;
+    if (working || busy) return;
     busy = true;
     refreshControls();
     overlay.classList.add('sticker-busy');
