@@ -457,7 +457,7 @@ func TestSecurityHeaders(t *testing.T) {
 	// "unsafe-eval").
 	csp := rec.Header().Get("Content-Security-Policy")
 	for _, token := range strings.Fields(csp) {
-		if token == "'unsafe-eval'" {
+		if strings.TrimSuffix(token, ";") == "'unsafe-eval'" {
 			t.Errorf("Content-Security-Policy allows 'unsafe-eval' as a standalone source: %q", csp)
 		}
 	}

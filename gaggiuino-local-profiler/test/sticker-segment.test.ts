@@ -72,7 +72,6 @@ import {
   autoCutout,
   tapMask,
   resetCutout,
-  isStickerCutoutAvailable,
   resizeHook,
 } from '../public-src/components/sticker/segment.js';
 
@@ -94,31 +93,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-describe('isStickerCutoutAvailable', () => {
-  it('is true when the HEAD probe succeeds, and probes once', async () => {
-    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
-    vi.stubGlobal('fetch', fetchSpy);
-    const segment = await freshSegment();
-
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith('models/isnet-general-use-int8.onnx', { method: 'HEAD' });
-  });
-
-  it('is false when the probe is not ok', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
-    const segment = await freshSegment();
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
-  });
-
-  it('is false when the probe throws', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no network'))));
-    const segment = await freshSegment();
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
-  });
 });
 
 describe('autoCutout', () => {
@@ -158,5 +132,30 @@ describe('tapMask', () => {
 
     expect(mask.length).toBe(w * h);
     expect(shared.created.length).toBe(sessionsBefore);
+  });
+});
+
+describe('isStickerCutoutAvailable', () => {
+  it('is true when the HEAD probe succeeds, and probes once', async () => {
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const segment = await freshSegment();
+
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith('models/isnet-general-use-int8.onnx', { method: 'HEAD' });
+  });
+
+  it('is false when the probe is not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
+    const segment = await freshSegment();
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+  });
+
+  it('is false when the probe throws', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no network'))));
+    const segment = await freshSegment();
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
   });
 });
