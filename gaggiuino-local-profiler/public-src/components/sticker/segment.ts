@@ -120,7 +120,7 @@ export async function autoCutout(
   const copy = rgba.slice();
   const mask = await request(
     { id: nextId++, type: 'auto', rgba: copy, w, h, modelsBase: modelsBase() },
-    [copy.buffer as ArrayBuffer],
+    [copy.buffer],
   );
   hasEmbeddings = true;
   return mask;
