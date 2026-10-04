@@ -171,7 +171,6 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
 export function renderShelfRow(b: ShelfBean, opts: ShelfTileOpts): Html {
   const { opened, openG, pct, sealedBags, frozenG } = shelfStock(b);
   const expanded = opts.expanded === true;
-  const archived = b.enabled === false;
   const origin = originLabel(b);
   const subtitle = [b.roaster, origin].filter((v): v is string => !!v).join(' · ');
 
