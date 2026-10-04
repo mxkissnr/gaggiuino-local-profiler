@@ -95,8 +95,8 @@ let activeModelsBase: string | null = null;
 
 /**
  * Drop the cached SAM embeddings and release every cached session. Called when
- * the editor closes; the worker that owns this module is terminated right
- * after, which is what returns the whole wasm heap to the browser.
+ * the editor closes; the client keeps this worker for a short idle window and
+ * then terminates it, which is what returns the whole wasm heap to the browser.
  */
 export function resetCutout(): void {
   embeddings = null;
