@@ -11,7 +11,7 @@ import { esc, html, joinHtml, scoreClass } from '../utils.js';
 import type { Html } from '../utils.js';
 import { loadBeanImageBlobUrl } from '../bean-image.js';
 import { beanInitials } from './library/shelf.js';
-import type { ShotMeta } from '../state/index.js';
+import type { LibraryRow, ShotMeta } from '../state/index.js';
 
 // Same metadata-only shot view as views/analytics.ts's ShotRow: only the
 // annotation id/name and the profile name are read, scores come from the
@@ -359,10 +359,7 @@ function _dayCell(day: MonthDay, today: Date, locale: string): Html {
 
 // A bean without a stored photo has nothing to fetch, and requesting it would
 // 404 and log a console error (the E2E smoke test fails on that).
-export function beanHasPhoto(
-  beans: readonly { id: number; image?: string | null }[] | undefined,
-  id: number,
-): boolean {
+export function beanHasPhoto(beans: readonly LibraryRow[] | undefined, id: number): boolean {
   return !!beans?.some(b => b.id === id && !!b.image);
 }
 
