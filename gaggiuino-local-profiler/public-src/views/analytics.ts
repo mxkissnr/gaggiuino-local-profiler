@@ -565,8 +565,8 @@ export function buildTrendChart() {
         tooltip: { callbacks: { footer: () => '↗ Shot anzeigen' } },
       },
       scales: {
-        x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, maxRotation: 45 }, grid: { color: 'rgba(63,63,70,.3)' } },
-        y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: 'rgba(63,63,70,.3)' } }
+        x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, maxRotation: 45 }, grid: { color: themeColor('--gray-700', '#2b2f33') } },
+        y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }
   } satisfies ChartConfiguration<'line'>));

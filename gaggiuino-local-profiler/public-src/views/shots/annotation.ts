@@ -12,7 +12,7 @@ import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
-import { COFFEE_ICON_SVG, CHECK_ICON_SVG } from '../../icons.js';
+import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
@@ -359,7 +359,7 @@ export function _renderMilkPills(selectedId: string): void {
   if (!S.milkTypes?.length) { container.innerHTML = html``; return; }
   container.innerHTML = joinHtml((S.milkTypes as MilkRow[]).map(m =>
     html`<button type="button" class="drink-pill${esc(selectedId === String(m.id) ? ' active' : '')}"
-      data-action="select-milk" data-id="${esc(String(m.id))}">${esc(m.emoji || '🥛')} ${esc(m.name)}</button>`
+      data-action="select-milk" data-id="${esc(String(m.id))}">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG} ${esc(m.name)}</button>`
   ));
   if (hidden) hidden.value = selectedId || '';
 }

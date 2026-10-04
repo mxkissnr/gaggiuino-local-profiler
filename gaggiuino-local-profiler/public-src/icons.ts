@@ -35,6 +35,11 @@ export const BELL_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 2
 
 export const BEAN_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z"/><path d="M8.5 15c2-1 3-3 3-6"/></svg>`;
 
+// #1328: moved here from views/orders.ts (single-use there until the
+// library and annotation milk pickers also needed an icon for a milk
+// whose user-chosen emoji is empty).
+export const MILK_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>`;
+
 export const BARCODE_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg>`;
 
 export const GEAR_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/></svg>`;
