@@ -600,7 +600,7 @@ const nl: Partial<Translations> = {
     'demo.getApp':'App installeren',
     photo_pick_btn:'Foto kiezen', photo_change_btn:'Foto wijzigen',
     crop_editor_title:'Foto bijsnijden', crop_editor_apply:'Toepassen', crop_editor_zoom:'Zoom',
-    sticker_title:'Uitknippen als sticker', sticker_working_1:'Bonen worden gesorteerd...', sticker_working_2:'Etiket wordt losgetrokken...', sticker_working_3:'Bijna klaar, de randen worden aangedrukt...', sticker_add:'Toevoegen', sticker_remove:'Weghalen', sticker_brush:'Penseel', sticker_brush_size:'Penseelgrootte', sticker_undo:'Ongedaan maken', sticker_reset:'Opnieuw beginnen', sticker_original:'Origineel', sticker_apply:'Sticker gebruiken', sticker_failed:'Deze foto wilde niet loslaten. Je kunt hem gewoon zo gebruiken.', sticker_fit:'Passend', sticker_close:'Sluiten', sticker_done:'Losgetrokken en op de plank geplakt.',
+    sticker_title:'Uitknippen als sticker', sticker_step:(step,total,label)=>`Stap ${step} van ${total}: ${label}`, sticker_stage_download:'snijgereedschap wordt opgehaald', sticker_stage_background:'zak wordt van de achtergrond onderscheiden', sticker_stage_subject:'randen worden nagetrokken', sticker_add:'Toevoegen', sticker_remove:'Weghalen', sticker_brush:'Penseel', sticker_brush_size:'Penseelgrootte', sticker_undo:'Ongedaan maken', sticker_reset:'Opnieuw beginnen', sticker_original:'Origineel', sticker_apply:'Sticker gebruiken', sticker_failed:'Deze foto wilde niet loslaten. Je kunt hem gewoon zo gebruiken.', sticker_fit:'Passend', sticker_close:'Sluiten', sticker_done:'Losgetrokken en op de plank geplakt.',
 
     // Machine profile editor (#307)
     lib_profiles:'Profielen', lib_add_profile:'+ Nieuw profiel', lib_empty_profiles:'Nog geen profielen',

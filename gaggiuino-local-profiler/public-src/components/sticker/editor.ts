@@ -9,25 +9,24 @@
 // mask.ts and segment.ts are the two earlier slices of this epic, already
 // merged to `dev`: mask.ts holds slice 1's pure mask maths (applyTap,
 // paintBrush, featherAlpha) and segment.ts holds slice 2's lazy cut-out runtime
-// (autoCutout, tapMask, resetCutout). This slice is deliberately only the UI
-// shell around them, so both are imported and consumed unchanged and neither
-// file is edited here.
+// (autoCutout, tapMask, resetCutout). This slice is the UI shell around them;
+// segment.ts also forwards the cut-out's progress, which drives the bar below.
 import { t } from '../../i18n.js';
 import { applyTap, featherAlpha, paintBrush } from './mask.js';
-import { autoCutout, resetCutout, tapMask } from './segment.js';
+import { autoCutout, resetCutout, tapMask, type CutoutProgress } from './segment.js';
 
 const MAX_WORK_EDGE = 1024;
 // Longer export edge: a 3:4 sticker is at most 600x800 (#1346).
 const EXPORT_MAX_EDGE = 800;
 const HISTORY_CAP = 20;
-const WORKING_ROTATE_MS = 1500;
 const PEEL_MS = 450;
 const TAP_SLOP_PX = 6;
 const DEFAULT_BRUSH = 16;
 const BRUSH_MIN = 4;
 const BRUSH_MAX = 60;
-
-const WORKING_KEYS = ['sticker_working_1', 'sticker_working_2', 'sticker_working_3'] as const;
+// How long a model-compute stage may ease before its share of the bar is full.
+const EASE_MS = 6000;
+const PROGRESS_TICK_MS = 250;
 
 export interface MaskBounds {
   x0: number;
@@ -196,6 +195,48 @@ export function zoomAround(view: StickerView, factor: number, px: number, py: nu
   return { scale, x: px - contentX * scale, y: py - contentY * scale };
 }
 
+export type CutoutStage = CutoutProgress['stage'];
+
+// The share of the bar each stage owns. The bar only moves forward: the editor
+// keeps the maximum, so a second model download never rewinds it.
+const STAGE_RANGES: Record<CutoutStage, readonly [number, number]> = {
+  download: [0, 30],
+  background: [30, 65],
+  subject: [65, 95],
+};
+
+/**
+ * Overall 0..100 for the cut-out bar. Download uses the reported byte fraction
+ * directly; a model run reports no fraction, so its share eases towards its end
+ * and never quite reaches it — the finished mask snaps the bar to 100.
+ */
+export function progressPercent(
+  stage: CutoutStage,
+  fraction: number | null,
+  elapsedInStageMs: number,
+): number {
+  const [start, end] = STAGE_RANGES[stage];
+  if (fraction !== null) {
+    const clamped = Math.min(1, Math.max(0, fraction));
+    return start + (end - start) * clamped;
+  }
+  const eased = start + (end - start) * (1 - Math.exp(-elapsedInStageMs / EASE_MS));
+  return Math.min(eased, end - 1);
+}
+
+// Stages run in this order. A later model's download can report an earlier
+// stage after a compute stage has started, and the editor must not rewind.
+const STAGE_ORDER: Record<CutoutStage, number> = {
+  download: 0,
+  background: 1,
+  subject: 2,
+};
+
+/** The later of two stages in `download < background < subject` order. */
+export function nextStage(current: CutoutStage, incoming: CutoutStage): CutoutStage {
+  return STAGE_ORDER[incoming] >= STAGE_ORDER[current] ? incoming : current;
+}
+
 interface DecodedPhoto {
   source: CanvasImageSource;
   width: number;
@@ -310,8 +351,16 @@ function buildEditor(
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
   const workingLine = element('p', 'sticker-working');
-  workingLine.textContent = t(WORKING_KEYS[0]);
+  workingLine.textContent = t('sticker_step', 1, 3, t('sticker_stage_download'));
   workingLine.setAttribute('role', 'status');
+
+  const progress = element('div', 'sticker-progress');
+  progress.setAttribute('role', 'progressbar');
+  progress.setAttribute('aria-valuemin', '0');
+  progress.setAttribute('aria-valuemax', '100');
+  progress.setAttribute('aria-valuenow', '0');
+  const progressFill = element('div', 'sticker-progress-fill');
+  progress.appendChild(progressFill);
 
   const tools = element('div', 'sticker-tools');
   const addBtn = themedButton('lib-btn-sm sticker-mode-add', t('sticker_add'));
@@ -338,7 +387,7 @@ function buildEditor(
   closeBtn.style.display = 'none';
   for (const child of [cancelBtn, applyBtn, closeBtn]) actions.appendChild(child);
 
-  for (const child of [title, viewport, workingLine, tools, actions]) modal.appendChild(child);
+  for (const child of [title, viewport, workingLine, progress, tools, actions]) modal.appendChild(child);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
@@ -357,9 +406,13 @@ function buildEditor(
   let working = true;
   let showOriginal = false;
   let closed = false;
-  let workingTimer: ReturnType<typeof setInterval> | null = null;
+  let progressTimer: ReturnType<typeof setInterval> | null = null;
   let peelTimer: ReturnType<typeof setTimeout> | null = null;
   let view: StickerView = { scale: 1, x: 0, y: 0 };
+  let stage: CutoutStage = 'download';
+  let fraction: number | null = null;
+  let stageStart = Date.now();
+  let progressValue = 0;
 
   function themeColor(name: string): string | null {
     if (typeof getComputedStyle !== 'function') return null;
@@ -436,26 +489,72 @@ function buildEditor(
     brushBtn.setAttribute('aria-pressed', String(brushOn));
   }
 
-  function startWorkingRotation(): void {
-    workingLine.textContent = t(WORKING_KEYS[0]);
-    let index = 0;
-    workingTimer = setInterval(() => {
-      index = (index + 1) % WORKING_KEYS.length;
-      workingLine.textContent = t(WORKING_KEYS[index]!);
-    }, WORKING_ROTATE_MS);
+  function stepLabel(current: CutoutStage, currentFraction: number | null): string {
+    const stepNo = current === 'download' ? 1 : current === 'background' ? 2 : 3;
+    const key =
+      current === 'download'
+        ? 'sticker_stage_download'
+        : current === 'background'
+          ? 'sticker_stage_background'
+          : 'sticker_stage_subject';
+    const text = t('sticker_step', stepNo, 3, t(key));
+    if (current === 'download' && currentFraction !== null) {
+      const pct = Math.round(Math.min(1, Math.max(0, currentFraction)) * 100);
+      return `${text} ${pct} %`;
+    }
+    return text;
   }
 
-  function stopWorkingRotation(): void {
-    if (workingTimer !== null) {
-      clearInterval(workingTimer);
-      workingTimer = null;
+  function paintProgress(): void {
+    const percent = progressPercent(stage, fraction, Date.now() - stageStart);
+    progressValue = Math.max(progressValue, percent);
+    const rounded = Math.round(progressValue);
+    progressFill.style.width = `${rounded}%`;
+    progress.setAttribute('aria-valuenow', String(rounded));
+  }
+
+  function stopProgressTimer(): void {
+    if (progressTimer !== null) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+  }
+
+  function onProgress(update: CutoutProgress): void {
+    if (closed || !working) return;
+    if (update.stage !== stage) {
+      const advanced = nextStage(stage, update.stage);
+      if (advanced === stage) {
+        // A later model's download reports 'download' after a compute stage:
+        // keep the current step and its easing, and show the byte progress
+        // beside the current label instead of rewinding the step.
+        if (update.fraction !== null) {
+          const pct = Math.round(Math.min(1, Math.max(0, update.fraction)) * 100);
+          workingLine.textContent = `${stepLabel(stage, null)} ${pct} %`;
+        }
+        paintProgress();
+        return;
+      }
+      stage = advanced;
+      stageStart = Date.now();
+    }
+    fraction = update.fraction;
+    workingLine.textContent = stepLabel(stage, update.fraction);
+    paintProgress();
+    // A model run reports no fraction, so a timer keeps the bar easing forward.
+    if (update.fraction === null) {
+      if (!prefersReducedMotion() && progressTimer === null) {
+        progressTimer = setInterval(paintProgress, PROGRESS_TICK_MS);
+      }
+    } else {
+      stopProgressTimer();
     }
   }
 
   function close(result: Blob | null): void {
     if (closed) return;
     closed = true;
-    stopWorkingRotation();
+    stopProgressTimer();
     if (peelTimer !== null) {
       clearTimeout(peelTimer);
       peelTimer = null;
@@ -475,7 +574,8 @@ function buildEditor(
     if (err !== undefined) console.error(err);
     working = false;
     busy = false;
-    stopWorkingRotation();
+    stopProgressTimer();
+    progress.style.display = 'none';
     workingLine.textContent = t('sticker_failed');
     workingLine.classList.add('sticker-failed');
     tools.style.display = 'none';
@@ -494,7 +594,11 @@ function buildEditor(
     current = new Uint8Array(mask);
     history.push(current);
     working = false;
-    stopWorkingRotation();
+    stopProgressTimer();
+    progressValue = 100;
+    progressFill.style.width = '100%';
+    progress.setAttribute('aria-valuenow', '100');
+    progress.style.display = 'none';
     workingLine.textContent = '';
     workingLine.style.display = 'none';
     refreshControls();
@@ -816,11 +920,10 @@ function buildEditor(
   applyBtn.addEventListener('click', onApply);
   document.addEventListener('keydown', onKeyDown);
 
-  startWorkingRotation();
   applyView();
   refreshControls();
   draw();
-  void autoCutout(rgba, workW, workH)
+  void autoCutout(rgba, workW, workH, onProgress)
     .then(ready)
     .catch((err: unknown) => {
       fail(err);

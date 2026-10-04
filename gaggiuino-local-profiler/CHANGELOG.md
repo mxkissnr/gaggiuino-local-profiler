@@ -1,4 +1,6 @@
 ## [Unreleased]
+### Added
+- **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
 - **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
 - **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day.** Closes #1357

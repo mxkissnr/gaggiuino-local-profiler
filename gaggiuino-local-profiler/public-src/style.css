@@ -2731,9 +2731,12 @@
         .sticker-brush-size { flex:1 1 120px; min-height:44px; accent-color:var(--accent); }
         .sticker-working { color:var(--gray-500); font-size: var(--fs-1); margin:0; text-align:center; }
         .sticker-working.sticker-failed { color:var(--err); }
+        .sticker-progress { height:6px; width:100%; border-radius:999px; background:var(--gray-800); overflow:hidden; }
+        .sticker-progress-fill { height:100%; width:0; border-radius:999px; background:var(--accent); }
         .sticker-overlay.sticker-busy { cursor:progress; }
         @media (prefers-reduced-motion: no-preference) {
             .sticker-peel { animation: sticker-peel 450ms ease-in forwards; transform-origin:85% 15%; }
+            .sticker-progress-fill { transition: width .25s ease; }
             @keyframes sticker-peel {
                 0%   { transform: translateY(0) rotate(0deg); box-shadow:0 0 0 rgba(0,0,0,0); }
                 100% { transform: translateY(-6px) rotate(-2deg); box-shadow:0 12px 24px rgba(0,0,0,.45); }
