@@ -106,18 +106,21 @@ class FakeClassList {
 
 class FakePath {
   classList = new FakeClassList();
-  constructor(private readonly id: string) {}
+  private readonly id: string;
+  constructor(id: string) { this.id = id; }
   getAttribute(name: string): string | null { return name === 'data-node-id' ? this.id : null; }
 }
 
 class FakeSvg {
   classList = new FakeClassList();
-  constructor(private readonly paths: FakePath[]) {}
+  private readonly paths: FakePath[];
+  constructor(paths: FakePath[]) { this.paths = paths; }
   querySelectorAll(selector: string): FakePath[] { return selector === '.lib-aroma-seg' ? this.paths : []; }
 }
 
 class FakeRoot {
-  constructor(private readonly svg: FakeSvg) {}
+  private readonly svg: FakeSvg;
+  constructor(svg: FakeSvg) { this.svg = svg; }
   querySelector(selector: string): FakeSvg | null { return selector === '.lib-aroma-svg' ? this.svg : null; }
 }
 
