@@ -1,0 +1,169 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import type { MonthDay, MonthShot } from '../public-src/views/analytics-month.js';
+
+// Same window/localStorage stubbing as analytics-equipment-stats.test.ts:
+// the module pulls in state/index.js, which reads localStorage at load, so the
+// real module is imported dynamically after the stub is in place.
+type MonthModule = typeof import('../public-src/views/analytics-month.js');
+let buildMonthDays: MonthModule['buildMonthDays'];
+let dotSize: MonthModule['dotSize'];
+let shiftMonth: MonthModule['shiftMonth'];
+
+beforeAll(async () => {
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    configurable: true, writable: true,
+  });
+  Object.defineProperty(globalThis, 'window', {
+    value: {},
+    configurable: true, writable: true,
+  });
+  ({ buildMonthDays, dotSize, shiftMonth } = await import('../public-src/views/analytics-month.js'));
+});
+
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing element at index ${i}`);
+  return v;
+}
+
+// Local wall-clock timestamp, so the local-date bucketing under test matches
+// what the builders see at runtime.
+function ts(y: number, month: number, d: number, h = 12, mi = 0): number {
+  return Math.floor(new Date(y, month, d, h, mi, 0, 0).getTime() / 1000);
+}
+
+interface ShotOverrides {
+  id: number;
+  timestamp: number;
+  beanId?: number;
+  coffee?: string;
+}
+
+function shot(o: ShotOverrides): MonthShot {
+  const s: MonthShot = { id: o.id, timestamp: o.timestamp };
+  if (o.beanId !== undefined || o.coffee !== undefined) {
+    s.annotation = { beanId: o.beanId ?? null, coffee: o.coffee ?? null };
+  }
+  return s;
+}
+
+const noScore = (): number | null => null;
+function scoreById(scores: Record<number, number>): (s: MonthShot) => number | null {
+  return s => scores[s.id] ?? null;
+}
+
+function day(days: MonthDay[], key: string): MonthDay {
+  const d = days.find(x => x.key === key);
+  if (!d) throw new Error(`missing day ${key}`);
+  return d;
+}
+
+describe('dotSize', () => {
+  it('maps 1 / 2 / 3+ shots to s / m / l', () => {
+    expect(dotSize(0)).toBe('s');
+    expect(dotSize(1)).toBe('s');
+    expect(dotSize(2)).toBe('m');
+    expect(dotSize(3)).toBe('l');
+    expect(dotSize(12)).toBe('l');
+  });
+});
+
+describe('shiftMonth', () => {
+  it('moves across year boundaries in both directions', () => {
+    expect(shiftMonth(2024, 11, 1)).toEqual([2025, 0]);
+    expect(shiftMonth(2024, 0, -1)).toEqual([2023, 11]);
+    expect(shiftMonth(2024, 5, 0)).toEqual([2024, 5]);
+  });
+});
+
+describe('buildMonthDays', () => {
+  it('pads the month to full Monday-first weeks', () => {
+    // January 2024 starts on a Monday and has 31 days -> exactly 5 weeks.
+    const days = buildMonthDays([], 2024, 0, noScore);
+    expect(days.length).toBe(35);
+    expect(at(days, 0).day).toBe(1);
+    expect(at(days, 0).outside).toBe(false);
+    expect(at(days, 34).day).toBe(31);
+
+    // September 2024 starts on a Sunday: 6 leading padding days, 42 cells.
+    const sep = buildMonthDays([], 2024, 8, noScore);
+    expect(sep.length).toBe(42);
+    expect(at(sep, 5).outside).toBe(true);
+    expect(at(sep, 6).day).toBe(1);
+    expect(at(sep, 6).outside).toBe(false);
+  });
+
+  it('buckets a 23:30 shot on its local day, not the UTC next day', () => {
+    const days = buildMonthDays([shot({ id: 1, timestamp: ts(2024, 2, 10, 23, 30) })], 2024, 2, noScore);
+    expect(day(days, '2024-03-10').count).toBe(1);
+    expect(day(days, '2024-03-11').count).toBe(0);
+  });
+
+  it('picks the bean with most shots and breaks a tie by the later shot', () => {
+    const shots = [
+      shot({ id: 1, timestamp: ts(2024, 2, 10, 8), beanId: 1, coffee: 'Alpha' }),
+      shot({ id: 2, timestamp: ts(2024, 2, 10, 18), beanId: 2, coffee: 'Beta' }),
+    ];
+    const d = day(buildMonthDays(shots, 2024, 2, noScore), '2024-03-10');
+    expect(d.count).toBe(2);
+    expect(d.mainBeanId).toBe(2);
+    expect(d.mainBeanName).toBe('Beta');
+
+    // ... and the outright majority wins regardless of order.
+    const shots2 = [
+      ...shots,
+      shot({ id: 3, timestamp: ts(2024, 2, 10, 9), beanId: 1, coffee: 'Alpha' }),
+    ];
+    const d2 = day(buildMonthDays(shots2, 2024, 2, noScore), '2024-03-10');
+    expect(d2.mainBeanId).toBe(1);
+    expect(d2.mainBeanName).toBe('Alpha');
+  });
+
+  it('leaves the main bean null when no shot carries a bean', () => {
+    const d = day(buildMonthDays([shot({ id: 1, timestamp: ts(2024, 2, 10) })], 2024, 2, noScore), '2024-03-10');
+    expect(d.count).toBe(1);
+    expect(d.mainBeanId).toBeNull();
+    expect(d.mainBeanName).toBeNull();
+  });
+
+  it('averages only scored shots and rounds; null without any score', () => {
+    const shots = [
+      shot({ id: 1, timestamp: ts(2024, 2, 10, 8) }),
+      shot({ id: 2, timestamp: ts(2024, 2, 10, 9) }),
+      shot({ id: 3, timestamp: ts(2024, 2, 10, 10) }),
+    ];
+    const scored = buildMonthDays(shots, 2024, 2, scoreById({ 1: 80, 2: 91 }));
+    expect(day(scored, '2024-03-10').avgScore).toBe(86); // round(85.5)
+    const unscored = buildMonthDays(shots, 2024, 2, noScore);
+    expect(day(unscored, '2024-03-10').avgScore).toBeNull();
+  });
+
+  it('records shot ids chronologically', () => {
+    const shots = [
+      shot({ id: 3, timestamp: ts(2024, 2, 10, 18) }),
+      shot({ id: 1, timestamp: ts(2024, 2, 10, 8) }),
+      shot({ id: 2, timestamp: ts(2024, 2, 10, 12) }),
+    ];
+    expect(day(buildMonthDays(shots, 2024, 2, noScore), '2024-03-10').shotIds).toEqual([1, 2, 3]);
+  });
+
+  it('marks firstOfBean only on the main bean's first day in the input', () => {
+    const shots = [
+      shot({ id: 1, timestamp: ts(2024, 2, 10, 8), beanId: 5, coffee: 'Gamma' }),
+      shot({ id: 2, timestamp: ts(2024, 2, 12, 8), beanId: 5, coffee: 'Gamma' }),
+    ];
+    const days = buildMonthDays(shots, 2024, 2, noScore);
+    expect(day(days, '2024-03-10').firstOfBean).toBe(true);
+    expect(day(days, '2024-03-12').firstOfBean).toBe(false);
+  });
+
+  it('does not mark firstOfBean when the bean was already pulled earlier', () => {
+    const shots = [
+      shot({ id: 1, timestamp: ts(2024, 2, 1, 8), beanId: 5, coffee: 'Gamma' }), // previous month
+      shot({ id: 2, timestamp: ts(2024, 3, 5, 8), beanId: 5, coffee: 'Gamma' }),
+    ];
+    const days = buildMonthDays(shots, 2024, 3, noScore);
+    expect(day(days, '2024-04-05').firstOfBean).toBe(false);
+  });
+});

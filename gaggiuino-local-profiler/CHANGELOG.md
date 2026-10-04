@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **The Statistics shot calendar has a month view: every day shows the bean you pulled most as a round thumbnail, sized by shot count and ringed by the day's average score, and tapping a day lists its shots.** Part of #1331
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
