@@ -6,6 +6,12 @@
 //
 // Nothing imports this module yet — slice 3b wires it into the photo flow — so
 // it never reaches the first-load bundle.
+// mask.ts and segment.ts are the two earlier slices of this epic, already
+// merged to `dev`: mask.ts holds slice 1's pure mask maths (applyTap,
+// paintBrush, featherAlpha) and segment.ts holds slice 2's lazy cut-out runtime
+// (autoCutout, tapMask, resetCutout). This slice is deliberately only the UI
+// shell around them, so both are imported and consumed unchanged and neither
+// file is edited here.
 import { t } from '../../i18n.js';
 import { applyTap, featherAlpha, paintBrush } from './mask.js';
 import { autoCutout, resetCutout, tapMask } from './segment.js';
