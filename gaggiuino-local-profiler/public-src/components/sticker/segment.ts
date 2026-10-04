@@ -24,6 +24,10 @@ import {
   type Point,
 } from './tensors.js';
 import { combineMasks } from './mask.js';
+// mask.ts (combineMasks, resizeBilinear, ...) and tensors.ts (isnetInput,
+// samMaskToFull, ...) are slice 1's pure helpers, already shipped on `dev`.
+// This slice consumes them unchanged on purpose — it adds only the model
+// runtimes and canvas glue — so neither file is edited here.
 
 const ISNET_MODEL = 'isnet-general-use-int8.onnx';
 const SAM_ENCODER_MODEL = 'slimsam-vision-encoder-q8.onnx';
