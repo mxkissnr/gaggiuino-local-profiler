@@ -64,25 +64,25 @@ function readLine(
 function medianFilter(values: Float32Array, present: Uint8Array, radius: number): Float32Array {
   const n = values.length;
   const out = new Float32Array(n);
-  const window = new Float32Array(2 * radius + 1);
+  const buf = new Float32Array(2 * radius + 1);
   for (let i = 0; i < n; i++) {
     let count = 0;
     for (let j = i - radius; j <= i + radius; j++) {
       if (j < 0 || j >= n || present[j] === 0) continue;
-      window[count++] = values[j]!;
+      buf[count++] = values[j]!;
     }
     if (count === 0) continue;
     for (let a = 1; a < count; a++) {
-      const v = window[a]!;
+      const v = buf[a]!;
       let b = a - 1;
-      while (b >= 0 && window[b]! > v) {
-        window[b + 1] = window[b]!;
+      while (b >= 0 && buf[b]! > v) {
+        buf[b + 1] = buf[b]!;
         b--;
       }
-      window[b + 1] = v;
+      buf[b + 1] = v;
     }
     const mid = count >> 1;
-    out[i] = count % 2 === 1 ? window[mid]! : (window[mid - 1]! + window[mid]!) / 2;
+    out[i] = count % 2 === 1 ? buf[mid]! : (buf[mid - 1]! + buf[mid]!) / 2;
   }
   return out;
 }
