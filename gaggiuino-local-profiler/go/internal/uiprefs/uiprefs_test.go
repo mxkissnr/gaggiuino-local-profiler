@@ -152,10 +152,10 @@ func TestSanitize_OversizedValue(t *testing.T) {
 }
 
 func TestSanitize_RejectsDeeperNesting(t *testing.T) {
-	cases := map[string]any{
-		"nested object": map[string]any{"a": map[string]any{"b": "c"}},
-		"array":         map[string]any{"a": []any{float64(1)}},
-		"flat in flat":  map[string]any{"a": map[string]any{"b": map[string]any{"c": "d"}}},
+	cases := map[string]map[string]any{
+		"nested object": {"a": map[string]any{"b": "c"}},
+		"array":         {"a": []any{float64(1)}},
+		"flat in flat":  {"a": map[string]any{"b": map[string]any{"c": "d"}}},
 	}
 	for name, in := range cases {
 		if _, issues := Sanitize(in); len(issues) == 0 {
