@@ -107,7 +107,11 @@ function createWorker(): Worker {
     const entry = pending.get(msg.id);
     if (!entry) return;
     if (msg.progress !== undefined) {
-      entry.onProgress?.(msg.progress);
+      try {
+        entry.onProgress?.(msg.progress);
+      } catch {
+        // A broken progress listener must not break the request plumbing.
+      }
       return;
     }
     pending.delete(msg.id);
