@@ -7,7 +7,7 @@
 //
 // Pure segment math lives in miniWheelSegments() so it stays unit-testable
 // without a DOM; miniWheelSvg()/flavorChipsHtml() only build markup.
-import { FLAVOR_WHEEL } from '../flavor-data.js';
+import { FLAVOR_WHEEL, flavorLeafCount } from '../flavor-data.js';
 import type { FlavorNode } from '../flavor-data.js';
 import { matchFlavors, colorForNode, muteHex, pathToNode } from '../flavor-match.js';
 import { esc, html, joinHtml } from '../utils.js';
@@ -38,11 +38,6 @@ const RINGS: Record<MiniWheelDepth, [number, number]> = {
 const MUTE_BG = '#71717a';
 const MUTE_WEIGHT = 0.6;
 
-function leafCount(node: FlavorNode): number {
-  if (!node.children?.length) return 1;
-  return node.children.reduce((sum, child) => sum + leafCount(child), 0);
-}
-
 // Ids of a bean's matched flavours plus every ancestor category, as a Set so
 // FLAVOR_WHEEL's own nodes are never mutated with _lit flags (markLit would
 // leave those behind and leak into the large wheel's next render).
@@ -56,7 +51,7 @@ function litIdsFor(flavors: unknown): Set<string> {
 export function miniWheelSegments(flavors: unknown): MiniWheelSegment[] {
   const lit = litIdsFor(flavors);
   const segments: MiniWheelSegment[] = [];
-  const totalLeaves = FLAVOR_WHEEL.reduce((sum, cat) => sum + leafCount(cat), 0);
+  const totalLeaves = FLAVOR_WHEEL.reduce((sum, cat) => sum + flavorLeafCount(cat), 0);
 
   const walk = (node: FlavorNode, depth: MiniWheelDepth, a0: number, a1: number): void => {
     const segment = (d: MiniWheelDepth): void => {
@@ -66,10 +61,10 @@ export function miniWheelSegments(flavors: unknown): MiniWheelSegment[] {
 
     const children = node.children;
     if (children?.length && depth < 3) {
-      const childLeaves = children.reduce((sum, child) => sum + leafCount(child), 0);
+      const childLeaves = children.reduce((sum, child) => sum + flavorLeafCount(child), 0);
       let cursor = a0;
       for (const child of children) {
-        const span = (a1 - a0) * (leafCount(child) / childLeaves);
+        const span = (a1 - a0) * (flavorLeafCount(child) / childLeaves);
         walk(child, (depth + 1) as MiniWheelDepth, cursor, cursor + span);
         cursor += span;
       }
@@ -88,7 +83,7 @@ export function miniWheelSegments(flavors: unknown): MiniWheelSegment[] {
 
   let cursor = 0;
   for (const cat of FLAVOR_WHEEL) {
-    const span = 360 * (leafCount(cat) / totalLeaves);
+    const span = 360 * (flavorLeafCount(cat) / totalLeaves);
     walk(cat, 1, cursor, cursor + span);
     cursor += span;
   }

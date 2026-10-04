@@ -21,6 +21,14 @@ export interface FlavorNode {
   _lit?: boolean;
 }
 
+// A node's weight is the number of leaf descriptors beneath it (a leaf weighs
+// 1). The large echarts sunburst and the inline SVG wheel (#1350) both lay
+// their wedges out from these counts, so it lives here in one place.
+export function flavorLeafCount(node: FlavorNode): number {
+  if (!node.children?.length) return 1;
+  return node.children.reduce((sum, child) => sum + flavorLeafCount(child), 0);
+}
+
 export const FLAVOR_WHEEL: FlavorNode[] = [
   {
     id: 'fruity', en: 'Fruity', de: 'Fruchtig', it: 'Fruttato', fr: 'Fruité', es: 'Afrutado', nl: 'Fruitig',
