@@ -249,4 +249,3 @@ describe('bean inventory reorder badge and unit (#1373)', () => {
     expect((consumed.match(/ g/g) ?? []).length).toBe(1);
   });
 });
-
