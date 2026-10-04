@@ -205,6 +205,16 @@ describe('bean detail sheet (#1330 part 2)', () => {
     // One inline wheel button in the aroma block, none in the ⋯ menu.
     expect(html.match(/data-action="open-flavor-wheel"/g)?.length).toBe(1);
   });
+
+  it('shows the phone grab handle and keeps the labelled close button (#1374)', () => {
+    const { elements } = setup();
+    openBeanSheet(1);
+
+    const html = sheetHtml(elements);
+    expect(html).toContain('class="lib-sheet-grab"');
+    expect(html).toContain('data-action="close-bean-sheet"');
+    expect(html).toContain(`aria-label="${t('lib_sheet_close')}"`);
+  });
 });
 
 describe('bean inventory reorder badge and unit (#1373)', () => {

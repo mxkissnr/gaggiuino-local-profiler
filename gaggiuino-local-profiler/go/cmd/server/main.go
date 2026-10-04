@@ -54,6 +54,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/webapp"
 )
 
@@ -324,6 +325,11 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	demoService := system.NewDemoService(sqlDB, shotsRepo, libRepo)
 	systemHandlers := system.NewHandlers(poller, demoService, token)
 	systemHandlers.RegisterRoutes(mux)
+
+	// #1375: per-install UI choices (view/filter/sort) that follow the user
+	// across devices, kept in the kv table under 'ui_prefs'.
+	uiprefsHandlers := uiprefs.NewHandlers(uiprefs.NewRepository(sqlDB))
+	uiprefsHandlers.RegisterRoutes(mux)
 
 	// Prime a newly-connected client with the current preheat/live snapshot
 	// before subscribing it to future pushes — see the Prime field's doc

@@ -16,6 +16,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 )
 
 // fakePNG returns a byte slice that passes matchesImageMagicBytes for
@@ -568,5 +569,59 @@ func TestRestore_AchievementsSkipsBadEntries(t *testing.T) {
 		if _, ok := ach[bad]; ok {
 			t.Errorf("bad achievement %q was restored: %+v", bad, ach)
 		}
+	}
+}
+
+// TestStreamRoundTrip_UIPrefs (#1375): a stored ui_prefs object survives a
+// backup and restore into a fresh install.
+func TestStreamRoundTrip_UIPrefs(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 1)
+	if err := uiprefs.NewRepository(deps1.DB).Save(map[string]any{"view": "shelf", "sort": "name"}); err != nil {
+		t.Fatalf("seeding ui_prefs: %v", err)
+	}
+	rec := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
+
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	prefs, err := uiprefs.NewRepository(deps2.DB).Get()
+	if err != nil {
+		t.Fatalf("Get ui_prefs: %v", err)
+	}
+	if prefs["view"] != "shelf" || prefs["sort"] != "name" {
+		t.Errorf("ui_prefs not restored: %+v", prefs)
+	}
+}
+
+// TestRestore_LegacyBackup_LeavesUIPrefsUntouched (#1375): an old bundle has
+// no ui_prefs key, so the target's own prefs stay put.
+func TestRestore_LegacyBackup_LeavesUIPrefsUntouched(t *testing.T) {
+	useImageDir(t)
+	zipBytes, err := os.ReadFile(filepath.Join("testdata", "legacy-backup.zip"))
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+	h, deps, _ := newTestHandlersInDir(t)
+	if err := uiprefs.NewRepository(deps.DB).Save(map[string]any{"view": "local-only"}); err != nil {
+		t.Fatalf("seeding ui_prefs: %v", err)
+	}
+	rr := doZip(t, newMux(h), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	prefs, err := uiprefs.NewRepository(deps.DB).Get()
+	if err != nil {
+		t.Fatalf("Get ui_prefs: %v", err)
+	}
+	if prefs["view"] != "local-only" {
+		t.Errorf("legacy restore clobbered ui_prefs: %+v", prefs)
 	}
 }

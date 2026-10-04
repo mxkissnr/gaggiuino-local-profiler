@@ -57,7 +57,7 @@ interface ShelfModule {
   loadShelfPrefs: () => ShelfPrefs;
   saveShelfPrefs: (prefs: ShelfPrefs) => void;
 }
-const { classifyBeanShelf, shelfStock, renderShelfTile, renderShelfRow, matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs } =
+const { classifyBeanShelf, shelfStock, renderShelfTile, renderShelfRow, matchesShelfQuery, matchesShelfFilter, sortShelf } =
   (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
 
 const { S } = await import('../public-src/state/index.js');
@@ -352,11 +352,16 @@ describe('sortShelf (#1329 part 2)', () => {
   });
 });
 
-describe('shelf prefs persistence (#1329 part 2)', () => {
+describe('shelf prefs persistence (#1329 part 2, shared store #1375)', () => {
   // The module-load stub elsewhere in this file is a no-op store; persistence
-  // needs a real (in-memory) one to round-trip.
+  // needs a real (in-memory) one to round-trip. ui-prefs.ts memoises the
+  // shared store at module load, so each test re-imports shelf.js against a
+  // fresh store instead of relying on a per-test localStorage swap.
+  let store: Map<string, string>;
+  let shelfMod: ShelfModule;
+
   beforeEach(() => {
-    const store = new Map<string, string>();
+    store = new Map();
     g.localStorage = {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => { store.set(k, v); },
@@ -364,22 +369,30 @@ describe('shelf prefs persistence (#1329 part 2)', () => {
     };
   });
 
-  it('round-trips filter, sort and view but never the query', () => {
-    saveShelfPrefs({ query: 'ethiopia', filter: 'decaf', sort: 'remaining', view: 'list' });
-    const loaded = loadShelfPrefs();
+  async function freshShelf(): Promise<ShelfModule> {
+    vi.resetModules();
+    return (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
+  }
+
+  it('round-trips filter, sort and view but never the query', async () => {
+    shelfMod = await freshShelf();
+    shelfMod.saveShelfPrefs({ query: 'ethiopia', filter: 'decaf', sort: 'remaining', view: 'list' });
+    const loaded = shelfMod.loadShelfPrefs();
     expect(loaded.filter).toBe('decaf');
     expect(loaded.sort).toBe('remaining');
     expect(loaded.view).toBe('list');
     expect(loaded.query).toBe('');
   });
 
-  it('falls back to defaults when nothing is stored', () => {
-    expect(loadShelfPrefs()).toEqual({ query: '', filter: 'all', sort: 'fresh', view: 'shelf' });
+  it('falls back to defaults when nothing is stored', async () => {
+    shelfMod = await freshShelf();
+    expect(shelfMod.loadShelfPrefs()).toEqual({ query: '', filter: 'all', sort: 'fresh', view: 'shelf' });
   });
 
-  it('ignores an invalid stored view', () => {
-    g.localStorage = { getItem: () => JSON.stringify({ view: 'grid' }), setItem: () => {} };
-    expect(loadShelfPrefs().view).toBe('shelf');
+  it('ignores an invalid stored view', async () => {
+    store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { view: 'grid' } }));
+    shelfMod = await freshShelf();
+    expect(shelfMod.loadShelfPrefs().view).toBe('shelf');
   });
 });
 

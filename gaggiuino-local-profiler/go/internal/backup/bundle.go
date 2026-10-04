@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 )
 
 // This file handles the "gather the small stuff" half of backup export:
@@ -86,6 +87,10 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
+	uiPrefs, err := uiprefs.NewRepository(d.DB).Get()
+	if err != nil {
+		return nil, err
+	}
 	allAchievements, err := d.AchievementsRepo.GetAll()
 	if err != nil {
 		return nil, err
@@ -103,7 +108,7 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 		"kv": map[string]any{
 			"menu": menu, "orders_settings": ordersSettings, "notify_mapping": notifyMapping,
 			"import_settings": importSettings, "mqtt_settings": safeMqtt,
-			"shot_defaults": shotDefaults,
+			"shot_defaults": shotDefaults, "ui_prefs": uiPrefs,
 		},
 	}
 

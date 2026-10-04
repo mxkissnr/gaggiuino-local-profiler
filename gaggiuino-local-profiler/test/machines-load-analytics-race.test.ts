@@ -22,7 +22,7 @@ g.window ??= globalThis;
 const win = globalThis as unknown as { initAnalytics: ReturnType<typeof vi.fn> };
 
 const { S } = await import('../public-src/state/index.js');
-const { loadMachines } = await import('../public-src/components/machines-settings.js');
+const { loadMachines, resolveActiveMachineId } = await import('../public-src/components/machines-settings.js');
 
 // Generic permissive fetch stub — loadMachines()'s own applyActiveMachineChange()
 // call fires a few unrelated, unawaited follow-up fetches (profile list,
@@ -67,5 +67,65 @@ describe('loadMachines (#526 render race)', () => {
     await loadMachines();
 
     expect(win.initAnalytics).not.toHaveBeenCalled();
+  });
+
+  // #1323: a remembered machine that no longer exists (deleted, or pulled in
+  // from another device through the shared ui_prefs) used to keep filtering
+  // the shot history to nothing. It must fall back to "all".
+  it('falls back to "all" when the remembered machine id is not in the loaded list', async () => {
+    S.currentMode = 'shots';
+    S.activeMachineId = 99; // stale id: no machine with this id exists any more
+    stubFetch([{ id: 1, name: 'Gaggiuino', isDefault: true }]);
+
+    await loadMachines();
+
+    expect(S.activeMachineId).toBe('all');
+  });
+});
+
+// The single validation both loadMachines() and main.ts's start-up ui-prefs
+// callback use, so a server-supplied id cannot bypass it (#1323, review finding 1).
+describe('resolveActiveMachineId (#1323)', () => {
+  beforeEach(() => {
+    g.document = { getElementById: () => undefined, querySelectorAll: () => [] };
+    S.activeMachineId = 'all';
+    S.allShots = [];
+    win.initAnalytics = vi.fn();
+  });
+
+  it('keeps a numeric id that is present in the loaded list', async () => {
+    stubFetch([
+      { id: 1, name: 'Gaggiuino', isDefault: true },
+      { id: 2, name: 'GaggiMate Sim', isDefault: false },
+    ]);
+
+    await loadMachines();
+
+    expect(resolveActiveMachineId(2)).toBe(2);
+  });
+
+  it('falls back to "all" for a numeric id that is missing from the loaded list', async () => {
+    stubFetch([{ id: 1, name: 'Gaggiuino', isDefault: true }]);
+
+    await loadMachines();
+
+    expect(resolveActiveMachineId(99)).toBe('all');
+  });
+
+  it('leaves a numeric id alone while the list has not loaded yet, for loadMachines() to validate later', async () => {
+    stubFetch([]);
+
+    await loadMachines();
+
+    expect(S.machines).toHaveLength(0);
+    expect(resolveActiveMachineId(99)).toBe(99);
+  });
+
+  it("keeps 'all'", async () => {
+    stubFetch([{ id: 1, name: 'Gaggiuino', isDefault: true }]);
+
+    await loadMachines();
+
+    expect(resolveActiveMachineId('all')).toBe('all');
   });
 });
