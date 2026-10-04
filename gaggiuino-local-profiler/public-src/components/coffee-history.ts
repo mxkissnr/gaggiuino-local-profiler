@@ -181,7 +181,8 @@ export function renderCoffeeHistory(host: HTMLElement): () => void {
   const showLabel = (event: Event): void => {
     const target = event.target as Element | null;
     const tile = target?.closest('.coffee-history-tile') as HTMLElement | null;
-    if (tile?.dataset.label) caption.textContent = tile.dataset.label;
+    const label = tile?.dataset.label;
+    if (label) caption.textContent = label;
   };
   stage.addEventListener('focusin', showLabel);
   stage.addEventListener('click', showLabel);
