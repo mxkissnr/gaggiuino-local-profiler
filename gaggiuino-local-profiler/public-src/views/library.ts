@@ -841,7 +841,7 @@ function _onSheetKeydown(e: KeyboardEvent): void {
     // A lightbox or the flavor wheel can sit above the sheet — Escape belongs
     // to whichever is on top, and never drops typed input.
     const lightbox = typeof document.querySelector === 'function' ? document.querySelector('.lightbox-overlay') : null;
-    const fw = document.getElementById('flavorWheelModal') as HTMLElement | null;
+    const fw = document.getElementById('flavorWheelModal');
     const fwOpen = !!fw && fw.style?.display === 'flex';
     if (lightbox || fwOpen) return;
     const tag = document.activeElement?.tagName?.toLowerCase() || '';
@@ -884,15 +884,15 @@ export function openBeanSheet(id: number): void {
     _wireSheetKeys();
     _focusSheetClose();
   };
-  const startViewTransition = (document as Document & { startViewTransition?: (cb: () => void) => void }).startViewTransition;
-  if (typeof startViewTransition === 'function' && _sheetMotionOk()) startViewTransition.call(document, paint);
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => void };
+  if (typeof doc.startViewTransition === 'function' && _sheetMotionOk()) doc.startViewTransition(paint);
   else paint();
 }
 
 export function closeBeanSheet(): void {
   const host = typeof document !== 'undefined' ? document.getElementById('beanSheet') : null;
   if (host) {
-    host.innerHTML = '';
+    host.innerHTML = html``;
     host.classList?.remove('open');
   }
   _sheetBeanId = null;
