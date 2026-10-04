@@ -537,7 +537,10 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 
 // getImage serves GET /api/shots/{id}/image. An invalid id is treated exactly
 // like "no image" (404), not a 400: it short-circuits to a nil shot before
-// the 404 check, the same outcome as a valid id with no shot.
+// the 404 check, the same outcome as a valid id with no shot. The image is
+// served with a revalidation-only cache header: the URL stays the same when a
+// photo is replaced, so clients must revalidate. http.ServeFile already sets
+// Last-Modified and answers If-Modified-Since with 304.
 func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	var shot Shot
@@ -563,7 +566,7 @@ func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no image")
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, path)
 }

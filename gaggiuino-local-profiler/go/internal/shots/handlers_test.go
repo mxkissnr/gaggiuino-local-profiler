@@ -468,6 +468,18 @@ func TestImage_UploadServeDeleteRoundTrip(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
 		t.Errorf("Content-Type = %q, want image/png", ct)
 	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-cache" {
+		t.Errorf("Cache-Control = %q, want private, no-cache", cc)
+	}
+	if lm := rec.Header().Get("Last-Modified"); lm != "" {
+		req304 := httptest.NewRequest(http.MethodGet, "/api/shots/1/image", nil)
+		req304.Header.Set("If-Modified-Since", lm)
+		rec304 := httptest.NewRecorder()
+		mux.ServeHTTP(rec304, req304)
+		if rec304.Code != http.StatusNotModified {
+			t.Errorf("revalidation status = %d, want 304", rec304.Code)
+		}
+	}
 	if !bytes.Equal(rec.Body.Bytes(), pngMagic) {
 		t.Errorf("served image bytes don't match uploaded bytes")
 	}

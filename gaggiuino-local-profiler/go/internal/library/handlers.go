@@ -338,7 +338,9 @@ func (h *Handlers) getBeansInfo(w http.ResponseWriter, r *http.Request) {
 
 // serveImage handles the repeated `GET .../image` shape: 404 with
 // {error:"no image"} when the entity/image is missing, otherwise serves the
-// file with a 24h cache header.
+// file with a revalidation-only cache header: the URL stays the same when a
+// photo is replaced, so clients must revalidate. http.ServeFile already sets
+// Last-Modified and answers If-Modified-Since with 304.
 func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefix string, id int64) {
 	contentType, known := img.ExtContentType[ext]
 	if ext == "" || !known {
@@ -353,7 +355,7 @@ func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefi
 		writeError(w, http.StatusNotFound, "no image")
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, path)
 }
