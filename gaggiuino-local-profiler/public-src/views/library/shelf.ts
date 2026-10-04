@@ -4,7 +4,7 @@
 // under vitest's node environment.
 import type { Html } from '../../utils.js';
 import { esc, html, joinHtml, roastAgeDays } from '../../utils.js';
-import { tHtml } from '../../i18n.js';
+import { t, tHtml } from '../../i18n.js';
 import { SNOWFLAKE_ICON_SVG } from '../../icons.js';
 import { countryName } from '../../constants.js';
 import { S } from '../../state/index.js';
@@ -137,11 +137,63 @@ function shelfStockBar(pct: number | null): Html {
     : esc('');
 }
 
+// Deterministic xorshift seeded with the bean id: a bean's icicles never
+// reshuffle between renders (no Math.random anywhere in this module).
+function icicleRng(seed: number): () => number {
+  let s = (Math.floor(seed) >>> 0) || 0x9e3779b9;
+  return () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 0x100000000;
+  };
+}
+
+// Icicles hanging from the shelf board under a frozen bag, as an inline SVG:
+// a frost rim along the top plus 9-11 tapered icicles whose length grows with
+// frozenG. Colours are literal SVG stops because ice reads the same in both
+// themes; the drop's timing and the whole geometry are seeded by the bean id.
+// Pure and DOM-free, so the tests can assert on its geometry.
+export function icicleSvg(frozenG: number, seed: number): Html {
+  const rnd = icicleRng(seed);
+  const num = (x: number): string => String(Math.round(x * 10) / 10);
+  const n = 9 + Math.floor(rnd() * 3);
+  const scale = 0.2 + 0.8 * Math.min(1, Math.max(0, frozenG) / 250);
+  const gradId = `lib-icicle-${Math.abs(Math.floor(seed))}`;
+  const slot = 100 / n;
+  const y0 = 2.5;
+  const parts: string[] = [
+    `<path class="lib-shelf-frost" d="M0 0 H100 V2.5 C76 4.9 62 0.7 50 2.3 C37 4.1 22 0.8 0 2.7 Z" fill="#e9f8ff"/>`,
+    `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6feff"/><stop offset="1" stop-color="#a9dcff" stop-opacity="0.5"/></linearGradient></defs>`,
+  ];
+  let dropX = 50;
+  const mid = Math.floor(n / 2);
+  for (let i = 0; i < n; i++) {
+    const cx = slot * (i + 0.5) + (rnd() - 0.5) * slot * 0.5;
+    const half = (6 + rnd() * 4) / 2;
+    const len = Math.max(3, 30 * scale * (0.62 + rnd() * 0.38));
+    const tip = y0 + len;
+    const lx = cx - half;
+    const rx = cx + half;
+    parts.push(`<path d="M${num(lx)} ${num(y0)} Q${num(lx + half * 0.25)} ${num(y0 + len * 0.55)} ${num(cx)} ${num(tip)} Q${num(rx - half * 0.25)} ${num(y0 + len * 0.55)} ${num(rx)} ${num(y0)} Z" fill="url(#${gradId})"/>`);
+    parts.push(`<path d="M${num(lx + half * 0.3)} ${num(y0 + 1)} Q${num(lx + half * 0.32)} ${num(y0 + len * 0.6)} ${num(cx - half * 0.12)} ${num(tip - 1.5)}" fill="none" stroke="#ffffff" stroke-width="0.6" stroke-linecap="round" opacity="0.75"/>`);
+    if (i === mid) dropX = cx;
+  }
+  const delay = (((Math.floor(seed) % 45) + 45) % 45) / 10;
+  parts.push(`<circle class="lib-shelf-icicle-drop" cx="${num(dropX)}" cy="${num(y0 + 2)}" r="1.7" fill="#bfe8ff" style="animation-delay:${num(delay)}s"/>`);
+  return `<svg class="lib-shelf-icicles" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true">${parts.join('')}</svg>` as Html;
+}
+
 // One bag standing on the shelf. A button so a tap opens the bean's detail
-// sheet (views/library.ts wires data-action="open-bean-sheet").
+// sheet (views/library.ts wires data-action="open-bean-sheet"). The open badge
+// is no longer drawn over the photo, so its word moves into the tile's
+// accessible name to keep an opened bag announced.
 export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
   const { opened, openG, pct, sealedBags, frozenG } = shelfStock(b);
   const archived = b.enabled === false;
+  const label = [b.name, b.roaster, opened ? t('lib_shelf_open_badge') : '', openG != null ? `${openG} g` : '']
+    .filter((v): v is string => !!v)
+    .join(', ');
 
   // Up to two decorative copies peek out behind the photo to hint at the
   // unopened bags waiting in the cupboard; the badge carries the count.
@@ -149,12 +201,12 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
     ? html`<span class="lib-shelf-stack" aria-hidden="true">${sealedBags > 1 ? html`<span class="lib-shelf-stack-layer"></span>` : esc('')}<span class="lib-shelf-stack-layer"></span></span>`
     : esc('');
 
-  return html`<button type="button" class="lib-shelf-tile${esc(opts.muted ? ' muted' : '')}" data-action="open-bean-sheet" data-id="${esc(b.id)}" aria-haspopup="dialog">
-    <span class="lib-shelf-bag">
+  return html`<button type="button" class="lib-shelf-tile${esc(opts.muted ? ' muted' : '')}" data-action="open-bean-sheet" data-id="${esc(b.id)}" aria-haspopup="dialog" aria-label="${esc(label)}">
+    <span class="lib-shelf-bag${esc(frozenG > 0 ? ' has-icicles' : '')}">
       ${stack}
       ${shelfBagImage(b)}
+      ${frozenG > 0 ? icicleSvg(frozenG, b.id) : esc('')}
       ${sealedBags > 0 ? html`<span class="lib-shelf-sealed-badge">+${esc(sealedBags)}</span>` : esc('')}
-      ${opened ? html`<span class="lib-shelf-open-badge">${tHtml('lib_shelf_open_badge')}</span>` : esc('')}
       ${archived ? html`<span class="lib-shelf-archived-tag">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}
     </span>
     <span class="lib-shelf-name serif-display">${esc(b.name)}</span>
