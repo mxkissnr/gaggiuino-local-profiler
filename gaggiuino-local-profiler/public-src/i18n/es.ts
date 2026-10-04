@@ -176,7 +176,7 @@ const es: Partial<Translations> = {
     lib_grinder_zero_point_delete:'Eliminar entrada de punto cero',
     lib_cancel:'Cancelar', lib_save:'Guardar',
     lib_empty_beans:'No hay granos guardados', lib_empty_grinders:'No hay molinos guardados',
-    lib_shelf_in_use:'En uso', lib_shelf_stock:'Reserva', lib_shelf_archive:'Vacíos y archivo', lib_shelf_archived_tag:'Archivado', lib_shelf_search_ph:'Café, tostador, origen', lib_shelf_all:'Todos', lib_shelf_sort_fresh:'Más fresco', lib_shelf_sort_name:'Nombre', lib_shelf_sort_remaining:'Más restante', lib_shelf_no_match:'Ningún café coincide', lib_shelf_full:'Tu estante se va llenando',
+    lib_shelf_stock:'Reserva', lib_shelf_archive:'Vacíos y archivo', lib_shelf_archived_tag:'Archivado', lib_shelf_search_ph:'Café, tostador, origen', lib_shelf_all:'Todos', lib_shelf_sort_fresh:'Más fresco', lib_shelf_sort_name:'Nombre', lib_shelf_sort_remaining:'Más restante', lib_shelf_no_match:'Ningún café coincide', lib_shelf_full:'Tu estante se va llenando', lib_shelf_open_badge:'abierto', lib_shelf_full_bags:(n)=>`+${n} llenas`, lib_shelf_view_shelf:'Estante', lib_shelf_view_list:'Lista',
     lib_btn_edit:'Editar', lib_btn_delete:'Eliminar',
     lib_btn_disable:'Desactivar para pedidos', lib_btn_enable:'Activar para pedidos',
     lib_bean_disabled_badge:'Desactivado',

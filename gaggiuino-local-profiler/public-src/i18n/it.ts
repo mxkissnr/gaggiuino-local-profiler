@@ -176,7 +176,7 @@ const it: Partial<Translations> = {
     lib_grinder_zero_point_delete:'Elimina voce punto zero',
     lib_cancel:'Annulla', lib_save:'Salva',
     lib_empty_beans:'Nessun grano salvato', lib_empty_grinders:'Nessun macinino salvato',
-    lib_shelf_in_use:'In uso', lib_shelf_stock:'Scorta', lib_shelf_archive:'Vuoti e archivio', lib_shelf_archived_tag:'Archiviato', lib_shelf_search_ph:'Caffè, torrefattore, origine', lib_shelf_all:'Tutti', lib_shelf_sort_fresh:'Più fresco', lib_shelf_sort_name:'Nome', lib_shelf_sort_remaining:'Più rimasto', lib_shelf_no_match:'Nessun caffè corrisponde', lib_shelf_full:'Lo scaffale si sta riempiendo',
+    lib_shelf_stock:'Scorta', lib_shelf_archive:'Vuoti e archivio', lib_shelf_archived_tag:'Archiviato', lib_shelf_search_ph:'Caffè, torrefattore, origine', lib_shelf_all:'Tutti', lib_shelf_sort_fresh:'Più fresco', lib_shelf_sort_name:'Nome', lib_shelf_sort_remaining:'Più rimasto', lib_shelf_no_match:'Nessun caffè corrisponde', lib_shelf_full:'Lo scaffale si sta riempiendo', lib_shelf_open_badge:'aperto', lib_shelf_full_bags:(n)=>`+${n} piene`, lib_shelf_view_shelf:'Scaffale', lib_shelf_view_list:'Lista',
     lib_btn_edit:'Modifica', lib_btn_delete:'Elimina',
     lib_btn_disable:'Disattiva per gli ordini', lib_btn_enable:'Attiva per gli ordini',
     lib_bean_disabled_badge:'Disattivato',
