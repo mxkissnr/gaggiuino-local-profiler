@@ -129,8 +129,8 @@ describe('setUiPref (#1375)', () => {
 
   it('does not drop a change made while a PUT is in flight (finding 2)', async () => {
     const mod = await loadModule();
-    let resolvePut: ((r: Response) => void) | undefined = undefined;
-    const fetchMock = vi.fn<FetchFn>(() => new Promise<Response>(res => { resolvePut = res; }));
+    const resolvers: Array<(r: Response) => void> = [];
+    const fetchMock = vi.fn<FetchFn>(() => new Promise<Response>(res => { resolvers.push(res); }));
     vi.stubGlobal('fetch', fetchMock);
     vi.useFakeTimers();
 
@@ -142,7 +142,8 @@ describe('setUiPref (#1375)', () => {
     // The user changes the same key before the first PUT has settled.
     mod.setUiPref('lib.shelf', { filter: 'v2' });
 
-    resolvePut?.(okJson({}));
+    const resolveFirst = resolvers[0];
+    resolveFirst?.(okJson({}));
     // Run the follow-up flush whichever microtask ordering settles the in-flight
     // PUT first (the version check must keep the key queued either way).
     await vi.runAllTimersAsync();
