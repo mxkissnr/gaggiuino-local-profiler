@@ -10,10 +10,9 @@ g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
-  renderBeanList: () => void;
-  toggleShelfBean: (beanId: number) => void;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
 }
-const { renderBeanList, toggleShelfBean } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { renderBeanCard } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #648: bg.roastDate was rendered into the bag-history block's innerHTML
 // without esc(), unlike every sibling field there (batchNumber etc.). Not
@@ -64,8 +63,7 @@ describe('renderBeanList (#648 bag-history roastDate escaping)', () => {
       grinders: [],
     };
 
-    renderBeanList();
-    toggleShelfBean(1);
+    beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     expect(beanListUI.innerHTML).not.toContain('<img src=x onerror=alert(1)>');
     expect(beanListUI.innerHTML).toContain('&lt;img src=x onerror=alert(1)&gt;');

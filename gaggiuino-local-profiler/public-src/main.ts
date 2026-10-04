@@ -101,7 +101,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openEditBag, closeEditBag, saveEditBag,
-         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags, toggleShelfBean,
+         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags, openBeanSheet, closeBeanSheet,
          toggleBagCard, reorderBags,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
@@ -441,7 +441,8 @@ Object.assign(window, {
   saveBagStock,
   markBagEmpty,
   togglePastBags,
-  toggleShelfBean,
+  openBeanSheet,
+  closeBeanSheet,
   toggleBagCard,
   reorderBags,
   openFreezeForm,
@@ -948,7 +949,8 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'mark-bag-empty':       void markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
       case 'toggle-past-bags':     togglePastBags(numId()); break;
-      case 'toggle-shelf-bean':    toggleShelfBean(numId()); break;
+      case 'open-bean-sheet':     openBeanSheet(numId()); break;
+      case 'close-bean-sheet':    closeBeanSheet(); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
       case 'save-freeze-form':   void saveFreezePortions(numId()); break;
@@ -956,10 +958,10 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-edit-frozen-form':  openEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'close-edit-frozen-form': closeEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'save-edit-frozen-form':  void saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
-      case 'filter-by-bean':     filterShotsByBean(numId()); break;
+      case 'filter-by-bean':     closeBeanSheet(); filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
-      case 'edit-bean':          editBean(numId()); break;
+      case 'edit-bean':          closeBeanSheet(); editBean(numId()); break;
       case 'delete-bean':        void deleteBean(numId()); break;
       case 'toggle-bean-active': void toggleBeanActive(numId()); break;
       case 'edit-grinder':       editGrinder(numId()); break;
@@ -986,6 +988,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'delete-profile':        void deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
       case 'create-profile-from-bean':
+        closeBeanSheet();
         if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
         else createProfileFromBean(numId());
         break;
@@ -1016,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
       case 'start-dialin':           openDialinWizard(); break;
-      case 'start-dialin-from-bean': startDialinFromBean(numId()); break;
+      case 'start-dialin-from-bean': closeBeanSheet(); startDialinFromBean(numId()); break;
       case 'dialin-confirm-shot':    void dialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'dialin-accept-next':     dialinAcceptNext(); break;
       case 'dialin-override':        dialinOverride(); break;

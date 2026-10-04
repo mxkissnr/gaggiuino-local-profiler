@@ -2,11 +2,13 @@
 ### Added
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
 - **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day.** Closes #1357
 - **Photos cached by the browser before the previous fix are re-checked too, so a replaced photo appears after a normal reload.** (#1357)
 - **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
 - **The bean library is one shelf with a stock bar and bag stacks per bean, and can switch to a compact list.** (#1330)
+- **Tapping a bean opens a detail sheet with its stock, bags and every action, and beans are archived and restored instead of hidden.** (#1330)
 - **Shop product photos on a plain or transparent background are cut out much more cleanly, because the bag is found first and only that part goes to the models.** Closes #1348
 - **Closing the sticker editor while a cut-out is still running now releases the worker straight away, so a quick reopen cannot overlap two cut-outs.** Part of #1347
 - **Cutting out a sticker no longer freezes the app or runs the browser out of memory, and the memory is given back when the editor closes.** Closes #1347

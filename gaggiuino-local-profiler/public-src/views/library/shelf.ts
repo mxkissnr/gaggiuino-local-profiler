@@ -111,7 +111,6 @@ export function shelfStock(b: ShelfBean): ShelfStock {
 
 export interface ShelfTileOpts {
   muted: boolean;
-  expanded?: boolean | undefined;
 }
 
 // Shared photo block: the bean's image or its initials placeholder. The
@@ -137,11 +136,10 @@ function shelfStockBar(pct: number | null): Html {
     : esc('');
 }
 
-// One bag standing on the shelf. A button so a tap expands the full bean card
-// below the grid (views/library.ts wires data-action="toggle-shelf-bean").
+// One bag standing on the shelf. A button so a tap opens the bean's detail
+// sheet (views/library.ts wires data-action="open-bean-sheet").
 export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
   const { opened, openG, pct, sealedBags, frozenG } = shelfStock(b);
-  const expanded = opts.expanded === true;
   const archived = b.enabled === false;
 
   // Up to two decorative copies peek out behind the photo to hint at the
@@ -150,7 +148,7 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
     ? html`<span class="lib-shelf-stack" aria-hidden="true">${sealedBags > 1 ? html`<span class="lib-shelf-stack-layer"></span>` : esc('')}<span class="lib-shelf-stack-layer"></span></span>`
     : esc('');
 
-  return html`<button type="button" class="lib-shelf-tile${esc(opts.muted ? ' muted' : '')}" data-action="toggle-shelf-bean" data-id="${esc(b.id)}" aria-expanded="${esc(expanded ? 'true' : 'false')}">
+  return html`<button type="button" class="lib-shelf-tile${esc(opts.muted ? ' muted' : '')}" data-action="open-bean-sheet" data-id="${esc(b.id)}" aria-haspopup="dialog">
     <span class="lib-shelf-bag">
       ${stack}
       ${shelfBagImage(b)}
@@ -166,11 +164,10 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
   </button>`;
 }
 
-// The compact list-view counterpart: the same button/expand contract as the
-// tile, laid out as one 44 px row.
+// The compact list-view counterpart: the same button/open-sheet contract as
+// the tile, laid out as one 44 px row.
 export function renderShelfRow(b: ShelfBean, opts: ShelfTileOpts): Html {
   const { opened, openG, pct, sealedBags, frozenG } = shelfStock(b);
-  const expanded = opts.expanded === true;
   const origin = originLabel(b);
   const subtitle = [b.roaster, origin].filter((v): v is string => !!v).join(' · ');
 
@@ -180,7 +177,7 @@ export function renderShelfRow(b: ShelfBean, opts: ShelfTileOpts): Html {
     frozenG > 0 ? html`<span class="lib-shelf-frozen-line">${SNOWFLAKE_ICON_SVG}${esc(frozenG)} g</span>` : esc(''),
   ];
 
-  return html`<button type="button" class="lib-shelf-row${esc(opts.muted ? ' muted' : '')}" data-action="toggle-shelf-bean" data-id="${esc(b.id)}" aria-expanded="${esc(expanded ? 'true' : 'false')}">
+  return html`<button type="button" class="lib-shelf-row${esc(opts.muted ? ' muted' : '')}" data-action="open-bean-sheet" data-id="${esc(b.id)}" aria-haspopup="dialog">
     <span class="lib-shelf-row-imgwrap">${shelfBagImage(b)}</span>
     <span class="lib-shelf-row-info">
       <span class="lib-shelf-row-titlerow"><span class="lib-shelf-row-name">${esc(b.name)}</span>${opened ? html`<span class="lib-shelf-open-badge">${tHtml('lib_shelf_open_badge')}</span>` : esc('')}</span>

@@ -49,8 +49,8 @@ interface ShelfPrefs {
 interface ShelfModule {
   classifyBeanShelf: (beans: readonly unknown[]) => ShelfBuckets;
   shelfStock: (b: unknown) => ShelfStock;
-  renderShelfTile: (b: unknown, opts: { muted: boolean; expanded?: boolean }) => string;
-  renderShelfRow: (b: unknown, opts: { muted: boolean; expanded?: boolean }) => string;
+  renderShelfTile: (b: unknown, opts: { muted: boolean }) => string;
+  renderShelfRow: (b: unknown, opts: { muted: boolean }) => string;
   matchesShelfQuery: (b: unknown, query: string) => boolean;
   matchesShelfFilter: (b: unknown, filter: ShelfFilter) => boolean;
   sortShelf: (beans: readonly unknown[], sort: ShelfSort) => unknown[];
@@ -205,7 +205,7 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     expect(out).toContain('&lt;img src=x onerror=alert(1)&gt;');
     // One word, so a single initial from the roaster.
     expect(out).toContain('>S<');
-    expect(out).toContain('aria-expanded="false"');
+    expect(out).toContain('aria-haspopup="dialog"');
     // The old conic ring is gone.
     expect(out).not.toContain('lib-shelf-ring');
   });
@@ -251,8 +251,8 @@ describe('renderShelfRow (#1330 list view)', () => {
     });
     const out = renderShelfRow(b, { muted: false });
     expect(out).toContain('lib-shelf-row');
-    expect(out).toContain('data-action="toggle-shelf-bean"');
-    expect(out).toContain('aria-expanded="false"');
+    expect(out).toContain('data-action="open-bean-sheet"');
+    expect(out).toContain('aria-haspopup="dialog"');
     expect(out).toContain('Red Brick');
     expect(out).toContain('Square Mile');
     expect(out).toContain('Brazil');
