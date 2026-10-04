@@ -225,7 +225,7 @@ g.createImageBitmap = () => Promise.resolve({ width: 120, height: 90 });
 const segmentModule = await import('../public-src/components/sticker/segment.js');
 const editorModule = await import('../public-src/components/sticker/editor.js');
 
-const { maskBounds, paddedAspectCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround, progressPercent } = editorModule;
+const { maskBounds, paddedAspectCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround, progressPercent, nextStage } = editorModule;
 const { autoCutout, resetCutout, tapMask } = segmentModule;
 const autoCutoutMock = vi.mocked(autoCutout);
 const resetCutoutMock = vi.mocked(resetCutout);
@@ -455,6 +455,20 @@ describe('progressPercent', () => {
   it('clamps a download fraction into its range', () => {
     expect(progressPercent('download', 2, 0)).toBe(30);
     expect(progressPercent('download', -1, 0)).toBe(0);
+  });
+});
+
+describe('nextStage', () => {
+  it('advances to a later stage and stays put on the same one', () => {
+    expect(nextStage('download', 'background')).toBe('background');
+    expect(nextStage('background', 'subject')).toBe('subject');
+    expect(nextStage('background', 'background')).toBe('background');
+  });
+
+  it('keeps the current stage when an earlier one arrives', () => {
+    expect(nextStage('background', 'download')).toBe('background');
+    expect(nextStage('subject', 'download')).toBe('subject');
+    expect(nextStage('subject', 'background')).toBe('subject');
   });
 });
 

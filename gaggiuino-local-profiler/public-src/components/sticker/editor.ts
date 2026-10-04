@@ -224,6 +224,19 @@ export function progressPercent(
   return Math.min(eased, end - 1);
 }
 
+// Stages run in this order. A later model's download can report an earlier
+// stage after a compute stage has started, and the editor must not rewind.
+const STAGE_ORDER: Record<CutoutStage, number> = {
+  download: 0,
+  background: 1,
+  subject: 2,
+};
+
+/** The later of two stages in `download < background < subject` order. */
+export function nextStage(current: CutoutStage, incoming: CutoutStage): CutoutStage {
+  return STAGE_ORDER[incoming] >= STAGE_ORDER[current] ? incoming : current;
+}
+
 interface DecodedPhoto {
   source: CanvasImageSource;
   width: number;
@@ -510,11 +523,23 @@ function buildEditor(
   function onProgress(update: CutoutProgress): void {
     if (closed || !working) return;
     if (update.stage !== stage) {
-      stage = update.stage;
+      const advanced = nextStage(stage, update.stage);
+      if (advanced === stage) {
+        // A later model's download reports 'download' after a compute stage:
+        // keep the current step and its easing, and show the byte progress
+        // beside the current label instead of rewinding the step.
+        if (update.fraction !== null) {
+          const pct = Math.round(Math.min(1, Math.max(0, update.fraction)) * 100);
+          workingLine.textContent = `${stepLabel(stage, null)} ${pct} %`;
+        }
+        paintProgress();
+        return;
+      }
+      stage = advanced;
       stageStart = Date.now();
     }
     fraction = update.fraction;
-    workingLine.textContent = stepLabel(update.stage, update.fraction);
+    workingLine.textContent = stepLabel(stage, update.fraction);
     paintProgress();
     // A model run reports no fraction, so a timer keeps the bar easing forward.
     if (update.fraction === null) {

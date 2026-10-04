@@ -2,6 +2,7 @@
 ### Added
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **The sticker cut-out progress no longer jumps back to step 1 when the second model downloads on a cold cache.** Closes #1358
 - **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day.** Closes #1357
 - **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
