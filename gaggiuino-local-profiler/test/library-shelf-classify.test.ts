@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // shelf.js's import chain (bags.js -> views/library.js -> state/i18n) reads
 // localStorage/navigator at module load time — stub the minimum browser
@@ -8,16 +8,49 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 
+// The staged-photo test drives saveBeanNoBag(), which calls into the API and
+// the crop editor. Mock both before the dynamic imports below load the view
+// (vi.hoisted keeps the spies out of the module factory's temporal dead zone).
+const mocks = vi.hoisted(() => ({
+  saveBean: vi.fn(),
+  uploadBeanImage: vi.fn(),
+  crop: vi.fn(),
+}));
+vi.mock('../public-src/api/library.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
+  return { ...actual, saveBean: mocks.saveBean, uploadBeanImage: mocks.uploadBeanImage };
+});
+vi.mock('../public-src/components/image-crop.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../public-src/components/image-crop.js')>();
+  return { ...actual, openImageCropEditor: mocks.crop };
+});
+
 interface ShelfBuckets {
   inUse: unknown[];
   stock: unknown[];
   emptyArchive: unknown[];
 }
+type ShelfFilter = 'all' | 'espresso' | 'filter' | 'decaf';
+type ShelfSort = 'fresh' | 'name' | 'remaining';
 interface ShelfModule {
   classifyBeanShelf: (beans: readonly unknown[]) => ShelfBuckets;
   renderShelfTile: (b: unknown, opts: { muted: boolean; expanded?: boolean }) => string;
+  matchesShelfQuery: (b: unknown, query: string) => boolean;
+  matchesShelfFilter: (b: unknown, filter: ShelfFilter) => boolean;
+  sortShelf: (beans: readonly unknown[], sort: ShelfSort) => unknown[];
+  loadShelfPrefs: () => { query: string; filter: ShelfFilter; sort: ShelfSort };
+  saveShelfPrefs: (prefs: { query: string; filter: ShelfFilter; sort: ShelfSort }) => void;
 }
-const { classifyBeanShelf, renderShelfTile } = (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
+const { classifyBeanShelf, renderShelfTile, matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs } =
+  (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
+
+const { S } = await import('../public-src/state/index.js');
+interface LibraryModule {
+  saveBeanNoBag: () => Promise<void>;
+  closeBeanForm: () => void;
+  stageNewBeanImage: (input: HTMLInputElement) => Promise<void>;
+}
+const library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // Minimal bean/bag rows: only the fields classifyBeanShelf/renderShelfTile read.
 function bean(over: Record<string, unknown>): Record<string, unknown> {
@@ -115,3 +148,189 @@ describe('renderShelfTile (#1329 shelf layout)', () => {
     expect(out).toContain('aria-expanded="false"');
   });
 });
+
+describe('matchesShelfQuery (#1329 part 2)', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('matches name, roaster, origin code and the origin display name', () => {
+    const b = bean({ name: 'Yirgacheffe', roaster: 'Square Mile', origins: [{ code: 'BR' }] });
+    expect(matchesShelfQuery(b, 'yirga')).toBe(true);
+    expect(matchesShelfQuery(b, 'square')).toBe(true);
+    expect(matchesShelfQuery(b, 'BR')).toBe(true);
+    // countryName('BR', 'en') === 'Brazil'
+    expect(matchesShelfQuery(b, 'brazil')).toBe(true);
+    expect(matchesShelfQuery(b, 'robles')).toBe(false);
+  });
+
+  it('matches everything for an empty or whitespace query', () => {
+    const b = bean({ name: 'Anything' });
+    expect(matchesShelfQuery(b, '')).toBe(true);
+    expect(matchesShelfQuery(b, '   ')).toBe(true);
+  });
+
+  it('falls back to the legacy singular origin field', () => {
+    const b = bean({ name: 'X', origin: 'ET' });
+    expect(matchesShelfQuery(b, 'ethiopia')).toBe(true);
+  });
+});
+
+describe('matchesShelfFilter (#1329 part 2)', () => {
+  it('treats omni as both espresso and filter', () => {
+    const omni = bean({ roastType: 'omni' });
+    expect(matchesShelfFilter(omni, 'espresso')).toBe(true);
+    expect(matchesShelfFilter(omni, 'filter')).toBe(true);
+    expect(matchesShelfFilter(omni, 'decaf')).toBe(false);
+  });
+
+  it('separates espresso-only from filter-only', () => {
+    expect(matchesShelfFilter(bean({ roastType: 'espresso' }), 'espresso')).toBe(true);
+    expect(matchesShelfFilter(bean({ roastType: 'espresso' }), 'filter')).toBe(false);
+    expect(matchesShelfFilter(bean({ roastType: 'filter' }), 'filter')).toBe(true);
+    expect(matchesShelfFilter(bean({ roastType: 'filter' }), 'espresso')).toBe(false);
+  });
+
+  it('matches decaf strictly and all always', () => {
+    expect(matchesShelfFilter(bean({ decaf: true }), 'decaf')).toBe(true);
+    expect(matchesShelfFilter(bean({ decaf: false }), 'decaf')).toBe(false);
+    expect(matchesShelfFilter(bean({}), 'all')).toBe(true);
+  });
+});
+
+describe('sortShelf (#1329 part 2)', () => {
+  function daysAgo(n: number): string {
+    const d = new Date(Date.now() - n * 86400000);
+    const p = (x: number) => String(x).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  it('fresh: youngest roast first, unknown age last', () => {
+    const fresh = bean({ id: 1, roastDate: daysAgo(5) });
+    const older = bean({ id: 2, roastDate: daysAgo(40) });
+    const unknown = bean({ id: 3 });
+    const out = sortShelf([unknown, older, fresh], 'fresh');
+    expect(ids(out)).toEqual([1, 2, 3]);
+  });
+
+  it('remaining: highest grams first, null last', () => {
+    const a = bean({ id: 1, remainingG: 50 });
+    const b = bean({ id: 2, remainingG: 200 });
+    const c = bean({ id: 3, remainingG: undefined });
+    const out = sortShelf([a, b, c], 'remaining');
+    expect(ids(out)).toEqual([2, 1, 3]);
+  });
+
+  it('name: localeCompare order', () => {
+    const out = sortShelf([bean({ id: 1, name: 'Charlie' }), bean({ id: 2, name: 'Alpha' }), bean({ id: 3, name: 'Bravo' })], 'name');
+    expect(ids(out)).toEqual([2, 3, 1]);
+  });
+
+  it('never mutates the input array', () => {
+    const input = [bean({ id: 1, name: 'B' }), bean({ id: 2, name: 'A' })];
+    const before = ids(input);
+    const out = sortShelf(input, 'name');
+    expect(out).not.toBe(input);
+    expect(ids(input)).toEqual(before);
+  });
+});
+
+describe('shelf prefs persistence (#1329 part 2)', () => {
+  // The module-load stub elsewhere in this file is a no-op store; persistence
+  // needs a real (in-memory) one to round-trip.
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    g.localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+    };
+  });
+
+  it('round-trips filter and sort but never the query', () => {
+    saveShelfPrefs({ query: 'ethiopia', filter: 'decaf', sort: 'remaining' });
+    const loaded = loadShelfPrefs();
+    expect(loaded.filter).toBe('decaf');
+    expect(loaded.sort).toBe('remaining');
+    expect(loaded.query).toBe('');
+  });
+
+  it('falls back to defaults when nothing is stored', () => {
+    expect(loadShelfPrefs()).toEqual({ query: '', filter: 'all', sort: 'fresh' });
+  });
+});
+
+// Universal stand-in element: saveBeanInternal reads ~20 form fields plus a
+// handful of chrome nodes, so a permissive object beats enumerating each id.
+function fakeLibraryDom(beanNameArg: string) {
+  interface FakeEl {
+    value: string; checked: boolean; files?: unknown[] | undefined;
+    style: Record<string, string>; dataset: Record<string, string>;
+    innerHTML: string;
+    classList: { add(): void; remove(): void; toggle(): void; contains(): boolean };
+    focus(): void; addEventListener(): void; removeEventListener(): void;
+    appendChild(): void; insertBefore(): void; remove(): void;
+    querySelectorAll(): never[]; setAttribute(): void; getAttribute(): null;
+  }
+  const makeEl = (over: Partial<FakeEl> = {}): FakeEl => ({
+    value: '', checked: false, files: undefined, style: {}, dataset: {}, innerHTML: '',
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    focus() {}, addEventListener() {}, removeEventListener() {},
+    appendChild() {}, insertBefore() {}, remove() {},
+    querySelectorAll: () => [], setAttribute() {}, getAttribute: () => null,
+    ...over,
+  });
+  const nodes: Record<string, FakeEl> = {
+    beanFormName: makeEl({ value: beanNameArg }),
+    beanListUI: makeEl(),
+  };
+  const doc = {
+    getElementById: (id: string): FakeEl => (nodes[id] ??= makeEl()),
+    querySelector: () => null,
+    querySelectorAll: () => [] as never[],
+    body: makeEl(),
+  };
+  return { doc, nodes };
+}
+
+describe('staged new-bean photo (#1329 part 2)', () => {
+  beforeEach(() => {
+    mocks.saveBean.mockReset();
+    mocks.uploadBeanImage.mockReset();
+    mocks.crop.mockReset();
+    S.beanEditId = null;
+    S.coffeeLibrary = { beans: [], recipes: [], grinders: [] };
+    S._urlImportSource = null;
+  });
+
+  it('uploads a staged photo after the bean is created', async () => {
+    const { doc } = fakeLibraryDom('New Bean');
+    g.document = doc;
+    mocks.crop.mockResolvedValue({} as Blob);
+    mocks.saveBean.mockResolvedValue({ id: 42, name: 'New Bean', bags: [] });
+    mocks.uploadBeanImage.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: 42, name: 'New Bean', image: 'jpg', bags: [] }),
+    } as unknown as Response);
+
+    const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
+    await library.stageNewBeanImage(input);
+    await library.saveBeanNoBag();
+
+    expect(mocks.uploadBeanImage).toHaveBeenCalledTimes(1);
+    expect(mocks.uploadBeanImage.mock.calls[0]?.[0]).toBe(42);
+  });
+
+  it('does not upload after closeBeanForm() cleared the staged photo', async () => {
+    const { doc } = fakeLibraryDom('Another Bean');
+    g.document = doc;
+    mocks.crop.mockResolvedValue({} as Blob);
+    mocks.saveBean.mockResolvedValue({ id: 43, name: 'Another Bean', bags: [] });
+
+    const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
+    await library.stageNewBeanImage(input);
+    library.closeBeanForm();
+    await library.saveBeanNoBag();
+
+    expect(mocks.uploadBeanImage).not.toHaveBeenCalled();
+  });
+});
+
