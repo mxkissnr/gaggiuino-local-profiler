@@ -176,6 +176,7 @@ const es: Partial<Translations> = {
     lib_grinder_zero_point_delete:'Eliminar entrada de punto cero',
     lib_cancel:'Cancelar', lib_save:'Guardar',
     lib_empty_beans:'No hay granos guardados', lib_empty_grinders:'No hay molinos guardados',
+    lib_shelf_in_use:'En uso', lib_shelf_stock:'Reserva', lib_shelf_archive:'Vacíos y archivo', lib_shelf_archived_tag:'Archivado',
     lib_btn_edit:'Editar', lib_btn_delete:'Eliminar',
     lib_btn_disable:'Desactivar para pedidos', lib_btn_enable:'Activar para pedidos',
     lib_bean_disabled_badge:'Desactivado',
