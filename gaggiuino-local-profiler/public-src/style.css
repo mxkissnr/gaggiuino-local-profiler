@@ -3227,7 +3227,7 @@
             position: relative; z-index: 1;
             background: var(--gray-950); border: 1px solid var(--gray-700); border-radius: var(--radius-lg, var(--radius));
             padding: var(--sp-6) var(--sp-5) var(--sp-5);
-            max-width: min(440px, 100%); width: 100%;
+            max-width: min(720px, 100%); width: 100%;
             max-height: min(92vh, 760px); overflow-y: auto;
             display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
             text-align: center;
@@ -3250,9 +3250,9 @@
         .easter-egg-panel-thanks { margin: 0; font-size: var(--fs-1); color: var(--gray-400); }
 
         /* ══ Coffee history (#1351): the spiral of shots around the machine
-           icon and the shelf of emptied bags, inside the hidden panel. ═══ */
+           icon and the shelf of bean bags, inside the hidden panel. ═══ */
         .coffee-history {
-            --coffee-tile: 26px;
+            --coffee-tile: 34px;
             --coffee-crema-hi: #cf935a;
             --coffee-crema-lo: #6f4423;
             width: 100%;
@@ -3260,12 +3260,12 @@
         }
         .coffee-history-stage {
             position: relative;
-            width: 100%; max-width: min(420px, 100%);
+            width: 100%; max-width: min(640px, 100%);
             aspect-ratio: 1 / 1;
             display: flex; align-items: center; justify-content: center;
         }
         /* Keep the icon's own position:relative — its clip-paths rely on it (#848). */
-        .coffee-history-stage .easter-egg-panel-icon { height: 92px; z-index: 0; }
+        .coffee-history-stage .easter-egg-panel-icon { height: 120px; z-index: 0; }
         .coffee-history-tile {
             position: absolute; left: 50%; top: 50%;
             width: var(--coffee-tile); height: var(--coffee-tile);
@@ -3285,13 +3285,13 @@
         }
         .coffee-history-shelf {
             display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end;
-            gap: 6px; width: 100%; max-width: 420px; min-height: 36px;
+            gap: 8px; width: 100%; max-width: 640px; min-height: 36px;
             padding: 6px 8px;
             border: 1px solid var(--gray-700); border-bottom-width: 3px;
             border-radius: var(--radius); background: var(--gray-900);
         }
         .coffee-history-bag {
-            position: relative; width: 18px; height: 26px;
+            position: relative; width: 30px; height: 44px;
             border-radius: 3px 3px 2px 2px;
             background: linear-gradient(180deg, var(--gray-600), var(--gray-700));
             overflow: hidden;
@@ -3301,6 +3301,10 @@
             display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-3);
             font-size: var(--fs-1); color: var(--gray-300);
             font-variant-numeric: tabular-nums;
+        }
+        @media (max-width: 600px) {
+            .coffee-history { --coffee-tile: 26px; }
+            .coffee-history-stage .easter-egg-panel-icon { height: 92px; }
         }
         @media (prefers-reduced-motion: no-preference) {
             .coffee-history-tile { opacity: 0; animation: coffee-tile-pop .32s ease-out both; }
