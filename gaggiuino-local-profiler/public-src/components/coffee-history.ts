@@ -34,6 +34,7 @@ export interface HistoryBag {
 export interface HistoryBean {
   id?: number;
   name?: string;
+  image?: string | null;
   bags?: readonly HistoryBag[] | null;
 }
 
@@ -200,6 +201,11 @@ export function renderCoffeeHistory(host: HTMLElement): () => void {
   const stats = historyStats(shots, beans);
   const tiles = historyTiles(shots, PHOTO_CAP);
   const bags = shelfBeans(shots, beans);
+  // A bean without a stored photo has nothing to fetch; requesting it would
+  // 404 and log a console error. The month calendar states the same rule as
+  // beanHasPhoto() (views/analytics-month.ts) — kept local so this panel does
+  // not pull the library view into its import graph.
+  const beansWithPhoto = new Set(beans.filter(bean => bean.id != null && bean.image).map(bean => bean.id));
   const reduced = prefersReducedMotion();
 
   let stopped = false;
@@ -268,7 +274,7 @@ export function renderCoffeeHistory(host: HTMLElement): () => void {
     bagEl.className = 'coffee-history-bag';
     bagEl.title = bag.name;
     bagEl.style.animationDelay = `${bagDelay(j, bags.length)}ms`;
-    if (bag.beanId != null) {
+    if (bag.beanId != null && beansWithPhoto.has(bag.beanId)) {
       const img = document.createElement('img');
       img.className = 'coffee-history-bag-img';
       img.alt = '';

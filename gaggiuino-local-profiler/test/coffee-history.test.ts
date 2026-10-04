@@ -1,4 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// The shelf must not fetch a bean photo that does not exist (the request would
+// 404 and log a console error), so stub the image loader and count its calls.
+const beanImageMocks = vi.hoisted(() => ({
+  loadBeanImageBlobUrl: vi.fn((_beanId?: unknown): Promise<string | null> => Promise.resolve(null)),
+  loadShotThumbBlobUrl: vi.fn((_beanId?: unknown): Promise<string | null> => Promise.resolve(null)),
+}));
+
+vi.mock('../public-src/bean-image.js', () => ({
+  loadBeanImageBlobUrl: beanImageMocks.loadBeanImageBlobUrl,
+  loadShotThumbBlobUrl: beanImageMocks.loadShotThumbBlobUrl,
+}));
 
 // coffee-history.ts reaches the library view (bag classification) and the
 // image cache; both read localStorage/navigator at module load under vitest's
@@ -23,13 +35,37 @@ interface HistoryModule {
   historyStats: (shots: readonly unknown[], beans: readonly unknown[]) => { shots: number; bags: number; kg: number };
   historyTiles: (shots: readonly unknown[], cap?: number) => HistoryTile[];
   shelfBeans: (shots: readonly unknown[], beans: readonly unknown[]) => ShelfBean[];
+  renderCoffeeHistory: (host: HTMLElement) => () => void;
 }
-const { spiralPositions, historyStats, historyTiles, shelfBeans } =
+const { spiralPositions, historyStats, historyTiles, shelfBeans, renderCoffeeHistory } =
   (await import('../public-src/components/coffee-history.js')) as unknown as HistoryModule;
+const { S } = await import('../public-src/state/index.js');
 
 function shot(over: Record<string, unknown>): Record<string, unknown> {
   return { id: 0, timestamp: 0, ...over };
 }
+
+// renderCoffeeHistory builds its DOM with document.createElement; a minimal
+// fake element is enough to reach the bag loop and count the loader calls.
+function fakeEl() {
+  const el = {
+    children: [] as unknown[],
+    className: '', title: '', textContent: '', alt: '', decoding: '', loading: '', src: '', type: '',
+    style: {} as Record<string, string>,
+    dataset: {} as Record<string, string>,
+    classList: { add: (_c: string): void => {} },
+    setAttribute: (_name: string, _value: string): void => {},
+    appendChild(child: unknown): void { el.children.push(child); },
+    append(...nodes: unknown[]): void { el.children.push(...nodes); },
+    replaceChildren(...nodes: unknown[]): void { el.children = nodes; },
+    addEventListener: (): void => {},
+    removeEventListener: (): void => {},
+  };
+  return el;
+}
+g.document = { createElement: () => fakeEl(), getElementById: () => null };
+g.requestAnimationFrame = () => 0;
+g.cancelAnimationFrame = () => {};
 
 describe('spiralPositions (#1351)', () => {
   it('returns exactly n points', () => {
@@ -144,5 +180,28 @@ describe('shelfBeans (#1351)', () => {
       shot({ id: 5, timestamp: 5, annotation: { beanId: 1 } }),
     ];
     expect(shelfBeans(shots, beans)).toEqual([{ beanId: 1, name: 'Only' }]);
+  });
+});
+
+describe('renderCoffeeHistory shelf photos (#1351)', () => {
+  it('loads a bean photo only for a bean that has one', () => {
+    const loadBeanPhoto = beanImageMocks.loadBeanImageBlobUrl;
+    loadBeanPhoto.mockClear();
+    S.allShots = [
+      shot({ id: 1, timestamp: 1, annotation: { beanId: 1 } }),
+      shot({ id: 2, timestamp: 2, annotation: { beanId: 2 } }),
+    ] as unknown as typeof S.allShots;
+    S.coffeeLibrary = {
+      beans: [
+        { id: 1, name: 'No photo' },
+        { id: 2, name: 'Photo', image: 'photo.jpg' },
+      ],
+      grinders: [],
+    };
+
+    renderCoffeeHistory(fakeEl() as unknown as HTMLElement);
+
+    expect(loadBeanPhoto).toHaveBeenCalledTimes(1);
+    expect(loadBeanPhoto).toHaveBeenCalledWith(2);
   });
 });
