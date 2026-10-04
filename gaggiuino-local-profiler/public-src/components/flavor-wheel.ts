@@ -402,6 +402,7 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   if (grow) {
     // Grow out of the small wheel: the old snapshot is the sheet's wheel, the
     // new one the full-screen modal.
+    setWheelTransitionName(canvasWrap, false); // a previous close may have left the name on the modal
     setWheelTransitionName(smallWheel, true);
     const transition = startWheelViewTransition(showModal);
     if (transition) {
