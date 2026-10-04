@@ -24,6 +24,14 @@
 // instead of Vite's separate vendor-chartjs chunk; total first-load bytes
 // are unaffected, just in one request instead of two.
 //
+// The sticker cut-out worker
+// (public-src/components/sticker/segment.worker.ts) is built as its own entry
+// point into assets/ (#1354): the page bundle creates it with
+// `new Worker(new URL('./segment.worker.ts', import.meta.url))`, a pattern
+// only Vite rewrites, so esbuild would otherwise keep the raw .ts URL and
+// ship no worker file. The worker's hashed output name is injected into the
+// page bundle as __GLP_SEGMENT_WORKER__ (see segment.ts).
+//
 // esbuild resolves the SPA's bare imports (echarts, chart.js/auto,
 // topojson-client) out of node_modules, so the dependency tree is still a
 // prerequisite — but only `npm ci`, never `npm run build`: no Vite bundle is
@@ -44,6 +52,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
@@ -77,11 +86,75 @@ var pages = []page{
 	{html: "kiosk.html", script: "kiosk.ts"},
 }
 
+// workerSource is the sticker cut-out worker (#1354), relative to -src. It is
+// built as its own entry point because Vite's
+// `new Worker(new URL('./segment.worker.ts', import.meta.url))` rewrite is
+// Vite-specific: esbuild's Go API leaves the .ts URL in the page bundle and
+// ships no worker file.
+const workerSource = "components/sticker/segment.worker.ts"
+
 // scriptTag is the exact module <script> tag a source page must carry for its
 // own entry point; writePageHTML strips it and injects the built output in
 // its place.
 func scriptTag(script string) string {
 	return fmt.Sprintf(`<script type="module" src="./%s"></script>`, script)
+}
+
+// esbuildEngines is the build target shared by the page bundles and the
+// sticker worker (#1354): Vite 8's implicit "baseline-widely-available"
+// target (chrome111/edge111/firefox114/safari16.4/ios16.4, see Vite's own
+// ESBUILD_BASELINE_WIDELY_AVAILABLE_TARGET). Carried over because esbuild
+// emits no CSS vendor prefixes at all without a target — the JS bundle is
+// byte-identical to an untargeted (esnext) build for this codebase, so this is
+// purely about not silently losing the CSS prefixes the Vite build produced.
+var esbuildEngines = []api.Engine{
+	{Name: api.EngineChrome, Version: "111"},
+	{Name: api.EngineEdge, Version: "111"},
+	{Name: api.EngineFirefox, Version: "114"},
+	{Name: api.EngineSafari, Version: "16.4"},
+	{Name: api.EngineIOS, Version: "16.4"},
+}
+
+// baseBundleOptions returns the esbuild options every bundle this command
+// produces shares — the page entries and the sticker worker (#1354): the
+// frontend root as AbsWorkingDir, the dependency tree, ES-module output to
+// assetsDir with hashed names, the target engines above and minification.
+// Callers add the fields that differ (EntryPoints, Splitting, the page
+// bundle's chunk/asset names and font loader).
+func baseBundleOptions(rootAbs, assetsDir, nodeModulesAbs string) api.BuildOptions {
+	return api.BuildOptions{
+		AbsWorkingDir: rootAbs,
+		// Explicit rather than relying on esbuild's own node_modules walk: in
+		// the image the tree is COPYed in from the deps stage, and this keeps
+		// that location authoritative (and greppable) instead of implicit.
+		NodePaths:         []string{nodeModulesAbs},
+		Bundle:            true,
+		Platform:          api.PlatformBrowser,
+		Format:            api.FormatESModule,
+		Outdir:            assetsDir,
+		Metafile:          true,
+		Write:             true,
+		EntryNames:        "[name]-[hash]",
+		Engines:           esbuildEngines,
+		MinifyWhitespace:  true,
+		MinifyIdentifiers: true,
+		MinifySyntax:      true,
+	}
+}
+
+// buildError turns esbuild's error list into the error run() returns, naming
+// which bundle failed.
+func buildError(what string, errs []api.Message) error {
+	msgs := api.FormatMessages(errs, api.FormatMessagesOptions{Color: false})
+	return fmt.Errorf("esbuild %s failed:\n%s", what, strings.Join(msgs, "\n"))
+}
+
+// logBuildWarnings prints esbuild's warnings for a bundle; both the page and
+// worker builds report them the same way.
+func logBuildWarnings(warnings []api.Message) {
+	for _, w := range api.FormatMessages(warnings, api.FormatMessagesOptions{Color: false}) {
+		log.Printf("esbuild warning: %s", w)
+	}
 }
 
 // run is the whole build: validate every page's inputs, bundle the pages'
@@ -157,55 +230,58 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 		return err
 	}
 
-	result := api.Build(api.BuildOptions{
-		EntryPoints:   entries,
-		AbsWorkingDir: rootAbs,
-		// Explicit rather than relying on esbuild's own node_modules walk: in
-		// the image the tree is COPYed in from the deps stage, and this keeps
-		// that location authoritative (and greppable) instead of implicit.
-		NodePaths:  []string{nodeModulesAbs},
-		Bundle:     true,
-		Splitting:  true,
-		Platform:   api.PlatformBrowser,
-		Format:     api.FormatESModule,
-		Outdir:     assetsDir,
-		Metafile:   true,
-		Write:      true,
-		EntryNames: "[name]-[hash]",
-		ChunkNames: "[name]-[hash]",
-		AssetNames: "[name]-[hash]",
-		// Vite 8's implicit build target ("baseline-widely-available":
-		// chrome111/edge111/firefox114/safari16.4/ios16.4, see Vite's own
-		// ESBUILD_BASELINE_WIDELY_AVAILABLE_TARGET). Carried over because
-		// esbuild emits no CSS vendor prefixes at all without a target —
-		// the JS bundle is byte-identical to an untargeted (esnext) build
-		// for this codebase, so this is purely about not silently losing
-		// the CSS prefixes the Vite build produced.
-		Engines: []api.Engine{
-			{Name: api.EngineChrome, Version: "111"},
-			{Name: api.EngineEdge, Version: "111"},
-			{Name: api.EngineFirefox, Version: "114"},
-			{Name: api.EngineSafari, Version: "16.4"},
-			{Name: api.EngineIOS, Version: "16.4"},
-		},
-		MinifyWhitespace:  true,
-		MinifyIdentifiers: true,
-		MinifySyntax:      true,
-		// style.css's three @font-face url()s are the only imported non-JS
-		// assets; everything else the SPA pulls in is either a fetch()
-		// against a path copied by copyPublicDir or an inline data: URI
-		// esbuild handles without a loader entry.
-		Loader: map[string]api.Loader{
-			".woff2": api.LoaderFile,
-		},
-	})
+	// The worker is validated and built first so its hashed output name can be
+	// handed to the page bundles through Define. Splitting is off: the worker
+	// is a single file, and onnxruntime-web is inlined (it loads its own wasm
+	// at runtime from env.wasm.wasmPaths).
+	workerAbs := filepath.Join(srcAbs, workerSource)
+	if _, err := os.Stat(workerAbs); err != nil {
+		return fmt.Errorf("sticker worker source: %w", err)
+	}
+	workerEntry, err := filepath.Rel(rootAbs, workerAbs)
+	if err != nil {
+		return fmt.Errorf("resolve worker entry point relative to %s: %w", rootAbs, err)
+	}
+	workerOpts := baseBundleOptions(rootAbs, assetsDir, nodeModulesAbs)
+	workerOpts.EntryPoints = []string{workerEntry}
+	workerResult := api.Build(workerOpts)
+	if len(workerResult.Errors) > 0 {
+		return buildError("worker build", workerResult.Errors)
+	}
+	logBuildWarnings(workerResult.Warnings)
+	workerMeta, err := parseMetafile(workerResult.Metafile)
+	if err != nil {
+		return fmt.Errorf("parse worker metafile: %w", err)
+	}
+	workerOut, _, ok := workerMeta.entryOutput(rootAbs, workerEntry)
+	if !ok {
+		return fmt.Errorf("metafile has no output for worker entry point %s", workerEntry)
+	}
+
+	opts := baseBundleOptions(rootAbs, assetsDir, nodeModulesAbs)
+	opts.EntryPoints = entries
+	opts.Splitting = true
+	opts.ChunkNames = "[name]-[hash]"
+	opts.AssetNames = "[name]-[hash]"
+	// The page bundle keeps Vite's
+	// `new Worker(new URL('./segment.worker.ts', import.meta.url))` pattern;
+	// esbuild does not rewrite it, so inject the worker's real hashed file
+	// name under the identifier segment.ts reads (#1354).
+	opts.Define = map[string]string{
+		"__GLP_SEGMENT_WORKER__": strconv.Quote("./" + filepath.Base(workerOut)),
+	}
+	// style.css's three @font-face url()s are the only imported non-JS assets;
+	// everything else the SPA pulls in is either a fetch() against a path
+	// copied by copyPublicDir or an inline data: URI esbuild handles without a
+	// loader entry.
+	opts.Loader = map[string]api.Loader{
+		".woff2": api.LoaderFile,
+	}
+	result := api.Build(opts)
 	if len(result.Errors) > 0 {
-		msgs := api.FormatMessages(result.Errors, api.FormatMessagesOptions{Color: false})
-		return fmt.Errorf("esbuild build failed:\n%s", strings.Join(msgs, "\n"))
+		return buildError("build", result.Errors)
 	}
-	for _, w := range api.FormatMessages(result.Warnings, api.FormatMessagesOptions{Color: false}) {
-		log.Printf("esbuild warning: %s", w)
-	}
+	logBuildWarnings(result.Warnings)
 
 	meta, err := parseMetafile(result.Metafile)
 	if err != nil {

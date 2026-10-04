@@ -10,6 +10,10 @@
  * new one against the OS reclaiming the old heap.
  */
 
+// Injected by go/cmd/frontend-build (the image path) as the hashed worker
+// file; undefined under the Vite dev server, where the .ts source is served.
+declare const __GLP_SEGMENT_WORKER__: string | undefined;
+
 const ISNET_MODEL = 'isnet-general-use-int8.onnx';
 
 /**
@@ -80,7 +84,11 @@ function scheduleIdleTermination(): void {
 }
 
 function createWorker(): Worker {
-  const created = new Worker(new URL('./segment.worker.ts', import.meta.url), { type: 'module' });
+  // The image build (go/cmd/frontend-build) injects the hashed worker file;
+  // the fallback is the Vite dev server, which serves the .ts source directly.
+  const workerUrl =
+    typeof __GLP_SEGMENT_WORKER__ === 'string' ? __GLP_SEGMENT_WORKER__ : './segment.worker.ts';
+  const created = new Worker(new URL(workerUrl, import.meta.url), { type: 'module' });
   created.onmessage = (event: MessageEvent): void => {
     const msg = event.data as { id?: number; mask?: Uint8Array; error?: string };
     if (typeof msg.id !== 'number') return;

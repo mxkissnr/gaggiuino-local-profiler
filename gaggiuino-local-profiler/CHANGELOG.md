@@ -1,4 +1,6 @@
 ## [Unreleased]
+### Fixed
+- **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
 - **Shop product photos on a plain or transparent background are cut out much more cleanly, because the bag is found first and only that part goes to the models.** Closes #1348
 - **Closing the sticker editor while a cut-out is still running now releases the worker straight away, so a quick reopen cannot overlap two cut-outs.** Part of #1347

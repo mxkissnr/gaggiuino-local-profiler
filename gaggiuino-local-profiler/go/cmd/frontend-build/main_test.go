@@ -99,6 +99,52 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 			t.Errorf("kiosk.html references %s, which was not written: %v", m[1], err)
 		}
 	}
+
+	// The sticker cut-out worker (#1354) is emitted as its own hashed asset,
+	// and a page bundle references that exact file: esbuild does not rewrite
+	// the new Worker(new URL('./segment.worker.ts', import.meta.url)) pattern
+	// Vite understands, so the build injects the hashed name at build time.
+	workerFiles, _ := filepath.Glob(filepath.Join(out, "assets", "segment.worker-*.js"))
+	if len(workerFiles) != 1 {
+		t.Fatalf("expected exactly one assets/segment.worker-*.js, got %d", len(workerFiles))
+	}
+	workerName := filepath.Base(workerFiles[0])
+	assets, _ := filepath.Glob(filepath.Join(out, "assets", "*.js"))
+	referenced := false
+	for _, asset := range assets {
+		if asset == workerFiles[0] {
+			continue
+		}
+		body, err := os.ReadFile(asset)
+		if err != nil {
+			t.Fatalf("read %s: %v", asset, err)
+		}
+		if strings.Contains(string(body), workerName) {
+			referenced = true
+		}
+	}
+	if !referenced {
+		t.Errorf("no built chunk references the worker file %s", workerName)
+	}
+
+	// The raw source path must be gone from every output: a leftover .ts URL
+	// is exactly the regression that broke the cut-out in the image.
+	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(body), "segment.worker.ts") {
+			rel, _ := filepath.Rel(out, path)
+			t.Errorf("%s still contains the unbundled worker source path segment.worker.ts", rel)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("walk output: %v", err)
+	}
 }
 
 func TestRunRejectsMissingSources(t *testing.T) {
