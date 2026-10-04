@@ -12,8 +12,9 @@ g.navigator ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   renderBeanList: () => void;
+  toggleShelfBean: (beanId: number) => void;
 }
-const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { renderBeanList, toggleShelfBean } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #829: surface the last-used grind setting in the Library bean-list row.
 // Deliberately sourced from S.shots' own annotations, not
@@ -53,8 +54,10 @@ function fakeDocument(): FakeDocument {
 }
 
 describe('renderBeanList last-used grind setting (#829)', () => {
+  let beanId = 0;
   beforeEach(() => {
-    S.coffeeLibrary = { beans: [{ id: 1, name: 'Yirgacheffe Chelelektu', bags: [{ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true }] }], grinders: [] };
+    beanId += 1;
+    S.coffeeLibrary = { beans: [{ id: beanId, name: 'Yirgacheffe Chelelektu', bags: [{ id: beanId, stock_g: 250, consumedG: 100, remainingG: 150, current: true }] }], grinders: [] };
   });
 
   it('shows the most recent shot\'s grind setting, then the new one after a grind-setting change', () => {
@@ -62,16 +65,16 @@ describe('renderBeanList last-used grind setting (#829)', () => {
     g.document = document;
 
     S.shots = [
-      { id: 1, timestamp: 1000, annotation: { beanId: 1, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.2' } },
+      { id: 1, timestamp: 1000, annotation: { beanId: beanId, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.2' } },
     ];
 
-    renderBeanList();
+    toggleShelfBean(beanId);
     expect(uiHtml(elements)).toContain('lib-last-grind-row');
     expect(uiHtml(elements)).toContain('Niche Zero @ 4.2');
     expect(uiHtml(elements)).not.toContain('Niche Zero @ 4.6');
 
     // A new, later shot changes the grind setting for the same bean.
-    S.shots.push({ id: 2, timestamp: 2000, annotation: { beanId: 1, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.6' } });
+    S.shots.push({ id: 2, timestamp: 2000, annotation: { beanId: beanId, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.6' } });
 
     renderBeanList();
     expect(uiHtml(elements)).toContain('Niche Zero @ 4.6');
@@ -84,11 +87,11 @@ describe('renderBeanList last-used grind setting (#829)', () => {
 
     // Later shot appears earlier in the array — must still win on timestamp.
     S.shots = [
-      { id: 2, timestamp: 5000, annotation: { beanId: 1, coffee: 'Yirgacheffe Chelelektu', grinder: 'DF64', grindSetting: '2.8' } },
-      { id: 1, timestamp: 1000, annotation: { beanId: 1, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.2' } },
+      { id: 2, timestamp: 5000, annotation: { beanId: beanId, coffee: 'Yirgacheffe Chelelektu', grinder: 'DF64', grindSetting: '2.8' } },
+      { id: 1, timestamp: 1000, annotation: { beanId: beanId, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.2' } },
     ];
 
-    renderBeanList();
+    toggleShelfBean(beanId);
     expect(uiHtml(elements)).toContain('DF64 @ 2.8');
     expect(uiHtml(elements)).not.toContain('Niche Zero @ 4.2');
   });
@@ -99,11 +102,11 @@ describe('renderBeanList last-used grind setting (#829)', () => {
 
     S.shots = [
       // Same bean name, but a different beanId — must NOT count as a match.
-      { id: 1, timestamp: 9000, annotation: { beanId: 99, coffee: 'Yirgacheffe Chelelektu', grinder: 'Wrong Grinder', grindSetting: '9.9' } },
-      { id: 2, timestamp: 1000, annotation: { beanId: 1, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.2' } },
+      { id: 1, timestamp: 9000, annotation: { beanId: beanId + 100, coffee: 'Yirgacheffe Chelelektu', grinder: 'Wrong Grinder', grindSetting: '9.9' } },
+      { id: 2, timestamp: 1000, annotation: { beanId: beanId, coffee: 'Yirgacheffe Chelelektu', grinder: 'Niche Zero', grindSetting: '4.2' } },
     ];
 
-    renderBeanList();
+    toggleShelfBean(beanId);
     expect(uiHtml(elements)).toContain('Niche Zero @ 4.2');
     expect(uiHtml(elements)).not.toContain('Wrong Grinder');
   });
@@ -114,7 +117,7 @@ describe('renderBeanList last-used grind setting (#829)', () => {
 
     S.shots = [];
 
-    renderBeanList();
+    toggleShelfBean(beanId);
     expect(uiHtml(elements)).not.toContain('lib-last-grind-row');
   });
 });

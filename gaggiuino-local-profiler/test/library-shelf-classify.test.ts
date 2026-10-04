@@ -32,16 +32,32 @@ interface ShelfBuckets {
 }
 type ShelfFilter = 'all' | 'espresso' | 'filter' | 'decaf';
 type ShelfSort = 'fresh' | 'name' | 'remaining';
+type ShelfView = 'shelf' | 'list';
+interface ShelfStock {
+  openG: number | null;
+  pct: number | null;
+  opened: boolean;
+  sealedBags: number;
+  frozenG: number;
+}
+interface ShelfPrefs {
+  query: string;
+  filter: ShelfFilter;
+  sort: ShelfSort;
+  view: ShelfView;
+}
 interface ShelfModule {
   classifyBeanShelf: (beans: readonly unknown[]) => ShelfBuckets;
+  shelfStock: (b: unknown) => ShelfStock;
   renderShelfTile: (b: unknown, opts: { muted: boolean; expanded?: boolean }) => string;
+  renderShelfRow: (b: unknown, opts: { muted: boolean; expanded?: boolean }) => string;
   matchesShelfQuery: (b: unknown, query: string) => boolean;
   matchesShelfFilter: (b: unknown, filter: ShelfFilter) => boolean;
   sortShelf: (beans: readonly unknown[], sort: ShelfSort) => unknown[];
-  loadShelfPrefs: () => { query: string; filter: ShelfFilter; sort: ShelfSort };
-  saveShelfPrefs: (prefs: { query: string; filter: ShelfFilter; sort: ShelfSort }) => void;
+  loadShelfPrefs: () => ShelfPrefs;
+  saveShelfPrefs: (prefs: ShelfPrefs) => void;
 }
-const { classifyBeanShelf, renderShelfTile, matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs } =
+const { classifyBeanShelf, shelfStock, renderShelfTile, renderShelfRow, matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs } =
   (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
 
 const { S } = await import('../public-src/state/index.js');
@@ -136,7 +152,51 @@ describe('classifyBeanShelf (#1329 shelf layout)', () => {
   });
 });
 
-describe('renderShelfTile (#1329 shelf layout)', () => {
+describe('shelfStock (#1330 one shelf)', () => {
+  it('reports the open bag: grams, percent, opened flag', () => {
+    const b = bean({ id: 1, bags: [bag({ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true })] });
+    expect(shelfStock(b)).toEqual({ openG: 150, pct: 60, opened: true, sealedBags: 0, frozenG: 0 });
+  });
+
+  it('shows the first upcoming bag when nothing is open, counting the rest as sealed', () => {
+    const b = bean({ id: 2, bags: [
+      bag({ id: 1, stock_g: 250, remainingG: 250, sortOrder: 1 }),
+      bag({ id: 2, stock_g: 250, remainingG: 250, sortOrder: 2 }),
+    ] });
+    expect(shelfStock(b)).toEqual({ openG: 250, pct: 100, opened: false, sealedBags: 1, frozenG: 0 });
+  });
+
+  it('counts every upcoming bag as sealed when a current bag exists', () => {
+    const b = bean({ id: 3, bags: [
+      bag({ id: 1, stock_g: 250, consumedG: 100, remainingG: 100, current: true }),
+      bag({ id: 2, stock_g: 250, remainingG: 250, sortOrder: 2 }),
+    ] });
+    const s = shelfStock(b);
+    expect(s.sealedBags).toBe(1);
+    expect(s.openG).toBe(100);
+    expect(s.opened).toBe(true);
+  });
+
+  it('leaves grams null for an untracked bean', () => {
+    const b = bean({ id: 4, bags: [bag({ id: 1, stock_g: 250 })] });
+    expect(shelfStock(b)).toEqual({ openG: null, pct: null, opened: false, sealedBags: 0, frozenG: 0 });
+  });
+
+  it('sums unthawed frozen portions and ignores thawed ones', () => {
+    const b = bean({ id: 5, bags: [bag({
+      id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true,
+      frozenPortions: [
+        { id: 1, frozenAt: 1, portionCount: 4, portionWeight_g: 18, remainingCount: 2 },
+        { id: 2, frozenAt: 1, portionCount: 2, portionWeight_g: 20, remainingCount: 1, thawedAt: 2 },
+      ],
+    })] });
+    expect(shelfStock(b).frozenG).toBe(36);
+  });
+});
+
+describe('renderShelfTile (#1330 one shelf)', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
   it('renders the initials placeholder and escapes a malicious name', () => {
     const b = bean({ id: 20, name: '<img src=x onerror=alert(1)>', roaster: 'Sq<m>', bags: [] });
     const out = renderShelfTile(b, { muted: false });
@@ -146,6 +206,65 @@ describe('renderShelfTile (#1329 shelf layout)', () => {
     // One word, so a single initial from the roaster.
     expect(out).toContain('>S<');
     expect(out).toContain('aria-expanded="false"');
+    // The old conic ring is gone.
+    expect(out).not.toContain('lib-shelf-ring');
+  });
+
+  it('shows the stock bar, grams, sealed bags, open badge and frozen grams', () => {
+    const b = bean({
+      id: 21,
+      name: 'Red Brick',
+      roaster: 'Square Mile',
+      bags: [
+        bag({
+          id: 1, stock_g: 250, consumedG: 100, remainingG: 120, current: true,
+          frozenPortions: [{ id: 1, frozenAt: 1, portionCount: 4, portionWeight_g: 18, remainingCount: 2 }],
+        }),
+        bag({ id: 2, stock_g: 250, remainingG: 250, sortOrder: 2 }),
+      ],
+    });
+    const out = renderShelfTile(b, { muted: false });
+    expect(out).toContain('lib-shelf-bar');
+    expect(out).toContain('lib-shelf-bar-fill');
+    expect(out).toContain('120 g');
+    expect(out).toContain('+1 full');
+    expect(out).toContain('lib-shelf-stack');
+    expect(out).toContain('lib-shelf-sealed-badge');
+    expect(out).toContain('lib-shelf-open-badge');
+    expect(out).toContain('36 g');
+  });
+});
+
+describe('renderShelfRow (#1330 list view)', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('renders a compact expandable row with name, origin, stock and sealed bags', () => {
+    const b = bean({
+      id: 30,
+      name: 'Red Brick',
+      roaster: 'Square Mile',
+      origins: [{ code: 'BR' }],
+      bags: [
+        bag({ id: 1, stock_g: 250, consumedG: 100, remainingG: 120, current: true }),
+        bag({ id: 2, stock_g: 250, remainingG: 250, sortOrder: 2 }),
+      ],
+    });
+    const out = renderShelfRow(b, { muted: false });
+    expect(out).toContain('lib-shelf-row');
+    expect(out).toContain('data-action="toggle-shelf-bean"');
+    expect(out).toContain('aria-expanded="false"');
+    expect(out).toContain('Red Brick');
+    expect(out).toContain('Square Mile');
+    expect(out).toContain('Brazil');
+    expect(out).toContain('120 g');
+    expect(out).toContain('+1 full');
+    expect(out).toContain('lib-shelf-open-badge');
+    expect(out).toContain('lib-shelf-bar');
+  });
+
+  it('marks archive rows muted', () => {
+    const b = bean({ id: 31, enabled: false, bags: [] });
+    expect(renderShelfRow(b, { muted: true })).toContain('lib-shelf-row muted');
   });
 });
 
@@ -245,16 +364,22 @@ describe('shelf prefs persistence (#1329 part 2)', () => {
     };
   });
 
-  it('round-trips filter and sort but never the query', () => {
-    saveShelfPrefs({ query: 'ethiopia', filter: 'decaf', sort: 'remaining' });
+  it('round-trips filter, sort and view but never the query', () => {
+    saveShelfPrefs({ query: 'ethiopia', filter: 'decaf', sort: 'remaining', view: 'list' });
     const loaded = loadShelfPrefs();
     expect(loaded.filter).toBe('decaf');
     expect(loaded.sort).toBe('remaining');
+    expect(loaded.view).toBe('list');
     expect(loaded.query).toBe('');
   });
 
   it('falls back to defaults when nothing is stored', () => {
-    expect(loadShelfPrefs()).toEqual({ query: '', filter: 'all', sort: 'fresh' });
+    expect(loadShelfPrefs()).toEqual({ query: '', filter: 'all', sort: 'fresh', view: 'shelf' });
+  });
+
+  it('ignores an invalid stored view', () => {
+    g.localStorage = { getItem: () => JSON.stringify({ view: 'grid' }), setItem: () => {} };
+    expect(loadShelfPrefs().view).toBe('shelf');
   });
 });
 

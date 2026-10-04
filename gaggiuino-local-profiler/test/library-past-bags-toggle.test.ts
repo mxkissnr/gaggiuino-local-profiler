@@ -12,8 +12,9 @@ const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   renderBeanList: () => void;
   togglePastBags: (beanId: number) => void;
+  toggleShelfBean: (beanId: number) => void;
 }
-const { renderBeanList, togglePastBags } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { renderBeanList, togglePastBags, toggleShelfBean } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #1122: the bean card renders a "Past bags" chip (data-action=
 // "toggle-past-bags") but the click dispatcher in main.ts had no case for
@@ -65,6 +66,7 @@ describe('togglePastBags (#1122 bag queue)', () => {
     };
 
     renderBeanList();
+    toggleShelfBean(1);
     expect(elements.beanListUI.innerHTML).toContain('data-action="toggle-past-bags"');
     expect(elements.beanListUI.innerHTML).not.toContain('2019-01-01');
 
