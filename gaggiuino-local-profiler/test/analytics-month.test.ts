@@ -79,12 +79,15 @@ describe('shiftMonth', () => {
 
 describe('buildMonthDays', () => {
   it('pads the month to full Monday-first weeks', () => {
-    // January 2024 starts on a Monday and has 31 days -> exactly 5 weeks.
+    // January 2024 starts on a Monday and has 31 days -> 4 whole weeks plus
+    // 3 days, padded to exactly 5 weeks (4 trailing cells).
     const days = buildMonthDays([], 2024, 0, noScore);
     expect(days.length).toBe(35);
     expect(at(days, 0).day).toBe(1);
     expect(at(days, 0).outside).toBe(false);
-    expect(at(days, 34).day).toBe(31);
+    expect(at(days, 30).day).toBe(31);
+    expect(at(days, 30).outside).toBe(false);
+    expect(at(days, 31).outside).toBe(true);
 
     // September 2024 starts on a Sunday: 6 leading padding days, 42 cells.
     const sep = buildMonthDays([], 2024, 8, noScore);
