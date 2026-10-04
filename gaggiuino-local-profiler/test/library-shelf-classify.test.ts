@@ -210,7 +210,7 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     expect(out).not.toContain('lib-shelf-ring');
   });
 
-  it('shows the stock bar, grams, sealed bags, open badge and frozen grams', () => {
+  it('shows the stock bar, grams, sealed bags, frozen grams and the open word for screen readers', () => {
     const b = bean({
       id: 21,
       name: 'Red Brick',
@@ -230,7 +230,12 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     expect(out).toContain('+1 full');
     expect(out).toContain('lib-shelf-stack');
     expect(out).toContain('lib-shelf-sealed-badge');
-    expect(out).toContain('lib-shelf-open-badge');
+    // The open badge left the photo; its word stays in the markup for screen
+    // readers, without an aria-label replacing the tile's inner text.
+    expect(out).not.toContain('lib-shelf-open-badge');
+    expect(out).not.toContain('aria-label');
+    expect(out).toContain('class="lib-shelf-open-label"');
+    expect(out).toContain('>open</span>');
     expect(out).toContain('36 g');
   });
 });

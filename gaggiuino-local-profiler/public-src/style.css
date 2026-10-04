@@ -1491,6 +1491,14 @@
         .lib-shelf-tile:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
         .lib-shelf-bag { position:relative; display:block; }
         .lib-shelf-bag::after { content:''; display:block; height:3px; margin-top:2px; border-radius:2px; background: var(--gray-700); }
+        /* Icicles hang from the shelf board (the bag's ::after), so they
+           start at the bag's bottom edge and stay clear of the photo. */
+        .lib-shelf-bag.has-icicles { margin-bottom: 30px; }
+        .lib-shelf-icicles { position:absolute; left:4%; width:92%; top:100%; height:34px; pointer-events:none; z-index:2; }
+        .lib-shelf-icicle-drop { opacity:0; }
+        /* The open word is announced but not drawn (the badge left the
+           photo); same off-screen technique as .lib-sheet-close. */
+        .lib-shelf-open-label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path: inset(50%); white-space:nowrap; }
         .lib-shelf-img, .lib-shelf-ph { position:relative; z-index:1; display:block; aspect-ratio:3/4; width:100%; object-fit:cover; border-radius: var(--radius-sm); background: var(--gray-800); }
         .lib-shelf-img.is-sticker, .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; filter: drop-shadow(0 0 1px var(--gray-100)) drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
         .lib-shelf-ph { display:flex; align-items:center; justify-content:center; background: var(--raised); color: var(--gray-500); font-size: var(--fs-3); font-weight:600; letter-spacing:.05em; }
@@ -1503,14 +1511,13 @@
         .lib-shelf-stack-layer:nth-child(2) { transform: translate(8px,-8px); }
         .lib-shelf-sealed-badge { position:absolute; top: var(--sp-1); right: var(--sp-1); z-index:2; font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
         .lib-shelf-open-badge { display:inline-block; font-size: var(--fs-1); font-weight:600; color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
-        .lib-shelf-bag .lib-shelf-open-badge { position:absolute; top: var(--sp-1); left: var(--sp-1); z-index:2; }
         /* Thin stock bar, same look as the full card's .lib-stock-bar-md. */
         .lib-shelf-bar { display:block; height:6px; border-radius:999px; background: var(--gray-700); overflow:hidden; }
         .lib-shelf-bar-fill { display:block; height:100%; border-radius:999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
         .lib-shelf-bar-fill.low { background: var(--err); }
         .lib-shelf-stock-line { font-size: var(--fs-1); color: var(--gray-400); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .lib-shelf-sealed { margin-left: var(--sp-1); color: var(--gray-500); }
-        .lib-shelf-frozen-line { display:inline-flex; align-items:center; gap:2px; font-size: var(--fs-1); color: var(--gray-500); }
+        .lib-shelf-frozen-line { display:inline-flex; align-items:center; gap:2px; font-size: var(--fs-1); color: var(--ice); }
         .lib-shelf-frozen-line .rail-icon { width:12px; height:12px; }
         .lib-shelf-archived-tag { position:absolute; bottom: var(--sp-1); left: var(--sp-1); font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
         .lib-shelf-tile.muted { filter: saturate(.25); opacity:.6; }
@@ -1629,12 +1636,14 @@
         .lib-form-confirm-q { font-size: var(--fs-1); color: var(--gray-200); }
         .lib-form-confirm-actions { display: flex; gap: var(--sp-2); }
         @keyframes lib-shelf-drop { 0% { transform: translateY(-14px) scale(1.05); } 60% { transform: translateY(0) scale(.97); } 100% { transform: translateY(0) scale(1); } }
+        @keyframes lib-icicle-fall { 0%, 86% { opacity:0; transform: translateY(0); } 90% { opacity:.9; } 100% { opacity:0; transform: translateY(26px); } }
         @keyframes lib-sheet-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes lib-sheet-fold { to { transform: scaleY(.2) rotate(-8deg); opacity: .4; } }
         @media (prefers-reduced-motion: no-preference) {
             .lib-sheet.lib-sheet-enter { animation: lib-sheet-in 220ms cubic-bezier(.4,0,.2,1); }
             .lib-sheet-photo.fold { animation: lib-sheet-fold 350ms ease forwards; }
             .lib-shelf-drop { animation: lib-shelf-drop 450ms cubic-bezier(.34,1.56,.64,1); }
+            .lib-shelf-icicle-drop { animation: lib-icicle-fall 4.5s ease-in infinite; }
         }
         @media (min-width: 900px) {
             .lib-sheet { left: auto; right: 0; top: var(--dev-banner-h, 0px); bottom: 0; width: min(440px, 100%); max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }

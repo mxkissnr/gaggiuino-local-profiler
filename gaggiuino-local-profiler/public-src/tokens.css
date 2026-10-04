@@ -80,6 +80,10 @@
             --ok:     #5cb98a;
             --warn:   #d3a03f;
             --err:    #e0705f;
+            /* --ice: the frozen-bean line and any ice accent; a cool
+               blue that stays legible as small text on both themes
+               (lightened here for the dark surfaces, darkened below). */
+            --ice:    #9fd8f5;
 
             /* ── Accent (amber-americano default) ──
                #1019: these are amber-americano's own values (see
@@ -152,6 +156,7 @@
             --ok:     #2f7350;
             --warn:   #7d5510;
             --err:    #a83526;
+            --ice:    #1f6d95;
             --on-fill: #fff;
         }
         /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
