@@ -143,6 +143,31 @@ describe('autoCutout', () => {
     worker.reply({ id: worker.sent[0]!.message.id, error: 'model boom' });
     await expect(promise).rejects.toThrow('model boom');
   });
+
+  it('forwards a progress message without settling the request', async () => {
+    const segment = await freshClient();
+    const updates: { stage: string; fraction: number | null }[] = [];
+    const promise = segment.autoCutout(RGBA, W, H, (p) => {
+      updates.push({ stage: p.stage, fraction: p.fraction });
+    });
+    const worker = latestWorker();
+    const id = worker.sent[0]!.message.id;
+
+    worker.reply({ id, progress: { stage: 'download', fraction: 0.5 } });
+
+    expect(updates).toEqual([{ stage: 'download', fraction: 0.5 }]);
+    // A progress message must leave the request pending for the final mask.
+    let settled = false;
+    void promise.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    const mask = new Uint8Array([7, 8, 9]);
+    worker.reply({ id, mask });
+    await expect(promise).resolves.toBe(mask);
+  });
 });
 
 describe('tapMask', () => {
