@@ -312,7 +312,7 @@ export function renderMonthCalendar(el: HTMLElement, year?: number, month?: numb
   const locale = localeFor(S.currentLang);
   const shots = _shots();
   _days = buildMonthDays(shots, _viewYear, _viewMonth, _scoreOf);
-  _shotsById = new Map(shots.map(s => [s.id, s]));
+  _shotsById = new Map<number, MonthShot>(shots.map((s): [number, MonthShot] => [s.id, s]));
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
