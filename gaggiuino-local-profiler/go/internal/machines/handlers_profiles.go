@@ -18,6 +18,13 @@ import (
 // supposed to be an instant "stale" response into an apparent total outage.
 const profileLiveFetchTimeout = 5 * time.Second
 
+// profileLiveWriteTimeout bounds every live SelectProfile/CreateProfile/
+// UpdateProfile/DeleteProfile call in this file — and, via its own local copy,
+// the background sweep in system/profile_sync.go. A var, not a const, so a test
+// can shrink it. A write gets twice the read budget: pushing a full profile
+// body to a busy machine can legitimately take longer than a status fetch.
+var profileLiveWriteTimeout = 10 * time.Second
+
 // This file is the "Machine profiles" section
 // (GET /api/machine/profiles, POST /api/machine/profile/set,
 // GET/POST/PUT/DELETE /api/machine/profile[/{id}]).
@@ -181,7 +188,10 @@ func (h *Handlers) setMachineProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "profile has not synced to the machine yet")
 		return
 	}
-	if err := adapter.SelectProfile(r.Context(), machine, profileID); err != nil {
+	selectCtx, cancel := context.WithTimeout(r.Context(), profileLiveWriteTimeout)
+	err := adapter.SelectProfile(selectCtx, machine, profileID)
+	cancel()
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -311,7 +321,9 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 			internalError(w, err)
 			return
 		}
-		created, err := adapter.CreateProfile(r.Context(), machine, ProfileInput{RawBody: rawBody})
+		createCtx, cancel := context.WithTimeout(r.Context(), profileLiveWriteTimeout)
+		created, err := adapter.CreateProfile(createCtx, machine, ProfileInput{RawBody: rawBody})
+		cancel()
 		if err != nil {
 			slog.Warn("creating machine profile failed, saved locally instead", "machineId", machine.ID, "err", err)
 			if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
@@ -343,7 +355,9 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 		internalError(w, err)
 		return
 	}
-	created, err := adapter.CreateProfile(r.Context(), machine, in)
+	createCtx, cancel := context.WithTimeout(r.Context(), profileLiveWriteTimeout)
+	created, err := adapter.CreateProfile(createCtx, machine, in)
+	cancel()
 	if err != nil {
 		slog.Warn("creating machine profile failed, saved locally instead", "machineId", machine.ID, "err", err)
 		if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
@@ -429,7 +443,9 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 		// Inject the id into the body when the client omitted it — without
 		// one GaggiMate's save creates a duplicate instead of updating.
 		pushBody := InjectIDIfAbsent(rawBody, *row.RemoteID)
-		updated, err := adapter.UpdateProfile(r.Context(), machine, ProfileInput{RawBody: pushBody})
+		updateCtx, cancel := context.WithTimeout(r.Context(), profileLiveWriteTimeout)
+		updated, err := adapter.UpdateProfile(updateCtx, machine, ProfileInput{RawBody: pushBody})
+		cancel()
 		if err != nil {
 			slog.Warn("updating machine profile failed, saved locally instead", "machineId", machine.ID, "profileId", *row.RemoteID, "err", err)
 			if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
@@ -490,7 +506,9 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 		internalError(w, err)
 		return
 	}
-	updated, err := adapter.UpdateProfile(r.Context(), machine, in)
+	updateCtx, cancel := context.WithTimeout(r.Context(), profileLiveWriteTimeout)
+	updated, err := adapter.UpdateProfile(updateCtx, machine, in)
+	cancel()
 	if err != nil {
 		slog.Warn("updating machine profile failed, saved locally instead", "machineId", machine.ID, "profileId", numericID, "err", err)
 		if merr := h.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
@@ -559,7 +577,9 @@ func (h *Handlers) deleteMachineProfile(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "syncStatus": "deleted"})
 		return
 	}
-	remaining, err := adapter.DeleteProfile(r.Context(), machine, *wasRemoteID)
+	deleteCtx, cancel := context.WithTimeout(r.Context(), profileLiveWriteTimeout)
+	remaining, err := adapter.DeleteProfile(deleteCtx, machine, *wasRemoteID)
+	cancel()
 	if err != nil {
 		slog.Warn("deleting machine profile failed, queued for later", "machineId", machine.ID, "profileId", *wasRemoteID, "err", err)
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "syncStatus": ProfileSyncPendingDelete})
