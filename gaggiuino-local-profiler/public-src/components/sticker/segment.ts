@@ -119,7 +119,10 @@ function canvasResizeRgba(
   dh: number,
 ): Uint8ClampedArray {
   const source = makeCanvas(w, h);
-  context2d(source).putImageData(new ImageData(rgba, w, h), 0, 0);
+  const sourceCtx = context2d(source);
+  const image = sourceCtx.createImageData(w, h);
+  image.data.set(rgba);
+  sourceCtx.putImageData(image, 0, 0);
   const target = makeCanvas(dw, dh);
   context2d(target).drawImage(source, 0, 0, dw, dh);
   return context2d(target).getImageData(0, 0, dw, dh).data;
