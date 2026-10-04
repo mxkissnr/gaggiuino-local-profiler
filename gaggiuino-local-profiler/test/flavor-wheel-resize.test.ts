@@ -72,12 +72,13 @@ describe('flavour wheel resize observer (#1381)', () => {
     expect(rendered).toBe(true);
 
     const observer = FakeResizeObserver.instances[0];
-    expect(observer).toBeDefined();
-    expect(observer?.observed).toContain(container);
+    if (!observer) throw new Error('expected a ResizeObserver to be created');
+    expect(observer.observed).toContain(container);
 
     const chart = charts[charts.length - 1];
     expect(chart?.resizeCalls).toBe(0);
-    observer?.callback([], observer as unknown as ResizeObserver);
+    // FakeResizeObserver is structurally a ResizeObserver, so this needs no cast.
+    observer.callback([], observer);
     expect(chart?.resizeCalls).toBe(1);
   });
 
