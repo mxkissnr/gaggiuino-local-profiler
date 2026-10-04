@@ -10,7 +10,6 @@ import { localeFor } from '../constants.js';
 import { esc, html, joinHtml, scoreClass } from '../utils.js';
 import type { Html } from '../utils.js';
 import { loadBeanImageBlobUrl } from '../bean-image.js';
-import { beanInitials } from './library/shelf.js';
 import type { LibraryRow, ShotMeta } from '../state/index.js';
 
 // Same metadata-only shot view as views/analytics.ts's ShotRow: only the
@@ -338,23 +337,45 @@ function _dayLabel(day: MonthDay, locale: string): string {
   return parts.join(' · ');
 }
 
-function _dayCell(day: MonthDay, today: Date, locale: string): Html {
+export type CellKind = 'empty' | 'photo' | 'disc';
+
+// Which day-cell flavour to draw: a day without shots shows only its number, a
+// day whose main bean has a photo shows that photo, and everything else (no
+// bean, or a bean without a photo) shows the number on a score-tinted disc.
+export function cellKind(day: Pick<MonthDay, 'count'>, hasPhoto: boolean): CellKind {
+  if (day.count === 0) return 'empty';
+  return hasPhoto ? 'photo' : 'disc';
+}
+
+// One in-month day cell. `hasPhoto` mirrors the beanHasPhoto check _loadThumbs
+// uses, so a day only gets an <img> when there is a photo to fetch.
+export function dayCellHtml(day: MonthDay, today: Date, locale: string, hasPhoto: boolean): Html {
   if (day.outside) return html`<div class="cal-month-cell cal-month-outside"></div>`;
   const cellDate = new Date(`${day.key}T00:00:00`);
   if (cellDate > today) return html`<div class="cal-month-cell cal-month-future"></div>`;
 
+  const todayCls: Html = day.key === _localKey(today) ? html` is-today` : esc('');
   const label = _dayLabel(day, locale);
-  if (day.count === 0) {
-    return html`<div class="cal-month-cell"><span class="cal-month-dot" title="${esc(label)}"></span></div>`;
+  const kind = cellKind(day, hasPhoto);
+
+  if (kind === 'empty') {
+    return html`<div class="cal-month-cell${todayCls}"><span class="cal-month-num" title="${esc(label)}">${esc(day.day)}</span></div>`;
   }
 
   const size = dotSize(day.count);
   const ring = day.avgScore !== null ? scoreClass(day.avgScore) : 'cal-month-ring-none';
-  const initial = beanInitials(day.mainBeanName || '');
-  const inner: Html = day.mainBeanId != null
-    ? html`<img class="cal-month-img" alt=""><span class="cal-month-initials" aria-hidden="true">${esc(initial)}</span>`
-    : html`<span class="cal-month-dot"></span>`;
-  return html`<div class="cal-month-cell"><button type="button" class="cal-month-thumb cal-month-${esc(size)} ${esc(ring)}${day.firstOfBean ? html` is-new-bag` : esc('')}" data-action="analytics-month-day" data-day="${esc(day.key)}"${day.mainBeanId != null ? html` data-bean-id="${esc(day.mainBeanId)}"` : esc('')} aria-label="${esc(label)}" title="${esc(label)}">${inner}</button></div>`;
+  const inner: Html = kind === 'photo'
+    ? html`<img class="cal-month-img" alt="">`
+    : html`<span class="cal-month-num">${esc(day.day)}</span>`;
+  const beanAttr = kind === 'photo' && day.mainBeanId != null
+    ? html` data-bean-id="${esc(day.mainBeanId)}"`
+    : esc('');
+  return html`<div class="cal-month-cell has-shot${todayCls}"><button type="button" class="cal-month-thumb cal-month-${esc(size)} ${esc(ring)}${kind === 'disc' ? html` no-img` : esc('')}${day.firstOfBean ? html` is-new-bag` : esc('')}" data-action="analytics-month-day" data-day="${esc(day.key)}"${beanAttr} aria-label="${esc(label)}" title="${esc(label)}">${inner}</button></div>`;
+}
+
+function _dayCell(day: MonthDay, today: Date, locale: string): Html {
+  const hasPhoto = day.mainBeanId != null && beanHasPhoto(S.coffeeLibrary.beans, day.mainBeanId);
+  return dayCellHtml(day, today, locale, hasPhoto);
 }
 
 // A bean without a stored photo has nothing to fetch, and requesting it would
