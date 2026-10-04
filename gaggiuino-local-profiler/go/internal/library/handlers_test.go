@@ -776,6 +776,18 @@ func TestBean_Image_RoundTrip(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "image/jpeg" {
 		t.Errorf("Content-Type = %q, want image/jpeg", ct)
 	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-cache" {
+		t.Errorf("Cache-Control = %q, want private, no-cache", cc)
+	}
+	if lm := rec.Header().Get("Last-Modified"); lm != "" {
+		req := httptest.NewRequest(http.MethodGet, "/api/library/bean/"+itoa(id)+"/image", nil)
+		req.Header.Set("If-Modified-Since", lm)
+		rec304 := httptest.NewRecorder()
+		mux.ServeHTTP(rec304, req)
+		if rec304.Code != http.StatusNotModified {
+			t.Errorf("revalidation status = %d, want 304", rec304.Code)
+		}
+	}
 }
 
 func TestBean_PostImage_UnsupportedType(t *testing.T) {

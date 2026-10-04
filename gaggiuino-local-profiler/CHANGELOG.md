@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day.** Closes #1357
 - **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
 - **Shop product photos on a plain or transparent background are cut out much more cleanly, because the bag is found first and only that part goes to the models.** Closes #1348
