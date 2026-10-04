@@ -551,11 +551,8 @@
             color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); max-width: 60%;
         }
 
-        /* KPI tiles */
-        .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--sp-3); }
-        .kpi-tile { background: var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); text-align: center; }
-        .kpi-val  { font-size: var(--fs-4); font-weight: 700; color: var(--gray-100); line-height: 1.2; }
-        .kpi-lbl  { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-1); }
+        /* Summary line (#1331): one line on desktop, wraps on narrow screens */
+        .analytics-summary { font-size: var(--fs-2); color: var(--gray-200); line-height: 1.6; }
         .trend-warning { margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius:var(--radius); font-size: var(--fs-1); background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
         .bean-stat-dialin { font-size: var(--fs-1); color: var(--gray-500); margin-top: var(--sp-1); display: flex; align-items: center; gap: var(--sp-1); }
 
@@ -568,13 +565,6 @@
         .bests-count { font-size: var(--fs-1); color: var(--gray-500); font-weight: 400; }
         .bests-link  { background: transparent; border: 1px solid var(--gray-700); color: var(--gray-400); border-radius:var(--radius); padding: 2px var(--sp-2); cursor: pointer; font-size: var(--fs-1); margin-left: var(--sp-2); transition: all .15s; }
         .bests-link:hover { color: var(--gray-200); border-color: var(--gray-500); }
-
-        @media (max-width: 900px) {
-            .kpi-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-        @media (max-width: 560px) {
-            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-        }
 
         /* Bean cards */
         .bean-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: var(--sp-3); }
