@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Added
+- **Statistics shows a month calendar with a photo of the day's bean and a one-line summary of how your shots are going.** (#1331)
 - **View, filter and sort choices now follow you across devices.** (#1375)
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
