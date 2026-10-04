@@ -70,7 +70,7 @@ async function releaseSession(file: string): Promise<void> {
   sessions.delete(file);
   try {
     const session = await pending;
-    await session.release?.();
+    await session.release();
   } catch {
     // Session creation failed: there is nothing to release.
   }

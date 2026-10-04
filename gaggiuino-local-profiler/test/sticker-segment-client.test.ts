@@ -13,7 +13,7 @@ class FakeWorker {
   onerror: ((event: ErrorEvent) => void) | null = null;
   onmessageerror: ((event: MessageEvent) => void) | null = null;
   terminated = false;
-  sent: Array<{ message: { id: number; type: string }; transfer?: Transferable[] }> = [];
+  sent: Array<{ message: { id: number; type: string }; transfer: Transferable[] | undefined }> = [];
   url: URL;
   options: WorkerOptions | undefined;
 
