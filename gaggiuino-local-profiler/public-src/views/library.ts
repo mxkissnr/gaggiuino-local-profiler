@@ -16,6 +16,7 @@ import { apiFetch } from '../api/transport.js';
 import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
 import { miniWheelSvg, flavorChipsHtml, applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../components/flavor-mini-wheel.js';
+import { attachSheetSwipe } from '../components/sheet-swipe.js';
 import { generateBeanQR } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
@@ -857,6 +858,7 @@ function renderBeanSheet(enter = false): void {
   const restoreScroll = beanSheetRestoredScroll(_sheetRenderedBeanId, id, _sheetScrollTop(host), enter);
   host.innerHTML = html`<div class="lib-sheet-backdrop" data-action="close-bean-sheet"></div>
     <section class="lib-sheet${esc(enter ? ' lib-sheet-enter' : '')}" role="dialog" aria-modal="true" aria-labelledby="beanSheetTitle">
+      <div class="lib-sheet-grab" aria-hidden="true"></div>
       <div class="lib-sheet-head">
         <div class="lib-sheet-photo">${bean.image
           ? html`<img class="lib-bean-thumb${esc(bean.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(bean.id)}" alt="">`
@@ -890,6 +892,13 @@ function renderBeanSheet(enter = false): void {
     ? host.querySelector<HTMLDetailsElement>('.lib-sheet-more')
     : null;
   if (details) details.ontoggle = () => { _sheetMoreOpen = details.open; };
+  // #1374: the rebuilt sheet gets fresh drag surfaces, so re-attach the
+  // swipe-to-close each render (the old elements were discarded).
+  const sheetEl = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
+  const grab = sheetEl && typeof sheetEl.querySelector === 'function' ? sheetEl.querySelector<HTMLElement>('.lib-sheet-grab') : null;
+  const head = sheetEl && typeof sheetEl.querySelector === 'function' ? sheetEl.querySelector<HTMLElement>('.lib-sheet-head') : null;
+  if (sheetEl && grab) attachSheetSwipe(sheetEl, grab, closeBeanSheet);
+  if (sheetEl && head) attachSheetSwipe(sheetEl, head, closeBeanSheet);
   loadBeanThumbnails();
 }
 
@@ -1342,6 +1351,13 @@ function _beanFormSheetHost(): HTMLElement | null {
   section.setAttribute('aria-modal', 'true');
   section.setAttribute('aria-labelledby', 'beanFormSheetTitle');
 
+  // #1374: the same grab handle and swipe-to-close as the detail sheet; the
+  // form's dirty guard (requestCloseBeanForm) still asks before discarding.
+  const grab = document.createElement('div');
+  grab.className = 'lib-sheet-grab';
+  grab.setAttribute('aria-hidden', 'true');
+  section.appendChild(grab);
+
   const head = document.createElement('div');
   head.className = 'lib-form-sheet-head';
   const title = document.createElement('h2');
@@ -1390,6 +1406,9 @@ function _beanFormSheetHost(): HTMLElement | null {
 
   host.appendChild(section);
   document.body.appendChild(host);
+
+  attachSheetSwipe(section, grab, requestCloseBeanForm);
+  attachSheetSwipe(section, head, requestCloseBeanForm);
 
   _formSheetHost = host;
   _formSheetBody = body;

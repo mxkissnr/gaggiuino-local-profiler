@@ -127,6 +127,11 @@ let _hlNode: string | null = null; // node highlighted from the legend, or null
 // so a late-arriving chunk never calls echarts.init() on a stale container.
 let _echartsPromise: Promise<typeof import('echarts')> | null = null;
 let _renderReqToken = 0;
+// #1374: the exact small wheel the open transition grew from. The close only
+// runs the reverse transition while that same element is still in the sheet,
+// so a sheet re-render (which replaces the node) falls back to a direct close
+// instead of naming a detached element.
+let _wheelGrowFromEl: HTMLElement | null = null;
 
 // #1350: a short, calm entry animation — skipped entirely when the user has
 // asked for reduced motion.
@@ -288,6 +293,7 @@ export function disposeFlavorWheel(): void {
   _rootId = null;
   _breadcrumbEl = null;
   _hlNode = null;
+  _wheelGrowFromEl = null;
 }
 
 // ── Modal wiring ─────────────────────────────────────────────────────────
@@ -316,11 +322,44 @@ function renderLegend(flavors: unknown, lang: FlavorLang): Html {
   return joinHtml(rows);
 }
 
+// ── Shared-element growth (#1374) ─────────────────────────────────────────
+
+interface WheelViewTransition {
+  updateCallbackDone?: Promise<void>;
+  finished?: Promise<void>;
+}
+
+// The wheel grows out of the small wheel only when View Transitions are
+// available, the user has not asked for reduced motion, and there is a small
+// wheel to grow from. Otherwise it opens and closes directly.
+export function shouldGrowWheelFrom(hasViewTransition: boolean, motionOk: boolean, fromSmallWheel: boolean): boolean {
+  return hasViewTransition && motionOk && fromSmallWheel;
+}
+
+function startWheelViewTransition(cb: () => void): WheelViewTransition | null {
+  if (typeof document === 'undefined') return null;
+  const doc = document as unknown as { startViewTransition?: (cb: () => void) => WheelViewTransition };
+  return typeof doc.startViewTransition === 'function' ? doc.startViewTransition(cb) : null;
+}
+
+function setWheelTransitionName(el: HTMLElement | null, on: boolean): void {
+  if (!el) return;
+  if (on) el.style.setProperty('view-transition-name', 'flavor-wheel');
+  else el.style.removeProperty('view-transition-name');
+}
+
 export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const bean = S.coffeeLibrary?.beans?.find(b => b.id === beanId);
   if (!bean) return;
   const modal = document.getElementById('flavorWheelModal');
   if (!modal) return;
+  // #1374: on a narrow phone #main is position:fixed (max-width:768px) and so
+  // becomes a stacking context, which trapped the overlay's own z-index inside
+  // it; the body-level bean sheet (z-index 901) therefore always painted above
+  // the wheel. One move to <body> puts the wheel back into the page's stacking
+  // context. The click delegation (document.body) and the backdrop handler
+  // follow the element.
+  if (document.body && modal.parentElement !== document.body) document.body.appendChild(modal);
 
   (document.getElementById('flavorWheelTitle') as HTMLElement).textContent = bean.name as string;
   // #1350: the bean's photo now sits in the wheel's centre (tapping it zooms
@@ -349,13 +388,45 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const legendEl = document.getElementById('flavorWheelLegend');
   if (legendEl) legendEl.innerHTML = renderLegend(bean.flavors, lang);
 
-  modal.style.display = 'flex';
   const container = document.getElementById('flavorWheelCanvas') as HTMLElement;
   const breadcrumbEl = document.getElementById('flavorWheelBreadcrumb');
   // echarts is a dynamic import now (#797) — show a loading state while its
   // chunk downloads instead of leaving the canvas blank.
   container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_loading')}</p>`;
   if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
+
+  const canvasWrap = modal.querySelector<HTMLElement>('.fw-canvas-wrap');
+  const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
+  const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
+  const grow = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!smallWheel && !!canvasWrap);
+  // Remember the exact node the growth snapshots so the close can tell a
+  // re-rendered sheet (new node) from the original.
+  _wheelGrowFromEl = grow ? smallWheel : null;
+
+  const showModal = (): void => {
+    setWheelTransitionName(smallWheel, false);
+    setWheelTransitionName(canvasWrap, true);
+    modal.style.display = 'flex';
+  };
+
+  if (grow) {
+    // Grow out of the small wheel: the old snapshot is the sheet's wheel, the
+    // new one the full-screen modal.
+    setWheelTransitionName(canvasWrap, false); // a previous close may have left the name on the modal
+    setWheelTransitionName(smallWheel, true);
+    const transition = startWheelViewTransition(showModal);
+    if (transition) {
+      // Render only after the DOM update has been snapshotted, so the echarts
+      // chunk download never blocks the growth.
+      if (transition.updateCallbackDone) await transition.updateCallbackDone;
+      else showModal();
+    } else {
+      showModal();
+    }
+  } else {
+    showModal();
+  }
+
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
     container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_unavailable')}</p>`;
     if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
@@ -364,6 +435,38 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
 
 export function closeFlavorWheel(): void {
   const modal = document.getElementById('flavorWheelModal');
-  if (modal) modal.style.display = 'none';
-  disposeFlavorWheel();
+  if (!modal) { disposeFlavorWheel(); return; }
+  const canvasWrap = modal.querySelector<HTMLElement>('.fw-canvas-wrap');
+  const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
+  const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
+  // Only run the reverse transition from the very element the open
+  // snapshotted; if the sheet was re-rendered that node is gone, so fall back
+  // to a direct close instead of naming a detached/different element.
+  const fromEl = _wheelGrowFromEl;
+  _wheelGrowFromEl = null;
+  const shrink = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!canvasWrap && smallWheel !== null && smallWheel === fromEl);
+
+  const hideModal = (): void => {
+    setWheelTransitionName(canvasWrap, false);
+    setWheelTransitionName(smallWheel, true);
+    modal.style.display = 'none';
+  };
+
+  if (shrink) {
+    setWheelTransitionName(canvasWrap, true);
+    const transition = startWheelViewTransition(() => { hideModal(); disposeFlavorWheel(); });
+    if (transition) {
+      const clearNames = (): void => { setWheelTransitionName(canvasWrap, false); setWheelTransitionName(smallWheel, false); };
+      const done = transition.finished ?? transition.updateCallbackDone;
+      if (done) void done.then(clearNames, clearNames);
+      else clearNames();
+    } else {
+      hideModal();
+      disposeFlavorWheel();
+    }
+  } else {
+    setWheelTransitionName(canvasWrap, false);
+    modal.style.display = 'none';
+    disposeFlavorWheel();
+  }
 }
