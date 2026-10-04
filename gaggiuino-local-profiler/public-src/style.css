@@ -1477,7 +1477,6 @@
         .lib-shelf-stack-layer:nth-child(2) { transform: translate(8px,-8px); }
         .lib-shelf-sealed-badge { position:absolute; top: var(--sp-1); right: var(--sp-1); z-index:2; font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
         .lib-shelf-open-badge { display:inline-block; font-size: var(--fs-1); font-weight:600; color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
-        .lib-shelf-bag .lib-shelf-open-badge { position:absolute; top: var(--sp-1); left: var(--sp-1); z-index:2; }
         /* Thin stock bar, same look as the full card's .lib-stock-bar-md. */
         .lib-shelf-bar { display:block; height:6px; border-radius:999px; background: var(--gray-700); overflow:hidden; }
         .lib-shelf-bar-fill { display:block; height:100%; border-radius:999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
