@@ -24,7 +24,11 @@ import { renderBasketList } from './library/baskets.js';
 import { renderPuckScreenList } from './library/puck-screens.js';
 import { renderGrinderList } from './library/grinders.js';
 import { classifyBeanBags, renderBagCard, _expandedPastSections } from './library/bags.js';
-import { classifyBeanShelf, renderShelfTile } from './library/shelf.js';
+import {
+  classifyBeanShelf, renderShelfTile,
+  matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs,
+} from './library/shelf.js';
+import type { ShelfFilter, ShelfPrefs, ShelfSort } from './library/shelf.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
 const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
@@ -483,8 +487,123 @@ const _expandedShelfBeans = new Set<number>();
 // rebuilt on every render, so its meaning has to live outside the DOM.
 let _shelfArchiveOpen = false;
 
+// Active shelf toolbar state. Only filter/sort are persisted (shelf.ts's
+// saveShelfPrefs); the query is intentionally session-only so a stale search
+// can't silently hide beans after a reload.
+let _shelfPrefs: ShelfPrefs = loadShelfPrefs();
+
 function _shelfHeading(key: string, count?: number): Html {
   return html`<div class="lib-shelf-heading"><span>${tHtml(key)}</span>${count != null ? html`<span class="lib-shelf-count">${esc(count)}</span>` : esc('')}</div>`;
+}
+
+function renderShelfToolbar(prefs: ShelfPrefs): Html {
+  const chip = (filter: ShelfFilter, key: string): Html =>
+    html`<button type="button" class="lib-shelf-chip" data-shelf-filter="${esc(filter)}" aria-pressed="${esc(prefs.filter === filter ? 'true' : 'false')}">${tHtml(key)}</button>`;
+  return html`<div class="lib-shelf-toolbar">
+    <input type="search" id="libShelfSearch" class="lib-shelf-search" placeholder="${tHtml('lib_shelf_search_ph')}" aria-label="${tHtml('lib_shelf_search_ph')}" value="${esc(prefs.query)}">
+    <div class="lib-shelf-chips">${chip('all', 'lib_shelf_all')}${chip('espresso', 'roast_type_espresso')}${chip('filter', 'roast_type_filter')}${chip('decaf', 'lib_bean_decaf')}</div>
+    <select id="libShelfSort" class="lib-shelf-sort">
+      <option value="fresh" ${esc(prefs.sort === 'fresh' ? 'selected' : '')}>${tHtml('lib_shelf_sort_fresh')}</option>
+      <option value="name" ${esc(prefs.sort === 'name' ? 'selected' : '')}>${tHtml('lib_shelf_sort_name')}</option>
+      <option value="remaining" ${esc(prefs.sort === 'remaining' ? 'selected' : '')}>${tHtml('lib_shelf_sort_remaining')}</option>
+    </select>
+  </div>`;
+}
+
+// The shelves live in their own container so toolbar events can rebuild just
+// them — rebuilding the whole view on every keystroke would drop the caret.
+function _shelfSectionsMount(): HTMLElement | null {
+  const el = document.getElementById('beanListUI');
+  if (!el) return null;
+  if (typeof el.querySelector !== 'function') return el;
+  return el.querySelector<HTMLElement>('#libShelfSections') || el;
+}
+
+function wireShelfToolbar(): void {
+  const search = document.getElementById('libShelfSearch') as HTMLInputElement | null;
+  if (search?.addEventListener) {
+    search.value = _shelfPrefs.query;
+    search.addEventListener('input', () => {
+      _shelfPrefs.query = search.value;
+      renderShelfSections();
+    });
+  }
+  const sort = document.getElementById('libShelfSort') as HTMLSelectElement | null;
+  if (sort?.addEventListener) {
+    sort.value = _shelfPrefs.sort;
+    sort.addEventListener('change', () => {
+      _shelfPrefs.sort = (sort.value as ShelfSort) || 'fresh';
+      saveShelfPrefs(_shelfPrefs);
+      renderShelfSections();
+    });
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-shelf-filter]').forEach(chip => {
+    if (!chip.addEventListener) return;
+    chip.addEventListener('click', () => {
+      _shelfPrefs.filter = (chip.dataset.shelfFilter as ShelfFilter) || 'all';
+      saveShelfPrefs(_shelfPrefs);
+      document.querySelectorAll<HTMLButtonElement>('[data-shelf-filter]').forEach(c => {
+        c.setAttribute('aria-pressed', c.dataset.shelfFilter === _shelfPrefs.filter ? 'true' : 'false');
+      });
+      renderShelfSections();
+    });
+  });
+}
+
+function renderShelfSections(): void {
+  const mount = _shelfSectionsMount();
+  if (!mount) return;
+  // Beans are a shared consumable, not scoped to the active machine — always
+  // render the full library regardless of S.activeMachineId. This reverts
+  // the display-filtering part of #334; see #339 for why that filter was
+  // wrong (it hid nearly the whole library once a second machine existed).
+  const beans = _beanList();
+  const prefs = _shelfPrefs;
+  const queried = beans.filter(b => matchesShelfQuery(b, prefs.query));
+  const { inUse, stock, emptyArchive } = classifyBeanShelf(queried);
+  // Filter/sort apply to Stock and Empty & archive; In use keeps its order.
+  const stockRows = sortShelf(stock.filter(b => matchesShelfFilter(b, prefs.filter)), prefs.sort);
+  const archiveRows = sortShelf(emptyArchive.filter(b => matchesShelfFilter(b, prefs.filter)), prefs.sort);
+
+  const expandedCards = (rows: ShelfBean[]): Html =>
+    joinHtml(rows.filter(b => _expandedShelfBeans.has(b.id)).map(b => renderBeanCard(b, beans)));
+
+  const inUseHtml: Html = inUse.length
+    ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_in_use')}${joinHtml(inUse.map(b => renderBeanCard(b, beans)))}</section>`
+    : esc('');
+
+  const stockHtml: Html = stockRows.length
+    ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_stock', stockRows.length)}
+        ${stockRows.length >= 10 ? html`<div class="lib-shelf-full-note">${tHtml('lib_shelf_full')}</div>` : esc('')}
+        <div class="lib-shelf">${joinHtml(stockRows.map(b => renderShelfTile(b, { muted: false, expanded: _expandedShelfBeans.has(b.id) })))}</div>
+        ${expandedCards(stockRows)}</section>`
+    : esc('');
+
+  const archiveHtml: Html = archiveRows.length
+    ? html`<details class="lib-shelf-archive"${esc(_shelfArchiveOpen ? ' open' : '')}>
+        <summary class="lib-shelf-heading lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="lib-shelf-count">${esc(archiveRows.length)}</span></summary>
+        <div class="lib-shelf">${joinHtml(archiveRows.map(b => renderShelfTile(b, { muted: true, expanded: _expandedShelfBeans.has(b.id) })))}</div>
+        ${expandedCards(archiveRows)}</details>`
+    : esc('');
+
+  const filtersActive = prefs.query.trim() !== '' || prefs.filter !== 'all';
+  const noMatchHtml: Html = filtersActive && !inUse.length && !stockRows.length && !archiveRows.length
+    ? html`<div class="lib-shelf-no-match">${tHtml('lib_shelf_no_match')}</div>`
+    : esc('');
+
+  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+  mount.innerHTML = html`${inUseHtml}${noMatchHtml}${stockHtml}${archiveHtml}`;
+
+  // Remember the archive section's open state; the <details> is recreated on
+  // every render, so the native toggle event is re-wired here each time. The
+  // typeof guard keeps the lightweight fake DOMs the tests install working
+  // (they give the element innerHTML but no querySelector).
+  const archive = typeof mount.querySelector === 'function'
+    ? mount.querySelector<HTMLDetailsElement>('.lib-shelf-archive')
+    : null;
+  if (archive) archive.ontoggle = () => { _shelfArchiveOpen = archive.open; };
+
+  loadBeanThumbnails();
 }
 
 export function toggleShelfBean(beanId: number): void {
@@ -496,10 +615,6 @@ export function toggleShelfBean(beanId: number): void {
 export function renderBeanList(): void {
   const el = document.getElementById('beanListUI');
   if (!el) return;
-  // Beans are a shared consumable, not scoped to the active machine — always
-  // render the full library regardless of S.activeMachineId. This reverts
-  // the display-filtering part of #334; see #339 for why that filter was
-  // wrong (it hid nearly the whole library once a second machine existed).
   const beans = _beanList();
   if (!beans.length) {
     el.innerHTML = html`<div class="lib-empty">${tHtml('lib_empty_beans')}</div>`;
@@ -508,40 +623,11 @@ export function renderBeanList(): void {
   // #1329: three shelves — what you are drinking on top as full cards, the
   // rest of the stock as a photo grid, and spent/archived beans tidied into a
   // collapsed section. A tile tap expands the unchanged full card below it.
-  const { inUse, stock, emptyArchive } = classifyBeanShelf(beans);
-  const expandedCards = (rows: ShelfBean[]): Html =>
-    joinHtml(rows.filter(b => _expandedShelfBeans.has(b.id)).map(b => renderBeanCard(b, beans)));
-
-  const inUseHtml: Html = inUse.length
-    ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_in_use')}${joinHtml(inUse.map(b => renderBeanCard(b, beans)))}</section>`
-    : esc('');
-
-  const stockHtml: Html = stock.length
-    ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_stock', stock.length)}
-        <div class="lib-shelf">${joinHtml(stock.map(b => renderShelfTile(b, { muted: false, expanded: _expandedShelfBeans.has(b.id) })))}</div>
-        ${expandedCards(stock)}</section>`
-    : esc('');
-
-  const archiveHtml: Html = emptyArchive.length
-    ? html`<details class="lib-shelf-archive"${esc(_shelfArchiveOpen ? ' open' : '')}>
-        <summary class="lib-shelf-heading lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="lib-shelf-count">${esc(emptyArchive.length)}</span></summary>
-        <div class="lib-shelf">${joinHtml(emptyArchive.map(b => renderShelfTile(b, { muted: true, expanded: _expandedShelfBeans.has(b.id) })))}</div>
-        ${expandedCards(emptyArchive)}</details>`
-    : esc('');
-
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = html`${inUseHtml}${stockHtml}${archiveHtml}`;
-
-  // Remember the archive section's open state; the <details> is recreated on
-  // every render, so the native toggle event is re-wired here each time. The
-  // typeof guard keeps the lightweight fake DOMs the tests install working
-  // (they give the element innerHTML but no querySelector).
-  const archive = typeof el.querySelector === 'function'
-    ? el.querySelector<HTMLDetailsElement>('.lib-shelf-archive')
-    : null;
-  if (archive) archive.ontoggle = () => { _shelfArchiveOpen = archive.open; };
-
-  loadBeanThumbnails();
+  // The toolbar rebuilds with the view; the shelves it filters live in their
+  // own container so typing can re-render them without losing the caret.
+  el.innerHTML = html`${renderShelfToolbar(_shelfPrefs)}<div id="libShelfSections"></div>`;
+  wireShelfToolbar();
+  renderShelfSections();
 }
 
 // Bean images need the auth token, so <img src> can't point at the API
@@ -880,7 +966,11 @@ export function openBeanForm(bean?: BeanRow | null): void {
   _field('beanFormBrewRatio').value = bean?.brewRatio || '';
   _field('beanFormBrewTime').value  = String(bean?.brewTimeS ?? '');
   _field('beanFormBrewNotes').value = bean?.brewNotes || '';
-  _el('beanFormImageField').style.display = bean ? '' : 'none';
+  // #1329 part 2: the photo picker is offered when creating too — the chosen
+  // (cropped) blob is staged and uploaded right after the bean is saved.
+  _el('beanFormImageField').style.display = '';
+  const stagedHint = document.getElementById('beanFormImageStaged');
+  if (stagedHint) stagedHint.style.display = 'none';
   // Edit mode keeps a single Speichern; creating a new bean instead offers
   // "Speichern und Packung hinzufügen" / "Speichern ohne Packung" — there's
   // nothing to combine-with-a-bag-dialog once the bean already exists.
@@ -906,6 +996,9 @@ export function closeBeanForm(): void {
   _state()._urlImportImageUrl = null;
   S._urlImportSourceUrl = null;
   _state()._urlImportExtraRecipes = null;
+  _stagedBeanImageBlob = null;
+  const stagedHint = document.getElementById('beanFormImageStaged');
+  if (stagedHint) stagedHint.style.display = 'none';
   const extraEl = document.getElementById('beanFormExtraRecipes');
   if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = html``; }
   _el('beanAddForm').classList.remove('open');
@@ -956,7 +1049,8 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   if (!S.beanEditId && S._urlImportSource) {
     payload.source     = S._urlImportSource;
     payload.importedAt = S._urlImportedAt;
-    if (_state()._urlImportImageUrl) payload.imageUrl = _state()._urlImportImageUrl;
+    // A photo the user staged for this create wins over the import's image URL.
+    if (_state()._urlImportImageUrl && !_stagedBeanImageBlob) payload.imageUrl = _state()._urlImportImageUrl;
     if (S._urlImportSourceUrl) payload.sourceUrl = S._urlImportSourceUrl;
   }
   // #451: capture which opt-in Brew Guide recipe candidates are still
@@ -970,6 +1064,24 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     if (idx !== -1) _beanList()[idx] = saved;
   } else {
     _beanList().push(saved);
+  }
+  const wasCreate = !S.beanEditId;
+  // #1329 part 2: upload a photo staged while creating, now that the bean has
+  // an id. A failed upload must not lose the bean — it stays in the list and
+  // the user gets the same generic error an edit-mode upload shows.
+  if (wasCreate && _stagedBeanImageBlob) {
+    const staged = _stagedBeanImageBlob;
+    _stagedBeanImageBlob = null;
+    const uploaded = await libraryApi.uploadBeanImage(saved.id, staged);
+    if (uploaded.ok) {
+      const withImage = (await uploaded.json()) as BeanListRow;
+      const imgIdx = _beanList().findIndex(b => b.id === saved.id);
+      if (imgIdx !== -1) _beanList()[imgIdx] = withImage;
+      invalidateBeanImage(saved.id);
+    } else {
+      const err = (await uploaded.json().catch(() => ({}))) as { error?: string };
+      alert(t('error_generic', err.error || uploaded.statusText));
+    }
   }
   for (const recipe of extraRecipesToImport) {
     const importedRecipe = await libraryApi.saveRecipe(null, { ...recipe, brewMethod: 'espresso', beanName: saved.name });
@@ -994,7 +1106,6 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     }
   }
   updateLibraryDatalist();
-  const wasCreate = !S.beanEditId;
   closeBeanForm();
   renderBeanList();
   if (extraRecipesToImport.length) renderRecipeList();
@@ -1031,6 +1142,22 @@ export async function toggleBeanActive(id: number): Promise<void> {
     _pendingBeanActiveToggles.delete(id);
     renderBeanList();
   }
+}
+
+// Photo chosen while *creating* a bean: the crop result can't be uploaded yet
+// (no id), so it waits here until saveBeanInternal has created the bean.
+let _stagedBeanImageBlob: Blob | null = null;
+
+export async function stageNewBeanImage(input: HTMLInputElement): Promise<void> {
+  const file = input.files?.[0];
+  if (!file) return;
+  const blob = await openImageCropEditor(file, { shape: 'square' });
+  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
+  input.value = '';
+  if (!blob) return;
+  _stagedBeanImageBlob = blob;
+  const hint = document.getElementById('beanFormImageStaged');
+  if (hint) hint.style.display = '';
 }
 
 export async function uploadBeanImage(id: number, input: HTMLInputElement): Promise<void> {

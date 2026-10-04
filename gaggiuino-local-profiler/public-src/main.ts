@@ -96,7 +96,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage,
+         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
@@ -815,7 +815,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => document.getElementById('beanFormImage')!.click());
   document.getElementById('beanFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
+    // #1329 part 2: creating stages the cropped photo until the bean is saved.
     if (S.beanEditId) void uploadBeanImage(S.beanEditId, this);
+    else void stageNewBeanImage(this);
   });
   document.getElementById('addRecipeStepBtn')!.addEventListener('click', addRecipeStep);
   document.getElementById('closeRecipeFormBtn')!.addEventListener('click', closeRecipeForm);
