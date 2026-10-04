@@ -533,8 +533,12 @@ export function renderBeanList(): void {
   el.innerHTML = html`${inUseHtml}${stockHtml}${archiveHtml}`;
 
   // Remember the archive section's open state; the <details> is recreated on
-  // every render, so the native toggle event is re-wired here each time.
-  const archive = el.querySelector<HTMLDetailsElement>('.lib-shelf-archive');
+  // every render, so the native toggle event is re-wired here each time. The
+  // typeof guard keeps the lightweight fake DOMs the tests install working
+  // (they give the element innerHTML but no querySelector).
+  const archive = typeof el.querySelector === 'function'
+    ? el.querySelector<HTMLDetailsElement>('.lib-shelf-archive')
+    : null;
   if (archive) archive.ontoggle = () => { _shelfArchiveOpen = archive.open; };
 
   loadBeanThumbnails();
