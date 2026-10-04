@@ -18,6 +18,7 @@ const shared = vi.hoisted(() => {
     // Session URIs in creation order, plus a single event log so a test can
     // assert that sessions were released before later ones were created.
     created: [] as string[],
+    createdOptions: [] as unknown[],
     released: [] as string[],
     log: [] as string[],
     disposed: 0,
@@ -78,8 +79,9 @@ vi.mock('onnxruntime-web/wasm', () => {
     env: shared.env,
     Tensor: FakeTensor,
     InferenceSession: {
-      create: (uri: string): Promise<ReturnType<typeof makeSession>> => {
+      create: (uri: string, options?: unknown): Promise<ReturnType<typeof makeSession>> => {
         shared.created.push(uri);
+        shared.createdOptions.push(options);
         shared.log.push(`create:${uri}`);
         return Promise.resolve(makeSession(uri));
       },
@@ -114,6 +116,7 @@ async function flush(): Promise<void> {
 
 beforeEach(() => {
   shared.created.length = 0;
+  shared.createdOptions.length = 0;
   shared.released.length = 0;
   shared.log.length = 0;
   shared.disposed = 0;
@@ -161,6 +164,21 @@ describe('autoCutout', () => {
       `create:${DECODER}`,
     ]);
     expect(shared.released).not.toContain(DECODER);
+  });
+
+  it('creates every session with the memory-saving wasm options', async () => {
+    const core = await freshCore();
+    await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
+    await flush();
+
+    expect(shared.createdOptions.length).toBeGreaterThan(0);
+    for (const options of shared.createdOptions) {
+      expect(options).toMatchObject({
+        executionProviders: ['wasm'],
+        enableCpuMemArena: false,
+        enableMemPattern: false,
+      });
+    }
   });
 });
 

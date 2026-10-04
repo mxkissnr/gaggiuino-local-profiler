@@ -4,11 +4,21 @@
  * The model work itself runs in segment.worker.ts, so the page stays responsive
  * while IS-Net and the SAM encoder run. This module only owns the worker's
  * lifetime and the request/response plumbing; the exported API is unchanged, so
- * editor.ts and views/library.ts need no change. Terminating the worker (on
- * editor close) is what returns the WebAssembly heap to the browser.
+ * editor.ts and views/library.ts need no change. Terminating the worker is what
+ * returns the WebAssembly heap to the browser; on editor close it is deferred by
+ * a short idle window so a quick reopen reuses the worker instead of racing a
+ * new one against the OS reclaiming the old heap.
  */
 
 const ISNET_MODEL = 'isnet-general-use-int8.onnx';
+
+/**
+ * How long the worker is kept after resetCutout() before being terminated. A
+ * worker started right after the previous one was terminated can fail with
+ * "RangeError: Out of memory" on mobile Safari, where the OS has not reclaimed
+ * the old wasm heap yet; the idle window lets a reopen reuse the live worker.
+ */
+const WORKER_IDLE_MS = 20_000;
 
 /** Absolute directory the models are served from, ending in "models/". */
 function modelsBase(): string {
@@ -41,6 +51,7 @@ let nextId = 1;
 // True once the current worker has finished an autoCutout(); taps are only
 // valid against embeddings the worker still holds.
 let hasEmbeddings = false;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
 const pending = new Map<number, Pending>();
 
 function rejectPending(err: unknown): void {
@@ -48,10 +59,24 @@ function rejectPending(err: unknown): void {
   pending.clear();
 }
 
+function clearIdleTimer(): void {
+  if (idleTimer !== null) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+}
+
 function dropWorker(): void {
+  clearIdleTimer();
   if (!worker) return;
   worker.terminate();
   worker = null;
+}
+
+/** Terminate the worker once the idle window passes, unless a call reuses it. */
+function scheduleIdleTermination(): void {
+  clearIdleTimer();
+  idleTimer = setTimeout(dropWorker, WORKER_IDLE_MS);
 }
 
 function createWorker(): Worker {
@@ -67,10 +92,7 @@ function createWorker(): Worker {
   };
   const fail = (): void => {
     rejectPending(new Error('segment: worker failed'));
-    if (worker === created) {
-      created.terminate();
-      worker = null;
-    }
+    if (worker === created) dropWorker();
   };
   created.onerror = (): void => fail();
   created.onmessageerror = (): void => fail();
@@ -116,6 +138,7 @@ export async function autoCutout(
   w: number,
   h: number,
 ): Promise<Uint8Array> {
+  clearIdleTimer();
   // The worker takes ownership of the pixel copy; transfer instead of cloning.
   const copy = rgba.slice();
   const mask = await request(
@@ -134,15 +157,20 @@ export async function tapMask(
   h: number,
 ): Promise<Uint8Array> {
   if (!hasEmbeddings) throw new Error('segment: autoCutout() must run before tapMask()');
+  clearIdleTimer();
   return request({ id: nextId++, type: 'tap', x, y, label, w, h });
 }
 
 /**
- * Drop the worker: reject anything still in flight, terminate it (which frees
- * the wasm heap) and forget it, so the next cut-out starts a fresh one.
+ * Close the current image: reject anything still in flight and tell the worker
+ * to drop its embeddings and sessions. The worker itself is kept for a short
+ * idle window so an immediate reopen reuses it; the idle timer then terminates
+ * it to return the wasm heap. A worker error still drops it at once.
  */
 export function resetCutout(): void {
   hasEmbeddings = false;
   rejectPending(new Error('segment: cancelled'));
-  dropWorker();
+  if (!worker) return;
+  worker.postMessage({ type: 'reset' });
+  scheduleIdleTermination();
 }

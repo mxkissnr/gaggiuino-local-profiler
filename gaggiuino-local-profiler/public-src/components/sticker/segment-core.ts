@@ -53,7 +53,13 @@ const sessions = new Map<string, Promise<InferenceSession>>();
 function sessionFor(ort: Ort, file: string, modelsBase: string): Promise<InferenceSession> {
   let session = sessions.get(file);
   if (!session) {
-    session = ort.InferenceSession.create(modelsBase + file, { executionProviders: ['wasm'] });
+    session = ort.InferenceSession.create(modelsBase + file, {
+      executionProviders: ['wasm'],
+      // The CPU memory arena and memory-pattern planning hold large buffers for
+      // reuse; disabling both lowers the peak (the wasm heap never shrinks).
+      enableCpuMemArena: false,
+      enableMemPattern: false,
+    });
     sessions.set(file, session);
   }
   return session;

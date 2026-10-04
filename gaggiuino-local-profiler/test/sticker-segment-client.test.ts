@@ -13,7 +13,7 @@ class FakeWorker {
   onerror: ((event: ErrorEvent) => void) | null = null;
   onmessageerror: ((event: MessageEvent) => void) | null = null;
   terminated = false;
-  sent: Array<{ message: { id: number; type: string }; transfer: Transferable[] | undefined }> = [];
+  sent: Array<{ message: { id?: number; type: string }; transfer: Transferable[] | undefined }> = [];
   url: URL;
   options: WorkerOptions | undefined;
 
@@ -23,7 +23,7 @@ class FakeWorker {
     FakeWorker.instances.push(this);
   }
 
-  postMessage(message: { id: number; type: string }, transfer?: Transferable[]): void {
+  postMessage(message: { id?: number; type: string }, transfer?: Transferable[]): void {
     this.sent.push({ message, transfer });
   }
 
@@ -64,6 +64,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -154,15 +155,43 @@ describe('tapMask', () => {
 });
 
 describe('resetCutout', () => {
-  it('terminates the worker and rejects a pending request', async () => {
+  it('sends reset, keeps the worker, and terminates it after the idle window', async () => {
+    vi.useFakeTimers();
     const segment = await freshClient();
     const promise = segment.autoCutout(RGBA, W, H);
     const worker = latestWorker();
 
     segment.resetCutout();
 
-    expect(worker.terminated).toBe(true);
+    expect(worker.terminated).toBe(false);
+    expect(worker.sent.at(-1)!.message.type).toBe('reset');
     await expect(promise).rejects.toThrow(/cancelled/);
+
+    vi.advanceTimersByTime(20_000);
+    expect(worker.terminated).toBe(true);
+  });
+
+  it('reuses the worker when autoCutout runs within the idle window', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const first = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+    worker.reply({ id: worker.sent[0]!.message.id, mask: new Uint8Array([1]) });
+    await first;
+
+    segment.resetCutout();
+    expect(worker.terminated).toBe(false);
+
+    const second = segment.autoCutout(RGBA, W, H);
+    expect(FakeWorker.instances).toHaveLength(1);
+    expect(worker.sent.at(-1)!.message.type).toBe('auto');
+
+    // The reuse cleared the idle timer, so the worker survives the full window.
+    vi.advanceTimersByTime(20_000);
+    expect(worker.terminated).toBe(false);
+
+    worker.reply({ id: worker.sent.at(-1)!.message.id, mask: new Uint8Array([2]) });
+    await expect(second).resolves.toEqual(new Uint8Array([2]));
   });
 });
 
