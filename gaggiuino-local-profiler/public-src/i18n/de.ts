@@ -213,6 +213,7 @@ const de: Partial<Translations> = {
     lib_confirm_delete_puckscreen:'Puck Screen aus der Bibliothek löschen?',
     analytics_trend:'Score-Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Alle',
     analytics_calendar:'Shot-Kalender', analytics_beans:'Bohnen-Auswertung', analytics_profiles:'Profil-Performance',
+    analytics_month_prev:'Voriger Monat', analytics_month_next:'Nächster Monat', analytics_month_shots:(n)=>`${n} Shot${n===1?'':'s'}`, analytics_month_marathon:'Barista-Marathon', analytics_month_new_bag:'Neue Packung', analytics_month_day_empty:'Keine Shots',
     analytics_no_trend:'Nicht genug Shots mit Score für den Trend.',
     analytics_no_beans:'Noch keine Bohnen in Annotationen eingetragen.',
     analytics_no_profiles:'Keine Profil-Daten verfügbar.',

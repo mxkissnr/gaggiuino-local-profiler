@@ -213,6 +213,7 @@ const fr: Partial<Translations> = {
     lib_confirm_delete_puckscreen:'Supprimer le puck screen de la bibliothèque ?',
     analytics_trend:'Tendance Score', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Tous',
     analytics_calendar:'Calendrier des Shots', analytics_beans:'Stats par Grain', analytics_profiles:'Performance des Profils',
+    analytics_month_prev:'Mois précédent', analytics_month_next:'Mois suivant', analytics_month_shots:(n)=>`${n} shot${n===1?'':'s'}`, analytics_month_marathon:'Marathon barista', analytics_month_new_bag:'Nouveau paquet', analytics_month_day_empty:'Aucun shot',
     analytics_no_trend:'Pas assez de shots avec score pour la tendance.',
     analytics_no_beans:'Aucun grain saisi dans les notes.',
     analytics_no_profiles:'Aucune donnée de profil disponible.',

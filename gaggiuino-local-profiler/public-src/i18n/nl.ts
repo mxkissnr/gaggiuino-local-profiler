@@ -213,6 +213,7 @@ const nl: Partial<Translations> = {
     lib_confirm_delete_puckscreen:'Puck screen uit de bibliotheek verwijderen?',
     analytics_trend:'Score Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'Alle',
     analytics_calendar:'Shot Kalender', analytics_beans:'Boon Statistieken', analytics_profiles:'Profiel Prestaties',
+    analytics_month_prev:'Vorige maand', analytics_month_next:'Volgende maand', analytics_month_shots:(n)=>`${n} shot${n===1?'':'s'}`, analytics_month_marathon:'Barista-marathon', analytics_month_new_bag:'Nieuwe zak', analytics_month_day_empty:'Geen shots',
     analytics_no_trend:'Niet genoeg gescoorde shots voor trend.',
     analytics_no_beans:'Nog geen bonen ingevoerd in annotaties.',
     analytics_no_profiles:'Geen profieldata beschikbaar.',

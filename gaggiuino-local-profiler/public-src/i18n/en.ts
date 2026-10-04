@@ -213,6 +213,7 @@ const en: Translations = {
     lib_confirm_delete_puckscreen:'Remove puck screen from library?',
     analytics_trend:'Score Trend', analytics_trend_30:'30 Shots', analytics_trend_90:'90 Shots', analytics_trend_all:'All',
     analytics_calendar:'Shot Calendar', analytics_beans:'Bean Stats', analytics_profiles:'Profile Performance',
+    analytics_month_prev:'Previous month', analytics_month_next:'Next month', analytics_month_shots:(n)=>`${n} shot${n===1?'':'s'}`, analytics_month_marathon:'Barista marathon', analytics_month_new_bag:'New bag', analytics_month_day_empty:'No shots',
     analytics_no_trend:'Not enough scored shots for trend.',
     analytics_no_beans:'No beans entered in annotations yet.',
     analytics_no_profiles:'No profile data available.',
