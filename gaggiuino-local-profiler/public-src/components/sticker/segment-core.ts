@@ -40,6 +40,15 @@ const SAM_SIZE = 1024;
 
 type Ort = typeof import('onnxruntime-web/wasm');
 
+export type CutoutStage = 'download' | 'background' | 'subject';
+
+/** Progress reported by autoCutout() while the cut-out runs. */
+export interface CutoutProgress {
+  stage: CutoutStage;
+  /** 0..1 while a model file downloads; null while a model computes. */
+  fraction: number | null;
+}
+
 let runtime: Promise<Ort> | null = null;
 
 /** Dynamic-import onnxruntime-web and point it at the served wasm files once. */
@@ -57,17 +66,81 @@ function loadRuntime(modelsBase: string): Promise<Ort> {
 
 const sessions = new Map<string, Promise<InferenceSession>>();
 
-/** Create (or reuse) a wasm-backed session for one model file. */
-function sessionFor(ort: Ort, file: string, modelsBase: string): Promise<InferenceSession> {
+/**
+ * Fetch one model file, reporting byte progress as the body streams. Returns
+ * the whole file as bytes. A response without a body stream or without a usable
+ * Content-Length is read in one go and reports no progress.
+ */
+export async function fetchModelBytes(
+  url: string,
+  onBytes?: (loaded: number, total: number) => void,
+): Promise<Uint8Array> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`segment: model download failed (${res.status})`);
+  const length = res.headers.get('Content-Length');
+  const total = length === null ? Number.NaN : Number(length);
+  const body = res.body;
+  if (!body || !Number.isFinite(total) || total <= 0) {
+    return new Uint8Array(await res.arrayBuffer());
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    chunks.push(value);
+    loaded += value.byteLength;
+    onBytes?.(loaded, total);
+  }
+  const bytes = new Uint8Array(loaded);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+/** Call onProgress, swallowing a throwing callback so the cut-out still runs. */
+function emit(
+  onProgress: ((progress: CutoutProgress) => void) | undefined,
+  progress: CutoutProgress,
+): void {
+  if (!onProgress) return;
+  try {
+    onProgress(progress);
+  } catch {
+    // A broken progress listener must never break the cut-out itself.
+  }
+}
+
+/**
+ * Create (or reuse) a wasm-backed session for one model file. On a cold cache
+ * the file is fetched with byte progress and handed to onnxruntime as bytes
+ * instead of a URL; the bytes are dropped as soon as the session is created.
+ */
+function sessionFor(
+  ort: Ort,
+  file: string,
+  modelsBase: string,
+  onProgress?: (progress: CutoutProgress) => void,
+): Promise<InferenceSession> {
   let session = sessions.get(file);
   if (!session) {
-    session = ort.InferenceSession.create(modelsBase + file, {
-      executionProviders: ['wasm'],
-      // The CPU memory arena and memory-pattern planning hold large buffers for
-      // reuse; disabling both lowers the peak (the wasm heap never shrinks).
-      enableCpuMemArena: false,
-      enableMemPattern: false,
-    });
+    session = (async () => {
+      const bytes = await fetchModelBytes(modelsBase + file, (loaded, total) => {
+        emit(onProgress, { stage: 'download', fraction: loaded / total });
+      });
+      return ort.InferenceSession.create(bytes, {
+        executionProviders: ['wasm'],
+        // The CPU memory arena and memory-pattern planning hold large buffers for
+        // reuse; disabling both lowers the peak (the wasm heap never shrinks).
+        enableCpuMemArena: false,
+        enableMemPattern: false,
+      });
+    })();
     sessions.set(file, session);
   }
   return session;
@@ -216,12 +289,17 @@ function andMask(mask: Uint8Array, alpha: Uint8Array): Uint8Array {
  * the sum of all three: IS-Net's session is released before the SAM encoder is
  * created, and the encoder is released right after it runs. Only the small
  * decoder and the cached embeddings survive into the tap phase.
+ *
+ * onProgress, when given, hears the model download fraction and the start of
+ * each model run; a cold cache downloads each model right before its session is
+ * created, so no model's bytes are held while another runs.
  */
 export async function autoCutout(
   rgba: Uint8ClampedArray,
   w: number,
   h: number,
   modelsBase: string,
+  onProgress?: (progress: CutoutProgress) => void,
 ): Promise<Uint8Array> {
   activeModelsBase = modelsBase;
   const box = plainBackgroundBox(rgba, w, h);
@@ -243,7 +321,8 @@ export async function autoCutout(
 
   const ort = await loadRuntime(modelsBase);
 
-  const isnetSession = await sessionFor(ort, ISNET_MODEL, modelsBase);
+  const isnetSession = await sessionFor(ort, ISNET_MODEL, modelsBase, onProgress);
+  emit(onProgress, { stage: 'background', fraction: null });
   const isnetRgba = resizeHook.rgba(source, sw, sh, ISNET_SIZE, ISNET_SIZE);
   const isnetOut = await isnetSession.run({
     input_image: new ort.Tensor('float32', isnetInput(isnetRgba), [1, 3, ISNET_SIZE, ISNET_SIZE]),
@@ -256,7 +335,8 @@ export async function autoCutout(
   await releaseSession(ISNET_MODEL);
 
   const { rw, rh } = samResizeDims(sw, sh);
-  const encoder = await sessionFor(ort, SAM_ENCODER_MODEL, modelsBase);
+  const encoder = await sessionFor(ort, SAM_ENCODER_MODEL, modelsBase, onProgress);
+  emit(onProgress, { stage: 'subject', fraction: null });
   const samRgba = resizeHook.rgba(source, sw, sh, rw, rh);
   const encOut = await encoder.run({
     pixel_values: new ort.Tensor('float32', samInput(samRgba, rw, rh), [1, 3, SAM_SIZE, SAM_SIZE]),

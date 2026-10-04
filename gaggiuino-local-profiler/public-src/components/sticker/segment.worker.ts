@@ -7,7 +7,7 @@
  * back to the browser.
  */
 
-import { autoCutout, tapMask, resetCutout } from './segment-core.js';
+import { autoCutout, tapMask, resetCutout, type CutoutProgress } from './segment-core.js';
 
 interface AutoRequest {
   id: number;
@@ -55,7 +55,10 @@ function reply(id: number, mask: Uint8Array): void {
 async function handle(msg: AutoRequest | TapRequest): Promise<void> {
   try {
     if (msg.type === 'auto') {
-      reply(msg.id, await autoCutout(msg.rgba, msg.w, msg.h, msg.modelsBase));
+      const onProgress = (progress: CutoutProgress): void => {
+        ctx.postMessage({ id: msg.id, progress });
+      };
+      reply(msg.id, await autoCutout(msg.rgba, msg.w, msg.h, msg.modelsBase, onProgress));
     } else {
       reply(msg.id, await tapMask(msg.x, msg.y, msg.label, msg.w, msg.h));
     }
