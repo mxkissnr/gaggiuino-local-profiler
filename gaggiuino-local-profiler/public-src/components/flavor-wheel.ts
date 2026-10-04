@@ -347,11 +347,12 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   if (!bean) return;
   const modal = document.getElementById('flavorWheelModal');
   if (!modal) return;
-  // #1374: below 640px #main is position:fixed and so a stacking context, which
-  // trapped the overlay's own z-index inside it; the body-level bean sheet
-  // (z-index 901) therefore always painted above the wheel on a phone. One move
-  // to <body> puts the wheel back into the page's stacking context. The click
-  // delegation (document.body) and the backdrop handler follow the element.
+  // #1374: on a narrow phone #main is position:fixed (max-width:768px) and so
+  // becomes a stacking context, which trapped the overlay's own z-index inside
+  // it; the body-level bean sheet (z-index 901) therefore always painted above
+  // the wheel. One move to <body> puts the wheel back into the page's stacking
+  // context. The click delegation (document.body) and the backdrop handler
+  // follow the element.
   if (document.body && modal.parentElement !== document.body) document.body.appendChild(modal);
 
   (document.getElementById('flavorWheelTitle') as HTMLElement).textContent = bean.name as string;
