@@ -255,6 +255,16 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
   if (remaining != null || totalConsumed > 0) {
     const isLow = remaining != null && remaining < 100;
     const rem = Math.max(0, remaining ?? 0);
+    // #1373: a bean imported from a shop page links its "reorder" badge back
+    // there. Restrict to http(s) so a stored javascript:/data: value can never
+    // become a clickable link.
+    let reorderUrl: string | null = null;
+    if (isLow && b.sourceUrl) {
+      try {
+        const parsed = new URL(b.sourceUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') reorderUrl = b.sourceUrl;
+      } catch { /* not a URL — keep the plain badge */ }
+    }
     const stockPct = current && current.stockG != null && current.stockG > 0
       ? Math.max(0, Math.min(100, Math.round(((current.remaining ?? 0) / current.stockG) * 100)))
       : 0;
@@ -264,10 +274,12 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
         <span class="lib-inv-pct${esc(isLow ? ' low' : '')}">${esc(stockPct)}%</span>
       </div>` : esc('')}
       <div class="lib-inv-nums">
-        ${remaining != null ? html`<span class="lib-inv-remaining${esc(isLow ? ' low' : '')}">${tHtml('lib_inv_remaining', rem)} g</span><span class="lib-inv-sep">·</span>` : esc('')}
-        <span class="lib-inv-consumed">${tHtml('lib_inv_consumed', totalConsumed)} g</span>
+        ${remaining != null ? html`<span class="lib-inv-remaining${esc(isLow ? ' low' : '')}">${tHtml('lib_inv_remaining', rem)}</span><span class="lib-inv-sep">·</span>` : esc('')}
+        <span class="lib-inv-consumed">${tHtml('lib_inv_consumed', totalConsumed)}</span>
         ${bags.length > 1 ? html`<span class="lib-inv-sep">·</span><span class="lib-inv-total">${tHtml('lib_inv_bags', bags.length)}</span>` : esc('')}
-        ${isLow ? html`<span class="lib-inv-reorder">${tHtml('lib_inv_reorder')}</span>` : esc('')}
+        ${isLow ? (reorderUrl
+          ? html`<a class="lib-inv-reorder" href="${esc(reorderUrl)}" target="_blank" rel="noopener noreferrer">${tHtml('lib_inv_reorder')}</a>`
+          : html`<span class="lib-inv-reorder">${tHtml('lib_inv_reorder')}</span>`) : esc('')}
       </div>
     </div>`;
   }

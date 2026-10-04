@@ -181,7 +181,7 @@ const nl: Partial<Translations> = {
     lib_grinder_zero_point_delete:'Nulpunt-invoer verwijderen',
     lib_cancel:'Annuleren', lib_save:'Opslaan',
     lib_empty_beans:'Nog geen bonen opgeslagen', lib_empty_grinders:'Nog geen molens opgeslagen',
-    lib_shelf_stock:'Voorraad', lib_shelf_archive:'Leeg & archief', lib_shelf_archived_tag:'Gearchiveerd', lib_shelf_search_ph:'Boon, brander, herkomst', lib_shelf_all:'Alle', lib_shelf_sort_fresh:'Versts', lib_shelf_sort_name:'Naam', lib_shelf_sort_remaining:'Meeste over', lib_shelf_no_match:'Geen bonen gevonden', lib_shelf_full:'Je plank raakt mooi vol', lib_shelf_open_badge:'open', lib_shelf_full_bags:(n)=>`+${n} vol`, lib_shelf_view_shelf:'Plank', lib_shelf_view_list:'Lijst',
+    lib_shelf_stock:'Voorraad', lib_shelf_archive:'Leeg & archief', lib_shelf_archived_tag:'Gearchiveerd', lib_shelf_search_ph:'Boon, brander, herkomst', lib_shelf_all:'Alle', lib_shelf_sort_fresh:'Recent gebrand', lib_shelf_sort_name:'Naam', lib_shelf_sort_remaining:'Meeste over', lib_shelf_no_match:'Geen bonen gevonden', lib_shelf_full:'Je plank raakt mooi vol', lib_shelf_open_badge:'open', lib_shelf_full_bags:(n)=>`+${n} vol`, lib_shelf_view_shelf:'Plank', lib_shelf_view_list:'Lijst',
     lib_btn_edit:'Bewerken', lib_btn_delete:'Verwijderen',
     lib_btn_archive:'Archiveren', lib_btn_restore:'Herstellen',
     lib_sheet_close:'Sluiten', lib_sheet_more:'Meer acties', lib_sheet_shot_log:'Shotlog', lib_sheet_aromas:'Aroma\'s',

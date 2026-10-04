@@ -181,7 +181,7 @@ const fr: Partial<Translations> = {
     lib_grinder_zero_point_delete:"Supprimer l'entrée de point zéro",
     lib_cancel:'Annuler', lib_save:'Enregistrer',
     lib_empty_beans:'Aucun grain enregistré', lib_empty_grinders:'Aucun moulin enregistré',
-    lib_shelf_stock:'Réserve', lib_shelf_archive:'Vides et archives', lib_shelf_archived_tag:'Archivé', lib_shelf_search_ph:'Café, torréfacteur, origine', lib_shelf_all:'Tous', lib_shelf_sort_fresh:'Plus frais', lib_shelf_sort_name:'Nom', lib_shelf_sort_remaining:'Le plus restant', lib_shelf_no_match:'Aucun café ne correspond', lib_shelf_full:'Ton étagère se remplit', lib_shelf_open_badge:'ouvert', lib_shelf_full_bags:(n)=>`+${n} pleines`, lib_shelf_view_shelf:'Étagère', lib_shelf_view_list:'Liste',
+    lib_shelf_stock:'Réserve', lib_shelf_archive:'Vides et archives', lib_shelf_archived_tag:'Archivé', lib_shelf_search_ph:'Café, torréfacteur, origine', lib_shelf_all:'Tous', lib_shelf_sort_fresh:'Torréfié récemment', lib_shelf_sort_name:'Nom', lib_shelf_sort_remaining:'Le plus restant', lib_shelf_no_match:'Aucun café ne correspond', lib_shelf_full:'Ton étagère se remplit', lib_shelf_open_badge:'ouvert', lib_shelf_full_bags:(n)=>`+${n} pleines`, lib_shelf_view_shelf:'Étagère', lib_shelf_view_list:'Liste',
     lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
     lib_btn_archive:'Archiver', lib_btn_restore:'Restaurer',
     lib_sheet_close:'Fermer', lib_sheet_more:"Plus d'actions", lib_sheet_shot_log:'Historique des shots', lib_sheet_aromas:'Arômes',

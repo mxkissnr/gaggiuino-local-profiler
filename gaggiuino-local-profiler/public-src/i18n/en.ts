@@ -181,7 +181,7 @@ const en: Translations = {
     lib_grinder_zero_point_delete:'Delete zero-point entry',
     lib_cancel:'Cancel', lib_save:'Save',
     lib_empty_beans:'No beans saved yet', lib_empty_grinders:'No grinders saved yet',
-    lib_shelf_stock:'Stock', lib_shelf_archive:'Empty & archive', lib_shelf_archived_tag:'Archived', lib_shelf_search_ph:'Bean, roaster, origin', lib_shelf_all:'All', lib_shelf_sort_fresh:'Freshest', lib_shelf_sort_name:'Name', lib_shelf_sort_remaining:'Most left', lib_shelf_no_match:'No beans match', lib_shelf_full:'Your shelf is filling up nicely', lib_shelf_open_badge:'open', lib_shelf_full_bags:(n)=>`+${n} full`, lib_shelf_view_shelf:'Shelf', lib_shelf_view_list:'List',
+    lib_shelf_stock:'Stock', lib_shelf_archive:'Empty & archive', lib_shelf_archived_tag:'Archived', lib_shelf_search_ph:'Bean, roaster, origin', lib_shelf_all:'All', lib_shelf_sort_fresh:'Recently roasted', lib_shelf_sort_name:'Name', lib_shelf_sort_remaining:'Most left', lib_shelf_no_match:'No beans match', lib_shelf_full:'Your shelf is filling up nicely', lib_shelf_open_badge:'open', lib_shelf_full_bags:(n)=>`+${n} full`, lib_shelf_view_shelf:'Shelf', lib_shelf_view_list:'List',
     lib_btn_edit:'Edit', lib_btn_delete:'Delete',
     lib_btn_archive:'Archive', lib_btn_restore:'Restore',
     lib_sheet_close:'Close', lib_sheet_more:'More actions', lib_sheet_shot_log:'Shot log', lib_sheet_aromas:'Aromas',
