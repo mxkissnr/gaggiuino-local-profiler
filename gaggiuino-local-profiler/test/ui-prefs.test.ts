@@ -129,7 +129,7 @@ describe('setUiPref (#1375)', () => {
 
   it('does not drop a change made while a PUT is in flight (finding 2)', async () => {
     const mod = await loadModule();
-    let resolvePut: ((r: Response) => void) | undefined;
+    let resolvePut: ((r: Response) => void) | undefined = undefined;
     const fetchMock = vi.fn<FetchFn>(() => new Promise<Response>(res => { resolvePut = res; }));
     vi.stubGlobal('fetch', fetchMock);
     vi.useFakeTimers();
