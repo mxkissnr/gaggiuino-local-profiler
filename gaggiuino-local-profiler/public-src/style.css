@@ -1550,7 +1550,7 @@
         @keyframes lib-sheet-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes lib-sheet-fold { to { transform: scaleY(.2) rotate(-8deg); opacity: .4; } }
         @media (prefers-reduced-motion: no-preference) {
-            .lib-sheet-host.open .lib-sheet { animation: lib-sheet-in 220ms cubic-bezier(.4,0,.2,1); }
+            .lib-sheet.lib-sheet-enter { animation: lib-sheet-in 220ms cubic-bezier(.4,0,.2,1); }
             .lib-sheet-photo.fold { animation: lib-sheet-fold 350ms ease forwards; }
         }
         @media (min-width: 900px) {

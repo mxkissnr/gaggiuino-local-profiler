@@ -703,6 +703,10 @@ let _sheetReturnFocus: HTMLElement | null = null;
 // _shelfArchiveOpen).
 let _sheetMoreOpen = false;
 let _sheetKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+// Bean id the host currently shows. The host is rebuilt (innerHTML) on every
+// render, so this remembers whether the next render is the same bean (keep the
+// scroll) or a fresh open (start at the top). See renderBeanSheet below.
+let _sheetRenderedBeanId: number | null = null;
 
 // Progressive enhancement: view transitions and the fold keyframe only when
 // the user has not asked for reduced motion.
@@ -773,7 +777,35 @@ function _sheetPrimary(b: BeanListRow): Html {
   </div>`;
 }
 
-function renderBeanSheet(): void {
+// The scroll container the sheet rebuild would otherwise reset is the
+// `.lib-sheet` element itself (overflow-y:auto). Read its current offset; 0
+// when the host isn't showing one (fresh open) or lacks a real querySelector
+// (the lightweight fake DOMs the tests install).
+function _sheetScrollTop(host: HTMLElement): number {
+  if (typeof host.querySelector !== 'function') return 0;
+  const sheet = host.querySelector<HTMLElement>('.lib-sheet');
+  const top = sheet?.scrollTop;
+  return typeof top === 'number' ? top : 0;
+}
+
+// Decides the scrollTop to restore after a rebuild: a re-render of the SAME
+// bean keeps its position so tapping inside the sheet doesn't jump to the top,
+// while a fresh open or a different bean starts at 0. Pure so the test can pin
+// the decision without a real scroll container.
+export function beanSheetRestoredScroll(
+  prevBeanId: number | null,
+  nextBeanId: number,
+  prevScrollTop: number,
+  enter: boolean,
+): number {
+  if (enter || prevBeanId == null || prevBeanId !== nextBeanId) return 0;
+  return Number.isFinite(prevScrollTop) && prevScrollTop > 0 ? prevScrollTop : 0;
+}
+
+// `enter` marks a render that comes from openBeanSheet: only then does the new
+// `.lib-sheet` carry the slide-in class, so the animation plays on open and not
+// on every action-driven rebuild.
+function renderBeanSheet(enter = false): void {
   const id = _sheetBeanId;
   if (id == null) return;
   const bean = _beanList().find(b => b.id === id);
@@ -782,8 +814,9 @@ function renderBeanSheet(): void {
   if (!host) return;
   const beans = _beanList();
   const origin = originDisplay(bean);
+  const restoreScroll = beanSheetRestoredScroll(_sheetRenderedBeanId, id, _sheetScrollTop(host), enter);
   host.innerHTML = html`<div class="lib-sheet-backdrop" data-action="close-bean-sheet"></div>
-    <section class="lib-sheet" role="dialog" aria-modal="true" aria-labelledby="beanSheetTitle">
+    <section class="lib-sheet${esc(enter ? ' lib-sheet-enter' : '')}" role="dialog" aria-modal="true" aria-labelledby="beanSheetTitle">
       <div class="lib-sheet-head">
         <div class="lib-sheet-photo">${bean.image
           ? html`<img class="lib-bean-thumb${esc(bean.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(bean.id)}" alt="">`
@@ -803,6 +836,13 @@ function renderBeanSheet(): void {
       <div class="lib-sheet-body">${renderBeanCard(bean, beans, { inSheet: true })}</div>
     </section>`;
   host.classList?.add('open');
+  _sheetRenderedBeanId = id;
+  // Restore the previous offset on the freshly built scroll container. Only a
+  // positive value matters; 0 is the default the new element already has.
+  if (restoreScroll > 0 && typeof host.querySelector === 'function') {
+    const sheet = host.querySelector<HTMLElement>('.lib-sheet');
+    if (sheet) sheet.scrollTop = restoreScroll;
+  }
   const details = typeof host.querySelector === 'function'
     ? host.querySelector<HTMLDetailsElement>('.lib-sheet-more')
     : null;
@@ -879,7 +919,7 @@ export function openBeanSheet(id: number): void {
   _sheetBeanId = id;
   _sheetMoreOpen = false;
   const paint = (): void => {
-    renderBeanSheet();
+    renderBeanSheet(true);
     document.body?.classList?.add('lib-sheet-open');
     _wireSheetKeys();
     _focusSheetClose();
@@ -896,6 +936,7 @@ export function closeBeanSheet(): void {
     host.classList?.remove('open');
   }
   _sheetBeanId = null;
+  _sheetRenderedBeanId = null;
   _sheetMoreOpen = false;
   _unwireSheetKeys();
   if (typeof document !== 'undefined') document.body?.classList?.remove('lib-sheet-open');

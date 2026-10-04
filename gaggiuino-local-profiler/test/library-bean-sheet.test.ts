@@ -15,8 +15,14 @@ interface LibraryModule {
   renderBeanList: () => void;
   openBeanSheet: (id: number) => void;
   closeBeanSheet: () => void;
+  beanSheetRestoredScroll: (
+    prevBeanId: number | null,
+    nextBeanId: number,
+    prevScrollTop: number,
+    enter: boolean,
+  ) => number;
 }
-const { renderBeanCard, renderBeanList, openBeanSheet, closeBeanSheet } =
+const { renderBeanCard, renderBeanList, openBeanSheet, closeBeanSheet, beanSheetRestoredScroll } =
   (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 interface FakeNode {
@@ -145,5 +151,26 @@ describe('bean detail sheet (#1330 part 2)', () => {
     renderBeanList();
 
     expect(sheetHtml(elements)).toBe('');
+  });
+
+  it('decides the scroll to restore after a sheet rebuild', () => {
+    // Same bean -> keep the previous offset (an in-sheet tap must not jump up).
+    expect(beanSheetRestoredScroll(1, 1, 240, false)).toBe(240);
+    // Fresh open, a different bean, or nothing rendered yet -> start at the top.
+    expect(beanSheetRestoredScroll(1, 1, 240, true)).toBe(0);
+    expect(beanSheetRestoredScroll(1, 2, 240, false)).toBe(0);
+    expect(beanSheetRestoredScroll(null, 1, 240, false)).toBe(0);
+    // A missing/invalid offset is treated as the top, never NaN.
+    expect(beanSheetRestoredScroll(1, 1, 0, false)).toBe(0);
+    expect(beanSheetRestoredScroll(1, 1, Number.NaN, false)).toBe(0);
+  });
+
+  it('plays the slide-in only on open, not on a re-render', () => {
+    const { elements } = setup();
+    openBeanSheet(1);
+    expect(sheetHtml(elements)).toContain('lib-sheet-enter');
+
+    renderBeanList();
+    expect(sheetHtml(elements)).not.toContain('lib-sheet-enter');
   });
 });

@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Fixed
+- **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
 - **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day.** Closes #1357
 - **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
