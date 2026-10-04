@@ -108,7 +108,9 @@ function prefersReducedMotion(): boolean {
 }
 
 function formatCount(key: string, value: number, decimals: number): string {
-  return t(key, decimals > 0 ? value.toFixed(decimals) : String(Math.round(value)));
+  // Pass a real number for the integer counters so the formatters' n!==1
+  // plural check works; kg stays a fixed-decimal string.
+  return decimals > 0 ? t(key, value.toFixed(decimals)) : t(key, Math.round(value));
 }
 
 function tileDelay(index: number, count: number): number {
