@@ -5,8 +5,6 @@
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { classifyBeanBags } from '../views/library/bags.js';
-import type { BeanRow } from '../views/library/bags.js';
 import { loadBeanImageBlobUrl, loadShotThumbBlobUrl } from '../bean-image.js';
 import { scoreColor } from '../utils.js';
 
@@ -36,6 +34,26 @@ export interface HistoryStats {
   shots: number;
   bags: number;
   kg: number;
+}
+
+/** The library bean/bag fields the history reads (via S.coffeeLibrary). */
+export interface HistoryBag {
+  remainingG?: number | null;
+  current?: boolean | null;
+}
+export interface HistoryBean {
+  id?: number;
+  name?: string;
+  bags?: readonly HistoryBag[] | null;
+}
+
+// views/library/bags.ts's classifyBeanBags() owns this rule ("past" + the
+// server's remainingG marks a tracked bag), but importing it would pull the
+// whole library view — and its module-load `document` listener — into the
+// topbar/panel import graph and break the DOM-free tests that import status.js
+// or live.js. The rule is small, so state it here directly.
+function isEmptiedBag(bag: HistoryBag): boolean {
+  return !bag.current && bag.remainingG != null && bag.remainingG <= 0;
 }
 
 // Only the newest photo shots get a thumbnail — an old history keeps its
@@ -69,11 +87,11 @@ export function spiralPositions(n: number, spacing: number): { x: number; y: num
  * server tracks stock for), and the summed dose in kg rounded to 0.1. Shots
  * without a dose count 0.
  */
-export function historyStats(shots: readonly HistoryShot[], beans: readonly BeanRow[]): HistoryStats {
+export function historyStats(shots: readonly HistoryShot[], beans: readonly HistoryBean[]): HistoryStats {
   let bags = 0;
   for (const bean of beans) {
-    for (const past of classifyBeanBags(bean).past) {
-      if (past.remaining != null) bags++;
+    for (const bag of bean.bags ?? []) {
+      if (isEmptiedBag(bag)) bags++;
     }
   }
   let grams = 0;
@@ -131,15 +149,15 @@ function tileLabel(tile: HistoryTile): string {
 }
 
 interface EmptiedBag {
-  beanId: number;
+  beanId: number | null;
   name: string;
 }
 
-function emptiedBags(beans: readonly BeanRow[]): EmptiedBag[] {
+function emptiedBags(beans: readonly HistoryBean[]): EmptiedBag[] {
   const out: EmptiedBag[] = [];
   for (const bean of beans) {
-    for (const past of classifyBeanBags(bean).past) {
-      if (past.remaining != null) out.push({ beanId: bean.id, name: bean.name });
+    for (const bag of bean.bags ?? []) {
+      if (isEmptiedBag(bag)) out.push({ beanId: bean.id ?? null, name: bean.name ?? '' });
     }
   }
   return out;
@@ -163,7 +181,7 @@ export function renderCoffeeHistory(host: HTMLElement): () => void {
   clear();
 
   const shots = S.allShots as unknown as HistoryShot[];
-  const beans = S.coffeeLibrary.beans as unknown as BeanRow[];
+  const beans = S.coffeeLibrary.beans as unknown as HistoryBean[];
   const stats = historyStats(shots, beans);
   const tiles = historyTiles(shots, PHOTO_CAP);
   const bags = emptiedBags(beans);
@@ -235,16 +253,18 @@ export function renderCoffeeHistory(host: HTMLElement): () => void {
     bagEl.className = 'coffee-history-bag';
     bagEl.title = bag.name;
     bagEl.style.animationDelay = `${bagDelay(j, bags.length)}ms`;
-    const img = document.createElement('img');
-    img.className = 'coffee-history-bag-img';
-    img.alt = '';
-    img.decoding = 'async';
-    bagEl.appendChild(img);
-    void loadBeanImageBlobUrl(bag.beanId).then(url => {
-      if (stopped || !url) return;
-      img.src = url;
-      bagEl.classList.add('coffee-history-bag-ready');
-    });
+    if (bag.beanId != null) {
+      const img = document.createElement('img');
+      img.className = 'coffee-history-bag-img';
+      img.alt = '';
+      img.decoding = 'async';
+      bagEl.appendChild(img);
+      void loadBeanImageBlobUrl(bag.beanId).then(url => {
+        if (stopped || !url) return;
+        img.src = url;
+        bagEl.classList.add('coffee-history-bag-ready');
+      });
+    }
     shelf.appendChild(bagEl);
   }
 
