@@ -152,9 +152,11 @@ func TestSanitize_OversizedValue(t *testing.T) {
 }
 
 func TestSanitize_RejectsDeeperNesting(t *testing.T) {
+	// A flat object value is allowed (see TestSanitize_Valid); anything nested
+	// inside that flat object, or an array, is not.
 	cases := map[string]map[string]any{
-		"nested object": {"a": map[string]any{"b": "c"}},
 		"array":         {"a": []any{float64(1)}},
+		"array in flat": {"a": map[string]any{"b": []any{"c"}}},
 		"flat in flat":  {"a": map[string]any{"b": map[string]any{"c": "d"}}},
 	}
 	for name, in := range cases {
