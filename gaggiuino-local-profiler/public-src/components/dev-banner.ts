@@ -52,6 +52,12 @@ export function showDevBuildBanner(devBuild?: string | null): void {
   if (mainEl) mainEl.style.top = `${banner.offsetHeight}px`;
   const sidebarEl = document.getElementById('sidebar');
   if (sidebarEl) sidebarEl.style.top = `${banner.offsetHeight}px`;
+  // #1372: expose the banner height as a CSS variable so fixed overlays that
+  // sit against the viewport (sheet backdrops, the desktop bean sheet, the
+  // guided-maintenance overlay, the flavour wheel) can start below the banner
+  // instead of hiding under it. Unset on real installs, where the fallback 0px
+  // keeps every rule exactly as before.
+  document.documentElement.style.setProperty('--dev-banner-h', `${banner.offsetHeight}px`);
 }
 
 // Other fixed banners (update-available, machine-unreachable) stack off of

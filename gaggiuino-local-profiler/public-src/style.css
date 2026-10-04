@@ -1536,8 +1536,11 @@
         body.lib-sheet-open { overflow: hidden; }
         .lib-sheet-host { display: none; }
         .lib-sheet-host.open { display: block; }
-        .lib-sheet-backdrop { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.55); }
-        .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: 88dvh; overflow-y: auto; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
+        /* #1372: fixed overlays start below the dev-build banner (--dev-banner-h
+           is set on :root by components/dev-banner.ts; it stays unset, so 0px,
+           on real installs). */
+        .lib-sheet-backdrop { position: fixed; top: var(--dev-banner-h, 0px); left: 0; right: 0; bottom: 0; z-index: 900; background: rgba(0,0,0,.55); }
+        .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: calc(88dvh - var(--dev-banner-h, 0px)); overflow-y: auto; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
         .lib-sheet-head { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--sp-3); align-items: start; }
         .lib-sheet-photo { width: 72px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
         .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -1582,7 +1585,7 @@
             .lib-shelf-drop { animation: lib-shelf-drop 450ms cubic-bezier(.34,1.56,.64,1); }
         }
         @media (min-width: 900px) {
-            .lib-sheet { left: auto; right: 0; top: 0; bottom: 0; width: min(440px, 100%); height: 100%; max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
+            .lib-sheet { left: auto; right: 0; top: var(--dev-banner-h, 0px); bottom: 0; width: min(440px, 100%); max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
             @keyframes lib-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         }
         .lib-form-hint-staged { color: var(--ok); }
@@ -2593,7 +2596,7 @@
         .maint-disabled-row .icon svg { width:14px; height:14px; }
         .maint-disabled-row span:nth-child(2) { flex:1; }
         /* Guided maintenance walkthrough */
-        .guided-maint-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding: var(--sp-4); }
+        .guided-maint-overlay { position:fixed; top: var(--dev-banner-h, 0px); left:0; right:0; bottom:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding: var(--sp-4); }
         .guided-maint-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:440px; width:100%; max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-3); }
         .guided-maint-step { display:flex; align-items:flex-start; gap: var(--sp-3); padding: var(--sp-2) var(--sp-2); border-bottom:1px solid var(--gray-800); cursor:pointer; font-size: var(--fs-2); color:var(--gray-300); }
         .guided-maint-step:last-child { border-bottom:none; }

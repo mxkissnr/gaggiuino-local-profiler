@@ -19,12 +19,18 @@ interface FakeBannerElement {
 
 function makeFakeDocument() {
   const registry = new Map<string, FakeBannerElement>();
+  const rootProps: Record<string, string> = {};
   const body = {
     style: {} as Record<string, string>,
     insertAdjacentElement: (_pos: string, el: FakeBannerElement) => { registry.set(el.id, el); },
   };
+  const documentElement = {
+    style: { setProperty: (key: string, value: string) => { rootProps[key] = value; } },
+  };
   return {
     body,
+    documentElement,
+    rootProps,
     getElementById: (id: string): FakeBannerElement => registry.get(id)!,
     createElement: (): FakeBannerElement => ({ id: '', style: {}, textContent: '', innerHTML: '', offsetHeight: 34 }),
   };
@@ -76,6 +82,13 @@ describe('dev-build banner (#683)', () => {
   it('pushes page content down by the banner height instead of overlaying it', () => {
     showDevBuildBanner();
     expect(doc.body.style.paddingTop).toBe('34px');
+  });
+
+  // #1372: fixed overlays (sheet backdrop, desktop sheet, flavour wheel) read
+  // this variable so they start below the banner instead of under it.
+  it('publishes the banner height as the --dev-banner-h CSS variable', () => {
+    showDevBuildBanner();
+    expect(doc.rootProps['--dev-banner-h']).toBe('34px');
   });
 
   it('devBannerHeight() is 0 when no banner exists (real installs)', () => {
