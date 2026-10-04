@@ -136,9 +136,9 @@ interface EmptiedBag {
 function emptiedBags(beans: readonly BeanRow[]): EmptiedBag[] {
   const out: EmptiedBag[] = [];
   for (const bean of beans) {
-    const emptied = classifyBeanBags(bean).past.some(entry => entry.remaining != null);
-    if (!emptied) continue;
-    out.push({ beanId: bean.id, name: bean.name });
+    for (const past of classifyBeanBags(bean).past) {
+      if (past.remaining != null) out.push({ beanId: bean.id, name: bean.name });
+    }
   }
   return out;
 }
