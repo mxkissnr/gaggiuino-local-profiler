@@ -3,6 +3,7 @@
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **Saving a profile to a GaggiMate that silently stops answering now falls back to saving it locally after a few seconds instead of hanging.** (#1319)
 - **The bean sheet and flavour wheel fit the window on desktop: the header stays visible, the large wheel no longer overflows, the form uses the extra width, and the small wheel marks the bean's notes.** (#1372)
 - **The bean stock line no longer shows the gram unit twice, and the shelf sort by roast date now reads naturally in German.** (#1373)
 - **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
