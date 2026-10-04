@@ -487,10 +487,15 @@ const _expandedShelfBeans = new Set<number>();
 // rebuilt on every render, so its meaning has to live outside the DOM.
 let _shelfArchiveOpen = false;
 
-// Active shelf toolbar state. Only filter/sort are persisted (shelf.ts's
-// saveShelfPrefs); the query is intentionally session-only so a stale search
-// can't silently hide beans after a reload.
-const _shelfPrefs: ShelfPrefs = loadShelfPrefs();
+// Active shelf toolbar state, loaded lazily: loadShelfPrefs() reads shelf.ts's
+// module bindings, which the shelf.ts -> bags.ts -> library.ts -> shelf.ts
+// import cycle leaves uninitialized during module evaluation. Only filter/sort
+// are persisted (shelf.ts's saveShelfPrefs); the query is session-only so a
+// stale search can't silently hide beans after a reload.
+let _shelfPrefsLazy: ShelfPrefs | null = null;
+function shelfPrefs(): ShelfPrefs {
+  return (_shelfPrefsLazy ??= loadShelfPrefs());
+}
 
 function _shelfHeading(key: string, count?: number): Html {
   return html`<div class="lib-shelf-heading"><span>${tHtml(key)}</span>${count != null ? html`<span class="lib-shelf-count">${esc(count)}</span>` : esc('')}</div>`;
@@ -520,30 +525,31 @@ function _shelfSectionsMount(): HTMLElement | null {
 }
 
 function wireShelfToolbar(): void {
+  const prefs = shelfPrefs();
   const search = document.getElementById('libShelfSearch') as HTMLInputElement | null;
   if (search?.addEventListener) {
-    search.value = _shelfPrefs.query;
+    search.value = prefs.query;
     search.addEventListener('input', () => {
-      _shelfPrefs.query = search.value;
+      prefs.query = search.value;
       renderShelfSections();
     });
   }
   const sort = document.getElementById('libShelfSort') as HTMLSelectElement | null;
   if (sort?.addEventListener) {
-    sort.value = _shelfPrefs.sort;
+    sort.value = prefs.sort;
     sort.addEventListener('change', () => {
-      _shelfPrefs.sort = (sort.value as ShelfSort) || 'fresh';
-      saveShelfPrefs(_shelfPrefs);
+      prefs.sort = (sort.value as ShelfSort) || 'fresh';
+      saveShelfPrefs(prefs);
       renderShelfSections();
     });
   }
   document.querySelectorAll<HTMLButtonElement>('[data-shelf-filter]').forEach(chip => {
     if (!chip.addEventListener) return;
     chip.addEventListener('click', () => {
-      _shelfPrefs.filter = (chip.dataset.shelfFilter as ShelfFilter) || 'all';
-      saveShelfPrefs(_shelfPrefs);
+      prefs.filter = (chip.dataset.shelfFilter as ShelfFilter) || 'all';
+      saveShelfPrefs(prefs);
       document.querySelectorAll<HTMLButtonElement>('[data-shelf-filter]').forEach(c => {
-        c.setAttribute('aria-pressed', c.dataset.shelfFilter === _shelfPrefs.filter ? 'true' : 'false');
+        c.setAttribute('aria-pressed', c.dataset.shelfFilter === prefs.filter ? 'true' : 'false');
       });
       renderShelfSections();
     });
@@ -558,7 +564,7 @@ function renderShelfSections(): void {
   // the display-filtering part of #334; see #339 for why that filter was
   // wrong (it hid nearly the whole library once a second machine existed).
   const beans = _beanList();
-  const prefs = _shelfPrefs;
+  const prefs = shelfPrefs();
   const queried = beans.filter(b => matchesShelfQuery(b, prefs.query));
   const { inUse, stock, emptyArchive } = classifyBeanShelf(queried);
   // Filter/sort apply to Stock and Empty & archive; In use keeps its order.
@@ -625,7 +631,7 @@ export function renderBeanList(): void {
   // collapsed section. A tile tap expands the unchanged full card below it.
   // The toolbar rebuilds with the view; the shelves it filters live in their
   // own container so typing can re-render them without losing the caret.
-  el.innerHTML = html`${renderShelfToolbar(_shelfPrefs)}<div id="libShelfSections"></div>`;
+  el.innerHTML = html`${renderShelfToolbar(shelfPrefs())}<div id="libShelfSections"></div>`;
   wireShelfToolbar();
   renderShelfSections();
 }
