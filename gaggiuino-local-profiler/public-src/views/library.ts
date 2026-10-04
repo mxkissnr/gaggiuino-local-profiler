@@ -26,15 +26,13 @@ import { renderPuckScreenList } from './library/puck-screens.js';
 import { renderGrinderList } from './library/grinders.js';
 import { classifyBeanBags, renderBagCard, _expandedPastSections } from './library/bags.js';
 import {
-  classifyBeanShelf, renderShelfTile, renderShelfRow, shelfStock,
+  classifyBeanShelf, renderShelfTile, renderShelfRow, shelfStock, beanInitials,
   matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs,
 } from './library/shelf.js';
 import type { ShelfFilter, ShelfPrefs, ShelfSort, ShelfView } from './library/shelf.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
 const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
-const ICON_EYE = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg>` as Html;
-const ICON_EYE_OFF = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z"/></svg>` as Html;
 const ICON_QR = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z"/></svg>` as Html;
 const ICON_PLUS = `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>` as Html;
 
@@ -213,12 +211,32 @@ export function switchLibTab(tab: string): void {
   _el('libSectionProfiles')?.classList.toggle('active', tab === 'profiles');
 }
 
-// Bean ids with an in-flight toggle-active request — disables the eye icon
-// button for that bean so a slow connection can't double-fire the toggle
-// before the first request's re-render lands.
+// Bean ids with an in-flight toggle-active request — disables the archive /
+// restore button for that bean so a slow connection can't double-fire the
+// toggle before the first request's re-render lands.
 const _pendingBeanActiveToggles = new Set<number>();
 
-function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
+interface BeanCardOpts {
+  // The detail sheet already shows the photo, the origin, the name + its
+  // toolbar and the bag actions in its own header, so the embedded card
+  // leaves those out (#1330 part 2).
+  inSheet?: boolean;
+}
+
+// The bag's real calendar age badge — shared by the card's header row and the
+// detail sheet's head so both stay in sync.
+function beanFreshBadge(b: BeanListRow): Html {
+  const { current } = classifyBeanBags(b);
+  const activeBag = current?.bg || null;
+  const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
+  const remaining = b.remainingG ?? null;
+  return (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
+    ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(roastAge))}" title="${esc(t('freshness_title', roastAge))}">${esc(roastAge)}d</span>`
+    : esc('');
+}
+
+function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: BeanCardOpts): Html {
+  const inSheet = opts?.inSheet === true;
   const bags = Array.isArray(b.bags) ? b.bags : [];
   // consumedG/remainingG (bean-level totals) and every bag's own
   // consumedG/remainingG/current are computed server-side (see
@@ -303,10 +321,7 @@ function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   // freezing part of the bag must not make the coffee still in normal use
   // read as fresher than it is. Frozen portions get their own effective
   // age (frozenPortionAgeDays, below) instead of discounting this one.
-  const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
-  const freshBadge: Html = (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
-    ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(roastAge))}" title="${esc(t('freshness_title', roastAge))}">${esc(roastAge)}d</span>`
-    : esc('');
+  const freshBadge: Html = beanFreshBadge(b);
 
   const locale = localeFor(S.currentLang);
   const frozenPortions = (activeBag && Array.isArray(activeBag.frozenPortions) ? activeBag.frozenPortions : []) as FrozenPortion[];
@@ -421,19 +436,19 @@ function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     <button class="lib-btn-sm lib-btn-icon" data-action="create-profile-from-bean" data-id="${esc(b.id)}" title="${tHtml('profile_create_from_bean')}">${SLIDERS_ICON_SVG}</button>
     <button class="lib-btn-sm lib-btn-icon" data-action="start-dialin-from-bean" data-id="${esc(b.id)}" title="${tHtml('dialin_wizard_start_from_bean')}">${TARGET_ICON_SVG}</button>
     <button class="lib-btn-sm lib-btn-icon" data-action="toggle-bean-qr" data-id="${esc(b.id)}" title="${tHtml('bean_qr_label')}">${ICON_QR}</button>
-    <button class="lib-btn-sm lib-btn-icon" data-action="toggle-bean-active" data-id="${esc(b.id)}" title="${tHtml(disabled ? 'lib_btn_enable' : 'lib_btn_disable')}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${disabled ? ICON_EYE_OFF : ICON_EYE}</button>
+    <button class="lib-btn-sm" data-action="toggle-bean-active" data-id="${esc(b.id)}" title="${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
     <button class="lib-btn-sm lib-btn-icon" data-action="edit-bean" data-id="${esc(b.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
     <span class="lib-toolbar-sep"></span>
     <button class="lib-btn-sm del lib-btn-icon" data-action="delete-bean" data-id="${esc(b.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
   </div>`;
-  return html`<div class="lib-item${esc(disabled ? ' lib-item-disabled' : '')}">
-    ${b.image ? html`<img class="lib-bean-thumb${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">` : esc('')}
+  return html`<div class="lib-item${esc(disabled ? ' lib-item-disabled' : '')}${esc(inSheet ? ' lib-item-in-sheet' : '')}">
+    ${!inSheet && b.image ? html`<img class="lib-bean-thumb${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">` : esc('')}
     <div class="lib-item-info">
-      ${originEyebrow}
-      <div class="lib-item-header">
-        <div class="lib-item-name"><span class="serif-display lib-bean-name-link" data-action="filter-by-bean" data-id="${esc(b.id)}" title="${tHtml('bean_filter_hint')}">${esc(b.name)}</span>${freshBadge}${b.roastType ? html` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}${b.decaf ? html` <span class="lib-decaf-badge">DECAF</span>` : esc('')}${disabled ? html` <span class="lib-disabled-badge">${tHtml('lib_bean_disabled_badge')}</span>` : esc('')}</div>
+      ${inSheet ? esc('') : originEyebrow}
+      ${inSheet ? esc('') : html`<div class="lib-item-header">
+        <div class="lib-item-name"><span class="serif-display lib-bean-name-link" data-action="filter-by-bean" data-id="${esc(b.id)}" title="${tHtml('bean_filter_hint')}">${esc(b.name)}</span>${freshBadge}${b.roastType ? html` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}${b.decaf ? html` <span class="lib-decaf-badge">DECAF</span>` : esc('')}${disabled ? html` <span class="lib-disabled-badge">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}</div>
         ${toolbarHtml}
-      </div>
+      </div>`}
       <div class="lib-item-sub">${joinHtml([
         b.region, b.species, b.variety, b.process, b.roaster, b.roastDate, b.notes,
       ].filter(Boolean).map((p, i) => i ? html` · ${esc(p)}` : esc(p)))}</div>
@@ -444,7 +459,7 @@ function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       ${lastGrindHtml}
       ${Array.isArray(b.flavors) && b.flavors.length ? html`<div class="lib-flavor-row">${joinHtml(b.flavors.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>` : esc('')}
       ${invHtml}
-      ${bagActionsHtml}
+      ${inSheet ? esc('') : bagActionsHtml}
       ${frozenHtml}
       ${bagHistoryHtml}
       ${b.source ? html`<div class="lib-item-source">${tHtml('lib_imported_from',
@@ -481,9 +496,6 @@ function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
 }
 
 // ── Bean list ─────────────────────────────────────────────────────────────
-// Beans expanded from a Stock / Empty & archive shelf tile. Module-level like
-// _expandedPastSections so the choice survives renderBeanList()'s full rebuild.
-const _expandedShelfBeans = new Set<number>();
 // Open state of the collapsed "Empty & archive" <details>; the element is
 // rebuilt on every render, so its meaning has to live outside the DOM.
 let _shelfArchiveOpen = false;
@@ -596,30 +608,25 @@ function renderShelfSections(): void {
   const shelfRows = [...combined.filter(isOpened), ...combined.filter(b => !isOpened(b))];
   const archiveRows = sortShelf(emptyArchive.filter(b => matchesShelfFilter(b, prefs.filter)), prefs.sort);
 
-  const expandedCards = (rows: ShelfBean[]): Html =>
-    joinHtml(rows.filter(b => _expandedShelfBeans.has(b.id)).map(b => renderBeanCard(b, beans)));
-
   // Same items in either view: a photo grid on the shelf, a compact list on
-  // request. The expanded full card renders below either one.
+  // request. Tapping either one opens the bean's detail sheet (#1330).
   const items = (rows: ShelfBean[], muted: boolean): Html => {
     const parts = rows.map(b => isList
-      ? renderShelfRow(b, { muted, expanded: _expandedShelfBeans.has(b.id) })
-      : renderShelfTile(b, { muted, expanded: _expandedShelfBeans.has(b.id) }));
+      ? renderShelfRow(b, { muted })
+      : renderShelfTile(b, { muted }));
     return html`<div class="${esc(isList ? 'lib-shelf-list' : 'lib-shelf')}">${joinHtml(parts)}</div>`;
   };
 
   const shelfHtml: Html = shelfRows.length
     ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_stock', shelfRows.length)}
         ${shelfRows.length >= 10 ? html`<div class="lib-shelf-full-note">${tHtml('lib_shelf_full')}</div>` : esc('')}
-        ${items(shelfRows, false)}
-        ${expandedCards(shelfRows)}</section>`
+        ${items(shelfRows, false)}</section>`
     : esc('');
 
   const archiveHtml: Html = archiveRows.length
     ? html`<details class="lib-shelf-archive"${esc(_shelfArchiveOpen ? ' open' : '')}>
         <summary class="lib-shelf-heading lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="lib-shelf-count">${esc(archiveRows.length)}</span></summary>
-        ${items(archiveRows, true)}
-        ${expandedCards(archiveRows)}</details>`
+        ${items(archiveRows, true)}</details>`
     : esc('');
 
   const filtersActive = prefs.query.trim() !== '' || prefs.filter !== 'all';
@@ -639,13 +646,9 @@ function renderShelfSections(): void {
     : null;
   if (archive) archive.ontoggle = () => { _shelfArchiveOpen = archive.open; };
 
-  loadBeanThumbnails();
-}
-
-export function toggleShelfBean(beanId: number): void {
-  if (_expandedShelfBeans.has(beanId)) _expandedShelfBeans.delete(beanId);
-  else _expandedShelfBeans.add(beanId);
-  renderBeanList();
+  // Every action that re-renders the shelf also refreshes the open sheet.
+  if (_sheetBeanId != null) renderBeanSheet();
+  else loadBeanThumbnails();
 }
 
 export function renderBeanList(): void {
@@ -653,13 +656,14 @@ export function renderBeanList(): void {
   if (!el) return;
   const beans = _beanList();
   if (!beans.length) {
+    if (_sheetBeanId != null) closeBeanSheet();
     el.innerHTML = html`<div class="lib-empty">${tHtml('lib_empty_beans')}</div>`;
     return;
   }
   // #1330: one shelf — the beans you are drinking stand first, the rest of the
   // stock behind them, and spent/archived beans tidy themselves into a
   // collapsed section. The toolbar switches the items between a photo grid and
-  // a compact list; either way a tap expands the unchanged full card below.
+  // a compact list; either way a tap opens the unchanged full card in a sheet.
   // The toolbar rebuilds with the view; the shelf it filters lives in its own
   // container so typing can re-render it without losing the caret.
   el.innerHTML = html`${renderShelfToolbar(shelfPrefs())}<div id="libShelfSections"></div>`;
@@ -685,6 +689,222 @@ function loadBeanThumbnails() {
       }
     });
   });
+}
+
+// ── Bean detail sheet (#1330 part 2) ──────────────────────────────────────
+// A tap on a shelf tile or a list row opens the bean's full card in a sheet
+// over the shelf instead of expanding it inline below the grid. One
+// persistent host on <body>; every action that re-renders the shelf also
+// refreshes the open sheet (renderShelfSections / renderBeanList above).
+let _sheetBeanId: number | null = null;
+let _sheetReturnFocus: HTMLElement | null = null;
+// Open state of the sheet's overflow <details>; the host is rebuilt on every
+// render, so its meaning lives outside the DOM (same pattern as
+// _shelfArchiveOpen).
+let _sheetMoreOpen = false;
+let _sheetKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+// Progressive enhancement: view transitions and the fold keyframe only when
+// the user has not asked for reduced motion.
+function _sheetMotionOk(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function _sheetHost(): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  const existing = document.getElementById('beanSheet');
+  if (existing) return existing;
+  if (typeof document.createElement !== 'function' || !document.body) return null;
+  const host = document.createElement('div');
+  host.id = 'beanSheet';
+  host.className = 'lib-sheet-host';
+  document.body.appendChild(host);
+  return host;
+}
+
+// The sheet head shows the same freshness/roast/decaf/archived badges the
+// card's header row renders.
+function _sheetBadges(b: BeanListRow): Html {
+  const disabled = b.enabled === false;
+  return html`${beanFreshBadge(b)}
+    ${b.roastType ? html`<span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}
+    ${b.decaf ? html`<span class="lib-decaf-badge">DECAF</span>` : esc('')}
+    ${disabled ? html`<span class="lib-disabled-badge">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}`;
+}
+
+function _sheetStockHtml(b: BeanListRow): Html {
+  const { openG, sealedBags, frozenG } = shelfStock(b);
+  const parts: Html[] = [];
+  if (openG != null) parts.push(html`<span class="lib-sheet-stock-g">${esc(openG)} g</span>`);
+  if (sealedBags > 0) parts.push(html`<span class="lib-shelf-sealed">${tHtml('lib_shelf_full_bags', sealedBags)}</span>`);
+  if (frozenG > 0) parts.push(html`<span class="lib-shelf-frozen-line">${SNOWFLAKE_ICON_SVG}${esc(frozenG)} g</span>`);
+  return parts.length ? html`<div class="lib-sheet-stock">${joinHtml(parts)}</div>` : esc('');
+}
+
+// Overflow menu: every meta action the old card toolbar offered, now with
+// text labels. Archive/restore replaces the old eye toggle (#1330).
+function _sheetMenu(b: BeanListRow): Html {
+  const disabled = b.enabled === false;
+  return html`<details class="lib-sheet-more"${esc(_sheetMoreOpen ? ' open' : '')}>
+    <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
+    <div class="lib-sheet-menu-list">
+      <button type="button" class="lib-sheet-menu-btn" data-action="edit-bean" data-id="${esc(b.id)}">${ICON_PENCIL} ${tHtml('lib_btn_edit')}</button>
+      <button type="button" class="lib-sheet-menu-btn" data-action="create-profile-from-bean" data-id="${esc(b.id)}">${SLIDERS_ICON_SVG} ${tHtml('profile_create_from_bean')}</button>
+      <button type="button" class="lib-sheet-menu-btn" data-action="start-dialin-from-bean" data-id="${esc(b.id)}">${TARGET_ICON_SVG} ${tHtml('dialin_wizard_start_from_bean')}</button>
+      <button type="button" class="lib-sheet-menu-btn" data-action="toggle-bean-qr" data-id="${esc(b.id)}">${ICON_QR} ${tHtml('bean_qr_label')}</button>
+      ${Array.isArray(b.flavors) && b.flavors.length ? html`<button type="button" class="lib-sheet-menu-btn" data-action="open-flavor-wheel" data-id="${esc(b.id)}">${FLAVOR_WHEEL_ICON_SVG} ${tHtml('flavor_wheel_btn')}</button>` : esc('')}
+      <span class="lib-sheet-menu-sep"></span>
+      <button type="button" class="lib-sheet-menu-btn" data-action="toggle-bean-active" data-id="${esc(b.id)}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
+      <span class="lib-sheet-menu-sep"></span>
+      <button type="button" class="lib-sheet-menu-btn del" data-action="delete-bean" data-id="${esc(b.id)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
+    </div>
+  </details>`;
+}
+
+function _sheetPrimary(b: BeanListRow): Html {
+  const { current } = classifyBeanBags(b);
+  const activeBag = current?.bg || null;
+  return html`<div class="lib-sheet-actions">
+    <button type="button" class="lib-sheet-primary" data-action="filter-by-bean" data-id="${esc(b.id)}">${tHtml('lib_sheet_shot_log')}</button>
+    <button type="button" class="lib-sheet-primary" data-action="open-new-bag" data-id="${esc(b.id)}">${tHtml('lib_new_bag_title')}</button>
+    ${activeBag ? html`<button type="button" class="lib-sheet-primary" data-action="open-freeze-form" data-id="${esc(b.id)}">${tHtml('bag_freeze_btn')}</button>` : esc('')}
+  </div>`;
+}
+
+function renderBeanSheet(): void {
+  const id = _sheetBeanId;
+  if (id == null) return;
+  const bean = _beanList().find(b => b.id === id);
+  if (!bean) { closeBeanSheet(); return; }
+  const host = _sheetHost();
+  if (!host) return;
+  const beans = _beanList();
+  const origin = originDisplay(bean);
+  host.innerHTML = html`<div class="lib-sheet-backdrop" data-action="close-bean-sheet"></div>
+    <section class="lib-sheet" role="dialog" aria-modal="true" aria-labelledby="beanSheetTitle">
+      <div class="lib-sheet-head">
+        <div class="lib-sheet-photo">${bean.image
+          ? html`<img class="lib-bean-thumb${esc(bean.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(bean.id)}" alt="">`
+          : html`<span class="lib-sheet-initials" aria-hidden="true">${esc(beanInitials(bean.roaster || bean.name || ''))}</span>`}</div>
+        <div class="lib-sheet-titles">
+          ${origin ? html`<div class="lib-item-origin-eyebrow">${esc(origin)}</div>` : esc('')}
+          <h2 id="beanSheetTitle" class="serif-display lib-sheet-name">${esc(bean.name)}</h2>
+          <div class="lib-sheet-badges">${_sheetBadges(bean)}</div>
+          ${_sheetStockHtml(bean)}
+        </div>
+        <div class="lib-sheet-head-actions">
+          ${_sheetMenu(bean)}
+          <button type="button" class="lib-sheet-close" data-action="close-bean-sheet" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
+        </div>
+      </div>
+      ${_sheetPrimary(bean)}
+      <div class="lib-sheet-body">${renderBeanCard(bean, beans, { inSheet: true })}</div>
+    </section>`;
+  host.classList?.add('open');
+  const details = typeof host.querySelector === 'function'
+    ? host.querySelector<HTMLDetailsElement>('.lib-sheet-more')
+    : null;
+  if (details) details.ontoggle = () => { _sheetMoreOpen = details.open; };
+  loadBeanThumbnails();
+}
+
+function _focusSheetClose(): void {
+  const host = typeof document !== 'undefined' ? document.getElementById('beanSheet') : null;
+  const btn = host && typeof host.querySelector === 'function'
+    ? host.querySelector<HTMLElement>('.lib-sheet-close')
+    : null;
+  btn?.focus?.();
+}
+
+function _foldSheetPhoto(): void {
+  const host = typeof document !== 'undefined' ? document.getElementById('beanSheet') : null;
+  const photo = host && typeof host.querySelector === 'function'
+    ? host.querySelector<HTMLElement>('.lib-sheet-photo')
+    : null;
+  photo?.classList?.add('fold');
+  setTimeout(() => photo?.classList?.remove('fold'), 350);
+}
+
+function _sheetFocusables(): HTMLElement[] {
+  const host = typeof document !== 'undefined' ? document.getElementById('beanSheet') : null;
+  if (!host || typeof host.querySelectorAll !== 'function') return [];
+  return Array.from(host.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+  ));
+}
+
+function _onSheetKeydown(e: KeyboardEvent): void {
+  if (_sheetBeanId == null) return;
+  if (e.key === 'Escape') {
+    // A lightbox or the flavor wheel can sit above the sheet — Escape belongs
+    // to whichever is on top, and never drops typed input.
+    const lightbox = typeof document.querySelector === 'function' ? document.querySelector('.lightbox-overlay') : null;
+    const fw = document.getElementById('flavorWheelModal') as HTMLElement | null;
+    const fwOpen = !!fw && fw.style?.display === 'flex';
+    if (lightbox || fwOpen) return;
+    const tag = document.activeElement?.tagName?.toLowerCase() || '';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    e.preventDefault();
+    closeBeanSheet();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const items = _sheetFocusables();
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (!first || !last) return;
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+function _wireSheetKeys(): void {
+  if (_sheetKeyHandler || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  _sheetKeyHandler = _onSheetKeydown;
+  document.addEventListener('keydown', _sheetKeyHandler);
+}
+
+function _unwireSheetKeys(): void {
+  const handler = _sheetKeyHandler;
+  _sheetKeyHandler = null;
+  if (!handler || typeof document === 'undefined' || typeof document.removeEventListener !== 'function') return;
+  document.removeEventListener('keydown', handler);
+}
+
+export function openBeanSheet(id: number): void {
+  const bean = _beanList().find(b => b.id === id);
+  if (!bean) return;
+  _sheetReturnFocus = (document.activeElement as HTMLElement | null) ?? null;
+  _sheetBeanId = id;
+  _sheetMoreOpen = false;
+  const paint = (): void => {
+    renderBeanSheet();
+    document.body?.classList?.add('lib-sheet-open');
+    _wireSheetKeys();
+    _focusSheetClose();
+  };
+  const startViewTransition = (document as Document & { startViewTransition?: (cb: () => void) => void }).startViewTransition;
+  if (typeof startViewTransition === 'function' && _sheetMotionOk()) startViewTransition.call(document, paint);
+  else paint();
+}
+
+export function closeBeanSheet(): void {
+  const host = typeof document !== 'undefined' ? document.getElementById('beanSheet') : null;
+  if (host) {
+    host.innerHTML = '';
+    host.classList?.remove('open');
+  }
+  _sheetBeanId = null;
+  _sheetMoreOpen = false;
+  _unwireSheetKeys();
+  if (typeof document !== 'undefined') document.body?.classList?.remove('lib-sheet-open');
+  const back = _sheetReturnFocus;
+  _sheetReturnFocus = null;
+  if (back && typeof back.focus === 'function'
+    && typeof document !== 'undefined' && typeof document.contains === 'function' && document.contains(back)) {
+    back.focus();
+  }
 }
 
 export function openNewBagForm(id: number): void {
@@ -1171,6 +1391,7 @@ export async function deleteBean(id: number): Promise<void> {
 // presence in /api/orders/active-beans changes.
 export async function toggleBeanActive(id: number): Promise<void> {
   if (_pendingBeanActiveToggles.has(id)) return;
+  const fromSheet = _sheetBeanId === id;
   _pendingBeanActiveToggles.add(id);
   renderBeanList();
   try {
@@ -1178,10 +1399,18 @@ export async function toggleBeanActive(id: number): Promise<void> {
     if (!saved) return;
     const idx = _beanList().findIndex(b => b.id === id);
     if (idx !== -1) _beanList()[idx] = saved;
+    window.showToast?.(t(saved.enabled === false ? 'lib_archived_toast' : 'lib_restored_toast'));
+    // Touch of love: on the shelf the bag folds away before the re-render
+    // moves it into the archive section.
+    if (fromSheet && saved.enabled === false && _sheetMotionOk()) {
+      _foldSheetPhoto();
+      setTimeout(renderBeanList, 350);
+      return;
+    }
   } finally {
     _pendingBeanActiveToggles.delete(id);
-    renderBeanList();
   }
+  renderBeanList();
 }
 
 // Photo chosen while *creating* a bean: the crop result can't be uploaded yet
