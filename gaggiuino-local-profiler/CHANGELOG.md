@@ -4,6 +4,7 @@
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **The bean photo stays centred in the large flavour wheel when the breadcrumb appears or the window changes size.** (#1381)
 - **A remembered machine that no longer exists no longer hides the shot history.** (#1323)
 - **Saving a profile to a GaggiMate that silently stops answering now falls back to saving it locally after a few seconds instead of hanging.** (#1319)
 - **The bean sheet and flavour wheel fit the window on desktop: the header stays visible, the large wheel no longer overflows, the form uses the extra width, and the small wheel marks the bean's notes.** (#1372)
