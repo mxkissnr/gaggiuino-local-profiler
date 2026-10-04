@@ -97,6 +97,22 @@ export function saveImportSettings(payload: unknown): Promise<Response> {
   return apiFetch('api/import/settings', _json(payload));
 }
 
+// ── Shared UI preferences (#1375) ────────────────────────────────────────
+
+/** GET /api/ui-prefs — the per-install UI choices (a flat key/value object). */
+export function getUiPrefs(): Promise<Response> {
+  return apiFetch('api/ui-prefs');
+}
+
+/** PUT /api/ui-prefs — partial update; a `null` value deletes that key. */
+export function saveUiPrefs(payload: Record<string, unknown>): Promise<Response> {
+  return apiFetch('api/ui-prefs', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Demo mode (#274) ─────────────────────────────────────────────────────
 
 /** POST /api/demo/seed — seed the demo dataset. */

@@ -8,6 +8,7 @@ import { tHtml } from '../../i18n.js';
 import { SNOWFLAKE_ICON_SVG } from '../../icons.js';
 import { countryName } from '../../constants.js';
 import { S } from '../../state/index.js';
+import { getUiPref, setUiPref } from '../../ui-prefs.js';
 import type { BagEntry, BeanRow } from './bags.js';
 import { classifyBeanBags } from './bags.js';
 
@@ -205,6 +206,10 @@ export interface ShelfPrefs {
 export const SHELF_PREFS_KEY = 'glp.libShelf';
 export const DEFAULT_SHELF_PREFS: ShelfPrefs = { query: '', filter: 'all', sort: 'fresh', view: 'shelf' };
 
+// #1375: the shared ui_prefs store is keyed 'lib.shelf'; SHELF_PREFS_KEY above
+// stays only as the pre-sync localStorage key read once during migration.
+const SHELF_PREF_STORE_KEY = 'lib.shelf';
+
 // Origin codes plus their localized display names (e.g. BR -> "Brazil"), so a
 // query matches either what the user typed in the picker or what they see.
 function originTerms(b: ShelfBean): string[] {
@@ -274,24 +279,35 @@ export function sortShelf(beans: readonly ShelfBean[], sort: ShelfSort): ShelfBe
 // Only filter/sort/view survive a reload — a stale query would silently hide
 // beans.
 export function loadShelfPrefs(): ShelfPrefs {
+  const parsed = _storedShelfPrefs();
+  if (parsed == null) return { ...DEFAULT_SHELF_PREFS };
+  const filter: ShelfFilter = parsed.filter === 'espresso' || parsed.filter === 'filter' || parsed.filter === 'decaf'
+    ? parsed.filter : 'all';
+  const sort: ShelfSort = parsed.sort === 'name' || parsed.sort === 'remaining' ? parsed.sort : 'fresh';
+  const view: ShelfView = parsed.view === 'list' ? 'list' : 'shelf';
+  return { query: '', filter, sort, view };
+}
+
+// Reads the shared store, falling back once to the old per-device key and
+// migrating its value up (#1375). The old key is removed either way.
+function _storedShelfPrefs(): Partial<ShelfPrefs> | null {
+  const shared = getUiPref<unknown>(SHELF_PREF_STORE_KEY);
+  if (shared && typeof shared === 'object') return shared as Partial<ShelfPrefs>;
   try {
     const raw = localStorage.getItem(SHELF_PREFS_KEY);
-    if (!raw) return { ...DEFAULT_SHELF_PREFS };
-    const parsed = JSON.parse(raw) as Partial<ShelfPrefs>;
-    const filter: ShelfFilter = parsed.filter === 'espresso' || parsed.filter === 'filter' || parsed.filter === 'decaf'
-      ? parsed.filter : 'all';
-    const sort: ShelfSort = parsed.sort === 'name' || parsed.sort === 'remaining' ? parsed.sort : 'fresh';
-    const view: ShelfView = parsed.view === 'list' ? 'list' : 'shelf';
-    return { query: '', filter, sort, view };
+    if (raw) {
+      const legacy = JSON.parse(raw) as Partial<ShelfPrefs>;
+      setUiPref(SHELF_PREF_STORE_KEY, legacy);
+      localStorage.removeItem(SHELF_PREFS_KEY);
+      return legacy;
+    }
+    localStorage.removeItem(SHELF_PREFS_KEY);
   } catch {
-    return { ...DEFAULT_SHELF_PREFS };
+    // An unreadable legacy value just falls back to the defaults.
   }
+  return null;
 }
 
 export function saveShelfPrefs(prefs: ShelfPrefs): void {
-  try {
-    localStorage.setItem(SHELF_PREFS_KEY, JSON.stringify({ filter: prefs.filter, sort: prefs.sort, view: prefs.view }));
-  } catch {
-    // Private-mode/quota failures just mean the prefs don't persist.
-  }
+  setUiPref(SHELF_PREF_STORE_KEY, { filter: prefs.filter, sort: prefs.sort, view: prefs.view });
 }
