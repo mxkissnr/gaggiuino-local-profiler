@@ -42,6 +42,10 @@ export default defineConfig(({ mode }) => {
   return {
     root: 'public-src',
     base: './',
+    // The cut-out worker (#1347) dynamically imports onnxruntime-web, so it has
+    // to be an ES module worker — the default iife worker format cannot split
+    // that import into its own chunk.
+    worker: { format: 'es' },
     plugins: demo ? [demoServiceWorker()] : [],
     build: {
       outDir: demo ? '../demo-dist' : '../public',
