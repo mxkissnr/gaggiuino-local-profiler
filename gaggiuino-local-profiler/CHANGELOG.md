@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Changed
+- **Groundwork for cutting bean photos out as stickers right on your device.** Part of #1336
 - **Find beans faster: search, filter and sort the shelf, and add a photo right when you create a bean.** Closes #1329
 - **Coffee library as a shelf: beans you are drinking stay on top, your stock stands as bag photos, and empty or archived beans tidy themselves away.** Part of #1329
 - **Calmer interface: flat accent colours, theme-aware badges and activity colours, and a proper milk icon instead of a fallback emoji.** Closes #1328
