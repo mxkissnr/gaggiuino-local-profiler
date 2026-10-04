@@ -530,6 +530,14 @@ export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatF
 // machine states, checked in that priority order if somehow reported
 // alongside one another (mirrors poll.go's effectiveSteaming/
 // effectiveFlushing/effectiveDescaling priority guard).
+//
+// #1383: 'off' is derived from msg.machineReachable alone -- a preheat
+// event carries no reachability of its own. A caller handling a non-live
+// update (a PREHEAT_UPDATE push) must pass the last known live message,
+// not null, or a machine already known to be off re-resolves to
+// 'heating' (heat 0) and shows its accent layer. This stays a pure
+// function on purpose: the #1383 fix lives at those callers
+// (views/live.ts, components/topbar-machine-icon.ts), not in here.
 export function resolveMachineIconState(msg: unknown, preheat: unknown): MachineIconState {
     const m = msg as { machineReachable?: boolean; isLive?: boolean; isSteaming?: boolean; isFlushing?: boolean; isDescaling?: boolean } | null | undefined;
     const p = preheat as { ready?: boolean; remaining?: number; pct?: number } | null | undefined;

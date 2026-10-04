@@ -14,12 +14,17 @@ interface HistoryTile {
   date: number;
   beanName: string;
 }
+interface ShelfBean {
+  beanId: number | null;
+  name: string;
+}
 interface HistoryModule {
   spiralPositions: (n: number, spacing: number) => { x: number; y: number }[];
   historyStats: (shots: readonly unknown[], beans: readonly unknown[]) => { shots: number; bags: number; kg: number };
   historyTiles: (shots: readonly unknown[], cap?: number) => HistoryTile[];
+  shelfBeans: (shots: readonly unknown[], beans: readonly unknown[]) => ShelfBean[];
 }
-const { spiralPositions, historyStats, historyTiles } =
+const { spiralPositions, historyStats, historyTiles, shelfBeans } =
   (await import('../public-src/components/coffee-history.js')) as unknown as HistoryModule;
 
 function shot(over: Record<string, unknown>): Record<string, unknown> {
@@ -96,5 +101,48 @@ describe('historyTiles (#1351)', () => {
     expect(tiles[0]?.hasPhoto).toBe(false);
     expect(tiles[0]?.beanName).toBe('');
     expect(tiles[0]?.score).toBeNull();
+  });
+});
+
+describe('shelfBeans (#1351)', () => {
+  it('returns each used bean once, ordered by its first shot', () => {
+    const beans = [
+      { id: 1, name: 'Old' },
+      { id: 2, name: 'New' },
+    ];
+    const shots = [
+      shot({ id: 1, timestamp: 300, annotation: { beanId: 2 } }),
+      shot({ id: 2, timestamp: 100, annotation: { beanId: 1 } }),
+      shot({ id: 3, timestamp: 200, annotation: { beanId: 1 } }),
+    ];
+    expect(shelfBeans(shots, beans)).toEqual([
+      { beanId: 1, name: 'Old' },
+      { beanId: 2, name: 'New' },
+    ]);
+  });
+
+  it('appends a bean whose only bag is emptied and was never shot', () => {
+    const beans = [
+      { id: 1, name: 'Used' },
+      { id: 2, name: 'Shelf only', bags: [{ remainingG: 0 }] },
+      { id: 3, name: 'Still full', bags: [{ remainingG: 250 }] },
+    ];
+    const shots = [shot({ id: 1, timestamp: 10, annotation: { beanId: 1 } })];
+    expect(shelfBeans(shots, beans)).toEqual([
+      { beanId: 1, name: 'Used' },
+      { beanId: 2, name: 'Shelf only' },
+    ]);
+  });
+
+  it('ignores shots with a missing or unknown beanId', () => {
+    const beans = [{ id: 1, name: 'Only' }];
+    const shots = [
+      shot({ id: 1, timestamp: 1, annotation: {} }),
+      shot({ id: 2, timestamp: 2, annotation: { beanId: null } }),
+      shot({ id: 3, timestamp: 3, annotation: { beanId: 99 } }),
+      shot({ id: 4, timestamp: 4 }),
+      shot({ id: 5, timestamp: 5, annotation: { beanId: 1 } }),
+    ];
+    expect(shelfBeans(shots, beans)).toEqual([{ beanId: 1, name: 'Only' }]);
   });
 });

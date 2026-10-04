@@ -81,7 +81,10 @@ export function handleTopbarLiveSnapshotEvent(msg: unknown): void {
 export function handleTopbarPreheatUpdateEvent(preheat: unknown): void {
   _lastPreheat = preheat;
   if (!iconShowsDefaultMachine()) return;
-  _applyState(null);
+  // #1383: resolve against the last live snapshot, not null — a preheat event
+  // carries no reachability of its own, so dropping it would re-light an icon
+  // whose machine we already know is off.
+  _applyState(_lastSnapshot);
 }
 
 function _applyState(msg: unknown): void {
