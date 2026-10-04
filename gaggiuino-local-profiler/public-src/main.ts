@@ -1132,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (shouldOpenSetupWizard(S.machines)) openSetupWizard();
   });
 
-  setInterval(updateStatus, 30000);
+  window.setInterval(updateStatus, 30000);
   updateMobileShotSidebarVisibility();
   let _lastViewportWidth = window.innerWidth;
   window.addEventListener('resize', () => {

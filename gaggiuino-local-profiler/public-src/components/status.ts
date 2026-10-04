@@ -314,7 +314,7 @@ export async function toggleMachinePower(): Promise<void> {
     if (r.ok) {
       const result = await r.json() as SwitchPayload;
       updatePowerButton({ configured: true, state: result.state });
-      setTimeout(async () => {
+      window.setTimeout(async () => {
         const sr = await getSwitch().catch(() => null);
         if (sr?.ok) updatePowerButton(await sr.json() as SwitchPayload);
       }, 2000);

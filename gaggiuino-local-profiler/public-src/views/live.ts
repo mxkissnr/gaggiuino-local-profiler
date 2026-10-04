@@ -440,8 +440,8 @@ export function connectLiveStream(): void {
   // every tick, same convention as status.js's own 30s updateStatus()
   // interval, which likewise always fires rather than deciding once at
   // startup.
-  timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) void fetchLiveData(); }, 1000));
-  timerRegistry.set('preheatPollInterval', setInterval(() => { if (!S.sseActive) void fetchPreheatData(); }, 10000));
+  timerRegistry.set('livePollInterval',    window.setInterval(() => { if (!S.sseActive) void fetchLiveData(); }, 1000));
+  timerRegistry.set('preheatPollInterval', window.setInterval(() => { if (!S.sseActive) void fetchPreheatData(); }, 10000));
 }
 
 export async function fetchPreheatData(): Promise<void> {
@@ -571,7 +571,7 @@ export async function fetchLiveData(): Promise<void> {
       S.liveLastSeq = msg.seq!;
       const machineId = S.activeMachineId;
       const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
-      setTimeout(async () => {
+      window.setTimeout(async () => {
         if (window.loadData) await window.loadData();
         const newest = S.shots
           .filter(s => s.machineId === machineId && s.id > priorNewestId)
@@ -640,7 +640,7 @@ export function setLiveBadge(state: string, detail = ''): void {
 function startElapsedTimer(startWall: number, elId: string): void {
   S.liveBrewStartWall = startWall;
   if (!timerRegistry.get('liveTimerTick')) {
-    timerRegistry.set('liveTimerTick', setInterval(() => {
+    timerRegistry.set('liveTimerTick', window.setInterval(() => {
       if (S.liveBrewStartWall) {
         const s = (Date.now() - S.liveBrewStartWall) / 1000;
         document.getElementById(elId)!.textContent = formatTimeLabel(s);
