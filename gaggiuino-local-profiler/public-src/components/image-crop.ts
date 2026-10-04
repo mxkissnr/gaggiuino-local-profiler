@@ -1,12 +1,20 @@
 // Reusable zoom + pan crop editor for photo uploads (#286).
 // Opens a modal over the picked file, lets the user zoom (slider/wheel/pinch)
 // and pan (drag/touch) an image against a fixed crop guide, then exports a
-// square JPEG blob that feeds into the existing upload flow unchanged.
+// JPEG blob that feeds into the existing upload flow unchanged.
 import { t } from '../i18n.js';
 import { esc, html } from '../utils.js';
 
-const PREVIEW_SIZE = 320; // on-screen canvas, CSS px == canvas px (no DPR scaling needed for a preview)
-const EXPORT_SIZE   = 480; // exported square buffer, reasonable thumbnail size
+// 'square' is the historical 1:1 crop (grinders, baskets, puck screens, shots);
+// 'portrait' is the 3:4 bag shape bean photos are shown at on the shelf (#1346).
+type CropAspect = 'square' | 'portrait';
+
+// Per-aspect canvas boxes: CSS px == canvas px for the preview (no DPR scaling
+// needed), the export is a larger buffer of the same shape.
+const BOX = {
+  square:   { previewW: 320, previewH: 320, exportW: 480, exportH: 480 },
+  portrait: { previewW: 240, previewH: 320, exportW: 600, exportH: 800 },
+} satisfies Record<CropAspect, { previewW: number; previewH: number; exportW: number; exportH: number }>;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
@@ -21,56 +29,64 @@ function dist(a: Point, b: Point): number {
 
 // Computes the zoom/pan → source-rect crop math shared between the live
 // preview draw and the final export. Kept pure so it's unit-testable.
-export function coverBaseScale(naturalW: number, naturalH: number, boxSize: number): number {
-  return Math.max(boxSize / naturalW, boxSize / naturalH);
+export function coverBaseScale(naturalW: number, naturalH: number, boxW: number, boxH: number): number {
+  return Math.max(boxW / naturalW, boxH / naturalH);
 }
 
-export function clampOffset(offsetX: number, offsetY: number, naturalW: number, naturalH: number, scale: number, boxSize: number): Point {
+export function clampOffset(offsetX: number, offsetY: number, naturalW: number, naturalH: number, scale: number, boxW: number, boxH: number): Point {
   const scaledW = naturalW * scale;
   const scaledH = naturalH * scale;
-  const minX = boxSize - scaledW;
-  const minY = boxSize - scaledH;
+  const minX = boxW - scaledW;
+  const minY = boxH - scaledH;
   return {
     x: Math.min(0, Math.max(minX, offsetX)),
     y: Math.min(0, Math.max(minY, offsetY)),
   };
 }
 
-// Opens the crop editor for `file`. `shape` ('circle' | 'square') only
-// affects the preview guide — the exported buffer is always a square JPEG,
-// consistent with how object-fit:cover + border-radius renders thumbnails
-// elsewhere in the app.
+// Opens the crop editor for `file`. `shape` ('circle' | 'square') picks the
+// preview guide, `aspect` ('square' | 'portrait') picks the 1:1 vs 3:4 export
+// shape — the exported JPEG matches the box, consistent with how
+// object-fit:cover + border-radius renders thumbnails elsewhere in the app.
 // Resolves with a Blob on Apply, or null on Cancel / load failure.
-export function openImageCropEditor(file: Blob, { shape = 'circle' }: { shape?: 'circle' | 'square' } = {}): Promise<Blob | null> {
+export function openImageCropEditor(
+  file: Blob,
+  { shape = 'circle', aspect = 'square' }: { shape?: 'circle' | 'square'; aspect?: CropAspect } = {},
+): Promise<Blob | null> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onerror = () => resolve(null);
     reader.onload = () => {
       const img = new Image();
       img.onerror = () => resolve(null);
-      img.onload = () => _buildEditor(img, shape, resolve);
+      img.onload = () => _buildEditor(img, shape, aspect, resolve);
       img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   });
 }
 
-function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve: (value: Blob | null) => void): void {
+function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect: CropAspect, resolve: (value: Blob | null) => void): void {
+  const box = BOX[aspect];
+  const previewW = box.previewW;
+  const previewH = box.previewH;
   const naturalW = img.naturalWidth;
   const naturalH = img.naturalHeight;
-  const baseScale = coverBaseScale(naturalW, naturalH, PREVIEW_SIZE);
+  const baseScale = coverBaseScale(naturalW, naturalH, previewW, previewH);
 
   let zoom = MIN_ZOOM;
-  let offsetX = (PREVIEW_SIZE - naturalW * baseScale) / 2;
-  let offsetY = (PREVIEW_SIZE - naturalH * baseScale) / 2;
+  let offsetX = (previewW - naturalW * baseScale) / 2;
+  let offsetY = (previewH - naturalH * baseScale) / 2;
 
+  const guideClass = shape === 'square' ? 'square' : 'circle';
+  const aspectClass = aspect === 'portrait' ? ' crop-editor-canvas-portrait' : '';
   const overlay = document.createElement('div');
   overlay.className = 'crop-editor-overlay';
   overlay.innerHTML = html`
     <div class="crop-editor-modal">
       <h3 class="crop-editor-title">${esc(t('crop_editor_title'))}</h3>
-      <canvas class="crop-editor-canvas crop-editor-canvas-${esc(shape === 'square' ? 'square' : 'circle')}"
-              width="${esc(PREVIEW_SIZE)}" height="${esc(PREVIEW_SIZE)}"></canvas>
+      <canvas class="crop-editor-canvas crop-editor-canvas-${esc(guideClass)}${aspectClass}"
+              width="${esc(previewW)}" height="${esc(previewH)}"></canvas>
       <div class="crop-editor-zoom-row">
         <span class="crop-editor-zoom-icon">−</span>
         <input type="range" class="crop-editor-zoom-slider" min="${esc(MIN_ZOOM)}" max="${esc(MAX_ZOOM)}" step="0.01" value="${esc(MIN_ZOOM)}" aria-label="${esc(t('crop_editor_zoom'))}">
@@ -88,14 +104,14 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
   const slider = overlay.querySelector('.crop-editor-zoom-slider') as HTMLInputElement;
 
   function draw(): void {
-    ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
+    ctx.clearRect(0, 0, previewW, previewH);
     const scale = baseScale * zoom;
     ctx.drawImage(img, offsetX, offsetY, naturalW * scale, naturalH * scale);
   }
 
   function applyClamp(): void {
     const scale = baseScale * zoom;
-    const c = clampOffset(offsetX, offsetY, naturalW, naturalH, scale, PREVIEW_SIZE);
+    const c = clampOffset(offsetX, offsetY, naturalW, naturalH, scale, previewW, previewH);
     offsetX = c.x; offsetY = c.y;
   }
 
@@ -117,13 +133,13 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
 
   // ── Zoom: slider, wheel ──────────────────────────────────────────────
   slider.addEventListener('input', () => {
-    setZoom(parseFloat(slider.value), PREVIEW_SIZE / 2, PREVIEW_SIZE / 2);
+    setZoom(parseFloat(slider.value), previewW / 2, previewH / 2);
   });
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    const fx = (e.clientX - rect.left) * (PREVIEW_SIZE / rect.width);
-    const fy = (e.clientY - rect.top) * (PREVIEW_SIZE / rect.height);
+    const fx = (e.clientX - rect.left) * (previewW / rect.width);
+    const fy = (e.clientY - rect.top) * (previewH / rect.height);
     setZoom(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08), fx, fy);
   }, { passive: false });
 
@@ -136,8 +152,8 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
   function toCanvasPoint(clientX: number, clientY: number): Point {
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (clientX - rect.left) * (PREVIEW_SIZE / rect.width),
-      y: (clientY - rect.top) * (PREVIEW_SIZE / rect.height),
+      x: (clientX - rect.left) * (previewW / rect.width),
+      y: (clientY - rect.top) * (previewH / rect.height),
     };
   }
 
@@ -160,8 +176,8 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1 && panLast) {
       const rect = canvas.getBoundingClientRect();
-      const scaleX = PREVIEW_SIZE / rect.width;
-      const scaleY = PREVIEW_SIZE / rect.height;
+      const scaleX = previewW / rect.width;
+      const scaleY = previewH / rect.height;
       const dx = (e.clientX - panLast.x) * scaleX;
       const dy = (e.clientY - panLast.y) * scaleY;
       panLast = { x: e.clientX, y: e.clientY };
@@ -202,16 +218,17 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', resolve
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
 
   (overlay.querySelector('.crop-editor-apply') as HTMLElement).addEventListener('click', () => {
-    const exportScaleFactor = EXPORT_SIZE / PREVIEW_SIZE;
-    const scale = baseScale * zoom * exportScaleFactor;
-    const exportOffsetX = offsetX * exportScaleFactor;
-    const exportOffsetY = offsetY * exportScaleFactor;
+    const exportScaleX = box.exportW / previewW;
+    const exportScaleY = box.exportH / previewH;
+    const scale = baseScale * zoom;
+    const exportOffsetX = offsetX * exportScaleX;
+    const exportOffsetY = offsetY * exportScaleY;
 
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = EXPORT_SIZE;
-    outCanvas.height = EXPORT_SIZE;
-      const outCtx = outCanvas.getContext('2d') as CanvasRenderingContext2D;
-    outCtx.drawImage(img, exportOffsetX, exportOffsetY, naturalW * scale, naturalH * scale);
+    outCanvas.width = box.exportW;
+    outCanvas.height = box.exportH;
+    const outCtx = outCanvas.getContext('2d') as CanvasRenderingContext2D;
+    outCtx.drawImage(img, exportOffsetX, exportOffsetY, naturalW * scale * exportScaleX, naturalH * scale * exportScaleY);
     outCanvas.toBlob((blob) => close(blob), 'image/jpeg', 0.9);
   });
 }

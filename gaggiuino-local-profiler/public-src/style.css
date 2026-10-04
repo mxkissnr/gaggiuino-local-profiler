@@ -2630,10 +2630,20 @@
         .crop-editor-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:1100; padding: var(--sp-4); }
         .crop-editor-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:360px; width:100%; display:flex; flex-direction:column; align-items:center; gap: var(--sp-4); }
         .crop-editor-title { font-size: var(--fs-2); font-weight:600; color:var(--gray-200); margin: 0; }
-        .crop-editor-canvas { touch-action:none; cursor:grab; background:var(--gray-950); max-width:100%; }
+        .crop-editor-canvas { touch-action:none; cursor:grab; background:var(--gray-950); max-width:100%; height:auto; }
         .crop-editor-canvas:active { cursor:grabbing; }
         .crop-editor-canvas-circle { border-radius:50%; }
         .crop-editor-canvas-square { border-radius:var(--radius); }
+        /* Bean-photo preview (#1346): 3:4 with a crimped top edge like a coffee
+           bag. Preview-guide only — the exported JPEG keeps the flat frame. */
+        .crop-editor-canvas-portrait {
+            border-radius: var(--radius-sm) var(--radius-sm) var(--radius) var(--radius);
+            clip-path: polygon(
+                0 4%, 6% 0, 12% 4%, 18% 0, 24% 4%, 30% 0, 36% 4%, 42% 0,
+                48% 4%, 54% 0, 60% 4%, 66% 0, 72% 4%, 78% 0, 84% 4%, 90% 0,
+                96% 4%, 100% 0, 100% 100%, 0 100%
+            );
+        }
         .crop-editor-zoom-row { display:flex; align-items:center; gap: var(--sp-2); width:100%; }
         .crop-editor-zoom-icon { color:var(--gray-500); font-size: var(--fs-2); user-select:none; }
         .crop-editor-zoom-slider { flex:1; accent-color:var(--accent); }
