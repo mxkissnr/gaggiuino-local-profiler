@@ -1,4 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// The open path only needs the chart to initialize; stub echarts so the test
+// neither downloads the real 370 kB chunk nor depends on a real canvas.
+vi.mock('echarts', () => ({
+  init: () => ({ dispose: () => {}, setOption: () => {}, dispatchAction: () => {}, off: () => {}, on: () => {} }),
+}));
 
 // flavor-wheel.js's import chain reads localStorage/navigator at module load —
 // stub the minimum browser globals (same pattern as the other frontend tests).
