@@ -135,13 +135,13 @@ function canvasResizeRgba(
  */
 export const resizeHook: { rgba: RgbaResize } = { rgba: canvasResizeRgba };
 
-function tensorData(outputs: Record<string, Tensor>, name: string): Float32Array {
+function tensorData(outputs: Readonly<Record<string, Tensor>>, name: string): Float32Array {
   const tensor = outputs[name];
   if (!tensor) throw new Error(`segment: model output ${name} missing`);
   return tensor.data as Float32Array;
 }
 
-function disposeAll(outputs: Record<string, Tensor>): void {
+function disposeAll(outputs: Readonly<Record<string, Tensor>>): void {
   for (const tensor of Object.values(outputs)) tensor.dispose?.();
 }
 
