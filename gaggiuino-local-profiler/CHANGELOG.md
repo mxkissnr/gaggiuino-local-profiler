@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Changed
+- **Coffee library as a shelf: beans you are drinking stay on top, your stock stands as bag photos, and empty or archived beans tidy themselves away.** Part of #1329
 - **Calmer interface: flat accent colours, theme-aware badges and activity colours, and a proper milk icon instead of a fallback emoji.** Closes #1328
 
 ## [3.3.0] – 2026-10-02
