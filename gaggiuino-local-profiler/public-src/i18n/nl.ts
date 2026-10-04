@@ -180,6 +180,7 @@ const nl: Partial<Translations> = {
     lib_btn_edit:'Bewerken', lib_btn_delete:'Verwijderen',
     lib_btn_archive:'Archiveren', lib_btn_restore:'Herstellen',
     lib_sheet_close:'Sluiten', lib_sheet_more:'Meer acties', lib_sheet_shot_log:'Shotlog',
+    lib_form_sheet_new:'Nieuwe boon', lib_form_sheet_edit:'Boon bewerken', lib_form_discard_q:'Wijzigingen verwerpen?', lib_form_discard:'Verwerpen', lib_form_keep_editing:'Doorgaan met bewerken',
     lib_archived_toast:'Zak opgevouwen en opgeborgen.', lib_restored_toast:'Weer op de plank.',
     lib_confirm_delete_bean:'Boon uit de bibliotheek verwijderen?',
     lib_confirm_delete_grinder:'Molen uit de bibliotheek verwijderen?',
