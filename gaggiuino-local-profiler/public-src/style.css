@@ -1546,6 +1546,12 @@
         .lib-sheet-head { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--sp-3); align-items: start; }
         /* #1374: the grab pill drags the sheet down to close it on phones. */
         .lib-sheet-grab { width: 36px; height: 4px; margin: 0 auto var(--sp-3); border-radius: 999px; background: var(--gray-600); }
+        /* #1374: the drag surfaces must opt out of native touch panning below
+           900px, or the browser scrolls/overscrolls the sheet and fires
+           pointercancel after a few pixels, so the swipe never dismisses. */
+        @media (max-width: 899px) {
+            .lib-sheet-grab, .lib-sheet-head, .lib-form-sheet-head { touch-action: none; }
+        }
         .lib-sheet-photo { width: 72px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
         .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
         .lib-sheet-photo .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; }

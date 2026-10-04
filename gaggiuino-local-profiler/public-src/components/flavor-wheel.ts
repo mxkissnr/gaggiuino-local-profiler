@@ -127,6 +127,11 @@ let _hlNode: string | null = null; // node highlighted from the legend, or null
 // so a late-arriving chunk never calls echarts.init() on a stale container.
 let _echartsPromise: Promise<typeof import('echarts')> | null = null;
 let _renderReqToken = 0;
+// #1374: the exact small wheel the open transition grew from. The close only
+// runs the reverse transition while that same element is still in the sheet,
+// so a sheet re-render (which replaces the node) falls back to a direct close
+// instead of naming a detached element.
+let _wheelGrowFromEl: HTMLElement | null = null;
 
 // #1350: a short, calm entry animation — skipped entirely when the user has
 // asked for reduced motion.
@@ -288,6 +293,7 @@ export function disposeFlavorWheel(): void {
   _rootId = null;
   _breadcrumbEl = null;
   _hlNode = null;
+  _wheelGrowFromEl = null;
 }
 
 // ── Modal wiring ─────────────────────────────────────────────────────────
@@ -393,6 +399,9 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
   const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
   const grow = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!smallWheel && !!canvasWrap);
+  // Remember the exact node the growth snapshots so the close can tell a
+  // re-rendered sheet (new node) from the original.
+  _wheelGrowFromEl = grow ? smallWheel : null;
 
   const showModal = (): void => {
     setWheelTransitionName(smallWheel, false);
@@ -430,7 +439,12 @@ export function closeFlavorWheel(): void {
   const canvasWrap = modal.querySelector<HTMLElement>('.fw-canvas-wrap');
   const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
   const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
-  const shrink = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!smallWheel && !!canvasWrap);
+  // Only run the reverse transition from the very element the open
+  // snapshotted; if the sheet was re-rendered that node is gone, so fall back
+  // to a direct close instead of naming a detached/different element.
+  const fromEl = _wheelGrowFromEl;
+  _wheelGrowFromEl = null;
+  const shrink = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!canvasWrap && smallWheel !== null && smallWheel === fromEl);
 
   const hideModal = (): void => {
     setWheelTransitionName(canvasWrap, false);
@@ -451,6 +465,7 @@ export function closeFlavorWheel(): void {
       disposeFlavorWheel();
     }
   } else {
+    setWheelTransitionName(canvasWrap, false);
     modal.style.display = 'none';
     disposeFlavorWheel();
   }
