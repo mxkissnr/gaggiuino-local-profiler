@@ -1394,6 +1394,10 @@ export async function toggleBeanActive(id: number): Promise<void> {
   const fromSheet = _sheetBeanId === id;
   _pendingBeanActiveToggles.add(id);
   renderBeanList();
+  // The pre-request render drew the button disabled; the finally below must
+  // always repaint, unless the fold animation already owns the next render
+  // (and the failed/aborted request paths re-render too).
+  let folded = false;
   try {
     const saved = await libraryApi.toggleBeanActive(id);
     if (!saved) return;
@@ -1404,13 +1408,13 @@ export async function toggleBeanActive(id: number): Promise<void> {
     // moves it into the archive section.
     if (fromSheet && saved.enabled === false && _sheetMotionOk()) {
       _foldSheetPhoto();
+      folded = true;
       setTimeout(renderBeanList, 350);
-      return;
     }
   } finally {
     _pendingBeanActiveToggles.delete(id);
+    if (!folded) renderBeanList();
   }
-  renderBeanList();
 }
 
 // Photo chosen while *creating* a bean: the crop result can't be uploaded yet

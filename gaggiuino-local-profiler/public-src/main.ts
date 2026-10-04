@@ -958,7 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-edit-frozen-form':  openEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'close-edit-frozen-form': closeEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'save-edit-frozen-form':  void saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
-      case 'filter-by-bean':     filterShotsByBean(numId()); break;
+      case 'filter-by-bean':     closeBeanSheet(); filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
       case 'edit-bean':          closeBeanSheet(); editBean(numId()); break;
