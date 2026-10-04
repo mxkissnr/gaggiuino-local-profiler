@@ -6,7 +6,6 @@
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
 - **The Statistics month calendar only asks for a bean's photo when it has one, so it stops logging a failed image request.** Part of #1331
-- **Bean photos are only requested for beans that have a stored photo, so a bean without one no longer logs a failed image request.** Closes #1391
 - **The machine icon no longer shows a strip of colour while the machine is switched off.** Closes #1383
 - **A remembered machine that no longer exists no longer hides the shot history.** (#1323)
 - **Saving a profile to a GaggiMate that silently stops answering now falls back to saving it locally after a few seconds instead of hanging.** (#1319)
