@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { plainBackgroundBox } from '../public-src/components/sticker/background.js';
 
 /**
  * State shared with the onnxruntime-web mock. vi.hoisted runs before the
@@ -22,6 +23,8 @@ const shared = vi.hoisted(() => {
     released: [] as string[],
     log: [] as string[],
     disposed: 0,
+    // Number of SAM-decoder runs (the branch with neither IS-Net nor encoder input).
+    decoderRuns: 0,
   };
 });
 
@@ -61,6 +64,7 @@ vi.mock('onnxruntime-web/wasm', () => {
         });
       }
       const plane = 256 * 256;
+      shared.decoderRuns += 1;
       const pred = new Float32Array(3 * plane);
       pred.fill(1, plane, 2 * plane);
       return Promise.resolve({
@@ -120,6 +124,7 @@ beforeEach(() => {
   shared.released.length = 0;
   shared.log.length = 0;
   shared.disposed = 0;
+  shared.decoderRuns = 0;
   shared.env.wasm.wasmPaths = undefined;
   shared.env.wasm.numThreads = undefined;
   shared.env.wasm.proxy = undefined;
@@ -213,5 +218,98 @@ describe('resetCutout', () => {
     await flush();
 
     expect(shared.released).toContain(DECODER);
+  });
+});
+
+/** A white 100x100 frame with a black 40x40 product in the middle. */
+function plainProduct(): { rgba: Uint8ClampedArray; w: number; h: number } {
+  const w = 100;
+  const h = 100;
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    rgba[i * 4] = 255;
+    rgba[i * 4 + 1] = 255;
+    rgba[i * 4 + 2] = 255;
+    rgba[i * 4 + 3] = 255;
+  }
+  for (let y = 30; y < 70; y++) {
+    for (let x = 30; x < 70; x++) {
+      const p = (y * w + x) * 4;
+      rgba[p] = 0;
+      rgba[p + 1] = 0;
+      rgba[p + 2] = 0;
+    }
+  }
+  return { rgba, w, h };
+}
+
+function recordResizes(core: Core, calls: number[][]): void {
+  core.resizeHook.rgba = (_rgba, sw, sh, dw, dh) => {
+    calls.push([sw, sh, dw, dh]);
+    return new Uint8ClampedArray(dw * dh * 4);
+  };
+}
+
+describe('autoCutout on a plain studio background', () => {
+  it('runs the models on the product box and zeroes the mask outside it', async () => {
+    const core = await freshCore();
+    const resizes: number[][] = [];
+    recordResizes(core, resizes);
+    const { rgba, w, h } = plainProduct();
+
+    const mask = await core.autoCutout(rgba, w, h, MODELS_BASE);
+
+    const box = plainBackgroundBox(rgba, w, h);
+    expect(box).not.toBeNull();
+    expect(mask.length).toBe(w * h);
+    // IS-Net's resize ran on the cropped box, not the full frame.
+    expect(resizes[0]![0]).toBe(box!.width);
+    expect(resizes[0]![1]).toBe(box!.height);
+    expect(box!.width).toBeLessThan(w);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (x < box!.x || y < box!.y || x >= box!.x + box!.width || y >= box!.y + box!.height) {
+          expect(mask[y * w + x]).toBe(0);
+        }
+      }
+    }
+  });
+
+  it('returns an all-zero mask for a tap outside the box without running the decoder', async () => {
+    const core = await freshCore();
+    const { rgba, w, h } = plainProduct();
+    await core.autoCutout(rgba, w, h, MODELS_BASE);
+    const before = shared.decoderRuns;
+
+    const mask = await core.tapMask(0, 0, 1, w, h);
+
+    expect(shared.decoderRuns).toBe(before);
+    expect(mask.length).toBe(w * h);
+    expect(mask.some((v) => v !== 0)).toBe(false);
+  });
+});
+
+describe('autoCutout on an opaque busy photo', () => {
+  it('keeps the full-image path', async () => {
+    const core = await freshCore();
+    const resizes: number[][] = [];
+    recordResizes(core, resizes);
+    const w = 64;
+    const h = 64;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    let state = 11;
+    for (let i = 0; i < w * h; i++) {
+      state = (state * 1103515245 + 12345) & 0x7fffffff;
+      rgba[i * 4] = state & 255;
+      rgba[i * 4 + 1] = (state >> 8) & 255;
+      rgba[i * 4 + 2] = (state >> 16) & 255;
+      rgba[i * 4 + 3] = 255;
+    }
+
+    const mask = await core.autoCutout(rgba, w, h, MODELS_BASE);
+
+    expect(mask.length).toBe(w * h);
+    expect(resizes[0]![0]).toBe(w);
+    expect(resizes[0]![1]).toBe(h);
   });
 });
