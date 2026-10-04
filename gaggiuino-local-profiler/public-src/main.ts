@@ -101,7 +101,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openEditBag, closeEditBag, saveEditBag,
-         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags,
+         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags, toggleShelfBean,
          toggleBagCard, reorderBags,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
@@ -441,6 +441,7 @@ Object.assign(window, {
   saveBagStock,
   markBagEmpty,
   togglePastBags,
+  toggleShelfBean,
   toggleBagCard,
   reorderBags,
   openFreezeForm,
@@ -944,6 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'mark-bag-empty':       void markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
       case 'toggle-past-bags':     togglePastBags(numId()); break;
+      case 'toggle-shelf-bean':    toggleShelfBean(numId()); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
       case 'save-freeze-form':   void saveFreezePortions(numId()); break;
