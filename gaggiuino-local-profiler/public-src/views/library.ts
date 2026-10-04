@@ -1206,6 +1206,9 @@ export async function uploadBeanImage(id: number, input: HTMLInputElement): Prom
 // (isStickerCutoutAvailable) are this epic's earlier slices, already shipped
 // on dev; this slice only wires them into the bean form and consumes both
 // unchanged, so neither file is edited here.
+// library.ts consumes only isStickerCutoutAvailable() from segment.ts; the
+// model work (autoCutout/tapMask/resetCutout) is editor.ts's concern. Moving
+// that work into a worker therefore leaves this call site unchanged.
 function stickerEditorModule() {
   return import('../components/sticker/editor.js');
 }
