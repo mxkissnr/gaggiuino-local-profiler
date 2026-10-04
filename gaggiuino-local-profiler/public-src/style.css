@@ -1465,6 +1465,24 @@
             .lib-shelf-tile .lib-shelf-bag { transition: transform 180ms ease; }
             .lib-shelf-tile:hover .lib-shelf-bag, .lib-shelf-tile:focus-visible .lib-shelf-bag { transform: translateY(-4px) rotate(-1.5deg); }
         }
+        /* Shelf toolbar (#1329 part 2): search, filter chips and sort. */
+        .lib-shelf-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+        .lib-shelf-search { flex:1 1 100%; min-width:0; box-sizing:border-box; min-height:44px; padding: var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-sm); color: var(--gray-200); font-size: var(--fs-2); }
+        .lib-shelf-search:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+        .lib-shelf-chips { display:flex; flex-wrap:wrap; gap: var(--sp-1); }
+        .lib-shelf-chip { min-height:32px; padding: 0 var(--sp-3); border:1px solid var(--gray-700); border-radius: var(--radius-sm); background:none; color: var(--gray-400); font-size: var(--fs-1); font-weight:600; cursor:pointer; transition: border-color .15s, color .15s, background .15s; }
+        .lib-shelf-chip:hover { border-color: var(--gray-500); color: var(--gray-200); }
+        .lib-shelf-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent-ink); }
+        .lib-shelf-sort { min-height:44px; padding: 0 var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-sm); color: var(--gray-200); font-size: var(--fs-1); }
+        .lib-shelf-sort:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+        .lib-shelf-no-match { color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-3) 0; }
+        .lib-shelf-full-note { color: var(--gray-500); font-size: var(--fs-1); margin-bottom: var(--sp-2); }
+        @media (min-width: 640px) {
+            .lib-shelf-search { flex:1 1 auto; }
+            .lib-shelf-sort { margin-left:auto; }
+        }
+        .lib-form-hint-staged { color: var(--ok); }
+
         .orders-milk-section { margin-top: var(--sp-4); }
         .orders-milk-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: 0 0 var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .orders-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-1); }
