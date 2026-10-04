@@ -8,7 +8,7 @@ g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} 
 g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { renderTopbarMachineIcon, handleTopbarLiveSnapshotEvent, syncTopbarMachineIconFallback } =
+const { renderTopbarMachineIcon, handleTopbarLiveSnapshotEvent, handleTopbarPreheatUpdateEvent, syncTopbarMachineIconFallback } =
   await import('../public-src/components/topbar-machine-icon.js');
 
 function makeHost() {
@@ -65,5 +65,15 @@ describe('topbar machine icon follows the selected machine (#1201)', () => {
     state.activeMachineId = 1;
     renderTopbarMachineIcon();
     expect(el.has('is-brewing')).toBe(true);
+  });
+
+  // #1383: a preheat event carries no reachability of its own, so it must not
+  // drop the snapshot that already told us the machine is off.
+  it('machine off: a preheat event does not re-light the icon', () => {
+    handleTopbarLiveSnapshotEvent({ machineReachable: false });
+    expect(el.has('is-on')).toBe(false);
+    handleTopbarPreheatUpdateEvent({ ready: false, remaining: 120, pct: 0 });
+    expect(el.has('is-on')).toBe(false);
+    expect(el.has('is-heating')).toBe(false);
   });
 });
