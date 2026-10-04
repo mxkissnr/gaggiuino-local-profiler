@@ -1516,6 +1516,47 @@
             .lib-shelf-search { flex:1 1 auto; }
             .lib-shelf-sort { margin-left:auto; }
         }
+        /* ── Bean detail sheet (#1330 part 2) ── */
+        body.lib-sheet-open { overflow: hidden; }
+        .lib-sheet-host { display: none; }
+        .lib-sheet-host.open { display: block; }
+        .lib-sheet-backdrop { position: fixed; inset: 0; z-index: 900; background: rgba(0,0,0,.55); }
+        .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: 88dvh; overflow-y: auto; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
+        .lib-sheet-head { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--sp-3); align-items: start; }
+        .lib-sheet-photo { width: 72px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
+        .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .lib-sheet-photo .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; }
+        .lib-sheet-initials { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--gray-500); font-size: var(--fs-3); font-weight: 600; letter-spacing: .05em; }
+        .lib-sheet-titles { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .lib-sheet-name { margin: 0; font-size: var(--fs-4); color: var(--gray-100); }
+        .lib-sheet-badges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
+        .lib-sheet-stock { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); color: var(--gray-400); font-size: var(--fs-1); }
+        .lib-sheet-head-actions { display: flex; align-items: center; gap: var(--sp-1); }
+        .lib-sheet-close { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: none; border-radius: 50%; background: var(--gray-800); color: var(--gray-200); cursor: pointer; }
+        .lib-sheet-close:hover { background: var(--gray-700); }
+        .lib-sheet-more { position: relative; }
+        .lib-sheet-more > summary { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--gray-800); color: var(--gray-200); cursor: pointer; list-style: none; font-size: var(--fs-3); line-height: 1; }
+        .lib-sheet-more > summary::-webkit-details-marker { display: none; }
+        .lib-sheet-more[open] > summary { background: var(--gray-700); }
+        .lib-sheet-menu-list { position: absolute; right: 0; top: calc(100% + var(--sp-1)); z-index: 2; min-width: 200px; max-height: min(60vh, 360px); overflow-y: auto; padding: var(--sp-1) 0; background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+        .lib-sheet-menu-btn { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-3); border: none; background: none; color: var(--gray-200); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
+        .lib-sheet-menu-btn:hover { background: var(--gray-700); }
+        .lib-sheet-menu-btn.del { color: var(--err); }
+        .lib-sheet-menu-sep { display: block; height: 1px; margin: var(--sp-1) 0; background: var(--gray-700); }
+        .lib-sheet-actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--sp-2); margin: var(--sp-3) 0; }
+        .lib-sheet-primary { min-height: 44px; padding: 0 var(--sp-2); border: 1px solid var(--gray-700); border-radius: var(--radius-sm); background: var(--gray-800); color: var(--gray-200); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
+        .lib-sheet-primary:hover { border-color: var(--accent); color: var(--accent-ink); }
+        .lib-sheet-body .lib-item-in-sheet { display: block; background: none; padding: 0; }
+        @keyframes lib-sheet-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes lib-sheet-fold { to { transform: scaleY(.2) rotate(-8deg); opacity: .4; } }
+        @media (prefers-reduced-motion: no-preference) {
+            .lib-sheet-host.open .lib-sheet { animation: lib-sheet-in 220ms cubic-bezier(.4,0,.2,1); }
+            .lib-sheet-photo.fold { animation: lib-sheet-fold 350ms ease forwards; }
+        }
+        @media (min-width: 900px) {
+            .lib-sheet { left: auto; right: 0; top: 0; bottom: 0; width: min(440px, 100%); height: 100%; max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
+            @keyframes lib-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        }
         .lib-form-hint-staged { color: var(--ok); }
 
         .orders-milk-section { margin-top: var(--sp-4); }
