@@ -1,4 +1,4 @@
-import type { components } from './schema.gen.js';
+import type { components, paths } from './schema.gen.js';
 import type { ShotDatapoints } from '../utils.js';
 
 // Domain types for the GLP REST API (#1110, package A3a).
@@ -207,3 +207,13 @@ export type McpSettings = components['schemas']['McpSettings'];
  * true` is rejected with a 400 on a non-dev build.
  */
 export type McpSettingsInput = components['schemas']['McpSettingsInput'];
+
+// ── Shared UI preferences (go/internal/system, #1375) ────────────────────
+//
+// The /api/ui-prefs GET/PUT path and its inline `{ [key: string]: unknown }`
+// payload/response were generated with the endpoint (schema.gen.ts, part 1).
+// There is no named component schema to re-export, so this alias derives the
+// merged-map type straight from `paths`; public-src/ui-prefs.ts and
+// api/system.ts use it. schema.gen.ts is auto-generated and must not be
+// hand-edited.
+export type UiPrefs = paths['/api/ui-prefs']['get']['responses'][200]['content']['application/json'];

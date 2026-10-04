@@ -7,6 +7,7 @@
 // selected machine.
 import { S, setState, filterShotsByMachine } from '../state/index.js';
 import * as machinesApi from '../api/machines.js';
+import { getUiPref, setUiPref } from '../ui-prefs.js';
 import { t, tHtml } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
 import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
@@ -60,13 +61,38 @@ let _selectedTheme: ThemeSelection | null = null;
 let _machineSystemSettings: Record<string, unknown> | null = null;
 
 (function restoreActiveMachine() {
-  const stored = localStorage.getItem('glp_active_machine');
-  if (stored) S.activeMachineId = stored === 'all' ? 'all' : parseInt(stored, 10);
+  // #1375: the selection now lives in the shared ui_prefs store (key
+  // machine.active); read the old per-device key once and migrate it up.
+  let stored = getUiPref<number | 'all'>('machine.active');
+  if (stored === undefined) {
+    try {
+      const legacy = localStorage.getItem('glp_active_machine');
+      if (legacy) {
+        stored = legacy === 'all' ? 'all' : parseInt(legacy, 10);
+        setUiPref('machine.active', stored);
+      }
+      localStorage.removeItem('glp_active_machine');
+    } catch { /* ignore */ }
+  }
+  if (stored !== undefined) S.activeMachineId = stored;
 })();
 
 export function setActiveMachine(id: number | 'all'): void {
   setState('activeMachineId', id);
-  try { localStorage.setItem('glp_active_machine', String(id)); } catch { /* ignore */ }
+  setUiPref('machine.active', id);
+}
+
+/**
+ * A machine id that is safe to select. A numeric id is kept only when the
+ * loaded machine list contains it, otherwise it falls back to 'all' (#1323).
+ * While the list is still empty (not loaded yet) the id is returned unchanged
+ * so loadMachines() can validate it once the list arrives. This is the single
+ * check shared by loadMachines() and the start-up ui-prefs callback, so a
+ * server-supplied id can never bypass it.
+ */
+export function resolveActiveMachineId(id: number | 'all'): number | 'all' {
+  if (typeof id !== 'number' || !S.machines.length) return id;
+  return S.machines.some(m => m.id === id) ? id : 'all';
 }
 
 // The default machine's id, or null before /api/machines has ever loaded —
@@ -225,6 +251,15 @@ export async function loadMachines(): Promise<void> {
     const machines = await machinesApi.listMachines();
     if (!machines) return;
     setState('machines', machines);
+    // #1323: a remembered machine that is no longer registered (deleted, or
+    // pulled in from another device via the shared ui_prefs) must not keep
+    // filtering the shot history down to nothing — fall back to "all". Uses the
+    // same check as the start-up ui-prefs callback so a late server answer
+    // cannot slip a stale id past it.
+    if (typeof S.activeMachineId === 'number') {
+      const resolved = resolveActiveMachineId(S.activeMachineId);
+      if (resolved !== S.activeMachineId) setActiveMachine(resolved);
+    }
     if (!S.activeMachineId) {
       const [firstMachine] = machines;
       const def = machines.find(m => m.isDefault) || firstMachine;

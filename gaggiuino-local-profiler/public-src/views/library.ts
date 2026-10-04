@@ -543,6 +543,13 @@ function shelfPrefs(): ShelfPrefs {
   return (_shelfPrefsLazy ??= loadShelfPrefs());
 }
 
+// #1375: main.ts calls this once the shared choices fetched from the server
+// have replaced the local cache, so an already-rendered shelf re-reads them.
+export function resetShelfPrefs(): void {
+  _shelfPrefsLazy = null;
+  renderBeanList();
+}
+
 function _shelfHeading(key: string, count?: number): Html {
   return html`<div class="lib-shelf-heading"><span>${tHtml(key)}</span>${count != null ? html`<span class="lib-shelf-count">${esc(count)}</span>` : esc('')}</div>`;
 }

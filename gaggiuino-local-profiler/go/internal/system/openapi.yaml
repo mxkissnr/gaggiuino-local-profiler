@@ -3178,6 +3178,51 @@ paths:
                   update_available:  { type: boolean }
                   release_url:       { type: string, nullable: true }
 
+  /api/ui-prefs:
+    get:
+      tags: [System]
+      summary: Stored UI preferences (view, filter and sort choices)
+      description: >
+        One flat JSON object of per-install UI choices, kept in the kv store
+        under `ui_prefs`; `{}` when nothing is stored yet.
+      responses:
+        "200":
+          description: Stored preferences object
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: >
+                  At most 64 keys, each matching
+                  `^[a-z][a-zA-Z0-9._-]{0,63}$`. Values are a string (at most
+                  256 characters), a number, a boolean, null, or a flat object
+                  of up to 16 of those scalars (no deeper nesting). The encoded
+                  object is at most 16 KiB.
+    put:
+      tags: [System]
+      summary: Partial-update the stored UI preferences
+      description: >
+        Merges the request body into the stored object; a `null` value deletes
+        that key. The merged object is validated like the stored one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Full stored preferences object after the merge
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Validation error (invalid key, too many keys, oversized value, or deeper nesting)
+
   /api/achievements:
     get:
       tags: [System]
