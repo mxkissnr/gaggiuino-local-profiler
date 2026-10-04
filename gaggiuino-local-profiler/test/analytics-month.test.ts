@@ -10,6 +10,8 @@ let dotSize: MonthModule['dotSize'];
 let shiftMonth: MonthModule['shiftMonth'];
 let summaryLine: MonthModule['summaryLine'];
 let beanHasPhoto: MonthModule['beanHasPhoto'];
+let cellKind: MonthModule['cellKind'];
+let dayCellHtml: MonthModule['dayCellHtml'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -20,7 +22,7 @@ beforeAll(async () => {
     value: {},
     configurable: true, writable: true,
   });
-  ({ buildMonthDays, dotSize, shiftMonth, summaryLine, beanHasPhoto } = await import('../public-src/views/analytics-month.js'));
+  ({ buildMonthDays, dotSize, shiftMonth, summaryLine, beanHasPhoto, cellKind, dayCellHtml } = await import('../public-src/views/analytics-month.js'));
 });
 
 function at<T>(arr: readonly T[], i: number): T {
@@ -293,5 +295,89 @@ describe('summaryLine', () => {
     const s = line(shots, {});
     expect(s.streak).toBe(7);
     expect(s.streakNote).toBe(true);
+  });
+});
+
+function mday(o: Partial<MonthDay> & { key: string; day: number }): MonthDay {
+  return {
+    key: o.key, day: o.day, outside: o.outside ?? false,
+    count: o.count ?? 0, avgScore: o.avgScore ?? null,
+    mainBeanId: o.mainBeanId ?? null, mainBeanName: o.mainBeanName ?? null,
+    shotIds: o.shotIds ?? [], firstOfBean: o.firstOfBean ?? false,
+  };
+}
+
+describe('cellKind', () => {
+  it('is empty for a day without shots, photo or not', () => {
+    expect(cellKind({ count: 0 }, true)).toBe('empty');
+    expect(cellKind({ count: 0 }, false)).toBe('empty');
+  });
+
+  it('is photo when the main bean has a photo', () => {
+    expect(cellKind({ count: 1 }, true)).toBe('photo');
+    expect(cellKind({ count: 4 }, true)).toBe('photo');
+  });
+
+  it('is disc when there are shots but no photo', () => {
+    expect(cellKind({ count: 1 }, false)).toBe('disc');
+    expect(cellKind({ count: 4 }, false)).toBe('disc');
+  });
+});
+
+describe('dayCellHtml', () => {
+  const today = new Date(2024, 2, 20);
+  const locale = 'en';
+
+  it('shows only the day number for a day without shots, and no dot', () => {
+    const out = dayCellHtml(mday({ key: '2024-03-04', day: 4, count: 0 }), today, locale, false);
+    expect(out).toContain('class="cal-month-num"');
+    expect(out).toContain('>4<');
+    expect(out).not.toContain('cal-month-dot');
+    expect(out).not.toContain('cal-month-thumb');
+  });
+
+  it('renders the photo img for a day whose bean has a photo', () => {
+    const out = dayCellHtml(mday({ key: '2024-03-05', day: 5, count: 2, avgScore: 92, mainBeanId: 7, mainBeanName: 'Alpha' }), today, locale, true);
+    expect(out).toContain('<img class="cal-month-img"');
+    expect(out).toContain('data-bean-id="7"');
+    expect(out).not.toContain('cal-month-num');
+    expect(out).not.toContain('cal-month-dot');
+  });
+
+  it('renders a number disc without an img for a day with shots but no photo', () => {
+    const out = dayCellHtml(mday({ key: '2024-03-06', day: 6, count: 1, avgScore: 80, mainBeanId: 7, mainBeanName: 'Alpha' }), today, locale, false);
+    expect(out).toContain('no-img');
+    expect(out).toContain('class="cal-month-num"');
+    expect(out).toContain('>6<');
+    expect(out).not.toContain('<img');
+    expect(out).not.toContain('cal-month-dot');
+  });
+
+  it('renders the disc for a day with shots and no bean at all', () => {
+    const out = dayCellHtml(mday({ key: '2024-03-07', day: 7, count: 1 }), today, locale, false);
+    expect(out).toContain('no-img');
+    expect(out).toContain('>7<');
+    expect(out).not.toContain('<img');
+  });
+
+  it('marks today without a shot with is-today only', () => {
+    const out = dayCellHtml(mday({ key: '2024-03-20', day: 20, count: 0 }), today, locale, false);
+    expect(out).toContain('is-today');
+    expect(out).not.toContain('has-shot');
+  });
+
+  it('marks a today cell with shots as has-shot so the ring stays', () => {
+    const out = dayCellHtml(mday({ key: '2024-03-20', day: 20, count: 1, avgScore: 80 }), today, locale, false);
+    expect(out).toContain('is-today');
+    expect(out).toContain('has-shot');
+  });
+
+  it('renders no number for outside or future cells', () => {
+    const outside = dayCellHtml(mday({ key: '2024-02-29', day: 29, outside: true }), today, locale, false);
+    expect(outside).toContain('cal-month-outside');
+    expect(outside).not.toContain('cal-month-num');
+    const future = dayCellHtml(mday({ key: '2024-03-21', day: 21, count: 0 }), today, locale, false);
+    expect(future).toContain('cal-month-future');
+    expect(future).not.toContain('cal-month-num');
   });
 });

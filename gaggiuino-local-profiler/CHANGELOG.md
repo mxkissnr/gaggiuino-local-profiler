@@ -5,6 +5,7 @@
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **The Statistics month calendar is compact, every day shows its date, and a day without a bean photo shows its score as a tinted disc instead of an empty ring.** Closes #1389
 - **The Statistics month calendar only asks for a bean's photo when it has one, so it stops logging a failed image request.** Part of #1331
 - **The machine icon no longer shows a strip of colour while the machine is switched off.** Closes #1383
 - **A remembered machine that no longer exists no longer hides the shot history.** (#1323)
