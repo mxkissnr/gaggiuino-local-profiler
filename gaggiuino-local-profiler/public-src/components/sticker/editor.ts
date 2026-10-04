@@ -84,8 +84,8 @@ export function paddedAspectCrop(bounds: MaskBounds, w: number, h: number, aspec
   const pad = Math.round(longer * padFrac);
   const paddedWidth = boxWidth + pad * 2;
   const paddedHeight = boxHeight + pad * 2;
-  let width = Math.max(paddedWidth, paddedHeight * aspect);
-  let height = Math.max(paddedHeight, paddedWidth / aspect);
+  let width = Math.ceil(Math.max(paddedWidth, paddedHeight * aspect));
+  let height = Math.ceil(Math.max(paddedHeight, paddedWidth / aspect));
   const centreX = (bounds.x0 + bounds.x1 + 1) / 2;
   const centreY = (bounds.y0 + bounds.y1 + 1) / 2;
 

@@ -303,6 +303,32 @@ describe('paddedAspectCrop', () => {
     const crop = paddedAspectCrop({ x0:350, y0:350, x1:399, y1:399 }, 400, 400);
     expect(crop).toEqual({ x:348, y:339, width:52, height:61 });
   });
+
+  it('returns whole-pixel bounds that still contain the padded mask', () => {
+    const crop = paddedAspectCrop({ x0:300, y0:100, x1:699, y1:900 }, 1024, 1024);
+    expect(Number.isInteger(crop.x)).toBe(true);
+    expect(Number.isInteger(crop.y)).toBe(true);
+    expect(Number.isInteger(crop.width)).toBe(true);
+    expect(Number.isInteger(crop.height)).toBe(true);
+
+    const pad = Math.round(Math.max(400, 801) * 0.04);
+    expect(crop.x).toBeLessThanOrEqual(300 - pad);
+    expect(crop.y).toBeLessThanOrEqual(100 - pad);
+    expect(crop.x + crop.width - 1).toBeGreaterThanOrEqual(699 + pad);
+    expect(crop.y + crop.height - 1).toBeGreaterThanOrEqual(900 + pad);
+    expect(Math.abs(crop.width - (crop.height * 3) / 4)).toBeLessThanOrEqual(1);
+  });
+
+  it('composes a buffer sized to the whole-pixel crop', () => {
+    const w = 1024;
+    const h = 1024;
+    const crop = paddedAspectCrop({ x0:300, y0:100, x1:699, y1:900 }, w, h);
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    const out = composeSticker(rgba, new Uint8Array(w * h), w, h, crop);
+    expect(out.width).toBe(crop.width);
+    expect(out.height).toBe(crop.height);
+    expect(out.data.length).toBe(crop.width * crop.height * 4);
+  });
 });
 
 describe('MaskHistory', () => {
