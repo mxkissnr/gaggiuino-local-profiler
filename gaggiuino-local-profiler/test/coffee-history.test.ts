@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 
 // The shelf must not fetch a bean photo that does not exist (the request would
 // 404 and log a console error), so stub the image loader and count its calls.
-vi.mock('../public-src/bean-image.js', () => ({
-  loadBeanImageBlobUrl: vi.fn(() => Promise.resolve(null)),
-  loadShotThumbBlobUrl: vi.fn(() => Promise.resolve(null)),
+const beanImageMocks = vi.hoisted(() => ({
+  loadBeanImageBlobUrl: vi.fn((_beanId?: unknown): Promise<string | null> => Promise.resolve(null)),
+  loadShotThumbBlobUrl: vi.fn((_beanId?: unknown): Promise<string | null> => Promise.resolve(null)),
 }));
 
-import { loadBeanImageBlobUrl } from '../public-src/bean-image.js';
+vi.mock('../public-src/bean-image.js', () => ({
+  loadBeanImageBlobUrl: beanImageMocks.loadBeanImageBlobUrl,
+  loadShotThumbBlobUrl: beanImageMocks.loadShotThumbBlobUrl,
+}));
 
 // coffee-history.ts reaches the library view (bag classification) and the
 // image cache; both read localStorage/navigator at module load under vitest's
@@ -182,7 +185,7 @@ describe('shelfBeans (#1351)', () => {
 
 describe('renderCoffeeHistory shelf photos (#1351)', () => {
   it('loads a bean photo only for a bean that has one', () => {
-    const loadBeanPhoto = vi.mocked(loadBeanImageBlobUrl);
+    const loadBeanPhoto = beanImageMocks.loadBeanImageBlobUrl;
     loadBeanPhoto.mockClear();
     S.allShots = [
       shot({ id: 1, timestamp: 1, annotation: { beanId: 1 } }),
