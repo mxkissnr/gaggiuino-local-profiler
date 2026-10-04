@@ -3178,7 +3178,8 @@
             position: relative; z-index: 1;
             background: var(--gray-950); border: 1px solid var(--gray-700); border-radius: var(--radius-lg, var(--radius));
             padding: var(--sp-6) var(--sp-5) var(--sp-5);
-            max-width: 320px; width: 100%;
+            max-width: min(440px, 100%); width: 100%;
+            max-height: min(92vh, 760px); overflow-y: auto;
             display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
             text-align: center;
         }
@@ -3198,6 +3199,73 @@
         .easter-egg-panel-stats dt { color: var(--gray-500); text-align: right; }
         .easter-egg-panel-stats dd { margin: 0; color: var(--gray-300); text-align: left; font-variant-numeric: tabular-nums; }
         .easter-egg-panel-thanks { margin: 0; font-size: var(--fs-1); color: var(--gray-400); }
+
+        /* ══ Coffee history (#1351): the spiral of shots around the machine
+           icon and the shelf of emptied bags, inside the hidden panel. ═══ */
+        .coffee-history {
+            --coffee-tile: 26px;
+            --coffee-crema-hi: #cf935a;
+            --coffee-crema-lo: #6f4423;
+            width: 100%;
+            display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+        }
+        .coffee-history-stage {
+            position: relative;
+            width: 100%; max-width: min(420px, 100%);
+            aspect-ratio: 1 / 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        /* Keep the icon's own position:relative — its clip-paths rely on it (#848). */
+        .coffee-history-stage .easter-egg-panel-icon { height: 92px; z-index: 0; }
+        .coffee-history-tile {
+            position: absolute; left: 50%; top: 50%;
+            width: var(--coffee-tile); height: var(--coffee-tile);
+            transform: translate(-50%, -50%);
+            padding: 0; border-radius: 50%; overflow: hidden;
+            border: 2px solid var(--gray-600);
+            background: radial-gradient(circle at 38% 34%, var(--coffee-crema-hi), var(--coffee-crema-lo));
+            cursor: pointer;
+        }
+        .coffee-history-tile-photo { background: var(--gray-800); }
+        .coffee-history-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+        .coffee-history-tile:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+        .coffee-history-caption {
+            margin: 0; min-height: 1.2em;
+            font-size: var(--fs-1); color: var(--gray-400);
+            font-variant-numeric: tabular-nums;
+        }
+        .coffee-history-shelf {
+            display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end;
+            gap: 6px; width: 100%; max-width: 420px; min-height: 36px;
+            padding: 6px 8px;
+            border: 1px solid var(--gray-700); border-bottom-width: 3px;
+            border-radius: var(--radius); background: var(--gray-900);
+        }
+        .coffee-history-bag {
+            position: relative; width: 18px; height: 26px;
+            border-radius: 3px 3px 2px 2px;
+            background: linear-gradient(180deg, var(--gray-600), var(--gray-700));
+            overflow: hidden;
+        }
+        .coffee-history-bag-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .coffee-history-counters {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-3);
+            font-size: var(--fs-1); color: var(--gray-300);
+            font-variant-numeric: tabular-nums;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+            .coffee-history-tile { opacity: 0; animation: coffee-tile-pop .32s ease-out both; }
+            .coffee-history-bag { opacity: 0; animation: coffee-bag-drop .5s cubic-bezier(.2, 1.3, .5, 1) both; }
+            @keyframes coffee-tile-pop {
+                from { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
+                to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            }
+            @keyframes coffee-bag-drop {
+                0%   { opacity: 0; transform: translateY(-16px); }
+                60%  { opacity: 1; transform: translateY(2px); }
+                100% { opacity: 1; transform: translateY(0); }
+            }
+        }
 
         /* ══ Achievements view: the stamp card (#812) ═══════════════════════
            A printed cardboard card, not an app panel — per PLAN.md section 5
