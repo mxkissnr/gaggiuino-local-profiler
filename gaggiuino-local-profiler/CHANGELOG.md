@@ -1,3 +1,7 @@
+## [Unreleased]
+### Changed
+- **Calmer interface: flat accent colours, theme-aware badges and activity colours, and a proper milk icon instead of a fallback emoji.** Closes #1328
+
 ## [3.3.0] – 2026-10-02
 ### Added
 - **The coffee library view is now fully type-checked.**

@@ -427,7 +427,7 @@ function _buildDoseDist() {
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { display: false } },
-        y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
+        y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }
   } satisfies ChartConfiguration<'bar'>));
@@ -457,7 +457,7 @@ function _buildRatioDist() {
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { display: false } },
-        y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
+        y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }
   } satisfies ChartConfiguration<'bar'>));
@@ -501,7 +501,7 @@ export function buildTimeOfDay() {
       },
       scales: {
         x: { ticks: { color: _mutedTickColor(), font: { size: 9 }, maxRotation: 0 }, grid: { display: false } },
-        y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(63,63,70,.3)' } }
+        y: { ticks: { color: _mutedTickColor(), font: { size: 10 }, precision: 0 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }
   } satisfies ChartConfiguration<'bar'>));
@@ -565,8 +565,8 @@ export function buildTrendChart() {
         tooltip: { callbacks: { footer: () => '↗ Shot anzeigen' } },
       },
       scales: {
-        x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, maxRotation: 45 }, grid: { color: 'rgba(63,63,70,.3)' } },
-        y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: 'rgba(63,63,70,.3)' } }
+        x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, maxRotation: 45 }, grid: { color: themeColor('--gray-700', '#2b2f33') } },
+        y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }
   } satisfies ChartConfiguration<'line'>));
@@ -1258,7 +1258,7 @@ export function buildProfileChart() {
         } } }
       },
       scales: {
-        x: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: 'rgba(63,63,70,.3)' } },
+        x: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: themeColor('--gray-700', '#2b2f33') } },
         y: { ticks: { color: C.tick, font: { size: 11 } }, grid: { display: false } }
       }
     }
@@ -1577,8 +1577,8 @@ function _renderDialinProgressionChart(beanName: string | null): void {
       },
       plugins: { legend: { labels: { color: C.tick, font: { size: 11 } } } },
       scales: {
-        x:  { ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: 'rgba(63,63,70,.3)' } },
-        y:  { position: 'left',  ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: 'rgba(63,63,70,.3)' } },
+        x:  { ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: themeColor('--gray-700', '#2b2f33') } },
+        y:  { position: 'left',  ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { color: themeColor('--gray-700', '#2b2f33') } },
         y1: { position: 'right', min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 } }, grid: { drawOnChartArea: false } },
       },
     },

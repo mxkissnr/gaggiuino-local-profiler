@@ -4,7 +4,7 @@ import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml } from '../../utils.js';
-import { CLOSE_ICON_SVG } from '../../icons.js';
+import { CLOSE_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import type { Milk } from '../../api/types.js';
 
 // state/index.ts's CoffeeLibrary types the milk collection as Milk[]; this
@@ -33,7 +33,7 @@ export function renderMilkList(): void {
     const cls = m.stockMl! <= 0 ? 'empty' : m.stockMl! < 300 ? 'low' : 'ok';
     return html`<div class="lib-milk-item">
       <div class="lib-milk-top">
-        <span style="font-size:1.3rem">${esc(m.emoji || '🥛')}</span>
+        <span style="font-size:1.3rem">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG}</span>
         <span class="lib-milk-name">${esc(m.name)}</span>
         <button class="lib-milk-del" data-action="delete-milk" data-id="${esc(m.id)}" title="${tHtml('lib_milk_delete')}">${CLOSE_ICON_SVG}</button>
       </div>
