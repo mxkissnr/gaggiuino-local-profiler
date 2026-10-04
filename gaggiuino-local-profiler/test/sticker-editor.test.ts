@@ -22,6 +22,10 @@ interface FakeEvent {
   key?: string;
   ctrlKey?: boolean;
   metaKey?: boolean;
+  pointerId?: number;
+  clientX?: number;
+  clientY?: number;
+  deltaY?: number;
   preventDefault?: () => void;
 }
 
@@ -221,10 +225,11 @@ g.createImageBitmap = () => Promise.resolve({ width: 120, height: 90 });
 const segmentModule = await import('../public-src/components/sticker/segment.js');
 const editorModule = await import('../public-src/components/sticker/editor.js');
 
-const { maskBounds, paddedSquareCrop, MaskHistory, composeSticker, openStickerEditor } = editorModule;
-const { autoCutout, resetCutout } = segmentModule;
+const { maskBounds, paddedSquareCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround } = editorModule;
+const { autoCutout, resetCutout, tapMask } = segmentModule;
 const autoCutoutMock = vi.mocked(autoCutout);
 const resetCutoutMock = vi.mocked(resetCutout);
+const tapMaskMock = vi.mocked(tapMask);
 
 function fillRect(
   mask: { [index: number]: number },
@@ -346,6 +351,40 @@ describe('composeSticker', () => {
   });
 });
 
+describe('clampView', () => {
+  it('clamps the scale to 1..6 and is the identity at scale 1', () => {
+    expect(clampView({ scale: 0.2, x: 0, y: 0 }, 100, 100, 100, 100).scale).toBe(1);
+    expect(clampView({ scale: 99, x: 0, y: 0 }, 100, 100, 100, 100).scale).toBe(6);
+    expect(clampView({ scale: 1, x: 0, y: 0 }, 100, 100, 100, 100)).toEqual({ scale: 1, x: 0, y: 0 });
+  });
+
+  it('clamps the pan so the scaled canvas always covers the viewport', () => {
+    const farLeft = clampView({ scale: 2, x: 1000, y: 1000 }, 100, 100, 100, 100);
+    expect(farLeft.x).toBe(0);
+    expect(farLeft.y).toBe(0);
+
+    const farRight = clampView({ scale: 2, x: -1000, y: -1000 }, 100, 100, 100, 100);
+    expect(farRight.x).toBe(-100);
+    expect(farRight.y).toBe(-100);
+  });
+});
+
+describe('zoomAround', () => {
+  it('keeps the content point under the cursor fixed', () => {
+    const view = zoomAround({ scale: 1, x: 0, y: 0 }, 2, 50, 40);
+    expect(view.scale).toBe(2);
+    expect(view.x).toBe(-50);
+    expect(view.y).toBe(-40);
+    // The point that was at (50, 40) is still at (50, 40).
+    expect(50 * view.scale + view.x).toBe(50);
+    expect(40 * view.scale + view.y).toBe(40);
+  });
+
+  it('clamps the scale at the maximum', () => {
+    expect(zoomAround({ scale: 5, x: 0, y: 0 }, 2, 0, 0).scale).toBe(6);
+  });
+});
+
 describe('openStickerEditor overlay', () => {
   let doc: FakeDocument;
 
@@ -355,7 +394,9 @@ describe('openStickerEditor overlay', () => {
     g.createImageBitmap = vi.fn(() => Promise.resolve({ width: 120, height: 90 }));
     autoCutoutMock.mockReset();
     resetCutoutMock.mockReset();
+    tapMaskMock.mockReset();
     autoCutoutMock.mockImplementation((_rgba, w, h) => Promise.resolve(centeredMask(w, h)));
+    tapMaskMock.mockImplementation((_x, _y, _mode, w, h) => Promise.resolve(new Uint8Array(w * h)));
   });
 
   afterEach(() => {
@@ -365,6 +406,133 @@ describe('openStickerEditor overlay', () => {
   function open(): Promise<Blob | null> {
     return openStickerEditor(new Blob(['photo'], { type: 'image/png' }));
   }
+
+  async function openReady(): Promise<{ overlay: FakeElement; promise: Promise<Blob | null> }> {
+    const promise = open();
+    await vi.waitFor(() => expect(doc.body.children.length).toBe(1));
+    const overlay = doc.body.children[0];
+    if (!overlay) throw new Error('overlay not found');
+    await vi.waitFor(() => expect(overlay.querySelector('.sticker-apply')?.disabled).toBe(false));
+    return { overlay, promise };
+  }
+
+  function node(overlay: FakeElement, selector: string): FakeElement {
+    const found = overlay.querySelector(selector);
+    if (!found) throw new Error(`${selector} not found`);
+    return found;
+  }
+
+  function readScale(canvas: FakeElement): number {
+    const match = /scale\(([-\d.]+)\)/.exec(canvas.style.transform ?? '');
+    return match?.[1] !== undefined ? Number(match[1]) : Number.NaN;
+  }
+
+  it('maps a tap through the canvas transform', async () => {
+    const { overlay } = await openReady();
+    const canvas = node(overlay, '.sticker-canvas');
+    const viewport = node(overlay, '.sticker-viewport');
+    // The canvas is displayed at 2x and offset by (10, 20); the buffer stays
+    // 120x90, so client pixels must be divided back through that rect.
+    canvas.getBoundingClientRect = () => ({ left: 10, top: 20, width: 240, height: 180 });
+
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 70, clientY: 80 });
+    viewport.dispatch('pointerup', { pointerId: 1, clientX: 70, clientY: 80 });
+
+    await vi.waitFor(() => expect(tapMaskMock).toHaveBeenCalled());
+    expect(tapMaskMock).toHaveBeenCalledWith(30, 30, 1, 120, 90);
+  });
+
+  it('raises the scale on a pinch and rolls a running brush stroke back', async () => {
+    const { overlay } = await openReady();
+    const canvas = node(overlay, '.sticker-canvas');
+    const viewport = node(overlay, '.sticker-viewport');
+    const undo = node(overlay, '.sticker-undo');
+    const brush = node(overlay, '.sticker-brush-toggle');
+
+    brush.click();
+    expect(brush.getAttribute('aria-pressed')).toBe('true');
+
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40 });
+    viewport.dispatch('pointermove', { pointerId: 1, clientX: 55, clientY: 40 });
+    // A second finger switches to gesture mode and aborts the stroke.
+    viewport.dispatch('pointerdown', { pointerId: 2, clientX: 100, clientY: 40 });
+    // The finger span goes from 45px (100 - 55) to 90px, doubling the scale.
+    viewport.dispatch('pointermove', { pointerId: 2, clientX: 145, clientY: 40 });
+
+    expect(readScale(canvas)).toBe(2);
+    // The aborted stroke was rolled back, so nothing was committed to history.
+    expect(undo.disabled).toBe(true);
+
+    // Lifting one finger after a pinch fires no tap; the gesture lasts until
+    // every pointer is up.
+    viewport.dispatch('pointerup', { pointerId: 2, clientX: 145, clientY: 40 });
+    viewport.dispatch('pointerup', { pointerId: 1, clientX: 40, clientY: 40 });
+    expect(tapMaskMock).not.toHaveBeenCalled();
+  });
+
+  it('zooms around the cursor on wheel', async () => {
+    const { overlay } = await openReady();
+    const canvas = node(overlay, '.sticker-canvas');
+    const viewport = node(overlay, '.sticker-viewport');
+    const preventDefault = vi.fn();
+
+    viewport.dispatch('wheel', { deltaY: -100, clientX: 60, clientY: 45, preventDefault });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(readScale(canvas)).toBeCloseTo(1.1);
+  });
+
+  it('Fit resets the zoom and is disabled at scale 1', async () => {
+    const { overlay } = await openReady();
+    const canvas = node(overlay, '.sticker-canvas');
+    const viewport = node(overlay, '.sticker-viewport');
+    const fit = node(overlay, '.sticker-fit');
+
+    expect(fit.disabled).toBe(true);
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40 });
+    viewport.dispatch('pointerdown', { pointerId: 2, clientX: 100, clientY: 40 });
+    viewport.dispatch('pointermove', { pointerId: 2, clientX: 160, clientY: 40 });
+    expect(fit.disabled).toBe(false);
+
+    fit.click();
+    expect(fit.disabled).toBe(true);
+    expect(canvas.style.transform).toBe('translate(0px, 0px) scale(1)');
+  });
+
+  it('closes the decoded bitmap when the editor closes', async () => {
+    const close = vi.fn();
+    g.createImageBitmap = vi.fn(() => Promise.resolve({ width: 120, height: 90, close }));
+    const { overlay, promise } = await openReady();
+
+    node(overlay, '.sticker-cancel').click();
+
+    await expect(promise).resolves.toBeNull();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a cut-out that resolves after the editor was closed', async () => {
+    const deferred: { resolve?: (mask: Uint8Array) => void } = {};
+    autoCutoutMock.mockReset();
+    autoCutoutMock.mockImplementation(
+      () => new Promise<Uint8Array>((resolve) => {
+        deferred.resolve = resolve;
+      }),
+    );
+
+    const promise = open();
+    await vi.waitFor(() => expect(doc.body.children.length).toBe(1));
+    const overlay = doc.body.children[0];
+    if (!overlay) throw new Error('overlay not found');
+    node(overlay, '.sticker-cancel').click();
+    await expect(promise).resolves.toBeNull();
+    expect(resetCutoutMock).toHaveBeenCalledTimes(1);
+
+    const resolveCut = deferred.resolve;
+    if (!resolveCut) throw new Error('autoCutout was not called');
+    resolveCut(new Uint8Array(4));
+    // The late ready() must drop the embeddings it computed after the close.
+    await vi.waitFor(() => expect(resetCutoutMock).toHaveBeenCalledTimes(2));
+  });
 
   it('opens the overlay after a successful cut-out and Cancel resolves null', async () => {
     const promise = open();

@@ -2637,7 +2637,8 @@
         .crop-editor-actions { display:flex; justify-content:flex-end; gap: var(--sp-2); width:100%; }
 
         /* Sticker editor overlay (#1336) */
-        .sticker-canvas { touch-action:none; max-width:100%; border-radius:var(--radius); background:var(--gray-950); }
+        .sticker-viewport { overflow:hidden; border-radius:var(--radius); max-width:100%; touch-action:none; line-height:0; }
+        .sticker-canvas { max-width:100%; border-radius:var(--radius); background:var(--gray-950); transform-origin:0 0; }
         .sticker-overlay .lib-btn-sm, .sticker-overlay .lib-save-btn { min-height:44px; }
         .sticker-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap: var(--sp-2); width:100%; }
         .sticker-tools .lib-btn-sm { min-width:44px; }

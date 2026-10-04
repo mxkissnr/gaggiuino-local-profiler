@@ -148,6 +148,48 @@ export function composeSticker(
   return { data, width: crop.width, height: crop.height };
 }
 
+export const MIN_SCALE = 1;
+export const MAX_SCALE = 6;
+
+export interface StickerView {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Limit the scale to [MIN_SCALE, MAX_SCALE] and clamp the translation so the
+ * scaled canvas always covers the viewport: no viewport edge shows a gap.
+ */
+export function clampView(
+  view: StickerView,
+  viewportW: number,
+  viewportH: number,
+  canvasW: number,
+  canvasH: number,
+): StickerView {
+  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, view.scale));
+  const scaledW = canvasW * scale;
+  const scaledH = canvasH * scale;
+  const minX = Math.min(0, viewportW - scaledW);
+  const maxX = Math.max(0, viewportW - scaledW);
+  const minY = Math.min(0, viewportH - scaledH);
+  const maxY = Math.max(0, viewportH - scaledH);
+  return {
+    scale,
+    x: Math.min(maxX, Math.max(minX, view.x)),
+    y: Math.min(maxY, Math.max(minY, view.y)),
+  };
+}
+
+/** Scale by `factor` while keeping the content point under (px, py) fixed. */
+export function zoomAround(view: StickerView, factor: number, px: number, py: number): StickerView {
+  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, view.scale * factor));
+  const contentX = (px - view.x) / view.scale;
+  const contentY = (py - view.y) / view.scale;
+  return { scale, x: px - contentX * scale, y: py - contentY * scale };
+}
+
 interface DecodedPhoto {
   source: CanvasImageSource;
   width: number;
@@ -191,6 +233,13 @@ function readWorkRgba(decoded: DecodedPhoto): { rgba: Uint8ClampedArray; w: numb
   return { rgba: ctx.getImageData(0, 0, w, h).data, w, h };
 }
 
+/** Release a decoded ImageBitmap (the <img> fallback has no close()). */
+function closeSource(source: CanvasImageSource | null): void {
+  if (!source) return;
+  const closable = source as unknown as { close?: () => void };
+  if (typeof closable.close === 'function') closable.close();
+}
+
 /**
  * Open the sticker editor for `photo`. Resolves with a PNG blob on Apply, or
  * null on Cancel, Escape, load failure or model failure.
@@ -200,11 +249,14 @@ export function openStickerEditor(photo: Blob): Promise<Blob | null> {
     void (async () => {
       let decoded: DecodedPhoto;
       let work: { rgba: Uint8ClampedArray; w: number; h: number };
+      let source: CanvasImageSource | null = null;
       try {
         decoded = await decodePhoto(photo);
+        source = decoded.source;
         work = readWorkRgba(decoded);
       } catch (err) {
         console.error(err);
+        closeSource(source);
         resolve(null);
         return;
       }
@@ -244,9 +296,11 @@ function buildEditor(
   const title = element('h3', 'crop-editor-title');
   title.textContent = t('sticker_title');
 
+  const viewport = element('div', 'sticker-viewport');
   const canvas = element('canvas', 'sticker-canvas');
   canvas.width = workW;
   canvas.height = workH;
+  viewport.appendChild(canvas);
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
   const workingLine = element('p', 'sticker-working');
@@ -266,7 +320,8 @@ function buildEditor(
   const undoBtn = themedButton('lib-btn-sm sticker-undo', t('sticker_undo'));
   const resetBtn = themedButton('lib-btn-sm sticker-reset', t('sticker_reset'));
   const originalBtn = themedButton('lib-btn-sm sticker-original', t('sticker_original'));
-  for (const child of [addBtn, removeBtn, brushBtn, sizeInput, undoBtn, resetBtn, originalBtn]) {
+  const fitBtn = themedButton('lib-btn-sm sticker-fit', t('sticker_fit'));
+  for (const child of [addBtn, removeBtn, brushBtn, sizeInput, undoBtn, resetBtn, originalBtn, fitBtn]) {
     tools.appendChild(child);
   }
 
@@ -277,7 +332,7 @@ function buildEditor(
   closeBtn.style.display = 'none';
   for (const child of [cancelBtn, applyBtn, closeBtn]) actions.appendChild(child);
 
-  for (const child of [title, canvas, workingLine, tools, actions]) modal.appendChild(child);
+  for (const child of [title, viewport, workingLine, tools, actions]) modal.appendChild(child);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
@@ -298,11 +353,26 @@ function buildEditor(
   let closed = false;
   let workingTimer: ReturnType<typeof setInterval> | null = null;
   let peelTimer: ReturnType<typeof setTimeout> | null = null;
+  let view: StickerView = { scale: 1, x: 0, y: 0 };
 
   function themeColor(name: string): string | null {
     if (typeof getComputedStyle !== 'function') return null;
     const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     return value || null;
+  }
+
+  function applyView(): void {
+    canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  }
+
+  function layoutSize(): { w: number; h: number } {
+    return { w: canvas.offsetWidth || workW, h: canvas.offsetHeight || workH };
+  }
+
+  function clampCurrent(): void {
+    const layout = layoutSize();
+    const rect = viewport.getBoundingClientRect();
+    view = clampView(view, rect.width || layout.w, rect.height || layout.h, layout.w, layout.h);
   }
 
   function drawCheckerboard(): void {
@@ -352,6 +422,7 @@ function buildEditor(
     sizeInput.disabled = !canEdit;
     resetBtn.disabled = !canEdit || autoMask === null;
     originalBtn.disabled = !canEdit;
+    fitBtn.disabled = view.scale === 1;
     undoBtn.disabled = !canEdit || !history.canUndo;
     applyBtn.disabled = !hasMask;
     addBtn.setAttribute('aria-pressed', String(mode === 'add'));
@@ -385,11 +456,16 @@ function buildEditor(
     }
     document.removeEventListener('keydown', onKeyDown);
     overlay.remove();
+    closeSource(decoded.source);
     resetCutout();
     resolve(result);
   }
 
   function fail(err?: unknown): void {
+    if (closed) {
+      resetCutout();
+      return;
+    }
     if (err !== undefined) console.error(err);
     working = false;
     busy = false;
@@ -404,6 +480,10 @@ function buildEditor(
   }
 
   function ready(mask: Uint8Array): void {
+    if (closed) {
+      resetCutout();
+      return;
+    }
     autoMask = new Uint8Array(mask);
     current = new Uint8Array(mask);
     history.push(current);
@@ -440,6 +520,10 @@ function buildEditor(
     try {
       const point = toImagePoint(clientX, clientY);
       const tap = await tapMask(point.x, point.y, mode === 'add' ? 1 : 0, workW, workH);
+      if (closed) {
+        resetCutout();
+        return;
+      }
       const base = current;
       if (!base) return;
       current = applyTap(base, tap, mode, workW, workH);
@@ -552,37 +636,160 @@ function buildEditor(
   for (const eventName of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) {
     originalBtn.addEventListener(eventName, endOriginal);
   }
+  fitBtn.addEventListener('click', () => {
+    view = { scale: 1, x: 0, y: 0 };
+    applyView();
+    refreshControls();
+  });
 
   let strokeId: number | null = null;
   let strokeStart: { x: number; y: number } | null = null;
   let strokeMoved = 0;
   let strokePainting = false;
+  let strokeStartMask: Uint8Array | null = null;
+  const pointers = new Map<number, { x: number; y: number }>();
+  let gestureMode = false;
+  let gestureStart: { dist: number; mid: { x: number; y: number }; view: StickerView } | null = null;
 
-  canvas.addEventListener('pointerdown', (event) => {
-    if (working || busy || !current) return;
+  function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+    return Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  }
+
+  function midpoint(a: { x: number; y: number }, b: { x: number; y: number }): { x: number; y: number } {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  function startStroke(event: PointerEvent): void {
     strokeId = event.pointerId;
     strokeStart = { x: event.clientX, y: event.clientY };
     strokeMoved = 0;
     strokePainting = brushOn;
-    if (typeof canvas.setPointerCapture === 'function') canvas.setPointerCapture(event.pointerId);
+    strokeStartMask = brushOn ? current : null;
+    if (typeof viewport.setPointerCapture === 'function') viewport.setPointerCapture(event.pointerId);
     if (strokePainting) paintAt(event.clientX, event.clientY);
+  }
+
+  function abortStroke(): void {
+    if (strokePainting && strokeStartMask) {
+      current = strokeStartMask;
+      draw();
+    }
+    if (strokeId !== null && typeof viewport.releasePointerCapture === 'function') {
+      viewport.releasePointerCapture(strokeId);
+    }
+    strokeId = null;
+    strokeStart = null;
+    strokeMoved = 0;
+    strokePainting = false;
+    strokeStartMask = null;
+  }
+
+  function rebaseGesture(): void {
+    const values = [...pointers.values()];
+    const a = values[0];
+    const b = values[1];
+    if (!a || !b) {
+      gestureStart = null;
+      return;
+    }
+    const rect = viewport.getBoundingClientRect();
+    const mid = midpoint(a, b);
+    gestureStart = {
+      dist: distance(a, b),
+      mid: { x: mid.x - rect.left, y: mid.y - rect.top },
+      view: { ...view },
+    };
+  }
+
+  function beginGesture(): void {
+    abortStroke();
+    gestureMode = true;
+    rebaseGesture();
+  }
+
+  function updateGesture(): void {
+    if (!gestureStart) return;
+    const values = [...pointers.values()];
+    const a = values[0];
+    const b = values[1];
+    if (!a || !b) return;
+    const rect = viewport.getBoundingClientRect();
+    const mid = midpoint(a, b);
+    const midX = mid.x - rect.left;
+    const midY = mid.y - rect.top;
+    const seeded = zoomAround(gestureStart.view, distance(a, b) / gestureStart.dist, gestureStart.mid.x, gestureStart.mid.y);
+    view = {
+      scale: seeded.scale,
+      x: seeded.x + (midX - gestureStart.mid.x),
+      y: seeded.y + (midY - gestureStart.mid.y),
+    };
+    clampCurrent();
+    applyView();
+    refreshControls();
+  }
+
+  function onWheel(event: WheelEvent): void {
+    if (closed) return;
+    event.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    view = zoomAround(view, event.deltaY < 0 ? 1.1 : 1 / 1.1, event.clientX - rect.left, event.clientY - rect.top);
+    clampCurrent();
+    applyView();
+    refreshControls();
+  }
+
+  viewport.addEventListener('wheel', onWheel, { passive: false });
+
+  viewport.addEventListener('pointerdown', (event) => {
+    if (closed) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size >= 2) {
+      if (gestureMode) rebaseGesture();
+      else beginGesture();
+      return;
+    }
+    if (working || busy || !current) return;
+    startStroke(event);
   });
 
-  canvas.addEventListener('pointermove', (event) => {
+  viewport.addEventListener('pointermove', (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (gestureMode) {
+      updateGesture();
+      return;
+    }
     if (strokeId !== event.pointerId || !strokeStart) return;
     strokeMoved = Math.max(strokeMoved, Math.hypot(event.clientX - strokeStart.x, event.clientY - strokeStart.y));
     if (strokePainting) paintAt(event.clientX, event.clientY);
   });
 
-  canvas.addEventListener('pointerup', (event) => {
+  function finishPointer(event: PointerEvent, cancelled: boolean): void {
+    pointers.delete(event.pointerId);
+    if (gestureMode) {
+      if (pointers.size === 0) {
+        gestureMode = false;
+        gestureStart = null;
+      } else if (pointers.size >= 2) {
+        rebaseGesture();
+      }
+      if (typeof viewport.releasePointerCapture === 'function') viewport.releasePointerCapture(event.pointerId);
+      return;
+    }
     if (strokeId !== event.pointerId) return;
+    if (cancelled) {
+      abortStroke();
+      refreshControls();
+      return;
+    }
     const painting = strokePainting;
     const moved = strokeMoved;
     const start = strokeStart;
     strokeId = null;
     strokeStart = null;
     strokePainting = false;
-    if (typeof canvas.releasePointerCapture === 'function') canvas.releasePointerCapture(event.pointerId);
+    strokeStartMask = null;
+    if (typeof viewport.releasePointerCapture === 'function') viewport.releasePointerCapture(event.pointerId);
     if (painting) {
       if (current) history.push(current);
       refreshControls();
@@ -590,15 +797,10 @@ function buildEditor(
     } else if (start && moved < TAP_SLOP_PX && !working && !busy && current) {
       void handleTap(event.clientX, event.clientY);
     }
-  });
+  }
 
-  canvas.addEventListener('pointercancel', (event) => {
-    if (strokeId !== event.pointerId) return;
-    strokeId = null;
-    strokeStart = null;
-    strokePainting = false;
-    refreshControls();
-  });
+  viewport.addEventListener('pointerup', (event) => finishPointer(event, false));
+  viewport.addEventListener('pointercancel', (event) => finishPointer(event, true));
 
   cancelBtn.addEventListener('click', () => close(null));
   closeBtn.addEventListener('click', () => close(null));
@@ -609,6 +811,7 @@ function buildEditor(
   document.addEventListener('keydown', onKeyDown);
 
   startWorkingRotation();
+  applyView();
   refreshControls();
   draw();
   void autoCutout(rgba, workW, workH)
