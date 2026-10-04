@@ -884,7 +884,9 @@ function _focusablesWithin(host: HTMLElement | null): HTMLElement[] {
 }
 
 // True while an overlay sits above a sheet: a lightbox, the crop/sticker
-// editor or the barcode scan modal owns Escape until it is gone.
+// editor or the barcode scan modal owns Escape until it is gone. The sticker
+// editor in components/sticker/editor.ts reuses the crop editor's
+// `.crop-editor-overlay` class, so one check covers both.
 function _overlayShieldsSheets(): boolean {
   if (typeof document === 'undefined') return false;
   const q = typeof document.querySelector === 'function' ? document.querySelector.bind(document) : null;
