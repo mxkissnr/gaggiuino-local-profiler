@@ -121,7 +121,7 @@ export function miniWheelSvg(flavors: unknown, sizePx: number): Html {
     return html`<path class="lib-aroma-seg${esc(segment.lit ? ' is-lit' : '')}" data-node-id="${esc(segment.id)}" d="${esc(sectorPath(segment.a0, segment.a1, rIn, rOut))}" fill="${esc(fill)}"></path>`;
   });
   const size = Math.round(sizePx);
-  return html`<svg class="lib-aroma-svg" viewBox="-100 -100 200 200" width="${esc(size)}" height="${esc(size)}" role="img" aria-hidden="true">${joinHtml(paths)}</svg>`;
+  return html`<svg class="lib-aroma-svg" viewBox="-100 -100 200 200" width="${esc(size)}" height="${esc(size)}" role="img">${joinHtml(paths)}</svg>`;
 }
 
 // One chip per bean flavour. A flavour that resolves to a wheel node becomes a
@@ -143,10 +143,6 @@ export function flavorChipsHtml(flavors: unknown): Html {
 // highlighted node is kept here (module state, same pattern as the sheet's
 // "more" menu open flag) and re-applied to the fresh SVG after a rebuild.
 let _sheetHlNode: string | null = null;
-
-export function currentSheetFlavorHighlight(): string | null {
-  return _sheetHlNode;
-}
 
 export function resetSheetFlavorHighlight(): void {
   _sheetHlNode = null;
