@@ -61,7 +61,7 @@ function setup() {
   };
   g.document = doc;
 
-  S.coffeeLibrary = { beans: [{ id: 1, name: 'Yirgacheffe Chelelektu', flavors: ['Jasmin'] }] };
+  S.coffeeLibrary = { beans: [{ id: 1, name: 'Yirgacheffe Chelelektu', flavors: ['Jasmin'] }], grinders: [] };
   S.currentLang = 'en';
   return { doc, modal, insideMain };
 }
