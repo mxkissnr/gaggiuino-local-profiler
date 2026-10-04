@@ -244,6 +244,10 @@ function renderPanelIcon(): void {
     _panelRainbow?.stop();
     _panelRainbow = animateGradientRainbow(el);
   }
+  // #1383: this panel is decorative and always shows the active machine
+  // coloured, so the resolver's 'off' -- which now also covers a null
+  // snapshot (no live message yet), even with an active preheat -- is
+  // rendered as the steady 'hot' look rather than a dark icon.
   const { mode, heatFraction } = resolveMachineIconState(null, _lastPreheat);
   setMachineIconMode(el, mode === 'off' ? 'hot' : mode, heatFraction || 1);
 }
