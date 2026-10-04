@@ -206,3 +206,46 @@ describe('bean detail sheet (#1330 part 2)', () => {
     expect(html.match(/data-action="open-flavor-wheel"/g)?.length).toBe(1);
   });
 });
+
+describe('bean inventory reorder badge and unit (#1373)', () => {
+  beforeEach(() => {
+    S.shots = [];
+    S.currentLang = 'en';
+  });
+
+  // remainingG < 100 flips the row into its low-stock shape, where the
+  // reorder badge lives.
+  function lowCard(over: Record<string, unknown>): string {
+    setup({ remainingG: 40, ...over });
+    const beans = S.coffeeLibrary.beans;
+    return renderBeanCard(beans[0], beans);
+  }
+
+  it('links the reorder badge to an http(s) source URL', () => {
+    const card = lowCard({ sourceUrl: 'https://shop.example/bean' });
+    expect(card).toContain('<a class="lib-inv-reorder" href="https://shop.example/bean" target="_blank" rel="noopener noreferrer">');
+    expect(card).not.toContain('<span class="lib-inv-reorder"');
+  });
+
+  it('keeps the plain badge when the bean has no source URL', () => {
+    const card = lowCard({});
+    expect(card).toContain('<span class="lib-inv-reorder">');
+    expect(card).not.toContain('<a class="lib-inv-reorder"');
+  });
+
+  it('refuses a non-http(s) source URL', () => {
+    const card = lowCard({ sourceUrl: 'javascript:alert(1)' });
+    expect(card).toContain('<span class="lib-inv-reorder">');
+    expect(card).not.toContain('<a class="lib-inv-reorder"');
+  });
+
+  it('shows the gram unit exactly once in the remaining and consumed figures', () => {
+    const card = lowCard({});
+    const remaining = card.match(/class="lib-inv-remaining[^"]*">([^<]*)</)?.[1] ?? '';
+    const consumed = card.match(/class="lib-inv-consumed">([^<]*)</)?.[1] ?? '';
+    expect(remaining).toBe(t('lib_inv_remaining', 40));
+    expect(consumed).toBe(t('lib_inv_consumed', 0));
+    expect((remaining.match(/ g/g) ?? []).length).toBe(1);
+    expect((consumed.match(/ g/g) ?? []).length).toBe(1);
+  });
+});
