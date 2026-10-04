@@ -57,6 +57,20 @@ export type HydratedShot = Omit<components['schemas']['HydratedShot'], 'datapoin
 };
 
 /**
+ * The shot-row fields the topbar's coffee-history panel reads from
+ * `S.allShots` (#1351): the metadata projection plus the joined annotation.
+ * `image` is the stored-photo signal and `score` the hydrated score, so both
+ * stay optional here — a metadata row may carry neither.
+ */
+export interface HistoryShot {
+  id: number;
+  timestamp: number;
+  score?: number | null;
+  image?: string | null;
+  annotation?: ShotAnnotation | null;
+}
+
+/**
  * GET/POST /api/shots/defaults (#654) — the per-install values pre-filled
  * into a brand-new shot's annotation panel. Mirrors
  * go/internal/shots/defaults.go's stored blob exactly (all seven keys are

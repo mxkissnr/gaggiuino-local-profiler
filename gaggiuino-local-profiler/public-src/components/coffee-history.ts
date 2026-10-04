@@ -5,21 +5,11 @@
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { localeFor } from '../constants.js';
+import type { HistoryShot } from '../api/types.js';
 import { loadBeanImageBlobUrl, loadShotThumbBlobUrl } from '../bean-image.js';
-import { scoreColor } from '../utils.js';
+import { formatDayLabel, scoreColor } from '../utils.js';
 
-/** A shot row as S.allShots carries it (metadata-only, plus the annotation). */
-export interface HistoryShot {
-  id: number;
-  timestamp: number;
-  score?: number | null;
-  image?: string | null;
-  annotation?: {
-    coffee?: string | null;
-    dose?: number | null;
-    score?: number | null;
-  } | null;
-}
+export type { HistoryShot };
 
 export interface HistoryTile {
   id: number;
@@ -142,7 +132,7 @@ function bagDelay(index: number, count: number): number {
 }
 
 function tileLabel(tile: HistoryTile): string {
-  const parts = [new Date(tile.date).toLocaleDateString(localeFor(S.currentLang))];
+  const parts = [formatDayLabel(tile.date, localeFor(S.currentLang))];
   if (tile.beanName) parts.push(tile.beanName);
   if (tile.score != null) parts.push(String(tile.score));
   return parts.join(' · ');
