@@ -1547,11 +1547,23 @@
         .lib-sheet-primary { min-height: 44px; padding: 0 var(--sp-2); border: 1px solid var(--gray-700); border-radius: var(--radius-sm); background: var(--gray-800); color: var(--gray-200); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
         .lib-sheet-primary:hover { border-color: var(--accent); color: var(--accent-ink); }
         .lib-sheet-body .lib-item-in-sheet { display: block; background: none; padding: 0; }
+        /* Bean form in a sheet (#1349): the same static form, moved in. */
+        .lib-form-sheet .lib-add-form { display: block; background: none; padding: 0; margin: 0; }
+        .lib-form-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+        .lib-form-sheet-head-actions { display: flex; align-items: center; gap: var(--sp-1); }
+        .lib-form-sheet-body { min-width: 0; }
+        .lib-form-sheet .lib-form-actions { position: sticky; bottom: 0; z-index: 2; padding: var(--sp-2) 0; background: var(--gray-900); }
+        .lib-form-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); }
+        .lib-form-confirm[hidden] { display: none; }
+        .lib-form-confirm-q { font-size: var(--fs-1); color: var(--gray-200); }
+        .lib-form-confirm-actions { display: flex; gap: var(--sp-2); }
+        @keyframes lib-shelf-drop { 0% { transform: translateY(-14px) scale(1.05); } 60% { transform: translateY(0) scale(.97); } 100% { transform: translateY(0) scale(1); } }
         @keyframes lib-sheet-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes lib-sheet-fold { to { transform: scaleY(.2) rotate(-8deg); opacity: .4; } }
         @media (prefers-reduced-motion: no-preference) {
             .lib-sheet.lib-sheet-enter { animation: lib-sheet-in 220ms cubic-bezier(.4,0,.2,1); }
             .lib-sheet-photo.fold { animation: lib-sheet-fold 350ms ease forwards; }
+            .lib-shelf-drop { animation: lib-shelf-drop 450ms cubic-bezier(.34,1.56,.64,1); }
         }
         @media (min-width: 900px) {
             .lib-sheet { left: auto; right: 0; top: 0; bottom: 0; width: min(440px, 100%); height: 100%; max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }

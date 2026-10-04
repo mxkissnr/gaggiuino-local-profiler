@@ -180,6 +180,7 @@ const fr: Partial<Translations> = {
     lib_btn_edit:'Modifier', lib_btn_delete:'Supprimer',
     lib_btn_archive:'Archiver', lib_btn_restore:'Restaurer',
     lib_sheet_close:'Fermer', lib_sheet_more:"Plus d'actions", lib_sheet_shot_log:'Historique des shots',
+    lib_form_sheet_new:'Nouveau grain', lib_form_sheet_edit:'Modifier le grain', lib_form_discard_q:'Abandonner les modifications ?', lib_form_discard:'Abandonner', lib_form_keep_editing:'Continuer la modification',
     lib_archived_toast:'Sachet plié et rangé.', lib_restored_toast:"De retour sur l'étagère.",
     lib_confirm_delete_bean:'Supprimer le grain de la bibliothèque ?',
     lib_confirm_delete_grinder:'Supprimer le moulin de la bibliothèque ?',

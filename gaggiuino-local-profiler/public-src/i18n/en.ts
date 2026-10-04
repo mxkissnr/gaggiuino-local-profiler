@@ -180,6 +180,7 @@ const en: Translations = {
     lib_btn_edit:'Edit', lib_btn_delete:'Delete',
     lib_btn_archive:'Archive', lib_btn_restore:'Restore',
     lib_sheet_close:'Close', lib_sheet_more:'More actions', lib_sheet_shot_log:'Shot log',
+    lib_form_sheet_new:'New bean', lib_form_sheet_edit:'Edit bean', lib_form_discard_q:'Discard your changes?', lib_form_discard:'Discard', lib_form_keep_editing:'Keep editing',
     lib_archived_toast:'Bag folded and put away.', lib_restored_toast:'Back on the shelf.',
     lib_confirm_delete_bean:'Remove bean from library?',
     lib_confirm_delete_grinder:'Remove grinder from library?',

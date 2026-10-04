@@ -716,6 +716,15 @@ function _sheetMotionOk(): boolean {
     && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+// #1349 touch of love: the shelf tile of a just-created bean bounces once.
+function _dropNewShelfTile(id: number): void {
+  if (!_sheetMotionOk() || typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  const tile = document.querySelector<HTMLElement>(`#beanListUI [data-action="open-bean-sheet"][data-id="${id}"]`);
+  if (!tile || typeof tile.classList?.add !== 'function') return;
+  tile.classList.add('lib-shelf-drop');
+  setTimeout(() => tile.classList.remove('lib-shelf-drop'), 450);
+}
+
 function _sheetHost(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
   const existing = document.getElementById('beanSheet');
@@ -867,23 +876,43 @@ function _foldSheetPhoto(): void {
   setTimeout(() => photo?.classList?.remove('fold'), 350);
 }
 
-function _sheetFocusables(): HTMLElement[] {
-  const host = typeof document !== 'undefined' ? document.getElementById('beanSheet') : null;
+function _focusablesWithin(host: HTMLElement | null): HTMLElement[] {
   if (!host || typeof host.querySelectorAll !== 'function') return [];
   return Array.from(host.querySelectorAll<HTMLElement>(
     'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
   ));
 }
 
+// True while an overlay sits above a sheet: a lightbox, the crop/sticker
+// editor or the barcode scan modal owns Escape until it is gone. The sticker
+// editor in components/sticker/editor.ts reuses the crop editor's
+// `.crop-editor-overlay` class, so one check covers both.
+function _overlayShieldsSheets(): boolean {
+  if (typeof document === 'undefined') return false;
+  const q = typeof document.querySelector === 'function' ? document.querySelector.bind(document) : null;
+  const lightbox = q ? q('.lightbox-overlay') : null;
+  const crop = q ? q('.crop-editor-overlay') : null;
+  const fw = typeof document.getElementById === 'function' ? document.getElementById('flavorWheelModal') : null;
+  const fwOpen = !!fw && fw.style?.display === 'flex';
+  const scan = typeof document.getElementById === 'function' ? document.getElementById('scanModal') : null;
+  const scanOpen = !!scan && scan.classList?.contains('open') === true;
+  return !!(lightbox || crop || fwOpen || scanOpen);
+}
+
+// Shared Tab trap for both sheets: keep focus inside the given host.
+function _trapTab(e: KeyboardEvent, host: HTMLElement | null): void {
+  const items = _focusablesWithin(host);
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (!first || !last) return;
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
 function _onSheetKeydown(e: KeyboardEvent): void {
   if (_sheetBeanId == null) return;
   if (e.key === 'Escape') {
-    // A lightbox or the flavor wheel can sit above the sheet — Escape belongs
-    // to whichever is on top, and never drops typed input.
-    const lightbox = typeof document.querySelector === 'function' ? document.querySelector('.lightbox-overlay') : null;
-    const fw = document.getElementById('flavorWheelModal');
-    const fwOpen = !!fw && fw.style?.display === 'flex';
-    if (lightbox || fwOpen) return;
+    if (_overlayShieldsSheets()) return;
     const tag = document.activeElement?.tagName?.toLowerCase() || '';
     if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
     e.preventDefault();
@@ -891,12 +920,7 @@ function _onSheetKeydown(e: KeyboardEvent): void {
     return;
   }
   if (e.key !== 'Tab') return;
-  const items = _sheetFocusables();
-  const first = items[0];
-  const last = items[items.length - 1];
-  if (!first || !last) return;
-  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  _trapTab(e, _sheetHost());
 }
 
 function _wireSheetKeys(): void {
@@ -1223,7 +1247,202 @@ function populateSuggestionDatalists(): void {
   attachAutocomplete(_field('beanFormProcess'), () => PROCESS_SUGGESTIONS);
 }
 
+// ── Bean form sheet (#1349) ───────────────────────────────────────────────
+// The bean form is static markup in index.html. Rather than re-template it,
+// opening the form moves that same node into this sheet and closing moves it
+// back, so every input value, id and listener survives untouched.
+let _formSheetHost: HTMLElement | null = null;
+let _formSheetBody: HTMLElement | null = null;
+let _formSheetTitle: HTMLElement | null = null;
+let _formSheetConfirm: HTMLElement | null = null;
+let _formSheetKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+let _formHomeParent: Node | null = null;
+let _formHomeNext: Node | null = null;
+let _formReturnBeanId: number | null = null;
+let _beanFormDirty = false;
+let _beanFormDirtyBound = false;
+
+function _rememberFormHome(): void {
+  const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
+  if (!form || !form.parentNode) return;
+  // While the form sits in our own sheet body there is no home to learn;
+  // re-recording on every other open also keeps the reference valid if the
+  // library markup around the form is ever rebuilt.
+  if (_formSheetBody && form.parentNode === _formSheetBody) return;
+  _formHomeParent = form.parentNode;
+  _formHomeNext = form.nextSibling;
+}
+
+function _restoreFormHome(): void {
+  const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
+  if (!form || !_formHomeParent) return;
+  form.classList?.remove('open');
+  if (_formHomeNext && _formHomeNext.parentNode === _formHomeParent) {
+    _formHomeParent.insertBefore(form, _formHomeNext);
+  } else {
+    _formHomeParent.appendChild(form);
+  }
+}
+
+// Persistent host, built once from the same classes as the detail sheet.
+function _beanFormSheetHost(): HTMLElement | null {
+  if (_formSheetHost) return _formSheetHost;
+  if (typeof document === 'undefined'
+    || typeof document.createElement !== 'function'
+    || !document.body
+    || typeof document.body.appendChild !== 'function') return null;
+
+  const host = document.createElement('div');
+  host.id = 'beanFormSheet';
+  host.className = 'lib-sheet-host';
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'lib-sheet-backdrop';
+  backdrop.setAttribute('data-action', 'close-bean-form-sheet');
+  host.appendChild(backdrop);
+
+  const section = document.createElement('section');
+  section.className = 'lib-sheet lib-form-sheet';
+  section.setAttribute('role', 'dialog');
+  section.setAttribute('aria-modal', 'true');
+  section.setAttribute('aria-labelledby', 'beanFormSheetTitle');
+
+  const head = document.createElement('div');
+  head.className = 'lib-form-sheet-head';
+  const title = document.createElement('h2');
+  title.id = 'beanFormSheetTitle';
+  title.className = 'lib-sheet-name';
+  head.appendChild(title);
+  const headActions = document.createElement('div');
+  headActions.className = 'lib-form-sheet-head-actions';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'lib-sheet-close';
+  close.setAttribute('data-action', 'close-bean-form-sheet');
+  close.setAttribute('aria-label', t('lib_sheet_close'));
+  close.innerHTML = CLOSE_ICON_SVG;
+  headActions.appendChild(close);
+  head.appendChild(headActions);
+  section.appendChild(head);
+
+  const confirm = document.createElement('div');
+  confirm.className = 'lib-form-confirm';
+  confirm.setAttribute('hidden', '');
+  const question = document.createElement('span');
+  question.className = 'lib-form-confirm-q';
+  question.textContent = t('lib_form_discard_q');
+  confirm.appendChild(question);
+  const confirmActions = document.createElement('div');
+  confirmActions.className = 'lib-form-confirm-actions';
+  const discard = document.createElement('button');
+  discard.type = 'button';
+  discard.className = 'lib-btn-sm';
+  discard.textContent = t('lib_form_discard');
+  discard.addEventListener('click', () => discardBeanForm());
+  confirmActions.appendChild(discard);
+  const keep = document.createElement('button');
+  keep.type = 'button';
+  keep.className = 'lib-save-btn';
+  keep.textContent = t('lib_form_keep_editing');
+  keep.addEventListener('click', () => _hideFormConfirm());
+  confirmActions.appendChild(keep);
+  confirm.appendChild(confirmActions);
+  section.appendChild(confirm);
+
+  const body = document.createElement('div');
+  body.className = 'lib-form-sheet-body';
+  section.appendChild(body);
+
+  host.appendChild(section);
+  document.body.appendChild(host);
+
+  _formSheetHost = host;
+  _formSheetBody = body;
+  _formSheetTitle = title;
+  _formSheetConfirm = confirm;
+  return host;
+}
+
+function _showFormConfirm(): void {
+  _formSheetConfirm?.removeAttribute('hidden');
+}
+
+function _hideFormConfirm(): void {
+  _formSheetConfirm?.setAttribute('hidden', '');
+}
+
+// One delegated listener: anything the user touches inside the form marks it
+// dirty. Programmatic prefill (imports) fires no event and stays clean.
+function _bindBeanFormDirty(): void {
+  if (_beanFormDirtyBound) return;
+  const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
+  if (!form || typeof form.addEventListener !== 'function') return;
+  _beanFormDirtyBound = true;
+  const mark = (): void => { _beanFormDirty = true; };
+  form.addEventListener('input', mark);
+  form.addEventListener('change', mark);
+}
+
+function _formSheetVisible(): boolean {
+  return !!_formSheetHost && _formSheetHost.classList?.contains('open') === true;
+}
+
+function _onFormSheetKeydown(e: KeyboardEvent): void {
+  if (!_formSheetVisible()) return;
+  if (e.key === 'Escape') {
+    if (_overlayShieldsSheets()) return;
+    const tag = document.activeElement?.tagName?.toLowerCase() || '';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    e.preventDefault();
+    requestCloseBeanForm();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  _trapTab(e, _formSheetHost);
+}
+
+function _wireFormSheetKeys(): void {
+  if (_formSheetKeyHandler || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  _formSheetKeyHandler = _onFormSheetKeydown;
+  document.addEventListener('keydown', _formSheetKeyHandler);
+}
+
+function _unwireFormSheetKeys(): void {
+  const handler = _formSheetKeyHandler;
+  _formSheetKeyHandler = null;
+  if (!handler || typeof document === 'undefined' || typeof document.removeEventListener !== 'function') return;
+  document.removeEventListener('keydown', handler);
+}
+
+// Moves the form into the sheet, shows it and wires the sheet keyboard.
+function _showBeanFormSheet(): void {
+  const host = _beanFormSheetHost();
+  if (!host) return;
+  _rememberFormHome();
+  const isEdit = S.beanEditId != null;
+  if (_formSheetTitle) _formSheetTitle.textContent = t(isEdit ? 'lib_form_sheet_edit' : 'lib_form_sheet_new');
+  _hideFormConfirm();
+  const form = document.getElementById('beanAddForm');
+  if (form) {
+    const photo = document.getElementById('beanFormImageField');
+    if (photo && typeof form.insertBefore === 'function' && form.firstChild !== photo) {
+      form.insertBefore(photo, form.firstChild);
+    }
+    (_formSheetBody ?? host).appendChild(form);
+    form.classList?.add('open');
+  }
+  host.classList?.add('open');
+  document.body?.classList?.add('lib-sheet-open');
+  _formReturnBeanId = S.beanEditId;
+  _wireFormSheetKeys();
+  _field('beanFormName').focus();
+}
+
 export function openBeanForm(bean?: BeanRow | null): void {
+  _bindBeanFormDirty();
+  // #1349: the form opens in its own sheet. When the detail sheet is up, hand
+  // over to the form without bouncing focus back to the shelf tile first.
+  if (_sheetBeanId != null) { _sheetReturnFocus = null; closeBeanSheet(); }
   S.beanEditId = bean ? bean.id : null;
   const importNotice = document.getElementById('beanFormImportNotice');
   if (importNotice) { importNotice.style.display = 'none'; importNotice.innerHTML = html``; }
@@ -1283,9 +1502,9 @@ export function openBeanForm(bean?: BeanRow | null): void {
   if (saveBtn)       saveBtn.style.display       = isEdit ? '' : 'none';
   if (saveNoBagBtn)  saveNoBagBtn.style.display  = isEdit ? 'none' : '';
   if (saveAddBagBtn) saveAddBagBtn.style.display = isEdit ? 'none' : '';
-  _el('beanAddForm').classList.add('open');
   _el('beanAddTrigger').style.display = 'none';
-  _field('beanFormName').focus();
+  _beanFormDirty = false;
+  _showBeanFormSheet();
 }
 
 export function closeBeanForm(): void {
@@ -1302,8 +1521,33 @@ export function closeBeanForm(): void {
   if (stickerBtn) stickerBtn.style.display = 'none';
   const extraEl = document.getElementById('beanFormExtraRecipes');
   if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = html``; }
-  _el('beanAddForm').classList.remove('open');
+  _hideFormConfirm();
+  _restoreFormHome();
+  _formSheetHost?.classList?.remove('open');
+  _unwireFormSheetKeys();
+  if (typeof document !== 'undefined') document.body?.classList?.remove('lib-sheet-open');
   _el('beanAddTrigger').style.display = '';
+  _beanFormDirty = false;
+  const returnId = _formReturnBeanId;
+  _formReturnBeanId = null;
+  if (returnId != null && _beanList().some(b => b.id === returnId)) {
+    openBeanSheet(returnId);
+    // The form's Save button is hidden again now; don't hand focus back to it
+    // when this detail sheet is later closed.
+    _sheetReturnFocus = null;
+  }
+}
+
+// Dirty-aware close: a form with unsaved edits asks before discarding.
+export function requestCloseBeanForm(): void {
+  if (_beanFormDirty) { _showFormConfirm(); return; }
+  closeBeanForm();
+}
+
+// Cancel / confirm-bar discard: an explicit "throw my edits away", no prompt.
+export function discardBeanForm(): void {
+  _beanFormDirty = false;
+  closeBeanForm();
 }
 
 export function editBean(id: number): void {
@@ -1409,6 +1653,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   updateLibraryDatalist();
   closeBeanForm();
   renderBeanList();
+  if (wasCreate) _dropNewShelfTile(saved.id);
   if (extraRecipesToImport.length) renderRecipeList();
   // openNewBagForm toggles the new bean's own card's inline
   // #newBagForm<id> (renderBeanList above must run first so that card
