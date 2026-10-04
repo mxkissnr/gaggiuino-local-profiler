@@ -510,11 +510,11 @@ describe('openStickerEditor overlay', () => {
   });
 
   it('drops a cut-out that resolves after the editor was closed', async () => {
-    let resolveCut: ((mask: Uint8Array) => void) | null = null;
+    const deferred: { resolve?: (mask: Uint8Array) => void } = {};
     autoCutoutMock.mockReset();
     autoCutoutMock.mockImplementation(
       () => new Promise<Uint8Array>((resolve) => {
-        resolveCut = resolve;
+        deferred.resolve = resolve;
       }),
     );
 
@@ -526,6 +526,7 @@ describe('openStickerEditor overlay', () => {
     await expect(promise).resolves.toBeNull();
     expect(resetCutoutMock).toHaveBeenCalledTimes(1);
 
+    const resolveCut = deferred.resolve;
     if (!resolveCut) throw new Error('autoCutout was not called');
     resolveCut(new Uint8Array(4));
     // The late ready() must drop the embeddings it computed after the close.
