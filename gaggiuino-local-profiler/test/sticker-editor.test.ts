@@ -9,7 +9,7 @@ vi.mock('../public-src/components/sticker/segment.js', () => ({
   autoCutout: vi.fn(),
   tapMask: vi.fn(),
   resetCutout: vi.fn(),
-  isStickerCutoutAvailable: vi.fn(async () => true),
+  isStickerCutoutAvailable: vi.fn(() => Promise.resolve(true)),
 }));
 
 // A tiny fake DOM: vitest runs in the node environment and the repo has no
@@ -93,7 +93,6 @@ class FakeContext {
 }
 
 class FakeElement implements ClassHost {
-  readonly tag: string;
   className = '';
   readonly classList: FakeClassList;
   readonly style: Record<string, string> = {};
@@ -112,8 +111,7 @@ class FakeElement implements ClassHost {
   parent: FakeElement | null = null;
   private readonly context = new FakeContext();
 
-  constructor(tag: string) {
-    this.tag = tag;
+  constructor(_tag: string) {
     this.classList = new FakeClassList(this);
   }
 
@@ -215,6 +213,10 @@ class FakeDocument {
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
+// Some modules in the import graph (state/constants) read these browser globals
+// at load time; a minimal stub keeps the dynamic import below from throwing.
+g.document = new FakeDocument();
+g.createImageBitmap = () => Promise.resolve({ width: 120, height: 90 });
 
 const segmentModule = await import('../public-src/components/sticker/segment.js');
 const editorModule = await import('../public-src/components/sticker/editor.js');
@@ -350,10 +352,10 @@ describe('openStickerEditor overlay', () => {
   beforeEach(() => {
     doc = new FakeDocument();
     g.document = doc;
-    g.createImageBitmap = vi.fn(async () => ({ width: 120, height: 90 }));
+    g.createImageBitmap = vi.fn(() => Promise.resolve({ width: 120, height: 90 }));
     autoCutoutMock.mockReset();
     resetCutoutMock.mockReset();
-    autoCutoutMock.mockImplementation(async (_rgba, w, h) => centeredMask(w, h));
+    autoCutoutMock.mockImplementation((_rgba, w, h) => Promise.resolve(centeredMask(w, h)));
   });
 
   afterEach(() => {
@@ -372,8 +374,8 @@ describe('openStickerEditor overlay', () => {
     expect(autoCutoutMock).toHaveBeenCalledTimes(1);
 
     const cancel = overlay?.querySelector('.sticker-cancel');
-    expect(cancel).not.toBeNull();
-    cancel?.click();
+    if (!cancel) throw new Error('cancel button not found');
+    cancel.click();
 
     await expect(promise).resolves.toBeNull();
     expect(doc.body.children.length).toBe(0);
@@ -393,10 +395,12 @@ describe('openStickerEditor overlay', () => {
       expect(overlay?.querySelector('.sticker-failed')?.textContent)
         .toBe('This photo would not peel. You can still use it as it is.');
     });
-    expect(overlay?.querySelector('.sticker-close')?.style.display).not.toBe('none');
+    const close = overlay?.querySelector('.sticker-close');
+    if (!close) throw new Error('close button not found');
+    expect(close.style.display).not.toBe('none');
     expect(errorSpy).toHaveBeenCalled();
 
-    overlay?.querySelector('.sticker-close')?.click();
+    close.click();
     await expect(promise).resolves.toBeNull();
     expect(doc.body.children.length).toBe(0);
   });
