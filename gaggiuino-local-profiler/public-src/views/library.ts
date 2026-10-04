@@ -26,10 +26,10 @@ import { renderPuckScreenList } from './library/puck-screens.js';
 import { renderGrinderList } from './library/grinders.js';
 import { classifyBeanBags, renderBagCard, _expandedPastSections } from './library/bags.js';
 import {
-  classifyBeanShelf, renderShelfTile,
+  classifyBeanShelf, renderShelfTile, renderShelfRow, shelfStock,
   matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs,
 } from './library/shelf.js';
-import type { ShelfFilter, ShelfPrefs, ShelfSort } from './library/shelf.js';
+import type { ShelfFilter, ShelfPrefs, ShelfSort, ShelfView } from './library/shelf.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
 const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
@@ -505,8 +505,13 @@ function _shelfHeading(key: string, count?: number): Html {
 function renderShelfToolbar(prefs: ShelfPrefs): Html {
   const chip = (filter: ShelfFilter, key: string): Html =>
     html`<button type="button" class="lib-shelf-chip" data-shelf-filter="${esc(filter)}" aria-pressed="${esc(prefs.filter === filter ? 'true' : 'false')}">${tHtml(key)}</button>`;
+  const viewBtn = (view: ShelfView, key: string): Html =>
+    html`<button type="button" class="lib-shelf-view-btn" data-shelf-view="${esc(view)}" aria-pressed="${esc(prefs.view === view ? 'true' : 'false')}" aria-label="${tHtml(key)}" title="${tHtml(key)}">${tHtml(key)}</button>`;
   return html`<div class="lib-shelf-toolbar">
-    <input type="search" id="libShelfSearch" class="lib-shelf-search" placeholder="${tHtml('lib_shelf_search_ph')}" aria-label="${tHtml('lib_shelf_search_ph')}" value="${esc(prefs.query)}">
+    <div class="lib-shelf-search-row">
+      <input type="search" id="libShelfSearch" class="lib-shelf-search" placeholder="${tHtml('lib_shelf_search_ph')}" aria-label="${tHtml('lib_shelf_search_ph')}" value="${esc(prefs.query)}">
+      <div class="lib-shelf-views">${viewBtn('shelf', 'lib_shelf_view_shelf')}${viewBtn('list', 'lib_shelf_view_list')}</div>
+    </div>
     <div class="lib-shelf-chips">${chip('all', 'lib_shelf_all')}${chip('espresso', 'roast_type_espresso')}${chip('filter', 'roast_type_filter')}${chip('decaf', 'lib_bean_decaf')}</div>
     <select id="libShelfSort" class="lib-shelf-sort">
       <option value="fresh" ${esc(prefs.sort === 'fresh' ? 'selected' : '')}>${tHtml('lib_shelf_sort_fresh')}</option>
@@ -555,6 +560,17 @@ function wireShelfToolbar(): void {
       renderShelfSections();
     });
   });
+  document.querySelectorAll<HTMLButtonElement>('[data-shelf-view]').forEach(btn => {
+    if (!btn.addEventListener) return;
+    btn.addEventListener('click', () => {
+      prefs.view = (btn.dataset.shelfView as ShelfView) === 'list' ? 'list' : 'shelf';
+      saveShelfPrefs(prefs);
+      document.querySelectorAll<HTMLButtonElement>('[data-shelf-view]').forEach(b => {
+        b.setAttribute('aria-pressed', b.dataset.shelfView === prefs.view ? 'true' : 'false');
+      });
+      renderShelfSections();
+    });
+  });
 }
 
 function renderShelfSections(): void {
@@ -568,38 +584,51 @@ function renderShelfSections(): void {
   const prefs = shelfPrefs();
   const queried = beans.filter(b => matchesShelfQuery(b, prefs.query));
   const { inUse, stock, emptyArchive } = classifyBeanShelf(queried);
-  // Filter/sort apply to Stock and Empty & archive; In use keeps its order.
-  const stockRows = sortShelf(stock.filter(b => matchesShelfFilter(b, prefs.filter)), prefs.sort);
+  const isList = prefs.view === 'list';
+
+  // One shelf: the beans being drunk and the unopened stock side by side.
+  // Filter and sort apply to both together, then a stable partition moves the
+  // opened beans to the front. classifyBeanShelf's inUse is exactly the opened
+  // set, so it is filtered out of the combined list before sorting to keep the
+  // partition from double-counting.
+  const combined = sortShelf([...inUse, ...stock].filter(b => matchesShelfFilter(b, prefs.filter)), prefs.sort);
+  const isOpened = (b: ShelfBean): boolean => shelfStock(b).opened;
+  const shelfRows = [...combined.filter(isOpened), ...combined.filter(b => !isOpened(b))];
   const archiveRows = sortShelf(emptyArchive.filter(b => matchesShelfFilter(b, prefs.filter)), prefs.sort);
 
   const expandedCards = (rows: ShelfBean[]): Html =>
     joinHtml(rows.filter(b => _expandedShelfBeans.has(b.id)).map(b => renderBeanCard(b, beans)));
 
-  const inUseHtml: Html = inUse.length
-    ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_in_use')}${joinHtml(inUse.map(b => renderBeanCard(b, beans)))}</section>`
-    : esc('');
+  // Same items in either view: a photo grid on the shelf, a compact list on
+  // request. The expanded full card renders below either one.
+  const items = (rows: ShelfBean[], muted: boolean): Html => {
+    const parts = rows.map(b => isList
+      ? renderShelfRow(b, { muted, expanded: _expandedShelfBeans.has(b.id) })
+      : renderShelfTile(b, { muted, expanded: _expandedShelfBeans.has(b.id) }));
+    return html`<div class="${esc(isList ? 'lib-shelf-list' : 'lib-shelf')}">${joinHtml(parts)}</div>`;
+  };
 
-  const stockHtml: Html = stockRows.length
-    ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_stock', stockRows.length)}
-        ${stockRows.length >= 10 ? html`<div class="lib-shelf-full-note">${tHtml('lib_shelf_full')}</div>` : esc('')}
-        <div class="lib-shelf">${joinHtml(stockRows.map(b => renderShelfTile(b, { muted: false, expanded: _expandedShelfBeans.has(b.id) })))}</div>
-        ${expandedCards(stockRows)}</section>`
+  const shelfHtml: Html = shelfRows.length
+    ? html`<section class="lib-shelf-section">${_shelfHeading('lib_shelf_stock', shelfRows.length)}
+        ${shelfRows.length >= 10 ? html`<div class="lib-shelf-full-note">${tHtml('lib_shelf_full')}</div>` : esc('')}
+        ${items(shelfRows, false)}
+        ${expandedCards(shelfRows)}</section>`
     : esc('');
 
   const archiveHtml: Html = archiveRows.length
     ? html`<details class="lib-shelf-archive"${esc(_shelfArchiveOpen ? ' open' : '')}>
         <summary class="lib-shelf-heading lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="lib-shelf-count">${esc(archiveRows.length)}</span></summary>
-        <div class="lib-shelf">${joinHtml(archiveRows.map(b => renderShelfTile(b, { muted: true, expanded: _expandedShelfBeans.has(b.id) })))}</div>
+        ${items(archiveRows, true)}
         ${expandedCards(archiveRows)}</details>`
     : esc('');
 
   const filtersActive = prefs.query.trim() !== '' || prefs.filter !== 'all';
-  const noMatchHtml: Html = filtersActive && !inUse.length && !stockRows.length && !archiveRows.length
+  const noMatchHtml: Html = filtersActive && !shelfRows.length && !archiveRows.length
     ? html`<div class="lib-shelf-no-match">${tHtml('lib_shelf_no_match')}</div>`
     : esc('');
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  mount.innerHTML = html`${inUseHtml}${noMatchHtml}${stockHtml}${archiveHtml}`;
+  mount.innerHTML = html`${noMatchHtml}${shelfHtml}${archiveHtml}`;
 
   // Remember the archive section's open state; the <details> is recreated on
   // every render, so the native toggle event is re-wired here each time. The
@@ -627,11 +656,12 @@ export function renderBeanList(): void {
     el.innerHTML = html`<div class="lib-empty">${tHtml('lib_empty_beans')}</div>`;
     return;
   }
-  // #1329: three shelves — what you are drinking on top as full cards, the
-  // rest of the stock as a photo grid, and spent/archived beans tidied into a
-  // collapsed section. A tile tap expands the unchanged full card below it.
-  // The toolbar rebuilds with the view; the shelves it filters live in their
-  // own container so typing can re-render them without losing the caret.
+  // #1330: one shelf — the beans you are drinking stand first, the rest of the
+  // stock behind them, and spent/archived beans tidy themselves into a
+  // collapsed section. The toolbar switches the items between a photo grid and
+  // a compact list; either way a tap expands the unchanged full card below.
+  // The toolbar rebuilds with the view; the shelf it filters lives in its own
+  // container so typing can re-render it without losing the caret.
   el.innerHTML = html`${renderShelfToolbar(shelfPrefs())}<div id="libShelfSections"></div>`;
   wireShelfToolbar();
   renderShelfSections();
