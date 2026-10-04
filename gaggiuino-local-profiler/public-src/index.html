@@ -164,8 +164,12 @@
         <div class="easter-egg-panel-backdrop" data-action="close-easter-egg"></div>
         <div class="easter-egg-panel-card">
             <button type="button" class="easter-egg-panel-close" id="easterEggPanelCloseBtn" data-action="close-easter-egg" aria-label="Schließen">&times;</button>
-            <div class="easter-egg-panel-icon" id="easterEggPanelIcon"></div>
             <h3 id="easterEggPanelTitle" data-i18n="easter_egg_title">Gefunden.</h3>
+            <!-- #1351: the machine icon lives in the centre of the coffee-history
+                 stage, so it is the spiral's hub rather than a second icon. -->
+            <div class="coffee-history" id="easterEggHistory">
+                <div class="easter-egg-panel-icon" id="easterEggPanelIcon"></div>
+            </div>
             <dl class="easter-egg-panel-stats" id="easterEggPanelStats"></dl>
             <p class="easter-egg-panel-thanks" data-i18n="easter_egg_thanks">Danke an alle, die dieses kleine Projekt nutzen.</p>
         </div>
