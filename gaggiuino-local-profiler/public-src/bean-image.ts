@@ -59,6 +59,13 @@ export function loadShotImageBlobUrl(shotId: number): Promise<string | null> {
   return _load(`shot:${shotId}`, shotImageUrl(shotId));
 }
 
+// #1351: the server serves a smaller thumbnail with ?thumb=1 (falling back to
+// the full image) — used by the coffee-history spiral so a long shot history
+// stays cheap to draw.
+export function loadShotThumbBlobUrl(shotId: number): Promise<string | null> {
+  return _load(`shotthumb:${shotId}`, `${shotImageUrl(shotId)}?thumb=1`);
+}
+
 export function invalidateShotImage(shotId: number): void {
   _cache.delete(`shot:${shotId}`);
 }

@@ -68,6 +68,11 @@ function _field(id: string): HTMLInputElement | null {
 //   - "upcoming" ("Volle"): tracked, remaining > 0, queued behind current.
 //   - "past" ("Vergangene"): remaining <= 0, or never tracked at all.
 //     Hidden by default in the UI.
+// #1351: the topbar coffee-history panel mirrors the "past + tracked" part of
+// this rule (isEmptiedBag() in components/coffee-history.ts) instead of
+// importing this module — the listener registered at the bottom of this file
+// runs at import time, and pulling it into the topbar/status/live import graph
+// breaks the DOM-free tests. Keep the two in sync if the rule changes.
 export function classifyBeanBags(b: BeanRow): ClassifiedBags {
   const bags = Array.isArray(b.bags) ? b.bags : [];
   const upcoming: BagEntry[] = [];

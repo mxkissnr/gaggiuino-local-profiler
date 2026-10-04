@@ -20,6 +20,7 @@ import { t } from '../i18n.js';
 import { esc, html, joinHtml } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, resolveMachineIconState,
          MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
+import { renderCoffeeHistory } from './coffee-history.js';
 
 function host(): HTMLElement | null {
   return document.getElementById('topbarMachineIcon');
@@ -207,10 +208,11 @@ export function handleTopbarMachineIconClick(): void {
 // long as the panel stays open instead of the burst's fade-out/auto-stop —
 // the panel itself is the "off switch" (closeEasterEggPanel() stops it). No
 // new persistent state, no analytics, nothing recorded — see this module's
-// top-of-file note and #845: intentionally never mentioned in
-// CHANGELOG.md/whats-new.js, it's meant to stay a secret.
+// top-of-file note and #845: it stays out of whats-new.js and is meant to stay
+// a secret; the CHANGELOG only ever names the hidden panel, never the trigger.
 let _panelIconFor: unknown = null;
 let _panelRainbow: RainbowHandle | null = null;
+let _coffeeHistoryStop: (() => void) | null = null;
 
 function panelHost(): HTMLElement | null {
   return document.getElementById('easterEggPanelIcon');
@@ -269,6 +271,8 @@ export function openEasterEggPanel(): void {
   const el = panelHost();
   if (el && !_panelRainbow) _panelRainbow = animateGradientRainbow(el);
   renderPanelStats();
+  const historyHost = document.getElementById('easterEggHistory');
+  if (historyHost) _coffeeHistoryStop = renderCoffeeHistory(historyHost);
   panel.style.display = 'flex';
   document.getElementById('easterEggPanelCloseBtn')?.focus();
 }
@@ -279,6 +283,8 @@ export function closeEasterEggPanel(): void {
   panel.style.display = 'none';
   _panelRainbow?.stop();
   _panelRainbow = null;
+  _coffeeHistoryStop?.();
+  _coffeeHistoryStop = null;
 }
 
 // Called once from main.js's bootstrap, not at module-import time — this

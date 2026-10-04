@@ -405,6 +405,11 @@ export function isoToGerman(iso: string | null | undefined): string {
   return `${dd}.${mm}.${yy}`;
 }
 
+/** Locale-aware short date for a Unix-ms timestamp (#1351 coffee-history tiles). */
+export function formatDayLabel(ms: number, locale: string): string {
+  return new Date(ms).toLocaleDateString(locale);
+}
+
 export function germanToIso(s: string | null | undefined): string | null {
   if (!s) return null;
   const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
