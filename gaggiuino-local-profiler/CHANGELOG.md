@@ -1,6 +1,5 @@
 ## [Unreleased]
 ### Added
-- **Groundwork for remembering your view, filter and sort choices across devices: the server now has a small validated preference store, included in backup and restore.** Part of #1375
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
 - **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
