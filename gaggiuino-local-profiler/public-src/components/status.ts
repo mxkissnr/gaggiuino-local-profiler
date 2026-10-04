@@ -314,10 +314,10 @@ export async function toggleMachinePower(): Promise<void> {
     if (r.ok) {
       const result = await r.json() as SwitchPayload;
       updatePowerButton({ configured: true, state: result.state });
-      window.setTimeout(async () => {
+      setTimeout(() => { void (async () => {
         const sr = await getSwitch().catch(() => null);
         if (sr?.ok) updatePowerButton(await sr.json() as SwitchPayload);
-      }, 2000);
+      })(); }, 2000);
     }
   } catch (e) { console.error('Power toggle Fehler:', e); }
   finally {
