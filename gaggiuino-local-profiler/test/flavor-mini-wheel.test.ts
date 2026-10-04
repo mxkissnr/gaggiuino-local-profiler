@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FLAVOR_WHEEL } from '../public-src/flavor-data.js';
 import type { FlavorNode } from '../public-src/flavor-data.js';
-import { miniWheelSegments, miniWheelSvg, flavorChipsHtml } from '../public-src/components/flavor-mini-wheel.js';
+import {
+  miniWheelSegments,
+  miniWheelSvg,
+  flavorChipsHtml,
+  applySheetFlavorHighlight,
+  highlightSheetFlavor,
+  resetSheetFlavorHighlight,
+} from '../public-src/components/flavor-mini-wheel.js';
 
 function walkAll(nodes: FlavorNode[], visit: (node: FlavorNode) => void): void {
   for (const node of nodes) {
@@ -55,6 +62,18 @@ describe('miniWheelSvg', () => {
     expect(svg).toContain('width="168"');
     expect(svg).toContain('data-node-id="cherry"');
   });
+
+  // #1372: the lit segments get the large wheel's white outline, and must be
+  // painted after the unlit ones so a neighbour sharing the ring edge cannot
+  // cover that outline.
+  it('marks lit paths with is-lit and draws them after the unlit paths', () => {
+    const flavors = ['Kirsche'];
+    const svg = miniWheelSvg(flavors, 168) as unknown as string;
+    const flags = [...svg.matchAll(/class="lib-aroma-seg( is-lit)?"/g)].map(m => Boolean(m[1]));
+    expect(flags.filter(Boolean).length).toBeGreaterThan(0);
+    expect(flags.filter(f => !f).length).toBeGreaterThan(0);
+    expect(flags.indexOf(true)).toBeGreaterThan(flags.lastIndexOf(false));
+  });
 });
 
 describe('flavorChipsHtml', () => {
@@ -72,5 +91,69 @@ describe('flavorChipsHtml', () => {
   it('handles empty and non-array input', () => {
     expect(flavorChipsHtml([]) as unknown as string).toBe('');
     expect(flavorChipsHtml(undefined) as unknown as string).toBe('');
+  });
+});
+
+// #1372: the pulse animation is applied only on a fresh tap, not when the
+// stored highlight is re-applied after the sheet rebuilds its SVG.
+class FakeClassList {
+  private names = new Set<string>();
+  add(name: string): void { this.names.add(name); }
+  remove(name: string): void { this.names.delete(name); }
+  toggle(name: string, on?: boolean): void { if (on) this.names.add(name); else this.names.delete(name); }
+  contains(name: string): boolean { return this.names.has(name); }
+}
+
+class FakePath {
+  classList = new FakeClassList();
+  private readonly id: string;
+  constructor(id: string) { this.id = id; }
+  getAttribute(name: string): string | null { return name === 'data-node-id' ? this.id : null; }
+}
+
+class FakeSvg {
+  classList = new FakeClassList();
+  private readonly paths: FakePath[];
+  constructor(paths: FakePath[]) { this.paths = paths; }
+  querySelectorAll(selector: string): FakePath[] { return selector === '.lib-aroma-seg' ? this.paths : []; }
+}
+
+class FakeRoot {
+  private readonly svg: FakeSvg;
+  constructor(svg: FakeSvg) { this.svg = svg; }
+  querySelector(selector: string): FakeSvg | null { return selector === '.lib-aroma-svg' ? this.svg : null; }
+}
+
+function chipIn(root: FakeRoot): Element {
+  return { closest: () => root } as unknown as Element;
+}
+
+describe('sheet highlight pulse (#1372)', () => {
+  beforeEach(() => resetSheetFlavorHighlight());
+
+  it('pulses only the tapped leaf path and clears it after the animation', () => {
+    vi.useFakeTimers();
+    const leaf = new FakePath('cherry');
+    const ancestor = new FakePath('fruity');
+    const root = new FakeRoot(new FakeSvg([ancestor, leaf]));
+    highlightSheetFlavor('cherry', chipIn(root));
+    expect(leaf.classList.contains('is-pulse')).toBe(true);
+    expect(ancestor.classList.contains('is-pulse')).toBe(false);
+    vi.advanceTimersByTime(500);
+    expect(leaf.classList.contains('is-pulse')).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('re-applying the highlight after a rebuild sets is-hl but not is-pulse', () => {
+    vi.useFakeTimers();
+    const first = new FakeRoot(new FakeSvg([new FakePath('cherry')]));
+    highlightSheetFlavor('cherry', chipIn(first)); // establish the stored highlight
+    vi.advanceTimersByTime(500);
+    const leaf = new FakePath('cherry');
+    const rebuilt = new FakeRoot(new FakeSvg([leaf]));
+    applySheetFlavorHighlight(rebuilt as unknown as ParentNode);
+    expect(leaf.classList.contains('is-hl')).toBe(true);
+    expect(leaf.classList.contains('is-pulse')).toBe(false);
+    vi.useRealTimers();
   });
 });
