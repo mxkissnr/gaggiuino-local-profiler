@@ -1190,12 +1190,14 @@
         .lib-aroma-wheel { flex: 0 0 auto; width: min(168px, 45vw); padding: 0; background: none; border: none; line-height: 0; cursor: pointer; }
         .lib-aroma-svg { display: block; width: 100%; height: auto; }
         .lib-aroma-seg { stroke: var(--gray-700); stroke-width: .6; }
+        /* #1372: lit segments carry the same white outline as the large wheel. */
+        .lib-aroma-seg.is-lit { stroke: #fff; stroke-width: 1.6; }
         .lib-aroma-svg.has-hl .lib-aroma-seg { opacity: .35; }
         .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px rgba(255,255,255,.65)); }
         .lib-aroma-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); flex: 1 1 120px; }
         .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--chip-color); cursor: pointer; }
         @media (prefers-reduced-motion: no-preference) {
-            .lib-aroma-seg.is-hl { animation: aroma-pulse 500ms ease-out; }
+            .lib-aroma-seg.is-pulse { animation: aroma-pulse 500ms ease-out; }
             @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
         }
         .lib-bean-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: var(--sp-3); background: var(--gray-800); cursor: pointer; }
@@ -2612,7 +2614,7 @@
            remaining space, but a flex column sized by `height:auto` (content)
            never has positive free space to grow into — the canvas would
            collapse to 0px before echarts even has a size to init() against. */
-        .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, 92dvh); max-height:92dvh; overflow-y:hidden; }
+        .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); max-height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); overflow-y:hidden; }
 
         /* Machine profile editor modal (#307) — same fixed-height/flex-child
            pattern as .flavor-wheel-modal above, but wider (dense 2-column
@@ -2727,11 +2729,11 @@
     init() against, instead of the modal having to scroll. */
     .fw-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap: var(--sp-2); }
     .fw-main { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
-    .fw-canvas-wrap { position:relative; flex:1 1 auto; min-height:0; }
+    .fw-canvas-wrap { position:relative; flex:1 1 auto; min-height:0; container-type: size; }
     .fw-canvas { width:100%; height:100%; cursor:pointer; position:relative; }
     .fw-side { flex:0 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-2); }
     /* Bean photo in the wheel centre; tapping it zooms back to the overview. */
-    .fw-center-photo { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:24%; aspect-ratio:1; padding:0; border:2px solid var(--gray-600); border-radius:50%; overflow:hidden; background:var(--gray-800); cursor:pointer; pointer-events:auto; }
+    .fw-center-photo { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:20cqmin; height:20cqmin; padding:0; border:2px solid var(--gray-600); border-radius:50%; overflow:hidden; background:var(--gray-800); cursor:pointer; pointer-events:auto; }
     .fw-center-photo img { display:block; width:100%; height:100%; object-fit:cover; }
     .fw-legend { display:flex; flex-direction:column; gap:2px; overflow-y:auto; min-height:0; }
     .fw-legend-row { display:flex; align-items:center; gap: var(--sp-2); width:100%; padding: var(--sp-1) var(--sp-2); background:none; border:none; border-radius:var(--radius); color:var(--gray-300); font:inherit; font-size:var(--fs-1); text-align:left; cursor:pointer; }
@@ -2740,7 +2742,7 @@
     .fw-legend-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     @media (min-width: 900px) {
         .flavor-wheel-modal { max-width: min(960px, 96vw); }
-        .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); gap: var(--sp-4); }
+        .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); grid-template-rows: minmax(0, 1fr); gap: var(--sp-4); }
     }
 
         /* Photo picker button (replaces native <input type=file>, #286) */

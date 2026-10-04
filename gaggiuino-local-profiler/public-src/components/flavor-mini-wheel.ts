@@ -109,7 +109,9 @@ function sectorPath(a0: number, a1: number, rIn: number, rOut: number): string {
 }
 
 export function miniWheelSvg(flavors: unknown, sizePx: number): Html {
-  const segments = miniWheelSegments(flavors);
+  // #1372: draw lit segments after the unlit ones so their white outline lands
+  // on top of a neighbour sharing the same ring edge instead of being covered.
+  const segments = [...miniWheelSegments(flavors)].sort((a, b) => Number(a.lit) - Number(b.lit));
   const paths = segments.map(segment => {
     const [rIn, rOut] = RINGS[segment.depth];
     const fill = segment.lit ? segment.color : muteHex(segment.color, MUTE_BG, MUTE_WEIGHT);
@@ -162,4 +164,17 @@ export function highlightSheetFlavor(nodeId: string | null, chipEl?: Element | n
   _sheetHlNode = nodeId && _sheetHlNode !== nodeId ? nodeId : null;
   const root = chipEl && typeof chipEl.closest === 'function' ? chipEl.closest('.lib-sheet') : null;
   applySheetFlavorHighlight(root);
+  // #1372: only a fresh tap pulses. The sheet re-renders on nearly every
+  // action, so re-applying the stored highlight (applySheetFlavorHighlight,
+  // called after each rebuild) must not replay the animation — otherwise the
+  // chip flashes every time the sheet updates. Start the pulse on the tapped
+  // leaf only; clearing the highlight does nothing.
+  if (!_sheetHlNode || !root) return;
+  const svg = (root as Element).querySelector?.('.lib-aroma-svg');
+  if (!svg || typeof svg.querySelectorAll !== 'function') return;
+  svg.querySelectorAll<Element>('.lib-aroma-seg').forEach(path => {
+    if (path.getAttribute?.('data-node-id') !== _sheetHlNode) return;
+    path.classList?.add?.('is-pulse');
+    setTimeout(() => path.classList?.remove?.('is-pulse'), 500);
+  });
 }
