@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Changed
+- **Cutting out a sticker no longer freezes the app or runs the browser out of memory, and the memory is given back when the editor closes.** Closes #1347
 - **Bean photos are cropped in the bag's 3:4 shape, and cut-out stickers keep it, so tall bags are no longer clipped.** Closes #1346
 - **Bean photos can now be cut out as stickers right in the bean form, on your own device, and stand on the shelf without a background.** Closes #1336
 - **Pinch to zoom in the sticker editor, so the fine edges are easy to touch up on a phone.** Part of #1336

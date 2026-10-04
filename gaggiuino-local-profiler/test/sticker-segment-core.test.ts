@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * State shared with the onnxruntime-web mock. vi.hoisted runs before the
- * hoisted vi.mock factory (and before segment.ts is imported), so the factory
- * can close over it safely.
+ * hoisted vi.mock factory (and before segment-core.ts is imported), so the
+ * factory can close over it safely.
  */
 const shared = vi.hoisted(() => {
   const env = {
@@ -13,7 +13,15 @@ const shared = vi.hoisted(() => {
       proxy: undefined as unknown,
     },
   };
-  return { env, created: [] as string[], disposed: 0 };
+  return {
+    env,
+    // Session URIs in creation order, plus a single event log so a test can
+    // assert that sessions were released before later ones were created.
+    created: [] as string[],
+    released: [] as string[],
+    log: [] as string[],
+    disposed: 0,
+  };
 });
 
 vi.mock('onnxruntime-web/wasm', () => {
@@ -33,7 +41,12 @@ vi.mock('onnxruntime-web/wasm', () => {
     }
   }
 
-  const makeSession = (): { run: (feeds: Record<string, unknown>) => Promise<Record<string, FakeTensor>> } => ({
+  const makeSession = (
+    uri: string,
+  ): {
+    run: (feeds: Record<string, unknown>) => Promise<Record<string, FakeTensor>>;
+    release: () => Promise<void>;
+  } => ({
     run: (feeds: Record<string, unknown>): Promise<Record<string, FakeTensor>> => {
       if ('input_image' in feeds) {
         return Promise.resolve({
@@ -54,6 +67,11 @@ vi.mock('onnxruntime-web/wasm', () => {
         pred_masks: new FakeTensor('float32', pred),
       });
     },
+    release: (): Promise<void> => {
+      shared.released.push(uri);
+      shared.log.push(`release:${uri}`);
+      return Promise.resolve();
+    },
   });
 
   return {
@@ -62,33 +80,46 @@ vi.mock('onnxruntime-web/wasm', () => {
     InferenceSession: {
       create: (uri: string): Promise<ReturnType<typeof makeSession>> => {
         shared.created.push(uri);
-        return Promise.resolve(makeSession());
+        shared.log.push(`create:${uri}`);
+        return Promise.resolve(makeSession(uri));
       },
     },
   };
 });
 
-import {
-  autoCutout,
-  tapMask,
-  resetCutout,
-  resizeHook,
-} from '../public-src/components/sticker/segment.js';
+const MODELS_BASE = 'https://example.test/glp/models/';
+const ISNET = `${MODELS_BASE}isnet-general-use-int8.onnx`;
+const ENCODER = `${MODELS_BASE}slimsam-vision-encoder-q8.onnx`;
+const DECODER = `${MODELS_BASE}slimsam-decoder-q8.onnx`;
 
-async function freshSegment(): Promise<typeof import('../public-src/components/sticker/segment.js')> {
+type Core = typeof import('../public-src/components/sticker/segment-core.js');
+
+/**
+ * A fresh copy of segment-core.ts, with the canvas resize seam stubbed (the
+ * Node test environment has neither OffscreenCanvas nor a DOM). The models base
+ * is passed in explicitly, so segment-core never touches document.
+ */
+async function freshCore(): Promise<Core> {
   vi.resetModules();
-  return await import('../public-src/components/sticker/segment.js');
+  const core = await import('../public-src/components/sticker/segment-core.js');
+  core.resizeHook.rgba = (_rgba, _w, _h, dw, dh) => new Uint8ClampedArray(dw * dh * 4);
+  return core;
+}
+
+/** Let releaseSession()'s fire-and-forget microtask run. */
+async function flush(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 beforeEach(() => {
   shared.created.length = 0;
+  shared.released.length = 0;
+  shared.log.length = 0;
   shared.disposed = 0;
   shared.env.wasm.wasmPaths = undefined;
   shared.env.wasm.numThreads = undefined;
   shared.env.wasm.proxy = undefined;
-  resizeHook.rgba = (_rgba, _w, _h, dw, dh) => new Uint8ClampedArray(dw * dh * 4);
-  vi.stubGlobal('document', { baseURI: 'https://example.test/glp/' });
-  resetCutout();
 });
 
 afterEach(() => {
@@ -100,7 +131,8 @@ describe('autoCutout', () => {
   const h = 6;
 
   it('returns a mask of length w*h and configures the wasm runtime', async () => {
-    const mask = await autoCutout(new Uint8ClampedArray(w * h * 4), w, h);
+    const core = await freshCore();
+    const mask = await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
 
     expect(mask.length).toBe(w * h);
     expect(String(shared.env.wasm.wasmPaths).endsWith('models/')).toBe(true);
@@ -109,10 +141,26 @@ describe('autoCutout', () => {
   });
 
   it('disposes the model output tensors', async () => {
-    await autoCutout(new Uint8ClampedArray(w * h * 4), w, h);
+    const core = await freshCore();
+    await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
     // IS-Net output plus the two decoder outputs; the encoder embeddings are
     // cached for tapMask and deliberately kept alive.
     expect(shared.disposed).toBe(3);
+  });
+
+  it('releases IS-Net before the encoder is created, releases the encoder, and keeps the decoder', async () => {
+    const core = await freshCore();
+    await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
+    await flush();
+
+    expect(shared.log).toEqual([
+      `create:${ISNET}`,
+      `release:${ISNET}`,
+      `create:${ENCODER}`,
+      `release:${ENCODER}`,
+      `create:${DECODER}`,
+    ]);
+    expect(shared.released).not.toContain(DECODER);
   });
 });
 
@@ -121,41 +169,31 @@ describe('tapMask', () => {
   const h = 6;
 
   it('throws before autoCutout has run for this image', async () => {
-    await expect(tapMask(1, 1, 1, w, h)).rejects.toThrow(/autoCutout/);
+    const core = await freshCore();
+    await expect(core.tapMask(1, 1, 1, w, h)).rejects.toThrow(/autoCutout/);
   });
 
   it('reuses the cached embeddings and returns a mask', async () => {
-    await autoCutout(new Uint8ClampedArray(w * h * 4), w, h);
+    const core = await freshCore();
+    await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
     const sessionsBefore = shared.created.length;
 
-    const mask = await tapMask(2, 3, 1, w, h);
+    const mask = await core.tapMask(2, 3, 1, w, h);
 
     expect(mask.length).toBe(w * h);
     expect(shared.created.length).toBe(sessionsBefore);
   });
 });
 
-describe('isStickerCutoutAvailable', () => {
-  it('is true when the HEAD probe succeeds, and probes once', async () => {
-    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
-    vi.stubGlobal('fetch', fetchSpy);
-    const segment = await freshSegment();
+describe('resetCutout', () => {
+  it('releases the cached decoder session', async () => {
+    const core = await freshCore();
+    await core.autoCutout(new Uint8ClampedArray(8 * 6 * 4), 8, 6, MODELS_BASE);
+    expect(shared.released).not.toContain(DECODER);
 
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith('models/isnet-general-use-int8.onnx', { method: 'HEAD' });
-  });
+    core.resetCutout();
+    await flush();
 
-  it('is false when the probe is not ok', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
-    const segment = await freshSegment();
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
-  });
-
-  it('is false when the probe throws', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no network'))));
-    const segment = await freshSegment();
-    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    expect(shared.released).toContain(DECODER);
   });
 });

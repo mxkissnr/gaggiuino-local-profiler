@@ -1,0 +1,189 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+/**
+ * A stand-in for the real Worker: it records what the client posts and lets a
+ * test reply (or error) exactly like the worker would from another thread.
+ * Fields are assigned in the constructor because tsconfig's erasableSyntaxOnly
+ * forbids parameter properties.
+ */
+class FakeWorker {
+  static instances: FakeWorker[] = [];
+
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  onmessageerror: ((event: MessageEvent) => void) | null = null;
+  terminated = false;
+  sent: Array<{ message: { id: number; type: string }; transfer?: Transferable[] }> = [];
+  url: URL;
+  options: WorkerOptions | undefined;
+
+  constructor(url: URL, options?: WorkerOptions) {
+    this.url = url;
+    this.options = options;
+    FakeWorker.instances.push(this);
+  }
+
+  postMessage(message: { id: number; type: string }, transfer?: Transferable[]): void {
+    this.sent.push({ message, transfer });
+  }
+
+  terminate(): void {
+    this.terminated = true;
+  }
+
+  reply(data: unknown): void {
+    this.onmessage?.({ data } as unknown as MessageEvent);
+  }
+
+  fail(): void {
+    this.onerror?.({ message: 'worker failed' } as unknown as ErrorEvent);
+  }
+}
+
+type Client = typeof import('../public-src/components/sticker/segment.js');
+
+async function freshClient(): Promise<Client> {
+  vi.resetModules();
+  return await import('../public-src/components/sticker/segment.js');
+}
+
+function latestWorker(): FakeWorker {
+  const worker = FakeWorker.instances.at(-1);
+  if (!worker) throw new Error('no worker was created');
+  return worker;
+}
+
+const W = 8;
+const H = 6;
+const RGBA = new Uint8ClampedArray(W * H * 4);
+
+beforeEach(() => {
+  FakeWorker.instances = [];
+  vi.stubGlobal('Worker', FakeWorker);
+  vi.stubGlobal('document', { baseURI: 'https://example.test/glp/' });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('isStickerCutoutAvailable', () => {
+  it('is true when the HEAD probe succeeds, and probes once', async () => {
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const segment = await freshClient();
+
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith('models/isnet-general-use-int8.onnx', { method: 'HEAD' });
+  });
+
+  it('is false when the probe is not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
+    const segment = await freshClient();
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+  });
+
+  it('is false when the probe throws', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no network'))));
+    const segment = await freshClient();
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+  });
+});
+
+describe('autoCutout', () => {
+  it('posts the pixels and resolves with the mask the worker sends back', async () => {
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    expect(FakeWorker.instances).toHaveLength(1);
+    expect(worker.sent).toHaveLength(1);
+    const { message, transfer } = worker.sent[0]!;
+    expect(message.type).toBe('auto');
+    expect(transfer).toHaveLength(1);
+
+    const mask = new Uint8Array([1, 2, 3]);
+    worker.reply({ id: message.id, mask });
+    await expect(promise).resolves.toBe(mask);
+  });
+
+  it('sends the models base resolved against document.baseURI', async () => {
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    // The message is a union at runtime, so read the field through the union.
+    const posted = worker.sent[0]!.message as { modelsBase?: string };
+    expect(posted.modelsBase).toBe('https://example.test/glp/models/');
+
+    worker.reply({ id: worker.sent[0]!.message.id, mask: new Uint8Array([0]) });
+    await promise;
+  });
+
+  it('rejects when the worker replies with an error', async () => {
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    worker.reply({ id: worker.sent[0]!.message.id, error: 'model boom' });
+    await expect(promise).rejects.toThrow('model boom');
+  });
+});
+
+describe('tapMask', () => {
+  it('rejects before autoCutout has run for this image', async () => {
+    const segment = await freshClient();
+    await expect(segment.tapMask(1, 1, 1, W, H)).rejects.toThrow(/autoCutout/);
+  });
+
+  it('resolves a tap after a successful autoCutout', async () => {
+    const segment = await freshClient();
+    const auto = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+    worker.reply({ id: worker.sent[0]!.message.id, mask: new Uint8Array([1]) });
+    await auto;
+
+    const tap = segment.tapMask(2, 3, 1, W, H);
+    expect(worker.sent).toHaveLength(2);
+    const mask = new Uint8Array([4, 5]);
+    worker.reply({ id: worker.sent[1]!.message.id, mask });
+    await expect(tap).resolves.toBe(mask);
+  });
+});
+
+describe('resetCutout', () => {
+  it('terminates the worker and rejects a pending request', async () => {
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    segment.resetCutout();
+
+    expect(worker.terminated).toBe(true);
+    await expect(promise).rejects.toThrow(/cancelled/);
+  });
+});
+
+describe('worker failure', () => {
+  it('rejects pending requests and starts a new worker next time', async () => {
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const first = latestWorker();
+
+    first.fail();
+
+    await expect(promise).rejects.toThrow();
+    expect(first.terminated).toBe(true);
+
+    const count = FakeWorker.instances.length;
+    const retry = segment.autoCutout(RGBA, W, H);
+    expect(FakeWorker.instances.length).toBe(count + 1);
+
+    const second = latestWorker();
+    const mask = new Uint8Array([9]);
+    second.reply({ id: second.sent[0]!.message.id, mask });
+    await expect(retry).resolves.toBe(mask);
+  });
+});
