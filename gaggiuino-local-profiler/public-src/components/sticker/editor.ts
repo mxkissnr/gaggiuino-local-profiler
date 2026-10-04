@@ -1,5 +1,5 @@
 // Sticker editor overlay (#1336, slice 3a): turns a photo blob into a
-// transparent PNG "sticker". The pure helpers (maskBounds, paddedSquareCrop,
+// transparent PNG "sticker". The pure helpers (maskBounds, paddedAspectCrop,
 // MaskHistory, composeSticker) are exported and unit-tested directly; the
 // overlay is the DOM shell that drives the slice-2 cut-out runtime
 // (segment.ts) and the slice-1 mask helpers (mask.ts).
@@ -17,7 +17,8 @@ import { applyTap, featherAlpha, paintBrush } from './mask.js';
 import { autoCutout, resetCutout, tapMask } from './segment.js';
 
 const MAX_WORK_EDGE = 1024;
-const EXPORT_MAX_EDGE = 480;
+// Longer export edge: a 3:4 sticker is at most 600x800 (#1346).
+const EXPORT_MAX_EDGE = 800;
 const HISTORY_CAP = 20;
 const WORKING_ROTATE_MS = 1500;
 const PEEL_MS = 450;
@@ -69,22 +70,27 @@ export function maskBounds(m: Uint8Array, w: number, h: number): MaskBounds | nu
 }
 
 /**
- * A square crop centred on `bounds`: the side is the longer bounding-box edge,
- * grown by `padFrac` of that side on every side, then clamped to the image.
+ * A `width:height = aspect` crop centred on `bounds`. The mask bounds grow by
+ * `padFrac` of their longer edge on every side, then the smallest aspect box
+ * that contains that padded rectangle is taken (so a wide mask gets a taller
+ * 3:4 box; a tall mask keeps its own height). Finally it is clamped to the
+ * image exactly like the old square crop: it shrinks at the image edges and
+ * never goes out of bounds. `aspect = 1` reproduces the historical square.
  */
-export function paddedSquareCrop(bounds: MaskBounds, w: number, h: number, padFrac = 0.04): CropRect {
+export function paddedAspectCrop(bounds: MaskBounds, w: number, h: number, aspect = 3 / 4, padFrac = 0.04): CropRect {
   const boxWidth = bounds.x1 - bounds.x0 + 1;
   const boxHeight = bounds.y1 - bounds.y0 + 1;
   const longer = Math.max(boxWidth, boxHeight);
   const pad = Math.round(longer * padFrac);
-  const side = longer + pad * 2;
+  const paddedWidth = boxWidth + pad * 2;
+  const paddedHeight = boxHeight + pad * 2;
+  let width = Math.ceil(Math.max(paddedWidth, paddedHeight * aspect));
+  let height = Math.ceil(Math.max(paddedHeight, paddedWidth / aspect));
   const centreX = (bounds.x0 + bounds.x1 + 1) / 2;
   const centreY = (bounds.y0 + bounds.y1 + 1) / 2;
 
-  let x = Math.round(centreX - side / 2);
-  let y = Math.round(centreY - side / 2);
-  let width = side;
-  let height = side;
+  let x = Math.round(centreX - width / 2);
+  let y = Math.round(centreY - height / 2);
   if (x < 0) {
     width += x;
     x = 0;
@@ -565,7 +571,7 @@ function buildEditor(
     const bounds = maskBounds(current, workW, workH);
     if (!bounds) return;
 
-    const crop = paddedSquareCrop(bounds, workW, workH);
+    const crop = paddedAspectCrop(bounds, workW, workH);
     const composed = composeSticker(rgba, current, workW, workH, crop);
     const longer = Math.max(composed.width, composed.height);
     const scale = longer > EXPORT_MAX_EDGE ? EXPORT_MAX_EDGE / longer : 1;

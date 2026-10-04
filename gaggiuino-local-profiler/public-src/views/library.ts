@@ -1161,7 +1161,7 @@ let _stagedBeanImageBlob: Blob | null = null;
 export async function stageNewBeanImage(input: HTMLInputElement): Promise<void> {
   const file = input.files?.[0];
   if (!file) return;
-  const blob = await openImageCropEditor(file, { shape: 'square' });
+  const blob = await openImageCropEditor(file, { shape: 'square', aspect: 'portrait' });
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
@@ -1192,7 +1192,7 @@ async function _uploadBeanImageBlob(id: number, blob: Blob): Promise<boolean> {
 export async function uploadBeanImage(id: number, input: HTMLInputElement): Promise<void> {
   const file = input.files?.[0];
   if (!file) return;
-  const blob = await openImageCropEditor(file, { shape: 'square' });
+  const blob = await openImageCropEditor(file, { shape: 'square', aspect: 'portrait' });
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!blob) return;
