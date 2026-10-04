@@ -110,6 +110,18 @@ describe('autoCutout', () => {
     await expect(promise).resolves.toBe(mask);
   });
 
+  it('creates a module worker from the source URL when no name is injected', async () => {
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    expect(worker.url.toString().endsWith('segment.worker.ts')).toBe(true);
+    expect(worker.options).toEqual({ type: 'module' });
+
+    worker.reply({ id: worker.sent[0]!.message.id, mask: new Uint8Array([0]) });
+    await promise;
+  });
+
   it('sends the models base resolved against document.baseURI', async () => {
     const segment = await freshClient();
     const promise = segment.autoCutout(RGBA, W, H);
