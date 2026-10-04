@@ -2,3 +2,4 @@ node_modules
 npm-debug.log
 .env
 *.md
+!THIRD_PARTY_NOTICES.md
