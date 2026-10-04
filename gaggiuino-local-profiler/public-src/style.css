@@ -1570,7 +1570,11 @@
         .lib-sheet-body .lib-item-in-sheet { display: block; background: none; padding: 0; }
         /* Bean form in a sheet (#1349): the same static form, moved in. */
         .lib-form-sheet .lib-add-form { display: block; background: none; padding: 0; margin: 0; }
-        .lib-form-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+        /* #1372: keep the form's title + close button in view while the sheet
+           scrolls. The sheet carries var(--sp-4) top padding and is the scroll
+           container, so the header sticks at the negative offset of that
+           padding to stay flush with the sheet's top edge. */
+        .lib-form-sheet-head { position: sticky; top: calc(-1 * var(--sp-4)); z-index: 3; background: var(--gray-900); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-4) 0 var(--sp-2); margin-top: calc(-1 * var(--sp-4)); margin-bottom: var(--sp-3); }
         .lib-form-sheet-head-actions { display: flex; align-items: center; gap: var(--sp-1); }
         .lib-form-sheet-body { min-width: 0; }
         .lib-form-sheet .lib-form-actions { position: sticky; bottom: 0; z-index: 2; padding: var(--sp-2) 0; background: var(--gray-900); }
@@ -1589,6 +1593,20 @@
         @media (min-width: 900px) {
             .lib-sheet { left: auto; right: 0; top: var(--dev-banner-h, 0px); bottom: 0; width: min(440px, 100%); max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
             @keyframes lib-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        }
+        /* #1372: desktop has spare width — widen the sheet, lay the bean form
+           out in three columns and place the wheel beside the aromas so the
+           form needs little or no scrolling. */
+        @media (min-width: 1200px) {
+            .lib-sheet { width: min(720px, 50vw); }
+            .lib-form-sheet .lib-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            /* The base odd-last-child rule spans a lone last field across the
+               whole row (right for the 2-column grid); in the 3-column form a
+               lone field stays in its own column. Explicit full-width fields
+               (.lib-form-field-wide) keep spanning. */
+            .lib-form-sheet .lib-form-grid .lib-form-field:not(.lib-form-field-wide):last-child:nth-child(odd) { grid-column: auto; }
+            .lib-sheet-aromas-body { flex-wrap: nowrap; }
+            .lib-sheet-aromas-body .lib-aroma-wheel { width: 200px; }
         }
         .lib-form-hint-staged { color: var(--ok); }
 
