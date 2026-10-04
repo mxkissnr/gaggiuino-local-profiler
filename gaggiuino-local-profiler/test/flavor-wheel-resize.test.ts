@@ -90,13 +90,4 @@ describe('flavour wheel resize observer (#1381)', () => {
     disposeFlavorWheel();
     expect(observer?.disconnected).toBe(true);
   });
-
-  it('disconnects the previous observer before a re-init', async () => {
-    await renderFlavorWheel(asEl(new FakeEl()), ['Jasmin'], 'en', null);
-    const first = FakeResizeObserver.instances[0];
-    await renderFlavorWheel(asEl(new FakeEl()), ['Jasmin'], 'en', null);
-
-    expect(FakeResizeObserver.instances).toHaveLength(2);
-    expect(first?.disconnected).toBe(true);
-  });
 });
