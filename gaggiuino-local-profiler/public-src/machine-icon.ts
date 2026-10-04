@@ -531,13 +531,17 @@ export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatF
 // alongside one another (mirrors poll.go's effectiveSteaming/
 // effectiveFlushing/effectiveDescaling priority guard).
 //
-// #1383: 'off' is derived from msg.machineReachable alone -- a preheat
-// event carries no reachability of its own. A caller handling a non-live
-// update (a PREHEAT_UPDATE push) must pass the last known live message,
-// not null, or a machine already known to be off re-resolves to
-// 'heating' (heat 0) and shows its accent layer. This stays a pure
-// function on purpose: the #1383 fix lives at those callers
-// (views/live.ts, components/topbar-machine-icon.ts), not in here.
+// #1383/#1385: the icon only earns colour on positive evidence the machine
+// is on. An explicit machineReachable === false is known-off and wins
+// outright; isLive/isSteaming/isFlushing/isDescaling are live-machine
+// states checked next; every other reachability value -- including the
+// null/undefined a default machine can report when its status never knew
+// -- is off too, instead of falling through to 'heating' (heat 0) / 'hot'
+// and lighting the accent layer on a machine that is switched off. A
+// preheat event carries no reachability of its own, so a caller handling a
+// non-live update (a PREHEAT_UPDATE push) still passes the last known live
+// message rather than null. This stays a pure function on purpose: the
+// caller-side fix lives in views/live.ts and components/topbar-machine-icon.ts.
 export function resolveMachineIconState(msg: unknown, preheat: unknown): MachineIconState {
     const m = msg as { machineReachable?: boolean; isLive?: boolean; isSteaming?: boolean; isFlushing?: boolean; isDescaling?: boolean } | null | undefined;
     const p = preheat as { ready?: boolean; remaining?: number; pct?: number } | null | undefined;
@@ -546,6 +550,7 @@ export function resolveMachineIconState(msg: unknown, preheat: unknown): Machine
     if (m?.isSteaming)                 return { mode: 'steaming', heatFraction: 1 };
     if (m?.isFlushing)                 return { mode: 'flushing', heatFraction: 1 };
     if (m?.isDescaling)                return { mode: 'descaling', heatFraction: 1 };
+    if (m?.machineReachable !== true)  return { mode: 'off', heatFraction: 0 };
     if (p && !p.ready && (p.remaining ?? 0) > 0) {
         return { mode: 'heating', heatFraction: Math.max(0, Math.min(1, p.pct || 0)) };
     }

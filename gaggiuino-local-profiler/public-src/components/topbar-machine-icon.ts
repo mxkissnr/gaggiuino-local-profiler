@@ -102,11 +102,15 @@ function _applyState(msg: unknown): void {
 // "on, detail unknown" — the same default resolveMachineIconState() itself
 // falls back to once a machine is reachable but reports neither isLive nor
 // an active preheat.
+// #1383: only a positive reachable === true earns that colour. Unknown
+// reachability (null/undefined, which a default machine's status can report
+// when it never knew) stays 'off', matching resolveMachineIconState()'s own
+// treatment of unknown reachability.
 export function syncTopbarMachineIconFallback(reachable: unknown): void {
   if (S.sseActive && iconShowsDefaultMachine()) return;
   const el = host();
   if (!el) return;
-  setMachineIconMode(el, reachable === false ? 'off' : 'hot', 1);
+  setMachineIconMode(el, reachable === true ? 'hot' : 'off', 1);
 }
 
 // Easter egg (#837): 7 clicks within 3s triggers a short, reversible
