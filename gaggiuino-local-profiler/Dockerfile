@@ -41,6 +41,40 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# ── Models: pinned on-device cut-out files + the onnxruntime-web wasm ─────
+# The sticker cut-out runs two ONNX models (IS-Net, SlimSAM) with
+# onnxruntime-web's WebAssembly runtime, all served same-origin by
+# internal/webapp at GET /models/{file}. The three model files are NOT in git:
+# each is pinned by its release URL and an inline SHA-256 below, downloaded
+# once here on the build platform (the files are architecture independent, so
+# a single fetch serves every target arch) and verified with `sha256sum -c`, so
+# a moved or tampered release asset fails the build instead of shipping
+# silently. Roughly 70 MB in total. The two wasm runtime files come from the
+# same onnxruntime-web 1.30.0 tree `npm ci` installed above, so their integrity
+# is already covered by package-lock.json. Same alpine digest as the runtime
+# stage below.
+FROM --platform=$BUILDPLATFORM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS models
+
+WORKDIR /models
+
+# ca-certificates is not guaranteed present in the bare alpine base, and wget
+# verifies the GitHub release TLS chain before downloading the assets.
+RUN apk add --no-cache ca-certificates \
+    && wget -q -O isnet-general-use-int8.onnx \
+        https://github.com/mxkissnr/glp-models/releases/download/models-v1/isnet-general-use-int8.onnx \
+    && wget -q -O slimsam-vision-encoder-q8.onnx \
+        https://github.com/mxkissnr/glp-models/releases/download/models-v1/slimsam-vision-encoder-q8.onnx \
+    && wget -q -O slimsam-decoder-q8.onnx \
+        https://github.com/mxkissnr/glp-models/releases/download/models-v1/slimsam-decoder-q8.onnx \
+    && printf '%s  %s\n' \
+        f1b1c6f7656e532627697afc989d953be1e7ef8f55a718f3611e8c9fd50cdef7 isnet-general-use-int8.onnx \
+        cce23c7b2e5d4f330932738fb67ba518e04b0d99ccdd1cccd22a7da4e01f2971 slimsam-vision-encoder-q8.onnx \
+        cb90b279f549d2cab7fd6e20c38522438c65d84bdcca3d2a764cff7d857fdce2 slimsam-decoder-q8.onnx \
+        | sha256sum -c -
+
+COPY --from=frontend-deps /app/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm /app/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs /models/
+COPY THIRD_PARTY_NOTICES.md /models/
+
 # ── Go builder ────────────────────────────────────────────────────────────
 # Digest-pinned (#1063, Scorecard pinned-dependencies) like the alpine
 # runtime stage below; Renovate's dockerfile manager keeps it current the
@@ -116,6 +150,11 @@ ENV GLP_DEV_BUILD=${GLP_DEV_BUILD}
 # pulling the ~190 MB warm RSS back toward the old Node image's ~90 MB.
 ENV GOMEMLIMIT=160MiB
 
+# internal/webapp serves the on-device cut-out models same-origin at
+# GET /models/{file} from here; see the `models` stage above. Empty would
+# disable the route (every request 404s).
+ENV GLP_MODELS_DIR=/usr/share/glp/models
+
 # /data is created (not just relied on as a bind-mount point) so the image
 # also runs standalone without an explicit `-v` — matching the HA add-on's
 # real usage, where Supervisor always provides the mount, but keeping local
@@ -128,6 +167,7 @@ RUN apk add --no-cache wget ca-certificates su-exec \
     && chown glp:glp /data
 
 COPY --from=builder /out/glp-server /usr/local/bin/glp-server
+COPY --from=models /models /usr/share/glp/models
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

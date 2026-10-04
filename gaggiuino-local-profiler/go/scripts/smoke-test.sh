@@ -231,6 +231,17 @@ if [[ -n "$DOCKER_IMAGE" ]]; then
 		a_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/$asset")
 		[[ "$a_code" == "200" ]] && ok "GET /$asset -> 200 (real Vite bundle)" || bad "GET /$asset: $a_code"
 	done
+
+	# The on-device cut-out models ship in the image's `models` build stage
+	# and are served by internal/webapp at /models/{file} from
+	# GLP_MODELS_DIR (see the repo-root Dockerfile); a native run has no
+	# models dir, so these are Docker-only checks.
+	model_headers=$(curl -s -D - -o /dev/null "$BASE_A/models/ort-wasm-simd-threaded.wasm")
+	grep -qi '^HTTP/[0-9.]* 200' <<<"$model_headers" && ok "GET /models/ort-wasm-simd-threaded.wasm -> 200" || bad "GET /models/ort-wasm-simd-threaded.wasm: $(head -1 <<<"$model_headers")"
+	grep -qi '^Content-Type: application/wasm' <<<"$model_headers" && ok "model wasm served as application/wasm" || bad "model wasm Content-Type: $(grep -i '^Content-Type:' <<<"$model_headers")"
+	# The root response's CSP must allow WebAssembly compilation for the lazy
+	# onnxruntime-web runtime.
+	grep -q "'wasm-unsafe-eval'" <<<"$root_headers" && ok "CSP allows WebAssembly compilation ('wasm-unsafe-eval')" || bad "CSP missing 'wasm-unsafe-eval'"
 fi
 
 step "domain: system (demo seed) + shots"
