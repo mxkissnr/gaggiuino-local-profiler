@@ -581,7 +581,7 @@ const de: Partial<Translations> = {
     'demo.getApp':'App installieren',
     photo_pick_btn:'Foto auswählen', photo_change_btn:'Foto ändern',
     crop_editor_title:'Foto zuschneiden', crop_editor_apply:'Übernehmen', crop_editor_zoom:'Zoom',
-    sticker_title:'Als Sticker freistellen', sticker_working_1:'Bohnen werden sortiert ...', sticker_working_2:'Etikett wird abgezogen ...', sticker_working_3:'Fast fertig, die Kanten werden noch getampert ...', sticker_add:'Hinzufügen', sticker_remove:'Wegnehmen', sticker_brush:'Pinsel', sticker_brush_size:'Pinselgröße', sticker_undo:'Rückgängig', sticker_reset:'Neu beginnen', sticker_original:'Original', sticker_apply:'Sticker übernehmen', sticker_failed:'Dieses Foto wollte sich nicht ablösen. Du kannst es trotzdem so verwenden.', sticker_close:'Schließen',
+    sticker_title:'Als Sticker freistellen', sticker_working_1:'Bohnen werden sortiert ...', sticker_working_2:'Etikett wird abgezogen ...', sticker_working_3:'Fast fertig, die Kanten werden noch getampert ...', sticker_add:'Hinzufügen', sticker_remove:'Wegnehmen', sticker_brush:'Pinsel', sticker_brush_size:'Pinselgröße', sticker_undo:'Rückgängig', sticker_reset:'Neu beginnen', sticker_original:'Original', sticker_apply:'Sticker übernehmen', sticker_failed:'Dieses Foto wollte sich nicht ablösen. Du kannst es trotzdem so verwenden.', sticker_fit:'Einpassen', sticker_close:'Schließen',
 
     // Machine profile editor (#307)
     lib_profiles:'Profile', lib_add_profile:'+ Neues Profil', lib_empty_profiles:'Noch keine Profile vorhanden',

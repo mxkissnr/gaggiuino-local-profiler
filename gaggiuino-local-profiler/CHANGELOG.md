@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### Changed
+- **Pinch to zoom in the sticker editor, so the fine edges are easy to touch up on a phone.** Part of #1336
 - **A sticker editor that cuts the bag out of a bean photo, with tap and brush touch-ups.** Part of #1336
 - **The app now carries two small on-device models for cutting bean photos out as stickers; nothing leaves your network.** Part of #1336
 - **Groundwork for cutting bean photos out as stickers right on your device.** Part of #1336
