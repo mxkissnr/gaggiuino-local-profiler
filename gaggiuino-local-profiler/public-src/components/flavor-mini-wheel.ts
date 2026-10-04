@@ -170,7 +170,8 @@ export function highlightSheetFlavor(nodeId: string | null, chipEl?: Element | n
   // chip flashes every time the sheet updates. Start the pulse on the tapped
   // leaf only; clearing the highlight does nothing.
   if (!_sheetHlNode || !root) return;
-  const svg = (root as Element).querySelector?.('.lib-aroma-svg');
+  if (typeof root.querySelector !== 'function') return;
+  const svg = root.querySelector('.lib-aroma-svg');
   if (!svg || typeof svg.querySelectorAll !== 'function') return;
   svg.querySelectorAll<Element>('.lib-aroma-seg').forEach(path => {
     if (path.getAttribute?.('data-node-id') !== _sheetHlNode) return;
