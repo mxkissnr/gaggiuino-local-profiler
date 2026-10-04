@@ -2636,6 +2636,23 @@
         .crop-editor-zoom-slider { flex:1; accent-color:var(--accent); }
         .crop-editor-actions { display:flex; justify-content:flex-end; gap: var(--sp-2); width:100%; }
 
+        /* Sticker editor overlay (#1336) */
+        .sticker-canvas { touch-action:none; max-width:100%; border-radius:var(--radius); background:var(--gray-950); }
+        .sticker-overlay .lib-btn-sm, .sticker-overlay .lib-save-btn { min-height:44px; }
+        .sticker-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap: var(--sp-2); width:100%; }
+        .sticker-tools .lib-btn-sm { min-width:44px; }
+        .sticker-brush-size { flex:1 1 120px; min-height:44px; accent-color:var(--accent); }
+        .sticker-working { color:var(--gray-500); font-size: var(--fs-1); margin:0; text-align:center; }
+        .sticker-working.sticker-failed { color:var(--err); }
+        .sticker-overlay.sticker-busy { cursor:progress; }
+        @media (prefers-reduced-motion: no-preference) {
+            .sticker-peel { animation: sticker-peel 450ms ease-in forwards; transform-origin:85% 15%; }
+            @keyframes sticker-peel {
+                0%   { transform: translateY(0) rotate(0deg); box-shadow:0 0 0 rgba(0,0,0,0); }
+                100% { transform: translateY(-6px) rotate(-2deg); box-shadow:0 12px 24px rgba(0,0,0,.45); }
+            }
+        }
+
         /* Fullscreen image lightbox (#287) */
         .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; z-index:1200; padding: var(--sp-4); cursor:zoom-out; }
         .lightbox-img { max-width:100%; max-height:100%; object-fit:contain; border-radius:var(--radius); cursor:default; }
