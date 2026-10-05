@@ -1,11 +1,10 @@
-import type { Basket, Milk, PuckScreen, Recipe } from '../api/types.js';
 import type { BeanRow } from './library/bags.js';
 import type { ShelfBean } from './library/shelf.js';
 import { S } from '../state/index.js';
 import type { ShotMeta } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import * as libraryApi from '../api/library.js';
-import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, isoDateInputToMs, html, joinHtml } from '../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, localeFor, countryName } from '../constants.js';
 import { setBeanFilter } from '../components/sidebar.js';
@@ -17,10 +16,9 @@ import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
 import { miniWheelSvg, flavorChipsHtml, applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../components/flavor-mini-wheel.js';
 import { attachSheetSwipe } from '../components/sheet-swipe.js';
-import { generateBeanQR } from '../glp-qr.js';
 import { calcBestGrindCombosForBean } from './shots/grind.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
-import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, FLAVOR_WHEEL_ICON_SVG, COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, STAR_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
+import { TARGET_ICON_SVG, SLIDERS_ICON_SVG, COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, STAR_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../icons.js';
 import { renderRecipeList } from './library/recipes.js';
 import { renderMilkList } from './library/milk.js';
 import { renderBasketList } from './library/baskets.js';
@@ -32,25 +30,13 @@ import {
   matchesShelfQuery, matchesShelfFilter, sortShelf, loadShelfPrefs, saveShelfPrefs,
 } from './library/shelf.js';
 import type { ShelfFilter, ShelfPrefs, ShelfSort, ShelfView } from './library/shelf.js';
+import { _beanList, _state, _field, _el } from './library/bean-shared.js';
+import type { BeanListRow, OriginChip, OriginBean } from './library/bean-shared.js';
+import { openNewBagForm } from './library/bean-card.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
 const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
 const ICON_QR = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z"/></svg>` as Html;
-const ICON_PLUS = `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>` as Html;
-
-// ── Typed views of S ──────────────────────────────────────────────────────
-// state/index.ts types library rows as opaque LibraryRow records; this view
-// owns the bean shape plus the bag-level fields the backend attaches on read,
-// reached through one typed view of the same array/state (same pattern as
-// views/library/bags.ts).
-type BeanListRow = BeanRow & {
-  consumedG?: number | undefined;
-  remainingG?: number | null | undefined;
-};
-
-function _beanList(): BeanListRow[] {
-  return S.coffeeLibrary.beans as BeanListRow[];
-}
 
 // The generated Bean.bags item lags the backend: frozenPortion fields are all
 // optional in the schema but always present at runtime — name what is read.
@@ -62,25 +48,6 @@ interface FrozenPortion {
   remainingCount?: number;
   thawedAt?: number;
 }
-
-// A bean origin chip (blend-capable) — mirrors the flavor chips. The schema
-// documents the weight as `pct`; the runtime payload carries `percent`.
-interface OriginChip { code?: string | undefined; percent?: number | undefined }
-interface OriginBean { origins?: OriginChip[] | undefined; origin?: string | undefined }
-
-type BeanFormExtraRecipe = Record<string, unknown>;
-
-interface LibraryState {
-  coffeeLibrary: {
-    recipes?: Recipe[] | undefined;
-    milks?: Milk[] | undefined;
-    baskets?: Basket[] | undefined;
-    puckScreens?: PuckScreen[] | undefined;
-  };
-  _urlImportImageUrl?: string | null;
-  _urlImportExtraRecipes?: BeanFormExtraRecipe[] | null;
-}
-function _state(): LibraryState { return S; }
 
 // Shot rows are metadata-only (ShotMeta); the bean list reads the annotation's
 // coffee/rating fields and the timestamp — named here, same convention as
@@ -95,23 +62,6 @@ type BeanShotRow = ShotMeta & {
   };
 };
 function _shots(): BeanShotRow[] { return S.shots as BeanShotRow[]; }
-
-// qrcode ships no type declarations; name the one call this view makes.
-interface QrCodeModule {
-  toCanvas(canvas: HTMLCanvasElement, text: string, options: {
-    width: number; margin: number; errorCorrectionLevel: string;
-    color: { dark: string; light: string };
-  }): Promise<unknown>;
-}
-
-// Every form field read/written here is an <input>/<select>; the shared
-// .value/.checked API is all that is used (same helper as grinders.ts).
-function _field(id: string): HTMLInputElement {
-  return document.getElementById(id) as HTMLInputElement;
-}
-function _el(id: string): HTMLElement {
-  return document.getElementById(id) as HTMLElement;
-}
 
 // Bean origin display — beans predating the blend feature (or ones without an
 // origins[] array yet) fall back to the legacy singular `origin` field.
@@ -218,15 +168,7 @@ export function switchLibTab(tab: string): void {
 // toggle before the first request's re-render lands.
 const _pendingBeanActiveToggles = new Set<number>();
 
-interface BeanCardOpts {
-  // The detail sheet already shows the photo, the origin, the name + its
-  // toolbar and the bag actions in its own header, so the embedded card
-  // leaves those out (#1330 part 2).
-  inSheet?: boolean;
-}
-
-// The bag's real calendar age badge — shared by the card's header row and the
-// detail sheet's head so both stay in sync.
+// The bag's real calendar age badge, shown in the detail sheet's head.
 function beanFreshBadge(b: BeanListRow): Html {
   const { current } = classifyBeanBags(b);
   const activeBag = current?.bg || null;
@@ -249,8 +191,7 @@ export function safeHttpUrl(u: string | null | undefined): string | null {
   return null;
 }
 
-export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: BeanCardOpts): Html {
-  const inSheet = opts?.inSheet === true;
+export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   const bags = Array.isArray(b.bags) ? b.bags : [];
   // consumedG/remainingG (bean-level totals) and every bag's own
   // consumedG/remainingG/current are computed server-side (see
@@ -292,17 +233,6 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
     </div>`;
   }
 
-  // Bag-level actions (new bag / freeze portions) live right next to the
-  // inventory display now, not in the generic actions toolbar — they act
-  // ON the packaging shown right above, so they read as one unit instead
-  // of being scattered into an unrelated meta-actions row. Rendered
-  // unconditionally (unlike invHtml) so a bean with zero bags yet still
-  // gets an obvious "add the first one" affordance.
-  const bagActionsHtml: Html = html`<div class="lib-bag-toolbar">
-    <button class="lib-btn-sm lib-bag-toolbar-btn" data-action="open-new-bag" data-id="${esc(b.id)}" title="${tHtml('lib_new_bag')}">${ICON_PLUS} ${tHtml('lib_new_bag_title')}</button>
-    ${activeBag ? html`<button class="lib-btn-sm lib-bag-toolbar-btn" data-action="open-freeze-form" data-id="${esc(b.id)}" title="${tHtml('bag_freeze_btn')}">${SNOWFLAKE_ICON_SVG} ${tHtml('bag_freeze_btn')}</button>` : esc('')}
-  </div>`;
-
   const bagHistoryHtml: Html = bags.length >= 1 ? (() => {
     const parts: Html[] = [];
     if (current) parts.push(renderBagCard(b, current, 'current', beans, false));
@@ -337,12 +267,6 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
       : esc('');
     return html`<div class="lib-bag-history">${joinHtml(parts)}</div>${pastSection}`;
   })() : html`<div class="lib-bag-empty-note">${tHtml('lib_bag_empty')}</div>`;
-
-  // #477: the bag's own freshness badge is always the real calendar age —
-  // freezing part of the bag must not make the coffee still in normal use
-  // read as fresher than it is. Frozen portions get their own effective
-  // age (frozenPortionAgeDays, below) instead of discounting this one.
-  const freshBadge: Html = beanFreshBadge(b);
 
   const locale = localeFor(S.currentLang);
   const frozenPortions = (activeBag && Array.isArray(activeBag.frozenPortions) ? activeBag.frozenPortions : []) as FrozenPortion[];
@@ -441,37 +365,12 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
     : esc('');
 
   const disabled = b.enabled === false;
-  // #404: origin moves out of the generic lib-item-sub line into its own
-  // small eyebrow above the (now serif) bean name.
-  const origin = originDisplay(b);
-  const originEyebrow: Html = origin ? html`<div class="lib-item-origin-eyebrow">${esc(origin)}</div>` : esc('');
-  // Meta-actions (profile/dial-in/QR/flavor-wheel/visibility/edit/delete)
-  // now live in a compact header toolbar next to the bean name — anchored
-  // at a fixed spot regardless of card content height, instead of the old
-  // single flex row that vertically centered on the WHOLE card and ended
-  // up floating in empty space next to whatever happened to be tallest
-  // (usually the bag cards). Delete sits behind a visual divider so it
-  // doesn't read as "just another icon" among the safe actions.
-  const toolbarHtml: Html = html`<div class="lib-item-toolbar">
-    ${Array.isArray(b.flavors) && b.flavors.length ? html`<button class="lib-btn-sm lib-btn-icon" data-action="open-flavor-wheel" data-id="${esc(b.id)}" title="${tHtml('flavor_wheel_btn')}">${FLAVOR_WHEEL_ICON_SVG}</button>` : esc('')}
-    <button class="lib-btn-sm lib-btn-icon" data-action="create-profile-from-bean" data-id="${esc(b.id)}" title="${tHtml('profile_create_from_bean')}">${SLIDERS_ICON_SVG}</button>
-    <button class="lib-btn-sm lib-btn-icon" data-action="start-dialin-from-bean" data-id="${esc(b.id)}" title="${tHtml('dialin_wizard_start_from_bean')}">${TARGET_ICON_SVG}</button>
-    <button class="lib-btn-sm lib-btn-icon" data-action="toggle-bean-qr" data-id="${esc(b.id)}" title="${tHtml('bean_qr_label')}">${ICON_QR}</button>
-    <button class="lib-btn-sm" data-action="toggle-bean-active" data-id="${esc(b.id)}" title="${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
-    <button class="lib-btn-sm lib-btn-icon" data-action="edit-bean" data-id="${esc(b.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-    <span class="lib-toolbar-sep"></span>
-    <button class="lib-btn-sm del lib-btn-icon" data-action="delete-bean" data-id="${esc(b.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
-  </div>`;
 
-  // #1350: inside the detail sheet the flavours become an "Aromas" block — the
-  // inline mini wheel plus chips that highlight their segment — instead of the
-  // plain chip row the shelf card keeps.
+  // #1350: the flavours render as an "Aromas" block — the inline mini wheel
+  // plus chips that highlight their segment.
   const flavorBlockHtml: Html = (() => {
     const flavors = b.flavors;
     if (!Array.isArray(flavors) || flavors.length === 0) return esc('');
-    if (!inSheet) {
-      return html`<div class="lib-flavor-row">${joinHtml(flavors.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>`;
-    }
     return html`<div class="lib-sheet-aromas">
       <div class="lib-sheet-aromas-title">${tHtml('lib_sheet_aromas')}</div>
       <div class="lib-sheet-aromas-body">
@@ -481,14 +380,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
     </div>`;
   })();
 
-  return html`<div class="lib-item${esc(disabled ? ' lib-item-disabled' : '')}${esc(inSheet ? ' lib-item-in-sheet' : '')}">
-    ${!inSheet && b.image ? html`<img class="lib-bean-thumb${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">` : esc('')}
+  return html`<div class="lib-item${esc(disabled ? ' lib-item-disabled' : '')} lib-item-in-sheet">
     <div class="lib-item-info">
-      ${inSheet ? esc('') : originEyebrow}
-      ${inSheet ? esc('') : html`<div class="lib-item-header">
-        <div class="lib-item-name"><span class="serif-display lib-bean-name-link" data-action="filter-by-bean" data-id="${esc(b.id)}" title="${tHtml('bean_filter_hint')}">${esc(b.name)}</span>${freshBadge}${b.roastType ? html` <span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}${b.decaf ? html` <span class="lib-decaf-badge">DECAF</span>` : esc('')}${disabled ? html` <span class="lib-disabled-badge">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}</div>
-        ${toolbarHtml}
-      </div>`}
       <div class="lib-item-sub">${joinHtml([
         b.region, b.species, b.variety, b.process, b.roaster, b.roastDate, b.notes,
       ].filter(Boolean).map((p, i) => i ? html` · ${esc(p)}` : esc(p)))}</div>
@@ -499,7 +392,6 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
       ${lastGrindHtml}
       ${flavorBlockHtml}
       ${invHtml}
-      ${inSheet ? esc('') : bagActionsHtml}
       ${frozenHtml}
       ${bagHistoryHtml}
       ${b.source ? html`<div class="lib-item-source">${tHtml('lib_imported_from',
@@ -889,7 +781,7 @@ function renderBeanSheet(enter = false): void {
         </div>
       </div>
       ${_sheetPrimary(bean)}
-      <div class="lib-sheet-body">${renderBeanCard(bean, beans, { inSheet: true })}</div>
+      <div class="lib-sheet-body">${renderBeanCard(bean, beans)}</div>
     </section>`;
   host.classList?.add('open');
   // Re-apply an aroma highlight that was active before this rebuild (the fresh
@@ -1036,41 +928,6 @@ export function closeBeanSheet(): void {
   }
 }
 
-export function openNewBagForm(id: number): void {
-  const form = document.getElementById(`newBagForm${id}`);
-  if (form) form.style.display = '';
-}
-
-export function closeNewBagForm(id: number): void {
-  const form = document.getElementById(`newBagForm${id}`);
-  if (form) form.style.display = 'none';
-}
-
-export async function deleteBag(beanId: number, bagId: number): Promise<void> {
-  const bean = _beanList().find(b => b.id === beanId);
-  const bags = Array.isArray(bean?.bags) ? bean?.bags : [];
-  if (!bean || bags.length <= 1) return;
-  const { current } = classifyBeanBags(bean);
-  if (current?.bg.id === bagId) return;
-  if (!confirm(t('lib_bag_delete_confirm'))) return;
-  const saved = await libraryApi.deleteBeanBag(beanId, bagId);
-  if (!saved) return;
-  const idx = _beanList().findIndex(b => b.id === beanId);
-  if (idx !== -1) _beanList()[idx] = saved;
-  renderBeanList();
-}
-
-export async function saveNewBag(id: number): Promise<void> {
-  const roastDate   = _field(`newBagRoastDate${id}`)?.value.trim() || '';
-  const stock_g     = parseFloat(_field(`newBagStock${id}`)?.value) || null;
-  const batchNumber = _field(`newBagBatchNumber${id}`)?.value.trim() || '';
-  const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber });
-  if (!saved) return;
-  const idx = _beanList().findIndex(b => b.id === id);
-  if (idx !== -1) _beanList()[idx] = saved;
-  renderBeanList();
-}
-
 // Clicking a bean's name in the Library sets the sidebar's structured bean
 // filter (state.js S.beanFilter / sidebar.js setBeanFilter()) and jumps to
 // the Shots tab so the filtered history is immediately visible.
@@ -1079,112 +936,6 @@ export function filterShotsByBean(id: number): void {
   if (!bean) return;
   setBeanFilter(bean.id, bean.name);
   switchMode('shots');
-}
-
-export function openFreezeForm(id: number): void {
-  _el(`freezeForm${id}`).style.display = '';
-}
-
-export function closeFreezeForm(id: number): void {
-  _el(`freezeForm${id}`).style.display = 'none';
-}
-
-// Freezes a portion of the active bag: grams move into a dated frozen pool
-// (see bag.frozenPortions in the schema) but stay counted in stock_g — the
-// freeze doesn't consume anything, it just pauses that portion's own
-// freshness clock (frozenPortionAgeDays(), utils.js, #477 — the bag's own
-// badge is never affected by this) until it's thawed.
-// frozenAt (#472) comes from the form's date picker (defaults to today, but
-// editable for logging a portion frozen in the past) rather than always
-// being "now".
-export async function saveFreezePortions(id: number): Promise<void> {
-  const portionCount    = parseInt(_field(`freezePortionCount${id}`)?.value, 10);
-  const portionWeight_g = parseFloat(_field(`freezePortionWeight${id}`)?.value);
-  const frozenAt = isoDateInputToMs(_field(`freezeDate${id}`)?.value) ?? Date.now();
-  if (!(portionCount > 0) || !(portionWeight_g > 0)) return;
-  const saved = await libraryApi.freezeBeanPortions(id, { portionCount, portionWeight_g, frozenAt });
-  if (!saved) return;
-  const idx = _beanList().findIndex(b => b.id === id);
-  if (idx !== -1) _beanList()[idx] = saved;
-  renderBeanList();
-}
-
-// Thaws one portion (#472) from a frozen-portion batch's remaining count —
-// e.g. pulling a single 18.5g vacuum-sealed portion out before a shot,
-// leaving the rest still frozen. The batch only stamps thawedAt (and its
-// badge switches to the closed-out "thawed" style) once remainingCount
-// reaches 0 server-side.
-export async function thawPortion(beanId: number, portionId: number): Promise<void> {
-  const saved = await libraryApi.thawBeanPortion(beanId, { portionId, count: 1 });
-  if (!saved) return;
-  const idx = _beanList().findIndex(b => b.id === beanId);
-  if (idx !== -1) _beanList()[idx] = saved;
-  renderBeanList();
-}
-
-export function openEditFrozenForm(portionId: number): void {
-  const el = document.getElementById(`editFrozenForm${portionId}`);
-  if (el) el.style.display = '';
-}
-
-export function closeEditFrozenForm(portionId: number): void {
-  const el = document.getElementById(`editFrozenForm${portionId}`);
-  if (el) el.style.display = 'none';
-}
-
-// Corrects a frozen-portion entry after the fact (#472) — wrong count,
-// weight, or freeze date entered when it was first frozen. Raising
-// remainingCount back above 0 on an already-thawed batch re-opens it
-// (server clears thawedAt); this is the only place that can happen from.
-export async function saveEditFrozenForm(beanId: number, portionId: number): Promise<void> {
-  const remainingCount  = parseInt(_field(`editFrozenRemaining${portionId}`)?.value, 10);
-  const portionWeight_g = parseFloat(_field(`editFrozenWeight${portionId}`)?.value);
-  const frozenAt = isoDateInputToMs(_field(`editFrozenDate${portionId}`)?.value);
-  const body: Record<string, number> = {};
-  if (Number.isFinite(remainingCount)) body.remainingCount = remainingCount;
-  if (portionWeight_g > 0) body.portionWeight_g = portionWeight_g;
-  if (frozenAt != null) body.frozenAt = frozenAt;
-  const saved = await libraryApi.adjustFrozenPortion(beanId, { portionId, ...body });
-  if (!saved) return;
-  const idx = _beanList().findIndex(b => b.id === beanId);
-  if (idx !== -1) _beanList()[idx] = saved;
-  renderBeanList();
-}
-
-export function toggleBeanQR(id: number): void {
-  const wrap = _el(`beanQR${id}`);
-  if (!wrap) return;
-  if (wrap.style.display !== 'none') { wrap.style.display = 'none'; return; }
-  const bean = _beanList().find(b => b.id === id);
-  if (!bean) return;
-  wrap.style.display = 'flex';
-  const canvas = _el(`beanQRCanvas${id}`) as HTMLCanvasElement;
-  const label = wrap.querySelector('.bean-qr-label');
-  // qrcode is a dynamic import now (#797) — the label doubles as a loading
-  // indicator while its chunk downloads, restored once the canvas is drawn
-  // (or the attempt fails).
-  if (label) label.textContent = t('bean_qr_loading');
-  // toCanvas() with no callback returns a Promise — without this .catch(),
-  // a rejection (e.g. QR data-capacity exceeded by a long notes field) was
-  // an unhandled rejection: the canvas stayed silently blank, no error ever
-  // reached the user.
-  // @ts-expect-error -- qrcode ships no type declarations
-  const qrModule = import('qrcode') as Promise<{ default: QrCodeModule }>;
-  qrModule.then(({ default: QRCode }) =>
-    // #814: this was drawn INVERTED — dark: '#e4e4e7' on light: '#18181b' means
-    // light modules on a dark ground, to match the dark theme. The QR spec
-    // assumes dark-on-light, and while many scanners cope with inversion,
-    // plenty of older and simpler ones do not: a code that fails to scan on
-    // someone's phone is a functional defect, not a theming preference.
-    // Fixed polarity in both themes, deliberately NOT theme-aware.
-    QRCode.toCanvas(canvas, generateBeanQR(bean), { width: 140, margin: 2, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } })
-  ).then(() => {
-    if (label) label.textContent = t('bean_qr_label');
-  }).catch(() => {
-    wrap.style.display = 'none';
-    if (label) label.textContent = t('bean_qr_label');
-    alert(t('bean_qr_error'));
-  });
 }
 
 // ── Flavor chips input ────────────────────────────────────────────────────
@@ -1732,7 +1483,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   if (wasCreate) _dropNewShelfTile(saved.id);
   if (extraRecipesToImport.length) renderRecipeList();
   // #1398: the new bean's inline #newBagForm<id> only exists inside its
-  // detail sheet (renderBeanCard with { inSheet: true }), so with a plain
+  // detail sheet (renderBeanCard), so with a plain
   // openNewBagForm the element was missing and the call threw. Open the
   // fresh sheet first and reveal the form once its content has painted.
   if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id));
@@ -1909,6 +1660,7 @@ export async function cutOutBeanSticker(): Promise<void> {
 
 // Section symbols moved to ./library/* — re-exported so existing importers
 // of views/library.js (main.ts et al.) keep working.
+export { openNewBagForm, closeNewBagForm, deleteBag, saveNewBag, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, toggleBeanQR } from './library/bean-card.js';
 export {
   renderRecipeList, addRecipeStep, removeRecipeStep, openRecipeForm, closeRecipeForm,
   editRecipe, saveRecipe, deleteRecipe,
