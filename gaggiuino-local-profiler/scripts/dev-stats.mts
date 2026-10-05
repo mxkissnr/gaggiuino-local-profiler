@@ -466,7 +466,7 @@ function statsForRepo(repo: RepoSpec): RepoStats | null {
     return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, modelCostUsd, totalLines, aiLines, devHours };
 }
 
-function fmtDate(d: string | undefined): string { return d || '?'; }
+function fmtDate(d: string | null | undefined): string { return d || '?'; }
 
 export function subscriptionCostSentence(monthsCount: number, firstDate: string | null | undefined, costUsd: number): string {
     return `The maintainer pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. Counting every calendar month touched since the first commit (${fmtDate(firstDate)}), ${monthsCount} month${monthsCount === 1 ? '' : 's'} works out to **$${costUsd.toFixed(2)}** for every Claude-model commit combined, regardless of which Claude model did the work.`;
