@@ -105,7 +105,11 @@ type LiveData struct {
 	Temperature       *float64 `json:"temperature"`
 	TargetTemperature *float64 `json:"targetTemperature"`
 	Pressure          *float64 `json:"pressure"`
-	WaterLevel        *int     `json:"waterLevel"`
+	// #1409: GaggiMate active warnings and firmware-update flag, carried
+	// from the merged evt:status via MachineStatus. machineWarnings is
+	// always a JSON array (empty for Gaggiuino, which reports neither).
+	MachineWarnings        []string `json:"machineWarnings"`
+	MachineUpdateAvailable bool     `json:"machineUpdateAvailable"`
 }
 
 // pollGlobalState holds package-level polling state (as opposed to the
@@ -861,8 +865,40 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 		ProfileID:         s.ProfileID,
 		ProfileName:       s.ProfileName,
 		SteamSwitchState:  steamOn,
+		Warnings:          activeMachineWarnings(m["warn"]),
+		UpdateAvailable:   m["up"] == true,
 	}
 }
+
+	// activeMachineWarnings extracts the active warning keys from a GaggiMate
+	// evt:status `warn` array. GaggiMate WebSocketHandler.cpp's addWarnings
+	// emits one {k, l, a} entry per WarningManager warning: k is the key, l its
+	// level (0 ignore / 1 warn / 2 error) and a whether it is currently active.
+	// Keep only entries that are active (a == true) and at least warn-level
+	// (l >= 1), preserving the firmware's order. A non-array value yields nil.
+	func activeMachineWarnings(v any) []string {
+		arr, ok := v.([]any)
+		if !ok {
+			return nil
+		}
+		var out []string
+		for _, e := range arr {
+			entry, ok := e.(map[string]any)
+			if !ok {
+				continue
+			}
+			k, ok := entry["k"].(string)
+			if !ok || k == "" {
+				continue
+			}
+			a, _ := entry["a"].(bool)
+			l, _ := entry["l"].(float64)
+			if a && l >= 1 {
+				out = append(out, k)
+			}
+		}
+		return out
+	}
 
 func derefFloat(v *float64) float64 {
 	if v == nil {
@@ -949,12 +985,17 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 	rt := p.runtime.Get()
 	var temp, targetTemp, pressure *float64
 	var waterLevel *int
+	// #1409: never nil, so machineWarnings is always a JSON array.
+	warnings := []string{}
+	var updateAvailable bool
 	if rt.MachineStatus != nil {
 		t := rt.MachineStatus.Temperature
 		tt := rt.MachineStatus.TargetTemperature
 		pr := rt.MachineStatus.Pressure
 		temp, targetTemp, pressure = &t, &tt, &pr
 		waterLevel = rt.MachineStatus.WaterLevel // already *int, nil when HasWaterSensor=false (wl field not parsed)
+		warnings = append([]string{}, rt.MachineStatus.Warnings...)
+		updateAvailable = rt.MachineStatus.UpdateAvailable
 	}
 
 	p.state.mu.Lock()
@@ -1002,6 +1043,9 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 		TargetTemperature: targetTemp,
 		Pressure:          pressure,
 		WaterLevel:        waterLevel,
+
+		MachineWarnings:        warnings,
+		MachineUpdateAvailable: updateAvailable,
 	}
 }
 
