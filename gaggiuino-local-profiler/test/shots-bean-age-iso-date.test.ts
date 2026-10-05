@@ -18,7 +18,7 @@ beforeAll(async () => {
   ({ S } = await import('../public-src/state/index.js'));
 });
 
-interface Bag { openedAt?: number; roastDate?: string }
+interface Bag { id?: number; openedAt?: number; roastDate?: string }
 interface Bean { id: number; name: string; roastDate?: string; bags?: Bag[] }
 interface CoffeeLibrary { beans: Bean[]; recipes: unknown[]; grinders: unknown[] }
 
