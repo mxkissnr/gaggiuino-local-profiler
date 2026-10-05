@@ -485,6 +485,9 @@ func TestModelHandlers_CancelledDownloadLeavesNoPartFile(t *testing.T) {
 		mux.ServeHTTP(rec, req)
 		close(done)
 	}()
+	// Always unblock the upstream handler, so a failed assertion cannot leave it
+	// stalled and hang the server's cleanup.
+	defer close(release)
 
 	<-entered
 	cancel()
@@ -493,7 +496,6 @@ func TestModelHandlers_CancelledDownloadLeavesNoPartFile(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("handler did not return after the request was cancelled")
 	}
-	close(release)
 
 	assertNoModelFile(t, dir, "alpha.onnx")
 }
