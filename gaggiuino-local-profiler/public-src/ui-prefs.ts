@@ -135,7 +135,7 @@ async function _flush(): Promise<void> {
     }
     for (const key of keys) {
       // Keep the key queued if its value changed while this PUT was in flight.
-      if (_version.get(key) === sentVersions.get(key)) _queue.delete(key);
+      if ((_version.get(key) ?? 0) === sentVersions.get(key)) _queue.delete(key);
     }
     _persistPending();
   } catch {
@@ -166,7 +166,7 @@ export async function flushUiPrefsOnLeave(): Promise<void> {
     if (!r.ok) return;
     let dropped = false;
     for (const key of keys) {
-      if (_version.get(key) === sentVersions.get(key)) {
+      if ((_version.get(key) ?? 0) === sentVersions.get(key)) {
         if (_queue.delete(key)) dropped = true;
       }
     }
@@ -176,14 +176,26 @@ export async function flushUiPrefsOnLeave(): Promise<void> {
   }
 }
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', () => { void flushUiPrefsOnLeave(); });
+type LeaveListener = () => void;
+interface ListenableTarget {
+  addEventListener?: ((type: string, listener: LeaveListener) => void) | undefined;
 }
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') void flushUiPrefsOnLeave();
-  });
+
+// Only subscribe when the global really is an EventTarget: several tests swap in
+// a partial window/document fake that only implements the few methods they need.
+function _subscribe(target: unknown, type: string, listener: LeaveListener): void {
+  const t = target as ListenableTarget | null | undefined;
+  t?.addEventListener?.(type, listener);
 }
+
+_subscribe(typeof window !== 'undefined' ? window : undefined, 'pagehide', () => {
+  void flushUiPrefsOnLeave();
+});
+_subscribe(typeof document !== 'undefined' ? document : undefined, 'visibilitychange', () => {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    void flushUiPrefsOnLeave();
+  }
+});
 
 /**
  * Server wins for every key it already holds, except keys with a local write
