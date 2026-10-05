@@ -5,7 +5,7 @@ import de from '../public-src/i18n/de.js';
 import en from '../public-src/i18n/en.js';
 import es from '../public-src/i18n/es.js';
 import fr from '../public-src/i18n/fr.js';
-import it from '../public-src/i18n/it.js';
+import itLang from '../public-src/i18n/it.js';
 import nl from '../public-src/i18n/nl.js';
 
 const TRANSITIONS: RecordedPhaseTransition[] = [
@@ -63,7 +63,7 @@ describe('exitReasonKey', () => {
 });
 
 describe('recorded-phase i18n keys', () => {
-    const LANGS = { de, en, es, fr, it, nl };
+    const LANGS = { de, en, es, fr, it: itLang, nl };
     const WARN_KEYS = [
         'machine_warn_water', 'machine_warn_flush', 'machine_warn_switch',
         'machine_warn_scaleConnected', 'machine_warn_scaleBattery', 'machine_warn_temperature',
