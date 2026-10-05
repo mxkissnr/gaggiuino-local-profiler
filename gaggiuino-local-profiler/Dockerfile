@@ -39,7 +39,8 @@ FROM --platform=$BUILDPLATFORM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0d
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts: no package lifecycle script runs during the image build.
+RUN npm ci --ignore-scripts
 
 # ── Go builder ────────────────────────────────────────────────────────────
 # Digest-pinned (#1063, Scorecard pinned-dependencies) like the alpine

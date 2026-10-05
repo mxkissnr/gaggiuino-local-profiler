@@ -13,6 +13,10 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
+// maxMachineResponseBytes caps a machine response body at 8 MiB so a
+// hostile machine cannot stream an unbounded response into memory.
+const maxMachineResponseBytes = 8 << 20
+
 // machinesDialer pins every real connection httpClient (and, via
 // websocket.DialOptions, every WS dial in this package — ws.go/live.go/
 // gaggimate_live.go/gaggimate_ws.go all pass HTTPClient: httpClient) opens
@@ -83,12 +87,12 @@ func httpGetBytes(ctx context.Context, url string, timeout time.Duration) ([]byt
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxMachineResponseBytes))
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, errorSnippet(body))
 	}
 	return body, nil
 }
@@ -118,7 +122,7 @@ func httpGetBytesCapped(ctx context.Context, url string, timeout time.Duration, 
 		return nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, errorSnippet(body))
 	}
 	return body, nil
 }
@@ -144,14 +148,25 @@ func httpPostBytes(ctx context.Context, url string, body []byte, timeout time.Du
 		return nil, err
 	}
 	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxMachineResponseBytes))
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, errorSnippet(respBody))
 	}
 	return respBody, nil
+}
+
+// errorSnippet renders a response body for an error message, whitespace
+// trimmed and cut to at most 200 bytes (an ellipsis marks the cut) so an
+// oversized or binary error body cannot flood a log or API response.
+func errorSnippet(body []byte) string {
+	s := strings.TrimSpace(string(body))
+	if len(s) > 200 {
+		return s[:200] + "…"
+	}
+	return s
 }
 
 // ── loose value coercion, mirroring JS's parseFloat/parseInt/!!/||null

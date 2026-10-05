@@ -1,6 +1,7 @@
 package machines
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -82,5 +83,44 @@ func TestNewGuardedHTTPClient_RedirectToBlockedAddressFails(t *testing.T) {
 	}
 	if !isSSRFBlocked(err) {
 		t.Fatalf("expected an SSRF-blocked error, got: %v", err)
+	}
+}
+
+// TestHTTPGetBytes_ErrorBodyIsTruncated is the #1408 regression test: a
+// machine that answers an error with a large body must not have that whole
+// body echoed back in the error message.
+func TestHTTPGetBytes_ErrorBodyIsTruncated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(bytes.Repeat([]byte("e"), 10*1024))
+	}))
+	defer srv.Close()
+	withAllowedLoopbackHost(t, "127.0.0.1")
+
+	_, err := httpGetBytes(context.Background(), srv.URL, 2*time.Second)
+	if err == nil {
+		t.Fatal("expected an error for a 500 response")
+	}
+	if len(err.Error()) >= 300 {
+		t.Fatalf("error message is %d bytes, want < 300: %q", len(err.Error()), err.Error())
+	}
+}
+
+// TestHTTPGetBytes_ResponseBodyIsCapped is the #1408 regression test for the
+// read side: an over-cap success body is read only up to
+// maxMachineResponseBytes rather than entirely into memory.
+func TestHTTPGetBytes_ResponseBodyIsCapped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(bytes.Repeat([]byte("a"), maxMachineResponseBytes+1))
+	}))
+	defer srv.Close()
+	withAllowedLoopbackHost(t, "127.0.0.1")
+
+	body, err := httpGetBytes(context.Background(), srv.URL, 5*time.Second)
+	if err != nil {
+		t.Fatalf("httpGetBytes: %v", err)
+	}
+	if len(body) != maxMachineResponseBytes {
+		t.Fatalf("body length = %d, want %d", len(body), maxMachineResponseBytes)
 	}
 }
