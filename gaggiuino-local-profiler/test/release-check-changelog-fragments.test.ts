@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkChangelogFragments } from '../scripts/release-check.mjs';
+import { checkChangelogFragments } from '../scripts/release-check.mts';
 
 // #1421 slice 2/2: the fragment collector folds changelog.d/<issue>.<section>.md
 // into CHANGELOG.md and deletes the collected files at release time. A release

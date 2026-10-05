@@ -80,7 +80,7 @@ The protocol is public. It must not contain LAN addresses, hostnames, tokens
 or personal names. Screenshots show only the app, never the surrounding Home
 Assistant UI.
 
-`scripts/release-check.mjs` rejects a protocol that leaks an RFC1918 private
+`scripts/release-check.mts` rejects a protocol that leaks an RFC1918 private
 IPv4 address, a hostname ending in `.local` or `.lan`, a JWT-like string or a
 GitHub token prefix.
 
