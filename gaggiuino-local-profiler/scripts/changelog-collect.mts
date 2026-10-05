@@ -15,8 +15,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Keep-a-Changelog order; lowercase on disk, title case in the heading.
-const SECTIONS = ['added', 'changed', 'deprecated', 'removed', 'fixed', 'security'];
-const TITLES = {
+const SECTIONS = ['added', 'changed', 'deprecated', 'removed', 'fixed', 'security'] as const;
+type Section = (typeof SECTIONS)[number];
+const TITLES: Record<Section, string> = {
     added: 'Added',
     changed: 'Changed',
     deprecated: 'Deprecated',
@@ -25,7 +26,22 @@ const TITLES = {
     security: 'Security',
 };
 
-function parseFragmentName(fileName) {
+export interface ChangelogFragment {
+    name: string;
+    content: string;
+}
+
+interface ParsedFragment {
+    section: Section;
+    issue: number;
+    suffix: string;
+}
+
+function isSection(value: string): value is Section {
+    return (SECTIONS as readonly string[]).includes(value);
+}
+
+function parseFragmentName(fileName: string): ParsedFragment {
     if (!fileName.endsWith('.md')) {
         throw new Error(`changelog fragment ${fileName}: expected a .md file`);
     }
@@ -36,7 +52,7 @@ function parseFragmentName(fileName) {
     }
     const name = stem.slice(0, dot);
     const section = stem.slice(dot + 1);
-    if (!SECTIONS.includes(section)) {
+    if (!isSection(section)) {
         throw new Error(
             `changelog fragment ${fileName}: unknown section "${section}" (expected one of: ${SECTIONS.join(', ')})`,
         );
@@ -48,7 +64,7 @@ function parseFragmentName(fileName) {
     return { section, issue: Number(match[1]), suffix: match[2] ?? '' };
 }
 
-function bulletsOf(content) {
+function bulletsOf(content: string): string[] {
     return content
         .split('\n')
         .map((line) => line.replace(/\r$/, ''))
@@ -57,14 +73,14 @@ function bulletsOf(content) {
 
 // Returns a Map of existing `### Title` heading to the lines that follow it,
 // in the order they appear. Only used on the [Unreleased] block.
-function parseUnreleased(blockLines) {
-    const sections = new Map();
-    let current = null;
+function parseUnreleased(blockLines: readonly string[]): Map<string, string[]> {
+    const sections = new Map<string, string[]>();
+    let current: string[] | null = null;
     for (const line of blockLines.slice(1)) {
         const heading = /^###\s+(.*\S)\s*$/.exec(line);
         if (heading) {
             current = [];
-            sections.set(heading[1], current);
+            sections.set(heading[1] ?? '', current);
         } else if (current && line.trim() !== '') {
             current.push(line);
         }
@@ -72,29 +88,35 @@ function parseUnreleased(blockLines) {
     return sections;
 }
 
-function unreleasedBlock(text) {
+function unreleasedBlock(text: string): string {
     const lines = text.split('\n');
     const start = lines.findIndex((line) => /^##\s+\[Unreleased\]\s*$/.test(line));
     if (start === -1) return '';
     let end = start + 1;
-    while (end < lines.length && !/^##\s/.test(lines[end])) end += 1;
+    while (end < lines.length && !/^##\s/.test(lines[end] ?? '')) end += 1;
     return lines.slice(start, end).join('\n');
 }
 
-export function collectChangelog(changelogText, fragments) {
+export function collectChangelog(
+    changelogText: string,
+    fragments: readonly ChangelogFragment[],
+): string {
     if (fragments.length === 0) return changelogText;
 
     const entries = fragments
         .map((fragment) => ({ ...fragment, ...parseFragmentName(fragment.name) }))
         .sort((a, b) => a.issue - b.issue || a.suffix.localeCompare(b.suffix));
 
-    const bulletsBySection = new Map(SECTIONS.map((section) => [section, []]));
+    const bulletsBySection = new Map<Section, string[]>(
+        SECTIONS.map((section): [Section, string[]] => [section, []]),
+    );
     for (const entry of entries) {
         const bullets = bulletsOf(entry.content);
         if (bullets.length === 0) {
             throw new Error(`changelog fragment ${entry.name}: no "- " bullet line found`);
         }
-        bulletsBySection.get(entry.section).push(...bullets);
+        const bucket = bulletsBySection.get(entry.section);
+        if (bucket) bucket.push(...bullets);
     }
 
     const lines = changelogText.split('\n');
@@ -104,7 +126,7 @@ export function collectChangelog(changelogText, fragments) {
     if (headingIndex !== -1) {
         blockStart = headingIndex;
         let end = headingIndex + 1;
-        while (end < lines.length && !/^##\s/.test(lines[end])) end += 1;
+        while (end < lines.length && !/^##\s/.test(lines[end] ?? '')) end += 1;
         blockEnd = end;
     }
 
@@ -114,7 +136,7 @@ export function collectChangelog(changelogText, fragments) {
     for (const section of SECTIONS) {
         const title = TITLES[section];
         const existingBody = existing.get(title);
-        const newBullets = bulletsBySection.get(section);
+        const newBullets = bulletsBySection.get(section) ?? [];
         if (existingBody === undefined && newBullets.length === 0) continue;
         rebuilt.push(`### ${title}`);
         if (existingBody !== undefined) rebuilt.push(...existingBody);
@@ -134,7 +156,7 @@ export function collectChangelog(changelogText, fragments) {
     return [...lines.slice(0, blockStart), ...rebuilt, ...lines.slice(blockEnd)].join('\n');
 }
 
-// CLI: node changelog-collect.mjs [--dry-run]
+// CLI: node changelog-collect.mts [--dry-run]
 if (import.meta.url === `file://${process.argv[1]}`) {
     const scriptDir = dirname(fileURLToPath(import.meta.url));
     const projectDir = join(scriptDir, '..');
@@ -145,18 +167,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const names = existsSync(fragmentsDir)
         ? readdirSync(fragmentsDir).filter((name) => name.endsWith('.md') && name !== 'README.md')
         : [];
-    const fragments = names.map((name) => ({
+    const fragments: ChangelogFragment[] = names.map((name) => ({
         name,
         content: readFileSync(join(fragmentsDir, name), 'utf8'),
     }));
     const changelogText = readFileSync(changelogPath, 'utf8');
 
-    let newText;
+    let newText: string;
     try {
         newText = collectChangelog(changelogText, fragments);
     } catch (error) {
-        console.error(error.message);
+        console.error(error instanceof Error ? error.message : String(error));
         process.exit(1);
+        throw error;
     }
 
     if (dryRun) {

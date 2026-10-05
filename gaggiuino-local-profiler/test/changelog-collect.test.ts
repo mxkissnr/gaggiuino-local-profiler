@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { collectChangelog } from '../scripts/changelog-collect.mjs';
+import { collectChangelog } from '../scripts/changelog-collect.mts';
 
 // #1421: every PR used to edit the same spot under `## [Unreleased]` in
 // CHANGELOG.md, so each merge into dev made every other open PR conflict and
