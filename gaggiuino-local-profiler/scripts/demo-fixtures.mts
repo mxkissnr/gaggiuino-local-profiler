@@ -682,7 +682,7 @@ async function main(): Promise<void> {
 // recorder — and its process.exit() — as an import side effect, the same
 // failure dev-stats.mts's guard prevents (#527).
 const entryArg = process.argv[1];
-const invokedDirectly = !!entryArg && fileURLToPath(import.meta.url) === path.resolve(entryArg);
+const invokedDirectly = entryArg !== undefined && fileURLToPath(import.meta.url) === path.resolve(entryArg);
 if (invokedDirectly) {
     main()
         .then(() => process.exit(0))
