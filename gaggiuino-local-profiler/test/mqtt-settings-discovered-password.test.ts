@@ -71,8 +71,8 @@ describe('MQTT settings password field (#1431)', () => {
 
     await loadMqttSettings();
 
-    expect(els.mqttPassword.value).toBe('');
-    expect(els.mqttPassword.placeholder).toBe('From Home Assistant — leave blank to use it');
+    expect(els.mqttPassword!.value).toBe('');
+    expect(els.mqttPassword!.placeholder).toBe('From Home Assistant — leave blank to use it');
 
     await saveMqttSettings();
 
@@ -88,14 +88,14 @@ describe('MQTT settings password field (#1431)', () => {
         useDiscoveredPassword: true,
       }),
     });
-    expect(JSON.parse(fetchSpy.mock.calls[2][1].body as string)).not.toHaveProperty('password');
+    expect(JSON.parse(fetchSpy.mock.calls[2]?.[1]?.body as string)).not.toHaveProperty('password');
   });
 
   it('posts a typed password and no discovery flag', async () => {
     mockLoad();
 
     await loadMqttSettings();
-    els.mqttPassword.value = 'typed-secret';
+    els.mqttPassword!.value = 'typed-secret';
     await saveMqttSettings();
 
     expect(fetchSpy).toHaveBeenNthCalledWith(3, 'api/mqtt/settings', {
@@ -110,6 +110,6 @@ describe('MQTT settings password field (#1431)', () => {
         password: 'typed-secret',
       }),
     });
-    expect(JSON.parse(fetchSpy.mock.calls[2][1].body as string)).not.toHaveProperty('useDiscoveredPassword');
+    expect(JSON.parse(fetchSpy.mock.calls[2]?.[1]?.body as string)).not.toHaveProperty('useDiscoveredPassword');
   });
 });
