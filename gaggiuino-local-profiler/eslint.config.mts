@@ -22,15 +22,19 @@ const localPlugin = {
 };
 
 // #1270 rename map. Each entry lands in its own slice, so a slice diffs only
-// the TypeScript name it ports and never the renamed-away JavaScript file:
-//   eslint.config.js          -> eslint.config.mts
-//   eslint-rules/html-sink.js -> eslint-rules/html-sink.mts
-//   public-src/public/sw.js   -> public-src/sw.ts        (bundled; served as sw.js)
-//   demo/sw/demo-sw.js        -> demo/sw/demo-sw.ts      (bundled to demo-sw.js)
-//   demo/sw/sw-core.js        -> demo/sw/sw-core.ts      (bundled into demo-sw.js)
-//   test/e2e/smoke.test.mjs   -> test/e2e/smoke.test.mts
-//   scripts/demo-fixtures.mjs -> scripts/demo-fixtures.mts  (this slice)
-// The unchanged scripts/*.mjs entries stay until their own slices port them.
+// the TypeScript name it ports and never the renamed-away JavaScript file.
+// Status below is as of this branch:
+//   eslint.config.js            -> eslint.config.mts             (ported)
+//   eslint-rules/html-sink.js   -> eslint-rules/html-sink.mts    (ported)
+//   public-src/public/sw.js     -> public-src/sw.ts              (ported; bundled, served as sw.js)
+//   demo/sw/demo-sw.js          -> demo/sw/demo-sw.ts            (ported; bundled to demo-sw.js)
+//   demo/sw/sw-core.js          -> demo/sw/sw-core.ts            (ported; bundled into demo-sw.js)
+//   test/e2e/smoke.test.mjs     -> test/e2e/smoke.test.mts       (ported)
+//   scripts/demo-fixtures.mjs   -> scripts/demo-fixtures.mts     (ported)
+//   scripts/demo-smoke.mjs      -> scripts/demo-smoke.mts        (ported)
+//   scripts/sync-dev-config.mjs -> scripts/sync-dev-config.mts   (ported)
+// Only scripts/dev-stats.mjs and scripts/release-check.mjs still await their
+// own slices; the unchanged .mjs files stay until then.
 
 export default [
   {
