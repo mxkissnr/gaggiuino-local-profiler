@@ -7,6 +7,7 @@
 ### Fixed
 - **Saving a new bean with "Save and add bag" opens the bag form again.**
 - **Bean age and the degassing hint now also work for roast dates entered in ISO format.**
+- **Shots from GaggiMate firmware v1.9.0 are imported with correct curves again.** Closes #1397
 - **The Statistics month calendar only asks for a bean's photo when it has one, so it stops logging a failed image request.** Part of #1331
 - **The machine icon no longer shows a strip of colour while the machine is switched off.** Closes #1383
 - **A remembered machine that no longer exists no longer hides the shot history.** (#1323)
