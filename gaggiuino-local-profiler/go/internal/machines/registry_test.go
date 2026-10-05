@@ -1,6 +1,9 @@
 package machines
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func strPtr(s string) *string { return &s }
 func i64Ptr(n int64) *int64   { return &n }
@@ -376,5 +379,72 @@ func TestRestoreMachines_PreservesWaterSensorFlag(t *testing.T) {
 	}
 	if len(list) != 1 || !list[0].HasWaterSensor {
 		t.Fatalf("hasWaterSensor not restored: %+v", list)
+	}
+}
+
+// TestRestoreMachines_ClearsMachineProfiles (#1406): the machine is the source
+// of truth for its profiles, and a restored id may now name a different
+// physical machine, so restoring the machines table must drop the local
+// machine_profiles cache/outbox in the same transaction. Otherwise a cached row
+// (or one still pending a push) stays attached to whatever machine now owns
+// that id and the next sync sweep would push the leftover edit to the wrong
+// address.
+func TestRestoreMachines_ClearsMachineProfiles(t *testing.T) {
+	reg, db := newTestRegistry(t)
+	m, err := reg.CreateMachine(MachineInput{Name: strPtr("Kitchen"), Type: strPtr("gaggiuino"), Host: strPtr("old.local")})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	repo := NewProfilesRepository(db)
+	if err := repo.UpsertSynced(m.ID, "remote-1", "Espresso", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if _, err := repo.UpsertDirty(m.ID, nil, nil, "Offline edit", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	countProfiles := func() int {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM machine_profiles`).Scan(&n); err != nil {
+			t.Fatalf("counting machine_profiles: %v", err)
+		}
+		return n
+	}
+	if got := countProfiles(); got != 2 {
+		t.Fatalf("seeded machine_profiles = %d, want 2 (one synced, one pending_create)", got)
+	}
+
+	// A valid restore rebuilds the machines table, so the cache/outbox goes too.
+	restored, err := reg.RestoreMachines([]Machine{
+		{ID: 1, Name: "Restored", Type: "gaggiuino", Host: "restored.local", IsDefault: true, Enabled: true},
+	})
+	if err != nil {
+		t.Fatalf("RestoreMachines: %v", err)
+	}
+	if restored != 1 {
+		t.Fatalf("restored = %d, want 1", restored)
+	}
+	if got := countProfiles(); got != 0 {
+		t.Fatalf("machine_profiles after a valid restore = %d, want 0", got)
+	}
+
+	// An all-invalid restore is a no-op, so it must leave the cache untouched.
+	if _, err := repo.UpsertDirty(m.ID, nil, nil, "Offline edit", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("UpsertDirty (re-seed): %v", err)
+	}
+	if got := countProfiles(); got != 1 {
+		t.Fatalf("re-seeded machine_profiles = %d, want 1", got)
+	}
+	restored, err = reg.RestoreMachines([]Machine{
+		{ID: 0, Name: "Broken", Type: "gaggiuino", Host: "a.local"},
+	})
+	if err != nil {
+		t.Fatalf("RestoreMachines (all-invalid): %v", err)
+	}
+	if restored != 0 {
+		t.Fatalf("restored (all-invalid) = %d, want 0", restored)
+	}
+	if got := countProfiles(); got != 1 {
+		t.Fatalf("machine_profiles after an all-invalid restore = %d, want 1 (untouched)", got)
 	}
 }
