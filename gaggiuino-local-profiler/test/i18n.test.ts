@@ -22,6 +22,14 @@ const NEW_KEYS = [
     'compare_title', 'please_wait', 'profile_unknown',
     'backup_progress_download', 'backup_progress_upload', 'backup_progress_preparing',
     'backup_progress_restoring', 'backup_progress_done', 'settings_devtools_export_db_failed',
+    // Recorded-phase extras (#1409): shot end reason, phase exit reasons and
+    // machine warnings. shot_end_reason is a formatter (truthy as a function).
+    'shot_end_reason',
+    'exit_reason_1', 'exit_reason_2', 'exit_reason_3', 'exit_reason_4',
+    'exit_reason_5', 'exit_reason_6', 'exit_reason_7',
+    'machine_warn_water', 'machine_warn_flush', 'machine_warn_switch',
+    'machine_warn_scaleConnected', 'machine_warn_scaleBattery', 'machine_warn_temperature',
+    'machine_update_available',
 ];
 
 describe('i18n language files', () => {
