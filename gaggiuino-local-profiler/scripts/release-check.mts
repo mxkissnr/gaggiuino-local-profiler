@@ -544,7 +544,7 @@ export function checkAcceptanceProtocol(markdown: string, version: string | null
     for (const { type, re } of leakPatterns) {
         const match = markdown.match(re);
         if (match) {
-            failures.push(`Check 6 (acceptance protocol): leaked ${type} "${match[0]!}"`);
+            failures.push(`Check 6 (acceptance protocol): leaked ${type} "${match[0]}"`);
         }
     }
 
@@ -720,5 +720,5 @@ function main(): void {
 // test would also run checks 1/2/4/5 against this repo and call
 // process.exit() as an import side effect.
 const invokedDirectly = process.argv[1] &&
-    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]!);
+    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (invokedDirectly) main();
