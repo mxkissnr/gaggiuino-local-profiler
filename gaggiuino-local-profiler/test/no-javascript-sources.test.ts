@@ -26,7 +26,6 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
 const ALLOWLIST: readonly string[] = [
     'gaggiuino-local-profiler/demo/sw/demo-sw.js',
     'gaggiuino-local-profiler/demo/sw/sw-core.js',
-    'gaggiuino-local-profiler/public-src/public/sw.js',
     'gaggiuino-local-profiler/scripts/demo-fixtures.mjs',
     'gaggiuino-local-profiler/scripts/demo-smoke.mjs',
     'gaggiuino-local-profiler/scripts/dev-stats.mjs',

@@ -2,10 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 
-// Part of #1404 (slice 4): public-src/public/sw.js is a classic service-worker
-// script, not a module, so it is loaded in a fresh context with only the
-// globals its fetch handler touches rather than imported.
+// Part of #1404 (slice 4): public-src/sw.ts is a TypeScript global script, not
+// a module, so it is transpiled and then run in a fresh context with only the
+// globals its fetch handler touches rather than imported (#1270).
 
 type FetchHandler = (event: ShellFetchEvent) => void;
 
@@ -42,7 +43,10 @@ type Sandbox = {
 const ORIGIN = 'https://glp.example';
 
 function loadAppShellSw() {
-    const source = readFileSync(fileURLToPath(new URL('../public-src/public/sw.js', import.meta.url)), 'utf8');
+    const source = readFileSync(fileURLToPath(new URL('../public-src/sw.ts', import.meta.url)), 'utf8');
+    const compiled = ts.transpileModule(source, {
+        compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    }).outputText;
     const handlers = new Map<string, FetchHandler>();
     const put = vi.fn<ShellCache['put']>(() => Promise.resolve());
     const open = vi.fn<(name: string) => Promise<ShellCache>>(() => Promise.resolve({ put }));
@@ -66,7 +70,7 @@ function loadAppShellSw() {
         },
         fetch: fetchMock,
     };
-    runInNewContext(source, sandbox);
+    runInNewContext(compiled, sandbox);
     return { handlers, put, fetchMock };
 }
 
