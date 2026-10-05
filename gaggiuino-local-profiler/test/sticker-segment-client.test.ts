@@ -69,27 +69,68 @@ afterEach(() => {
 });
 
 describe('isStickerCutoutAvailable', () => {
+  const MODELS = { version: 'models-v1', sizes: {} };
+
   it('is true when the HEAD probe succeeds, and probes once', async () => {
-    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);
     const segment = await freshClient();
 
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith('models/isnet-general-use-int8.onnx', { method: 'HEAD' });
+    expect(fetchSpy).toHaveBeenCalledWith('models/models-v1/isnet-general-use-int8.onnx', {
+      method: 'HEAD',
+    });
   });
 
-  it('is false when the probe is not ok', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
+  it('is false and cached when the probe returns 404', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: false, status: 404 }));
+    vi.stubGlobal('fetch', fetchSpy);
     const segment = await freshClient();
+
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('is false when the probe throws', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no network'))));
+  it('is false and retried when the probe throws', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('no network'))
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchSpy);
     const segment = await freshClient();
+
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('is false and retried when the probe fails transiently', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchSpy);
+    const segment = await freshClient();
+
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('is false without the models manifest, without probing', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const segment = await freshClient();
+
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -122,14 +163,15 @@ describe('autoCutout', () => {
     await promise;
   });
 
-  it('sends the models base resolved against document.baseURI', async () => {
+  it('sends the versioned models base resolved against document.baseURI', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', { version: 'models-v1', sizes: {} });
     const segment = await freshClient();
     const promise = segment.autoCutout(RGBA, W, H);
     const worker = latestWorker();
 
     // The message is a union at runtime, so read the field through the union.
     const posted = worker.sent[0]!.message as { modelsBase?: string };
-    expect(posted.modelsBase).toBe('https://example.test/glp/models/');
+    expect(posted.modelsBase).toBe('https://example.test/glp/models/models-v1/');
 
     worker.reply({ id: worker.sent[0]!.message.id, mask: new Uint8Array([0]) });
     await promise;
@@ -271,5 +313,85 @@ describe('worker failure', () => {
     const mask = new Uint8Array([9]);
     second.reply({ id: second.sent[0]!.message.id, mask });
     await expect(retry).resolves.toBe(mask);
+  });
+});
+
+describe('request watchdog', () => {
+  it('rejects every pending request and terminates the worker when one goes unanswered', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const first = segment.autoCutout(RGBA, W, H);
+    const firstError = first.catch((err: unknown) => err);
+    const second = segment.autoCutout(RGBA, W, H);
+    const secondError = second.catch((err: unknown) => err);
+    const worker = latestWorker();
+    // Both requests share the one worker and are still waiting for an answer.
+    expect(FakeWorker.instances).toHaveLength(1);
+
+    vi.advanceTimersByTime(120_000);
+
+    expect(((await firstError) as Error).message).toMatch(/did not answer/);
+    expect(((await secondError) as Error).message).toMatch(/did not answer/);
+    expect(worker.terminated).toBe(true);
+
+    // The next request starts a fresh worker instead of the terminated one.
+    const next = segment.autoCutout(RGBA, W, H);
+    expect(FakeWorker.instances).toHaveLength(2);
+    const fresh = latestWorker();
+    fresh.reply({ id: fresh.sent[0]!.message.id, mask: new Uint8Array([3]) });
+    await expect(next).resolves.toEqual(new Uint8Array([3]));
+  });
+
+  it('clears the watchdog when the answer arrives before the deadline', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    const mask = new Uint8Array([5]);
+    worker.reply({ id: worker.sent[0]!.message.id, mask });
+    await expect(promise).resolves.toBe(mask);
+
+    vi.advanceTimersByTime(120_000);
+    // The cleared watchdog must not terminate the worker after a normal answer.
+    expect(worker.terminated).toBe(false);
+  });
+
+  it('re-arms on progress so a long but progressing request is not killed', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H, () => {});
+    const worker = latestWorker();
+    const id = worker.sent[0]!.message.id;
+
+    // Five minutes of work with a progress report every minute: each gap is well
+    // under the 120 s limit, so the watchdog deadline must keep moving forward.
+    for (let elapsed = 0; elapsed < 300_000; elapsed += 60_000) {
+      worker.reply({ id, progress: { stage: 'download', fraction: 0.1 } });
+      vi.advanceTimersByTime(60_000);
+    }
+    expect(worker.terminated).toBe(false);
+
+    const mask = new Uint8Array([4, 2]);
+    worker.reply({ id, mask });
+    await expect(promise).resolves.toBe(mask);
+  });
+
+  it('still rejects and terminates when progress stops for the full window', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H, () => {});
+    const error = promise.catch((err: unknown) => err);
+    const worker = latestWorker();
+    const id = worker.sent[0]!.message.id;
+
+    worker.reply({ id, progress: { stage: 'inference', fraction: 0.9 } });
+    vi.advanceTimersByTime(60_000);
+    expect(worker.terminated).toBe(false);
+
+    // A full 120 s of silence after the last progress report is still a stall.
+    vi.advanceTimersByTime(60_000);
+    expect(((await error) as Error).message).toMatch(/did not answer/);
+    expect(worker.terminated).toBe(true);
   });
 });

@@ -462,9 +462,11 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// as those: GET falls through auth.RequireToken's static-asset bypass,
 	// exactly as the static frontend always has. See internal/webapp/doc.go.
 	webapp.NewHandlers().RegisterRoutes(mux)
-	// The on-device cut-out models the Dockerfile ships, served same-origin for
-	// the browser to fetch before it has a token. GLP_MODELS_DIR is unset
-	// outside the image, which disables the route (every request 404s).
+	// The on-device cut-out models, served same-origin for the browser to fetch
+	// before it has a token. GLP_MODELS_DIR is the download-on-first-use cache
+	// dir: the first GET for a model downloads it from the pinned glp-models
+	// release into that dir. It is unset outside the image, which disables the
+	// route (every request 404s).
 	webapp.NewModelHandlers(getEnv("GLP_MODELS_DIR", "")).RegisterRoutes(mux)
 
 	if onMux != nil {

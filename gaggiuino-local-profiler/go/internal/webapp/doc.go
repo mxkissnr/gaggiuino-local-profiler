@@ -39,9 +39,11 @@
 //     up.
 //   - Everything else in dist/ (the hashed assets/, manifest.json, sw.js,
 //     icon.png, countries-110m.json) is served as a plain static file.
-//     manifest.json/sw.js are served even under Ingress — harmless, since a
-//     page that never received the manifest <link> or ran the
-//     SW-registration call never requests them.
+//     Files under assets/ are content-hashed and sent with
+//     Cache-Control: public, max-age=31536000, immutable; manifest.json/sw.js
+//     are served even under Ingress — harmless, since a page that never
+//     received the manifest <link> or ran the SW-registration call never
+//     requests them.
 //   - A .html file (only ever index.html today) carries the same no-cache
 //     headers.
 //

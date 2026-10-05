@@ -20,7 +20,17 @@ export type { CutoutProgress };
 // file; undefined under the Vite dev server, where the .ts source is served.
 declare const __GLP_SEGMENT_WORKER__: string | undefined;
 
+// Injected by go/cmd/frontend-build as {"version":..., "sizes":{file: bytes}};
+// undefined under the Vite dev server, where the cut-out is treated as
+// unavailable rather than pointed at a guessed path.
+declare const __GLP_CUTOUT_MODELS__: { version: string; sizes: Record<string, number> } | undefined;
+
 const ISNET_MODEL = 'isnet-general-use-int8.onnx';
+
+// The pinned model release, or "" when the build injected no manifest (the
+// Vite dev server and any build without the models route).
+const MODELS_VERSION =
+  typeof __GLP_CUTOUT_MODELS__ === 'undefined' ? '' : __GLP_CUTOUT_MODELS__.version;
 
 /**
  * How long the worker is kept after resetCutout() before being terminated. A
@@ -30,23 +40,44 @@ const ISNET_MODEL = 'isnet-general-use-int8.onnx';
  */
 const WORKER_IDLE_MS = 20_000;
 
+/**
+ * How long a single request may stay unanswered before the client gives up. The
+ * first cut-out downloads the model files server-side, so this is generous; a
+ * worker silent for this long is presumed stuck, and the next request starts a
+ * fresh one instead of hanging the cut-out forever.
+ */
+const REQUEST_TIMEOUT_MS = 120_000;
+
 /** Absolute directory the models are served from, ending in "models/". */
 function modelsBase(): string {
-  return new URL('models/', document.baseURI).href;
+  const version = MODELS_VERSION === '' ? '' : `${MODELS_VERSION}/`;
+  return new URL(`models/${version}`, document.baseURI).href;
 }
 
 let availability: Promise<boolean> | null = null;
 
 /**
- * Whether this deployment ships the cut-out models, probed once with a HEAD
- * request against the smallest model. Any failure means "not available"; the
- * result is cached for the session.
+ * Whether this deployment serves the cut-out models. Probes the smallest model
+ * with a HEAD request against the versioned manifest path. Only a definite
+ * answer is cached: a confirmed present (true) or a definite 404 (false). A
+ * network failure is not cached, so a probe that failed while the server was
+ * still starting is retried on the next call (#1399).
  */
 export function isStickerCutoutAvailable(): Promise<boolean> {
+  if (MODELS_VERSION === '') return Promise.resolve(false);
   if (!availability) {
-    availability = fetch(`models/${ISNET_MODEL}`, { method: 'HEAD' })
-      .then((res) => res.ok)
-      .catch(() => false);
+    availability = fetch(`models/${MODELS_VERSION}/${ISNET_MODEL}`, { method: 'HEAD' })
+      .then((res) => {
+        if (res.ok) return true;
+        if (res.status === 404) return false;
+        // Neither a confirmed present nor a confirmed absent: leave the probe
+        // uncached below so a transient failure is retried.
+        throw new Error(`models probe: ${res.status}`);
+      })
+      .catch(() => {
+        availability = null;
+        return false;
+      });
   }
   return availability;
 }
@@ -55,6 +86,12 @@ interface Pending {
   resolve: (mask: Uint8Array) => void;
   reject: (err: unknown) => void;
   onProgress?: (progress: CutoutProgress) => void;
+  timer: ReturnType<typeof setTimeout>;
+  /**
+   * Restarts this request's watchdog. A request that is still reporting
+   * progress has not stalled, so its deadline moves forward.
+   */
+  rearm: () => void;
 }
 
 let worker: Worker | null = null;
@@ -66,7 +103,10 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null;
 const pending = new Map<number, Pending>();
 
 function rejectPending(err: unknown): void {
-  for (const entry of pending.values()) entry.reject(err);
+  for (const entry of pending.values()) {
+    clearTimeout(entry.timer);
+    entry.reject(err);
+  }
   pending.clear();
 }
 
@@ -112,9 +152,11 @@ function createWorker(): Worker {
       } catch {
         // A broken progress listener must not break the request plumbing.
       }
+      entry.rearm();
       return;
     }
     pending.delete(msg.id);
+    clearTimeout(entry.timer);
     if (msg.error !== undefined) entry.reject(new Error(msg.error));
     else entry.resolve(msg.mask ?? new Uint8Array());
   };
@@ -160,7 +202,31 @@ function request(
 ): Promise<Uint8Array> {
   const target = workerFor();
   return new Promise<Uint8Array>((resolve, reject) => {
-    pending.set(message.id, onProgress ? { resolve, reject, onProgress } : { resolve, reject });
+    const stall = (): void => {
+      // The worker keeps one shared session for every request, so a request that
+      // stays unanswered this long makes the whole worker unusable: fail every
+      // pending request and terminate it. The next request starts a new worker.
+      rejectPending(new Error('segment: worker did not answer within 120s'));
+      if (worker === target) dropWorker();
+    };
+    const entry: Pending = {
+      resolve,
+      reject,
+      // Spread rather than a possibly-undefined property because
+      // exactOptionalPropertyTypes rejects `onProgress: undefined`.
+      ...(onProgress ? { onProgress } : {}),
+      timer: setTimeout(stall, REQUEST_TIMEOUT_MS),
+      // A request that keeps reporting progress is still making headway: the
+      // first cut-out downloads 46 MB and runs inference server-side, which can
+      // outlast REQUEST_TIMEOUT_MS on slow hardware or links. Resetting the
+      // watchdog on every progress message means only that much *silence* is a
+      // stall, so a slow but progressing download is not killed mid-flight.
+      rearm: () => {
+        clearTimeout(entry.timer);
+        entry.timer = setTimeout(stall, REQUEST_TIMEOUT_MS);
+      },
+    };
+    pending.set(message.id, entry);
     target.postMessage(message, transfer);
   });
 }

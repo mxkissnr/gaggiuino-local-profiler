@@ -132,6 +132,13 @@ func (h *Handlers) static(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Everything under assets/ is content-hashed by cmd/frontend-build, so a
+	// given name's bytes never change and it can be cached indefinitely; a new
+	// build changes the name instead. This covers the embedded onnxruntime-web
+	// runtime files (#1404) as much as the JS/CSS bundles.
+	if strings.HasPrefix(name, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 	if strings.HasSuffix(name, ".html") {
 		setNoCache(w)
 	}

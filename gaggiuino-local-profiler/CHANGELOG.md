@@ -5,6 +5,8 @@
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **The sticker cut-out explains when its tools could not be downloaded and no longer spins forever when the browser stops the cut-out.** (#1404, #1399)
+- **The sticker cut-out no longer gives up on a slow first download that is still making progress, and a full disk is reported as a storage problem.** Part of #1404
 - **The Analytics month calendar moves on to the new month when the app stays open over a month change.** Closes #1401
 - **Restoring a backup no longer pushes leftover profile edits to a machine that now has a different address.** Closes #1406
 - **View, filter and sort choices made shortly before closing the app or while offline are no longer lost, and one invalid setting can no longer stop syncing.** Closes #1403
@@ -24,6 +26,8 @@
 - **Photos cached by the browser before the previous fix are re-checked too, so a replaced photo appears after a normal reload.** (#1357)
 - **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
+- **The installed app no longer caches the sticker cut-out's large runtime file, so its offline cache stays small.** Closes #1404
+- **Updates are about 60 MB smaller: the sticker cut-out downloads its models once, the first time you use it.** (#1404)
 - **Frozen beans hang icicles under their bag on the shelf, and the open label no longer covers the bag photo.** Part of #1350
 - **On a phone a bean closes with a swipe down, and the flavour wheel grows out of the small wheel to full screen instead of opening behind the bean.** (#1374)
 - **The flavour wheel now sits right in a bean's details, and the large wheel opens on the full overview with readable labels and a legend.** (#1350)

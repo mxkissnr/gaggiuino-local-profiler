@@ -190,14 +190,27 @@ describe('autoCutout', () => {
   const w = 8;
   const h = 6;
 
-  it('returns a mask of length w*h and configures the wasm runtime', async () => {
+  it('points onnxruntime at the build-injected hashed wasm/mjs', async () => {
+    vi.stubGlobal('__GLP_ORT_WASM__', './ort-wasm-simd-threaded-abc12345.wasm');
+    vi.stubGlobal('__GLP_ORT_MJS__', './ort-wasm-simd-threaded-def67890.mjs');
     const core = await freshCore();
     const mask = await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
 
     expect(mask.length).toBe(w * h);
-    expect(String(shared.env.wasm.wasmPaths).endsWith('models/')).toBe(true);
+    const paths = shared.env.wasm.wasmPaths as { wasm: string; mjs: string };
+    expect(paths.wasm.endsWith('ort-wasm-simd-threaded-abc12345.wasm')).toBe(true);
+    expect(paths.mjs.endsWith('ort-wasm-simd-threaded-def67890.mjs')).toBe(true);
     expect(shared.env.wasm.numThreads).toBe(1);
     expect(shared.env.wasm.proxy).toBe(false);
+  });
+
+  it('leaves wasmPaths unset when the build did not inject the runtime files', async () => {
+    const core = await freshCore();
+    const mask = await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
+
+    expect(mask.length).toBe(w * h);
+    expect(shared.env.wasm.wasmPaths).toBeUndefined();
+    expect(shared.env.wasm.numThreads).toBe(1);
   });
 
   it('disposes the model output tensors', async () => {
@@ -301,6 +314,48 @@ describe('fetchModelBytes', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 } as Response)));
 
     await expect(core.fetchModelBytes(`${MODELS_BASE}missing.onnx`)).rejects.toThrow(/404/);
+  });
+
+  it('reports progress from a known size when Content-Length is stripped', async () => {
+    const core = await freshCore();
+    const url = `${MODELS_BASE}chunked.onnx`;
+    const bytes = new Uint8Array(10).fill(3);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(streamedResponse(url, [bytes.slice(0, 4), bytes.slice(4)], false))),
+    );
+
+    const fractions: number[] = [];
+    const out = await core.fetchModelBytes(
+      url,
+      (loaded, total) => fractions.push(loaded / total),
+      bytes.byteLength,
+    );
+
+    expect(Array.from(out)).toEqual(Array.from(bytes));
+    expect(fractions).toEqual([0.4, 1]);
+  });
+
+  it('rejects a short body against the known size', async () => {
+    const core = await freshCore();
+    const url = `${MODELS_BASE}short.onnx`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(streamedResponse(url, [new Uint8Array(4)], false))),
+    );
+
+    await expect(core.fetchModelBytes(url, undefined, 10)).rejects.toThrow(
+      `${core.MODEL_DOWNLOAD_FAILED} (incomplete)`,
+    );
+  });
+
+  it('rejects a rejected fetch with the failure prefix', async () => {
+    const core = await freshCore();
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('boom'))));
+
+    await expect(core.fetchModelBytes(`${MODELS_BASE}net.onnx`)).rejects.toThrow(
+      `${core.MODEL_DOWNLOAD_FAILED} (network)`,
+    );
   });
 });
 

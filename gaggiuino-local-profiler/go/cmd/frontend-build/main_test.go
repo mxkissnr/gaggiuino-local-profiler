@@ -127,6 +127,28 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 		t.Errorf("no built chunk references the worker file %s", workerName)
 	}
 
+	// The onnxruntime-web runtime (#1404) ships as two content-hashed assets in
+	// assets/, and the worker bundle references both hashed names plus the pinned
+	// model manifest's IS-Net size. segment-core sizes a download from that
+	// manifest instead of the strippable Content-Length.
+	ortNames := make([]string, 0, 2)
+	for _, ext := range []string{"wasm", "mjs"} {
+		matches, _ := filepath.Glob(filepath.Join(out, "assets", "ort-wasm-simd-threaded-*."+ext))
+		if len(matches) != 1 {
+			t.Fatalf("expected exactly one assets/ort-wasm-simd-threaded-*.%s, got %d", ext, len(matches))
+		}
+		ortNames = append(ortNames, filepath.Base(matches[0]))
+	}
+	workerBody, err := os.ReadFile(workerFiles[0])
+	if err != nil {
+		t.Fatalf("read worker bundle: %v", err)
+	}
+	for _, want := range append(ortNames, "46360717") {
+		if !strings.Contains(string(workerBody), want) {
+			t.Errorf("worker bundle does not contain %q", want)
+		}
+	}
+
 	// The raw source path must be gone from every output: a leftover .ts URL
 	// is exactly the regression that broke the cut-out in the image.
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {

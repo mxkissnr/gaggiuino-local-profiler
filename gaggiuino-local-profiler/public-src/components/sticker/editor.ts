@@ -237,6 +237,18 @@ export function nextStage(current: CutoutStage, incoming: CutoutStage): CutoutSt
   return STAGE_ORDER[incoming] >= STAGE_ORDER[current] ? incoming : current;
 }
 
+// Mirrors MODEL_DOWNLOAD_FAILED in segment-core.ts. The literal is duplicated
+// rather than imported as a value so segment-core (and its onnxruntime-web /
+// worker chunk) never enters the page bundle; keep the two strings in sync.
+const MODEL_DOWNLOAD_FAILED_PREFIX = 'segment: model download failed';
+
+/** Picks the failure line: a download failure gets its own, clearer message. */
+export function failureMessageKey(err: unknown): 'sticker_download_failed' | 'sticker_failed' {
+  return err instanceof Error && err.message.startsWith(MODEL_DOWNLOAD_FAILED_PREFIX)
+    ? 'sticker_download_failed'
+    : 'sticker_failed';
+}
+
 interface DecodedPhoto {
   source: CanvasImageSource;
   width: number;
@@ -576,7 +588,7 @@ function buildEditor(
     busy = false;
     stopProgressTimer();
     progress.style.display = 'none';
-    workingLine.textContent = t('sticker_failed');
+    workingLine.textContent = t(failureMessageKey(err));
     workingLine.classList.add('sticker-failed');
     tools.style.display = 'none';
     cancelBtn.style.display = 'none';
