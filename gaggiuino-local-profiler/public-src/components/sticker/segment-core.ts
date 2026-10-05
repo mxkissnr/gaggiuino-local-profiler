@@ -38,6 +38,17 @@ const SAM_DECODER_MODEL = 'slimsam-decoder-q8.onnx';
 const ISNET_SIZE = 1024;
 const SAM_SIZE = 1024;
 
+// Injected by go/cmd/frontend-build (the image path) as the hashed same-origin
+// wasm runtime files; undefined under the Vite dev server, where
+// onnxruntime-web resolves them next to its own bundle instead.
+declare const __GLP_ORT_WASM__: string | undefined;
+declare const __GLP_ORT_MJS__: string | undefined;
+
+// Injected by go/cmd/frontend-build as {"version":..., "sizes":{file: bytes}};
+// undefined under the Vite dev server. Lets a download be sized before the
+// response arrives, which matters under HA Ingress (it strips Content-Length).
+declare const __GLP_CUTOUT_MODELS__: { version: string; sizes: Record<string, number> } | undefined;
+
 type Ort = typeof import('onnxruntime-web/wasm');
 
 export type CutoutStage = 'download' | 'background' | 'subject';
@@ -52,10 +63,18 @@ export interface CutoutProgress {
 let runtime: Promise<Ort> | null = null;
 
 /** Dynamic-import onnxruntime-web and point it at the served wasm files once. */
-function loadRuntime(modelsBase: string): Promise<Ort> {
+function loadRuntime(): Promise<Ort> {
   if (!runtime) {
     runtime = import('onnxruntime-web/wasm').then((ort) => {
-      ort.env.wasm.wasmPaths = modelsBase;
+      // The image build injects the hashed same-origin runtime files; the Vite
+      // dev server leaves the globals undefined and onnxruntime resolves its
+      // defaults instead.
+      if (typeof __GLP_ORT_WASM__ === 'string' && typeof __GLP_ORT_MJS__ === 'string') {
+        ort.env.wasm.wasmPaths = {
+          wasm: new URL(__GLP_ORT_WASM__, import.meta.url).href,
+          mjs: new URL(__GLP_ORT_MJS__, import.meta.url).href,
+        };
+      }
       ort.env.wasm.numThreads = 1;
       ort.env.wasm.proxy = false;
       return ort;
@@ -66,39 +85,78 @@ function loadRuntime(modelsBase: string): Promise<Ort> {
 
 const sessions = new Map<string, Promise<InferenceSession>>();
 
+/** Error message prefix every model download failure carries. */
+export const MODEL_DOWNLOAD_FAILED = 'segment: model download failed';
+
+/** Byte size the build pinned for one model file, or undefined outside the image build. */
+function expectedModelBytes(file: string): number | undefined {
+  if (typeof __GLP_CUTOUT_MODELS__ === 'undefined') return undefined;
+  return __GLP_CUTOUT_MODELS__.sizes[file];
+}
+
 /**
  * Fetch one model file, reporting byte progress as the body streams. Returns
- * the whole file as bytes. A response without a body stream or without a usable
- * Content-Length is read in one go and reports no progress.
+ * the whole file as bytes.
+ *
+ * The progress total is the response's Content-Length when it is present and
+ * valid, otherwise expectedTotal. Home Assistant's ingress proxy strips
+ * Content-Length for bodies above ~4 MB and a broken upstream stream can end
+ * cleanly, so the pinned size is the only total available there. When
+ * expectedTotal is given the received length must match it. Every failure —
+ * a non-ok status, a rejected fetch, a stream read error or a length mismatch —
+ * throws `segment: model download failed (<status|network|incomplete>)`.
  */
 export async function fetchModelBytes(
   url: string,
   onBytes?: (loaded: number, total: number) => void,
+  expectedTotal?: number,
 ): Promise<Uint8Array> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`segment: model download failed (${res.status})`);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    throw new Error(`${MODEL_DOWNLOAD_FAILED} (network)`);
+  }
+  if (!res.ok) throw new Error(`${MODEL_DOWNLOAD_FAILED} (${res.status})`);
   const length = res.headers.get('Content-Length');
-  const total = length === null ? Number.NaN : Number(length);
+  const headerTotal = length === null ? Number.NaN : Number(length);
+  const total = Number.isFinite(headerTotal) && headerTotal > 0 ? headerTotal : expectedTotal;
   const body = res.body;
-  if (!body || !Number.isFinite(total) || total <= 0) {
-    return new Uint8Array(await res.arrayBuffer());
+
+  let bytes: Uint8Array;
+  if (!body || !(typeof total === 'number' && total > 0)) {
+    // No usable total: read the whole file in one go and report no progress.
+    try {
+      bytes = new Uint8Array(await res.arrayBuffer());
+    } catch {
+      throw new Error(`${MODEL_DOWNLOAD_FAILED} (network)`);
+    }
+  } else {
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        chunks.push(value);
+        loaded += value.byteLength;
+        onBytes?.(loaded, total);
+      }
+    } catch {
+      throw new Error(`${MODEL_DOWNLOAD_FAILED} (network)`);
+    }
+    bytes = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
   }
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    chunks.push(value);
-    loaded += value.byteLength;
-    onBytes?.(loaded, total);
-  }
-  const bytes = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+
+  if (typeof expectedTotal === 'number' && expectedTotal > 0 && bytes.byteLength !== expectedTotal) {
+    throw new Error(`${MODEL_DOWNLOAD_FAILED} (incomplete)`);
   }
   return bytes;
 }
@@ -130,9 +188,13 @@ function sessionFor(
   let session = sessions.get(file);
   if (!session) {
     session = (async () => {
-      const bytes = await fetchModelBytes(modelsBase + file, (loaded, total) => {
-        emit(onProgress, { stage: 'download', fraction: loaded / total });
-      });
+      const bytes = await fetchModelBytes(
+        modelsBase + file,
+        (loaded, total) => {
+          emit(onProgress, { stage: 'download', fraction: loaded / total });
+        },
+        expectedModelBytes(file),
+      );
       return ort.InferenceSession.create(bytes, {
         executionProviders: ['wasm'],
         // The CPU memory arena and memory-pattern planning hold large buffers for
@@ -319,7 +381,7 @@ export async function autoCutout(
     sh = box.height;
   }
 
-  const ort = await loadRuntime(modelsBase);
+  const ort = await loadRuntime();
 
   const isnetSession = await sessionFor(ort, ISNET_MODEL, modelsBase, onProgress);
   emit(onProgress, { stage: 'background', fraction: null });
@@ -386,7 +448,7 @@ export async function tapMask(
   if (box && (x < box.x || y < box.y || x >= box.x + box.width || y >= box.y + box.height)) {
     return new Uint8Array(w * h);
   }
-  const ort = await loadRuntime(modelsBase);
+  const ort = await loadRuntime();
   let mask: Uint8Array;
   if (box) {
     const sub = await decode(
