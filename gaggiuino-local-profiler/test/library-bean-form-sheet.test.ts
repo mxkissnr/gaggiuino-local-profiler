@@ -7,6 +7,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 
+// saveBeanAddBag() drives saveBeanInternal, which calls into the library API;
+// mocking it keeps the test off the network and lets it return a canned bean.
+const mocks = vi.hoisted(() => ({ saveBean: vi.fn() }));
+vi.mock('../public-src/api/library.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
+  return { ...actual, saveBean: mocks.saveBean };
+});
+
 type Listener = (event: FakeEvent) => void;
 interface FakeEvent { target?: unknown; key?: string; preventDefault?: () => void }
 
@@ -203,6 +211,18 @@ class FakeDocument {
     // missing host stays observable. Everything else (the ~25 form fields)
     // is a permissive stub, like the other library tests.
     if (id === 'beanSheet' || id === 'beanFormSheet') return null;
+    // The inline bag form only exists inside the bean detail sheet's painted
+    // markup (renderBeanCard with inSheet) and the fake DOM keeps innerHTML as
+    // a plain string, so expose the element only once that markup is present —
+    // otherwise a genuinely missing form stays observable (#1398).
+    if (id.startsWith('newBagForm')) {
+      const sheet = this.nodes.get('beanSheet');
+      if (!sheet || !sheet.innerHTML.includes(`id="${id}"`)) return null;
+      const el = new FakeElement(this);
+      el.id = id;
+      this.nodes.set(id, el);
+      return el;
+    }
     const el = new FakeElement(this);
     el.id = id;
     this.nodes.set(id, el);
@@ -230,6 +250,8 @@ interface LibraryModule {
   closeBeanForm: () => void;
   requestCloseBeanForm: () => void;
   discardBeanForm: () => void;
+  saveBeanAddBag: () => Promise<void>;
+  openNewBagForm: (id: number) => void;
 }
 
 interface Bean {
@@ -255,6 +277,7 @@ beforeEach(async () => {
   doc = new FakeDocument();
   g.document = doc;
   g.window = { matchMedia: () => ({ matches: false }) };
+  mocks.saveBean.mockReset();
   vi.resetModules();
   ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
   library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
@@ -369,3 +392,31 @@ describe('bean form sheet (#1349)', () => {
     expect(form.parentNode).toBe(home);
   });
 });
+
+describe('save and add bag (#1398)', () => {
+  it('opens the freshly created bean sheet with its inline bag form visible', async () => {
+    setupHome();
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+    mocks.saveBean.mockResolvedValue({
+      id: 7,
+      name: 'New Bean',
+      roaster: 'Kaffee Braun',
+      bags: [{ id: 1, stock_g: 250, consumedG: 0, remainingG: 250, current: true, roastDate: '2026-01-01' }],
+    });
+
+    await library.saveBeanAddBag();
+
+    const sheet = doc.body.querySelector('#beanSheet');
+    expect(sheet).not.toBeNull();
+    expect(sheet?.classList.contains('open')).toBe(true);
+    expect(sheet?.innerHTML).toContain('id="newBagForm7"');
+    const form = doc.getElementById('newBagForm7');
+    expect(form).not.toBeNull();
+    expect(form?.style.display).toBe('');
+  });
+
+  it('openNewBagForm tolerates a bag form that is not in the DOM', () => {
+    expect(() => library.openNewBagForm(999)).not.toThrow();
+  });
+});
+
