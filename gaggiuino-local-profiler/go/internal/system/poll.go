@@ -140,6 +140,11 @@ type pollGlobalState struct {
 	lastSyncTime        *string
 	lastSyncError       *string
 	defaultSyncInFlight bool
+	// defaultSyncRerun is set when a trigger arrives while a default sync is
+	// already running (#1409): the run does one more pass afterwards instead of
+	// the trigger being dropped. Read and cleared by syncDefaultMachineShots,
+	// guarded by mu like defaultSyncInFlight.
+	defaultSyncRerun bool
 	// otherSyncInFlight is the #773 per-machine single-run guard for non-default
 	// machines (syncOtherMachines, #1146), keyed by machine id — one slot per
 	// machine, so a slow backfill on one machine never blocks another's.
