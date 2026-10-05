@@ -19,20 +19,28 @@
 // a flaky connection. Chart.js/ECharts/topojson-client/QRCode and both
 // bundled fonts (Figtree, Fraunces) are all same-origin /assets/ output and
 // covered by this caching — no cross-origin request is left uncached.
+//
+// This file is TypeScript (#1270), bundled to sw.js by both frontend builds:
+// go/cmd/frontend-build (the image) and vite.config.ts (`npm run build`). It
+// is deliberately a global script with no import/export, so both bundlers emit
+// a classic script and the unit test can run it in a vm; tsconfig.sw.json
+// types it against the WebWorker lib.
 
 const SHELL_CACHE = 'glp-shell-v1';
 
-self.addEventListener('install', () => self.skipWaiting());
+const sw = self as unknown as ServiceWorkerGlobalScope;
 
-self.addEventListener('activate', (event) => {
+sw.addEventListener('install', () => { void sw.skipWaiting(); });
+
+sw.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys()
             .then(keys => Promise.all(keys.filter(k => k !== SHELL_CACHE).map(k => caches.delete(k))))
-            .then(() => self.clients.claim())
+            .then(() => sw.clients.claim())
     );
 });
 
-self.addEventListener('fetch', (event) => {
+sw.addEventListener('fetch', (event) => {
     const { request } = event;
     if (request.method !== 'GET') return;
 
@@ -49,7 +57,7 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.endsWith('.wasm')) return;
 
     // Only shell-cache same-origin document navigations and built bundles.
-    const isShellAsset = url.origin === self.location.origin &&
+    const isShellAsset = url.origin === sw.location.origin &&
         (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html' ||
          url.pathname.startsWith('/assets/'));
     if (!isShellAsset) return;
@@ -58,9 +66,9 @@ self.addEventListener('fetch', (event) => {
         fetch(request)
             .then(res => {
                 const copy = res.clone();
-                caches.open(SHELL_CACHE).then(c => c.put(request, copy));
+                void caches.open(SHELL_CACHE).then(c => c.put(request, copy));
                 return res;
             })
-            .catch(() => caches.match(request))
+            .catch(async () => (await caches.match(request)) ?? Response.error())
     );
 });

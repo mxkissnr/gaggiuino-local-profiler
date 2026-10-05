@@ -37,12 +37,26 @@ function demoServiceWorker(): Plugin {
   };
 }
 
+// App-shell service worker (#1270): public-src/sw.ts bundled to sw.js at the
+// output root, unhashed — main.ts registers 'sw.js' and a worker's scope is
+// its own directory. It imports nothing, so the emitted chunk is a classic
+// script with no import/export; no SPA module may import it.
+function appServiceWorker(): Plugin {
+  return {
+    name: 'glp-app-service-worker',
+    apply: 'build',
+    buildStart() {
+      this.emitFile({ type: 'chunk', id: fileURLToPath(new URL('./public-src/sw.ts', import.meta.url)), fileName: 'sw.js' });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const demo = mode === 'demo';
   return {
     root: 'public-src',
     base: './',
-    plugins: demo ? [demoServiceWorker()] : [],
+    plugins: demo ? [appServiceWorker(), demoServiceWorker()] : [appServiceWorker()],
     build: {
       outDir: demo ? '../demo-dist' : '../public',
       emptyOutDir: true,
