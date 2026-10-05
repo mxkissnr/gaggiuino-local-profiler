@@ -36,6 +36,10 @@ services:
       - GLP_ENABLE_ORDERS=${GLP_ENABLE_ORDERS:-false}
       - GLP_DEBUG_LOGGING=${GLP_DEBUG_LOGGING:-false}
 
+      # Only needed when reached under a domain name through a reverse proxy
+      # (comma-separated extra allowed Host names).
+      # - GLP_ALLOWED_HOSTS=glp.example.com
+
       # Restores HA auto-sync, switch-entity power control and push
       # notifications without a Supervisor. GLP_HA_TOKEN is a normal Home
       # Assistant long-lived access token (HA -> your profile -> Security ->

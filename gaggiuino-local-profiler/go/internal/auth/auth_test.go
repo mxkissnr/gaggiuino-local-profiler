@@ -479,3 +479,106 @@ func TestCryptoRandSanity(t *testing.T) {
 		t.Fatal("expected two independent random reads to differ")
 	}
 }
+
+func TestHostAllowed(t *testing.T) {
+	cases := []struct {
+		name  string
+		host  string
+		extra []string
+		want  bool
+	}{
+		{"ipv4 literal with port", "192.168.1.5:8099", nil, true},
+		{"ipv6 literal with port", "[::1]:8099", nil, true},
+		{"localhost", "localhost", nil, true},
+		{"single-label supervisor hostname", "a0d7b954-gaggiuino-local-profiler", nil, true},
+		{"mdns name", "glp.local", nil, true},
+		{"mdns name upper-case trailing dot", "GLP.LOCAL.", nil, true},
+		{"fritz.box name with port", "homeassistant.fritz.box:8099", nil, true},
+		{"lan name", "ha.lan", nil, true},
+		{"home.arpa name", "glp.home.arpa", nil, true},
+		{"internal name", "x.internal", nil, true},
+		{"localdomain name", "x.localdomain", nil, true},
+		{"foreign domain", "evil.example.com", nil, false},
+		{"fritz.box under a public domain", "fritz.box.example.com", nil, false},
+		{"hyphenated lan lookalike", "evil-lan.com", nil, false},
+		{"lan label under a public domain", "lan.example.com", nil, false},
+		{"foreign domain in extra", "evil.example.com", []string{"evil.example.com"}, true},
+		{"empty host", "", nil, false},
+		{"domain with port in extra", "example.com:8099", []string{"example.com"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := HostAllowed(c.host, c.extra); got != c.want {
+				t.Errorf("HostAllowed(%q, %v) = %v, want %v", c.host, c.extra, got, c.want)
+			}
+		})
+	}
+}
+
+func TestParseAllowedHosts(t *testing.T) {
+	got := ParseAllowedHosts("a.example, b.example:443  c")
+	want := []string{"a.example", "b.example", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("ParseAllowedHosts() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ParseAllowedHosts() = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestRequireKnownHost_ForeignHostRejected(t *testing.T) {
+	nextCalled := false
+	handler := RequireKnownHost(nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/token", nil)
+	req.Host = "evil.example.com"
+	req.RemoteAddr = "192.168.1.50:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("expected 421 for a foreign host, got %d", rec.Code)
+	}
+	if nextCalled {
+		t.Fatal("next handler must not run for a foreign host")
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected application/json content type, got %q", ct)
+	}
+}
+
+func TestRequireKnownHost_IngressRequestPassesWithForeignHost(t *testing.T) {
+	nextCalled := false
+	handler := RequireKnownHost(nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/token", nil)
+	req.Host = "evil.example.com" // the HA host, which the app can't enumerate
+	req.RemoteAddr = "172.30.32.2:1234"
+	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/0123456789abcdef")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !nextCalled {
+		t.Fatalf("expected a genuine ingress request to pass, got %d (nextCalled=%v)", rec.Code, nextCalled)
+	}
+}
+
+func TestRequireKnownHost_AllowedHostPasses(t *testing.T) {
+	nextCalled := false
+	handler := RequireKnownHost(nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/token", nil)
+	req.Host = "192.168.1.5:8099"
+	req.RemoteAddr = "192.168.1.50:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !nextCalled {
+		t.Fatalf("expected an allowed host to pass, got %d (nextCalled=%v)", rec.Code, nextCalled)
+	}
+}
