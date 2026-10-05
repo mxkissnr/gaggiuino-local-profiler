@@ -3,7 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // ui-prefs.ts seeds itself from localStorage at *module load time*, so the
 // store has to be in place before the module is imported in each test. Each
 // test gets a fresh module instance through vi.resetModules() so the queue and
-// timer state never leak between tests.
+// timer state never leak between tests. The window/document fakes let the
+// module's pagehide/visibilitychange listeners register in the node test env.
+type Listener = (...args: unknown[]) => unknown;
 const g = globalThis as unknown as Record<string, unknown>;
 const _store = new Map<string, string>();
 g.localStorage = {
@@ -12,6 +14,19 @@ g.localStorage = {
   removeItem: (k: string) => { _store.delete(k); },
 };
 g.navigator ??= { language: 'en-US' };
+const winListeners = new Map<string, Listener>();
+const docListeners = new Map<string, Listener>();
+g.window = {
+  addEventListener: (type: string, cb: Listener) => { winListeners.set(type, cb); },
+};
+g.document = {
+  visibilityState: 'visible',
+  addEventListener: (type: string, cb: Listener) => { docListeners.set(type, cb); },
+};
+
+function pendingKeys(): string[] {
+  return JSON.parse(_store.get('glp_ui_prefs_pending') ?? '[]') as string[];
+}
 
 type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
 
@@ -36,6 +51,9 @@ async function loadModule() {
 
 beforeEach(() => {
   _store.clear();
+  winListeners.clear();
+  docListeners.clear();
+  (g.document as { visibilityState: string }).visibilityState = 'visible';
 });
 
 afterEach(() => {
@@ -43,24 +61,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('mergeUiPrefs (#1375)', () => {
-  it('the server wins for every key it has', async () => {
+describe('mergeUiPrefs (#1375, #1403)', () => {
+  it('the server wins and local-only keys are dropped once it has preferences', async () => {
     const { mergeUiPrefs } = await loadModule();
     expect(mergeUiPrefs({ a: 1, b: 2 }, { a: 9, c: 3 })).toEqual({
-      merged: { a: 9, b: 2, c: 3 },
-      pushUp: ['b'],
+      merged: { a: 9, c: 3 },
+      pushUp: [],
     });
   });
 
-  it('keys only present locally are pushed up', async () => {
-    const { mergeUiPrefs } = await loadModule();
-    expect(mergeUiPrefs({ 'lib.shelf': { filter: 'all' } }, {})).toEqual({
-      merged: { 'lib.shelf': { filter: 'all' } },
-      pushUp: ['lib.shelf'],
-    });
-  });
-
-  it('an empty server keeps everything local and pushes it all up', async () => {
+  it('an empty server keeps everything local and pushes it all up (migration)', async () => {
     const { mergeUiPrefs } = await loadModule();
     expect(mergeUiPrefs({ a: 1, b: 2 }, {})).toEqual({
       merged: { a: 1, b: 2 },
@@ -68,11 +78,27 @@ describe('mergeUiPrefs (#1375)', () => {
     });
   });
 
+  it('keys only present locally are pushed up only when the server is empty', async () => {
+    const { mergeUiPrefs } = await loadModule();
+    expect(mergeUiPrefs({ 'lib.shelf': { filter: 'all' } }, {})).toEqual({
+      merged: { 'lib.shelf': { filter: 'all' } },
+      pushUp: ['lib.shelf'],
+    });
+  });
+
   it('a local write still queued beats the server value (finding 3)', async () => {
     const { mergeUiPrefs } = await loadModule();
     expect(mergeUiPrefs({ a: 1, b: 2 }, { a: 9, c: 3 }, new Set(['a']))).toEqual({
-      merged: { a: 1, b: 2, c: 3 },
-      pushUp: ['b'],
+      merged: { a: 1, c: 3 },
+      pushUp: [],
+    });
+  });
+
+  it('a pending local-only key survives a non-empty server', async () => {
+    const { mergeUiPrefs } = await loadModule();
+    expect(mergeUiPrefs({ a: 1 }, { c: 3 }, new Set(['a']))).toEqual({
+      merged: { a: 1, c: 3 },
+      pushUp: [],
     });
   });
 
@@ -151,17 +177,106 @@ describe('setUiPref (#1375)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(sentBody(fetchMock.mock.calls[1])).toEqual({ 'lib.shelf': { filter: 'v2' } });
   });
+
+  it('persists the pending set and retries it after a reload (#1403)', async () => {
+    const mod = await loadModule();
+    vi.stubGlobal('fetch', vi.fn<FetchFn>(() => Promise.resolve({ ok: false } as Response)));
+    vi.useFakeTimers();
+
+    mod.setUiPref('lib.shelf', { filter: 'all' });
+    expect(pendingKeys()).toEqual(['lib.shelf']);
+    await vi.advanceTimersByTimeAsync(600); // the PUT fails, the key stays pending
+    expect(pendingKeys()).toEqual(['lib.shelf']);
+
+    // Simulated reload: a fresh module instance reads the pending set back and
+    // re-sends it together with the next change.
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    const mod2 = await loadModule();
+    const okFetch = vi.fn<FetchFn>(() => Promise.resolve(okJson({})));
+    vi.stubGlobal('fetch', okFetch);
+    vi.useFakeTimers();
+
+    mod2.setUiPref('machine.active', 2);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(okFetch).toHaveBeenCalledTimes(1);
+    expect(sentBody(okFetch.mock.calls[0])).toEqual({
+      'lib.shelf': { filter: 'all' },
+      'machine.active': 2,
+    });
+  });
+
+  it('drops the keys a 400 names but keeps the rest queued (#1403)', async () => {
+    const mod = await loadModule();
+    const bad = {
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'Validation failed', issues: ['invalid value for key "a"'] }),
+    } as unknown as Response;
+    const fetchMock = vi.fn<FetchFn>(() => Promise.resolve(bad));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    mod.setUiPref('a', { nested: { deep: 1 } });
+    mod.setUiPref('b', 'ok');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sentBody(fetchMock.mock.calls[0])).toEqual({ a: { nested: { deep: 1 } }, b: 'ok' });
+    expect(pendingKeys()).toEqual(['b']);
+
+    // A later change flushes the remaining key without the rejected one.
+    mod.setUiPref('c', 3);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentBody(fetchMock.mock.calls[1])).toEqual({ b: 'ok', c: 3 });
+    // The rejected key's local value is deliberately kept.
+    expect(mod.getUiPref('a')).toEqual({ nested: { deep: 1 } });
+  });
+
+  it('flushes the pending set with keepalive on pagehide (#1403)', async () => {
+    _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'all' } }));
+    _store.set('glp_ui_prefs_pending', JSON.stringify(['lib.shelf']));
+    await loadModule();
+    const fetchMock = vi.fn<FetchFn>(() => Promise.resolve(okJson({})));
+    vi.stubGlobal('fetch', fetchMock);
+
+    winListeners.get('pagehide')?.();
+
+    await vi.waitFor(() => { expect(fetchMock).toHaveBeenCalledTimes(1); });
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toBe('api/ui-prefs');
+    expect(call?.[1]?.method).toBe('PUT');
+    expect(call?.[1]?.keepalive).toBe(true);
+    expect(sentBody(call)).toEqual({ 'lib.shelf': { filter: 'all' } });
+    await vi.waitFor(() => { expect(pendingKeys()).toEqual([]); });
+  });
+
+  it('flushes with keepalive when the tab becomes hidden (#1403)', async () => {
+    _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'all' } }));
+    _store.set('glp_ui_prefs_pending', JSON.stringify(['lib.shelf']));
+    await loadModule();
+    const fetchMock = vi.fn<FetchFn>(() => Promise.resolve(okJson({})));
+    vi.stubGlobal('fetch', fetchMock);
+    (g.document as { visibilityState: string }).visibilityState = 'hidden';
+
+    docListeners.get('visibilitychange')?.();
+
+    await vi.waitFor(() => { expect(fetchMock).toHaveBeenCalledTimes(1); });
+    expect(fetchMock.mock.calls[0]?.[1]?.keepalive).toBe(true);
+  });
 });
 
-describe('loadUiPrefsFromServer (#1375)', () => {
-  it('lets the server win, pushes local-only keys up once, and caches the merge', async () => {
+describe('loadUiPrefsFromServer (#1375, #1403)', () => {
+  it('lets the server win and drops local-only keys once it has preferences', async () => {
     _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'espresso' }, localOnly: 1 }));
     const mod = await loadModule();
 
     const calls: [string, RequestInit | undefined][] = [];
     const fetchMock = vi.fn<FetchFn>((url, opts) => {
       calls.push([url, opts]);
-      if (opts?.method === 'PUT') return Promise.resolve(okJson({}));
       return Promise.resolve(okJson({ 'lib.shelf': { filter: 'decaf' }, fromServer: 2 }));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -171,16 +286,52 @@ describe('loadUiPrefsFromServer (#1375)', () => {
     expect(changed).toBe(true);
     expect(mod.getUiPref('lib.shelf')).toEqual({ filter: 'decaf' });
     expect(mod.getUiPref('fromServer')).toBe(2);
-    expect(mod.getUiPref('localOnly')).toBe(1);
-    expect(cachedPrefs()).toEqual({
-      'lib.shelf': { filter: 'decaf' },
-      localOnly: 1,
-      fromServer: 2,
+    expect(mod.getUiPref('localOnly')).toBeUndefined();
+    expect(cachedPrefs()).toEqual({ 'lib.shelf': { filter: 'decaf' }, fromServer: 2 });
+
+    expect(calls.some(([, o]) => o?.method === 'PUT')).toBe(false);
+  });
+
+  it('migrates every local key up when the server is empty (first sync)', async () => {
+    _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'espresso' }, localOnly: 1 }));
+    const mod = await loadModule();
+
+    const calls: [string, RequestInit | undefined][] = [];
+    const fetchMock = vi.fn<FetchFn>((url, opts) => {
+      calls.push([url, opts]);
+      return Promise.resolve(okJson({}));
     });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await mod.loadUiPrefsFromServer();
+
+    expect(mod.getUiPref('lib.shelf')).toEqual({ filter: 'espresso' });
+    expect(mod.getUiPref('localOnly')).toBe(1);
 
     const put = calls.find(([, o]) => o?.method === 'PUT');
     expect(put).toBeTruthy();
-    expect(sentBody(put)).toEqual({ localOnly: 1 });
+    expect(sentBody(put)).toEqual({ 'lib.shelf': { filter: 'espresso' }, localOnly: 1 });
+  });
+
+  it('re-sends a persisted pending key on the next start even with a non-empty server (#1403)', async () => {
+    _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'all' }, other: 1 }));
+    _store.set('glp_ui_prefs_pending', JSON.stringify(['lib.shelf']));
+    const mod = await loadModule();
+
+    const calls: [string, RequestInit | undefined][] = [];
+    const fetchMock = vi.fn<FetchFn>((url, opts) => {
+      calls.push([url, opts]);
+      return Promise.resolve(okJson({ other: 1, fromServer: 2 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await mod.loadUiPrefsFromServer();
+
+    // The server's value for the pending key must not overwrite the local one.
+    expect(mod.getUiPref('lib.shelf')).toEqual({ filter: 'all' });
+    const put = calls.find(([, o]) => o?.method === 'PUT');
+    expect(put).toBeTruthy();
+    expect(sentBody(put)).toEqual({ 'lib.shelf': { filter: 'all' } });
   });
 
   it('leaves the local cache untouched when the request fails', async () => {
