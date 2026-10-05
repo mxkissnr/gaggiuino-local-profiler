@@ -35,9 +35,9 @@ const (
 	// the largest model is ~44 MB and may stream slowly.
 	modelResponseHeaderTimeout = 30 * time.Second
 
-	// maxModelRedirectHops bounds a download's redirect chain (the original
-	// request plus two redirects), so a compromised release URL cannot walk
-	// the download to an unrelated host.
+	// maxModelRedirectHops bounds a download's redirect chain: the original
+	// request plus up to two redirects. A fourth request is refused, so a
+	// compromised release URL cannot walk the download to an unrelated host.
 	maxModelRedirectHops = 3
 )
 
@@ -308,7 +308,7 @@ func newModelHTTPClient() *http.Client {
 // github.com, and nothing else is trusted.
 func checkModelRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxModelRedirectHops {
-		return fmt.Errorf("stopped after %d redirects", maxModelRedirectHops)
+		return fmt.Errorf("stopped after %d hops", maxModelRedirectHops)
 	}
 	if req.URL.Scheme != "https" {
 		return fmt.Errorf("refusing non-https redirect to %q", req.URL.String())
