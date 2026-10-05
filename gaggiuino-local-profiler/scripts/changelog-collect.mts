@@ -157,7 +157,7 @@ export function collectChangelog(
 }
 
 // CLI: node changelog-collect.mts [--dry-run]
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1] ?? ''}`) {
     const scriptDir = dirname(fileURLToPath(import.meta.url));
     const projectDir = join(scriptDir, '..');
     const fragmentsDir = join(projectDir, 'changelog.d');
@@ -179,7 +179,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exit(1);
-        throw error;
+        throw error instanceof Error ? error : new Error(String(error));
     }
 
     if (dryRun) {

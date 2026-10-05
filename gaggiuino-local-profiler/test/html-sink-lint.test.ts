@@ -1,7 +1,7 @@
-// #1104 L1: proves the typed `html-sink` ESLint rule (eslint-rules/html-sink.js)
+// #1104 L1: proves the typed `html-sink` ESLint rule (eslint-rules/html-sink.mts)
 // rejects plain-string values at the innerHTML/outerHTML and insertAdjacentHTML
 // sinks and accepts Html-branded ones. It lints the fixture through the project's
-// real eslint.config.js (the same typed setup as `npm run lint`), so the rule sees
+// real eslint.config.mts (the same typed setup as `npm run lint`), so the rule sees
 // the exact parser services and Html types it does in production. The fixture is
 // globally ignored by that config, so the normal `eslint .` run never trips on its
 // deliberate violations — this test lints it explicitly with ignore disabled.
@@ -26,7 +26,7 @@ describe('local/html-sink (#1104 L1)', () => {
   // Type-aware linting loads the TS program, which is slower than the default
   // 5s vitest budget on a cold cache.
   it('rejects plain strings and accepts Html-branded values at the markup sinks', async () => {
-    const eslint = new ESLint({ cwd: appRoot, ignore: false });
+    const eslint = new ESLint({ cwd: appRoot, ignore: false, flags: ['unstable_native_nodejs_ts_config'] });
     const results = await eslint.lintFiles([fixturePath]);
     const messages = results
       .flatMap((result) => result.messages)
