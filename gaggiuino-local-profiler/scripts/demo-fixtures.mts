@@ -5,7 +5,7 @@
 // touches neither the SPA, the service worker, the Vite config nor workflows.
 //
 // Two recording phases feed one manifest:
-//   A. SPA-driven — boots the real throwaway server from scripts/e2e-harness.mjs,
+//   A. SPA-driven — boots the real throwaway server from scripts/e2e-harness.mts,
 //      restores the sanitized demo backup (gaggiuino-local-profiler/demo/
 //      glp-demo-backup.zip, overridable via GLP_DEMO_BACKUP), places a few
 //      pending orders, then drives headless Chromium through every view at
@@ -21,12 +21,13 @@
 // long hex blobs); a hit aborts the run with a non-zero exit.
 //
 // Run from gaggiuino-local-profiler/: `npm run demo:fixtures`
-// (needs `npx playwright install chromium` once, same as screenshots.mjs).
+// (needs `npx playwright install chromium` once, same as screenshots.mts).
 
 import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
+import type { Page, Response } from 'playwright';
 import { appRoot, bootServer, restoreBackup, stopServer } from './e2e-harness.mts';
 
 // Cache-buster query keys the SPA may append to force a fresh fetch; a static
@@ -64,7 +65,7 @@ const OPENAPI_GET_SKIP = new Map([
  * Query params are sorted so ordering differences do not split one resource
  * across two fixtures, and the cache-buster params above are dropped.
  */
-export function fixtureKey(method, urlString) {
+export function fixtureKey(method: string, urlString: string): string {
     const url = new URL(urlString, 'http://fixture.invalid');
     const params = [...url.searchParams.entries()]
         .filter(([name]) => !CACHE_BUSTER_PARAMS.has(name))
@@ -75,7 +76,7 @@ export function fixtureKey(method, urlString) {
 
 // FNV-1a (32-bit) — a short, dependency-free, deterministic suffix that keeps
 // distinct keys apart even when their slugged names collide.
-function fnv1aHex(input) {
+function fnv1aHex(input: string): string {
     let hash = 0x811c9dc5;
     for (let i = 0; i < input.length; i++) {
         hash ^= input.charCodeAt(i);
@@ -89,7 +90,7 @@ function fnv1aHex(input) {
  * extension: a slugged key (ASCII letters/digits/hyphens only) plus the short
  * hash suffix, so distinct keys always map to distinct files.
  */
-export function fixtureFileName(key, ext) {
+export function fixtureFileName(key: string, ext: string): string {
     const safeExt = String(ext || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
     const slug = String(key)
         .toLowerCase()
@@ -118,9 +119,10 @@ const CONTENT_TYPE_EXT = new Map([
 ]);
 
 /** Maps a Content-Type (with or without parameters) to a bare extension. */
-export function extForContentType(contentType) {
-    const base = String(contentType || '').split(';')[0].trim().toLowerCase();
-    if (CONTENT_TYPE_EXT.has(base)) return CONTENT_TYPE_EXT.get(base);
+export function extForContentType(contentType: string | null | undefined): string {
+    const base = (String(contentType || '').split(';')[0] ?? '').trim().toLowerCase();
+    const known = CONTENT_TYPE_EXT.get(base);
+    if (known) return known;
     if (base.startsWith('image/')) return base.slice('image/'.length).replace(/[^a-z0-9]/g, '') || 'img';
     if (base.startsWith('text/')) return base.slice('text/'.length).replace(/[^a-z0-9+]/g, '') || 'txt';
     return 'bin';
@@ -144,18 +146,20 @@ const HEX_RE = /\b[0-9a-f]{32,}\b/gi;
  * placeholders nor part of an extra allowed value (e.g. the harness API
  * token). Empty means clean.
  */
-export function findLeaks(text, extraAllowed = []) {
+export function findLeaks(text: string, extraAllowed: readonly string[] = []): string[] {
     const source = String(text ?? '');
     const allowed = [...PLACEHOLDER_HEX, ...extraAllowed].filter(Boolean).map(String);
-    const hits = new Set();
+    const hits = new Set<string>();
     for (const match of source.matchAll(IPV4_RE)) {
-        if (ALLOWED_IPV4.has(match[0]) || match[0].startsWith('127.')) continue;
-        hits.add(match[0]);
+        const hit = match[0] as string;
+        if (ALLOWED_IPV4.has(hit) || hit.startsWith('127.')) continue;
+        hits.add(hit);
     }
-    for (const match of source.matchAll(EMAIL_RE)) hits.add(match[0]);
+    for (const match of source.matchAll(EMAIL_RE)) hits.add(match[0] as string);
     for (const match of source.matchAll(HEX_RE)) {
-        if (allowed.some(value => value.includes(match[0]))) continue;
-        hits.add(match[0]);
+        const hit = match[0] as string;
+        if (allowed.some(value => value.includes(hit))) continue;
+        hits.add(hit);
     }
     return [...hits];
 }
@@ -166,14 +170,14 @@ export function findLeaks(text, extraAllowed = []) {
  * `    get:` per operation, so a line-based read is enough and avoids pulling
  * a YAML parser in as a dependency.
  */
-export function parseOpenApiGetPaths(yamlText) {
-    const paths = [];
-    let current = null;
+export function parseOpenApiGetPaths(yamlText: string): string[] {
+    const paths: string[] = [];
+    let current: string | null = null;
     for (const rawLine of String(yamlText ?? '').split('\n')) {
         const line = rawLine.replace(/\r$/, '');
         const pathMatch = /^ {2}(\/[^:]*):\s*$/.exec(line);
         if (pathMatch) {
-            current = pathMatch[1];
+            current = pathMatch[1] ?? null;
             continue;
         }
         if (current && /^ {4}get:\s*$/.test(line)) paths.push(current);
@@ -185,9 +189,15 @@ export function parseOpenApiGetPaths(yamlText) {
 
 // manifest key -> { status, contentType, body: Buffer }; last write wins so the
 // desktop/phone passes and phase A/phase B converge on one fixture per key.
-const recorded = new Map();
+interface RecordedEntry {
+    status: number;
+    contentType: string;
+    body: Buffer;
+}
 
-function recordResponse(method, urlString, status, contentType, body) {
+const recorded = new Map<string, RecordedEntry>();
+
+function recordResponse(method: string, urlString: string, status: number, contentType: string, body: Buffer): void {
     if (!body || body.length === 0) return;
     recorded.set(fixtureKey(method, urlString), {
         status,
@@ -196,14 +206,14 @@ function recordResponse(method, urlString, status, contentType, body) {
     });
 }
 
-function isTextContentType(contentType) {
-    const base = String(contentType || '').split(';')[0].trim().toLowerCase();
+function isTextContentType(contentType: string): boolean {
+    const base = (String(contentType || '').split(';')[0] ?? '').trim().toLowerCase();
     if (!base) return false;
     return base.startsWith('text/') || base.includes('json') || base.includes('xml')
         || base.includes('javascript') || base.includes('svg');
 }
 
-function recordedGet(pathname) {
+function recordedGet(pathname: string): RecordedEntry | null {
     for (const [key, entry] of recorded) {
         if (!key.startsWith(`GET ${pathname}`)) continue;
         const rest = key.slice(`GET ${pathname}`.length);
@@ -214,28 +224,42 @@ function recordedGet(pathname) {
 
 // ── Phase A: SPA-driven ──────────────────────────────────────────────────
 
-const PAGE_PROFILES = [
+interface PageProfile {
+    name: string;
+    viewport: { width: number; height: number };
+    isMobile?: boolean;
+    hasTouch?: boolean;
+}
+
+const PAGE_PROFILES: readonly PageProfile[] = [
     { name: 'desktop', viewport: { width: 1440, height: 900 } },
     { name: 'phone', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
 ];
 
 /* eslint-disable no-undef -- the callbacks below run inside the Chromium tab
    via Playwright, where `document` is a real global; ESLint lints this file
-   with Node globals only. Same pattern as scripts/screenshots.mjs. */
+   with Node globals only. Same pattern as scripts/screenshots.mts. */
 
 // Clicks through the DOM directly (not page.click) so the topbar buttons work
 // at phone width too, where CSS hides them: the SPA attaches their handlers
 // regardless of visibility.
-async function clickInPage(page, selector) {
+function clickInPage(page: Page, selector: string): Promise<boolean> {
     return page.evaluate(sel => {
-        const el = document.querySelector(sel);
+        const el = document.querySelector<HTMLElement>(sel);
         if (!el) return false;
         el.click();
         return true;
     }, selector);
 }
 
-const VIEWS = [
+interface View {
+    name: string;
+    nav: string;
+    ready?: () => boolean;
+    after?: (page: Page) => Promise<void>;
+}
+
+const VIEWS: readonly View[] = [
     {
         name: 'shots',
         nav: '#btnShots',
@@ -307,27 +331,27 @@ const VIEWS = [
     },
 ];
 
-async function visitAllViews(page) {
+async function visitAllViews(page: Page): Promise<void> {
     for (const view of VIEWS) {
         if (!(await clickInPage(page, view.nav))) {
             console.warn(`demo-fixtures: nav ${view.nav} (${view.name}) not found`);
             continue;
         }
         if (view.ready) {
-            await page.waitForFunction(view.ready, undefined, { timeout: 15000 }).catch(err => {
-                console.warn(`demo-fixtures: ${view.name} not ready: ${err.message}`);
+            await page.waitForFunction(view.ready, undefined, { timeout: 15000 }).catch((err: unknown) => {
+                console.warn(`demo-fixtures: ${view.name} not ready: ${(err as Error).message}`);
             });
         }
         if (view.after) {
-            await view.after(page).catch(err => console.warn(`demo-fixtures: ${view.name} follow-up failed: ${err.message}`));
+            await view.after(page).catch((err: unknown) => console.warn(`demo-fixtures: ${view.name} follow-up failed: ${(err as Error).message}`));
         }
     }
 }
 
-function attachRecorder(page) {
-    const pending = [];
-    page.on('response', response => {
-        let pathname;
+function attachRecorder(page: Page): Promise<void>[] {
+    const pending: Promise<void>[] = [];
+    page.on('response', (response: Response) => {
+        let pathname: string;
         try {
             pathname = new URL(response.url()).pathname;
         } catch {
@@ -342,14 +366,14 @@ function attachRecorder(page) {
             try {
                 recordResponse(method, response.url(), response.status(), contentType, await response.body());
             } catch (err) {
-                console.warn(`demo-fixtures: unreadable response ${method} ${pathname}: ${err.message}`);
+                console.warn(`demo-fixtures: unreadable response ${method} ${pathname}: ${(err as Error).message}`);
             }
         })());
     });
     return pending;
 }
 
-async function recordPhaseA(baseUrl) {
+async function recordPhaseA(baseUrl: string): Promise<void> {
     const browser = await chromium.launch();
     try {
         for (const profile of PAGE_PROFILES) {
@@ -368,7 +392,7 @@ async function recordPhaseA(baseUrl) {
             try {
                 await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
                 // The SPA is loaded once the English nav label rendered; the
-                // two style overrides mirror screenshots.mjs and smoke.test.mjs.
+                // two style overrides mirror screenshots.mts and smoke.test.mts.
                 await page.waitForFunction(
                     () => !!document.querySelector('[data-i18n="nav_analytics"]'),
                     undefined, { timeout: 15000 },
@@ -377,7 +401,7 @@ async function recordPhaseA(baseUrl) {
                 await page.addStyleTag({ content: '#btnLive{display:flex!important}' });
                 await visitAllViews(page);
             } catch (err) {
-                console.warn(`demo-fixtures: ${profile.name} pass aborted: ${err.message}`);
+                console.warn(`demo-fixtures: ${profile.name} pass aborted: ${(err as Error).message}`);
             }
             await Promise.allSettled(pending);
             await context.close();
@@ -391,19 +415,47 @@ async function recordPhaseA(baseUrl) {
 
 // ── Phase B: spec-driven ─────────────────────────────────────────────────
 
+// Ids a {id} path param is expanded from; JSON list responses carry strings or
+// numbers, and anything else is dropped rather than stringified.
+type FixtureId = string | number;
+
 // Which recorded list response supplies the ids for each {id} path, and where
 // those ids sit in its body.
-const ID_SOURCES = {
-    shots:      { listPath: '/api/shots',      pick: body => (body?.shots ?? []).map(item => item.id) },
-    shotDump:   { listPath: '/shots.json',     pick: body => (Array.isArray(body) ? body : []).map(item => item.id) },
-    beans:      { listPath: '/api/library',    pick: body => (body?.beans ?? []).map(item => item.id) },
-    grinders:   { listPath: '/api/library',    pick: body => (body?.grinders ?? []).map(item => item.id) },
-    baskets:    { listPath: '/api/library',    pick: body => (body?.baskets ?? []).map(item => item.id) },
-    puckScreens:{ listPath: '/api/library',    pick: body => (body?.puckScreens ?? []).map(item => item.id) },
-    profiles:   { listPath: '/api/machine/profiles', pick: body => (body?.optionsRaw ?? []).map(item => item.id) },
+interface IdSource {
+    listPath: string;
+    pick: (body: unknown) => FixtureId[];
+}
+
+type IdKind = 'shots' | 'shotDump' | 'beans' | 'grinders' | 'baskets' | 'puckScreens' | 'profiles';
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value !== null && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function idsIn(value: unknown): FixtureId[] {
+    return Array.isArray(value)
+        ? value
+            .map(item => (item as { id?: unknown }).id)
+            .filter((id): id is FixtureId => typeof id === 'string' || typeof id === 'number')
+        : [];
+}
+
+const ID_SOURCES: Record<IdKind, IdSource> = {
+    shots:      { listPath: '/api/shots',            pick: body => idsIn(asRecord(body)?.['shots']) },
+    shotDump:   { listPath: '/shots.json',           pick: body => idsIn(body) },
+    beans:      { listPath: '/api/library',          pick: body => idsIn(asRecord(body)?.['beans']) },
+    grinders:   { listPath: '/api/library',          pick: body => idsIn(asRecord(body)?.['grinders']) },
+    baskets:    { listPath: '/api/library',          pick: body => idsIn(asRecord(body)?.['baskets']) },
+    puckScreens:{ listPath: '/api/library',          pick: body => idsIn(asRecord(body)?.['puckScreens']) },
+    profiles:   { listPath: '/api/machine/profiles', pick: body => idsIn(asRecord(body)?.['optionsRaw']) },
 };
 
-const PARAM_PATH_SOURCES = [
+interface ParamPathSource {
+    match: RegExp;
+    kind: IdKind;
+}
+
+const PARAM_PATH_SOURCES: readonly ParamPathSource[] = [
     { match: /^\/api\/shots\/\{id\}$/, kind: 'shots' },
     { match: /^\/api\/shots\/\{id\}\/card$/, kind: 'shots' },
     { match: /^\/api\/shots\/\{id\}\/image$/, kind: 'shots' },
@@ -414,16 +466,16 @@ const PARAM_PATH_SOURCES = [
     { match: /^\/api\/machine\/profile\/\{id\}$/, kind: 'profiles' },
 ];
 
-function idsFromEntry(entry, pick) {
+function idsFromEntry(entry: RecordedEntry | null, pick: (body: unknown) => FixtureId[]): FixtureId[] {
     if (!entry) return [];
     try {
-        return pick(JSON.parse(entry.body.toString('utf8'))).filter(id => id !== null && id !== undefined);
+        return pick(JSON.parse(entry.body.toString('utf8')) as unknown);
     } catch {
         return [];
     }
 }
 
-function expandIds(kind) {
+function expandIds(kind: IdKind): FixtureId[] {
     if (kind === 'shots') {
         const primary = idsFromEntry(recordedGet(ID_SOURCES.shots.listPath), ID_SOURCES.shots.pick);
         return primary.length ? primary : idsFromEntry(recordedGet(ID_SOURCES.shotDump.listPath), ID_SOURCES.shotDump.pick);
@@ -432,7 +484,7 @@ function expandIds(kind) {
     return idsFromEntry(recordedGet(source.listPath), source.pick);
 }
 
-async function tryFetch(baseUrl, apiToken, urlPath) {
+async function tryFetch(baseUrl: string, apiToken: string, urlPath: string): Promise<RecordedEntry | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
@@ -446,14 +498,14 @@ async function tryFetch(baseUrl, apiToken, urlPath) {
             body: Buffer.from(await response.arrayBuffer()),
         };
     } catch (err) {
-        console.warn(`demo-fixtures: GET ${urlPath} failed: ${err.message}`);
+        console.warn(`demo-fixtures: GET ${urlPath} failed: ${(err as Error).message}`);
         return null;
     } finally {
         clearTimeout(timer);
     }
 }
 
-async function recordPhaseB(baseUrl, apiToken, getPaths) {
+async function recordPhaseB(baseUrl: string, apiToken: string, getPaths: readonly string[]): Promise<void> {
     for (const template of getPaths) {
         if (OPENAPI_GET_SKIP.has(template)) continue;
         const hasParam = /\{[^}]+\}/.test(template);
@@ -466,7 +518,7 @@ async function recordPhaseB(baseUrl, apiToken, getPaths) {
     }
 }
 
-function expandParamPaths(template) {
+function expandParamPaths(template: string): string[] {
     const source = PARAM_PATH_SOURCES.find(candidate => candidate.match.test(template));
     if (!source) return [];
     const ids = expandIds(source.kind);
@@ -476,7 +528,7 @@ function expandParamPaths(template) {
 
 // ── Phase B bookkeeping + output ─────────────────────────────────────────
 
-function templateToRegex(template) {
+function templateToRegex(template: string): RegExp {
     const pattern = template
         .split('/')
         .map(segment => (/^\{[^}]+\}$/.test(segment) ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
@@ -484,14 +536,14 @@ function templateToRegex(template) {
     return new RegExp(`^${pattern}$`);
 }
 
-function missingGetPaths(getPaths) {
-    const missing = [];
+function missingGetPaths(getPaths: readonly string[]): string[] {
+    const missing: string[] = [];
     for (const template of getPaths) {
         if (OPENAPI_GET_SKIP.has(template)) continue;
         const matcher = templateToRegex(template);
         const found = [...recorded.keys()].some(key => {
             if (!key.startsWith('GET ')) return false;
-            const pathOnly = key.slice(4).split('?')[0];
+            const pathOnly = key.slice(4).split('?')[0] ?? '';
             return matcher.test(pathOnly);
         });
         if (!found) missing.push(template);
@@ -499,8 +551,8 @@ function missingGetPaths(getPaths) {
     return missing;
 }
 
-function collectLeaks(apiToken) {
-    const hits = [];
+function collectLeaks(apiToken: string): string[] {
+    const hits: string[] = [];
     for (const [key, entry] of recorded) {
         if (!isTextContentType(entry.contentType)) continue;
         for (const value of findLeaks(entry.body.toString('utf8'), [apiToken])) {
@@ -510,13 +562,14 @@ function collectLeaks(apiToken) {
     return hits;
 }
 
-function writeFixtures(outDir) {
+function writeFixtures(outDir: string): { count: number; totalBytes: number } {
     rmSync(outDir, { recursive: true, force: true });
     mkdirSync(outDir, { recursive: true });
-    const entries = {};
+    const entries: Record<string, { status: number; contentType: string; file: string }> = {};
     let totalBytes = 0;
     for (const key of [...recorded.keys()].sort()) {
         const entry = recorded.get(key);
+        if (!entry) continue;
         const ext = extForContentType(entry.contentType);
         const file = fixtureFileName(key, ext);
         let body = entry.body;
@@ -538,29 +591,37 @@ function writeFixtures(outDir) {
 
 // ── Orchestration ────────────────────────────────────────────────────────
 
+interface ApiRequestInit {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+}
+
 // Authenticated JSON round-trip for the setup calls below. Unlike the
 // best-effort phase B fetches, any non-2xx throws so a broken setup fails
 // the run instead of silently producing empty views.
-async function apiJson(baseUrl, apiToken, pathname, init = {}) {
+async function apiJson<T = unknown>(baseUrl: string, apiToken: string, pathname: string, init: ApiRequestInit = {}): Promise<T> {
+    const headers: Record<string, string> = { 'x-glp-token': apiToken, ...(init.headers ?? {}) };
     const response = await fetch(baseUrl + pathname, {
-        ...init,
-        headers: { 'x-glp-token': apiToken, ...(init.headers || {}) },
+        method: init.method || 'GET',
+        headers,
+        body: init.body ?? null,
     });
     if (!response.ok) {
         throw new Error(`demo-fixtures: ${init.method || 'GET'} ${pathname} -> ${response.status}`);
     }
-    return response.json();
+    return await response.json() as T;
 }
 
 // Places a few pending orders through the same public API the kiosk order
 // form uses, so the Orders view is not empty. Returns the API token for the
 // later authenticated fetches.
-async function createPendingOrders(baseUrl) {
-    const { apiToken } = await fetch(`${baseUrl}/api/token`).then(response => response.json());
+async function createPendingOrders(baseUrl: string): Promise<string> {
+    const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(response => response.json())) as { apiToken: string };
 
     // A restored backup ships orders disabled, so placeOrder() answers 503
     // until the DB setting is switched on through the settings API.
-    const settings = await apiJson(baseUrl, apiToken, '/api/orders/settings');
+    const settings = await apiJson<Record<string, unknown>>(baseUrl, apiToken, '/api/orders/settings');
     await apiJson(baseUrl, apiToken, '/api/orders/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -569,7 +630,7 @@ async function createPendingOrders(baseUrl) {
 
     // placeOrder() only accepts an item name that exists in the menu, so take
     // one from the restored menu rather than a hard-coded drink.
-    const menu = await apiJson(baseUrl, apiToken, '/api/orders/menu');
+    const menu = await apiJson<Array<{ name?: string }>>(baseUrl, apiToken, '/api/orders/menu');
     const item = (Array.isArray(menu) ? menu[0]?.name : '') || '';
     if (!item) throw new Error('demo-fixtures: the restored menu has no items to order');
 
@@ -583,7 +644,7 @@ async function createPendingOrders(baseUrl) {
     return apiToken;
 }
 
-async function main() {
+async function main(): Promise<void> {
     const outDir = path.join(appRoot, 'demo', 'fixtures');
     const backupPath = process.env.GLP_DEMO_BACKUP || path.join(appRoot, 'demo', 'glp-demo-backup.zip');
     const openapiPath = path.join(appRoot, 'go', 'internal', 'system', 'openapi.yaml');
@@ -619,9 +680,9 @@ async function main() {
 // Only boot the server and write fixtures when invoked as a script. Without
 // this guard, importing the pure helpers in a unit test runs the whole
 // recorder — and its process.exit() — as an import side effect, the same
-// failure dev-stats.mjs's guard prevents (#527).
-const invokedDirectly = process.argv[1] &&
-    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+// failure dev-stats.mts's guard prevents (#527).
+const entryArg = process.argv[1];
+const invokedDirectly = !!entryArg && fileURLToPath(import.meta.url) === path.resolve(entryArg);
 if (invokedDirectly) {
     main()
         .then(() => process.exit(0))
