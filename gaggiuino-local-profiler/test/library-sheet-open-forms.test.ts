@@ -52,7 +52,7 @@ function fakeDocument() {
     querySelectorAll: () => [],
     createElement: () => makeNode(),
     body,
-    activeElement: null as FakeEl | null,
+    activeElement: null,
     addEventListener: () => {},
     removeEventListener: () => {},
     contains: () => true,
