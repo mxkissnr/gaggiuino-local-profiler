@@ -1,4 +1,5 @@
 import type { Chart } from 'chart.js';
+import type { RecordedPhaseTransition } from './constants.js';
 
 // ── HTML escaping (XSS prevention) ───────────────────────────────────────
 // Branded marker for a string known to be safe to interpolate into markup
@@ -328,6 +329,8 @@ export interface ShotDatapoints {
   weightFlow?: number[];
   temperature?: number[];
   targetTemperature?: number[];
+  phaseTransitions?: RecordedPhaseTransition[] | null;
+  finalExitReason?: number | null;
 }
 
 export type XYSeries = { x: number; y: number }[];
