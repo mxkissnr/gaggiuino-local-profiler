@@ -6,13 +6,10 @@ import { t, tHtml } from '../i18n.js';
 import * as libraryApi from '../api/library.js';
 import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, toIsoDateInput, todayIsoDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
-import { COFFEE_COUNTRIES, VARIETY_SUGGESTIONS, PROCESS_SUGGESTIONS, localeFor, countryName } from '../constants.js';
+import { localeFor, countryName } from '../constants.js';
 import { setBeanFilter } from '../components/sidebar.js';
-import { attachAutocomplete } from '../components/autocomplete.js';
 import { switchMode } from '../components/mode.js';
 import { loadBeanImageBlobUrl, invalidateBeanImage } from '../bean-image.js';
-import { apiFetch } from '../api/transport.js';
-import { openImageCropEditor } from '../components/image-crop.js';
 import { openLightbox } from '../components/lightbox.js';
 import { miniWheelSvg, flavorChipsHtml, applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../components/flavor-mini-wheel.js';
 import { attachSheetSwipe } from '../components/sheet-swipe.js';
@@ -31,8 +28,10 @@ import {
 } from './library/shelf.js';
 import type { ShelfFilter, ShelfPrefs, ShelfSort, ShelfView } from './library/shelf.js';
 import { _beanList, _state, _field, _el } from './library/bean-shared.js';
-import type { BeanListRow, OriginChip, OriginBean } from './library/bean-shared.js';
+import type { BeanListRow, OriginBean } from './library/bean-shared.js';
 import { openNewBagForm } from './library/bean-card.js';
+import { updateStickerButton, stagedBeanImage, clearStagedBeanImage } from './library/bean-sticker.js';
+import { populateOriginSelect, bindOriginInput, setFormOrigins, populateSuggestionDatalists, bindFlavorInput, setFormFlavors, commitFlavorInput, formFlavors, formOrigins } from './library/bean-form-chips.js';
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
 const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
@@ -938,132 +937,6 @@ export function filterShotsByBean(id: number): void {
   switchMode('shots');
 }
 
-// ── Flavor chips input ────────────────────────────────────────────────────
-// Module-level working array; rendered into #beanFormFlavorChips before the
-// text input. Enter/comma commits the typed value, × removes a chip.
-let _formFlavors: string[] = [];
-let _flavorInputBound = false;
-
-function renderFlavorChips(): void {
-  const wrap = _el('beanFormFlavorChips');
-  if (!wrap) return;
-  wrap.querySelectorAll('.flavor-chip').forEach(el => el.remove());
-  const input = _field('beanFormFlavorInput');
-  for (const [i, f] of _formFlavors.entries()) {
-    const chip = document.createElement('span');
-    chip.className = 'flavor-chip';
-    chip.innerHTML = html`${esc(f)} <button type="button" class="flavor-chip-x" data-flavor-idx="${esc(i)}">${CLOSE_ICON_SVG}</button>`;
-    wrap.insertBefore(chip, input);
-  }
-}
-
-function commitFlavorInput(): void {
-  const input = _field('beanFormFlavorInput');
-  if (!input) return;
-  const val = input.value.trim().replace(/,+$/, '').trim();
-  input.value = '';
-  if (!val || val.length > 50 || _formFlavors.length >= 20) return;
-  if (_formFlavors.some(f => f.toLowerCase() === val.toLowerCase())) return;
-  _formFlavors.push(val);
-  renderFlavorChips();
-}
-
-export function setFormFlavors(flavors?: string[] | null): void {
-  _formFlavors = Array.isArray(flavors) ? [...flavors] : [];
-  renderFlavorChips();
-}
-
-function bindFlavorInput(): void {
-  if (_flavorInputBound) return;
-  const input = _field('beanFormFlavorInput');
-  const wrap  = _el('beanFormFlavorChips');
-  if (!input || !wrap) return;
-  _flavorInputBound = true;
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitFlavorInput(); }
-    else if (e.key === 'Backspace' && !input.value && _formFlavors.length) {
-      _formFlavors.pop();
-      renderFlavorChips();
-    }
-  });
-  input.addEventListener('blur', commitFlavorInput);
-  wrap.addEventListener('click', e => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>('.flavor-chip-x');
-    if (!btn) return;
-    _formFlavors.splice(Number(btn.dataset.flavorIdx), 1);
-    renderFlavorChips();
-  });
-}
-
-// ── Bean form: origin (blend-capable chips, mirrors the flavor chips) ──────
-// Each chip is a country code with an optional weighting percent, used by
-// the world map to split a blend's shots across its origin countries.
-let _formOrigins: OriginChip[] = [];
-let _originInputBound = false;
-
-function populateOriginSelect(): void {
-  const sel = _field('beanFormOrigin');
-  if (!sel) return;
-  const options = COFFEE_COUNTRIES
-    .map(c => ({ code: c.code, label: countryName(c.code, S.currentLang) }))
-    .sort((a, b) => a.label.localeCompare(b.label, S.currentLang));
-  sel.innerHTML = html`<option value="">${tHtml('lib_bean_origin_none')}</option>${joinHtml(options.map(o => html`<option value="${esc(o.code)}">${esc(o.label)}</option>`))}`;
-  sel.value = '';
-}
-
-function renderOriginChips(): void {
-  const wrap = _el('beanFormOriginChips');
-  if (!wrap) return;
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  wrap.innerHTML = joinHtml(_formOrigins.map((o, i) => html`
-    <span class="flavor-chip origin-chip">${esc(countryName(o.code, S.currentLang))}
-      <input type="number" class="origin-chip-percent" data-origin-idx="${esc(i)}" min="0" max="100" step="1" placeholder="%" value="${esc(o.percent ?? '')}">
-      <button type="button" class="flavor-chip-x" data-origin-idx-remove="${esc(i)}">${CLOSE_ICON_SVG}</button>
-    </span>`));
-}
-
-export function setFormOrigins(bean?: OriginBean | null): void {
-  const origins = Array.isArray(bean?.origins) && bean.origins.length
-    ? bean.origins
-    : (bean?.origin ? [{ code: bean.origin }] : []);
-  _formOrigins = origins.map(o => ({ ...o }));
-  renderOriginChips();
-}
-
-function bindOriginInput(): void {
-  if (_originInputBound) return;
-  const sel  = _field('beanFormOrigin');
-  const wrap = _el('beanFormOriginChips');
-  if (!sel || !wrap) return;
-  _originInputBound = true;
-  sel.addEventListener('change', () => {
-    const code = sel.value;
-    sel.value = '';
-    if (!code || _formOrigins.some(o => o.code === code) || _formOrigins.length >= 5) return;
-    _formOrigins.push({ code });
-    renderOriginChips();
-  });
-  wrap.addEventListener('click', e => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-origin-idx-remove]');
-    if (!btn) return;
-    _formOrigins.splice(Number(btn.dataset.originIdxRemove), 1);
-    renderOriginChips();
-  });
-  wrap.addEventListener('change', e => {
-    const input = (e.target as HTMLElement).closest<HTMLInputElement>('.origin-chip-percent');
-    if (!input) return;
-    const i = Number(input.dataset.originIdx);
-    const n = parseFloat(input.value);
-    const origin = _formOrigins[i];
-    if (origin) origin.percent = Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
-  });
-}
-
-function populateSuggestionDatalists(): void {
-  attachAutocomplete(_field('beanFormVariety'), () => VARIETY_SUGGESTIONS);
-  attachAutocomplete(_field('beanFormProcess'), () => PROCESS_SUGGESTIONS);
-}
-
 // ── Bean form sheet (#1349) ───────────────────────────────────────────────
 // The bean form is static markup in index.html. Rather than re-template it,
 // opening the form moves that same node into this sheet and closing moves it
@@ -1341,7 +1214,7 @@ export function closeBeanForm(): void {
   _state()._urlImportImageUrl = null;
   S._urlImportSourceUrl = null;
   _state()._urlImportExtraRecipes = null;
-  _stagedBeanImageBlob = null;
+  clearStagedBeanImage();
   const stagedHint = document.getElementById('beanFormImageStaged');
   if (stagedHint) stagedHint.style.display = 'none';
   const stickerBtn = document.getElementById('beanFormStickerBtn');
@@ -1414,7 +1287,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { _field('beanFormName').focus(); return; }
   const payload: Record<string, unknown> = {
-    name, roaster, roastDate, notes, decaf, origins: _formOrigins, variety, species, category, process, flavors: _formFlavors, roastType, region,
+    name, roaster, roastDate, notes, decaf, origins: formOrigins(), variety, species, category, process, flavors: formFlavors(), roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes,
   };
@@ -1422,7 +1295,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     payload.source     = S._urlImportSource;
     payload.importedAt = S._urlImportedAt;
     // A photo the user staged for this create wins over the import's image URL.
-    if (_state()._urlImportImageUrl && !_stagedBeanImageBlob) payload.imageUrl = _state()._urlImportImageUrl;
+    if (_state()._urlImportImageUrl && !stagedBeanImage()) payload.imageUrl = _state()._urlImportImageUrl;
     if (S._urlImportSourceUrl) payload.sourceUrl = S._urlImportSourceUrl;
   }
   // #451: capture which opt-in Brew Guide recipe candidates are still
@@ -1441,9 +1314,9 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   // #1329 part 2: upload a photo staged while creating, now that the bean has
   // an id. A failed upload must not lose the bean — it stays in the list and
   // the user gets the same generic error an edit-mode upload shows.
-  if (wasCreate && _stagedBeanImageBlob) {
-    const staged = _stagedBeanImageBlob;
-    _stagedBeanImageBlob = null;
+  const staged = stagedBeanImage();
+  if (wasCreate && staged) {
+    clearStagedBeanImage();
     const uploaded = await libraryApi.uploadBeanImage(saved.id, staged);
     if (uploaded.ok) {
       const withImage = (await uploaded.json()) as BeanListRow;
@@ -1529,138 +1402,11 @@ export async function toggleBeanActive(id: number): Promise<void> {
   }
 }
 
-// Photo chosen while *creating* a bean: the crop result can't be uploaded yet
-// (no id), so it waits here until saveBeanInternal has created the bean.
-let _stagedBeanImageBlob: Blob | null = null;
-
-export async function stageNewBeanImage(input: HTMLInputElement): Promise<void> {
-  const file = input.files?.[0];
-  if (!file) return;
-  const blob = await openImageCropEditor(file, { shape: 'square', aspect: 'portrait' });
-  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
-  input.value = '';
-  if (!blob) return;
-  _stagedBeanImageBlob = blob;
-  const hint = document.getElementById('beanFormImageStaged');
-  if (hint) hint.style.display = '';
-  void updateStickerButton();
-}
-
-// Shared post-upload step: store the server's updated bean row, drop the
-// cached blob URL and redraw the list. Returns false — after the same generic
-// alert this flow always showed — when the upload failed.
-async function _uploadBeanImageBlob(id: number, blob: Blob): Promise<boolean> {
-  const r = await libraryApi.uploadBeanImage(id, blob);
-  if (!r.ok) {
-    const err = (await r.json().catch(() => ({}))) as { error?: string };
-    alert(t('error_generic', err.error || r.statusText));
-    return false;
-  }
-  const saved = (await r.json()) as BeanListRow;
-  const idx = _beanList().findIndex(b => b.id === id);
-  if (idx !== -1) _beanList()[idx] = saved;
-  invalidateBeanImage(id);
-  renderBeanList();
-  return true;
-}
-
-export async function uploadBeanImage(id: number, input: HTMLInputElement): Promise<void> {
-  const file = input.files?.[0];
-  if (!file) return;
-  const blob = await openImageCropEditor(file, { shape: 'square', aspect: 'portrait' });
-  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
-  input.value = '';
-  if (!blob) return;
-  const ok = await _uploadBeanImageBlob(id, blob);
-  if (ok) void updateStickerButton();
-}
-
-// The cut-out editor and its onnxruntime runtime are heavy, so the bean form
-// reaches them only through dynamic imports — the first-load bundle stays
-// free of both. editor.ts (openStickerEditor) and segment.ts
-// (isStickerCutoutAvailable) are this epic's earlier slices, already shipped
-// on dev; this slice only wires them into the bean form and consumes both
-// unchanged, so neither file is edited here.
-// library.ts consumes only isStickerCutoutAvailable() from segment.ts; the
-// model work (autoCutout/tapMask/resetCutout) is editor.ts's concern. Moving
-// that work into a worker therefore leaves this call site unchanged.
-function stickerEditorModule() {
-  return import('../components/sticker/editor.js');
-}
-function stickerSegmentModule() {
-  return import('../components/sticker/segment.js');
-}
-
-// The "cut out as sticker" button appears only when the deployment ships the
-// cut-out models and there is a photo to cut: an existing photo in edit mode,
-// or a staged blob while creating.
-export async function updateStickerButton(): Promise<void> {
-  const btn = document.getElementById('beanFormStickerBtn') as HTMLButtonElement | null;
-  if (!btn) return;
-  const id = S.beanEditId;
-  const hasPhoto = id != null
-    ? !!_beanList().find(b => b.id === id)?.image
-    : _stagedBeanImageBlob != null;
-  if (!hasPhoto) { btn.style.display = 'none'; return; }
-  let available = false;
-  try {
-    const { isStickerCutoutAvailable } = await stickerSegmentModule();
-    available = await isStickerCutoutAvailable();
-  } catch { /* probe failed: stay with the initial "not available" */ }
-  // Re-read after the await: the form may have been closed or its photo
-  // changed while the availability probe was in flight.
-  const stillId = S.beanEditId;
-  const stillHasPhoto = stillId != null
-    ? !!_beanList().find(b => b.id === stillId)?.image
-    : _stagedBeanImageBlob != null;
-  btn.style.display = available && stillHasPhoto ? '' : 'none';
-}
-
-/**
- * Cut the bean's photo out as a transparent sticker and replace the stored
- * photo with it. Edit mode uploads right away; create mode swaps the staged
- * blob in place so the regular save path uploads it.
- */
-export async function cutOutBeanSticker(): Promise<void> {
-  const btn = document.getElementById('beanFormStickerBtn') as HTMLButtonElement | null;
-  if (btn?.disabled) return;
-  btn?.setAttribute('disabled', '');
-  try {
-    const id = S.beanEditId;
-    let photo: Blob | null;
-    if (id != null) {
-      const r = await apiFetch(`api/library/bean/${id}/image`);
-      if (!r.ok) {
-        const err = (await r.json().catch(() => ({}))) as { error?: string };
-        alert(t('error_generic', err.error || r.statusText));
-        return;
-      }
-      photo = await r.blob();
-    } else {
-      photo = _stagedBeanImageBlob;
-    }
-    if (!photo) return;
-    const { openStickerEditor } = await stickerEditorModule();
-    const png = await openStickerEditor(photo);
-    if (!png) return;
-    if (id != null) {
-      const uploaded = await _uploadBeanImageBlob(id, png);
-      if (uploaded) window.showToast?.(t('sticker_done'));
-    } else {
-      // eslint-disable-next-line require-atomic-updates -- single-flight: the disabled-button guard above prevents overlapping runs
-      _stagedBeanImageBlob = png;
-      const hint = document.getElementById('beanFormImageStaged');
-      if (hint) hint.style.display = '';
-      void updateStickerButton();
-    }
-  } finally {
-    btn?.removeAttribute('disabled');
-  }
-}
-
 // Section symbols moved to ./library/* — re-exported so existing importers
 // of views/library.js (main.ts et al.) keep working.
 export { openNewBagForm, closeNewBagForm, deleteBag, saveNewBag, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, toggleBeanQR } from './library/bean-card.js';
+export { stageNewBeanImage, uploadBeanImage, updateStickerButton, cutOutBeanSticker } from './library/bean-sticker.js';
+export { setFormFlavors, setFormOrigins } from './library/bean-form-chips.js';
 export {
   renderRecipeList, addRecipeStep, removeRecipeStep, openRecipeForm, closeRecipeForm,
   editRecipe, saveRecipe, deleteRecipe,
