@@ -18,29 +18,52 @@ import (
 // hasPassword / #1050 handling /api/mqtt/settings already does for the app's
 // own broker credentials.
 
-// RedactSystemSettings removes `mqttPassword` from a machine system-settings
-// JSON object and reports whether it held a non-empty password as
-// `mqttPasswordSet`. A body that is not a JSON object, invalid JSON, or an
-// object without mqttPassword is returned unchanged.
+// RedactSystemSettings removes `mqttPassword` from a machine settings JSON
+// body and reports whether it held a non-empty password as `mqttPasswordSet`.
+// It handles both shapes the settings endpoint returns: a flat
+// system-category object (mqttPassword at the top level) and the
+// all-categories object, whose categories are nested (mqttPassword under
+// `system`). A body that is not a JSON object, invalid JSON, or carries no
+// mqttPassword is returned unchanged.
 func RedactSystemSettings(raw []byte) []byte {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
 		return raw
 	}
-	pwRaw, present := obj["mqttPassword"]
-	if !present {
+	changed := redactSettingsObject(obj)
+	// All-categories reads nest each category, so the system one's
+	// mqttPassword sits under obj["system"] rather than at the top level.
+	if sysRaw, present := obj["system"]; present {
+		var sys map[string]json.RawMessage
+		if err := json.Unmarshal(sysRaw, &sys); err == nil && sys != nil && redactSettingsObject(sys) {
+			if redacted, err := json.Marshal(sys); err == nil {
+				obj["system"] = redacted
+				changed = true
+			}
+		}
+	}
+	if !changed {
 		return raw
 	}
-	var pw string
-	_ = json.Unmarshal(pwRaw, &pw)
-	delete(obj, "mqttPassword")
-	obj["mqttPasswordSet"] = json.RawMessage(strconv.FormatBool(pw != ""))
-
 	redacted, err := json.Marshal(obj)
 	if err != nil {
 		return raw
 	}
 	return redacted
+}
+
+// redactSettingsObject deletes mqttPassword from obj, replacing it with
+// mqttPasswordSet, and reports whether it changed anything.
+func redactSettingsObject(obj map[string]json.RawMessage) bool {
+	pwRaw, present := obj["mqttPassword"]
+	if !present {
+		return false
+	}
+	var pw string
+	_ = json.Unmarshal(pwRaw, &pw)
+	delete(obj, "mqttPassword")
+	obj["mqttPasswordSet"] = json.RawMessage(strconv.FormatBool(pw != ""))
+	return true
 }
 
 // RestoreSystemPassword re-inserts the machine's current mqttPassword into an

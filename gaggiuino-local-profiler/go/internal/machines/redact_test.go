@@ -135,3 +135,97 @@ func TestMachineSystemSettings_RedactAndRestore(t *testing.T) {
 		t.Fatalf("POST response leaked the machine mqttPassword: %s", rec.Body.Bytes())
 	}
 }
+
+// TestRedactSystemSettings_NestedAllCategories covers the all-categories
+// shape (GET /api/machine/settings with no category): the categories are
+// nested, so mqttPassword sits under `system` rather than at the top level.
+func TestRedactSystemSettings_NestedAllCategories(t *testing.T) {
+	raw := []byte(`{"boiler":{"temperature":93},"system":{"mqttPassword":"s3cret","releaseChannel":1}}`)
+	got := RedactSystemSettings(raw)
+	if strings.Contains(string(got), "s3cret") {
+		t.Fatalf("nested mqttPassword leaked: %s", got)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal %s: %v", got, err)
+	}
+	sys, ok := obj["system"].(map[string]any)
+	if !ok {
+		t.Fatalf("system category missing: %s", got)
+	}
+	if _, present := sys["mqttPassword"]; present {
+		t.Fatalf("system.mqttPassword not removed: %s", got)
+	}
+	if sys["mqttPasswordSet"] != true {
+		t.Fatalf("system.mqttPasswordSet = %v, want true", sys["mqttPasswordSet"])
+	}
+	if obj["boiler"] == nil {
+		t.Fatalf("boiler category lost: %s", got)
+	}
+}
+
+// TestMachineSystemSettings_RedactAllCategories is the handler-level
+// counterpart: an empty category (all-categories read) must not leak the
+// nested system mqttPassword either.
+func TestMachineSystemSettings_RedactAllCategories(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	fake.settingsBody = []byte(`{"boiler":{"temperature":93},"system":{"mqttPassword":"s3cret","releaseChannel":1}}`)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	id := strconv.FormatInt(machine.ID, 10)
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/settings?machineId="+id, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, body=%s", rec.Code, rec.Body.Bytes())
+	}
+	if strings.Contains(rec.Body.String(), "s3cret") {
+		t.Fatalf("all-categories GET leaked the machine mqttPassword: %s", rec.Body.Bytes())
+	}
+	sys, _ := decodeBody(t, rec.Body.Bytes())["system"].(map[string]any)
+	if sys == nil || sys["mqttPasswordSet"] != true {
+		t.Fatalf("system.mqttPasswordSet = %v, want true (body=%s)", sys, rec.Body.Bytes())
+	}
+}
+
+// TestMachineSystemSettings_UpdateParseFailureIs502: if the browser omits
+// mqttPassword and the machine's current settings can't be parsed, the save
+// must 502 rather than forward a payload that silently wipes the password.
+func TestMachineSystemSettings_UpdateParseFailureIs502(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	fake.settingsBody = []byte(`not json`)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	id := strconv.FormatInt(machine.ID, 10)
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/settings/system",
+		strings.NewReader(`{"machineId":`+id+`,"releaseChannel":1}`)))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("POST status = %d, want 502; body=%s", rec.Code, rec.Body.Bytes())
+	}
+	fake.mu.Lock()
+	forwarded := len(fake.lastUpdateSettingsBody)
+	fake.mu.Unlock()
+	if forwarded != 0 {
+		t.Fatalf("settings update was forwarded despite unparseable current settings")
+	}
+}

@@ -161,7 +161,11 @@ func (h *Handlers) updateSettings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := json.Unmarshal(currentRaw, &current); err != nil {
-				current = nil
+				// A parse failure is as bad as a fetch failure here: the
+				// password can't be recovered, so forwarding the payload would
+				// silently wipe it — fail like the other machine errors.
+				writeError(w, http.StatusBadGateway, err.Error())
+				return
 			}
 		}
 		RestoreSystemPassword(bodyMap, current)
