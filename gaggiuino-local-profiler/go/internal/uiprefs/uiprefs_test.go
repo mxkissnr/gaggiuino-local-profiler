@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
@@ -263,5 +264,66 @@ func TestPUT_MalformedJSONIs400(t *testing.T) {
 	rec := do(t, mux, http.MethodPut, "/api/ui-prefs", `{not json`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("PUT malformed = %d %q; want 400", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPUT_InvalidBodyKeyIs400NamingTheKey(t *testing.T) {
+	mux, _ := newTestMux(t)
+	rec := do(t, mux, http.MethodPut, "/api/ui-prefs", `{"BadKey":"x"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PUT = %d %q; want 400", rec.Code, rec.Body.String())
+	}
+	resp := decode(t, rec)
+	issues, _ := resp["issues"].([]any)
+	found := false
+	for _, issue := range issues {
+		if s, ok := issue.(string); ok && strings.Contains(s, "BadKey") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("issues %v do not name BadKey", issues)
+	}
+}
+
+func TestPUT_DropsStoredInvalidKeyButKeepsTheRest(t *testing.T) {
+	mux, repo := newTestMux(t)
+	// Save deliberately bypasses Sanitize, so this stands in for a value an
+	// older version wrote and the current rules no longer accept.
+	if err := repo.Save(map[string]any{"BadKey": "x", "view": "shelf"}); err != nil {
+		t.Fatal(err)
+	}
+	rec := do(t, mux, http.MethodPut, "/api/ui-prefs", `{"sort":"name"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT = %d %q; want 200", rec.Code, rec.Body.String())
+	}
+	got := decode(t, rec)
+	if _, ok := got["BadKey"]; ok {
+		t.Errorf("invalid stored key was kept: %+v", got)
+	}
+	if got["view"] != "shelf" || got["sort"] != "name" {
+		t.Errorf("valid keys lost: %+v", got)
+	}
+}
+
+func TestPUT_ConcurrentDifferentKeysAllPersist(t *testing.T) {
+	mux, _ := newTestMux(t)
+	bodies := []string{`{"a":"1"}`, `{"b":"2"}`, `{"c":"3"}`}
+	var wg sync.WaitGroup
+	for _, body := range bodies {
+		wg.Add(1)
+		go func(body string) {
+			defer wg.Done()
+			if rec := do(t, mux, http.MethodPut, "/api/ui-prefs", body); rec.Code != http.StatusOK {
+				t.Errorf("PUT %s = %d %q; want 200", body, rec.Code, rec.Body.String())
+			}
+		}(body)
+	}
+	wg.Wait()
+	got := decode(t, do(t, mux, http.MethodGet, "/api/ui-prefs", ""))
+	for _, key := range []string{"a", "b", "c"} {
+		if _, ok := got[key]; !ok {
+			t.Errorf("concurrent PUTs lost key %q: %+v", key, got)
+		}
 	}
 }

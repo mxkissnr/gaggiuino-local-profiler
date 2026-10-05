@@ -108,13 +108,20 @@ export function getUiPrefs(): Promise<Response> {
   return apiFetch('api/ui-prefs');
 }
 
+export interface SaveUiPrefsOptions {
+  /** Send with `keepalive` so the browser may finish the PUT while the page unloads. */
+  keepalive?: boolean | undefined;
+}
+
 /** PUT /api/ui-prefs — partial update; a `null` value deletes that key. */
-export function saveUiPrefs(payload: UiPrefs): Promise<Response> {
-  return apiFetch('api/ui-prefs', {
+export function saveUiPrefs(payload: UiPrefs, opts: SaveUiPrefsOptions = {}): Promise<Response> {
+  const init: RequestInit = {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  });
+  };
+  if (opts.keepalive) init.keepalive = true;
+  return apiFetch('api/ui-prefs', init);
 }
 
 // ── Demo mode (#274) ─────────────────────────────────────────────────────
