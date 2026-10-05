@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestGetEnvNumber(t *testing.T) {
@@ -42,4 +47,43 @@ func TestGetEnvNumber(t *testing.T) {
 			t.Errorf("getEnvNumber() = %v, want 600 (default, empty string)", got)
 		}
 	})
+}
+
+func TestRequireKnownHostOnBuiltHandler(t *testing.T) {
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	handler, sqlDB, err := buildApp(ctx, appConfig{
+		dbPath:          filepath.Join(dir, "glp.db"),
+		tokenPath:       filepath.Join(dir, "api_token.txt"),
+		port:            "0",
+		rateLimitWindow: time.Minute,
+		rateLimitMax:    1_000_000,
+	})
+	if err != nil {
+		cancel()
+		t.Fatalf("buildApp: %v", err)
+	}
+	t.Cleanup(func() { cancel(); sqlDB.Close() })
+
+	// An unknown Host is refused with 421 before even the public GET /api/token
+	// handler runs (#1430).
+	reqUnknown := httptest.NewRequest(http.MethodGet, "/api/token", nil)
+	reqUnknown.Host = "evil.example.com"
+	reqUnknown.RemoteAddr = "192.168.1.50:1234"
+	recUnknown := httptest.NewRecorder()
+	handler.ServeHTTP(recUnknown, reqUnknown)
+	if recUnknown.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("Host: evil.example.com -> %d, want 421", recUnknown.Code)
+	}
+
+	// Loopback is a known host, so the request reaches the handler chain (200,
+	// or 403 when expose_api_port is off) -- anything but 421.
+	reqKnown := httptest.NewRequest(http.MethodGet, "/api/token", nil)
+	reqKnown.Host = "127.0.0.1:8099"
+	reqKnown.RemoteAddr = "192.168.1.50:1234"
+	recKnown := httptest.NewRecorder()
+	handler.ServeHTTP(recKnown, reqKnown)
+	if recKnown.Code == http.StatusMisdirectedRequest {
+		t.Fatalf("Host: 127.0.0.1:8099 -> 421, want a non-421 response")
+	}
 }

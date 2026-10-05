@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -37,6 +38,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/backup"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/debug"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
@@ -74,6 +76,11 @@ const shutdownTimeout = 8 * time.Second
 // field is an env-var read in production (configFromEnv) and an explicit
 // value in tests (cmd/server's smoke test).
 type appConfig struct {
+	// allowedHosts are extra exact Host names the app will answer for, beyond
+	// the always-allowed IP literals, localhost, single-label names and
+	// .local names — from options.json's allowed_hosts plus
+	// GLP_ALLOWED_HOSTS. #1430.
+	allowedHosts    []string
 	dbPath          string
 	tokenPath       string
 	port            string
@@ -92,7 +99,27 @@ func configFromEnv() appConfig {
 		port:            getEnv("GLP_PORT", defaultPort),
 		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond))) * time.Millisecond,
 		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax))),
+		allowedHosts:    auth.ParseAllowedHosts(readAllowedHostsOption() + " " + os.Getenv("GLP_ALLOWED_HOSTS")),
 	}
+}
+
+// readAllowedHostsOption reads options.json's allowed_hosts string (the
+// Supervisor-written add-on option, see config.yaml). A missing file,
+// unparseable JSON or an absent key all yield "" — the same
+// fail-open-to-empty behaviour the other option readers rely on, so an
+// install with no extra hosts behaves exactly as before #1430.
+func readAllowedHostsOption() string {
+	data, err := os.ReadFile(config.OptionsFile)
+	if err != nil {
+		return ""
+	}
+	var opts struct {
+		AllowedHosts string `json:"allowed_hosts"`
+	}
+	if err := json.Unmarshal(data, &opts); err != nil {
+		return ""
+	}
+	return opts.AllowedHosts
 }
 
 func main() {
@@ -475,12 +502,17 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	limiter := ratelimit.New(rateLimitWindow, rateLimitMax)
 
-	// The middleware order: security headers, then the app-level rate limiter
-	// (deliberately ahead of auth so it also caps unauthenticated
-	// login/token-probing traffic), then token auth. Read from the innermost
-	// handler outward, this chain applies auth first, rate-limit second,
-	// security headers last, which is the correct nesting to make requests
-	// experience them in that order.
+	// The middleware order: security headers, then the known-host check, then
+	// the app-level rate limiter (deliberately ahead of auth so it also caps
+	// unauthenticated login/token-probing traffic), then token auth. Read from
+	// the innermost handler outward, this chain applies auth first, rate-limit
+	// second, the known-host check third and security headers last, which is
+	// the correct nesting to make requests experience them in that order.
+	//
+	// auth.RequireKnownHost sits ahead of the rate limiter on purpose: a
+	// request for an unknown Host is refused with 421 before it costs a
+	// rate-limit slot or reaches any handler, including the public
+	// GET /api/token.
 	//
 	// There is no global body-parser step to slot in here: net/http reads a
 	// request body lazily per-handler, not through a chained global
@@ -488,8 +520,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// own request body size per-route — internal/debug's importDB, for one,
 	// wraps its body in http.MaxBytesReader at the 500 MB ceiling.
 	handler := auth.SecurityHeaders(
-		limiter.Middleware(
-			auth.RequireToken(token)(mux),
+		auth.RequireKnownHost(cfg.allowedHosts)(
+			limiter.Middleware(
+				auth.RequireToken(token)(mux),
+			),
 		),
 	)
 
