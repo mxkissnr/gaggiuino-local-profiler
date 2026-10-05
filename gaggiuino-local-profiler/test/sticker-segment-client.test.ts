@@ -321,15 +321,17 @@ describe('request watchdog', () => {
     vi.useFakeTimers();
     const segment = await freshClient();
     const first = segment.autoCutout(RGBA, W, H);
+    const firstError = first.catch((err: unknown) => err);
     const second = segment.autoCutout(RGBA, W, H);
+    const secondError = second.catch((err: unknown) => err);
     const worker = latestWorker();
     // Both requests share the one worker and are still waiting for an answer.
     expect(FakeWorker.instances).toHaveLength(1);
 
     vi.advanceTimersByTime(120_000);
 
-    await expect(first).rejects.toThrow(/did not answer/);
-    await expect(second).rejects.toThrow(/did not answer/);
+    expect(((await firstError) as Error).message).toMatch(/did not answer/);
+    expect(((await secondError) as Error).message).toMatch(/did not answer/);
     expect(worker.terminated).toBe(true);
 
     // The next request starts a fresh worker instead of the terminated one.
