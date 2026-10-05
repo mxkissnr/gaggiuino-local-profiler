@@ -871,35 +871,35 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 	}
 }
 
-	// activeMachineWarnings extracts the active warning keys from a GaggiMate
-	// evt:status `warn` array. GaggiMate WebSocketHandler.cpp's addWarnings
-	// emits one {k, l, a} entry per WarningManager warning: k is the key, l its
-	// level (0 ignore / 1 warn / 2 error) and a whether it is currently active.
-	// Keep only entries that are active (a == true) and at least warn-level
-	// (l >= 1), preserving the firmware's order. A non-array value yields nil.
-	func activeMachineWarnings(v any) []string {
-		arr, ok := v.([]any)
-		if !ok {
-			return nil
-		}
-		var out []string
-		for _, e := range arr {
-			entry, ok := e.(map[string]any)
-			if !ok {
-				continue
-			}
-			k, ok := entry["k"].(string)
-			if !ok || k == "" {
-				continue
-			}
-			a, _ := entry["a"].(bool)
-			l, _ := entry["l"].(float64)
-			if a && l >= 1 {
-				out = append(out, k)
-			}
-		}
-		return out
+// activeMachineWarnings extracts the active warning keys from a GaggiMate
+// evt:status `warn` array. GaggiMate WebSocketHandler.cpp's addWarnings
+// emits one {k, l, a} entry per WarningManager warning: k is the key, l its
+// level (0 ignore / 1 warn / 2 error) and a whether it is currently active.
+// Keep only entries that are active (a == true) and at least warn-level
+// (l >= 1), preserving the firmware's order. A non-array value yields nil.
+func activeMachineWarnings(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
 	}
+	var out []string
+	for _, e := range arr {
+		entry, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		k, ok := entry["k"].(string)
+		if !ok || k == "" {
+			continue
+		}
+		a, _ := entry["a"].(bool)
+		l, _ := entry["l"].(float64)
+		if a && l >= 1 {
+			out = append(out, k)
+		}
+	}
+	return out
+}
 
 func derefFloat(v *float64) float64 {
 	if v == nil {
