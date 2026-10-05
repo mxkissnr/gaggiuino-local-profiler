@@ -30,8 +30,7 @@ export const BELL_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 2
 
 // #419 follow-up: same reuse-a-shared-icon pattern for the remaining
 // i18n-embedded decorative glyphs found outside the original #417 sweep
-// (bean_age_at_shot, lib_scan_barcode, lib_url_import, lib_import_settings_btn,
-// settings_machine_experimental_badge).
+// (bean_age_at_shot, lib_scan_barcode, lib_url_import, lib_import_settings_btn).
 
 export const BEAN_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z"/><path d="M8.5 15c2-1 3-3 3-6"/></svg>`;
 
