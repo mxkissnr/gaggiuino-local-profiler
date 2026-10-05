@@ -21,13 +21,16 @@ const localPlugin = {
   },
 };
 
-// #1270 rename map, already completed by earlier slices on this branch — the
-// E2E-tooling slice that owns these globs touches none of them, it only ports
-// scripts/*.mts and test/e2e/*.mts and retires the classic-JS blocks below:
+// #1270 rename map. Each entry lands in its own slice, so a slice diffs only
+// the TypeScript name it ports and never the renamed-away JavaScript file:
+//   eslint.config.js          -> eslint.config.mts
+//   eslint-rules/html-sink.js -> eslint-rules/html-sink.mts
 //   public-src/public/sw.js   -> public-src/sw.ts        (bundled; served as sw.js)
 //   demo/sw/demo-sw.js        -> demo/sw/demo-sw.ts      (bundled to demo-sw.js)
 //   demo/sw/sw-core.js        -> demo/sw/sw-core.ts      (bundled into demo-sw.js)
-//   eslint-rules/html-sink.js -> eslint-rules/html-sink.mts
+//   test/e2e/smoke.test.mjs   -> test/e2e/smoke.test.mts
+//   scripts/demo-fixtures.mjs -> scripts/demo-fixtures.mts  (this slice)
+// The unchanged scripts/*.mjs entries stay until their own slices port them.
 
 export default [
   {
