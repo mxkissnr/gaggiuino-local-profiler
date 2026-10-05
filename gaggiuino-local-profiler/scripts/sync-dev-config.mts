@@ -148,7 +148,7 @@ export function syncDevConfig(sourceText: string, targetText: string): SyncDevCo
 
 // CLI: node sync-dev-config.mts <source config.yaml> <target config.yaml>
 // Overwrites the target in place.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1] ?? ''}`) {
     const [sourcePath, targetPath] = process.argv.slice(2);
     if (!sourcePath || !targetPath) {
         console.error('usage: sync-dev-config.mts <source config.yaml> <target config.yaml>');
