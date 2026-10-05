@@ -62,7 +62,7 @@ The exact co-author string varies by era as model names changed over the project
 
 ## Cost
 
-The maintainer pays a flat **$20/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. Counting every calendar month touched since the first commit (2026-05-20), 6 months works out to **$120.00** for every Claude-model commit combined, regardless of which Claude model did the work.
+Max pays a flat **$20/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. 6 months since the first commit (2026-05-20) works out to **$120.00** for every Claude-model commit combined, regardless of which Claude model did the work.
 
 This assumes a continuous subscription for the whole span — it does not account for any gaps where the subscription might have lapsed.
 
