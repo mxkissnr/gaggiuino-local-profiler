@@ -1,7 +1,7 @@
-const js = require('@eslint/js');
-const globals = require('globals');
-const tseslint = require('typescript-eslint');
-const { htmlSinkRule } = require('./eslint-rules/html-sink.js');
+import js from '@eslint/js';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+import { htmlSinkRule } from './eslint-rules/html-sink.mts';
 
 const commonRules = {
   'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
@@ -21,7 +21,7 @@ const localPlugin = {
   },
 };
 
-module.exports = [
+export default [
   {
     // go/ is Go, not JS. The transient staged Vite build under
     // internal/webapp/dist/ stays ignored.
@@ -38,23 +38,16 @@ module.exports = [
     plugins: { local: localPlugin },
   },
   js.configs.recommended,
-  {
-    files: ['eslint.config.js', 'eslint-rules/**/*.js'],
-    languageOptions: {
-      globals: globals.node,
-    },
-    rules: commonRules,
-  },
   ...tseslint.config({
-    // Root build/test tooling configs (#1270): TypeScript files run in Node, so
-    // node globals only (unlike the browser-scoped public-src/ block below).
-    files: ['vite.config.ts', 'vitest.config.ts'],
+    // Root build/test tooling configs (#1270): Node-run TypeScript tooling files,
+    // so node globals only (unlike the browser-scoped public-src/ block below).
+    files: ['vite.config.ts', 'vitest.config.ts', 'eslint.config.mts', 'eslint-rules/**/*.mts', 'scripts/**/*.mts', 'test/**/*.mts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.node,
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: __dirname,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
@@ -104,12 +97,13 @@ module.exports = [
   // the type-aware rules don't touch the .js files still in flight.
   ...tseslint.config({
     files: ['public-src/**/*.ts'],
+    ignores: ['public-src/sw.ts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.browser,
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: __dirname,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
@@ -120,13 +114,21 @@ module.exports = [
       'local/html-sink': 'error',
     },
   }),
-  {
-    files: ['test/**/*.js'],
+  ...tseslint.config({
+    // Service workers (#1270): typed against the WebWorker lib by tsconfig.sw.json,
+    // which the root tsconfig.json excludes them from, so an explicit project
+    // replaces the project service here.
+    files: ['public-src/sw.ts', 'demo/sw/**/*.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
-      globals: { ...globals.node, ...globals.vitest },
+      globals: globals.serviceworker,
+      parserOptions: { projectService: false, project: './tsconfig.sw.json', tsconfigRootDir: import.meta.dirname },
     },
-    rules: commonRules,
-  },
+    rules: {
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+    },
+  }),
   ...tseslint.config({
     files: ['test/**/*.ts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
@@ -134,7 +136,7 @@ module.exports = [
       globals: { ...globals.node, ...globals.vitest },
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: __dirname,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {

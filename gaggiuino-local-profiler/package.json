@@ -8,7 +8,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node --test --test-force-exit test/e2e/*.test.mjs",
-    "lint": "eslint .",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
     "typecheck": "tsc --noEmit",
     "types:api": "openapi-typescript go/internal/system/openapi.yaml -o public-src/api/schema.gen.ts",
     "release:check": "node scripts/release-check.mjs",
