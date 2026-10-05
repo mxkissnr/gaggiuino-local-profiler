@@ -431,7 +431,7 @@ describe('renderMonthCalendar month rollover (#1401)', () => {
 
   // A fresh module instance per test: the shown month and the "user navigated"
   // flag are module state, and re-importing is the only way to reset them.
-  async function freshNav(): Promise<NavModule> {
+  function freshNav(): Promise<NavModule> {
     vi.resetModules();
     return import('../public-src/views/analytics-month.js');
   }
