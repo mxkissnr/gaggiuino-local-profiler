@@ -40,6 +40,11 @@
 // immutable. Both bundles also receive the pinned model manifest
 // (internal/cutoutmodels) as __GLP_CUTOUT_MODELS__.
 //
+// The app-shell service worker (#1270) is built from public-src/sw.ts to an
+// unhashed sw.js at the output root as a classic script (IIFE, no imports):
+// the page registers 'sw.js' relative to itself and a worker's scope is the
+// directory it is served from, so it cannot use the hashed assets/ names.
+//
 // esbuild resolves the SPA's bare imports (echarts, chart.js/auto,
 // topojson-client) out of node_modules, so the dependency tree is still a
 // prerequisite — but only `npm ci`, never `npm run build`: no Vite bundle is
@@ -102,6 +107,12 @@ var pages = []page{
 // Vite-specific: esbuild's Go API leaves the .ts URL in the page bundle and
 // ships no worker file.
 const workerSource = "components/sticker/segment.worker.ts"
+
+// swSource is the app-shell service worker (#1270), relative to -src. It is
+// built as its own entry point into an unhashed sw.js at the output root: the
+// page registers it as 'sw.js' and a worker's scope is the directory it is
+// served from, so it cannot live under the hashed assets/ names.
+const swSource = "sw.ts"
 
 // scriptTag is the exact module <script> tag a source page must carry for its
 // own entry point; writePageHTML strips it and injects the built output in
@@ -330,6 +341,25 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 		return fmt.Errorf("copy public assets: %w", err)
 	}
 
+	// The app-shell service worker (#1270) is bundled separately into an
+	// unhashed sw.js at the output root. Format IIFE keeps it a classic script
+	// (it imports nothing) and Outfile pins the name main.ts registers as
+	// 'sw.js'.
+	swAbs := filepath.Join(srcAbs, swSource)
+	if _, err := os.Stat(swAbs); err != nil {
+		return fmt.Errorf("service worker source: %w", err)
+	}
+	swResult := api.Build(api.BuildOptions{
+		AbsWorkingDir: rootAbs, EntryPoints: []string{swAbs}, Bundle: true,
+		Platform: api.PlatformBrowser, Format: api.FormatIIFE,
+		Outfile: filepath.Join(outAbs, "sw.js"), Write: true, Engines: esbuildEngines,
+		MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true,
+	})
+	if len(swResult.Errors) > 0 {
+		return buildError("service worker build", swResult.Errors)
+	}
+	logBuildWarnings(swResult.Warnings)
+
 	for _, src := range sources {
 		if err := writePageHTML(string(src.srcHTML), src.html, scriptTag(src.script), outAbs, meta, rootAbs, src.entry); err != nil {
 			return fmt.Errorf("write %s: %w", src.html, err)
@@ -475,8 +505,8 @@ func relFromOutDir(base, outDir, p string) (string, error) {
 }
 
 // copyPublicDir copies Vite's former "public dir" convention verbatim into
-// outDir: static files (manifest.json, sw.js, icon.png,
-// countries-110m.json) that are referenced by relative URL/fetch rather than
+// outDir: static files (manifest.json, icon.png, countries-110m.json) that
+// are referenced by relative URL/fetch rather than
 // imported, and so must ship unbundled at the same top-level path. os.CopyFS
 // recurses, so a nested file under public-src/public/ keeps its relative
 // path instead of being silently skipped; the caller has already removed and
