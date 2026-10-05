@@ -10,7 +10,9 @@ g.navigator ??= { language: 'en-US' };
 
 // saveNewBag/saveFreezePortions call into the library API; mocking keeps the
 // test off the network and lets each return a canned bean (sticker-cutout
-// test pattern).
+// test pattern). This deliberately leaves api/library.ts untouched — it
+// already exports addBeanBag/freezeBeanPortions, and the plan names it only
+// as the module mocked here.
 const mocks = vi.hoisted(() => ({ addBeanBag: vi.fn(), freezeBeanPortions: vi.fn() }));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
