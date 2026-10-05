@@ -390,7 +390,7 @@ func TestPushOneProfile_DoesNotAdoptProfileLinkedToAnotherRow(t *testing.T) {
 	repo := machines.NewProfilesRepository(sqlDB)
 	p.SetProfilesRepo(repo)
 
-	if err := repo.UpsertSynced(1, "gm-1", "Shared", json.RawMessage(`{}`), false); err != nil {
+	if err := repo.UpsertSynced(1, "gm-1", "Shared", json.RawMessage(`{"label":"Shared","phases":[{"name":"P","type":"PRESSURE"}]}`), false); err != nil {
 		t.Fatalf("UpsertSynced: %v", err)
 	}
 	if _, err := repo.UpsertDirty(1, nil, nil, "Shared", json.RawMessage(`{"label":"Shared"}`)); err != nil {
@@ -490,5 +490,75 @@ func TestPushOneProfile_DeleteFailureKeepsRowWhenStillListed(t *testing.T) {
 	}
 	if rows[0].LastSyncError == nil || !strings.Contains(*rows[0].LastSyncError, errBoom.Error()) {
 		t.Errorf("LastSyncError = %v, want the delete error recorded", rows[0].LastSyncError)
+	}
+}
+
+// TestPushOneProfile_CreateTimeoutMergesListSummaryPlaceholder covers the
+// path that most often produces a duplicate (#1405 review): after the save
+// times out, the live profile list reconciles the machine's copy into a
+// synced, empty-body placeholder row (UpsertListSummary) before the sweep
+// runs. The sweep must fold that placeholder's remote id onto the pending row
+// and drop it, not create a second machine profile or leave two local rows.
+func TestPushOneProfile_CreateTimeoutMergesListSummaryPlaceholder(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+	shortenPushTimeout(t)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Placeholder", json.RawMessage(`{"label":"Placeholder"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+
+	var machineProfiles []machines.ProfileSummary
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return append([]machines.ProfileSummary(nil), machineProfiles...), nil
+	}
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		machineProfiles = append(machineProfiles, machines.ProfileSummary{ID: "gm-1", Name: "Placeholder"})
+		return machines.ProfileSummary{}, context.DeadlineExceeded
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("first PushDirtyProfiles: %v", err)
+	}
+
+	// The live list reconciles the machine's copy into a synced placeholder
+	// before the next sweep, exactly as handlers_profiles.go does.
+	if err := repo.UpsertListSummary(1, "gm-1", "Placeholder", false); err != nil {
+		t.Fatalf("UpsertListSummary: %v", err)
+	}
+
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		t.Fatal("CreateProfile called again: the list-summary placeholder should have been merged")
+		return machines.ProfileSummary{}, nil
+	}
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("second PushDirtyProfiles: %v", err)
+	}
+
+	profiles, err := repo.ListByMachine(1)
+	if err != nil {
+		t.Fatalf("ListByMachine: %v", err)
+	}
+	named := 0
+	for _, r := range profiles {
+		if r.Name == "Placeholder" {
+			named++
+		}
+	}
+	if named != 1 {
+		t.Fatalf("local rows named %q = %d (%+v), want exactly 1", "Placeholder", named, profiles)
+	}
+	adopted, err := repo.Get(1, "gm-1")
+	if err != nil {
+		t.Fatalf("Get(gm-1): %v", err)
+	}
+	if adopted == nil || adopted.LocalID != row.LocalID {
+		t.Fatalf("Get(gm-1) = %+v, want the original row %d carrying the remote id", adopted, row.LocalID)
+	}
+	if len(machineProfiles) != 1 {
+		t.Fatalf("machine has %d profiles, want exactly 1", len(machineProfiles))
 	}
 }

@@ -339,16 +339,46 @@ func (r *ProfilesRepository) ReplaceRemoteID(localID int64, expectedUpdatedAt in
 	return nil
 }
 
-// MarkDirty forces a row back to dirty so the next sweep pushes its local
-// body. Used when adopting a machine-side profile found by name during a
-// pending-create push (#1405): ListProfiles returns no body, so the adopted
-// row's remote copy cannot be assumed equal to the local edit — the local
-// edit stays authoritative and is pushed as a follow-up update.
-func (r *ProfilesRepository) MarkDirty(localID int64) error {
-	_, err := r.db.Exec(`UPDATE machine_profiles SET sync_status = ?, last_sync_error = NULL WHERE local_id = ?`,
-		ProfileSyncDirty, localID)
+// AdoptRemoteID gives localID a machine-assigned remote id and leaves it
+// dirty so the next sweep pushes the local body. The remote id, name and
+// dirty flag are written in one statement, so a failure cannot leave the row
+// synced with an adopted id and no pending push (#1405 review): the remote
+// copy's body is unknown (ListProfiles returns none), so the local edit stays
+// authoritative.
+func (r *ProfilesRepository) AdoptRemoteID(localID int64, remoteID, name string) error {
+	_, err := r.db.Exec(`UPDATE machine_profiles
+			SET remote_id = ?, name = ?, sync_status = ?, last_sync_error = NULL
+			WHERE local_id = ?`,
+		remoteID, name, ProfileSyncDirty, localID)
 	if err != nil {
-		return fmt.Errorf("machines: marking local profile %d dirty: %w", localID, err)
+		return fmt.Errorf("machines: adopting remote id %q for local profile %d: %w", remoteID, localID, err)
+	}
+	return nil
+}
+
+// AdoptRemoteIDOverPlaceholder is AdoptRemoteID for the case where a live
+// ListProfiles reconcile already inserted a synced, empty-body placeholder
+// row for the same remote id (see UpsertListSummary). It moves the id onto
+// localID and hard-deletes placeholderLocalID in one transaction: the partial
+// unique index on (machine_id, remote_id) would otherwise reject the adopt
+// while the placeholder still holds the id.
+func (r *ProfilesRepository) AdoptRemoteIDOverPlaceholder(localID, placeholderLocalID int64, remoteID, name string) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("machines: beginning remote id adoption for local profile %d: %w", localID, err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM machine_profiles WHERE local_id = ?`, placeholderLocalID); err != nil {
+		return fmt.Errorf("machines: deleting list-summary placeholder %d: %w", placeholderLocalID, err)
+	}
+	if _, err := tx.Exec(`UPDATE machine_profiles
+			SET remote_id = ?, name = ?, sync_status = ?, last_sync_error = NULL
+			WHERE local_id = ?`,
+		remoteID, name, ProfileSyncDirty, localID); err != nil {
+		return fmt.Errorf("machines: adopting remote id %q for local profile %d: %w", remoteID, localID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("machines: committing remote id adoption for local profile %d: %w", localID, err)
 	}
 	return nil
 }

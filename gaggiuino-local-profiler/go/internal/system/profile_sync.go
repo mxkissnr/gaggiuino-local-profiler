@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -158,6 +159,16 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 	}
 }
 
+// isListSummaryPlaceholder reports whether row is the empty body a live
+// ListProfiles reconcile (UpsertListSummary) inserts for a machine profile
+// whose body has never been fetched — as opposed to a real local profile
+// that happens to share the name. Only such a placeholder may be folded into
+// a pending row during adoption; a real row must keep its own machine-side
+// profile.
+func isListSummaryPlaceholder(row machines.ProfileRow) bool {
+	return row.SyncStatus == machines.ProfileSyncSynced && strings.TrimSpace(string(row.Data)) == "{}"
+}
+
 // createProfileOnMachine pushes a row that has no remote id yet — a
 // pending_create, or the dirty-without-remote-id fallback — as a create.
 //
@@ -186,15 +197,19 @@ func (p *Poller) createProfileOnMachine(ctx context.Context, machine *machines.M
 		if err != nil {
 			return err
 		}
-		if linked != nil {
-			continue
+		if linked == nil {
+			return p.profilesRepo.AdoptRemoteID(row.LocalID, remote.ID, remote.Name)
 		}
-		if err := p.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, remote.ID, remote.Name); err != nil {
-			return err
+		// A live ListProfiles reconcile (handlers_profiles.go ->
+		// UpsertListSummary) can have already inserted a synced, empty-body
+		// placeholder for this remote profile before the sweep ran, so
+		// GetByRemoteID finds a row that is not a real local profile. Fold the
+		// id onto this row and drop the placeholder instead of creating a
+		// duplicate.
+		if linked.LocalID != row.LocalID && linked.Name == row.Name && isListSummaryPlaceholder(*linked) {
+			return p.profilesRepo.AdoptRemoteIDOverPlaceholder(row.LocalID, linked.LocalID, remote.ID, remote.Name)
 		}
-		// ReplaceRemoteID marks a row whose updated_at is unchanged synced;
-		// force it back to dirty so the local body still reaches the machine.
-		return p.profilesRepo.MarkDirty(row.LocalID)
+		continue
 	}
 
 	in := machines.ProfileInput{RawBody: row.Data}
