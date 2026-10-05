@@ -742,7 +742,9 @@ export async function deleteBean(id: number): Promise<void> {
 }
 
 // Section symbols moved to ./library/* — re-exported so existing importers
-// of views/library.js (main.ts et al.) keep working.
+// of views/library.js (main.ts et al.) keep working. saveEditFrozenForm's
+// manual frozen-portion edit stays client-driven (#1411) and calls
+// adjustFrozenPortion directly; see bean-card.ts for the full rationale.
 export { openBeanSheet, closeBeanSheet, beanSheetRestoredScroll, toggleBeanActive } from './library/bean-sheet.js';
 export { renderBeanCard, safeHttpUrl, openNewBagForm, closeNewBagForm, deleteBag, saveNewBag, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, toggleBeanQR } from './library/bean-card.js';
 export { stageNewBeanImage, uploadBeanImage, updateStickerButton, cutOutBeanSticker } from './library/bean-sticker.js';
