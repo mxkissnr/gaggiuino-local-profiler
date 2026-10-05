@@ -52,11 +52,11 @@ func (h *Handlers) discovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, map[string]any{
-		"available": true,
-		"host":      broker.Host,
-		"port":      broker.Port,
-		"username":  broker.Username,
-		"password":  broker.Password,
+		"available":   true,
+		"host":        broker.Host,
+		"port":        broker.Port,
+		"username":    broker.Username,
+		"hasPassword": broker.Password != "",
 	})
 }
 
@@ -79,7 +79,23 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 	// "keep unchanged" and "overwrite" cases below.
 	if clear, _ := body["clearPassword"].(bool); clear {
 		parsed.Password = ""
-	} else if _, present := body["password"]; !present {
+	} else if pw, present := body["password"].(string); present && pw != "" {
+		// #1431: a non-empty password always wins — the caller typed a new
+		// one, so no discovery lookup happens.
+		parsed.Password = pw
+	} else if useDiscovered, _ := body["useDiscoveredPassword"].(bool); useDiscovered {
+		// #1431: GET /api/mqtt/discovery no longer returns the broker password
+		// (only hasPassword), so the Settings UI can no longer prefill it. This
+		// opt-in reuses the Supervisor-discovered broker's password instead. No
+		// discovered broker is a hard error so an unrelated/stale stored
+		// password is never silently kept.
+		broker := DiscoverSupervisorMQTT(r.Context(), h.ha)
+		if broker == nil {
+			httputil.WriteError(w, http.StatusBadRequest, "no discovered MQTT broker")
+			return
+		}
+		parsed.Password = broker.Password
+	} else {
 		// #1050: getSettings never echoes the real password back (see above),
 		// so the Settings UI's re-submitted form has no way to send it back
 		// unchanged — an absent password field means "keep the stored one",
@@ -169,5 +185,5 @@ func (h *Handlers) applyToMachine(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Applied broker connection to machine #%d %q's own MQTT client settings", machine.ID, machine.Name)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(result)
+	_, _ = w.Write(machines.RedactSystemSettings(result))
 }
