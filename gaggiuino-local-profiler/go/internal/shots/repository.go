@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"sync"
 	"time"
@@ -593,6 +594,16 @@ var annotationMu sync.Mutex
 // the lock is held and the lock is not re-entrant, so it must not call back
 // into an annotation writer.
 func (r *Repository) UpdateAnnotation(shotID int64, fn func(ann map[string]any) error) (map[string]any, error) {
+	return r.updateAnnotation(shotID, fn, nil)
+}
+
+// updateAnnotation is the locked read-modify-write behind UpdateAnnotation
+// and PatchAnnotation. When after is non-nil it runs once the merged
+// annotation is saved, still under annotationMu, so the annotation and
+// after's side effects land together or not at all (#1411). Lock order is
+// annotationMu first, then internal/library's writeMu; nothing may take them
+// in the reverse order.
+func (r *Repository) updateAnnotation(shotID int64, fn func(ann map[string]any) error, after func(prev, next map[string]any) error) (map[string]any, error) {
 	annotationMu.Lock()
 	defer annotationMu.Unlock()
 
@@ -600,11 +611,20 @@ func (r *Repository) UpdateAnnotation(shotID int64, fn func(ann map[string]any) 
 	if err != nil {
 		return nil, err
 	}
+	prev := maps.Clone(ann)
 	if err := fn(ann); err != nil {
 		return nil, err
 	}
 	if err := r.saveAnnotation(shotID, ann); err != nil {
 		return nil, err
+	}
+	if after != nil {
+		if err := after(prev, ann); err != nil {
+			if rerr := r.saveAnnotation(shotID, prev); rerr != nil {
+				return nil, fmt.Errorf("%w (restoring annotation for shot %d: %v)", err, shotID, rerr)
+			}
+			return nil, fmt.Errorf("%w", err)
+		}
 	}
 	return ann, nil
 }

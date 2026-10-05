@@ -173,11 +173,6 @@ export async function restockMilk(id: number, ml: number): Promise<Milk | null> 
   return _jsonOrNull<Milk>(await apiFetch(`api/library/milk/${id}/restock`, _json('POST', { ml })));
 }
 
-/** POST /api/library/milk/{id}/deduct — subtract the drink's `ml` from the milk's stock. */
-export async function deductMilk(id: number, ml: number): Promise<Milk | null> {
-  return _jsonOrNull<Milk>(await apiFetch(`api/library/milk/${id}/deduct`, _json('POST', { ml })));
-}
-
 /** DELETE /api/library/milk/{id} — permanently delete a milk. */
 export function deleteMilkById(id: number): Promise<Response> {
   return apiFetch(`api/library/milk/${id}`, { method: 'DELETE' });
