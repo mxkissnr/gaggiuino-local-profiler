@@ -21,19 +21,24 @@ beforeAll(async () => {
 interface Bag { openedAt?: number; roastDate?: string }
 interface Bean { id: number; name: string; roastDate?: string; bags?: Bag[] }
 interface CoffeeLibrary { beans: Bean[]; recipes: unknown[]; grinders: unknown[] }
-const state = S as unknown as { coffeeLibrary: CoffeeLibrary | null };
+
+// S is assigned in beforeAll, so the cast has to happen per call, not once at
+// module-eval time.
+function library(): { coffeeLibrary: CoffeeLibrary | null } {
+  return S as unknown as { coffeeLibrary: CoffeeLibrary | null };
+}
 
 // The shot and the roast date are both built as local midnights, so the day
 // count does not depend on the test runner's timezone.
 const SHOT_SEC = new Date(2024, 4, 31).getTime() / 1000;
 
 function setBean(roastDate: string, bags: Bag[] = []): void {
-  state.coffeeLibrary = { beans: [{ id: 1, name: 'Test Bean', roastDate, bags }], recipes: [], grinders: [] };
+  library().coffeeLibrary = { beans: [{ id: 1, name: 'Test Bean', roastDate, bags }], recipes: [], grinders: [] };
 }
 
 describe('bean age roast-date parsing (#1402)', () => {
   beforeEach(() => {
-    state.coffeeLibrary = { beans: [], recipes: [], grinders: [] };
+    library().coffeeLibrary = { beans: [], recipes: [], grinders: [] };
   });
 
   it('reads an ISO roast date and its German equivalent the same way', () => {
