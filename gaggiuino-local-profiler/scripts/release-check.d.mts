@@ -1,6 +1,6 @@
-// Type declarations for the plain-JS release-check script imported by
-// test/release-check-screenshot-freshness.test.ts. The script itself stays
-// JavaScript; only the surface the tests exercise is declared.
+// Type declarations for the plain-JS release-check script imported by the
+// test/release-check-*.test.ts suites. The script itself stays JavaScript;
+// only the surface the tests exercise is declared.
 export function checkScreenshotFreshness(
     gitRoot: string,
     publicSrcRel: string,
@@ -13,3 +13,4 @@ export function checkAcceptanceProtocol(
     markdown: string,
     version: string | null,
 ): string[];
+export function checkChangelogFragments(fragmentsDir: string): string[];
