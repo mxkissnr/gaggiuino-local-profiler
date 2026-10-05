@@ -2,10 +2,13 @@
 // reads at load time; the server (GET/PUT /api/ui-prefs) is the shared source
 // of truth, so the same choices follow you to another device. Changed keys are
 // PUT in one debounced request and stay queued until a request succeeds.
+// #1403: the queued key set is itself persisted, so a change made offline or
+// just before the tab closes is retried after a reload and flushed on leave.
 import { getUiPrefs, saveUiPrefs } from './api/system.js';
 import type { UiPrefs } from './api/types.js';
 
 const STORAGE_KEY = 'glp_ui_prefs';
+const PENDING_STORAGE_KEY = 'glp_ui_prefs_pending';
 const FLUSH_DELAY_MS = 600;
 
 let _prefs: UiPrefs = {};
@@ -20,6 +23,18 @@ try {
 }
 
 const _queue = new Set<string>();
+try {
+  const rawPending = localStorage.getItem(PENDING_STORAGE_KEY);
+  const parsedPending = rawPending ? (JSON.parse(rawPending) as unknown) : null;
+  if (Array.isArray(parsedPending)) {
+    for (const key of parsedPending) {
+      if (typeof key === 'string') _queue.add(key);
+    }
+  }
+} catch {
+  // A corrupt pending set just means nothing is retried after this reload.
+}
+
 // Bumped on every write to a key, so a failed/deferred flush can tell whether
 // the value it sent is still the current one (finding: an in-flight PUT must
 // not drop a change made while it was in flight).
@@ -41,15 +56,43 @@ function _persist(): void {
   }
 }
 
+/** Persists the queued key set so pending changes survive a reload. */
+function _persistPending(): void {
+  try {
+    localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify([..._queue]));
+  } catch {
+    // Same best-effort contract as _persist.
+  }
+}
+
+/** Builds the PUT payload for the currently queued keys. */
+function _queuedPayload(): UiPrefs {
+  const payload: UiPrefs = {};
+  for (const key of _queue) payload[key] = _prefs[key];
+  return payload;
+}
+
 /** Records a choice: cache it synchronously, then queue it for the server. */
 export function setUiPref(key: string, value: unknown): void {
   _prefs[key] = value;
   _version.set(key, (_version.get(key) ?? 0) + 1);
   _persist();
   _queue.add(key);
+  _persistPending();
   if (_timer == null) {
     _timer = setTimeout(() => { _timer = null; void _flush(); }, FLUSH_DELAY_MS);
   }
+}
+
+/** Extracts the key names a 400 response's `issues` point at. */
+function _issueKeys(issues: unknown): Set<string> {
+  const keys = new Set<string>();
+  if (!Array.isArray(issues)) return keys;
+  for (const issue of issues) {
+    const match = /"([^"]+)"/.exec(String(issue));
+    if (match && match[1] != null) keys.add(match[1]);
+  }
+  return keys;
 }
 
 async function _flush(): Promise<void> {
@@ -70,11 +113,31 @@ async function _flush(): Promise<void> {
       sentVersions.set(key, _version.get(key) ?? 0);
     }
     const r = await saveUiPrefs(payload);
-    if (!r.ok) return; // keep queued for the next change / next start
+    if (!r.ok) {
+      // A 400 names the keys it rejected; drop those so one bad value cannot
+      // block every later sync. The local value is deliberately kept.
+      if (r.status === 400) {
+        let dropped = false;
+        try {
+          const body = (await r.json()) as unknown;
+          const issues = body && typeof body === 'object'
+            ? (body as { issues?: unknown }).issues
+            : undefined;
+          for (const key of _issueKeys(issues)) {
+            if (_queue.delete(key)) dropped = true;
+          }
+        } catch {
+          // Unreadable error body: keep everything queued and retry later.
+        }
+        if (dropped) _persistPending();
+      }
+      return; // keep queued for the next change / next start
+    }
     for (const key of keys) {
       // Keep the key queued if its value changed while this PUT was in flight.
       if (_version.get(key) === sentVersions.get(key)) _queue.delete(key);
     }
+    _persistPending();
   } catch {
     // Network failure: keep queued; the next change or the next start re-sends.
   } finally {
@@ -87,32 +150,77 @@ async function _flush(): Promise<void> {
 }
 
 /**
- * Server wins for every key it has, except keys with a local write still queued
- * (`pending`), which are newer than the server's value. Keys only present
- * locally (and not pending) are pushed up once, which migrates an existing
- * device. Pure so it can be unit-tested.
+ * Sends every queued key to the server right away, using `keepalive` so the
+ * browser is allowed to finish the request while the page unloads. Called on
+ * `pagehide` and when the tab becomes hidden. A successful response clears the
+ * sent keys from the pending set; a failed one leaves them for the next start.
+ */
+export async function flushUiPrefsOnLeave(): Promise<void> {
+  if (!_queue.size) return;
+  const keys = [..._queue];
+  const payload = _queuedPayload();
+  const sentVersions = new Map<string, number>();
+  for (const key of keys) sentVersions.set(key, _version.get(key) ?? 0);
+  try {
+    const r = await saveUiPrefs(payload, { keepalive: true });
+    if (!r.ok) return;
+    let dropped = false;
+    for (const key of keys) {
+      if (_version.get(key) === sentVersions.get(key)) {
+        if (_queue.delete(key)) dropped = true;
+      }
+    }
+    if (dropped) _persistPending();
+  } catch {
+    // The page may be gone before the fetch settles; the pending set survives.
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => { void flushUiPrefsOnLeave(); });
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void flushUiPrefsOnLeave();
+  });
+}
+
+/**
+ * Server wins for every key it already holds, except keys with a local write
+ * still queued (`pending`), which are newer than the server's value. When the
+ * server is empty the local cache is migrated up once; once the server has any
+ * preferences it is authoritative, and local-only keys that are not pending are
+ * dropped rather than pushed, so two apps sharing one origin cannot leak their
+ * local-only keys into each other. Pure so it can be unit-tested.
  */
 export function mergeUiPrefs(
   local: UiPrefs,
   server: UiPrefs,
   pending: ReadonlySet<string> = new Set<string>(),
 ): { merged: UiPrefs; pushUp: string[] } {
-  const merged: UiPrefs = { ...local };
-  const pushUp: string[] = [];
+  const merged: UiPrefs = {};
   for (const [key, value] of Object.entries(server)) {
-    if (pending.has(key)) continue;
-    merged[key] = value;
+    merged[key] = pending.has(key) ? local[key] : value;
   }
-  for (const key of Object.keys(local)) {
-    if (!(key in server) && !pending.has(key)) pushUp.push(key);
+  for (const key of pending) {
+    if (key in local) merged[key] = local[key];
+  }
+  const pushUp: string[] = [];
+  if (Object.keys(server).length === 0) {
+    for (const key of Object.keys(local)) {
+      merged[key] = local[key];
+      if (!pending.has(key)) pushUp.push(key);
+    }
   }
   return { merged, pushUp };
 }
 
 /**
- * Fetches the shared choices and merges them over the local cache, pushing
- * local-only keys up once. Resolves to whether anything changed so callers can
- * re-render; a network failure leaves the local cache untouched.
+ * Fetches the shared choices and merges them over the local cache. Local-only
+ * keys are pushed up only on the first sync (an empty server); otherwise the
+ * server is authoritative and the local cache is trimmed to match. Resolves to
+ * whether anything changed so callers can re-render; a network failure leaves
+ * the local cache untouched.
  */
 export async function loadUiPrefsFromServer(): Promise<boolean> {
   try {
@@ -128,6 +236,7 @@ export async function loadUiPrefsFromServer(): Promise<boolean> {
     _persist();
     if (pushUp.length) {
       for (const key of pushUp) _queue.add(key);
+      _persistPending();
       await _flush();
     }
     return changed;
