@@ -69,27 +69,68 @@ afterEach(() => {
 });
 
 describe('isStickerCutoutAvailable', () => {
+  const MODELS = { version: 'models-v1', sizes: {} };
+
   it('is true when the HEAD probe succeeds, and probes once', async () => {
-    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);
     const segment = await freshClient();
 
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith('models/isnet-general-use-int8.onnx', { method: 'HEAD' });
+    expect(fetchSpy).toHaveBeenCalledWith('models/models-v1/isnet-general-use-int8.onnx', {
+      method: 'HEAD',
+    });
   });
 
-  it('is false when the probe is not ok', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
+  it('is false and cached when the probe returns 404', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi.fn(() => Promise.resolve({ ok: false, status: 404 }));
+    vi.stubGlobal('fetch', fetchSpy);
     const segment = await freshClient();
+
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('is false when the probe throws', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no network'))));
+  it('is false and retried when the probe throws', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('no network'))
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchSpy);
     const segment = await freshClient();
+
     await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('is false and retried when the probe fails transiently', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', MODELS);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchSpy);
+    const segment = await freshClient();
+
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('is false without the models manifest, without probing', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const segment = await freshClient();
+
+    await expect(segment.isStickerCutoutAvailable()).resolves.toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -122,14 +163,15 @@ describe('autoCutout', () => {
     await promise;
   });
 
-  it('sends the models base resolved against document.baseURI', async () => {
+  it('sends the versioned models base resolved against document.baseURI', async () => {
+    vi.stubGlobal('__GLP_CUTOUT_MODELS__', { version: 'models-v1', sizes: {} });
     const segment = await freshClient();
     const promise = segment.autoCutout(RGBA, W, H);
     const worker = latestWorker();
 
     // The message is a union at runtime, so read the field through the union.
     const posted = worker.sent[0]!.message as { modelsBase?: string };
-    expect(posted.modelsBase).toBe('https://example.test/glp/models/');
+    expect(posted.modelsBase).toBe('https://example.test/glp/models/models-v1/');
 
     worker.reply({ id: worker.sent[0]!.message.id, mask: new Uint8Array([0]) });
     await promise;

@@ -20,7 +20,17 @@ export type { CutoutProgress };
 // file; undefined under the Vite dev server, where the .ts source is served.
 declare const __GLP_SEGMENT_WORKER__: string | undefined;
 
+// Injected by go/cmd/frontend-build as {"version":..., "sizes":{file: bytes}};
+// undefined under the Vite dev server, where the cut-out is treated as
+// unavailable rather than pointed at a guessed path.
+declare const __GLP_CUTOUT_MODELS__: { version: string; sizes: Record<string, number> } | undefined;
+
 const ISNET_MODEL = 'isnet-general-use-int8.onnx';
+
+// The pinned model release, or "" when the build injected no manifest (the
+// Vite dev server and any build without the models route).
+const MODELS_VERSION =
+  typeof __GLP_CUTOUT_MODELS__ === 'undefined' ? '' : __GLP_CUTOUT_MODELS__.version;
 
 /**
  * How long the worker is kept after resetCutout() before being terminated. A
@@ -32,21 +42,34 @@ const WORKER_IDLE_MS = 20_000;
 
 /** Absolute directory the models are served from, ending in "models/". */
 function modelsBase(): string {
-  return new URL('models/', document.baseURI).href;
+  const version = MODELS_VERSION === '' ? '' : `${MODELS_VERSION}/`;
+  return new URL(`models/${version}`, document.baseURI).href;
 }
 
 let availability: Promise<boolean> | null = null;
 
 /**
- * Whether this deployment ships the cut-out models, probed once with a HEAD
- * request against the smallest model. Any failure means "not available"; the
- * result is cached for the session.
+ * Whether this deployment serves the cut-out models. Probes the smallest model
+ * with a HEAD request against the versioned manifest path. Only a definite
+ * answer is cached: a confirmed present (true) or a definite 404 (false). A
+ * network failure is not cached, so a probe that failed while the server was
+ * still starting is retried on the next call (#1399).
  */
 export function isStickerCutoutAvailable(): Promise<boolean> {
+  if (MODELS_VERSION === '') return Promise.resolve(false);
   if (!availability) {
-    availability = fetch(`models/${ISNET_MODEL}`, { method: 'HEAD' })
-      .then((res) => res.ok)
-      .catch(() => false);
+    availability = fetch(`models/${MODELS_VERSION}/${ISNET_MODEL}`, { method: 'HEAD' })
+      .then((res) => {
+        if (res.ok) return true;
+        if (res.status === 404) return false;
+        // Neither a confirmed present nor a confirmed absent: leave the probe
+        // uncached below so a transient failure is retried.
+        throw new Error(`models probe: ${res.status}`);
+      })
+      .catch(() => {
+        availability = null;
+        return false;
+      });
   }
   return availability;
 }
