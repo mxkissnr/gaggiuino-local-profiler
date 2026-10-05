@@ -986,7 +986,12 @@ function _unwireSheetKeys(): void {
   document.removeEventListener('keydown', handler);
 }
 
-export function openBeanSheet(id: number): void {
+// `onPainted` runs after the sheet's content is in the DOM. The paint may be
+// deferred (it goes through a view transition when motion is allowed), so
+// callers that need to touch elements inside the fresh card — e.g. revealing
+// the inline bag form after "Save and add bag" (#1398) — must wait for this
+// rather than assume the sheet is already built.
+export function openBeanSheet(id: number, onPainted?: () => void): void {
   const bean = _beanList().find(b => b.id === id);
   if (!bean) return;
   _sheetReturnFocus = (document.activeElement as HTMLElement | null) ?? null;
@@ -997,6 +1002,7 @@ export function openBeanSheet(id: number): void {
     document.body?.classList?.add('lib-sheet-open');
     _wireSheetKeys();
     _focusSheetClose();
+    onPainted?.();
   };
   const doc = document as Document & { startViewTransition?: (cb: () => void) => void };
   if (typeof doc.startViewTransition === 'function' && _sheetMotionOk()) doc.startViewTransition(paint);
@@ -1024,11 +1030,13 @@ export function closeBeanSheet(): void {
 }
 
 export function openNewBagForm(id: number): void {
-  _el(`newBagForm${id}`).style.display = '';
+  const form = document.getElementById(`newBagForm${id}`);
+  if (form) form.style.display = '';
 }
 
 export function closeNewBagForm(id: number): void {
-  _el(`newBagForm${id}`).style.display = 'none';
+  const form = document.getElementById(`newBagForm${id}`);
+  if (form) form.style.display = 'none';
 }
 
 export async function deleteBag(beanId: number, bagId: number): Promise<void> {
@@ -1716,12 +1724,11 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   renderBeanList();
   if (wasCreate) _dropNewShelfTile(saved.id);
   if (extraRecipesToImport.length) renderRecipeList();
-  // openNewBagForm toggles the new bean's own card's inline
-  // #newBagForm<id> (renderBeanList above must run first so that card
-  // exists) — NOT openNewBagDialog, a modal-overlay entry point left over
-  // from an earlier design that has no matching HTML in index.html at all
-  // (dead code: calling it was a silent no-op, the actual bug report).
-  if (wasCreate && openBagDialogAfter) openNewBagForm(saved.id);
+  // #1398: the new bean's inline #newBagForm<id> only exists inside its
+  // detail sheet (renderBeanCard with { inSheet: true }), so with a plain
+  // openNewBagForm the element was missing and the call threw. Open the
+  // fresh sheet first and reveal the form once its content has painted.
+  if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id));
 }
 
 export async function deleteBean(id: number): Promise<void> {
