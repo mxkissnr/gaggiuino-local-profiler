@@ -69,7 +69,7 @@ The SPA is built two different ways, for two different purposes — they no long
 `go/cmd/frontend-build` reads `public-src/index.html`, bundles `public-src/` into `go/internal/webapp/dist/`
 (with hashed filenames and relative `./assets/...` URLs, both load-bearing for HA ingress — see #797),
 and rewrites the module `<script>` tag the way Vite's HTML plugin used to. The Dockerfile's builder
-stage and `scripts/e2e-harness.mjs` both call it, so the shipped image and the E2E server embed the
+stage and `scripts/e2e-harness.mts` both call it, so the shipped image and the E2E server embed the
 same bundle.
 
 Node is therefore a **local-dev-only** dependency: it is not in the image and not in CI's build gate
@@ -94,16 +94,16 @@ make -C go frontend
 git checkout -- gaggiuino-local-profiler/go/internal/webapp/dist
 ```
 
-`scripts/e2e-harness.mjs` does both halves on its own (builds the bundle, boots the real server,
+`scripts/e2e-harness.mts` does both halves on its own (builds the bundle, boots the real server,
 restores the placeholder), which is why the E2E job asserts against the real bundle.
 
 ## Screenshots
 
-`gaggiuino-local-profiler/scripts/screenshots.mjs` regenerates `docs/screenshots/*.png` for the
+`gaggiuino-local-profiler/scripts/screenshots.mts` regenerates `docs/screenshots/*.png` for the
 README and wiki from the built-in demo seed; run it from `gaggiuino-local-profiler/`:
 
 ```sh
-node scripts/screenshots.mjs [path/to/wiki-repo]
+node scripts/screenshots.mts [path/to/wiki-repo]
 ```
 
 It needs `npx playwright install chromium` once beforehand. With the optional wiki-repo argument
@@ -113,7 +113,7 @@ To build the screenshots from real data instead of the synthetic seed, point the
 backup zip (created via Settings → Backup in the app):
 
 ```sh
-GLP_SCREENSHOT_BACKUP=/path/to/backup.zip node scripts/screenshots.mjs
+GLP_SCREENSHOT_BACKUP=/path/to/backup.zip node scripts/screenshots.mts
 ```
 
 The zip is restored into the throwaway instance through the app's own `POST /api/restore`; a
@@ -130,7 +130,7 @@ seeded PNGs in place instead of regenerating them.
 
 ## Demo fixtures
 
-`gaggiuino-local-profiler/scripts/demo-fixtures.mjs` records a static snapshot of every API
+`gaggiuino-local-profiler/scripts/demo-fixtures.mts` records a static snapshot of every API
 response the SPA needs, so the demo can later be served from GitHub Pages with a service worker
 instead of the Go backend (#1193). Run it from `gaggiuino-local-profiler/`:
 
@@ -146,7 +146,7 @@ operations in `go/internal/system/openapi.yaml`. The result goes to `demo/fixtur
 `manifest.json` plus one file per response. That directory is git-ignored — it is a regenerated
 artifact, not source. Before writing anything the script scans every text response for leaked
 personal data (IP literals, e-mail addresses, long hex blobs) and aborts on a hit, so a run that
-passes is safe to serve but never committed. Like `screenshots.mjs` it needs
+passes is safe to serve but never committed. Like `screenshots.mts` it needs
 `npx playwright install chromium` once.
 
 ## Versioning

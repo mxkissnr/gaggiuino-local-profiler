@@ -1,5 +1,5 @@
 // Playwright E2E smoke test (#798). Boots the throwaway, seeded instance
-// from scripts/e2e-harness.mjs (shared with scripts/screenshots.mjs) once,
+// from scripts/e2e-harness.mts (shared with scripts/screenshots.mts) once,
 // then drives a single real headless Chromium tab through every top-level
 // nav view. This is deliberately a smoke test, not a UI regression suite:
 // each view only needs to (a) reach an interactive state and (b) log no
@@ -17,10 +17,12 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { bootServer, seed, stopServer } from '../../scripts/e2e-harness.mjs';
+import type { Browser, Page } from 'playwright';
+import { bootServer, seed, stopServer } from '../../scripts/e2e-harness.mts';
 
-let browser, page;
-const consoleErrors = [];
+let browser: Browser;
+let page: Page;
+const consoleErrors: string[] = [];
 
 before(async () => {
     const baseUrl = await bootServer();
@@ -32,7 +34,7 @@ before(async () => {
     page.on('pageerror', err => consoleErrors.push(String(err)));
 
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
-    // Same two overrides scripts/screenshots.mjs applies, for the same
+    // Same two overrides scripts/screenshots.mts applies, for the same
     // reasons: the update-check banner does a real GitHub API call and
     // overlays/intercepts clicks on the nav bar whenever the checked-out
     // version is ahead of the latest published release; #btnLive stays
@@ -40,7 +42,7 @@ before(async () => {
     // throwaway instance never has.
     await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
     await page.addStyleTag({ content: '#btnLive{display:flex!important}' });
-    await page.waitForTimeout(500); // let async post-load renders settle, same as screenshots.mjs
+    await page.waitForTimeout(500); // let async post-load renders settle, same as screenshots.mts
 });
 
 after(async () => {
@@ -52,10 +54,17 @@ after(async () => {
     stopServer();
 });
 
+interface View {
+    name: string;
+    nav: string;
+    post?: (page: Page) => Promise<void>;
+    ready: () => boolean;
+}
+
 // Snapshots consoleErrors, runs the view transition, waits for its
 // interactive-state marker, then returns only the errors that appeared
 // during that transition.
-async function gotoView({ nav, post, ready }) {
+async function gotoView({ nav, post, ready }: View): Promise<string[]> {
     const before = consoleErrors.length;
     await page.click(nav);
     // Analytics' #worldMapWrap only exists inside the now-visible view — it
@@ -64,16 +73,16 @@ async function gotoView({ nav, post, ready }) {
     // container is still display:none from the previous mode).
     if (post) await post(page);
     await page.waitForFunction(ready, undefined, { timeout: 10000 });
-    await page.waitForTimeout(300); // let the view's own async render finish, same margin screenshots.mjs uses
+    await page.waitForTimeout(300); // let the view's own async render finish, same margin screenshots.mts uses
     return consoleErrors.slice(before);
 }
 
 // The `ready` callbacks below run inside the browser tab via Playwright's
 // page.waitForFunction(), not in this Node process -- `document` is a real
 // global there, even though ESLint's static analysis (correctly, for a
-// .mjs file with node globals) doesn't know that.
+// .mts file with node globals) doesn't know that.
 /* eslint-disable no-undef */
-const VIEWS = [
+const VIEWS: View[] = [
     {
         name: 'Shots',
         nav: '#btnShots',
@@ -97,7 +106,7 @@ const VIEWS = [
         post: async p => { await p.locator('#worldMapWrap').scrollIntoViewIfNeeded(); },
         // The ECharts world map (views/analytics.js) mounts a <canvas> into
         // #worldMapWrap once echarts.init() renders — same element
-        // scripts/screenshots.mjs scrolls to before its own screenshot.
+        // scripts/screenshots.mts scrolls to before its own screenshot.
         ready: () => !!document.querySelector('#worldMapWrap canvas'),
     },
     {
@@ -153,7 +162,7 @@ const VIEWS = [
 /* eslint-enable no-undef */
 
 for (const view of VIEWS) {
-    test(`${view.name} view reaches an interactive state with no console errors`, async () => {
+    void test(`${view.name} view reaches an interactive state with no console errors`, async () => {
         const errors = await gotoView(view);
         assert.deepEqual(errors, [], `${view.name} view logged console errors: ${JSON.stringify(errors)}`);
     });

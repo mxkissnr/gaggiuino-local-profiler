@@ -27,7 +27,7 @@ import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
-import { appRoot, bootServer, restoreBackup, stopServer } from './e2e-harness.mjs';
+import { appRoot, bootServer, restoreBackup, stopServer } from './e2e-harness.mts';
 
 // Cache-buster query keys the SPA may append to force a fresh fetch; a static
 // snapshot must key by the real resource, so both are dropped from fixtureKey.
