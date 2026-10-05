@@ -87,6 +87,11 @@ interface Pending {
   reject: (err: unknown) => void;
   onProgress?: (progress: CutoutProgress) => void;
   timer: ReturnType<typeof setTimeout>;
+  /**
+   * Restarts this request's watchdog. A request that is still reporting
+   * progress has not stalled, so its deadline moves forward.
+   */
+  rearm: () => void;
 }
 
 let worker: Worker | null = null;
@@ -147,6 +152,7 @@ function createWorker(): Worker {
       } catch {
         // A broken progress listener must not break the request plumbing.
       }
+      entry.rearm();
       return;
     }
     pending.delete(msg.id);
@@ -196,17 +202,31 @@ function request(
 ): Promise<Uint8Array> {
   const target = workerFor();
   return new Promise<Uint8Array>((resolve, reject) => {
-    const timer = setTimeout(() => {
+    const stall = (): void => {
       // The worker keeps one shared session for every request, so a request that
       // stays unanswered this long makes the whole worker unusable: fail every
       // pending request and terminate it. The next request starts a new worker.
       rejectPending(new Error('segment: worker did not answer within 120s'));
       if (worker === target) dropWorker();
-    }, REQUEST_TIMEOUT_MS);
-    pending.set(
-      message.id,
-      onProgress ? { resolve, reject, onProgress, timer } : { resolve, reject, timer },
-    );
+    };
+    const entry: Pending = {
+      resolve,
+      reject,
+      // Spread rather than a possibly-undefined property because
+      // exactOptionalPropertyTypes rejects `onProgress: undefined`.
+      ...(onProgress ? { onProgress } : {}),
+      timer: setTimeout(stall, REQUEST_TIMEOUT_MS),
+      // A request that keeps reporting progress is still making headway: the
+      // first cut-out downloads 46 MB and runs inference server-side, which can
+      // outlast REQUEST_TIMEOUT_MS on slow hardware or links. Resetting the
+      // watchdog on every progress message means only that much *silence* is a
+      // stall, so a slow but progressing download is not killed mid-flight.
+      rearm: () => {
+        clearTimeout(entry.timer);
+        entry.timer = setTimeout(stall, REQUEST_TIMEOUT_MS);
+      },
+    };
+    pending.set(message.id, entry);
     target.postMessage(message, transfer);
   });
 }

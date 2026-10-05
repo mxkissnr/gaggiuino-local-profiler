@@ -356,4 +356,42 @@ describe('request watchdog', () => {
     // The cleared watchdog must not terminate the worker after a normal answer.
     expect(worker.terminated).toBe(false);
   });
+
+  it('re-arms on progress so a long but progressing request is not killed', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H, () => {});
+    const worker = latestWorker();
+    const id = worker.sent[0]!.message.id;
+
+    // Five minutes of work with a progress report every minute: each gap is well
+    // under the 120 s limit, so the watchdog deadline must keep moving forward.
+    for (let elapsed = 0; elapsed < 300_000; elapsed += 60_000) {
+      worker.reply({ id, progress: { stage: 'download', fraction: 0.1 } });
+      vi.advanceTimersByTime(60_000);
+    }
+    expect(worker.terminated).toBe(false);
+
+    const mask = new Uint8Array([4, 2]);
+    worker.reply({ id, mask });
+    await expect(promise).resolves.toBe(mask);
+  });
+
+  it('still rejects and terminates when progress stops for the full window', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H, () => {});
+    const error = promise.catch((err: unknown) => err);
+    const worker = latestWorker();
+    const id = worker.sent[0]!.message.id;
+
+    worker.reply({ id, progress: { stage: 'inference', fraction: 0.9 } });
+    vi.advanceTimersByTime(60_000);
+    expect(worker.terminated).toBe(false);
+
+    // A full 120 s of silence after the last progress report is still a stall.
+    vi.advanceTimersByTime(60_000);
+    expect(((await error) as Error).message).toMatch(/did not answer/);
+    expect(worker.terminated).toBe(true);
+  });
 });
