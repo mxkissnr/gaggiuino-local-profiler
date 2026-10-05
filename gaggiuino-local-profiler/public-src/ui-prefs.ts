@@ -185,7 +185,9 @@ interface ListenableTarget {
 // a partial window/document fake that only implements the few methods they need.
 function _subscribe(target: unknown, type: string, listener: LeaveListener): void {
   const t = target as ListenableTarget | null | undefined;
-  t?.addEventListener?.(type, listener);
+  if (t && typeof t.addEventListener === 'function') {
+    t.addEventListener(type, listener);
+  }
 }
 
 _subscribe(typeof window !== 'undefined' ? window : undefined, 'pagehide', () => {
