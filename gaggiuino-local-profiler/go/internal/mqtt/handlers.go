@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -92,6 +93,18 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		broker := DiscoverSupervisorMQTT(r.Context(), h.ha)
 		if broker == nil {
 			httputil.WriteError(w, http.StatusBadRequest, "no discovered MQTT broker")
+			return
+		}
+		// #1431 follow-up: the discovered password belongs to the discovered
+		// broker only. Without this, useDiscoveredPassword plus an arbitrary
+		// host would forward the Supervisor's broker password to whatever
+		// broker the caller names. Host is compared case-insensitively (DNS
+		// names are); port/username are compared against the same defaults
+		// parseSettings applies when the body omits them.
+		if !strings.EqualFold(parsed.Host, broker.Host) ||
+			parsed.Port != broker.Port ||
+			parsed.Username != broker.Username {
+			httputil.WriteError(w, http.StatusBadRequest, "the discovered password can only be used with the discovered broker")
 			return
 		}
 		parsed.Password = broker.Password
