@@ -78,6 +78,13 @@ func (h *Handlers) getSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	// #1431: the system category carries the machine's own MQTT broker
+	// password, which must never reach the browser. Report that one is set
+	// (mqttPasswordSet) instead; an empty category reads every category, so
+	// redact it too.
+	if category == "" || category == "system" {
+		settings = RedactSystemSettings(settings)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(settings)
@@ -130,10 +137,50 @@ func (h *Handlers) updateSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if category == "system" {
+		// #1431: the browser never receives the machine's own mqttPassword
+		// (RedactSystemSettings), so its re-submitted full-category form has no
+		// way to send it back. Restore it from the current settings before
+		// forwarding, so a save never silently wipes it.
+		var bodyMap map[string]any
+		if err := json.Unmarshal(rawBody, &bodyMap); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid settings payload")
+			return
+		}
+		if bodyMap == nil {
+			bodyMap = map[string]any{}
+		}
+		var current map[string]any
+		if _, present := bodyMap["mqttPassword"]; !present {
+			currentRaw, err := adapter.GetSettings(r.Context(), machine, "system")
+			if err != nil {
+				// A save must never silently wipe the password: if the browser
+				// didn't send one and the current one can't be read, fail like
+				// the other machine errors rather than forwarding the payload.
+				writeError(w, http.StatusBadGateway, err.Error())
+				return
+			}
+			if err := json.Unmarshal(currentRaw, &current); err != nil {
+				current = nil
+			}
+		}
+		RestoreSystemPassword(bodyMap, current)
+		merged, err := json.Marshal(bodyMap)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		rawBody = merged
+	}
 	result, err := adapter.UpdateSettings(r.Context(), machine, category, rawBody)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
+	}
+	// #1431: the machine's own POST response echoes the applied settings,
+	// including mqttPassword — redact it before forwarding to the browser.
+	if category == "system" {
+		result = RedactSystemSettings(result)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

@@ -265,6 +265,27 @@ func TestRoute_DiscoveryUnavailable(t *testing.T) {
 	}
 }
 
+// TestRoute_Discovery_NeverReturnsPassword is the #1431 regression test: the
+// discovery response must report whether the broker has a password
+// (hasPassword) instead of echoing the password itself.
+func TestRoute_Discovery_NeverReturnsPassword(t *testing.T) {
+	_, _, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{body: `{"data":{"host":"core-mosquitto","port":1883,"username":"ha-mqtt","password":"broker-secret"}}`})
+	rec := do(t, m, http.MethodGet, "/api/mqtt/discovery", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	body := decode(t, rec)
+	if _, present := body["password"]; present {
+		t.Fatalf("discovery response leaked a password field: %v", body)
+	}
+	if body["hasPassword"] != true {
+		t.Fatalf("hasPassword = %v, want true", body["hasPassword"])
+	}
+	if body["host"] != "core-mosquitto" {
+		t.Fatalf("host = %v, want core-mosquitto", body["host"])
+	}
+}
+
 func TestRoute_SettingsGetPost(t *testing.T) {
 	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("x")})
 	if decode(t, do(t, m, http.MethodGet, "/api/mqtt/settings", ""))["transport"] != "websocket" {
@@ -379,6 +400,60 @@ func TestRoute_SettingsPost_ClearPassword(t *testing.T) {
 	}
 	if repo.GetSettings().Password != "" {
 		t.Fatalf("clearPassword:true with a password field present should still wipe it: %+v", repo.GetSettings())
+	}
+}
+
+// TestRoute_SettingsPost_UseDiscoveredPassword is the #1431 counterpart for
+// the discovered-broker password: with no explicit password,
+// useDiscoveredPassword:true stores the Supervisor-discovered broker's
+// password, and a non-empty password in the same request still wins.
+func TestRoute_SettingsPost_UseDiscoveredPassword(t *testing.T) {
+	disc := fakeSupervisor{body: `{"data":{"host":"core-mosquitto","port":1883,"username":"ha-mqtt","password":"discovered-secret"}}`}
+
+	// No explicit password -> the discovered one is stored.
+	_, repo, m := newRoutes(t, &fakeAdapter{}, disc)
+	rec := do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.50","port":1883,"username":"u","prefix":"gaggiuino","useDiscoveredPassword":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if repo.GetSettings().Password != "discovered-secret" {
+		t.Fatalf("stored password = %q, want the discovered one", repo.GetSettings().Password)
+	}
+	if decode(t, rec)["hasPassword"] != true {
+		t.Fatalf("response hasPassword = %v, want true", decode(t, rec)["hasPassword"])
+	}
+
+	// An explicit non-empty password wins over the discovered one.
+	_, repo2, m2 := newRoutes(t, &fakeAdapter{}, disc)
+	rec = do(t, m2, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.50","port":1883,"username":"u","password":"explicit-secret","prefix":"gaggiuino","useDiscoveredPassword":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if repo2.GetSettings().Password != "explicit-secret" {
+		t.Fatalf("stored password = %q, want the explicit one", repo2.GetSettings().Password)
+	}
+}
+
+// TestRoute_SettingsPost_UseDiscoveredPasswordNoBroker: opting into the
+// discovered password when discovery finds no broker must 400 and leave the
+// stored password untouched.
+func TestRoute_SettingsPost_UseDiscoveredPasswordNoBroker(t *testing.T) {
+	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("no service")})
+	if _, err := repo.SaveSettings(Settings{
+		Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+		Username: "u", Password: "stored-secret", Prefix: "gaggiuino",
+	}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	rec := do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.50","port":1883,"username":"u","prefix":"gaggiuino","useDiscoveredPassword":true}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if repo.GetSettings().Password != "stored-secret" {
+		t.Fatalf("stored password = %q, want it untouched", repo.GetSettings().Password)
 	}
 }
 
