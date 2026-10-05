@@ -576,4 +576,3 @@ func TestGaggiMateSlogToShot_LegacyZeroReasons(t *testing.T) {
 		t.Fatalf("finalExitReason = %v, want 0", v)
 	}
 }
-
