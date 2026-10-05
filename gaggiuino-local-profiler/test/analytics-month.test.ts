@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { MonthDay, MonthShot } from '../public-src/views/analytics-month.js';
 
 // Same window/localStorage stubbing as analytics-equipment-stats.test.ts:
@@ -379,5 +379,99 @@ describe('dayCellHtml', () => {
     const future = dayCellHtml(mday({ key: '2024-03-21', day: 21, count: 0 }), today, locale, false);
     expect(future).toContain('cal-month-future');
     expect(future).not.toContain('cal-month-num');
+  });
+});
+
+// #1401: the shown month used to be frozen from `new Date()` at module load, so
+// a view left open across a month boundary kept rendering the old month. These
+// tests drive renderMonthCalendar against a minimal fake element/document (the
+// suite runs under vitest's node environment, no jsdom) with the clock pinned
+// so the month can change between two renders.
+describe('renderMonthCalendar month rollover (#1401)', () => {
+  type NavModule = Pick<MonthModule, 'renderMonthCalendar' | 'analyticsMonthNext' | 'analyticsMonthPrev'>;
+
+  interface FakeEl {
+    innerHTML: string;
+    querySelector: () => null;
+    querySelectorAll: () => unknown[];
+  }
+
+  // Only the members renderMonthCalendar touches: innerHTML writes, the
+  // #calMonthPop lookup (absent -> early return) and the thumbnail scan (none).
+  const el: FakeEl = {
+    innerHTML: '',
+    querySelector: () => null,
+    querySelectorAll: () => [],
+  };
+  const monthEl = el as unknown as HTMLElement;
+
+  function titleOf(year: number, month: number): string {
+    return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(year, month, 1));
+  }
+
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        getElementById: (id: string) => (id === 'shotMonthCalendar' ? el : null),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+      configurable: true, writable: true,
+    });
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    el.innerHTML = '';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A fresh module instance per test: the shown month and the "user navigated"
+  // flag are module state, and re-importing is the only way to reset them.
+  async function freshNav(): Promise<NavModule> {
+    vi.resetModules();
+    return import('../public-src/views/analytics-month.js');
+  }
+
+  it('rolls to the new month on a re-render after a month change', async () => {
+    vi.setSystemTime(new Date(2026, 9, 31, 12, 0, 0)); // 2026-10-31
+    const mod = await freshNav();
+    mod.renderMonthCalendar(monthEl);
+    expect(el.innerHTML).toContain(titleOf(2026, 9)); // October 2026
+
+    vi.setSystemTime(new Date(2026, 10, 1, 0, 30, 0)); // 2026-11-01
+    mod.renderMonthCalendar(monthEl);
+    expect(el.innerHTML).toContain(titleOf(2026, 10)); // November 2026
+  });
+
+  it('keeps the month the user navigated to across re-renders', async () => {
+    vi.setSystemTime(new Date(2026, 10, 15, 12, 0, 0)); // 2026-11-15
+    const mod = await freshNav();
+    mod.renderMonthCalendar(monthEl);
+    mod.analyticsMonthPrev(); // -> October 2026
+    expect(el.innerHTML).toContain(titleOf(2026, 9));
+
+    // A later rebuild (language change, data reload) must keep October.
+    mod.renderMonthCalendar(monthEl);
+    expect(el.innerHTML).toContain(titleOf(2026, 9));
+    expect(el.innerHTML).not.toContain(titleOf(2026, 10));
+  });
+
+  it('resumes following the current month after navigating back to it', async () => {
+    vi.setSystemTime(new Date(2026, 9, 31, 12, 0, 0)); // 2026-10-31
+    const mod = await freshNav();
+    mod.renderMonthCalendar(monthEl);
+    mod.analyticsMonthPrev(); // -> September 2026, pinned
+    expect(el.innerHTML).toContain(titleOf(2026, 8));
+
+    mod.analyticsMonthNext(); // back to the current month, following again
+    expect(el.innerHTML).toContain(titleOf(2026, 9));
+
+    vi.setSystemTime(new Date(2026, 10, 1, 0, 30, 0)); // 2026-11-01
+    mod.renderMonthCalendar(monthEl);
+    expect(el.innerHTML).toContain(titleOf(2026, 10)); // November 2026
   });
 });

@@ -268,9 +268,12 @@ function _scoreOf(shot: MonthShot): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-// Shown month; navigation keeps it until the view is rebuilt.
+// Shown month. Until the user navigates it follows the current month on every
+// render, so a view left open across a month boundary rolls over on its own;
+// navigating pins the chosen month instead.
 let _viewYear = new Date().getFullYear();
 let _viewMonth = new Date().getMonth();
+let _navigated = false;
 let _openDay: string | null = null;
 let _days: MonthDay[] = [];
 let _shotsById = new Map<number, MonthShot>();
@@ -279,6 +282,11 @@ let _escHandler: ((e: KeyboardEvent) => void) | null = null;
 function _switchTo(year: number, month: number): void {
   _viewYear = year;
   _viewMonth = month;
+  // Pin the view once the user picks a month, but resume following "now" the
+  // moment they navigate back to the current one, so a later month boundary
+  // still rolls the view forward.
+  const now = new Date();
+  _navigated = year !== now.getFullYear() || month !== now.getMonth();
   const el = document.getElementById('shotMonthCalendar');
   if (el) renderMonthCalendar(el);
 }
@@ -433,8 +441,19 @@ function _renderPopover(el: HTMLElement): void {
 // Render the month view into `el`. The optional year/month only matter for a
 // direct call; the nav buttons go through the module's own shown month.
 export function renderMonthCalendar(el: HTMLElement, year?: number, month?: number): void {
+  // An explicit year/month is a deliberate selection; otherwise the shown
+  // month is reused so the nav buttons survive the rebuild a _switchTo makes.
+  if (typeof year === 'number' || typeof month === 'number') _navigated = true;
   if (typeof year === 'number') _viewYear = year;
   if (typeof month === 'number') _viewMonth = month;
+  const now = new Date();
+  // With no navigation yet, follow the current month at render time: a view
+  // left open across a month change shows the new month, not the one that was
+  // current when it was mounted.
+  if (!_navigated) {
+    _viewYear = now.getFullYear();
+    _viewMonth = now.getMonth();
+  }
   // A rebuild (language change, data reload, machine filter) is a fresh
   // render: close any open day popover instead of leaving it pointing at a
   // day whose shot list may have changed underneath it.
@@ -445,7 +464,6 @@ export function renderMonthCalendar(el: HTMLElement, year?: number, month?: numb
   _days = buildMonthDays(shots, _viewYear, _viewMonth, _scoreOf);
   _shotsById = new Map<number, MonthShot>(shots.map((s): [number, MonthShot] => [s.id, s]));
 
-  const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const isCurrentMonth = _viewYear === today.getFullYear() && _viewMonth === today.getMonth();
   const title = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(_viewYear, _viewMonth, 1));

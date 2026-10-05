@@ -5,6 +5,7 @@
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **The Analytics month calendar moves on to the new month when the app stays open over a month change.** Closes #1401
 - **Shots from GaggiMate firmware v1.9.0 are imported with correct curves again.** Closes #1397
 - **The Statistics month calendar only asks for a bean's photo when it has one, so it stops logging a failed image request.** Part of #1331
 - **The machine icon no longer shows a strip of colour while the machine is switched off.** Closes #1383
