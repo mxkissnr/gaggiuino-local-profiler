@@ -141,6 +141,43 @@ export function buildGmPhaseRanges(phases: GmPhaseInput[] | null | undefined): G
   return ranges;
 }
 
+// A phase transition recorded in a shot log. `t` is deciseconds, the same unit
+// as timeInShot; `reason` is a PHASE_EXIT_REASON_* code from GaggiMate's
+// shot_log_format.h (see exitReasonKey).
+export interface RecordedPhaseTransition {
+  t: number;
+  phase: number;
+  name?: string;
+  reason?: number;
+}
+
+// Recorded transitions -> {name, phaseType, t0, t1} ranges in seconds, so a
+// shot's phases are shaded from the log's own timings. profileRanges (when
+// present) supplies each phase's type by index.
+export function buildRecordedGmPhaseRanges(
+  transitions: RecordedPhaseTransition[] | null | undefined,
+  endSec: number,
+  profileRanges?: GmPhaseRange[] | null,
+): GmPhaseRange[] {
+  const list = transitions || [];
+  return list.map((tr, i) => {
+    const t0 = tr.t / 10;
+    const next = list[i + 1];
+    const t1 = next ? next.t / 10 : Math.max(endSec, t0);
+    return {
+      name: tr.name || `Phase ${tr.phase + 1}`,
+      phaseType: profileRanges?.[tr.phase]?.phaseType ?? 'brew',
+      t0,
+      t1,
+    };
+  });
+}
+
+// PHASE_EXIT_REASON_* code (1..7) -> i18n key, else null.
+export function exitReasonKey(code: unknown): string | null {
+  return typeof code === 'number' && Number.isInteger(code) && code >= 1 && code <= 7 ? `exit_reason_${code}` : null;
+}
+
 // ── Phase background plugin ───────────────────────────────────────────────
 // #814: the phase shading draws straight onto the canvas, so it cannot inherit
 // anything from CSS. Its label text and divider were fixed light-on-dark values
