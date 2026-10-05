@@ -128,7 +128,7 @@ export async function seed(baseUrl: string): Promise<{ machine2: unknown }> {
     const post = (p: string, body?: unknown): Promise<unknown> => fetch(`${baseUrl}${p}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-glp-token': apiToken },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? null : JSON.stringify(body),
     }).then(async r => {
         const text = await r.text();
         if (!r.ok) throw new Error(`POST ${p} -> ${r.status}: ${text}`);
