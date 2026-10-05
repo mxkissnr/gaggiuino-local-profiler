@@ -33,8 +33,9 @@ const localPlugin = {
 //   scripts/demo-fixtures.mjs   -> scripts/demo-fixtures.mts     (ported)
 //   scripts/demo-smoke.mjs      -> scripts/demo-smoke.mts        (ported)
 //   scripts/sync-dev-config.mjs -> scripts/sync-dev-config.mts   (ported)
-// Only scripts/dev-stats.mjs and scripts/release-check.mjs still await their
-// own slices; the unchanged .mjs files stay until then.
+//   scripts/dev-stats.mjs       -> scripts/dev-stats.mts         (ported)
+// Only scripts/release-check.mjs still awaits its own slice; the unchanged
+// .mjs file stays until then.
 
 export default [
   {
