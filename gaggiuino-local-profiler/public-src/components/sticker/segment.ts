@@ -40,6 +40,14 @@ const MODELS_VERSION =
  */
 const WORKER_IDLE_MS = 20_000;
 
+/**
+ * How long a single request may stay unanswered before the client gives up. The
+ * first cut-out downloads the model files server-side, so this is generous; a
+ * worker silent for this long is presumed stuck, and the next request starts a
+ * fresh one instead of hanging the cut-out forever.
+ */
+const REQUEST_TIMEOUT_MS = 120_000;
+
 /** Absolute directory the models are served from, ending in "models/". */
 function modelsBase(): string {
   const version = MODELS_VERSION === '' ? '' : `${MODELS_VERSION}/`;
@@ -78,6 +86,7 @@ interface Pending {
   resolve: (mask: Uint8Array) => void;
   reject: (err: unknown) => void;
   onProgress?: (progress: CutoutProgress) => void;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 let worker: Worker | null = null;
@@ -89,7 +98,10 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null;
 const pending = new Map<number, Pending>();
 
 function rejectPending(err: unknown): void {
-  for (const entry of pending.values()) entry.reject(err);
+  for (const entry of pending.values()) {
+    clearTimeout(entry.timer);
+    entry.reject(err);
+  }
   pending.clear();
 }
 
@@ -138,6 +150,7 @@ function createWorker(): Worker {
       return;
     }
     pending.delete(msg.id);
+    clearTimeout(entry.timer);
     if (msg.error !== undefined) entry.reject(new Error(msg.error));
     else entry.resolve(msg.mask ?? new Uint8Array());
   };
@@ -183,7 +196,17 @@ function request(
 ): Promise<Uint8Array> {
   const target = workerFor();
   return new Promise<Uint8Array>((resolve, reject) => {
-    pending.set(message.id, onProgress ? { resolve, reject, onProgress } : { resolve, reject });
+    const timer = setTimeout(() => {
+      // The worker keeps one shared session for every request, so a request that
+      // stays unanswered this long makes the whole worker unusable: fail every
+      // pending request and terminate it. The next request starts a new worker.
+      rejectPending(new Error('segment: worker did not answer within 120s'));
+      if (worker === target) dropWorker();
+    }, REQUEST_TIMEOUT_MS);
+    pending.set(
+      message.id,
+      onProgress ? { resolve, reject, onProgress, timer } : { resolve, reject, timer },
+    );
     target.postMessage(message, transfer);
   });
 }

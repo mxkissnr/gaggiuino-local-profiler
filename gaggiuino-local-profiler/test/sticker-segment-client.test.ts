@@ -315,3 +315,43 @@ describe('worker failure', () => {
     await expect(retry).resolves.toBe(mask);
   });
 });
+
+describe('request watchdog', () => {
+  it('rejects every pending request and terminates the worker when one goes unanswered', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const first = segment.autoCutout(RGBA, W, H);
+    const second = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+    // Both requests share the one worker and are still waiting for an answer.
+    expect(FakeWorker.instances).toHaveLength(1);
+
+    vi.advanceTimersByTime(120_000);
+
+    await expect(first).rejects.toThrow(/did not answer/);
+    await expect(second).rejects.toThrow(/did not answer/);
+    expect(worker.terminated).toBe(true);
+
+    // The next request starts a fresh worker instead of the terminated one.
+    const next = segment.autoCutout(RGBA, W, H);
+    expect(FakeWorker.instances).toHaveLength(2);
+    const fresh = latestWorker();
+    fresh.reply({ id: fresh.sent[0]!.message.id, mask: new Uint8Array([3]) });
+    await expect(next).resolves.toEqual(new Uint8Array([3]));
+  });
+
+  it('clears the watchdog when the answer arrives before the deadline', async () => {
+    vi.useFakeTimers();
+    const segment = await freshClient();
+    const promise = segment.autoCutout(RGBA, W, H);
+    const worker = latestWorker();
+
+    const mask = new Uint8Array([5]);
+    worker.reply({ id: worker.sent[0]!.message.id, mask });
+    await expect(promise).resolves.toBe(mask);
+
+    vi.advanceTimersByTime(120_000);
+    // The cleared watchdog must not terminate the worker after a normal answer.
+    expect(worker.terminated).toBe(false);
+  });
+});
