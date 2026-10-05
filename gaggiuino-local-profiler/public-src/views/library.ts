@@ -237,6 +237,18 @@ function beanFreshBadge(b: BeanListRow): Html {
     : esc('');
 }
 
+// #1408: safeHttpUrl returns u only when it parses as an absolute http(s)
+// URL, so a stored javascript:/data: value renders as plain text, never as a
+// clickable link.
+export function safeHttpUrl(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return u;
+  } catch { /* not a URL */ }
+  return null;
+}
+
 export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: BeanCardOpts): Html {
   const inSheet = opts?.inSheet === true;
   const bags = Array.isArray(b.bags) ? b.bags : [];
@@ -248,6 +260,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
   const remaining = b.remainingG ?? null;
   const { current, upcoming, past } = classifyBeanBags(b);
   const activeBag = current?.bg || null;
+  const sourceHref = safeHttpUrl(b.sourceUrl);
 
   // Stock %/bar is scoped to the CURRENT bag only (how far through the
   // bag actually being drawn from) — the headline g-numbers above stay
@@ -256,16 +269,10 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
   if (remaining != null || totalConsumed > 0) {
     const isLow = remaining != null && remaining < 100;
     const rem = Math.max(0, remaining ?? 0);
-    // #1373: a bean imported from a shop page links its "reorder" badge back
-    // there. Restrict to http(s) so a stored javascript:/data: value can never
-    // become a clickable link.
-    let reorderUrl: string | null = null;
-    if (isLow && b.sourceUrl) {
-      try {
-        const parsed = new URL(b.sourceUrl);
-        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') reorderUrl = b.sourceUrl;
-      } catch { /* not a URL — keep the plain badge */ }
-    }
+    // #1373/#1408: a bean imported from a shop page links its "reorder" badge
+    // back there. safeHttpUrl restricts to http(s) so a stored javascript:/
+    // data: value can never become a clickable link.
+    const reorderUrl: string | null = isLow ? sourceHref : null;
     const stockPct = current && current.stockG != null && current.stockG > 0
       ? Math.max(0, Math.min(100, Math.round(((current.remaining ?? 0) / current.stockG) * 100)))
       : 0;
@@ -496,7 +503,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[], opts?: Bean
       ${frozenHtml}
       ${bagHistoryHtml}
       ${b.source ? html`<div class="lib-item-source">${tHtml('lib_imported_from',
-        b.sourceUrl ? html`<a href="${esc(b.sourceUrl)}" target="_blank" rel="noopener">${esc(b.source)}</a>` : esc(b.source),
+        sourceHref ? html`<a href="${esc(sourceHref)}" target="_blank" rel="noopener">${esc(b.source)}</a>` : esc(b.source),
         esc(b.importedAt || ''))}</div>` : esc('')}
     </div>
     <div id="newBagForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
