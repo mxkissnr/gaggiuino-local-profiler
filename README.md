@@ -47,13 +47,15 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Shot score & dial-in help** - an automatic 0-100 score with a plain-language verdict, grind recommendations, and a guided dial-in wizard that tunes grind against a 25-32 s extraction target.
 - **Compare mode & ghost curve** - overlay any two shots by hand, or let the shot detail auto-compare against the previous shot on the same profile with delta chips and a dashed ghost curve.
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
-- **Analytics** - score trends, a shot calendar heatmap, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
+- **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
+- **Sticker cut-out** - cut a bean photo out as a sticker right in the app, on your own device (the models download once on first use).
+- **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
 - **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.
 - **Maintenance tracking** - descaling, backflush, group-head and gasket tasks tracked per machine, with grinder cleaning and burr-wear tracking alongside.
 - **Orders & kiosk mode** - take drink orders from a tablet kiosk page with variants and notes, and watch the barista queue update on its own.
 - **Exports & sharing** - export shots as `.shot` or CSV, or turn any shot into a shareable card.
 - **AI assistants via MCP** - optionally expose a built-in Model Context Protocol server so AI assistants can read your shots, beans, maintenance and analytics, with separate opt-ins for write and developer tools.
-- **Six languages & themes** - the full UI ships in DE, EN, IT, FR, ES and NL, with light/dark/auto themes and six accent colour schemes.
+- **Six languages & themes** - the full UI ships in DE, EN, IT, FR, ES and NL, with light/dark/auto themes and eight accent colour schemes. Your view, filter and sort choices are synced across devices.
 
 All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki/Features).
 
@@ -71,7 +73,7 @@ All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-l
     <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
   </tr>
   <tr>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library with bean cards" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library shelf with bean bags" width="100%"/></td>
     <td></td>
   </tr>
 </table>
