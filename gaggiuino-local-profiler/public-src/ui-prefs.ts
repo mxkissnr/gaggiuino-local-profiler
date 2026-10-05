@@ -237,8 +237,10 @@ export async function loadUiPrefsFromServer(): Promise<boolean> {
     if (pushUp.length) {
       for (const key of pushUp) _queue.add(key);
       _persistPending();
-      await _flush();
     }
+    // A non-empty queue means a migration or changes persisted from a previous
+    // session are still unsent; retry them now that the server answered.
+    if (_queue.size) await _flush();
     return changed;
   } catch {
     return false;

@@ -313,6 +313,27 @@ describe('loadUiPrefsFromServer (#1375, #1403)', () => {
     expect(sentBody(put)).toEqual({ 'lib.shelf': { filter: 'espresso' }, localOnly: 1 });
   });
 
+  it('re-sends a persisted pending key on the next start even with a non-empty server (#1403)', async () => {
+    _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'all' }, other: 1 }));
+    _store.set('glp_ui_prefs_pending', JSON.stringify(['lib.shelf']));
+    const mod = await loadModule();
+
+    const calls: [string, RequestInit | undefined][] = [];
+    const fetchMock = vi.fn<FetchFn>((url, opts) => {
+      calls.push([url, opts]);
+      return Promise.resolve(okJson({ other: 1, fromServer: 2 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await mod.loadUiPrefsFromServer();
+
+    // The server's value for the pending key must not overwrite the local one.
+    expect(mod.getUiPref('lib.shelf')).toEqual({ filter: 'all' });
+    const put = calls.find(([, o]) => o?.method === 'PUT');
+    expect(put).toBeTruthy();
+    expect(sentBody(put)).toEqual({ 'lib.shelf': { filter: 'all' } });
+  });
+
   it('leaves the local cache untouched when the request fails', async () => {
     _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'espresso' } }));
     const mod = await loadModule();
