@@ -44,8 +44,7 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   }),
-  // TypeScript sources migrate file-by-file (#1102): scoped to the .ts globs so
-  // the type-aware rules don't touch the .js files still in flight.
+  // TypeScript SPA sources (#1102; the port finished under #1270).
   ...tseslint.config({
     files: ['public-src/**/*.ts'],
     ignores: ['public-src/sw.ts'],

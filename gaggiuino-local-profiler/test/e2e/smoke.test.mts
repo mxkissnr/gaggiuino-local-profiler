@@ -86,14 +86,14 @@ const VIEWS: View[] = [
     {
         name: 'Shots',
         nav: '#btnShots',
-        // sidebar.js renders one `wrapper-<id>` element per shot (see
-        // components/mode.js's goToShot()) — the demo dataset seeds 12.
+        // sidebar.ts renders one `wrapper-<id>` element per shot (see
+        // components/mode.ts's goToShot()) — the demo dataset seeds 12.
         ready: () => !!document.querySelector('[id^="wrapper-"]'),
     },
     {
         name: 'Library',
         nav: '#btnLibrary',
-        // renderBeanList() (views/library.js) replaces #beanListUI's
+        // renderBeanList() (views/library.ts) replaces #beanListUI's
         // content with real bean cards once S.coffeeLibrary loads —
         // checking for one of the seeded bean names proves it rendered the
         // real data, not just an empty-state placeholder. The demo dataset's
@@ -104,7 +104,7 @@ const VIEWS: View[] = [
         name: 'Analytics',
         nav: '#btnAnalytics',
         post: async p => { await p.locator('#worldMapWrap').scrollIntoViewIfNeeded(); },
-        // The ECharts world map (views/analytics.js) mounts a <canvas> into
+        // The ECharts world map (views/analytics.ts) mounts a <canvas> into
         // #worldMapWrap once echarts.init() renders — same element
         // scripts/screenshots.mts scrolls to before its own screenshot.
         ready: () => !!document.querySelector('#worldMapWrap canvas'),
@@ -112,7 +112,7 @@ const VIEWS: View[] = [
     {
         name: 'Maintenance',
         nav: '#btnMaintenance',
-        // renderMaintenanceDashboard() (views/maintenance.js) fills
+        // renderMaintenanceDashboard() (views/maintenance.ts) fills
         // #maintSummary with .maint-tile counters once the async
         // maintenance data loads.
         ready: () => document.querySelectorAll('#maintSummary .maint-tile').length > 0,
@@ -120,7 +120,7 @@ const VIEWS: View[] = [
     {
         name: 'Dialin',
         nav: '#btnDialin',
-        // views/dialin.js fills #dialinGrid with real shot cards once
+        // views/dialin.ts fills #dialinGrid with real shot cards once
         // recent shots load; an empty grid would still contain a single
         // ".dialin-empty" placeholder node, so this must specifically wait
         // for that not to be the only child.
@@ -132,7 +132,7 @@ const VIEWS: View[] = [
     {
         name: 'Live',
         nav: '#btnLive',
-        // connectLiveStream() (views/live.js) sets the badge to 'connecting'
+        // connectLiveStream() (views/live.ts) sets the badge to 'connecting'
         // synchronously, then the first api/live/data response resolves it
         // to ready/unreachable/idle/brewing/error via setLiveBadge() — this
         // seeded instance's default machine has no host configured, so it
@@ -146,14 +146,14 @@ const VIEWS: View[] = [
     {
         name: 'Orders',
         nav: '#btnOrders',
-        // loadOrdersView() (views/orders.js) awaits api/orders/settings
+        // loadOrdersView() (views/orders.ts) awaits api/orders/settings
         // before setting #ordersEnabledLabel's text.
         ready: () => !!document.getElementById('ordersEnabledLabel')?.textContent,
     },
     {
         name: 'Settings',
         nav: '#btnSettings',
-        // renderMachinesList() (components/machines-settings.js) renders one
+        // renderMachinesList() (components/machines-settings.ts) renders one
         // .machine-row per machine — the default row plus the second
         // machine seed() adds.
         ready: () => document.querySelectorAll('#machinesList .machine-row').length >= 2,

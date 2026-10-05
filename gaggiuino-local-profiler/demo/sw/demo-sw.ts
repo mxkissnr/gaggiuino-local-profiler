@@ -18,7 +18,7 @@ const DEMO_TOKEN = { apiToken: 'demo' };
 // import the SPA's TS constant.
 const SIMULATE_MESSAGE = 'glp-demo-simulate';
 // The named SSE event the app routes to the Live view (sse.ts's
-// EVENTS.LIVE_SNAPSHOT, backend lib/events.js).
+// EVENTS.LIVE_SNAPSHOT).
 const LIVE_SNAPSHOT_EVENT = 'live-snapshot';
 
 // One replay frame every 500 ms, advancing half a second of shot time each
@@ -42,8 +42,8 @@ const sseStreams = new Set<SseStream>();
 const SSE_ENCODER = new TextEncoder();
 
 // The increasing seq the fake machine reports: unchanged while a shot runs,
-// incremented when one ends — exactly lib/poll.js's liveSeq, and what the app
-// watches for to reload the shot list after a brew.
+// incremented when one ends — the seq the app watches to reload the shot
+// list after a brew.
 let liveSeq = 0;
 let simulateRunning = false;
 
