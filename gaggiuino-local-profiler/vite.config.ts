@@ -5,9 +5,10 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Demo mode (#1193) builds the SPA for GitHub Pages: static output in
-// ../demo-dist, the entry point swapped for the service-worker bootstrap, and
-// the worker + recorded fixtures copied next to the bundle so the whole
-// directory is self-contained. The normal build is untouched.
+// ../demo-dist, the entry point swapped for the service-worker bootstrap, the
+// worker bundled from demo/sw/demo-sw.ts, and the recorded fixtures copied
+// next to the bundle so the whole directory is self-contained. The normal
+// build is untouched.
 function demoServiceWorker(): Plugin {
   let projectRoot = '';
   let outDir = '';
@@ -20,6 +21,11 @@ function demoServiceWorker(): Plugin {
       projectRoot = dirname(root);
       outDir = resolve(root, config.build.outDir);
     },
+    // The worker is TypeScript now (#1270), so it is bundled (with its
+    // demo/sw/sw-core.ts import inlined) rather than copied.
+    buildStart() {
+      this.emitFile({ type: 'chunk', id: join(projectRoot, 'demo', 'sw', 'demo-sw.ts'), fileName: 'demo-sw.js' });
+    },
     transformIndexHtml: {
       order: 'pre',
       handler: html => html.replace('src="./main.ts"', 'src="./demo/boot.ts"'),
@@ -28,9 +34,6 @@ function demoServiceWorker(): Plugin {
       const fixtures = join(projectRoot, 'demo', 'fixtures');
       if (!existsSync(join(fixtures, 'manifest.json'))) {
         this.error('demo/fixtures/manifest.json is missing — run `npm run demo:fixtures` first');
-      }
-      for (const file of ['demo-sw.js', 'sw-core.js']) {
-        cpSync(join(projectRoot, 'demo', 'sw', file), join(outDir, file));
       }
       cpSync(fixtures, join(outDir, 'fixtures'), { recursive: true });
     },

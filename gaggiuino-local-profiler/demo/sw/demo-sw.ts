@@ -1,18 +1,21 @@
 // Service worker for the static GitHub Pages demo (#1193).
 //
 // The demo ships the real SPA with no backend, so this worker answers every
-// API request from the fixtures recorded by scripts/demo-fixtures.mjs. It is a
-// classic script (importScripts, not import) because it is copied verbatim
-// into demo-dist/ rather than bundled. Reads replay fixtures; writes are
-// accepted and thrown away, and the page is told so it can say nothing was
-// saved.
-importScripts('sw-core.js');
+// API request from the fixtures recorded by scripts/demo-fixtures.mts. It is
+// TypeScript (#1270): the demo build bundles it with its core (demo/sw/
+// sw-core.ts) into a single classic script, demo-dist/demo-sw.js, so this file
+// is not copied verbatim. Reads replay fixtures; writes are accepted and
+// thrown away, and the page is told so it can say nothing was saved.
+import { GLPDemo, type FixtureEntry, type Manifest } from './sw-core.ts';
+
+declare const self: ServiceWorkerGlobalScope;
 
 const DEMO_TOKEN = { apiToken: 'demo' };
 
 // A simulate request from the demo banner (public-src/demo/banner.ts). The
 // string is a values-must-match contract between the two, same as sse.ts's
-// EVENTS — the worker is a classic script and cannot import the TS constant.
+// EVENTS — the worker is bundled separately from the SPA, so it must not
+// import the SPA's TS constant.
 const SIMULATE_MESSAGE = 'glp-demo-simulate';
 // The named SSE event the app routes to the Live view (sse.ts's
 // EVENTS.LIVE_SNAPSHOT, backend lib/events.js).
@@ -31,7 +34,11 @@ const SSE_KEEPALIVE_MS = 20000;
 
 // Open `api/events` streams (their ReadableStream controllers), so a
 // simulation can push live-snapshot frames onto every connected tab.
-const sseStreams = new Set();
+interface SseStream {
+    controller: { enqueue(chunk: Uint8Array): void };
+    timer: ReturnType<typeof setInterval>;
+}
+const sseStreams = new Set<SseStream>();
 const SSE_ENCODER = new TextEncoder();
 
 // The increasing seq the fake machine reports: unchanged while a shot runs,
@@ -40,15 +47,15 @@ const SSE_ENCODER = new TextEncoder();
 let liveSeq = 0;
 let simulateRunning = false;
 
-let manifestPromise = null;
+let manifestPromise: Promise<Manifest> | null = null;
 
 /** Loads fixtures/manifest.json from the scope, retrying after a failure. */
-function loadManifest() {
+function loadManifest(): Promise<Manifest> {
     if (!manifestPromise) {
         manifestPromise = fetch(new URL('fixtures/manifest.json', self.registration.scope))
             .then(response => {
                 if (!response.ok) throw new Error(`fixtures/manifest.json: HTTP ${response.status}`);
-                return response.json();
+                return response.json() as Promise<Manifest>;
             })
             .catch(error => {
                 manifestPromise = null;
@@ -58,7 +65,7 @@ function loadManifest() {
     return manifestPromise;
 }
 
-function jsonResponse(body, status = 200) {
+function jsonResponse(body: unknown, status = 200): Response {
     return new Response(JSON.stringify(body), {
         status,
         headers: { 'Content-Type': 'application/json' },
@@ -66,14 +73,14 @@ function jsonResponse(body, status = 200) {
 }
 
 /** Forgets one stream and stops its keepalive. */
-function dropStream(entry) {
+function dropStream(entry: SseStream | null): void {
     if (!entry) return;
     if (entry.timer) clearInterval(entry.timer);
     sseStreams.delete(entry);
 }
 
 /** Encodes one named SSE event (its `event:`/`data:` lines). */
-function encodeEvent(type, data) {
+function encodeEvent(type: string, data: unknown): Uint8Array {
     return SSE_ENCODER.encode(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
@@ -87,9 +94,9 @@ function encodeEvent(type, data) {
  * is running its frames already do that, so the idle one is skipped to avoid
  * clobbering the live view mid-brew.
  */
-function sseResponse() {
-    let entry = null;
-    const stream = new ReadableStream({
+function sseResponse(): Response {
+    let entry: SseStream | null = null;
+    const stream = new ReadableStream<Uint8Array>({
         start(controller) {
             controller.enqueue(SSE_ENCODER.encode(': demo\n\n'));
             entry = {
@@ -97,7 +104,7 @@ function sseResponse() {
                 timer: setInterval(() => {
                     try {
                         if (!simulateRunning) {
-                            controller.enqueue(encodeEvent(LIVE_SNAPSHOT_EVENT, self.GLPDemo.idleFrame(liveSeq)));
+                            controller.enqueue(encodeEvent(LIVE_SNAPSHOT_EVENT, GLPDemo.idleFrame(liveSeq)));
                         }
                     } catch {
                         dropStream(entry);
@@ -117,7 +124,7 @@ function sseResponse() {
 }
 
 /** Enqueues one named SSE event to every open stream, dropping dead ones. */
-function broadcast(type, data) {
+function broadcast(type: string, data: unknown): void {
     const bytes = encodeEvent(type, data);
     for (const entry of [...sseStreams]) {
         try {
@@ -128,7 +135,7 @@ function broadcast(type, data) {
     }
 }
 
-async function fixtureResponse(entry, pathname, deltaMs) {
+async function fixtureResponse(entry: FixtureEntry, pathname: string, deltaMs: number): Promise<Response> {
     const response = await fetch(new URL(`fixtures/${entry.file}`, self.registration.scope));
     if (!response.ok) {
         console.warn('[glp-demo] missing fixture file:', entry.file);
@@ -144,8 +151,8 @@ async function fixtureResponse(entry, pathname, deltaMs) {
     if (isJson) {
         const text = await response.text();
         try {
-            const shifted = self.GLPDemo.shiftTimestamps(JSON.parse(text), deltaMs);
-            return new Response(JSON.stringify(self.GLPDemo.patchMachineOnline(pathname, shifted, Date.now())), { status, headers });
+            const shifted = GLPDemo.shiftTimestamps(JSON.parse(text) as unknown, deltaMs);
+            return new Response(JSON.stringify(GLPDemo.patchMachineOnline(pathname, shifted, Date.now())), { status, headers });
         } catch {
             return new Response(text, { status, headers });
         }
@@ -154,11 +161,16 @@ async function fixtureResponse(entry, pathname, deltaMs) {
     return new Response(body, { status, headers });
 }
 
+/** True for a plain JSON object (not null, not an array). */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** Parses one recorded fixture file, or null when it is missing/not JSON. */
-async function fetchFixtureJson(entry) {
+async function fetchFixtureJson(entry: FixtureEntry | undefined): Promise<unknown> {
     if (!entry) return null;
     const response = await fetch(new URL(`fixtures/${entry.file}`, self.registration.scope));
-    return response.ok ? response.json() : null;
+    return response.ok ? response.json() as Promise<unknown> : null;
 }
 
 /**
@@ -167,13 +179,15 @@ async function fetchFixtureJson(entry) {
  * Null when either fixture is absent, so a simulate on an incomplete download
  * is a no-op rather than a crash.
  */
-async function loadNewestShot(manifest) {
-    const listKey = self.GLPDemo.shotsListKey(manifest);
+async function loadNewestShot(manifest: Manifest): Promise<unknown> {
+    const listKey = GLPDemo.shotsListKey(manifest);
     if (!listKey) return null;
     const list = await fetchFixtureJson(manifest.entries[listKey]);
-    const id = list && Array.isArray(list.shots) && list.shots.length ? list.shots[0].id : null;
+    const shots = isJsonObject(list) && Array.isArray(list.shots) ? (list.shots as unknown[]) : [];
+    const first = shots[0];
+    const id = isJsonObject(first) && typeof first.id === 'number' ? first.id : null;
     if (id == null) return null;
-    return fetchFixtureJson(manifest.entries[self.GLPDemo.fixtureKey('GET', `api/shots/${id}`)]);
+    return fetchFixtureJson(manifest.entries[GLPDemo.fixtureKey('GET', `api/shots/${id}`)]);
 }
 
 /**
@@ -183,10 +197,10 @@ async function loadNewestShot(manifest) {
  * worker alive for the whole 25–40 s shot — or null when a replay is already
  * active. The async body clears the flag when it settles.
  */
-function startSimulation() {
+function startSimulation(): Promise<void> | null {
     if (simulateRunning) return null;
     simulateRunning = true;
-    const done = () => { simulateRunning = false; };
+    const done = (): void => { simulateRunning = false; };
     // Promise chain rather than async/await + finally: require-atomic-updates
     // can't see that nothing else writes the flag while a run is active.
     return replayShot().then(done, error => {
@@ -200,27 +214,29 @@ function startSimulation() {
  * 500 ms until the shot's last timeInShot, then one idle frame whose
  * incremented seq triggers the app's post-brew shot-list reload.
  */
-async function replayShot() {
+async function replayShot(): Promise<void> {
     const shot = await loadNewestShot(await loadManifest());
-    if (!shot) {
+    if (!isJsonObject(shot)) {
         console.warn('[glp-demo] simulate: no shot fixture to replay');
         return;
     }
-    const times = (shot.datapoints && shot.datapoints.timeInShot) || [];
-    const endTenths = times.length ? times[times.length - 1] : 0;
+    const datapoints = isJsonObject(shot.datapoints) ? shot.datapoints : {};
+    const times = Array.isArray(datapoints.timeInShot) ? (datapoints.timeInShot as unknown[]) : [];
+    const lastTime = times.length ? times[times.length - 1] : 0;
+    const endTenths = typeof lastTime === 'number' ? lastTime : 0;
     const seq = liveSeq;
-    await new Promise(resolve => {
+    await new Promise<void>(resolve => {
         let elapsed = 0;
         const timer = setInterval(() => {
             elapsed += SIM_STEP_TENTHS;
             if (elapsed < endTenths) {
-                broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.liveFrame(shot, elapsed, seq));
+                broadcast(LIVE_SNAPSHOT_EVENT, GLPDemo.liveFrame(shot, elapsed, seq));
                 return;
             }
             clearInterval(timer);
-            broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.liveFrame(shot, endTenths, seq));
+            broadcast(LIVE_SNAPSHOT_EVENT, GLPDemo.liveFrame(shot, endTenths, seq));
             liveSeq = seq + 1;
-            broadcast(LIVE_SNAPSHOT_EVENT, self.GLPDemo.idleFrame(liveSeq));
+            broadcast(LIVE_SNAPSHOT_EVENT, GLPDemo.idleFrame(liveSeq));
             resolve();
         }, SIM_INTERVAL_MS);
     });
@@ -231,15 +247,15 @@ async function replayShot() {
  * page's banner can say so. Best-effort: a request with no client id, or a
  * tab that has since closed, is simply skipped.
  */
-async function notifyWriteDiscarded(event) {
+async function notifyWriteDiscarded(event: FetchEvent): Promise<void> {
     if (!event.clientId) return;
     const client = await self.clients.get(event.clientId);
     if (client) client.postMessage({ type: 'glp-demo-write' });
 }
 
-async function handle(request, event) {
+async function handle(request: Request, event: FetchEvent): Promise<Response> {
     const manifest = await loadManifest();
-    const route = self.GLPDemo.route(request.method, request.url, self.registration.scope, manifest);
+    const route = GLPDemo.route(request.method, request.url, self.registration.scope, manifest);
     switch (route.kind) {
         case 'token':
             return jsonResponse(DEMO_TOKEN);
@@ -264,15 +280,15 @@ async function handle(request, event) {
     }
 }
 
-self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('install', () => { void self.skipWaiting(); });
 
-self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (event: ExtendableEvent) => event.waitUntil(self.clients.claim()));
 
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event: FetchEvent) => {
     const request = event.request;
     // route()'s passthrough decision depends only on the method and URL, so an
     // empty manifest is enough to decide whether to intercept at all.
-    const route = self.GLPDemo.route(request.method, request.url, self.registration.scope, { entries: {} });
+    const route = GLPDemo.route(request.method, request.url, self.registration.scope, { entries: {} });
     if (route.kind === 'passthrough') return;
     event.respondWith(handle(request, event));
 });
@@ -281,9 +297,9 @@ self.addEventListener('fetch', event => {
 // recorded shot down every open api/events stream. waitUntil holds the worker
 // open for the replay — pending timers alone do not stop the browser from
 // terminating an idle worker, which would freeze the shot partway through.
-self.addEventListener('message', event => {
-    const data = event.data;
-    if (!data || data.type !== SIMULATE_MESSAGE) return;
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+    const data: unknown = event.data;
+    if (!isJsonObject(data) || data.type !== SIMULATE_MESSAGE) return;
     const replay = startSimulation();
     if (replay) event.waitUntil(replay);
 });
