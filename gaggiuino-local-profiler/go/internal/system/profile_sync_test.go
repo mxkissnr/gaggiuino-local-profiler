@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -278,5 +279,404 @@ func TestPushDirtyProfiles_PendingDelete_HardDeletesLocallyOnSuccess(t *testing.
 	}
 	if got != nil {
 		t.Fatalf("Get = %+v, want nil (hard-deleted after a successful remote delete)", got)
+	}
+}
+
+// shortenPushTimeout shrinks the per-call profile push timeout for the
+// duration of a test, so the lost-reply scenarios below run against the same
+// short deadline they would on a real machine.
+func shortenPushTimeout(t *testing.T) {
+	t.Helper()
+	old := profilePushTimeout
+	profilePushTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { profilePushTimeout = old })
+}
+
+// TestPushOneProfile_CreateTimeoutAdoptsProfileOnNextSweep reproduces
+// #1405's create case: the first push's CreateProfile reply is lost (times
+// out) but the machine stored the profile anyway. The next sweep must adopt
+// that profile instead of creating a second copy, leaving exactly one profile
+// with that name on the machine and a remote id on the local row.
+func TestPushOneProfile_CreateTimeoutAdoptsProfileOnNextSweep(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+	shortenPushTimeout(t)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Timed Out", json.RawMessage(`{"label":"Timed Out"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	// Adoption by name only runs after a previous push timed out.
+	if err := repo.MarkSyncError(row.LocalID, "context deadline exceeded"); err != nil {
+		t.Fatalf("MarkSyncError: %v", err)
+	}
+
+	var machineProfiles []machines.ProfileSummary
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return append([]machines.ProfileSummary(nil), machineProfiles...), nil
+	}
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		// The machine applies the create, but its reply never reaches us.
+		machineProfiles = append(machineProfiles, machines.ProfileSummary{ID: "gm-1", Name: "Timed Out"})
+		return machines.ProfileSummary{}, context.DeadlineExceeded
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("first PushDirtyProfiles: %v", err)
+	}
+
+	// The second sweep must adopt the stored profile, never create again.
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		t.Fatal("CreateProfile called again: the stored profile should have been adopted")
+		return machines.ProfileSummary{}, nil
+	}
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("second PushDirtyProfiles: %v", err)
+	}
+
+	adopted, err := repo.Get(1, "gm-1")
+	if err != nil {
+		t.Fatalf("Get by remote id: %v", err)
+	}
+	if adopted == nil {
+		t.Fatal("row was not adopted: no local row carries the machine's remote id")
+	}
+	if adopted.LocalID != row.LocalID {
+		t.Errorf("adopted LocalID = %d, want %d", adopted.LocalID, row.LocalID)
+	}
+	if len(machineProfiles) != 1 {
+		t.Fatalf("machine has %d profiles named %q, want exactly 1", len(machineProfiles), "Timed Out")
+	}
+}
+
+// TestPushOneProfile_ListProfilesFailureDoesNotCreate guards #1405's "never
+// create blindly" rule: if the pre-create ListProfiles fails, the row stays
+// pending for a later sweep and CreateProfile must not run at all.
+func TestPushOneProfile_ListProfilesFailureDoesNotCreate(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "No List", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	// Adoption by name only runs after a previous push timed out.
+	if err := repo.MarkSyncError(row.LocalID, "context deadline exceeded"); err != nil {
+		t.Fatalf("MarkSyncError: %v", err)
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return nil, errBoom
+	}
+	// createProfileFn is deliberately left nil: a call would panic and fail
+	// the test, proving CreateProfile never ran.
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	dirty, err := repo.DirtyRows(1)
+	if err != nil {
+		t.Fatalf("DirtyRows: %v", err)
+	}
+	if len(dirty) != 1 {
+		t.Fatalf("DirtyRows = %+v, want the row preserved for the next sweep", dirty)
+	}
+	if dirty[0].LastSyncError == nil || !strings.Contains(*dirty[0].LastSyncError, errBoom.Error()) {
+		t.Errorf("LastSyncError = %v, want the ListProfiles error recorded", dirty[0].LastSyncError)
+	}
+}
+
+// TestPushOneProfile_DoesNotAdoptProfileLinkedToAnotherRow: a same-name
+// machine profile that already belongs to a different local row is not ours
+// to adopt, so a create must still happen.
+func TestPushOneProfile_DoesNotAdoptProfileLinkedToAnotherRow(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if err := repo.UpsertSynced(1, "gm-1", "Shared", json.RawMessage(`{"label":"Shared","phases":[{"name":"P","type":"PRESSURE"}]}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	row, err := repo.UpsertDirty(1, nil, nil, "Shared", json.RawMessage(`{"label":"Shared"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	// Adoption by name only runs after a previous push timed out.
+	if err := repo.MarkSyncError(row.LocalID, "context deadline exceeded"); err != nil {
+		t.Fatalf("MarkSyncError: %v", err)
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return []machines.ProfileSummary{{ID: "gm-1", Name: "Shared"}}, nil
+	}
+	var calls int32
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		atomic.AddInt32(&calls, 1)
+		return machines.ProfileSummary{ID: "gm-2", Name: "Shared"}, nil
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("CreateProfile calls = %d, want 1 (gm-1 is linked to another row, so it must not be adopted)", got)
+	}
+	created, err := repo.Get(1, "gm-2")
+	if err != nil || created == nil {
+		t.Fatalf("Get(gm-2) = %+v, %v; want the newly created row", created, err)
+	}
+}
+
+// TestPushOneProfile_DeleteTimeoutHardDeletesWhenAlreadyGone reproduces
+// #1405's delete case: DeleteProfile's reply is lost but the machine removed
+// the profile, so a confirming list must let the row be hard-deleted instead
+// of retrying an id that no longer exists forever.
+func TestPushOneProfile_DeleteTimeoutHardDeletesWhenAlreadyGone(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+	shortenPushTimeout(t)
+
+	if err := repo.UpsertSynced(1, "gm-1", "To Delete", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if err := repo.MarkPendingDelete(1, "gm-1"); err != nil {
+		t.Fatalf("MarkPendingDelete: %v", err)
+	}
+	fake.deleteProfileFn = func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error) {
+		return nil, context.DeadlineExceeded
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return nil, nil // gm-1 is gone
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	got, err := repo.Get(1, "gm-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("Get = %+v, want nil (the machine already deleted the profile)", got)
+	}
+}
+
+// TestPushOneProfile_DeleteFailureKeepsRowWhenStillListed: a delete that
+// really failed (the id is still on the machine) must keep the row for a
+// later sweep.
+func TestPushOneProfile_DeleteFailureKeepsRowWhenStillListed(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if err := repo.UpsertSynced(1, "gm-1", "Still There", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if err := repo.MarkPendingDelete(1, "gm-1"); err != nil {
+		t.Fatalf("MarkPendingDelete: %v", err)
+	}
+	fake.deleteProfileFn = func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error) {
+		return nil, errBoom
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return []machines.ProfileSummary{{ID: "gm-1", Name: "Still There"}}, nil
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	rows, err := repo.DirtyRows(1)
+	if err != nil {
+		t.Fatalf("DirtyRows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].SyncStatus != machines.ProfileSyncPendingDelete {
+		t.Fatalf("DirtyRows = %+v, want the pending_delete row preserved", rows)
+	}
+	if rows[0].LastSyncError == nil || !strings.Contains(*rows[0].LastSyncError, errBoom.Error()) {
+		t.Errorf("LastSyncError = %v, want the delete error recorded", rows[0].LastSyncError)
+	}
+}
+
+// TestPushOneProfile_CreateTimeoutMergesListSummaryPlaceholder covers the
+// path that most often produces a duplicate (#1405 review): after the save
+// times out, the live profile list reconciles the machine's copy into a
+// synced, empty-body placeholder row (UpsertListSummary) before the sweep
+// runs. The sweep must fold that placeholder's remote id onto the pending row
+// and drop it, not create a second machine profile or leave two local rows.
+func TestPushOneProfile_CreateTimeoutMergesListSummaryPlaceholder(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+	shortenPushTimeout(t)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Placeholder", json.RawMessage(`{"label":"Placeholder"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	// Adoption by name only runs after a previous push timed out.
+	if err := repo.MarkSyncError(row.LocalID, "context deadline exceeded"); err != nil {
+		t.Fatalf("MarkSyncError: %v", err)
+	}
+
+	var machineProfiles []machines.ProfileSummary
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return append([]machines.ProfileSummary(nil), machineProfiles...), nil
+	}
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		machineProfiles = append(machineProfiles, machines.ProfileSummary{ID: "gm-1", Name: "Placeholder"})
+		return machines.ProfileSummary{}, context.DeadlineExceeded
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("first PushDirtyProfiles: %v", err)
+	}
+
+	// The live list reconciles the machine's copy into a synced placeholder
+	// before the next sweep, exactly as handlers_profiles.go does.
+	if err := repo.UpsertListSummary(1, "gm-1", "Placeholder", false); err != nil {
+		t.Fatalf("UpsertListSummary: %v", err)
+	}
+
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		t.Fatal("CreateProfile called again: the list-summary placeholder should have been merged")
+		return machines.ProfileSummary{}, nil
+	}
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("second PushDirtyProfiles: %v", err)
+	}
+
+	profiles, err := repo.ListByMachine(1)
+	if err != nil {
+		t.Fatalf("ListByMachine: %v", err)
+	}
+	named := 0
+	for _, r := range profiles {
+		if r.Name == "Placeholder" {
+			named++
+		}
+	}
+	if named != 1 {
+		t.Fatalf("local rows named %q = %d (%+v), want exactly 1", "Placeholder", named, profiles)
+	}
+	adopted, err := repo.Get(1, "gm-1")
+	if err != nil {
+		t.Fatalf("Get(gm-1): %v", err)
+	}
+	if adopted == nil || adopted.LocalID != row.LocalID {
+		t.Fatalf("Get(gm-1) = %+v, want the original row %d carrying the remote id", adopted, row.LocalID)
+	}
+	if len(machineProfiles) != 1 {
+		t.Fatalf("machine has %d profiles, want exactly 1", len(machineProfiles))
+	}
+}
+
+// TestPushOneProfile_NoPreviousTimeoutCreatesInsteadOfAdopting: a pending row
+// that has no recorded sync error must not adopt a same-name profile already
+// on the machine — it can belong to a different, pre-existing profile, and
+// adopting its id would let the next sweep overwrite it with this row's body
+// (#1405 follow-up). With no previous error the sweep creates directly and
+// never lists.
+func TestPushOneProfile_NoPreviousTimeoutCreatesInsteadOfAdopting(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if _, err := repo.UpsertDirty(1, nil, nil, "Same Name", json.RawMessage(`{"label":"Same Name"}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+
+	var listCalls, createCalls int32
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		atomic.AddInt32(&listCalls, 1)
+		return []machines.ProfileSummary{{ID: "gm-9", Name: "Same Name"}}, nil
+	}
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		atomic.AddInt32(&createCalls, 1)
+		return machines.ProfileSummary{ID: "gm-2", Name: "Same Name"}, nil
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&createCalls); got != 1 {
+		t.Fatalf("CreateProfile calls = %d, want 1 (no timed-out create to adopt for)", got)
+	}
+	if got := atomic.LoadInt32(&listCalls); got != 0 {
+		t.Errorf("ListProfiles calls = %d, want 0 (adoption only follows a timed-out create)", got)
+	}
+	untouched, err := repo.Get(1, "gm-9")
+	if err != nil {
+		t.Fatalf("Get(gm-9): %v", err)
+	}
+	if untouched != nil {
+		t.Fatalf("Get(gm-9) = %+v, want nil (the pre-existing machine profile must not be adopted)", untouched)
+	}
+	created, err := repo.Get(1, "gm-2")
+	if err != nil || created == nil {
+		t.Fatalf("Get(gm-2) = %+v, %v; want the newly created row", created, err)
+	}
+}
+
+// TestPushOneProfile_NonTimeoutErrorCreatesInsteadOfAdopting: a previous push
+// that failed for a reason other than a timeout (here a refused connection)
+// proves the create never landed, so a same-name profile on the machine is a
+// different, pre-existing one and must not be adopted (#1405 follow-up).
+func TestPushOneProfile_NonTimeoutErrorCreatesInsteadOfAdopting(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Same Name", json.RawMessage(`{"label":"Same Name"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	if err := repo.MarkSyncError(row.LocalID, "dial tcp 10.0.0.5:80: connect: connection refused"); err != nil {
+		t.Fatalf("MarkSyncError: %v", err)
+	}
+
+	var listCalls, createCalls int32
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		atomic.AddInt32(&listCalls, 1)
+		return []machines.ProfileSummary{{ID: "gm-9", Name: "Same Name"}}, nil
+	}
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		atomic.AddInt32(&createCalls, 1)
+		return machines.ProfileSummary{ID: "gm-2", Name: "Same Name"}, nil
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&createCalls); got != 1 {
+		t.Fatalf("CreateProfile calls = %d, want 1 (a non-timeout error means the create never landed)", got)
+	}
+	if got := atomic.LoadInt32(&listCalls); got != 0 {
+		t.Errorf("ListProfiles calls = %d, want 0 (adoption only follows a timed-out create)", got)
+	}
+	untouched, err := repo.Get(1, "gm-9")
+	if err != nil {
+		t.Fatalf("Get(gm-9): %v", err)
+	}
+	if untouched != nil {
+		t.Fatalf("Get(gm-9) = %+v, want nil (a non-timeout failure must not adopt a same-name profile)", untouched)
+	}
+	created, err := repo.Get(1, "gm-2")
+	if err != nil || created == nil {
+		t.Fatalf("Get(gm-2) = %+v, %v; want the newly created row", created, err)
 	}
 }
