@@ -223,9 +223,11 @@ g.document = new FakeDocument();
 g.createImageBitmap = () => Promise.resolve({ width: 120, height: 90 });
 
 const segmentModule = await import('../public-src/components/sticker/segment.js');
+const segmentCoreModule = await import('../public-src/components/sticker/segment-core.js');
 const editorModule = await import('../public-src/components/sticker/editor.js');
 
-const { maskBounds, paddedAspectCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround, progressPercent, nextStage } = editorModule;
+const { maskBounds, paddedAspectCrop, MaskHistory, composeSticker, openStickerEditor, clampView, zoomAround, progressPercent, nextStage, failureMessageKey } = editorModule;
+const { MODEL_DOWNLOAD_FAILED } = segmentCoreModule;
 const { autoCutout, resetCutout, tapMask } = segmentModule;
 const autoCutoutMock = vi.mocked(autoCutout);
 const resetCutoutMock = vi.mocked(resetCutout);
@@ -469,6 +471,19 @@ describe('nextStage', () => {
     expect(nextStage('background', 'download')).toBe('background');
     expect(nextStage('subject', 'download')).toBe('subject');
     expect(nextStage('subject', 'background')).toBe('subject');
+  });
+});
+
+describe('failureMessageKey', () => {
+  it('picks the download-specific message for a model download failure', () => {
+    expect(failureMessageKey(new Error(`${MODEL_DOWNLOAD_FAILED} (network)`))).toBe('sticker_download_failed');
+    expect(failureMessageKey(new Error(`${MODEL_DOWNLOAD_FAILED} (incomplete)`))).toBe('sticker_download_failed');
+  });
+
+  it('picks the generic message for any other error or a missing one', () => {
+    expect(failureMessageKey(new Error('boom'))).toBe('sticker_failed');
+    expect(failureMessageKey('segment: model download failed')).toBe('sticker_failed');
+    expect(failureMessageKey(undefined)).toBe('sticker_failed');
   });
 });
 
