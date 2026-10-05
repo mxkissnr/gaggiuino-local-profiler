@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { safeHttpUrl } from '../public-src/views/library.js';
+
+// library.js's import chain touches state/index.ts, which reads
+// localStorage/navigator at module load time — stub the minimum browser
+// globals so the module graph can be imported under vitest's node
+// environment (same pattern as test/library-frozen-portion-age-badge.test.ts).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+
+const { safeHttpUrl } = await import('../public-src/views/library.js');
 
 describe('safeHttpUrl', () => {
     it('accepts absolute http and https URLs', () => {
