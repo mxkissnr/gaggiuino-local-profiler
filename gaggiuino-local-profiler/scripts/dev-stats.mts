@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generates DEVELOPMENT.md: how long the GLP ecosystem has been in
 // development and how much of it carries a Claude co-author line, per repo
-// and combined. Run on demand (`node scripts/dev-stats.mjs`) — not wired into
+// and combined. Run on demand (`node scripts/dev-stats.mts`) — not wired into
 // CI, since it assumes the four sibling repos are checked out locally side by
 // side, the layout on this machine.
 //
@@ -35,7 +35,7 @@ const projectsRoot   = path.join(glpProjectRoot, '..');      // .../Projekte
 // this machine's CLAUDE.md (everything under ~/Dokumente/Projekte/glp-project).
 const canonicalProjectsRoot   = path.join(os.homedir(), 'Dokumente', 'Projekte');
 const canonicalGlpProjectRoot = path.join(canonicalProjectsRoot, 'glp-project');
-function resolveCompanionDir(relativeDir, canonicalDir) {
+function resolveCompanionDir(relativeDir: string, canonicalDir: string): string {
     return existsSync(path.join(relativeDir, '.git')) ? relativeDir : canonicalDir;
 }
 
@@ -59,7 +59,17 @@ const CHART_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
 // both surfaces. `single` colours a one-series chart (commits per repo);
 // `claude`/`deepseek`/`other` colour the model breakdown by vendor, so colour
 // encodes the vendor instead of the bar's rank.
-const CHART_THEMES = {
+type Theme = 'light' | 'dark';
+type Vendor = 'claude' | 'deepseek' | 'other';
+
+interface ChartPalette {
+    ink: string;
+    inkSecondary: string;
+    baseline: string;
+    series: Record<'single' | Vendor, string>;
+}
+
+const CHART_THEMES: Record<Theme, ChartPalette> = {
     light: {
         ink: '#0b0b0b',
         inkSecondary: '#52514e',
@@ -82,12 +92,12 @@ const LEGEND_SWATCH = 10;
 const LEGEND_LABEL_GAP = 6;
 const LEGEND_ENTRY_GAP = 18;
 
-const VENDOR_ORDER = ['claude', 'deepseek', 'other'];
-const VENDOR_LABELS = { claude: 'Claude', deepseek: 'DeepSeek', other: 'Other' };
+const VENDOR_ORDER: readonly Vendor[] = ['claude', 'deepseek', 'other'];
+const VENDOR_LABELS: Record<Vendor, string> = { claude: 'Claude', deepseek: 'DeepSeek', other: 'Other' };
 
 // Vendor a model co-author string belongs to (#1210). The two named vendors
 // get their own palette colour; anything else is neutral grey.
-export function modelVendor(model) {
+export function modelVendor(model: string): Vendor {
     if (/^Claude/i.test(model)) return 'claude';
     if (/^DeepSeek/i.test(model)) return 'deepseek';
     return 'other';
@@ -97,18 +107,31 @@ export function modelVendor(model) {
 // `Claude` key — display it as "Claude (version not recorded)" so the chart
 // and the table don't imply a specific Claude model. The counting key is
 // unchanged; only the display string differs.
-export function modelDisplayLabel(model) {
+export function modelDisplayLabel(model: string): string {
     return model === 'Claude' ? 'Claude (version not recorded)' : model;
 }
 
-function xmlEsc(s) {
-    return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const XML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+
+function xmlEsc(value: string): string {
+    return value.replace(/[&<>"]/g, c => XML_ESCAPES[c] ?? c);
 }
 
 const BAR_CHART_BAR_H = 22;
 const BAR_CHART_GAP = 14;
 const BAR_CHART_TOP_PAD = 46;
 const BAR_CHART_BOTTOM_PAD = 16;
+
+export interface BarChartItem {
+    label: string;
+    value: number;
+    color?: string;
+}
+
+export interface BarChartLegendEntry {
+    label: string;
+    color: string;
+}
 
 // Horizontal bar chart as an SVG document string: thin marks (22px, under
 // the 24px cap), 4px rounded data-end at the bar's tip, square at the
@@ -125,7 +148,11 @@ const BAR_CHART_BOTTOM_PAD = 16;
 // through. `theme` picks the light/dark ink, each item may carry its own
 // `color` (defaulting to the theme's single-series blue), and `legend`
 // renders a swatch row right of the title. Returns null for an empty series.
-export function barChartSVG(title, items, { theme = 'light', legend = null } = {}) {
+export function barChartSVG(
+    title: string,
+    items: BarChartItem[],
+    { theme = 'light', legend = null }: { theme?: Theme; legend?: BarChartLegendEntry[] | null } = {},
+): string | null {
     if (!items.length) return null;
     const palette = CHART_THEMES[theme] || CHART_THEMES.light;
     const width = 880, barH = BAR_CHART_BAR_H, gap = BAR_CHART_GAP, topPad = BAR_CHART_TOP_PAD, bottomPad = BAR_CHART_BOTTOM_PAD, leftPad = 220, rightPad = 60;
@@ -174,7 +201,10 @@ export function barChartSVG(title, items, { theme = 'light', legend = null } = {
 // Vendor colours for the model breakdown plus a legend listing only the
 // vendors actually present, in a fixed order so the legend doesn't reshuffle
 // with the value sort (#1210).
-export function modelBreakdownData(counts, theme = 'light') {
+export function modelBreakdownData(
+    counts: Record<string, number>,
+    theme: Theme = 'light',
+): { items: Required<BarChartItem>[]; legend: BarChartLegendEntry[] } {
     const palette = CHART_THEMES[theme] || CHART_THEMES.light;
     const items = Object.entries(counts)
         .map(([model, value]) => ({ label: modelDisplayLabel(model), value, color: palette.series[modelVendor(model)] }))
@@ -188,7 +218,7 @@ export function modelBreakdownData(counts, theme = 'light') {
 // <picture> markup that swaps the light chart for the dark one under GitHub's
 // dark theme (#1210). Paths are relative to the repo root, where both the
 // generated DEVELOPMENT.md and the README sit.
-export function chartPictureHTML(base, alt) {
+export function chartPictureHTML(base: string, alt: string): string {
     return [
         '<picture>',
         `  <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/${base}-dark.svg">`,
@@ -197,7 +227,7 @@ export function chartPictureHTML(base, alt) {
     ].join('\n');
 }
 
-function renderCharts(results, combinedModelCounts) {
+function renderCharts(results: RepoStats[], combinedModelCounts: Record<string, number>): boolean {
     const outDir = path.join(appRepoRoot, 'docs', 'dev-stats');
     mkdirSync(outDir, { recursive: true });
 
@@ -208,7 +238,7 @@ function renderCharts(results, combinedModelCounts) {
     // #1210: one light and one dark variant per chart; the old single
     // commits-per-repo.svg / model-breakdown.svg are no longer written.
     let rendered = false;
-    for (const theme of ['light', 'dark']) {
+    for (const theme of ['light', 'dark'] as const) {
         const commitsSvg = barChartSVG('Commits per repo', repoItems, { theme });
         if (commitsSvg) {
             writeFileSync(path.join(outDir, `commits-per-repo-${theme}.svg`), commitsSvg);
@@ -224,7 +254,26 @@ function renderCharts(results, combinedModelCounts) {
     return rendered;
 }
 
-const REPOS = [
+interface RepoSpec {
+    name: string;
+    dir: string;
+}
+
+interface RepoStats {
+    name: string;
+    dir: string;
+    firstDate: string | undefined;
+    lastDate: string | undefined;
+    totalCommits: number;
+    aiCommits: number;
+    modelCounts: Record<string, number>;
+    modelCostUsd: Record<string, number>;
+    totalLines: number;
+    aiLines: number;
+    devHours: number;
+}
+
+const REPOS: RepoSpec[] = [
     { name: 'gaggiuino-local-profiler', dir: appRepoRoot },
     { name: 'glp-integration',          dir: resolveCompanionDir(path.join(projectsRoot, 'glp-integration'), path.join(canonicalProjectsRoot, 'glp-integration')) },
     { name: 'glp-lovelace-card',        dir: resolveCompanionDir(path.join(glpProjectRoot, 'glp-lovelace-card'), path.join(canonicalGlpProjectRoot, 'glp-lovelace-card')) },
@@ -242,13 +291,13 @@ const CLAUDE_PRO_MONTHLY_USD = 20;
 // Claude-only version of this script already did — this naturally covers
 // Claude *, DeepSeek *, bare `openhands`, and any future model string
 // without per-model hardcoding.
-const NON_AI_COAUTHOR_PATTERNS = [
+const NON_AI_COAUTHOR_PATTERNS: RegExp[] = [
     /^mxkissnr$/i,                  // any email
     /^Paul-Lukas Schäfer$/i,
     /^dependabot\[bot\]$/i,
     /^renovate\[bot\]$/i,
 ];
-export function isAiCoAuthor(name) {
+export function isAiCoAuthor(name: string): boolean {
     return !NON_AI_COAUTHOR_PATTERNS.some(re => re.test(name));
 }
 
@@ -258,11 +307,12 @@ export function isAiCoAuthor(name) {
 // subscription cost derivable from git history. An unrecognized future
 // model defaults to 'api-billed' — a wrong "it's covered by the
 // subscription" assumption is worse than an honest "not tracked yet".
-const BILLING_TYPE_PATTERNS = [
+type BillingType = 'subscription' | 'api-billed';
+const BILLING_TYPE_PATTERNS: { pattern: RegExp; type: BillingType }[] = [
     { pattern: /Claude/i, type: 'subscription' },
     { pattern: /DeepSeek/i, type: 'api-billed' },
 ];
-export function billingTypeFor(model) {
+export function billingTypeFor(model: string): BillingType {
     for (const { pattern, type } of BILLING_TYPE_PATTERNS) {
         if (pattern.test(model)) return type;
     }
@@ -280,7 +330,7 @@ const SESSION_GAP_HOURS = 2;
 // increase every session's duration (higher hours total).
 const SESSION_LEAD_IN_MINUTES = 30;
 
-function git(dir, args) {
+function git(dir: string, args: string): string {
     // maxBuffer bumped from Node's 1 MB default (#823-era commits have
     // unusually long bodies; `git log --shortstat` across all repos now
     // exceeds it and fails with ENOBUFS on some sandboxes).
@@ -301,7 +351,10 @@ function git(dir, args) {
 // legitimate "no origin refs" path — so the scope silently degraded to HEAD and
 // #528 never actually took effect. Plain `for-each-ref <pattern>` needs no format
 // string: empty output already means "no such refs".
-export function historyScope(dir, runGit = git) {
+export function historyScope(
+    dir: string,
+    runGit: (dir: string, args: string) => string = git,
+): '--remotes=origin' | 'HEAD' {
     try {
         const refs = runGit(dir, 'for-each-ref --count=1 refs/remotes/origin');
         if (refs) return '--remotes=origin';
@@ -309,7 +362,8 @@ export function historyScope(dir, runGit = git) {
         // A repo without origin refs returns empty output rather than failing, so
         // an actual throw means something else broke. Say so instead of silently
         // publishing branch-dependent numbers — that silence is what hid #529.
-        console.warn(`dev-stats: could not read origin refs in ${dir}, falling back to HEAD (numbers will depend on the checked-out branch): ${err.message.split('\n')[0]}`);
+        const detail = err instanceof Error ? err.message : String(err);
+        console.warn(`dev-stats: could not read origin refs in ${dir}, falling back to HEAD (numbers will depend on the checked-out branch): ${detail}`);
     }
     return 'HEAD';
 }
@@ -318,7 +372,7 @@ export function historyScope(dir, runGit = git) {
 // inclusive — a subscription started any day in a month, or still running
 // into a month it's barely touched, still counts that whole month (e.g. a
 // first commit on Jan 15 with today Feb 3 is 2 months, not 1).
-export function monthsSinceStart(firstDateStr, today = new Date()) {
+export function monthsSinceStart(firstDateStr: string | null | undefined, today: Date = new Date()): number {
     if (!firstDateStr) return 0;
     const first = new Date(firstDateStr);
     return (today.getFullYear() - first.getFullYear()) * 12 + (today.getMonth() - first.getMonth()) + 1;
@@ -329,17 +383,17 @@ export function monthsSinceStart(firstDateStr, today = new Date()) {
 // its own span (last − first commit in the cluster) plus one
 // SESSION_LEAD_IN_MINUTES credit, since the first commit marks the *end* of
 // some unlogged work, not the start. Returns total hours across all sessions.
-export function clusterIntoSessions(timestampsMs) {
+export function clusterIntoSessions(timestampsMs: number[]): number {
     if (!timestampsMs.length) return 0;
     const sorted = [...timestampsMs].sort((a, b) => a - b);
     const gapMs    = SESSION_GAP_HOURS * 60 * 60 * 1000;
     const leadInMs = SESSION_LEAD_IN_MINUTES * 60 * 1000;
 
     let totalMs = 0;
-    let sessionStart = sorted[0];
-    let sessionEnd    = sorted[0];
+    let sessionStart = sorted[0]!;
+    let sessionEnd    = sorted[0]!;
     for (let i = 1; i < sorted.length; i++) {
-        const t = sorted[i];
+        const t = sorted[i]!;
         if (t - sessionEnd <= gapMs) {
             sessionEnd = t;
         } else {
@@ -352,7 +406,7 @@ export function clusterIntoSessions(timestampsMs) {
     return totalMs / 3_600_000;
 }
 
-function statsForRepo(repo) {
+function statsForRepo(repo: RepoSpec): RepoStats | null {
     if (!existsSync(path.join(repo.dir, '.git'))) {
         console.warn(`skip ${repo.name}: not a git repo at ${repo.dir}`);
         return null;
@@ -378,8 +432,8 @@ function statsForRepo(repo) {
     const raw    = git(repo.dir, `log ${scope} --format=%x02%B --shortstat`);
     const chunks = raw.split('\x02').filter(Boolean);
 
-    const modelCounts = {};
-    const modelCostUsd = {};
+    const modelCounts: Record<string, number> = {};
+    const modelCostUsd: Record<string, number> = {};
     let aiCommits = 0, totalLines = 0, aiLines = 0;
     for (const chunk of chunks) {
         const ins = parseInt((chunk.match(/(\d+) insertion/) || [])[1] || '0', 10);
@@ -389,7 +443,7 @@ function statsForRepo(repo) {
         // squash merge combining a human's and an AI's lines, or an
         // AI-orchestrator plus the model it ran) — take the first one that
         // classifies as an AI model, not just the first trailer line.
-        const coAuthors = [...chunk.matchAll(/Co-Authored-By:\s*([^<\n]+)</g)].map(m => m[1].trim());
+        const coAuthors = [...chunk.matchAll(/Co-Authored-By:\s*([^<\n]+)</g)].map(m => m[1]!.trim());
         const model = coAuthors.find(isAiCoAuthor);
         if (!model) continue;
         aiCommits++;
@@ -403,7 +457,7 @@ function statsForRepo(repo) {
         // (or a similar) trailer. Once that data exists, this sums it per
         // model instead of leaving api-billed costs untracked below.
         const costMatch = chunk.match(/Co-Authored-Cost-Usd:\s*([0-9.]+)/);
-        const costUsd = costMatch ? parseFloat(costMatch[1]) : undefined;
+        const costUsd = costMatch ? parseFloat(costMatch[1]!) : undefined;
         if (costUsd !== undefined) {
             modelCostUsd[model] = (modelCostUsd[model] || 0) + costUsd;
         }
@@ -412,16 +466,16 @@ function statsForRepo(repo) {
     return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, modelCostUsd, totalLines, aiLines, devHours };
 }
 
-function fmtDate(d) { return d || '?'; }
+function fmtDate(d: string | undefined): string { return d || '?'; }
 
-export function subscriptionCostSentence(monthsCount, firstDate, costUsd) {
+export function subscriptionCostSentence(monthsCount: number, firstDate: string | null | undefined, costUsd: number): string {
     return `The maintainer pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. Counting every calendar month touched since the first commit (${fmtDate(firstDate)}), ${monthsCount} month${monthsCount === 1 ? '' : 's'} works out to **$${costUsd.toFixed(2)}** for every Claude-model commit combined, regardless of which Claude model did the work.`;
 }
 
-function main() {
-    const results = REPOS.map(statsForRepo).filter(Boolean);
+function main(): void {
+    const results = REPOS.map(statsForRepo).filter((r): r is RepoStats => r !== null);
     if (!results.length) {
-        console.error('No repos found — check the REPOS paths in scripts/dev-stats.mjs for this machine\'s layout.');
+        console.error('No repos found — check the REPOS paths in scripts/dev-stats.mts for this machine\'s layout.');
         process.exit(1);
     }
 
@@ -434,17 +488,17 @@ function main() {
         aiLines: results.reduce((s, r) => s + r.aiLines, 0),
         devHours: results.reduce((s, r) => s + r.devHours, 0),
     };
-    const combinedModelCounts = {};
+    const combinedModelCounts: Record<string, number> = {};
     results.forEach(r => Object.entries(r.modelCounts).forEach(([m, c]) => {
         combinedModelCounts[m] = (combinedModelCounts[m] || 0) + c;
     }));
-    const combinedModelCostUsd = {};
+    const combinedModelCostUsd: Record<string, number> = {};
     results.forEach(r => Object.entries(r.modelCostUsd).forEach(([m, c]) => {
         combinedModelCostUsd[m] = (combinedModelCostUsd[m] || 0) + c;
     }));
 
     const days = combined.firstDate && combined.lastDate
-        ? Math.round((new Date(combined.lastDate) - new Date(combined.firstDate)) / 86400000) + 1
+        ? Math.round((new Date(combined.lastDate).getTime() - new Date(combined.firstDate).getTime()) / 86400000) + 1
         : null;
 
     const chartsRendered = renderCharts(results, combinedModelCounts);
@@ -452,10 +506,10 @@ function main() {
     const monthsSinceStartCount = monthsSinceStart(combined.firstDate);
     const subscriptionCostUsd = monthsSinceStartCount * CLAUDE_PRO_MONTHLY_USD;
 
-    const lines = [];
+    const lines: string[] = [];
     lines.push('# Development Stats');
     lines.push('');
-    lines.push(`Generated ${new Date().toISOString().slice(0, 10)} by \`scripts/dev-stats.mjs\`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.`);
+    lines.push(`Generated ${new Date().toISOString().slice(0, 10)} by \`scripts/dev-stats.mts\`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.`);
     lines.push('');
     lines.push('## Timeline');
     lines.push('');
@@ -510,9 +564,9 @@ function main() {
         const trackedCostUsd = apiBilledModels.reduce((s, m) => s + (combinedModelCostUsd[m] || 0), 0);
         lines.push('| Model | Commits | Cost |');
         lines.push('|---|---|---|');
-        for (const m of apiBilledModels.sort((a, b) => combinedModelCounts[b] - combinedModelCounts[a])) {
+        for (const m of apiBilledModels.sort((a, b) => (combinedModelCounts[b] ?? 0) - (combinedModelCounts[a] ?? 0))) {
             const cost = combinedModelCostUsd[m];
-            lines.push(`| ${m} | ${combinedModelCounts[m]} | ${cost !== undefined ? `$${cost.toFixed(2)}` : 'not tracked'} |`);
+            lines.push(`| ${m} | ${combinedModelCounts[m] ?? 0} | ${cost !== undefined ? `$${cost.toFixed(2)}` : 'not tracked'} |`);
         }
         lines.push('');
         lines.push(trackedCostUsd
@@ -521,7 +575,7 @@ function main() {
         lines.push('');
     }
     lines.push('---');
-    lines.push('*This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mjs` instead.*');
+    lines.push('*This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mts` instead.*');
 
     const outPath = path.join(appRepoRoot, 'DEVELOPMENT.md');
     writeFileSync(outPath, lines.join('\n') + '\n');
@@ -532,6 +586,7 @@ function main() {
 // anything from this file (e.g. a unit test for historyScope) regenerates and
 // overwrites DEVELOPMENT.md as an import side effect — which is how a test run
 // could silently republish stats from the wrong branch (#527).
-const invokedDirectly = process.argv[1] &&
-    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+const entryArg = process.argv[1];
+const invokedDirectly = entryArg !== undefined &&
+    fileURLToPath(import.meta.url) === path.resolve(entryArg);
 if (invokedDirectly) main();

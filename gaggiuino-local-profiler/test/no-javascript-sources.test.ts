@@ -24,7 +24,6 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
 // TypeScript is a later #1270 slice, which must delete that entry here (the
 // second test below enforces the deletion).
 const ALLOWLIST: readonly string[] = [
-    'gaggiuino-local-profiler/scripts/dev-stats.mjs',
     'gaggiuino-local-profiler/scripts/release-check.mjs',
 ];
 

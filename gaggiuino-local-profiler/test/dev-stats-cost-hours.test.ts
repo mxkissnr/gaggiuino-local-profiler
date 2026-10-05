@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { monthsSinceStart, clusterIntoSessions, subscriptionCostSentence } from '../scripts/dev-stats.mjs';
+import { monthsSinceStart, clusterIntoSessions, subscriptionCostSentence } from '../scripts/dev-stats.mts';
 
 // #623: replaced the token/line-based cost estimate (scripts/dev-stats.pricing.json,
 // now deleted) with the real flat-rate Claude Pro subscription cost, and added a
