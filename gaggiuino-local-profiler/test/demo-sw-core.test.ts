@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { GLPDemo, type Manifest } from '../demo/sw/sw-core.ts';
-import { fixtureKey as recorderFixtureKey } from '../scripts/demo-fixtures.mjs';
+import { fixtureKey as recorderFixtureKey } from '../scripts/demo-fixtures.mts';
 
 function at<T>(arr: readonly T[], i: number): T {
   const v = arr[i];
@@ -37,7 +37,7 @@ describe('sw-core fixtureKey matches the recorder (#1193)', () => {
     ];
 
     for (const [method, url] of cases) {
-        it(`agrees with scripts/demo-fixtures.mjs on ${method} ${url}`, () => {
+        it(`agrees with scripts/demo-fixtures.mts on ${method} ${url}`, () => {
             expect(glp.fixtureKey(method, url)).toBe(recorderFixtureKey(method, url));
         });
     }

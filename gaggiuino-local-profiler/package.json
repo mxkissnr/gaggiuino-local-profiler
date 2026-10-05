@@ -13,7 +13,7 @@
     "types:api": "openapi-typescript go/internal/system/openapi.yaml -o public-src/api/schema.gen.ts",
     "release:check": "node scripts/release-check.mjs",
     "changelog:collect": "node scripts/changelog-collect.mts",
-    "demo:fixtures": "node scripts/demo-fixtures.mjs",
+    "demo:fixtures": "node scripts/demo-fixtures.mts",
     "demo:smoke": "node scripts/demo-smoke.mjs"
   },
   "dependencies": {

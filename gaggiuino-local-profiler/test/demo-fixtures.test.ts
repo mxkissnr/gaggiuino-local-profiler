@@ -5,9 +5,9 @@ import {
     extForContentType,
     findLeaks,
     parseOpenApiGetPaths,
-} from '../scripts/demo-fixtures.mjs';
+} from '../scripts/demo-fixtures.mts';
 
-// Part of #1193 (S1): the pure helpers behind scripts/demo-fixtures.mjs. The
+// Part of #1193 (S1): the pure helpers behind scripts/demo-fixtures.mts. The
 // recorder itself boots the Go server and drives Chromium, so only the pure
 // functions get unit coverage here; the full run is exercised by the
 // maintainer with `npm run demo:fixtures`.
