@@ -179,7 +179,7 @@ func stringEnum(values []string) []any {
 }
 
 func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
-	if deps.Shots == nil || deps.ShotsRepo == nil {
+	if deps.Shots == nil {
 		return annotateShotOutput{}, fmt.Errorf("shot history is not available")
 	}
 	if in.Rating == nil && in.Notes == nil && in.GrindSetting == nil {
@@ -195,24 +195,19 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if shot == nil {
 		return annotateShotOutput{}, fmt.Errorf("shot %d not found; use list_shots to find ids", in.ID)
 	}
-	// Merge, never replace: UpdateAnnotation reads, overlays only the provided
-	// fields (so keys this tool doesn't know — orderedBy, beanId, recipeId, ... —
-	// survive untouched) and writes the result under one lock (#1273).
-	ann, err := deps.ShotsRepo.UpdateAnnotation(in.ID, func(ann map[string]any) error {
-		if in.Rating != nil {
-			ann["rating"] = float64(*in.Rating)
-		}
-		if in.Notes != nil {
-			ann["notes"] = *in.Notes
-		}
-		if in.GrindSetting != nil {
-			ann["grindSetting"] = *in.GrindSetting
-		}
-		if issues := shots.ValidateAnnotation(ann); len(issues) > 0 {
-			return &shots.AnnotationValidationError{Issues: issues}
-		}
-		return nil
-	})
+	// Same PatchAnnotation merge as the HTTP endpoint (#1273, #1411): unknown
+	// keys survive and stock bookkeeping runs in the same save.
+	patch := map[string]any{}
+	if in.Rating != nil {
+		patch["rating"] = float64(*in.Rating)
+	}
+	if in.Notes != nil {
+		patch["notes"] = *in.Notes
+	}
+	if in.GrindSetting != nil {
+		patch["grindSetting"] = *in.GrindSetting
+	}
+	ann, err := deps.Shots.PatchAnnotation(in.ID, patch)
 	if err != nil {
 		var verr *shots.AnnotationValidationError
 		if errors.As(err, &verr) {
