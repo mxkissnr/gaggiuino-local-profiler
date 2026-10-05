@@ -22,7 +22,8 @@ cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
   `machines` (+ `machines/proto` for the Gaggiuino binary WS codec),
   `orders`, `maintenance`, `backup`, `importer`, `db`, `auth`,
   `ratelimit`, `sse`, `system` (status/preheat/version/demo), `ha`,
-  `mqtt`, `img`, `achievements`, `netguard`, `webapp` (SPA embed + serve).
+  `mqtt`, `mcp`, `img`, `achievements`, `netguard`, `uiprefs`, `cutoutmodels`,
+  `config`, `httputil`, `logbuf`, `debug`, `webapp` (SPA embed + serve).
 - Each package has a `doc.go` that is the authoritative description of what
   it does and why. The Node → Go migration history lives in
   [`docs/history/go-migration.md`](../../docs/history/go-migration.md).
@@ -82,6 +83,7 @@ go/
     auth/          ingress-trust checks + API-token auth
     backup/        backup/restore (JSON export + zip)
     config/        shared, dependency-free `options.json` helpers
+    cutoutmodels/  pinned list (names, sizes, SHA-256) of the on-device sticker cut-out models
     db/            SQLite schema init + migrations
     debug/         export-db/import-db + the Go-only ingress self-check
     ha/            Home Assistant REST client (notify/persons/switch)
@@ -89,9 +91,11 @@ go/
     img/           shared entity-image helpers + optimize
     importer/      bean import from shop/roaster URLs
     library/       coffee library (beans, grinders, baskets, milks, recipes)
+    logbuf/        ring buffer of recent log lines for diagnostics
     machines/      machine registry + control proxy + per-type adapters
       proto/         Gaggiuino's binary WS codec
     maintenance/   maintenance tasks + log
+    mcp/           built-in MCP server exposing shot history to AI assistants
     mqtt/          MQTT live-data transport
     netguard/      SSRF/host guards
     orders/        barista-orders queue
@@ -99,6 +103,7 @@ go/
     shots/         shot history + scoring
     sse/           `/api/events` Server-Sent Events hub
     system/        status/preheat/version/demo + background polling
+    uiprefs/       view, filter and sort choices stored server-side so they follow you across devices
     webapp/        the SPA from `../public-src`, embedded via `//go:embed` and served at `/`
   scripts/
     smoke-test.sh            native-binary + Docker-image smoke test
