@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { syncDevConfig } from '../scripts/sync-dev-config.mjs';
+import { syncDevConfig } from '../scripts/sync-dev-config.mts';
 
 // #805: build-dev.yaml bumped `version` and copied apparmor.txt (#790) but
 // never synced `options`/`schema`, so an option added to the app's own

@@ -13,18 +13,18 @@
 // Run on demand with `npm run demo:smoke`. Requires `npm run build:demo`
 // first and `npx playwright install chromium` once beforehand.
 
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium, type Browser, type Page } from 'playwright';
 
 /* eslint-disable no-undef -- the callbacks passed to Playwright's
    page.evaluate / page.waitForFunction / context.addInitScript are serialised
    and run inside the Chromium tab, where `document`, `navigator`,
    `localStorage` and `getComputedStyle` are real globals; ESLint lints this
-   file with Node globals only. Same pattern as scripts/screenshots.mjs. */
+   file with Node globals only. Same pattern as scripts/screenshots.mts. */
 
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(appRoot, '..', 'demo-dist');
@@ -49,11 +49,24 @@ const CONTENT_TYPES = new Map([
     ['.zip', 'application/zip'],
 ]);
 
+interface View {
+    desktop: string;
+    mobile: string;
+    container: string;
+}
+
+interface Profile {
+    name: string;
+    viewport: { width: number; height: number };
+    isMobile?: boolean;
+    hasTouch?: boolean;
+}
+
 /**
  * Content type for a file path, chosen by extension; an unknown extension
  * falls back to the generic binary type rather than a wrong text type.
  */
-export function contentTypeFor(filePath) {
+export function contentTypeFor(filePath: string): string {
     return CONTENT_TYPES.get(path.extname(filePath).toLowerCase()) || 'application/octet-stream';
 }
 
@@ -63,9 +76,9 @@ export function contentTypeFor(filePath) {
  * The traversal guard is the point: the server only ever reads inside
  * demo-dist/, never a sibling file a crafted path points at.
  */
-export function resolveRequestPath(rootDir, urlPath) {
-    const raw = String(urlPath).split(/[?#]/)[0];
-    let decoded;
+export function resolveRequestPath(rootDir: string, urlPath: string): string | null {
+    const raw = String(urlPath).split(/[?#]/)[0] ?? '';
+    let decoded: string;
     try {
         decoded = decodeURIComponent(raw);
     } catch {
@@ -79,42 +92,46 @@ export function resolveRequestPath(rootDir, urlPath) {
     return resolved;
 }
 
-/** Serves `rootDir` under BASE_PATH on a free port; resolves the server. */
-function startServer(rootDir) {
-    const server = createServer(async (req, res) => {
-        try {
-            const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
-            if (pathname !== BASE_PATH && !pathname.startsWith(BASE_PATH + '/')) {
-                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-                res.end('not found');
-                return;
-            }
-            const file = resolveRequestPath(rootDir, pathname.slice(BASE_PATH.length));
-            if (!file) {
-                res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
-                res.end('forbidden');
-                return;
-            }
-            const info = await stat(file);
-            // A directory (the sub-path root) maps to its index.html.
-            const target = info.isDirectory() ? path.join(file, 'index.html') : file;
-            const body = await readFile(target);
-            res.writeHead(200, { 'Content-Type': contentTypeFor(target) });
-            res.end(body);
-        } catch {
+async function handleRequest(rootDir: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+        const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
+        if (pathname !== BASE_PATH && !pathname.startsWith(BASE_PATH + '/')) {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end('not found');
+            return;
         }
+        const file = resolveRequestPath(rootDir, pathname.slice(BASE_PATH.length));
+        if (!file) {
+            res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('forbidden');
+            return;
+        }
+        const info = await stat(file);
+        // A directory (the sub-path root) maps to its index.html.
+        const target = info.isDirectory() ? path.join(file, 'index.html') : file;
+        const body = await readFile(target);
+        res.writeHead(200, { 'Content-Type': contentTypeFor(target) });
+        res.end(body);
+    } catch {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('not found');
+    }
+}
+
+/** Serves `rootDir` under BASE_PATH on a free port; resolves the server. */
+function startServer(rootDir: string): Promise<Server> {
+    const server = createServer((req, res) => {
+        void handleRequest(rootDir, req, res);
     });
-    return new Promise(resolve => {
+    return new Promise<Server>(resolve => {
         server.listen(0, '127.0.0.1', () => resolve(server));
     });
 }
 
 // One entry per main view. `desktop`/`mobile` are the two nav surfaces the app
-// exposes: the top bar (screenshots.mjs's #btn* selectors) and, below the 768px
+// exposes: the top bar (screenshots.mts's #btn* selectors) and, below the 768px
 // breakpoint, the configurable bottom nav / "Mehr" sheet (#443).
-const VIEWS = [
+const VIEWS: readonly View[] = [
     { desktop: '#btnShots', mobile: '#bnShots', container: '#shots-view' },
     { desktop: '#btnLibrary', mobile: '#bnLibrary', container: '#library-view' },
     { desktop: '#btnAnalytics', mobile: '#bnAnalytics', container: '#analytics-view' },
@@ -127,17 +144,17 @@ const VIEWS = [
 
 // Live/Orders ship hidden unless the capability is configured (updatePowerButton
 // in status.js); a static demo has no live machine to report one, so force both
-// visible — same treatment screenshots.mjs gives #btnLive — on either nav.
+// visible — same treatment screenshots.mts gives #btnLive — on either nav.
 const REVEAL_CSS = '#btnLive{display:flex!important}#btnOrders{display:flex!important}' +
     '#bnLive{display:flex!important}#bnOrders{display:flex!important}';
 
-const PROFILES = [
+const PROFILES: readonly Profile[] = [
     { name: 'desktop', viewport: { width: 1440, height: 900 } },
     { name: 'phone', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
 ];
 
 /** Switches to `view`, clicking whichever nav surface is actually shown. */
-async function openView(page, view) {
+async function openView(page: Page, view: View): Promise<void> {
     const desktop = page.locator(view.desktop);
     if (await desktop.isVisible()) {
         await desktop.click();
@@ -151,7 +168,7 @@ async function openView(page, view) {
 }
 
 /** Opens a shot's detail: mobile reaches the list through the burger drawer. */
-async function openShotDetail(page) {
+async function openShotDetail(page: Page): Promise<void> {
     const drawer = page.locator('#mobileDrawerBtn');
     if (await drawer.isVisible()) await drawer.click();
     await page.waitForSelector('#sidebar .shot', { state: 'visible', timeout: 20000 });
@@ -162,13 +179,14 @@ async function openShotDetail(page) {
 }
 
 /** Reads the "MM:SS" elapsed label the Live view shows; 0 when it is blank. */
-function elapsedSeconds(label) {
+function elapsedSeconds(label: string | null): number {
     const [minutes, seconds] = String(label).trim().split(':').map(Number);
+    if (minutes === undefined || seconds === undefined) return 0;
     return Number.isFinite(minutes) && Number.isFinite(seconds) ? minutes * 60 + seconds : 0;
 }
 
 /** Records every way the Live view must show the replayed shot as running. */
-async function assertLiveShot(page, problems, profileName) {
+async function assertLiveShot(page: Page, problems: string[], profileName: string): Promise<void> {
     const state = await page.evaluate(() => {
         const badge = document.getElementById('live-status-badge');
         const content = document.getElementById('live-content');
@@ -186,11 +204,11 @@ async function assertLiveShot(page, problems, profileName) {
     }
 }
 
-async function runProfile(browser, baseUrl, profile, problems) {
+async function runProfile(browser: Browser, baseUrl: string, profile: Profile, problems: string[]): Promise<void> {
     const context = await browser.newContext({
         viewport: profile.viewport,
-        isMobile: profile.isMobile,
-        hasTouch: profile.hasTouch,
+        isMobile: !!profile.isMobile,
+        hasTouch: !!profile.hasTouch,
         locale: 'en-US',
     });
     await context.addInitScript(() => {
@@ -220,7 +238,7 @@ async function runProfile(browser, baseUrl, profile, problems) {
         await page.addStyleTag({ content: REVEAL_CSS });
 
         // Shots is the default view; open a shot detail from its list first.
-        await openView(page, VIEWS[0]);
+        await openView(page, VIEWS[0]!);
         await openShotDetail(page);
         for (const view of VIEWS.slice(1)) await openView(page, view);
 
@@ -235,29 +253,30 @@ async function runProfile(browser, baseUrl, profile, problems) {
     }
 }
 
-async function main() {
+async function main(): Promise<void> {
     if (!existsSync(distDir)) {
         console.error(`demo-smoke: ${path.relative(appRoot, distDir)}/ not found — run \`npm run build:demo\` first`);
         process.exit(1);
     }
 
     const server = await startServer(distDir);
-    const { port } = server.address();
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
     const baseUrl = `http://127.0.0.1:${port}${BASE_PATH}/`;
-    const problems = [];
-    let browser;
+    const problems: string[] = [];
+    let browser: Browser | undefined;
     try {
         browser = await chromium.launch();
         for (const profile of PROFILES) {
             try {
                 await runProfile(browser, baseUrl, profile, problems);
             } catch (error) {
-                problems.push(`[${profile.name}] ${error.message}`);
+                problems.push(`[${profile.name}] ${(error as Error).message}`);
             }
         }
     } finally {
         if (browser) await browser.close();
-        await new Promise(resolve => server.close(resolve));
+        await new Promise<void>(resolve => server.close(() => resolve()));
     }
 
     if (problems.length) {
@@ -270,9 +289,9 @@ async function main() {
 
 // Only serve and drive the browser when invoked as a script; importing the
 // pure helpers in a unit test must not start a server (same guard as
-// demo-fixtures.mjs / dev-stats.mjs, #527).
-const invokedDirectly = process.argv[1] &&
-    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+// demo-fixtures.mts / dev-stats.mts, #527).
+const entryArg = process.argv[1];
+const invokedDirectly = entryArg !== undefined && fileURLToPath(import.meta.url) === path.resolve(entryArg);
 if (invokedDirectly) {
     main().catch(error => {
         console.error(error);
