@@ -1,13 +1,36 @@
 ## [Unreleased]
 ### Added
-- **Statistics shows a month calendar with a photo of the day's bean and a one-line summary of how your shots are going.** (#1331)
+- **The coffee library is one shelf: beans you are drinking stay on top, your stock stands as bag photos with a stock bar and bag stacks, empty or archived beans tidy themselves away, and the shelf can switch to a compact list.** Part of #1329, #1330
+- **Find beans faster: search, filter and sort the shelf, and add a photo right when you create a bean.** Closes #1329
+- **Tapping a bean opens a detail sheet with its stock, bags and every action, and beans are archived and restored instead of hidden.** (#1330)
+- **Frozen beans hang icicles under their bag on the shelf, and the open label no longer covers the bag photo.** Part of #1350
+- **Bean photos can be cut out as stickers right in the bean form, on your own device, and stand on the shelf without a background.** Closes #1336
+- **A sticker editor lets you touch up the cut-out with tap and brush, and pinch to zoom for the fine edges on a phone.** Part of #1336
+- **The sticker cut-out downloads its models (about 60 MB) once, the first time you use it, so updates are about 60 MB smaller; nothing leaves your network.** Closes #1404
+- **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
+- **Analytics shows a month calendar with a photo of the day's bean and a one-line summary of how your shots are going.** (#1331)
+- **The month calendar has compact cells with day numbers and a marker for days without a bean photo.** Closes #1389
 - **View, filter and sort choices now follow you across devices.** (#1375)
 - **Reorder opens the shop page a bean was imported from.** (#1373)
-- **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
+### Changed
+- **The app now says App instead of Add-on, matching Home Assistant.** Closes #1423. Part of #1407
+- **GaggiMate is no longer labelled experimental.** Closes #1423. Part of #1407
+- **On a phone a bean closes with a swipe down, and the flavor wheel grows out of the small wheel to full screen instead of opening behind the bean.** (#1374)
+- **The flavor wheel now sits right in a bean's details, and the large wheel opens on the full overview with readable labels and a legend.** (#1350)
+- **Adding or editing a bean now happens in the same sheet as its details, with the photo on top and Save always in reach.** (#1349)
+- **Shop product photos on a plain or transparent background are cut out much more cleanly, because the bag is found first and only that part goes to the models.** Closes #1348
+- **Bean photos are cropped in the bag's 3:4 shape, and cut-out stickers keep it, so tall bags are no longer clipped.** Closes #1346
+- **Calmer interface: flat accent colors, theme-aware badges and activity colors, and a proper milk icon instead of a fallback emoji.** Closes #1328
 ### Fixed
+- **The off-centre photo in the large flavor wheel is centred again.** Closes #1381
+- **A machine whose reachability is unknown now shows as off instead of on.** Part of #1383
+- **The machine icon no longer shows a strip of color while the machine is switched off.** Closes #1383
 - **The sticker cut-out explains when its tools could not be downloaded and no longer spins forever when the browser stops the cut-out.** (#1404, #1399)
 - **The sticker cut-out no longer gives up on a slow first download that is still making progress, and a full disk is reported as a storage problem.** Part of #1404
+- **The sticker cut-out now works in the installed app, not just in the development preview.** Closes #1354
+- **Cutting out a sticker no longer freezes the app or runs the browser out of memory, and closing the editor gives the memory back straight away.** Closes #1347
 - **The Analytics month calendar moves on to the new month when the app stays open over a month change.** Closes #1401
+- **The Analytics month calendar no longer requests a photo for beans that have none.** Part of #1331
 - **Restoring a backup no longer pushes leftover profile edits to a machine that now has a different address.** Closes #1406
 - **View, filter and sort choices made shortly before closing the app or while offline are no longer lost, and one invalid setting can no longer stop syncing.** Closes #1403
 - **A slow GaggiMate no longer ends up with duplicate profiles after a profile save timed out.** Closes #1405
@@ -15,39 +38,12 @@
 - **Saving a new bean with "Save and add bag" opens the bag form again.**
 - **Bean age and the degassing hint now also work for roast dates entered in ISO format.**
 - **Shots from GaggiMate firmware v1.9.0 are imported with correct curves again.** Closes #1397
-- **The Statistics month calendar only asks for a bean's photo when it has one, so it stops logging a failed image request.** Part of #1331
-- **The machine icon no longer shows a strip of colour while the machine is switched off.** Closes #1383
 - **A remembered machine that no longer exists no longer hides the shot history.** (#1323)
 - **Saving a profile to a GaggiMate that silently stops answering now falls back to saving it locally after a few seconds instead of hanging.** (#1319)
-- **The bean sheet and flavour wheel fit the window on desktop: the header stays visible, the large wheel no longer overflows, the form uses the extra width, and the small wheel marks the bean's notes.** (#1372)
+- **The bean sheet and flavor wheel fit the window on desktop: the header stays visible, the large wheel no longer overflows, the form uses the extra width, and the small wheel marks the bean's notes.** (#1372)
 - **The bean stock line no longer shows the gram unit twice, and the shelf sort by roast date now reads naturally in German.** (#1373)
 - **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
-- **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day.** Closes #1357
-- **Photos cached by the browser before the previous fix are re-checked too, so a replaced photo appears after a normal reload.** (#1357)
-- **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
-### Changed
-- **The app now says App instead of Add-on, matching Home Assistant, and GaggiMate is no longer labelled experimental.** Closes #1423. Part of #1407
-- **The old GaggiMate experimental badge is fully gone from the machine list, including its leftover styling.** Closes #1423. Part of #1407
-- **The installed app no longer caches the sticker cut-out's large runtime file, so its offline cache stays small.** Closes #1404
-- **Updates are about 60 MB smaller: the sticker cut-out downloads its models once, the first time you use it.** (#1404)
-- **Frozen beans hang icicles under their bag on the shelf, and the open label no longer covers the bag photo.** Part of #1350
-- **On a phone a bean closes with a swipe down, and the flavour wheel grows out of the small wheel to full screen instead of opening behind the bean.** (#1374)
-- **The flavour wheel now sits right in a bean's details, and the large wheel opens on the full overview with readable labels and a legend.** (#1350)
-- **Adding or editing a bean now happens in the same sheet as its details, with the photo on top and Save always in reach.** (#1349)
-- **The bean library is one shelf with a stock bar and bag stacks per bean, and can switch to a compact list.** (#1330)
-- **Tapping a bean opens a detail sheet with its stock, bags and every action, and beans are archived and restored instead of hidden.** (#1330)
-- **Shop product photos on a plain or transparent background are cut out much more cleanly, because the bag is found first and only that part goes to the models.** Closes #1348
-- **Closing the sticker editor while a cut-out is still running now releases the worker straight away, so a quick reopen cannot overlap two cut-outs.** Part of #1347
-- **Cutting out a sticker no longer freezes the app or runs the browser out of memory, and the memory is given back when the editor closes.** Closes #1347
-- **Bean photos are cropped in the bag's 3:4 shape, and cut-out stickers keep it, so tall bags are no longer clipped.** Closes #1346
-- **Bean photos can now be cut out as stickers right in the bean form, on your own device, and stand on the shelf without a background.** Closes #1336
-- **Pinch to zoom in the sticker editor, so the fine edges are easy to touch up on a phone.** Part of #1336
-- **A sticker editor that cuts the bag out of a bean photo, with tap and brush touch-ups.** Part of #1336
-- **The app now carries two small on-device models for cutting bean photos out as stickers; nothing leaves your network.** Part of #1336
-- **Groundwork for cutting bean photos out as stickers right on your device.** Part of #1336
-- **Find beans faster: search, filter and sort the shelf, and add a photo right when you create a bean.** Closes #1329
-- **Coffee library as a shelf: beans you are drinking stay on top, your stock stands as bag photos, and empty or archived beans tidy themselves away.** Part of #1329
-- **Calmer interface: flat accent colours, theme-aware badges and activity colours, and a proper milk icon instead of a fallback emoji.** Closes #1328
+- **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day, also for photos the browser cached earlier.** Closes #1357
 
 ## [3.3.0] – 2026-10-02
 ### Added
@@ -264,7 +260,6 @@
 - **The shot detail screen now shows Bohne and Mühle as two separate recipe cards** instead of one long combined string ("bean · grinder · grind setting · baseline") under a single "Bohne & Mühle" label. Closes #871
 
 ### Fixed
-- **The easter-egg rainbow effect on the topbar machine icon now rotates the machine's own colour** instead of overlaying a translucent colour filter on top of the finished icon. Closes #886
 - **The topbar machine icon no longer shows a sliver of the machine's accent colour poking out below its 44px box.** Closes #887
 - **A bean's remaining stock in the Coffee Library no longer displays as a negative number.** Closes #888
 - **The dev-build banner covered the topbar and shot-list header on mobile** instead of pushing them down like it does on desktop. Closes #861
@@ -312,10 +307,10 @@
 - **A comment broke the stylesheet.** An explanatory comment in `style.css` named the token pattern `--gray-*/--err`; the `*/` inside it closed the comment early, so the remaining prose was parsed as CSS and `npm run build` failed. Nothing caught it beforehand -- the test suite never loaded the file and ESLint does not read CSS -- so a test now parses `style.css` and points at the exact line of any comment that closes itself early. #812
 
 ### Added
-- **The stamp card.** The achievement catalogue now has a face: a printed cardboard card with seven categories side by side, browsable from the first visit. Every field is identically pre-printed and only the stamp tells them apart — rough ink with a ragged edge, each one sitting a couple of degrees askew, at a fixed angle per badge so it never re-jitters between paints. A locked secret badge shows a "?" and nothing else; its name and description never reach the browser at all. A category with every badge unlocked gets a diagonal "Full" overprint with the date. No level, no rank, no point score. The card stays paper-coloured in the dark theme too — it is a depicted object, not a panel. #812
+- **The stamp card.** The achievement catalogue now has a face: a printed cardboard card with seven categories side by side, browsable from the first visit. Every field is identically pre-printed and only the stamp tells them apart — rough ink with a ragged edge, each one sitting a couple of degrees askew, at a fixed angle per badge so it never re-jitters between paints. A category with every badge unlocked gets a diagonal "Full" overprint with the date. No level, no rank, no point score. The card stays paper-coloured in the dark theme too — it is a depicted object, not a panel. #812
 
 ### Added
-- **Achievement copy in all six languages, and the tests the feature was missing.** The 48 open badges now have a name and description in de/en/it/fr/es/nl; the 6 secret ones stay encoded server-side so reading the JS bundle cannot spoil them. #812
+- **Achievement copy in all six languages, and the tests the feature was missing.** The badges now have a name and description in de/en/it/fr/es/nl. #812
 
 
 ### Added
