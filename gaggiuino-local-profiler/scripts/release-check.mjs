@@ -28,6 +28,9 @@
 //     still-pending case, waives a case without a reason, uses an unknown
 //     result, or leaks private infrastructure (RFC1918 IPv4, .local/.lan
 //     hostnames, JWT-like strings, GitHub token prefixes)
+//  7. a changelog fragment (changelog.d/*.md other than README.md) is still
+//     on disk — its notes never reached CHANGELOG.md (run
+//     `npm run changelog:collect`)
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { execFileSync } from 'child_process';
@@ -548,6 +551,41 @@ export function checkAcceptanceProtocol(markdown, version) {
     return failures;
 }
 
+// ── Check 7: leftover changelog fragments ───────────────────────────────
+//
+// Each PR drops one changelog.d/<issue>.<section>.md fragment instead of
+// editing CHANGELOG.md directly (format: changelog.d/README.md). At release
+// time `npm run changelog:collect` folds every fragment into CHANGELOG.md and
+// deletes it. A release cut while fragments are still on disk would ship a
+// changelog missing those entries, so refuse to pass. The directory is
+// optional — a checkout that predates fragments simply has none. Filesystem
+// read only: takes the directory path, returns one message if any fragment is
+// left after README.md is discounted.
+export function checkChangelogFragments(fragmentsDir) {
+    const failures = [];
+    if (!existsSync(fragmentsDir)) return failures;
+
+    let entries;
+    try {
+        entries = readdirSync(fragmentsDir, { withFileTypes: true });
+    } catch {
+        return failures;
+    }
+
+    const leftovers = entries
+        .filter((e) => e.isFile() && e.name !== 'README.md')
+        .map((e) => e.name)
+        .sort();
+
+    if (leftovers.length) {
+        failures.push(
+            `Check 7 (changelog fragments): ${leftovers.length} changelog fragment(s) not collected — run \`npm run changelog:collect\`: ${leftovers.join(', ')}`
+        );
+    }
+
+    return failures;
+}
+
 function main() {
     const failures = [];
 
@@ -662,6 +700,9 @@ function main() {
             failures.push(...checkAcceptanceProtocol(readFileSync(acceptanceAbs, 'utf8'), glpVersion));
         }
     }
+
+    // ── Check 7: leftover changelog fragments ───────────────────────────
+    failures.push(...checkChangelogFragments(path.join(packageRoot, 'changelog.d')));
 
     // ── Report ───────────────────────────────────────────────────────────
     if (failures.length) {
