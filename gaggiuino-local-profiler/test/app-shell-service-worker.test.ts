@@ -22,7 +22,7 @@ interface ShellCache {
     put: (request: unknown, response: unknown) => Promise<void>;
 }
 
-interface Sandbox {
+type Sandbox = {
     self: {
         addEventListener: (type: string, handler: FetchHandler) => void;
         skipWaiting: () => void;
@@ -37,7 +37,7 @@ interface Sandbox {
         delete: (name: string) => Promise<boolean>;
     };
     fetch: (request: unknown) => Promise<ShellResponse>;
-}
+};
 
 const ORIGIN = 'https://glp.example';
 
