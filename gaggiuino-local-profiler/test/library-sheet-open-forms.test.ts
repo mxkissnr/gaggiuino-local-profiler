@@ -197,9 +197,9 @@ describe('bean sheet open-form snapshot (#1412)', () => {
 
     library.renderBeanList();
 
-    expect(elements.newBagForm1!.style.display).toBe('');
-    expect(elements.newBagStock1!.value).toBe('250');
-    expect(elements.newBagBatchNumber1!.value).toBe('L-42');
+    expect(elements.newBagForm1.style.display).toBe('');
+    expect(elements.newBagStock1.value).toBe('250');
+    expect(elements.newBagBatchNumber1.value).toBe('L-42');
   });
 
   it('starts a fresh open closed', () => {
@@ -213,8 +213,8 @@ describe('bean sheet open-form snapshot (#1412)', () => {
 
     library.openBeanSheet(1);
 
-    expect(elements.newBagForm1!.style.display).toBe('none');
-    expect(elements.newBagStock1!.value).toBe('');
+    expect(elements.newBagForm1.style.display).toBe('none');
+    expect(elements.newBagStock1.value).toBe('');
   });
 
   it('saving a new bag closes its form', async () => {
@@ -237,7 +237,7 @@ describe('bean sheet open-form snapshot (#1412)', () => {
     await library.saveNewBag(1);
 
     expect(mocks.addBeanBag).toHaveBeenCalledWith(1, { roastDate: '2026-10-01', stock_g: 250, batchNumber: 'L-42' });
-    expect(elements.newBagForm1!.style.display).toBe('none');
+    expect(elements.newBagForm1.style.display).toBe('none');
   });
 
   it('saving frozen portions closes the freeze form', async () => {
@@ -260,6 +260,6 @@ describe('bean sheet open-form snapshot (#1412)', () => {
     await library.saveFreezePortions(1);
 
     expect(mocks.freezeBeanPortions).toHaveBeenCalledWith(1, expect.objectContaining({ portionCount: 3, portionWeight_g: 18 }));
-    expect(elements.freezeForm1!.style.display).toBe('none');
+    expect(elements.freezeForm1.style.display).toBe('none');
   });
 });
