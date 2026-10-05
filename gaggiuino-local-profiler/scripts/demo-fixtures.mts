@@ -151,13 +151,13 @@ export function findLeaks(text: string, extraAllowed: readonly string[] = []): s
     const allowed = [...PLACEHOLDER_HEX, ...extraAllowed].filter(Boolean).map(String);
     const hits = new Set<string>();
     for (const match of source.matchAll(IPV4_RE)) {
-        const hit = match[0] as string;
+        const hit = match[0];
         if (ALLOWED_IPV4.has(hit) || hit.startsWith('127.')) continue;
         hits.add(hit);
     }
-    for (const match of source.matchAll(EMAIL_RE)) hits.add(match[0] as string);
+    for (const match of source.matchAll(EMAIL_RE)) hits.add(match[0]);
     for (const match of source.matchAll(HEX_RE)) {
-        const hit = match[0] as string;
+        const hit = match[0];
         if (allowed.some(value => value.includes(hit))) continue;
         hits.add(hit);
     }
