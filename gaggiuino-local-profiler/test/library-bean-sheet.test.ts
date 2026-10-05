@@ -11,7 +11,7 @@ g.navigator ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 const { t } = await import('../public-src/i18n.js');
 interface LibraryModule {
-  renderBeanCard: (b: unknown, beans: unknown[], opts?: { inSheet?: boolean }) => string;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
   renderBeanList: () => void;
   openBeanSheet: (id: number) => void;
   closeBeanSheet: () => void;
@@ -126,7 +126,7 @@ describe('bean detail sheet (#1330 part 2)', () => {
   it('renders the embedded card without the toolbar but with the bag history', () => {
     setup();
     const beans = S.coffeeLibrary.beans;
-    const card = renderBeanCard(beans[0], beans, { inSheet: true });
+    const card = renderBeanCard(beans[0], beans);
 
     expect(card).not.toContain('lib-item-toolbar');
     expect(card).not.toContain('lib-bean-thumb');
@@ -184,7 +184,7 @@ describe('bean detail sheet (#1330 part 2)', () => {
     expect(html).toContain('lib-aroma-wheel');
     expect(html).toContain('lib-aroma-svg');
     expect(html).toContain('data-action="highlight-flavor"');
-    // The plain chip row is the shelf card's now, not the sheet's.
+    // The plain chip row is gone; flavours only render as the Aromas block.
     expect(html).not.toContain('lib-flavor-row');
   });
 

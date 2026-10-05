@@ -212,7 +212,7 @@ class FakeDocument {
     // is a permissive stub, like the other library tests.
     if (id === 'beanSheet' || id === 'beanFormSheet') return null;
     // The inline bag form only exists inside the bean detail sheet's painted
-    // markup (renderBeanCard with inSheet) and the fake DOM keeps innerHTML as
+    // markup (renderBeanCard) and the fake DOM keeps innerHTML as
     // a plain string, so expose the element only once that markup is present —
     // otherwise a genuinely missing form stays observable (#1398).
     if (id.startsWith('newBagForm')) {

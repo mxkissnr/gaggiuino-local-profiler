@@ -1082,33 +1082,6 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
-        /* Bean card header: name + meta-actions toolbar on one row, anchored
-           at the top of the card instead of the old .lib-item-actions,
-           which sat as a flex sibling of .lib-item-info and vertically
-           centered on the WHOLE card — floating in empty space next to
-           whatever content happened to be tallest (usually the bag list). */
-        .lib-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
-        .lib-item-header .lib-item-name { min-width: 0; flex: 1; }
-        .lib-item-toolbar { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
-        .lib-toolbar-sep { width: 1px; align-self: stretch; margin: 2px var(--sp-1); background: rgba(255,255,255,.08); }
-        @media (max-width: 640px) {
-          .lib-item-header { flex-wrap: wrap; }
-          .lib-item-toolbar { width: 100%; justify-content: flex-end; }
-        }
-        /* Bag-level quick actions (new bag / freeze), grouped with the
-           inventory display right above them instead of mixed into the
-           bean's own meta-actions toolbar — they act on the packaging,
-           not the bean record. */
-        .lib-bag-toolbar { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
-        /* Material 3 button hierarchy: "Neue Packung" is the primary action
-           on this row (filled tonal — accent-tinted fill, no border),
-           "Einfrieren" is secondary (outlined — border only, transparent
-           fill). Keyed off data-action so no new classes/markup are needed. */
-        .lib-bag-toolbar-btn { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 4px var(--sp-3); font-size: var(--fs-1); font-weight: 600; transition: background .15s, border-color .15s; }
-        .lib-bag-toolbar-btn[data-action="open-new-bag"] { background: color-mix(in srgb, var(--accent) 16%, var(--gray-800)); color: var(--accent-ink); border: 1px solid transparent; }
-        .lib-bag-toolbar-btn[data-action="open-new-bag"]:hover { background: color-mix(in srgb, var(--accent) 26%, var(--gray-800)); }
-        .lib-bag-toolbar-btn[data-action="open-freeze-form"] { background: transparent; border: 1px solid var(--gray-600); color: var(--gray-300); }
-        .lib-bag-toolbar-btn[data-action="open-freeze-form"]:hover { background: rgba(255,255,255,.06); border-color: var(--gray-500); }
         /* Machine-profile list (library-profile-editor.js renderProfileList):
            name + optional utility badge on one row — badge sits outside the
            name's own ellipsis-truncation so it never gets clipped away. */
@@ -1174,9 +1147,6 @@
         .lib-roast-badge { display: inline-block; background: var(--gray-700); color: var(--gray-300); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
         .lib-disabled-badge { display: inline-block; background: var(--gray-700); color: var(--gray-500); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
         .lib-item-disabled { opacity: .55; }
-        /* Bean name → click filters the sidebar shot list to this bean (#beanfilter) */
-        .lib-bean-name-link { cursor: pointer; }
-        .lib-bean-name-link:hover { text-decoration: underline; text-decoration-color: var(--accent); }
         /* Frozen portion badges (#freeze) — same pill language as .lib-fresh-badge,
            blue-ish to read distinctly as "on ice" rather than a freshness state. */
         .lib-frozen-row { margin-top: var(--sp-1); display: flex; flex-wrap: wrap; gap: var(--sp-1); }
@@ -1211,7 +1181,6 @@
         .origin-chip { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.3); color: #7dd3fc; }
         .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .lib-flavor-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-1); }
         /* #1350: "Aromas" block in the bean detail sheet — the inline mini
            wheel next to highlight chips coloured from each flavour's segment. */
         .lib-sheet-aromas { margin-top: var(--sp-2); }
