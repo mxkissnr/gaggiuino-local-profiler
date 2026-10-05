@@ -4924,7 +4924,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Settings object (shape mirrors the machine's own GET /api/settings/* response) */
+                /** @description Settings object (shape mirrors the machine's own GET /api/settings/* response). The system category redacts mqttPassword to mqttPasswordSet (#1431). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -5615,7 +5615,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description { available: false } or { available: true, host, port, username, password } from the Supervisor's /services/mqtt */
+                /** @description { available: false } or { available: true, host, port, username, hasPassword } from the Supervisor's /services/mqtt */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -7736,7 +7736,7 @@ export interface components {
                 syncStatus: string;
             }[];
         };
-        /** @description GET /api/machine/settings — the machine's own settings object, passed through from its GET /api/settings/{category}. Only releaseChannel is read by the app today, so the rest stays an open object. */
+        /** @description GET /api/machine/settings — the machine's own settings object, passed through from its GET /api/settings/{category}. Only releaseChannel is read by the app today, so the rest stays an open object. For the system category the machine's own mqttPassword is redacted to mqttPasswordSet (#1431: never sent to the browser); on a write, mqttPassword is write-only and is restored from the machine's current settings when the payload omits it. */
         MachineSystemSettings: {
             releaseChannel?: number;
         } & {
@@ -7797,6 +7797,8 @@ export interface components {
             password?: string;
             /** @description Write-only: wipe the stored password regardless of the password field (#1062). */
             clearPassword?: boolean;
+            /** @description Write-only: with an empty or absent password, use the password of the broker found through Supervisor discovery. */
+            useDiscoveredPassword?: boolean;
             prefix?: string;
         };
         /** @description GET/POST /api/mcp/settings response (go/internal/mcp's SettingsView): the stored MCP toggles plus developerToolsAvailable, which reports whether this build offers the developer tools at all (the GLP_DEV_BUILD channel — allowDeveloperTools can only be stored true on such a build). */

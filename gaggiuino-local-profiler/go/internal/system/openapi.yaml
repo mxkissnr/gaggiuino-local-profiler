@@ -979,7 +979,11 @@ components:
       description: >
         GET /api/machine/settings — the machine's own settings object, passed
         through from its GET /api/settings/{category}. Only releaseChannel is
-        read by the app today, so the rest stays an open object.
+        read by the app today, so the rest stays an open object. For the system
+        category the machine's own mqttPassword is redacted to mqttPasswordSet
+        (#1431: never sent to the browser); on a write, mqttPassword is
+        write-only and is restored from the machine's current settings when the
+        payload omits it.
       properties:
         releaseChannel: { type: integer }
       additionalProperties: true
@@ -1058,6 +1062,7 @@ components:
         username: { type: string }
         password: { type: string, description: "Write-only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set." }
         clearPassword: { type: boolean, description: "Write-only: wipe the stored password regardless of the password field (#1062)." }
+        useDiscoveredPassword: { type: boolean, description: "Write-only: with an empty or absent password, use the password of the broker found through Supervisor discovery." }
         prefix: { type: string }
 
     # ── MCP ────────────────────────────────────────────────────────────────
@@ -2777,7 +2782,7 @@ paths:
         - { name: category, in: query, schema: { type: string, enum: [boiler, system, display, scales, led, theme, versions] } }
       responses:
         "200":
-          description: Settings object (shape mirrors the machine's own GET /api/settings/* response)
+          description: Settings object (shape mirrors the machine's own GET /api/settings/* response). The system category redacts mqttPassword to mqttPasswordSet (#1431).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MachineSystemSettings' }
@@ -2961,7 +2966,7 @@ paths:
       tags: [Mqtt]
       summary: Supervisor MQTT service auto-discovery (requires services [mqtt:want] in config.yaml)
       responses:
-        "200": { description: "{ available: false } or { available: true, host, port, username, password } from the Supervisor's /services/mqtt" }
+        "200": { description: "{ available: false } or { available: true, host, port, username, hasPassword } from the Supervisor's /services/mqtt" }
 
   /api/mqtt/settings:
     get:
