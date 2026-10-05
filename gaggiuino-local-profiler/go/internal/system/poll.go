@@ -105,6 +105,7 @@ type LiveData struct {
 	Temperature       *float64 `json:"temperature"`
 	TargetTemperature *float64 `json:"targetTemperature"`
 	Pressure          *float64 `json:"pressure"`
+	WaterLevel        *int     `json:"waterLevel"`
 	// #1409: GaggiMate active warnings and firmware-update flag, carried
 	// from the merged evt:status via MachineStatus. machineWarnings is
 	// always a JSON array (empty for Gaggiuino, which reports neither).

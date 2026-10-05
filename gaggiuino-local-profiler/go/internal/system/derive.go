@@ -54,6 +54,7 @@ type MachineStatus struct {
 	ThermocoupleFaulted       *bool   `json:"thermocoupleFaulted,omitempty"`
 	ThermocoupleFaultReason   *string `json:"thermocoupleFaultReason,omitempty"`
 	PressureSensorFaulted     *bool   `json:"pressureSensorFaulted,omitempty"`
+	PressureSensorFaultReason *string `json:"pressureSensorFaultReason,omitempty"`
 	// #1409: GaggiMate active warnings / firmware-update flag, carried from
 	// the merged evt:status. omitempty keeps Gaggiuino's /api/machine/status
 	// byte-identical, since it reports neither.
