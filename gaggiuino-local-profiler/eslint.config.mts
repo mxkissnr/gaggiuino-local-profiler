@@ -3,39 +3,12 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import { htmlSinkRule } from './eslint-rules/html-sink.mts';
 
-const commonRules = {
-  'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
-  'no-undef': 'error',
-  'require-atomic-updates': 'error',
-  'no-implicit-globals': 'error',
-  'no-restricted-properties': [
-    'warn',
-    { property: 'innerHTML', message: 'innerHTML use flagged for review (XSS risk) — warning only, not blocking.' },
-  ],
-};
-
 const localPlugin = {
   rules: {
     // #1104 L1.
     'html-sink': htmlSinkRule,
   },
 };
-
-// #1270 rename map. Each entry lands in its own slice, so a slice diffs only
-// the TypeScript name it ports and never the renamed-away JavaScript file.
-// Status below is as of this branch:
-//   eslint.config.js            -> eslint.config.mts             (ported)
-//   eslint-rules/html-sink.js   -> eslint-rules/html-sink.mts    (ported)
-//   public-src/public/sw.js     -> public-src/sw.ts              (ported; bundled, served as sw.js)
-//   demo/sw/demo-sw.js          -> demo/sw/demo-sw.ts            (ported; bundled to demo-sw.js)
-//   demo/sw/sw-core.js          -> demo/sw/sw-core.ts            (ported; bundled into demo-sw.js)
-//   test/e2e/smoke.test.mjs     -> test/e2e/smoke.test.mts       (ported)
-//   scripts/demo-fixtures.mjs   -> scripts/demo-fixtures.mts     (ported)
-//   scripts/demo-smoke.mjs      -> scripts/demo-smoke.mts        (ported)
-//   scripts/sync-dev-config.mjs -> scripts/sync-dev-config.mts   (ported)
-//   scripts/dev-stats.mjs       -> scripts/dev-stats.mts         (ported)
-//   scripts/release-check.mjs   -> scripts/release-check.mts     (ported)
-// Every entry is ported; no JavaScript source named here remains on disk.
 
 export default [
   {
@@ -71,13 +44,6 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   }),
-  {
-    files: ['scripts/**/*.js', 'scripts/**/*.mjs'],
-    languageOptions: {
-      globals: globals.node,
-    },
-    rules: commonRules,
-  },
   // TypeScript sources migrate file-by-file (#1102): scoped to the .ts globs so
   // the type-aware rules don't touch the .js files still in flight.
   ...tseslint.config({

@@ -1,9 +1,8 @@
-// #1270 A1: the repository is Go + TypeScript only (backend Go; browser code,
-// build and dev tooling TypeScript). This test fails when a tracked
-// `.js`/`.mjs`/`.cjs` file appears outside third-party vendored code and the
-// explicit allowlist below, and when an allowlist entry disappears — so a PR
-// that ports or deletes one of today's leftovers must drop its entry, and the
-// allowlist can only shrink. See CLAUDE.md and DEVELOPMENT.md for the rule.
+// #1270: the repository is Go + TypeScript only (backend Go; browser code,
+// build and dev tooling TypeScript). Any tracked `.js`/`.mjs`/`.cjs` file
+// outside a vendored `/vendor/` path fails this test. #1270 finished the
+// port, so the allowlist that once tracked the leftovers is gone. See
+// CLAUDE.md and DEVELOPMENT.md for the rule.
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,18 +12,6 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
     cwd: APP_ROOT,
     encoding: 'utf8',
 }).trim();
-
-// Today's leftovers on `dev`, verbatim from `git ls-files`. Sorted, and it may
-// only shrink; see #1270. Vendored third-party files are skipped by the scan
-// below, not listed here.
-//
-// Every path below is an allowlist entry naming a file that #1270 has not
-// ported yet — an entry is not a file this change modifies. #1270 A1 only
-// records the rule and adds this enforcement test; porting each entry to
-// TypeScript is a later #1270 slice, which must delete that entry here (the
-// second test below enforces the deletion).
-const ALLOWLIST: readonly string[] = [
-];
 
 const JAVASCRIPT_SOURCE = /\.(js|mjs|cjs)$/;
 
@@ -43,27 +30,14 @@ function trackedJavaScriptSources(): string[] {
 }
 
 describe('Go + TypeScript only (#1270)', () => {
-    it('has no JavaScript sources outside the allowlist', () => {
-        const allowed = new Set(ALLOWLIST);
-        const unexpected = trackedJavaScriptSources().filter((path) => !allowed.has(path));
+    it('has no JavaScript sources', () => {
+        const unexpected = trackedJavaScriptSources();
 
         const message = [
-            `Found ${unexpected.length} tracked JavaScript source(s) outside the allowlist — port it to TypeScript (Go + TypeScript only, see #1270):`,
+            `Found ${unexpected.length} tracked JavaScript source(s) — port it to TypeScript (Go + TypeScript only, see #1270):`,
             ...unexpected.map((path) => `  ${path}`),
         ].join('\n');
 
         expect(unexpected, message).toEqual([]);
-    });
-
-    it('keeps every allowlist entry still existing', () => {
-        const found = new Set(trackedJavaScriptSources());
-        const stale = ALLOWLIST.filter((path) => !found.has(path));
-
-        const message = [
-            `Found ${stale.length} allowlist entry/entries that no longer exist — remove it from the allowlist (see #1270):`,
-            ...stale.map((path) => `  ${path}`),
-        ].join('\n');
-
-        expect(stale, message).toEqual([]);
     });
 });
