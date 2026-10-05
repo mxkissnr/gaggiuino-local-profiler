@@ -69,12 +69,17 @@ options:
   # to obtain a token (an already-configured Order Card that already has
   # glp_token in its YAML is unaffected). See DOCS.md's "Trust model" section.
   expose_api_port: true
+  # #1430: comma-separated extra host names -- beyond IP addresses, localhost,
+  # single-label names and .local names -- the app will answer for. Only needed
+  # when the app is reached through a reverse proxy under your own domain.
+  allowed_hosts: ""
 schema:
   sync_interval: int(1,60)
   preheat_time: int(1,120)?
   enable_orders: bool?
   debug_logging: bool?
   expose_api_port: bool?
+  allowed_hosts: str?
 
 # Home Assistant backups skip the downloaded cut-out models: they are ~60 MB of
 # regenerable data the app re-downloads on first use, so a backup should not
