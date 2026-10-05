@@ -54,7 +54,7 @@ options:
   debug_logging: false
   # #1288: MCP is configured in-app via GET/POST /api/mcp/settings, so it has
   # no add-on options here. The dev-channel manifest is synced from this file
-  # by scripts/sync-dev-config.mjs.
+  # by scripts/sync-dev-config.mts.
   # #803: default true (open) so no existing install's behaviour changes on
   # upgrade -- see go/internal/system/options.go's isApiPortExposed and
   # go/internal/system/handlers.go's GET /api/token. Turning this off

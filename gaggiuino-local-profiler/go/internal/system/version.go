@@ -21,7 +21,7 @@ const versionCacheTTL = time.Hour
 // glpVersion is the GLP version this binary reports from GET /api/version.
 // config.yaml's `version:` is canonical; this const must match it and is
 // bumped alongside it at release time (CLAUDE.md's Versioning section).
-// Enforced by test/version-sync.test.js and scripts/release-check.mjs.
+// Enforced by test/version-sync.test.ts and scripts/release-check.mts.
 // Duplicated rather than imported — no shared "constants" package exists in
 // this Go port; every domain package that needs a version-shaped value
 // defines its own, see internal/db's schema version handling.
