@@ -278,6 +278,16 @@ func TestAnnotate_HappyPathAndPersists(t *testing.T) {
 	if body["ok"] != true {
 		t.Errorf("expected {ok:true}, got %+v", body)
 	}
+	merged := toMap(body["annotation"])
+	if merged["coffee"] != "Bean" {
+		t.Errorf("expected response annotation.coffee = Bean, got %+v", merged)
+	}
+	if merged["rating"] != float64(5) {
+		t.Errorf("expected response annotation.rating = 5, got %+v", merged)
+	}
+	if _, has := body["score"]; !has {
+		t.Errorf("expected response to carry a score key, got %+v", body)
+	}
 
 	ann, err := s.FindByID(1)
 	if err != nil {

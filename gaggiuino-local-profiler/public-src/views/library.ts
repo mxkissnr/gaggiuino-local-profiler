@@ -1136,6 +1136,9 @@ export function closeEditFrozenForm(portionId: number): void {
 // weight, or freeze date entered when it was first frozen. Raising
 // remainingCount back above 0 on an already-thawed batch re-opens it
 // (server clears thawedAt); this is the only place that can happen from.
+// Deliberately client-driven: this manual library edit is separate from shot
+// annotation saves, which book milk and frozen-portion stock server-side
+// (#1411) — hence adjustFrozenPortion is kept for this caller.
 export async function saveEditFrozenForm(beanId: number, portionId: number): Promise<void> {
   const remainingCount  = parseInt(_field(`editFrozenRemaining${portionId}`)?.value, 10);
   const portionWeight_g = parseFloat(_field(`editFrozenWeight${portionId}`)?.value);

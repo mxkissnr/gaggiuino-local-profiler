@@ -19,6 +19,9 @@ export type { ShotDatapoints };
 /** A shot's user-supplied annotation (`shot.annotation`), per openapi.yaml's Annotation. */
 export type ShotAnnotation = components['schemas']['Annotation'];
 
+/** POST /api/shots/{id}/annotate response (#1411). */
+export type AnnotateResult = components['schemas']['AnnotateResult'];
+
 /**
  * POST /api/shots/{id}/annotate body. The generated Annotation schema types
  * `dose` as number|null and `roastDate` as a non-null string, but the manual
