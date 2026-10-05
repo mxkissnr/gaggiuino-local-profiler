@@ -223,4 +223,13 @@ func TestContract_LiveDataShape(t *testing.T) {
 	requireNullableNumberField(t, body, "targetTemperature")
 	requireNullableNumberField(t, body, "pressure")
 	requireNullableNumberField(t, body, "waterLevel")
+	requireBoolField(t, body, "machineUpdateAvailable")
+
+	warnings, ok := body["machineWarnings"].([]any)
+	if !ok || warnings == nil {
+		t.Fatalf("machineWarnings = %v (%T), want non-nil []any", body["machineWarnings"], body["machineWarnings"])
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("machineWarnings = %v, want empty", warnings)
+	}
 }

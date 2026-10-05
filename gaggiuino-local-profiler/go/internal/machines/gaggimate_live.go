@@ -60,10 +60,25 @@ type gaggiMateLiveClient struct {
 
 	mu       sync.Mutex
 	sessions map[string]*gaggiMateLiveSession
+
+	// onShotSaved is fired when the controller reports evt:history-shot-saved
+	// (firmware v1.9.0+, #1409), guarded by mu. It runs on the session's read
+	// loop, so it must not block — see setOnShotSaved.
+	onShotSaved func()
 }
 
 func newGaggiMateLiveClient() *gaggiMateLiveClient {
 	return &gaggiMateLiveClient{idleTimeout: liveIdleTimeout, sessions: make(map[string]*gaggiMateLiveSession)}
+}
+
+// setOnShotSaved installs the hook fired when the controller reports
+// evt:history-shot-saved. The hook runs on the session's read loop, so it must
+// not block — it should hand any real work off to a goroutine (see
+// machines.Handlers.SetOnShotSaved and system.Poller.SyncAfterShotSaved).
+func (c *gaggiMateLiveClient) setOnShotSaved(fn func()) {
+	c.mu.Lock()
+	c.onShotSaved = fn
+	c.mu.Unlock()
 }
 
 func (c *gaggiMateLiveClient) session(baseURL string) *gaggiMateLiveSession {
@@ -183,6 +198,16 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 				s.status = mergeGaggiMateStatus(s.status, msg)
 				s.statusAt = time.Now()
 				s.mu.Unlock()
+			} else if tp == "evt:history-shot-saved" {
+				// Firmware v1.9.0+ announces a new history shot here (#1409). Read
+				// the hook under mu, then call it unlocked; it must not block because
+				// it runs on this read loop. This frame never touches the status cache.
+				c.mu.Lock()
+				hook := c.onShotSaved
+				c.mu.Unlock()
+				if hook != nil {
+					hook()
+				}
 			} else if strings.HasPrefix(tp, "res:") {
 				s.dispatchResponse(msg)
 			}

@@ -625,7 +625,7 @@ components:
       description: >
         GET /api/live/data and the SSE live-snapshot payload (one shared Go
         builder, so every key below is always present — null where noted).
-      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel]
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable]
       properties:
         isLive:      { type: boolean }
         profileName: { type: string }
@@ -681,6 +681,8 @@ components:
         targetTemperature: { type: number, nullable: true, description: "#902 idle stats: current target temperature" }
         pressure: { type: number, nullable: true, description: "#902 idle stats: current pressure" }
         waterLevel: { type: integer, nullable: true, description: "#902 idle stats: current water level" }
+        machineWarnings: { type: array, items: { type: string }, description: "#1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino" }
+        machineUpdateAvailable: { type: boolean, description: "#1409: GaggiMate reports a firmware update; always false for Gaggiuino" }
 
     # ── Backup ────────────────────────────────────────────────────────────
 

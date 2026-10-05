@@ -272,6 +272,7 @@
                     <span class="recipe-card-label" data-i18n="meta_duration">Dauer</span>
                     <span class="recipe-card-value" id="duration">-</span>
                     <span class="recipe-card-sub" id="phasesSub"></span>
+                    <span class="recipe-card-sub" id="stopReasonSub"></span>
                 </div>
                 <div class="recipe-card">
                     <span class="recipe-card-label" data-i18n="recipe_bean">Bohne</span>
@@ -1136,6 +1137,10 @@
                     <div class="idle-stat-label" data-i18n="live_idle_water_label">Wasserstand</div>
                 </div>
             </div>
+            <!-- #1409: the machine's own warnings and a firmware-update hint,
+                 both driven by views/live.js's handleLiveData(). -->
+            <p id="liveIdleWarnings" class="live-idle-warn" style="display:none"></p>
+            <p id="liveIdleUpdateHint" class="live-idle-hint" data-i18n="machine_update_available" style="display:none">Firmware-Update auf der Maschine verfügbar</p>
 
             <!-- Pre-shot setup: bean/dose/grinder/grind/basket/puckscreen/recipe
                  chosen here get written onto the next completed shot's

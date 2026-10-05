@@ -22,6 +22,14 @@ const NEW_KEYS = [
     'compare_title', 'please_wait', 'profile_unknown',
     'backup_progress_download', 'backup_progress_upload', 'backup_progress_preparing',
     'backup_progress_restoring', 'backup_progress_done', 'settings_devtools_export_db_failed',
+    // Recorded-phase extras (#1409): shot end reason, phase exit reasons and
+    // machine warnings. shot_end_reason is a formatter (truthy as a function).
+    'shot_end_reason',
+    'exit_reason_1', 'exit_reason_2', 'exit_reason_3', 'exit_reason_4',
+    'exit_reason_5', 'exit_reason_6', 'exit_reason_7',
+    'machine_warn_water', 'machine_warn_flush', 'machine_warn_switch',
+    'machine_warn_scaleConnected', 'machine_warn_scaleBattery', 'machine_warn_temperature',
+    'machine_update_available',
 ];
 
 describe('i18n language files', () => {
@@ -109,6 +117,14 @@ describe('index.html i18n wiring', () => {
 
     it('wires the share-card button tooltip to the new share_card_tooltip key', () => {
         expect(html).toMatch(/id="shareCardBtn"[^>]*data-i18n-title="share_card_tooltip"/);
+    });
+
+    it('wires the idle firmware-update hint to machine_update_available (#1409)', () => {
+        // The idle warning list is filled from JS; only the update hint is a
+        // plain data-i18n text node, so it must stay child-element-free.
+        expect(html).toMatch(/<p[^>]*id="liveIdleUpdateHint"[^>]*data-i18n="machine_update_available"[^>]*>Firmware-Update auf der Maschine verfügbar<\/p>/);
+        expect(html).toMatch(/<p[^>]*id="liveIdleWarnings"[^>]*><\/p>/);
+        expect(html).not.toMatch(/<p[^>]*id="liveIdleWarnings"[^>]*data-i18n=/);
     });
 
     it('backup download control is no longer a plain <a href> (would 401 outside HA ingress)', () => {

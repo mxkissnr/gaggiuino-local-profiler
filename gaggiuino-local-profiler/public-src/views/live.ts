@@ -42,6 +42,8 @@ interface LiveMessage {
   profileName?: string;
   seq?: number;
   machineReachable?: boolean | null;
+  machineWarnings?: string[];
+  machineUpdateAvailable?: boolean;
   isSteaming?: boolean;
   isFlushing?: boolean;
   isDescaling?: boolean;
@@ -677,6 +679,15 @@ export function handlePreheatUpdateEvent(payload: PreheatData): void {
   updatePreheatWidget(payload);
 }
 
+// #1409: a warning key from the machine maps to a machine_warn_<key> label;
+// a key we don't know yet falls back to the raw key so a newer firmware's
+// warning still shows something instead of a blank/undefined label.
+function machineWarningLabel(k: string): string {
+  const key = `machine_warn_${k}`;
+  const s = t(key);
+  return s === key ? k : s;
+}
+
 export function handleLiveData(msg: LiveMessage): void {
   const dp: LiveDatapoints = msg.datapoints || {};
   const times   = dp.timeInShot  || [];
@@ -716,6 +727,12 @@ export function handleLiveData(msg: LiveMessage): void {
     if (idleTargetTempEl) idleTargetTempEl.textContent = '';
     if (idlePressureEl)   idlePressureEl.textContent   = '–';
     if (idleWaterEl)       idleWaterEl.textContent      = '–';
+    // #1409: same stale-data reasoning -- a warning or update hint from the
+    // last reachable poll must not stay under "machine unreachable".
+    const idleWarnEl   = document.getElementById('liveIdleWarnings');
+    const idleUpdateEl = document.getElementById('liveIdleUpdateHint');
+    if (idleWarnEl)   idleWarnEl.style.display   = 'none';
+    if (idleUpdateEl) idleUpdateEl.style.display = 'none';
     return;
   }
   idleEl.classList.remove('unreachable');
@@ -747,6 +764,20 @@ export function handleLiveData(msg: LiveMessage): void {
   {
     const waterStat = document.getElementById('liveIdleWaterStat');
     if (waterStat) waterStat.style.display = msg.waterLevel != null ? '' : 'none';
+  }
+
+  // #1409: the machine's own active warnings (already-translated keys) and a
+  // hint that its firmware has an update. Both live behind the idle panel and
+  // are hidden when the machine has nothing to report.
+  {
+    const warningsEl = document.getElementById('liveIdleWarnings');
+    const updateEl   = document.getElementById('liveIdleUpdateHint');
+    const warnings   = msg.machineWarnings || [];
+    if (warningsEl) {
+      warningsEl.textContent = warnings.map(machineWarningLabel).join(' · ');
+      warningsEl.style.display = warnings.length > 0 ? '' : 'none';
+    }
+    if (updateEl) updateEl.style.display = msg.machineUpdateAvailable ? '' : 'none';
   }
 
   // #902/#983: steam/flush/descale live sessions -- same live-content

@@ -39,6 +39,18 @@ const (
 	gaggiMateIndexMaxBytes = gaggiMateIndexHdrBytes + gaggiMateIndexMaxEntries*gaggiMateIndexEntBytes
 )
 
+// v5+ slog header phase-transition slots, per upstream shot_log_format.h
+// v1.9.0. Each 29-byte entry is a uint16 sample index, uint8 phase number,
+// uint8 exit reason (why the previous phase ended), then a 25-byte
+// NUL-padded phase name.
+const (
+	gaggiMateSlogPhaseOff      = 110
+	gaggiMateSlogPhaseSize     = 29
+	gaggiMateSlogPhaseMax      = 12
+	gaggiMateSlogPhaseCountOff = 458
+	gaggiMateSlogExitReasonOff = 459
+)
+
 // Field slots in the slog fieldsMask — bit order matches the device's FIELD_BITS.
 // scale=0 marks special handling (tick multiplied, not divided; systemInfo bitfield).
 type gaggiMateFieldDef struct {
@@ -73,6 +85,18 @@ type gaggiMateSlogResult struct {
 	profileName      string
 	finalWeight      float64
 	samples          []gaggiMateSample
+	phaseTransitions []gaggiMatePhaseTransition
+	finalExitReason  int
+	hasPhaseData     bool
+}
+
+// gaggiMatePhaseTransition is one v5+ header phase transition. sampleIndex
+// indexes the sample stream; reason explains why the phase named here ended.
+type gaggiMatePhaseTransition struct {
+	sampleIndex int
+	phaseNumber int
+	reason      int
+	name        string
 }
 
 type gaggiMateSample struct {
@@ -181,6 +205,26 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 	}
 	if len(data) >= 110 {
 		s.finalWeight = float64(binary.LittleEndian.Uint16(data[108:110])) / 10
+	}
+	// v5+ headers reserve the phase-transition table and a final exit reason.
+	// A reason of 0 means unknown/legacy: pre-1.9.0 firmware wrote 0 into the
+	// then-reserved bytes. brewDelayMs @460 is deliberately not read.
+	if s.version >= 5 && hdrSize >= gaggiMateSlogHdrV5 && len(data) > gaggiMateSlogExitReasonOff {
+		s.hasPhaseData = true
+		count := int(data[gaggiMateSlogPhaseCountOff])
+		if count > gaggiMateSlogPhaseMax {
+			count = gaggiMateSlogPhaseMax
+		}
+		for i := 0; i < count; i++ {
+			off := gaggiMateSlogPhaseOff + i*gaggiMateSlogPhaseSize
+			s.phaseTransitions = append(s.phaseTransitions, gaggiMatePhaseTransition{
+				sampleIndex: int(binary.LittleEndian.Uint16(data[off : off+2])),
+				phaseNumber: int(data[off+2]),
+				reason:      int(data[off+3]),
+				name:        gaggiMateCString(data, off+4, 25),
+			})
+		}
+		s.finalExitReason = int(data[gaggiMateSlogExitReasonOff])
 	}
 	// Build list of active fields from mask, in bit order. Each set bit
 	// occupies a fixed width in the sample record: v6 widened the elapsed-ms
@@ -402,6 +446,43 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 		profileName = "Unknown"
 	}
 
+	datapoints := map[string]any{
+		"timeInShot":        timeInShot,
+		"pressure":          pressure,
+		"temperature":       temperature,
+		"targetTemperature": targetTemperature,
+		"targetPressure":    targetPressure,
+		"targetPumpFlow":    targetPumpFlow,
+		"shotWeight":        shotWeight,
+		"weightFlow":        weightFlow,
+		"pumpFlow":          pumpFlow,
+		// bleScaleConnected gates the chart label: true = real BLE scale,
+		// false = volumetric estimate (ev). Stored in datapoints so
+		// mapShotDatapoints can see it without the top-level shot context.
+		"bleScaleConnected": bleScaleConnected,
+	}
+	if slog.hasPhaseData {
+		// reason on entry i is why the previous phase ended; finalExitReason is
+		// why the shot ended. t is deciseconds, the same unit as timeInShot.
+		transitions := make([]map[string]any, 0, len(slog.phaseTransitions))
+		for _, tr := range slog.phaseTransitions {
+			var t int64
+			if tr.sampleIndex < n {
+				t = timeInShot[tr.sampleIndex]
+			} else {
+				t = int64(math.Round(float64(tr.sampleIndex) * float64(slog.sampleIntervalMs) / 100))
+			}
+			transitions = append(transitions, map[string]any{
+				"t":      t,
+				"phase":  tr.phaseNumber,
+				"name":   tr.name,
+				"reason": tr.reason,
+			})
+		}
+		datapoints["phaseTransitions"] = transitions
+		datapoints["finalExitReason"] = slog.finalExitReason
+	}
+
 	return map[string]any{
 		"id":        nativeID,
 		"timestamp": int64(slog.timestamp),
@@ -411,21 +492,7 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 		"machineType":          "gaggimate",
 		"gaggimateFinalWeight": slog.finalWeight,
 		"gaggimateBleScale":    bleScaleConnected,
-		"datapoints": map[string]any{
-			"timeInShot":        timeInShot,
-			"pressure":          pressure,
-			"temperature":       temperature,
-			"targetTemperature": targetTemperature,
-			"targetPressure":    targetPressure,
-			"targetPumpFlow":    targetPumpFlow,
-			"shotWeight":        shotWeight,
-			"weightFlow":        weightFlow,
-			"pumpFlow":          pumpFlow,
-			// bleScaleConnected gates the chart label: true = real BLE scale,
-			// false = volumetric estimate (ev). Stored in datapoints so
-			// mapShotDatapoints can see it without the top-level shot context.
-			"bleScaleConnected": bleScaleConnected,
-		},
+		"datapoints":           datapoints,
 		"gaggimateExtra": map[string]any{
 			"puckFlow":       puckFlow,
 			"volumetricFlow": volumetricFlow,

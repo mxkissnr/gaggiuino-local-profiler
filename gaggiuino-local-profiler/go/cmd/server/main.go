@@ -325,6 +325,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// background — cancelling it would only matter for a future
 	// clean-shutdown path.
 	poller := system.NewPoller(registry, machinesHandlers, hub, haClient)
+	// #1409: a GaggiMate firmware v1.9.0+ evt:history-shot-saved frame syncs the
+	// default machine's shot history right away instead of waiting for the
+	// post-brew timer. The hook hand-offs to SafeGo inside SyncAfterShotSaved.
+	machinesHandlers.SetOnShotSaved(poller.SyncAfterShotSaved)
 	// POST /api/sync's manual shot-history pull loop persists through
 	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)

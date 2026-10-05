@@ -108,6 +108,18 @@ func (h *Handlers) SetOnProfileSaved(fn func(action string)) {
 	h.onProfileSaved = fn
 }
 
+// SetOnShotSaved wires the side effect to run when the GaggiMate controller
+// reports a new shot was saved (evt:history-shot-saved, firmware v1.9.0+;
+// #1409). cmd/server uses it to pull the default machine's shot history right
+// away instead of waiting for the post-brew timer. internal/system imports
+// internal/machines, so wiring this as a callback here avoids the import cycle
+// a direct dependency would create, same reason as SetOnProfileSaved. A nil
+// hook (never wired, e.g. in this package's own unit tests) is a no-op. The
+// callback runs on the live read loop and must not block.
+func (h *Handlers) SetOnShotSaved(fn func()) {
+	h.gaggimateLive.setOnShotSaved(fn)
+}
+
 // disconnectLiveForHost tears down both persistent live sessions for a host
 // whose machine record's host changed or was deleted — the Gaggiuino WS
 // session (d_sensor_snap/d_sys_state cache) and the GaggiMate WS session

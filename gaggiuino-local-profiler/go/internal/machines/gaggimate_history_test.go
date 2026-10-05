@@ -404,3 +404,175 @@ func TestGaggiMateSlogToShot_MissingWaterPumpedIsNull(t *testing.T) {
 		}
 	}
 }
+
+// putGaggiMatePhase writes one v5+ header phase transition at the upstream
+// slot 110 + i*29: uint16 sample index, uint8 phase, uint8 reason, then up to
+// 25 bytes of name. The header starts zeroed, so a shorter name stays
+// NUL-terminated.
+func putGaggiMatePhase(data []byte, i int, sampleIndex uint16, phase, reason byte, name string) {
+	off := gaggiMateSlogPhaseOff + i*gaggiMateSlogPhaseSize
+	binary.LittleEndian.PutUint16(data[off:off+2], sampleIndex)
+	data[off+2] = phase
+	data[off+3] = reason
+	copy(data[off+4:off+4+25], name)
+}
+
+// TestGaggiMateParseSlog_V7PhaseTransitions covers #1409: the v5+ header's
+// phase table and final exit reason parse into the slog struct and land in the
+// shot's datapoints.
+func TestGaggiMateParseSlog_V7PhaseTransitions(t *testing.T) {
+	data := buildGaggiMateSlog(t, 7, 0x3FFF, 250, []gaggiMateTestSample{
+		gaggiMateV7Sample(0), gaggiMateV7Sample(250), gaggiMateV7Sample(500), gaggiMateV7Sample(750),
+	})
+	putGaggiMatePhase(data, 0, 0, 0, 0, "Preinfusion")
+	putGaggiMatePhase(data, 1, 2, 1, 5, "Extraction")
+	data[gaggiMateSlogPhaseCountOff] = 2
+	data[gaggiMateSlogExitReasonOff] = 1
+
+	result, err := gaggiMateParseSlog(data)
+	if err != nil {
+		t.Fatalf("gaggiMateParseSlog: %v", err)
+	}
+	if !result.hasPhaseData {
+		t.Fatalf("hasPhaseData = false, want true for a v5+ header")
+	}
+	wantTransitions := []gaggiMatePhaseTransition{
+		{sampleIndex: 0, phaseNumber: 0, reason: 0, name: "Preinfusion"},
+		{sampleIndex: 2, phaseNumber: 1, reason: 5, name: "Extraction"},
+	}
+	if !reflect.DeepEqual(result.phaseTransitions, wantTransitions) {
+		t.Fatalf("phaseTransitions = %+v, want %+v", result.phaseTransitions, wantTransitions)
+	}
+	if result.finalExitReason != 1 {
+		t.Fatalf("finalExitReason = %d, want 1", result.finalExitReason)
+	}
+
+	shot := gaggiMateSlogToShot(result, 42)
+	dp := shot["datapoints"].(map[string]any)
+	wantDP := []map[string]any{
+		{"t": int64(0), "phase": 0, "name": "Preinfusion", "reason": 0},
+		{"t": int64(5), "phase": 1, "name": "Extraction", "reason": 5},
+	}
+	if got := dp["phaseTransitions"]; !reflect.DeepEqual(got, wantDP) {
+		t.Fatalf("phaseTransitions = %#v, want %#v", got, wantDP)
+	}
+	if got := dp["finalExitReason"]; got != 1 {
+		t.Fatalf("finalExitReason = %v, want 1", got)
+	}
+}
+
+// TestGaggiMateParseSlog_PhaseCountClamped checks a corrupt count byte cannot
+// overflow the fixed 12-slot table.
+func TestGaggiMateParseSlog_PhaseCountClamped(t *testing.T) {
+	data := buildGaggiMateSlog(t, 7, 0x3FFF, 250, []gaggiMateTestSample{gaggiMateV7Sample(0)})
+	data[gaggiMateSlogPhaseCountOff] = 200
+
+	result, err := gaggiMateParseSlog(data)
+	if err != nil {
+		t.Fatalf("gaggiMateParseSlog: %v", err)
+	}
+	if len(result.phaseTransitions) != gaggiMateSlogPhaseMax {
+		t.Fatalf("len(phaseTransitions) = %d, want %d (count clamped)", len(result.phaseTransitions), gaggiMateSlogPhaseMax)
+	}
+}
+
+// TestGaggiMateParseSlog_PhaseNameBounds checks the 25-byte name slot: a
+// 24-char name plus NUL round-trips, and 25 non-NUL bytes stay within the slot.
+func TestGaggiMateParseSlog_PhaseNameBounds(t *testing.T) {
+	const name24 = "abcdefghijklmnopqrstuvwx" // 24 chars, NUL-terminated by the zeroed header
+
+	data := buildGaggiMateSlog(t, 7, 0x3FFF, 250, []gaggiMateTestSample{gaggiMateV7Sample(0)})
+	putGaggiMatePhase(data, 0, 0, 0, 0, name24)
+	data[gaggiMateSlogPhaseCountOff] = 1
+
+	result, err := gaggiMateParseSlog(data)
+	if err != nil {
+		t.Fatalf("gaggiMateParseSlog: %v", err)
+	}
+	if got := result.phaseTransitions[0].name; got != name24 {
+		t.Fatalf("name = %q, want %q", got, name24)
+	}
+
+	// 25 non-NUL bytes fill the whole slot; the name must be exactly 25 bytes
+	// and not bleed into the count/exit-reason bytes after the table.
+	data2 := buildGaggiMateSlog(t, 7, 0x3FFF, 250, []gaggiMateTestSample{gaggiMateV7Sample(0)})
+	for k := 0; k < 25; k++ {
+		data2[gaggiMateSlogPhaseOff+4+k] = 'x'
+	}
+	data2[gaggiMateSlogPhaseCountOff] = 1
+
+	result2, err := gaggiMateParseSlog(data2)
+	if err != nil {
+		t.Fatalf("gaggiMateParseSlog: %v", err)
+	}
+	if got := result2.phaseTransitions[0].name; len(got) != 25 {
+		t.Fatalf("name length = %d (%q), want exactly 25", len(got), got)
+	}
+}
+
+// TestGaggiMateSlogToShot_TransitionBeyondSamples checks a transition past the
+// last sample is timed from its index and the sample interval.
+func TestGaggiMateSlogToShot_TransitionBeyondSamples(t *testing.T) {
+	data := buildGaggiMateSlog(t, 7, 0x3FFF, 250, []gaggiMateTestSample{
+		gaggiMateV7Sample(0), gaggiMateV7Sample(250), gaggiMateV7Sample(500),
+	})
+	putGaggiMatePhase(data, 0, 10, 2, 3, "Extraction")
+	data[gaggiMateSlogPhaseCountOff] = 1
+
+	slog, err := gaggiMateParseSlog(data)
+	if err != nil {
+		t.Fatalf("gaggiMateParseSlog: %v", err)
+	}
+	dp := gaggiMateSlogToShot(slog, 1)["datapoints"].(map[string]any)
+	transitions := dp["phaseTransitions"].([]map[string]any)
+	if got := transitions[0]["t"]; got != int64(25) {
+		t.Fatalf("t = %v, want 25 (10 * 250 / 100)", got)
+	}
+}
+
+// TestGaggiMateSlogToShot_V4HasNoPhaseKeys checks a v4 (128-byte header) slog
+// exposes neither phase key.
+func TestGaggiMateSlogToShot_V4HasNoPhaseKeys(t *testing.T) {
+	data := buildSlogFixture(t, 4, 0b101, 3, 4)
+	slog, err := gaggiMateParseSlog(data)
+	if err != nil {
+		t.Fatalf("gaggiMateParseSlog: %v", err)
+	}
+	if slog.hasPhaseData {
+		t.Fatalf("hasPhaseData = true for a v4 slog")
+	}
+	dp := gaggiMateSlogToShot(slog, 1)["datapoints"].(map[string]any)
+	if _, ok := dp["phaseTransitions"]; ok {
+		t.Fatalf("phaseTransitions present for a v4 slog")
+	}
+	if _, ok := dp["finalExitReason"]; ok {
+		t.Fatalf("finalExitReason present for a v4 slog")
+	}
+}
+
+// TestGaggiMateSlogToShot_LegacyZeroReasons checks a v5 file whose phase bytes
+// are still zero (pre-1.9.0 firmware) yields an empty slice, not a nil one.
+func TestGaggiMateSlogToShot_LegacyZeroReasons(t *testing.T) {
+	data := buildGaggiMateSlog(t, 5, 0x1FFF, 250, []gaggiMateTestSample{
+		gaggiMateV7Sample(0), gaggiMateV7Sample(1), gaggiMateV7Sample(2),
+	})
+
+	slog, err := gaggiMateParseSlog(data)
+	if err != nil {
+		t.Fatalf("gaggiMateParseSlog: %v", err)
+	}
+	dp := gaggiMateSlogToShot(slog, 1)["datapoints"].(map[string]any)
+	got, ok := dp["phaseTransitions"].([]map[string]any)
+	if !ok {
+		t.Fatalf("phaseTransitions missing or wrong type: %T", dp["phaseTransitions"])
+	}
+	if got == nil {
+		t.Fatalf("phaseTransitions = nil, want a non-nil empty slice")
+	}
+	if len(got) != 0 {
+		t.Fatalf("len(phaseTransitions) = %d, want 0", len(got))
+	}
+	if v := dp["finalExitReason"]; v != 0 {
+		t.Fatalf("finalExitReason = %v, want 0", v)
+	}
+}
