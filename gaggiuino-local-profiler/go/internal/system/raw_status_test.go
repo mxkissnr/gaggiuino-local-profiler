@@ -97,3 +97,57 @@ func TestExtractVersion_ArrayAndObject(t *testing.T) {
 }
 
 func intPtr(v int) *int { return &v }
+
+// TestRawStatusFrom_GaggiMateWarnings covers #1409: a GaggiMate evt:status
+// `warn` array reduces to the active, at-least-warn-level keys in order, and
+// `up` drives UpdateAvailable. A Gaggiuino array body carries neither.
+func TestRawStatusFrom_GaggiMateWarnings(t *testing.T) {
+	body := `{"warn":[{"k":"water","l":1,"a":true},{"k":"flush","l":0,"a":true},{"k":"switch","l":2,"a":false},{"k":"scaleBattery","l":2,"a":true}],"up":true}`
+
+	got := rawStatusFromBody(t, body, false)
+	if len(got.Warnings) != 2 || got.Warnings[0] != "water" || got.Warnings[1] != "scaleBattery" {
+		t.Fatalf("Warnings = %v, want [water scaleBattery]", got.Warnings)
+	}
+	if !got.UpdateAvailable {
+		t.Fatalf("UpdateAvailable = false, want true")
+	}
+
+	plain := rawStatusFromBody(t, `[{"upTime":"58"}]`, false)
+	if plain.Warnings != nil {
+		t.Fatalf("Warnings = %v, want nil for Gaggiuino", plain.Warnings)
+	}
+	if plain.UpdateAvailable {
+		t.Fatalf("UpdateAvailable = true, want false for Gaggiuino")
+	}
+}
+
+// TestDeriveAndLiveData_MachineWarnings covers #1409 end to end:
+// deriveMachineState forwards the warning fields onto MachineStatus, and
+// buildLiveDataResponse surfaces them as a never-nil machineWarnings array
+// plus machineUpdateAvailable.
+func TestDeriveAndLiveData_MachineWarnings(t *testing.T) {
+	derived := deriveMachineState(DeriveInput{
+		Status: RawStatus{Warnings: []string{"water"}, UpdateAvailable: true},
+		Now:    1,
+	}).MachineStatus
+	if len(derived.Warnings) != 1 || derived.Warnings[0] != "water" || !derived.UpdateAvailable {
+		t.Fatalf("deriveMachineState MachineStatus = %+v, want Warnings [water] UpdateAvailable true", derived)
+	}
+
+	p, _ := newTestPoller(t, &fakeAdapter{})
+
+	empty := p.LiveData()
+	if empty.MachineWarnings == nil {
+		t.Fatalf("LiveData().MachineWarnings = nil, want non-nil empty")
+	}
+	if len(empty.MachineWarnings) != 0 || empty.MachineUpdateAvailable {
+		t.Fatalf("LiveData() = %+v, want empty warnings and no update", empty)
+	}
+
+	p.runtime.SetMachineStatus(&MachineStatus{Warnings: []string{"water"}, UpdateAvailable: true})
+
+	got := p.LiveData()
+	if len(got.MachineWarnings) != 1 || got.MachineWarnings[0] != "water" || !got.MachineUpdateAvailable {
+		t.Fatalf("LiveData() = %+v, want Warnings [water] UpdateAvailable true", got)
+	}
+}

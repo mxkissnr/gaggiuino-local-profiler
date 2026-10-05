@@ -7539,6 +7539,10 @@ export interface components {
             pressure: number | null;
             /** @description #902 idle stats: current water level */
             waterLevel: number | null;
+            /** @description #1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino */
+            machineWarnings: string[];
+            /** @description #1409: GaggiMate reports a firmware update; always false for Gaggiuino */
+            machineUpdateAvailable: boolean;
         };
         BackupBundle: {
             /** @example true */
