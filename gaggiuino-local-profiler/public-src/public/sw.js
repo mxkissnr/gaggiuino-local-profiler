@@ -43,6 +43,11 @@ self.addEventListener('fetch', (event) => {
     // always go straight to the network, unmediated.
     if (url.pathname.startsWith('/api/')) return;
 
+    // onnxruntime-web's runtime is a multi-megabyte .wasm served from
+    // /assets/; caching it would bloat the shell cache for no offline benefit,
+    // so leave it to the network like /api/.
+    if (url.pathname.endsWith('.wasm')) return;
+
     // Only shell-cache same-origin document navigations and built bundles.
     const isShellAsset = url.origin === self.location.origin &&
         (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html' ||
