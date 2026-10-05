@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { CoffeeLibrary, LibraryRow } from '../public-src/state/index.js';
 
 // annotation.js imports state.js, which reads localStorage/navigator at
@@ -11,11 +11,7 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const apiModule = await import('../public-src/api/transport.js');
-const fetchSpy = vi.spyOn(apiModule, 'apiFetch').mockResolvedValue({
-    ok: true, json: () => Promise.resolve({}),
-} as unknown as Response);
-const { _maybeAdjustFrozenPortion, _renderFrozenPortionPills } = await import('../public-src/views/shots/annotation.js');
+const { _stockFieldsChanged, _renderFrozenPortionPills } = await import('../public-src/views/shots/annotation.js');
 
 interface FrozenPortionFixture {
     id: number;
@@ -23,36 +19,6 @@ interface FrozenPortionFixture {
     remainingCount: number;
     frozenAt?: number;
     thawedAt?: number;
-}
-
-// Mirrors the non-exported AnnotationPayload contract in
-// public-src/views/shots/annotation.ts; only frozenPortionId varies below.
-interface AnnotationPayloadFixture {
-    rating: number | null;
-    coffee: string;
-    beanId: number | null;
-    basketId: number | null;
-    puckScreenId: number | null;
-    grinder: string;
-    grindSetting: string;
-    dose: number | null;
-    roastDate: string | null;
-    tds: number | null;
-    notes: string;
-    drinkType: string | null;
-    milkType: number | null;
-    recipeId: number | null;
-    beanAgeDays: number | null;
-    frozenPortionId: number | null;
-}
-
-function payload(frozenPortionId: number | null): AnnotationPayloadFixture {
-    return {
-        rating: null, coffee: '', beanId: null, basketId: null, puckScreenId: null,
-        grinder: '', grindSetting: '', dose: null, roastDate: null, tds: null,
-        notes: '', drinkType: null, milkType: null, recipeId: null, beanAgeDays: null,
-        frozenPortionId,
-    };
 }
 
 function library(beans: LibraryRow[]): CoffeeLibrary {
@@ -63,76 +29,35 @@ function makeBean(portions: FrozenPortionFixture[]) {
     return { id: 1, name: 'Flower Power', bags: [{ id: 1, frozenPortions: portions }] };
 }
 
-beforeEach(() => {
-    fetchSpy.mockClear();
-});
-
-// #502: mirrors test/milk-deduct-gate.test.js's coverage shape for the
-// analogous milk-deduction gate — same "compare previous vs. new, only act
-// on a real change" contract, applied to frozen-portion remainingCount.
-describe('_maybeAdjustFrozenPortion', () => {
-    it('decrements remainingCount when a frozen portion is newly picked for a shot with no prior annotation', () => {
-        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])]);
-        _maybeAdjustFrozenPortion(undefined, payload(100));
-        expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
-            method: 'POST', body: JSON.stringify({ portionId: 100, remainingCount: 19 }),
-        }));
+// #1411: the server books milk stock and frozen-portion counts itself while
+// it saves; the client reloads the library only when a field the server books
+// from (drink, milk or frozen portion) actually changed.
+describe('_stockFieldsChanged (#1411)', () => {
+    it('is true when a drink+milk is newly assigned to a shot with no prior annotation', () => {
+        expect(_stockFieldsChanged(undefined, { drinkType: 'latte', milkType: 1 })).toBe(true);
     });
 
-    it('does not double-decrement when re-saving the exact same portion choice', () => {
-        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 19 }])]);
-        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, payload(100));
-        expect(fetchSpy).not.toHaveBeenCalled();
+    it('is false when only a field the server does not book from changed', () => {
+        expect(_stockFieldsChanged(
+            { drinkType: 'latte', milkType: 1 },
+            { drinkType: 'latte', milkType: 1, rating: 5 },
+        )).toBe(false);
     });
 
-    it('reverses the previous portion and applies the new one when the choice changes', () => {
-        S.coffeeLibrary = library([makeBean([
-            { id: 100, portionCount: 20, remainingCount: 19 },
-            { id: 200, portionCount: 5, remainingCount: 5 },
-        ])]);
-        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, payload(200));
-        expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
-            body: JSON.stringify({ portionId: 100, remainingCount: 20 }),
-        }));
-        expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
-            body: JSON.stringify({ portionId: 200, remainingCount: 4 }),
-        }));
-        expect(fetchSpy).toHaveBeenCalledTimes(2);
+    it('is true when the frozen portion is cleared', () => {
+        expect(_stockFieldsChanged({ frozenPortionId: 100 }, { frozenPortionId: null })).toBe(true);
     });
 
-    it('reverses the previous portion (increments it back) when switching back to "not frozen"', () => {
-        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 19 }])]);
-        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, payload(null));
-        expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
-            body: JSON.stringify({ portionId: 100, remainingCount: 20 }),
-        }));
-        expect(fetchSpy).toHaveBeenCalledTimes(1);
+    it('is false when the drink type only differs between null and empty string', () => {
+        expect(_stockFieldsChanged({ drinkType: null }, { drinkType: '' })).toBe(false);
     });
 
-    it('never increments a reversed portion above its own portionCount', () => {
-        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])]);
-        // Shouldn't normally happen (remainingCount already at max), but the
-        // clamp must hold regardless of how the previous state got there.
-        const shot = { id: 1, annotation: { frozenPortionId: 100 } };
-        _maybeAdjustFrozenPortion(shot, payload(null));
-        expect(fetchSpy).toHaveBeenCalledWith('api/library/bean/1/adjust-frozen-portion', expect.objectContaining({
-            body: JSON.stringify({ portionId: 100, remainingCount: 20 }),
-        }));
+    it('is false when the milk type only differs between number and string', () => {
+        expect(_stockFieldsChanged({ milkType: 1 }, { milkType: '1' })).toBe(false);
     });
 
-    it('does nothing when neither the previous nor the new annotation used a frozen portion', () => {
-        S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 20 }])]);
-        _maybeAdjustFrozenPortion(undefined, payload(null));
-        expect(fetchSpy).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when the referenced portion no longer exists in the library', () => {
-        S.coffeeLibrary = library([]);
-        _maybeAdjustFrozenPortion(undefined, payload(999));
-        expect(fetchSpy).not.toHaveBeenCalled();
+    it('is false when neither annotation touches a stock field', () => {
+        expect(_stockFieldsChanged({}, { rating: 4 })).toBe(false);
     });
 });
 
