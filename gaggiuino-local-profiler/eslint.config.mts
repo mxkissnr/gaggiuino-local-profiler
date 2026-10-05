@@ -21,6 +21,14 @@ const localPlugin = {
   },
 };
 
+// #1270 rename map, already completed by earlier slices on this branch — the
+// E2E-tooling slice that owns these globs touches none of them, it only ports
+// scripts/*.mts and test/e2e/*.mts and retires the classic-JS blocks below:
+//   public-src/public/sw.js   -> public-src/sw.ts        (bundled; served as sw.js)
+//   demo/sw/demo-sw.js        -> demo/sw/demo-sw.ts      (bundled to demo-sw.js)
+//   demo/sw/sw-core.js        -> demo/sw/sw-core.ts      (bundled into demo-sw.js)
+//   eslint-rules/html-sink.js -> eslint-rules/html-sink.mts
+
 export default [
   {
     // go/ is Go, not JS. The transient staged Vite build under
@@ -62,37 +70,6 @@ export default [
     },
     rules: commonRules,
   },
-  {
-    files: ['public-src/**/*.js'],
-    languageOptions: {
-      globals: globals.browser,
-    },
-    rules: commonRules,
-  },
-  {
-    // Demo service worker sources (#1193): classic scripts copied verbatim
-    // into demo-dist/ rather than bundled, so they run in the serviceworker
-    // global scope instead of a module or a window.
-    files: ['demo/sw/**/*.js'],
-    languageOptions: {
-      globals: {
-        ...globals.serviceworker,
-        self: 'readonly',
-        clients: 'readonly',
-        importScripts: 'readonly',
-        caches: 'readonly',
-        console: 'readonly',
-        fetch: 'readonly',
-        Response: 'readonly',
-        ReadableStream: 'readonly',
-        TextEncoder: 'readonly',
-        TextDecoder: 'readonly',
-        URL: 'readonly',
-        URLSearchParams: 'readonly',
-      },
-    },
-    rules: commonRules,
-  },
   // TypeScript sources migrate file-by-file (#1102): scoped to the .ts globs so
   // the type-aware rules don't touch the .js files still in flight.
   ...tseslint.config({
@@ -131,8 +108,8 @@ export default [
   }),
   // The service workers are TypeScript now (#1270): public-src/sw.ts and the
   // demo/sw sources match the service-worker block above and are typechecked
-  // by tsconfig.sw.json. test/e2e/smoke.test.mjs is ported in a later #1270
-  // slice, so it stays .js here and its classic-JS block still applies.
+  // by tsconfig.sw.json. test/e2e/smoke.test.mts is ported by the E2E-tooling
+  // slice; it matches the test/**/*.mts block above (node globals), not vitest.
   ...tseslint.config({
     files: ['test/**/*.ts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
@@ -154,15 +131,5 @@ export default [
     // re-lints it through the ESLint API with ignore disabled.
     files: ['test/fixtures/**/*.ts'],
     rules: { 'local/html-sink': 'error' },
-  },
-  {
-    // test/e2e/*.mjs runs on node:test (Playwright), not vitest — see
-    // test:e2e in package.json (#798) — so it gets node globals only, not
-    // globals.vitest.
-    files: ['test/**/*.mjs'],
-    languageOptions: {
-      globals: globals.node,
-    },
-    rules: commonRules,
   },
 ];
