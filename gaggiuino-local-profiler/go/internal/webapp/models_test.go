@@ -2,8 +2,11 @@ package webapp
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/cutoutmodels"
 )
@@ -395,6 +399,103 @@ func TestModelHandlers_UnwritableDir(t *testing.T) {
 	if n := up.hits.Load(); n != 0 {
 		t.Errorf("upstream hits = %d, want 0", n)
 	}
+}
+
+// failingWriter lets the first `allow` bytes through, then fails every write,
+// simulating a destination whose disk fills mid-stream.
+type failingWriter struct {
+	w     io.Writer
+	allow int
+}
+
+func (f *failingWriter) Write(p []byte) (int, error) {
+	if f.allow <= 0 {
+		return 0, errors.New("no space left on device")
+	}
+	n := len(p)
+	if n > f.allow {
+		n = f.allow
+	}
+	f.allow -= n
+	written, err := f.w.Write(p[:n])
+	if err != nil {
+		return written, err
+	}
+	if written < len(p) {
+		return written, errors.New("no space left on device")
+	}
+	return written, nil
+}
+
+// modelMuxWithHook wires the test seam with a wrapPart hook installed, so a test
+// can inject a destination writer that fails mid-stream.
+func modelMuxWithHook(t *testing.T, dir string, up *modelUpstream, files []cutoutmodels.File, wrap func(io.Writer) io.Writer) *http.ServeMux {
+	t.Helper()
+	h := newModelHandlers(dir, up.URL+"/", newModelHTTPClient(), files)
+	h.wrapPart = wrap
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	return mux
+}
+
+func TestModelHandlers_WriteFailureIsStorageError(t *testing.T) {
+	files, bodies := fakeManifest(t)
+	dir := t.TempDir()
+	up := newModelUpstream(t, bodies, nil)
+	mux := modelMuxWithHook(t, dir, up, files, func(w io.Writer) io.Writer {
+		return &failingWriter{w: w, allow: 4}
+	})
+
+	rec := getModel(mux, http.MethodGet, modelURL("alpha.onnx"))
+	// A local write failure is the server's storage, not the upstream's fault.
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", rec.Code)
+	}
+	assertNoModelFile(t, dir, "alpha.onnx")
+}
+
+func TestModelHandlers_CancelledDownloadLeavesNoPartFile(t *testing.T) {
+	files, bodies := fakeManifest(t)
+	file := findFile(t, files, "alpha.onnx")
+	dir := t.TempDir()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	override := func(w http.ResponseWriter, _ *http.Request) bool {
+		// Announce the full length, send a prefix, then stall so the client is
+		// mid-copy when the test cancels the request context.
+		w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
+		_, _ = w.Write(bodies["alpha.onnx"][:8])
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		close(entered)
+		<-release
+		return true
+	}
+	up := newModelUpstream(t, bodies, override)
+	mux := modelMux(t, dir, up, files)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := httptest.NewRequest(http.MethodGet, modelURL("alpha.onnx"), nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		mux.ServeHTTP(rec, req)
+		close(done)
+	}()
+
+	<-entered
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("handler did not return after the request was cancelled")
+	}
+	close(release)
+
+	assertNoModelFile(t, dir, "alpha.onnx")
 }
 
 func TestModelHandlers_RemovesStaleVersions(t *testing.T) {

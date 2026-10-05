@@ -60,6 +60,32 @@ type ModelHandlers struct {
 	// locks serializes downloads per file name so two concurrent first
 	// requests fetch the bytes once; the loser re-checks disk after locking.
 	locks map[string]*sync.Mutex
+
+	// wrapPart is a test-only hook: it wraps the destination .part writer before
+	// the streaming copy so a test can inject a write failure (e.g. disk full).
+	// Production leaves it nil and the file is written to directly.
+	wrapPart func(io.Writer) io.Writer
+}
+
+// modelFileWriter records the first error from the destination .part file's
+// Write. An io.Copy failure is otherwise ambiguous — a read from the upstream
+// body and a write to the local file both surface as the copy's error — so this
+// lets the caller tell a disk failure (errModelStorage) from a failed download.
+type modelFileWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (f *modelFileWriter) Write(p []byte) (int, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
+	n, err := f.w.Write(p)
+	if err == nil && n != len(p) {
+		err = io.ErrShortWrite
+	}
+	f.err = err
+	return n, err
 }
 
 // NewModelHandlers builds ModelHandlers reading model files from dir. An empty
@@ -238,9 +264,19 @@ func (h *ModelHandlers) download(ctx context.Context, file cutoutmodels.File, pa
 	// LimitReader(Size+1) both caps a hostile body and detects one that is
 	// longer than pinned, since a short read can never be confused with an
 	// exact match once the byte count is checked below.
+	dest := io.Writer(out)
+	if h.wrapPart != nil {
+		dest = h.wrapPart(out)
+	}
+	fileWriter := &modelFileWriter{w: dest}
 	hasher := sha256.New()
-	written, err := io.Copy(io.MultiWriter(out, hasher), io.LimitReader(resp.Body, file.Size+1))
+	written, err := io.Copy(io.MultiWriter(fileWriter, hasher), io.LimitReader(resp.Body, file.Size+1))
 	if err != nil {
+		// A local write failure (disk full) surfaces here just like a failed
+		// upstream read; the writer's recorded error tells the two apart.
+		if fileWriter.err != nil {
+			return fmt.Errorf("%w: %v", errModelStorage, fileWriter.err)
+		}
 		return fmt.Errorf("read upstream: %w", err)
 	}
 	if written != file.Size {
