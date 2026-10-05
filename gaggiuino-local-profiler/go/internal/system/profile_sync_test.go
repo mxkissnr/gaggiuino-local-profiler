@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -278,5 +279,204 @@ func TestPushDirtyProfiles_PendingDelete_HardDeletesLocallyOnSuccess(t *testing.
 	}
 	if got != nil {
 		t.Fatalf("Get = %+v, want nil (hard-deleted after a successful remote delete)", got)
+	}
+}
+
+// TestPushOneProfile_CreateTimeoutAdoptsProfileOnNextSweep reproduces
+// #1405's create case: the first push's CreateProfile reply is lost (times
+// out) but the machine stored the profile anyway. The next sweep must adopt
+// that profile instead of creating a second copy, leaving exactly one profile
+// with that name on the machine and a remote id on the local row.
+func TestPushOneProfile_CreateTimeoutAdoptsProfileOnNextSweep(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	row, err := repo.UpsertDirty(1, nil, nil, "Timed Out", json.RawMessage(`{"label":"Timed Out"}`))
+	if err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+
+	var machineProfiles []machines.ProfileSummary
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return append([]machines.ProfileSummary(nil), machineProfiles...), nil
+	}
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		// The machine applies the create, but its reply never reaches us.
+		machineProfiles = append(machineProfiles, machines.ProfileSummary{ID: "gm-1", Name: "Timed Out"})
+		return machines.ProfileSummary{}, context.DeadlineExceeded
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("first PushDirtyProfiles: %v", err)
+	}
+
+	// The second sweep must adopt the stored profile, never create again.
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		t.Fatal("CreateProfile called again: the stored profile should have been adopted")
+		return machines.ProfileSummary{}, nil
+	}
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("second PushDirtyProfiles: %v", err)
+	}
+
+	adopted, err := repo.Get(1, "gm-1")
+	if err != nil {
+		t.Fatalf("Get by remote id: %v", err)
+	}
+	if adopted == nil {
+		t.Fatal("row was not adopted: no local row carries the machine's remote id")
+	}
+	if adopted.LocalID != row.LocalID {
+		t.Errorf("adopted LocalID = %d, want %d", adopted.LocalID, row.LocalID)
+	}
+	if len(machineProfiles) != 1 {
+		t.Fatalf("machine has %d profiles named %q, want exactly 1", len(machineProfiles), "Timed Out")
+	}
+}
+
+// TestPushOneProfile_ListProfilesFailureDoesNotCreate guards #1405's "never
+// create blindly" rule: if the pre-create ListProfiles fails, the row stays
+// pending for a later sweep and CreateProfile must not run at all.
+func TestPushOneProfile_ListProfilesFailureDoesNotCreate(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if _, err := repo.UpsertDirty(1, nil, nil, "No List", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return nil, errBoom
+	}
+	// createProfileFn is deliberately left nil: a call would panic and fail
+	// the test, proving CreateProfile never ran.
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	dirty, err := repo.DirtyRows(1)
+	if err != nil {
+		t.Fatalf("DirtyRows: %v", err)
+	}
+	if len(dirty) != 1 {
+		t.Fatalf("DirtyRows = %+v, want the row preserved for the next sweep", dirty)
+	}
+	if dirty[0].LastSyncError == nil || !strings.Contains(*dirty[0].LastSyncError, errBoom.Error()) {
+		t.Errorf("LastSyncError = %v, want the ListProfiles error recorded", dirty[0].LastSyncError)
+	}
+}
+
+// TestPushOneProfile_DoesNotAdoptProfileLinkedToAnotherRow: a same-name
+// machine profile that already belongs to a different local row is not ours
+// to adopt, so a create must still happen.
+func TestPushOneProfile_DoesNotAdoptProfileLinkedToAnotherRow(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if err := repo.UpsertSynced(1, "gm-1", "Shared", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if _, err := repo.UpsertDirty(1, nil, nil, "Shared", json.RawMessage(`{"label":"Shared"}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return []machines.ProfileSummary{{ID: "gm-1", Name: "Shared"}}, nil
+	}
+	var calls int32
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		atomic.AddInt32(&calls, 1)
+		return machines.ProfileSummary{ID: "gm-2", Name: "Shared"}, nil
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("CreateProfile calls = %d, want 1 (gm-1 is linked to another row, so it must not be adopted)", got)
+	}
+	created, err := repo.Get(1, "gm-2")
+	if err != nil || created == nil {
+		t.Fatalf("Get(gm-2) = %+v, %v; want the newly created row", created, err)
+	}
+}
+
+// TestPushOneProfile_DeleteTimeoutHardDeletesWhenAlreadyGone reproduces
+// #1405's delete case: DeleteProfile's reply is lost but the machine removed
+// the profile, so a confirming list must let the row be hard-deleted instead
+// of retrying an id that no longer exists forever.
+func TestPushOneProfile_DeleteTimeoutHardDeletesWhenAlreadyGone(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if err := repo.UpsertSynced(1, "gm-1", "To Delete", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if err := repo.MarkPendingDelete(1, "gm-1"); err != nil {
+		t.Fatalf("MarkPendingDelete: %v", err)
+	}
+	fake.deleteProfileFn = func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error) {
+		return nil, context.DeadlineExceeded
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return nil, nil // gm-1 is gone
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	got, err := repo.Get(1, "gm-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("Get = %+v, want nil (the machine already deleted the profile)", got)
+	}
+}
+
+// TestPushOneProfile_DeleteFailureKeepsRowWhenStillListed: a delete that
+// really failed (the id is still on the machine) must keep the row for a
+// later sweep.
+func TestPushOneProfile_DeleteFailureKeepsRowWhenStillListed(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	if err := repo.UpsertSynced(1, "gm-1", "Still There", json.RawMessage(`{}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if err := repo.MarkPendingDelete(1, "gm-1"); err != nil {
+		t.Fatalf("MarkPendingDelete: %v", err)
+	}
+	fake.deleteProfileFn = func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error) {
+		return nil, errBoom
+	}
+	fake.listProfilesFn = func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
+		return []machines.ProfileSummary{{ID: "gm-1", Name: "Still There"}}, nil
+	}
+
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+
+	rows, err := repo.DirtyRows(1)
+	if err != nil {
+		t.Fatalf("DirtyRows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].SyncStatus != machines.ProfileSyncPendingDelete {
+		t.Fatalf("DirtyRows = %+v, want the pending_delete row preserved", rows)
+	}
+	if rows[0].LastSyncError == nil || !strings.Contains(*rows[0].LastSyncError, errBoom.Error()) {
+		t.Errorf("LastSyncError = %v, want the delete error recorded", rows[0].LastSyncError)
 	}
 }

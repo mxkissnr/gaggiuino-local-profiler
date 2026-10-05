@@ -339,6 +339,20 @@ func (r *ProfilesRepository) ReplaceRemoteID(localID int64, expectedUpdatedAt in
 	return nil
 }
 
+// MarkDirty forces a row back to dirty so the next sweep pushes its local
+// body. Used when adopting a machine-side profile found by name during a
+// pending-create push (#1405): ListProfiles returns no body, so the adopted
+// row's remote copy cannot be assumed equal to the local edit — the local
+// edit stays authoritative and is pushed as a follow-up update.
+func (r *ProfilesRepository) MarkDirty(localID int64) error {
+	_, err := r.db.Exec(`UPDATE machine_profiles SET sync_status = ?, last_sync_error = NULL WHERE local_id = ?`,
+		ProfileSyncDirty, localID)
+	if err != nil {
+		return fmt.Errorf("machines: marking local profile %d dirty: %w", localID, err)
+	}
+	return nil
+}
+
 // MarkSynced's expectedUpdatedAt has the same lost-update-guard rationale
 // as ReplaceRemoteID's — see that doc comment.
 func (r *ProfilesRepository) MarkSynced(localID int64, expectedUpdatedAt int64) error {

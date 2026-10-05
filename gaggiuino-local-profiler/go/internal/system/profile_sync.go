@@ -100,39 +100,13 @@ func (p *Poller) PushDirtyProfiles(ctx context.Context, machineID int64) error {
 func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, adapter machines.Adapter, row machines.ProfileRow) error {
 	switch row.SyncStatus {
 	case machines.ProfileSyncPendingCreate:
-		in := machines.ProfileInput{RawBody: row.Data}
-		if machine.Type != "gaggimate" {
-			in = machines.ProfileInput{}
-			if err := json.Unmarshal(row.Data, &in); err != nil {
-				return err
-			}
-		}
-		createCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
-		created, err := adapter.CreateProfile(createCtx, machine, in)
-		cancel()
-		if err != nil {
-			return err
-		}
-		return p.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, created.ID, created.Name)
+		return p.createProfileOnMachine(ctx, machine, adapter, row)
 	case machines.ProfileSyncDirty:
 		if row.RemoteID == nil {
 			// Shouldn't happen (dirty implies a prior successful sync gave
 			// it a remote id) but fall back to create rather than dropping
 			// the edit silently if it ever does.
-			in := machines.ProfileInput{RawBody: row.Data}
-			if machine.Type != "gaggimate" {
-				in = machines.ProfileInput{}
-				if err := json.Unmarshal(row.Data, &in); err != nil {
-					return err
-				}
-			}
-			createCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
-			created, err := adapter.CreateProfile(createCtx, machine, in)
-			cancel()
-			if err != nil {
-				return err
-			}
-			return p.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, created.ID, created.Name)
+			return p.createProfileOnMachine(ctx, machine, adapter, row)
 		}
 		var in machines.ProfileInput
 		if machine.Type == "gaggimate" {
@@ -163,12 +137,80 @@ func (p *Poller) pushOneProfile(ctx context.Context, machine *machines.Machine, 
 		_, err := adapter.DeleteProfile(deleteCtx, machine, *row.RemoteID)
 		cancel()
 		if err != nil {
-			return err
+			// Same lost-reply case as create (#1405): the machine may have
+			// deleted it even though the reply never came back. A fresh list
+			// is the tie-breaker — if the id is gone, the delete landed.
+			listCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+			remoteProfiles, listErr := adapter.ListProfiles(listCtx, machine)
+			cancel()
+			if listErr != nil {
+				return err
+			}
+			for _, remote := range remoteProfiles {
+				if remote.ID == *row.RemoteID {
+					return err
+				}
+			}
 		}
 		return p.profilesRepo.HardDelete(row.LocalID)
 	default:
 		return nil
 	}
+}
+
+// createProfileOnMachine pushes a row that has no remote id yet — a
+// pending_create, or the dirty-without-remote-id fallback — as a create.
+//
+// The create is not idempotent on its own: a CreateProfile whose reply
+// window (profilePushTimeout) expires may still have reached the machine and
+// been applied, in which case the next sweep used to re-send it blind and
+// leave a duplicate behind (#1405). So list the machine's profiles first; if
+// one already carries this row's name and is not linked to another local row,
+// adopt its id instead of creating a second copy. The row is left dirty so
+// the next sweep pushes the local body as an update — ListProfiles returns
+// no body, so the local edit stays authoritative rather than being assumed
+// already synced. A ListProfiles error aborts the push (retried next sweep)
+// rather than creating blindly.
+func (p *Poller) createProfileOnMachine(ctx context.Context, machine *machines.Machine, adapter machines.Adapter, row machines.ProfileRow) error {
+	listCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+	remoteProfiles, err := adapter.ListProfiles(listCtx, machine)
+	cancel()
+	if err != nil {
+		return err
+	}
+	for _, remote := range remoteProfiles {
+		if remote.Name != row.Name {
+			continue
+		}
+		linked, err := p.profilesRepo.GetByRemoteID(row.MachineID, remote.ID)
+		if err != nil {
+			return err
+		}
+		if linked != nil {
+			continue
+		}
+		if err := p.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, remote.ID, remote.Name); err != nil {
+			return err
+		}
+		// ReplaceRemoteID marks a row whose updated_at is unchanged synced;
+		// force it back to dirty so the local body still reaches the machine.
+		return p.profilesRepo.MarkDirty(row.LocalID)
+	}
+
+	in := machines.ProfileInput{RawBody: row.Data}
+	if machine.Type != "gaggimate" {
+		in = machines.ProfileInput{}
+		if err := json.Unmarshal(row.Data, &in); err != nil {
+			return err
+		}
+	}
+	createCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+	created, err := adapter.CreateProfile(createCtx, machine, in)
+	cancel()
+	if err != nil {
+		return err
+	}
+	return p.profilesRepo.ReplaceRemoteID(row.LocalID, row.UpdatedAt, created.ID, created.Name)
 }
 
 // runProfileSyncSweep is the periodic, all-machines fallback trigger: unlike
