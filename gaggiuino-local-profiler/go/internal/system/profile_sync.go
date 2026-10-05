@@ -169,47 +169,68 @@ func isListSummaryPlaceholder(row machines.ProfileRow) bool {
 	return row.SyncStatus == machines.ProfileSyncSynced && strings.TrimSpace(string(row.Data)) == "{}"
 }
 
+// previousPushTimedOut reports whether row's last push attempt failed with a
+// timeout. Adoption by name in createProfileOnMachine is safe only in that
+// case: a timed-out create may still have landed even though we never saw the
+// reply, so a same-name profile the machine now lists could be ours. After a
+// non-timeout error (or no previous error at all) our create could not have
+// landed, so a same-name profile there belongs to a different, pre-existing
+// profile and must not be adopted (#1405 follow-up).
+func previousPushTimedOut(row machines.ProfileRow) bool {
+	return row.LastSyncError != nil && strings.Contains(*row.LastSyncError, "context deadline exceeded")
+}
+
 // createProfileOnMachine pushes a row that has no remote id yet — a
 // pending_create, or the dirty-without-remote-id fallback — as a create.
 //
 // The create is not idempotent on its own: a CreateProfile whose reply
 // window (profilePushTimeout) expires may still have reached the machine and
 // been applied, in which case the next sweep used to re-send it blind and
-// leave a duplicate behind (#1405). So list the machine's profiles first; if
-// one already carries this row's name and is not linked to another local row,
+// leave a duplicate behind (#1405). But adoption by name is only safe when
+// our own create may have landed, i.e. when the row's previous push timed out
+// (previousPushTimedOut): then list the machine's profiles and, if one
+// already carries this row's name and is not linked to another local row,
 // adopt its id instead of creating a second copy. The row is left dirty so
 // the next sweep pushes the local body as an update — ListProfiles returns
 // no body, so the local edit stays authoritative rather than being assumed
 // already synced. A ListProfiles error aborts the push (retried next sweep)
 // rather than creating blindly.
+//
+// After no error, or a failure that was not a timeout, our create cannot have
+// reached the machine, so a same-name profile there is a different,
+// pre-existing one: adopting it would let the next sweep overwrite that
+// profile's body with this row's (#1405 follow-up). The row is created
+// directly and no ListProfiles call is made.
 func (p *Poller) createProfileOnMachine(ctx context.Context, machine *machines.Machine, adapter machines.Adapter, row machines.ProfileRow) error {
-	listCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
-	remoteProfiles, err := adapter.ListProfiles(listCtx, machine)
-	cancel()
-	if err != nil {
-		return err
-	}
-	for _, remote := range remoteProfiles {
-		if remote.Name != row.Name {
-			continue
-		}
-		linked, err := p.profilesRepo.GetByRemoteID(row.MachineID, remote.ID)
+	if previousPushTimedOut(row) {
+		listCtx, cancel := context.WithTimeout(ctx, profilePushTimeout)
+		remoteProfiles, err := adapter.ListProfiles(listCtx, machine)
+		cancel()
 		if err != nil {
 			return err
 		}
-		if linked == nil {
-			return p.profilesRepo.AdoptRemoteID(row.LocalID, remote.ID, remote.Name)
+		for _, remote := range remoteProfiles {
+			if remote.Name != row.Name {
+				continue
+			}
+			linked, err := p.profilesRepo.GetByRemoteID(row.MachineID, remote.ID)
+			if err != nil {
+				return err
+			}
+			if linked == nil {
+				return p.profilesRepo.AdoptRemoteID(row.LocalID, remote.ID, remote.Name)
+			}
+			// A live ListProfiles reconcile (handlers_profiles.go ->
+			// UpsertListSummary) can have already inserted a synced, empty-body
+			// placeholder for this remote profile before the sweep ran, so
+			// GetByRemoteID finds a row that is not a real local profile. Fold the
+			// id onto this row and drop the placeholder instead of creating a
+			// duplicate.
+			if linked.LocalID != row.LocalID && linked.Name == row.Name && isListSummaryPlaceholder(*linked) {
+				return p.profilesRepo.AdoptRemoteIDOverPlaceholder(row.LocalID, linked.LocalID, remote.ID, remote.Name)
+			}
+			continue
 		}
-		// A live ListProfiles reconcile (handlers_profiles.go ->
-		// UpsertListSummary) can have already inserted a synced, empty-body
-		// placeholder for this remote profile before the sweep ran, so
-		// GetByRemoteID finds a row that is not a real local profile. Fold the
-		// id onto this row and drop the placeholder instead of creating a
-		// duplicate.
-		if linked.LocalID != row.LocalID && linked.Name == row.Name && isListSummaryPlaceholder(*linked) {
-			return p.profilesRepo.AdoptRemoteIDOverPlaceholder(row.LocalID, linked.LocalID, remote.ID, remote.Name)
-		}
-		continue
 	}
 
 	in := machines.ProfileInput{RawBody: row.Data}
