@@ -6,6 +6,7 @@
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
 - **A slow GaggiMate no longer ends up with duplicate profiles after a profile save timed out.** Closes #1405
+- **Creating a profile whose name matches a different profile already on the machine no longer risks overwriting it.** Part of #1405
 - **Shots from GaggiMate firmware v1.9.0 are imported with correct curves again.** Closes #1397
 - **The Statistics month calendar only asks for a bean's photo when it has one, so it stops logging a failed image request.** Part of #1331
 - **The machine icon no longer shows a strip of colour while the machine is switched off.** Closes #1383
