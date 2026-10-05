@@ -34,8 +34,8 @@ const localPlugin = {
 //   scripts/demo-smoke.mjs      -> scripts/demo-smoke.mts        (ported)
 //   scripts/sync-dev-config.mjs -> scripts/sync-dev-config.mts   (ported)
 //   scripts/dev-stats.mjs       -> scripts/dev-stats.mts         (ported)
-// Only scripts/release-check.mjs still awaits its own slice; the unchanged
-// .mjs file stays until then.
+//   scripts/release-check.mjs   -> scripts/release-check.mts     (ported)
+// Every entry is ported; no JavaScript source named here remains on disk.
 
 export default [
   {
