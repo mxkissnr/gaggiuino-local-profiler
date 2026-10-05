@@ -305,6 +305,13 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	haClient := ha.NewClientFromEnv()
 	ordersRepo := orders.NewRepository(sqlDB)
+	// #1411: annotating a shot books milk stock and frozen-portion counts on
+	// the server inside the same locked save; injected here because
+	// internal/shots cannot import internal/library or internal/orders, like
+	// SetBeanSource.
+	shots.SetAnnotationStockHook(func(prev, next map[string]any) error {
+		return library.ApplyAnnotationStock(libRepo, ordersRepo.GetMenu, prev, next)
+	})
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
 	ordersHandlers.RegisterRoutes(mux)
 

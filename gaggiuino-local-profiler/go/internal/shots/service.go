@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
 )
 
@@ -135,14 +136,38 @@ func (e *AnnotationValidationError) Error() string {
 // value (see orders' CompleteOrder, which owns orderedBy).
 var serverOwnedAnnotationKeys = map[string]bool{"orderedBy": true}
 
+// annotationStockHook books the library side effects of a PatchAnnotation
+// (milk stock, frozen-portion counts, #1411). It is installed by cmd/server
+// because this package cannot import internal/library. It only runs for
+// PatchAnnotation: never for UpdateAnnotation (orders' orderedBy) or
+// SaveAnnotation (restore and sync).
+var annotationStockHook atomic.Pointer[func(prev, next map[string]any) error]
+
+// SetAnnotationStockHook installs the process-wide annotation stock hook.
+// Passing nil removes it, restoring the no-bookkeeping behaviour tests and
+// tools rely on.
+func SetAnnotationStockHook(fn func(prev, next map[string]any) error) {
+	if fn == nil {
+		annotationStockHook.Store(nil)
+		return
+	}
+	annotationStockHook.Store(&fn)
+}
+
 // PatchAnnotation merges patch into the shot's stored annotation (#1273):
 // every remaining top-level key of patch overwrites the stored value, a key
 // present as JSON null or "" clears the field, and keys absent from patch
 // are kept. Server-owned keys are ignored. The merged result is validated
 // before it is written; an invalid merge returns *AnnotationValidationError
 // and leaves the stored annotation untouched. Returns the saved annotation.
+// The installed annotation stock hook (see SetAnnotationStockHook) runs once
+// the merge is saved, in the same locked save.
 func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[string]any, error) {
-	return s.repo.UpdateAnnotation(shotID, func(ann map[string]any) error {
+	var after func(prev, next map[string]any) error
+	if h := annotationStockHook.Load(); h != nil {
+		after = *h
+	}
+	return s.repo.updateAnnotation(shotID, func(ann map[string]any) error {
 		for k, v := range patch {
 			if serverOwnedAnnotationKeys[k] {
 				continue
@@ -153,7 +178,7 @@ func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[strin
 			return &AnnotationValidationError{Issues: issues}
 		}
 		return nil
-	})
+	}, after)
 }
 
 // SetImage sets the shot's image extension and returns the updated shot.
