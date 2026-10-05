@@ -6,6 +6,7 @@
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
 - **Saving a new bean with "Save and add bag" opens the bag form again.**
+- **Bean age and the degassing hint now also work for roast dates entered in ISO format.**
 - **The Statistics month calendar only asks for a bean's photo when it has one, so it stops logging a failed image request.** Part of #1331
 - **The machine icon no longer shows a strip of colour while the machine is switched off.** Closes #1383
 - **A remembered machine that no longer exists no longer hides the shot history.** (#1323)
