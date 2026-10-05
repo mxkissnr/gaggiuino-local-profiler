@@ -197,10 +197,9 @@ describe('autoCutout', () => {
     const mask = await core.autoCutout(new Uint8ClampedArray(w * h * 4), w, h, MODELS_BASE);
 
     expect(mask.length).toBe(w * h);
-    expect(shared.env.wasm.wasmPaths).toEqual({
-      wasm: expect.stringMatching(/ort-wasm-simd-threaded-abc12345\.wasm$/),
-      mjs: expect.stringMatching(/ort-wasm-simd-threaded-def67890\.mjs$/),
-    });
+    const paths = shared.env.wasm.wasmPaths as { wasm: string; mjs: string };
+    expect(paths.wasm.endsWith('ort-wasm-simd-threaded-abc12345.wasm')).toBe(true);
+    expect(paths.mjs.endsWith('ort-wasm-simd-threaded-def67890.mjs')).toBe(true);
     expect(shared.env.wasm.numThreads).toBe(1);
     expect(shared.env.wasm.proxy).toBe(false);
   });
