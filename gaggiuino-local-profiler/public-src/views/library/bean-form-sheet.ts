@@ -6,12 +6,22 @@ import { attachSheetSwipe } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
 import type { BeanRow } from './bags.js';
 import { _beanList, _state, _field, _el } from './bean-shared.js';
-import { populateOriginSelect, bindOriginInput, setFormOrigins, populateSuggestionDatalists, bindFlavorInput, setFormFlavors } from './bean-form-chips.js';
-import { updateStickerButton, clearStagedBeanImage } from './bean-sticker.js';
+import type { BeanListRow } from './bean-shared.js';
+import { populateOriginSelect, bindOriginInput, setFormOrigins, populateSuggestionDatalists, bindFlavorInput, setFormFlavors, commitFlavorInput, formFlavors, formOrigins } from './bean-form-chips.js';
+import { updateStickerButton, clearStagedBeanImage, stagedBeanImage } from './bean-sticker.js';
 import {
   sheetBeanId, forgetSheetReturnFocus, openBeanSheet, closeBeanSheet,
-  _overlayShieldsSheets, _trapTab,
+  _overlayShieldsSheets, _trapTab, _dropNewShelfTile,
 } from './bean-sheet.js';
+import * as libraryApi from '../../api/library.js';
+import { invalidateBeanImage } from '../../bean-image.js';
+import { renderRecipeList } from './recipes.js';
+import { openNewBagForm } from './bean-card.js';
+import * as libraryView from '../library.js';
+
+// Circular with library.ts (it re-exports this module): only ever touched at
+// call time, never read at module load.
+const library = libraryView;
 
 // ── Bean form sheet (#1349) ───────────────────────────────────────────────
 // The bean form is static markup in index.html. Rather than re-template it,
@@ -324,4 +334,125 @@ export function requestCloseBeanForm(): void {
 export function discardBeanForm(): void {
   _beanFormDirty = false;
   closeBeanForm();
+}
+
+export function editBean(id: number): void {
+  const bean = _beanList().find(b => b.id === id);
+  if (bean) openBeanForm(bean);
+}
+
+export async function saveBean(): Promise<void> { return saveBeanInternal(false); }
+// Create-only entry points (see openBeanForm's mode-conditional buttons) —
+// both save the bean identically, they only differ in what happens right
+// after: opening the existing new-bag dialog, or not.
+export async function saveBeanNoBag(): Promise<void> { return saveBeanInternal(false); }
+export async function saveBeanAddBag(): Promise<void> { return saveBeanInternal(true); }
+
+async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
+  const name      = _field('beanFormName').value.trim();
+  const roaster   = _field('beanFormRoaster').value.trim();
+  const roastDate = _field('beanFormRoastDate').value.trim();
+  const notes     = _field('beanFormNotes').value.trim();
+  const decaf     = _field('beanFormDecaf').checked;
+  const variety   = _field('beanFormVariety').value.trim();
+  const species   = _field('beanFormSpecies').value;
+  const category  = _field('beanFormCategory').value;
+  const process   = _field('beanFormProcess').value.trim();
+  const roastType = _field('beanFormRoastType').value;
+  const region    = _field('beanFormRegion').value.trim();
+  const altitude_m    = _field('beanFormAltitude').value;
+  const importer      = _field('beanFormImporter').value.trim();
+  const harvest       = _field('beanFormHarvest').value.trim();
+  const price_eur     = _field('beanFormPrice').value;
+  const producer      = _field('beanFormProducer').value.trim();
+  const certification = _field('beanFormCertification').value.trim();
+  const brewTempC  = _field('beanFormBrewTemp').value;
+  const brewRatio  = _field('beanFormBrewRatio').value.trim();
+  const brewTimeS  = _field('beanFormBrewTime').value;
+  const brewNotes  = _field('beanFormBrewNotes').value.trim();
+  commitFlavorInput(); // take a still-typed flavor along
+  if (!name) { _field('beanFormName').focus(); return; }
+  const payload: Record<string, unknown> = {
+    name, roaster, roastDate, notes, decaf, origins: formOrigins(), variety, species, category, process, flavors: formFlavors(), roastType, region,
+    altitude_m, importer, harvest, price_eur, producer, certification,
+    brewTempC, brewRatio, brewTimeS, brewNotes,
+  };
+  if (!S.beanEditId && S._urlImportSource) {
+    payload.source     = S._urlImportSource;
+    payload.importedAt = S._urlImportedAt;
+    // A photo the user staged for this create wins over the import's image URL.
+    if (_state()._urlImportImageUrl && !stagedBeanImage()) payload.imageUrl = _state()._urlImportImageUrl;
+    if (S._urlImportSourceUrl) payload.sourceUrl = S._urlImportSourceUrl;
+  }
+  // #451: capture which opt-in Brew Guide recipe candidates are still
+  // checked before closeBeanForm() clears both the DOM and this state.
+  const extraRecipesToImport = (_state()._urlImportExtraRecipes || []).filter((_, i) =>
+    document.querySelector<HTMLInputElement>(`[data-extra-recipe-idx="${i}"]`)?.checked);
+  const saved = await libraryApi.saveBean(S.beanEditId, payload);
+  if (!saved) return;
+  if (S.beanEditId) {
+    const idx = _beanList().findIndex(b => b.id === S.beanEditId);
+    if (idx !== -1) _beanList()[idx] = saved;
+  } else {
+    _beanList().push(saved);
+  }
+  const wasCreate = !S.beanEditId;
+  // #1329 part 2: upload a photo staged while creating, now that the bean has
+  // an id. A failed upload must not lose the bean — it stays in the list and
+  // the user gets the same generic error an edit-mode upload shows.
+  const staged = stagedBeanImage();
+  if (wasCreate && staged) {
+    clearStagedBeanImage();
+    const uploaded = await libraryApi.uploadBeanImage(saved.id, staged);
+    if (uploaded.ok) {
+      const withImage = (await uploaded.json()) as BeanListRow;
+      const imgIdx = _beanList().findIndex(b => b.id === saved.id);
+      if (imgIdx !== -1) _beanList()[imgIdx] = withImage;
+      invalidateBeanImage(saved.id);
+    } else {
+      const err = (await uploaded.json().catch(() => ({}))) as { error?: string };
+      alert(t('error_generic', err.error || uploaded.statusText));
+    }
+  }
+  for (const recipe of extraRecipesToImport) {
+    const importedRecipe = await libraryApi.saveRecipe(null, { ...recipe, brewMethod: 'espresso', beanName: saved.name });
+    if (importedRecipe) {
+      const lib = _state().coffeeLibrary;
+      if (!lib.recipes) lib.recipes = [];
+      lib.recipes.push(importedRecipe);
+    }
+  }
+  // Also persist price_eur to the current bag so per-bag price stays in sync
+  if (S.beanEditId && price_eur) {
+    const activeBagForSave = classifyBeanBags(saved).current?.bg || null;
+    if (activeBagForSave) {
+      const savedWithBag = await libraryApi.updateBeanBag(S.beanEditId, activeBagForSave.id as number, {
+        roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
+        batchNumber: activeBagForSave.batchNumber || '', price_eur: parseFloat(price_eur) || null,
+      });
+      if (savedWithBag) {
+        const idx2 = _beanList().findIndex(b => b.id === S.beanEditId);
+        if (idx2 !== -1) _beanList()[idx2] = savedWithBag;
+      }
+    }
+  }
+  library.updateLibraryDatalist();
+  closeBeanForm();
+  library.renderBeanList();
+  if (wasCreate) _dropNewShelfTile(saved.id);
+  if (extraRecipesToImport.length) renderRecipeList();
+  // #1398: the new bean's inline #newBagForm<id> only exists inside its
+  // detail sheet (renderBeanCard), so with a plain
+  // openNewBagForm the element was missing and the call threw. Open the
+  // fresh sheet first and reveal the form once its content has painted.
+  if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id));
+}
+
+export async function deleteBean(id: number): Promise<void> {
+  if (!confirm(t('lib_confirm_delete_bean'))) return;
+  const r = await libraryApi.deleteBeanPermanently(id);
+  if (!r.ok) return;
+  S.coffeeLibrary.beans = S.coffeeLibrary.beans.filter(b => b.id !== id);
+  library.updateLibraryDatalist();
+  library.renderBeanList();
 }

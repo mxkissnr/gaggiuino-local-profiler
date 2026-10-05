@@ -379,6 +379,7 @@ export async function saveNewBag(id: number): Promise<void> {
   const batchNumber = _field(`newBagBatchNumber${id}`)?.value.trim() || '';
   const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber });
   if (!saved) return;
+  closeNewBagForm(id);
   const idx = _beanList().findIndex(b => b.id === id);
   if (idx !== -1) _beanList()[idx] = saved;
   library.renderBeanList();
@@ -389,7 +390,8 @@ export function openFreezeForm(id: number): void {
 }
 
 export function closeFreezeForm(id: number): void {
-  _el(`freezeForm${id}`).style.display = 'none';
+  const form = document.getElementById(`freezeForm${id}`);
+  if (form) form.style.display = 'none';
 }
 
 // Freezes a portion of the active bag: grams move into a dated frozen pool
@@ -407,6 +409,7 @@ export async function saveFreezePortions(id: number): Promise<void> {
   if (!(portionCount > 0) || !(portionWeight_g > 0)) return;
   const saved = await libraryApi.freezeBeanPortions(id, { portionCount, portionWeight_g, frozenAt });
   if (!saved) return;
+  closeFreezeForm(id);
   const idx = _beanList().findIndex(b => b.id === id);
   if (idx !== -1) _beanList()[idx] = saved;
   library.renderBeanList();
@@ -452,6 +455,7 @@ export async function saveEditFrozenForm(beanId: number, portionId: number): Pro
   if (frozenAt != null) body.frozenAt = frozenAt;
   const saved = await libraryApi.adjustFrozenPortion(beanId, { portionId, ...body });
   if (!saved) return;
+  closeEditFrozenForm(portionId);
   const idx = _beanList().findIndex(b => b.id === beanId);
   if (idx !== -1) _beanList()[idx] = saved;
   library.renderBeanList();

@@ -149,6 +149,35 @@ export function beanSheetRestoredScroll(
   return Number.isFinite(prevScrollTop) && prevScrollTop > 0 ? prevScrollTop : 0;
 }
 
+// #1412: the card's inline forms (new bag, freeze, edit frozen portion:
+// .lib-new-bag-form, shown via style.display; bag stock/edit rows) live in
+// the sheet's innerHTML, so a rebuild closed them and dropped typed text.
+export interface OpenSheetForms { open: string[]; values: Array<[string, string]> }
+
+export function captureOpenSheetForms(root: ParentNode): OpenSheetForms {
+  const snap: OpenSheetForms = { open: [], values: [] };
+  if (typeof root.querySelectorAll !== 'function') return snap;
+  for (const selector of ['.lib-new-bag-form', '.lib-stock-edit-row']) {
+    for (const form of Array.from(root.querySelectorAll<HTMLElement>(selector))) {
+      if (form.style.display === 'none') continue;
+      if (form.id) snap.open.push(form.id);
+      if (typeof form.querySelectorAll !== 'function') continue;
+      for (const input of Array.from(form.querySelectorAll<HTMLInputElement>('input[id]'))) {
+        snap.values.push([input.id, input.value]);
+      }
+    }
+  }
+  return snap;
+}
+
+export function restoreOpenSheetForms(snap: OpenSheetForms, byId: (id: string) => HTMLElement | null): void {
+  for (const id of snap.open) { const form = byId(id); if (form) form.style.display = ''; }
+  for (const [id, value] of snap.values) {
+    const input = byId(id) as HTMLInputElement | null;
+    if (input) input.value = value;
+  }
+}
+
 // `enter` marks a render that comes from openBeanSheet: only then does the new
 // `.lib-sheet` carry the slide-in class, so the animation plays on open and not
 // on every action-driven rebuild.
@@ -162,6 +191,8 @@ export function renderBeanSheet(enter = false): void {
   const beans = _beanList();
   const origin = originDisplay(bean);
   const restoreScroll = beanSheetRestoredScroll(_sheetRenderedBeanId, id, _sheetScrollTop(host), enter);
+  // Only a rebuild of the bean already shown keeps its open forms; a fresh open starts closed.
+  const openForms = !enter && _sheetRenderedBeanId === id ? captureOpenSheetForms(host) : null;
   host.innerHTML = html`<div class="lib-sheet-backdrop" data-action="close-bean-sheet"></div>
     <section class="lib-sheet${esc(enter ? ' lib-sheet-enter' : '')}" role="dialog" aria-modal="true" aria-labelledby="beanSheetTitle">
       <div class="lib-sheet-grab" aria-hidden="true"></div>
@@ -183,6 +214,7 @@ export function renderBeanSheet(enter = false): void {
       ${_sheetPrimary(bean)}
       <div class="lib-sheet-body">${renderBeanCard(bean, beans)}</div>
     </section>`;
+  if (openForms) restoreOpenSheetForms(openForms, formId => document.getElementById(formId));
   host.classList?.add('open');
   // Re-apply an aroma highlight that was active before this rebuild (the fresh
   // SVG has no is-hl classes of its own).
