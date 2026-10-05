@@ -406,9 +406,11 @@ func TestRoute_SettingsPost_ClearPassword(t *testing.T) {
 // TestRoute_SettingsPost_UseDiscoveredPassword is the #1431 counterpart for
 // the discovered-broker password: with no explicit password,
 // useDiscoveredPassword:true stores the Supervisor-discovered broker's
-// password, and a non-empty password in the same request still wins.
+// password when the request names that same broker, and a non-empty password
+// in the same request still wins. A literal private host is used because the
+// request's host must both match the discovered one and pass the SSRF guard.
 func TestRoute_SettingsPost_UseDiscoveredPassword(t *testing.T) {
-	disc := fakeSupervisor{body: `{"data":{"host":"core-mosquitto","port":1883,"username":"ha-mqtt","password":"discovered-secret"}}`}
+	disc := fakeSupervisor{body: `{"data":{"host":"192.168.1.50","port":1883,"username":"u","password":"discovered-secret"}}`}
 
 	// No explicit password -> the discovered one is stored.
 	_, repo, m := newRoutes(t, &fakeAdapter{}, disc)
@@ -454,6 +456,44 @@ func TestRoute_SettingsPost_UseDiscoveredPasswordNoBroker(t *testing.T) {
 	}
 	if repo.GetSettings().Password != "stored-secret" {
 		t.Fatalf("stored password = %q, want it untouched", repo.GetSettings().Password)
+	}
+}
+
+// TestRoute_SettingsPost_UseDiscoveredPasswordBrokerMismatch is the #1431
+// follow-up regression test: the discovered password may only be stored
+// together with the discovered broker's own host/port/username. A request
+// that names a different broker must 400 and leave the stored settings
+// untouched, so the Home Assistant broker password is never forwarded to an
+// attacker-named broker.
+func TestRoute_SettingsPost_UseDiscoveredPasswordBrokerMismatch(t *testing.T) {
+	disc := fakeSupervisor{body: `{"data":{"host":"core-mosquitto","port":1883,"username":"ha-mqtt","password":"discovered-secret"}}`}
+
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"different host", `{"transport":"mqtt","host":"evil.example.com","port":1883,"username":"ha-mqtt","prefix":"gaggiuino","useDiscoveredPassword":true}`},
+		{"different port", `{"transport":"mqtt","host":"core-mosquitto","port":1884,"username":"ha-mqtt","prefix":"gaggiuino","useDiscoveredPassword":true}`},
+		{"different username", `{"transport":"mqtt","host":"core-mosquitto","port":1883,"username":"someone-else","prefix":"gaggiuino","useDiscoveredPassword":true}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, repo, m := newRoutes(t, &fakeAdapter{}, disc)
+			if _, err := repo.SaveSettings(Settings{
+				Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+				Username: "u", Password: "stored-secret", Prefix: "gaggiuino",
+			}); err != nil {
+				t.Fatalf("SaveSettings: %v", err)
+			}
+
+			rec := do(t, m, http.MethodPost, "/api/mqtt/settings", tc.body)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("POST status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+			}
+			stored := repo.GetSettings()
+			if stored.Host != "192.168.1.50" || stored.Password != "stored-secret" {
+				t.Fatalf("mismatched discovery changed stored settings: %+v", stored)
+			}
+		})
 	}
 }
 
