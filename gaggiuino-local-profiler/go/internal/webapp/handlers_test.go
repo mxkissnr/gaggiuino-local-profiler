@@ -17,6 +17,7 @@ func testHandlers(t *testing.T) *Handlers {
 		"manifest.json":       {Data: []byte(`{"name":"GLP"}`)},
 		"sw.js":               {Data: []byte("/* service worker */")},
 		"assets/app-abc.js":   {Data: []byte("console.log(1)")},
+		"assets/x-abc.js":     {Data: []byte("console.log(2)")},
 		"countries-110m.json": {Data: []byte(`{"type":"Topology"}`)},
 	})
 }
@@ -184,6 +185,36 @@ func TestStatic_HTMLFileGetsNoCache(t *testing.T) {
 	}
 	if rec.Header().Get("Cache-Control") != "no-cache, no-store, must-revalidate" {
 		t.Errorf("a served .html file must carry no-cache headers, got %q", rec.Header().Get("Cache-Control"))
+	}
+}
+
+// TestStatic_ImmutableHashedAssets covers #1404: content-hashed files under
+// assets/ get a year-long immutable Cache-Control, while the un-hashed public
+// files stay uncached and index.html keeps its existing no-cache headers.
+func TestStatic_ImmutableHashedAssets(t *testing.T) {
+	mux := http.NewServeMux()
+	testHandlers(t).RegisterRoutes(mux)
+
+	const immutable = "public, max-age=31536000, immutable"
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{"/assets/x-abc.js", immutable},
+		{"/assets/app-abc.js", immutable},
+		{"/manifest.json", ""},
+		{"/sw.js", ""},
+		{"/index.html", "no-cache, no-store, must-revalidate"},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s: status = %d, want 200", tc.path, rec.Code)
+			continue
+		}
+		if got := rec.Header().Get("Cache-Control"); got != tc.want {
+			t.Errorf("GET %s: Cache-Control = %q, want %q", tc.path, got, tc.want)
+		}
 	}
 }
 
