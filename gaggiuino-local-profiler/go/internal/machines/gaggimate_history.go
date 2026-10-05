@@ -61,6 +61,7 @@ var gaggiMateFieldDefs = []gaggiMateFieldDef{
 	{10, "ev", 10},
 	{11, "pr", 100},
 	{12, "systemInfo", 0},
+	{13, "wp", 10},
 }
 
 type gaggiMateSlogResult struct {
@@ -81,7 +82,7 @@ type gaggiMateSample struct {
 	fl, tf            float64
 	pf, vf            float64
 	v, ev             float64
-	pr                float64
+	pr, wp            float64
 	bleScaleConnected bool
 	hasTickMs         bool
 	hasTT, hasCT      bool
@@ -89,7 +90,7 @@ type gaggiMateSample struct {
 	hasFL, hasTF      bool
 	hasPF, hasVF      bool
 	hasV, hasEV       bool
-	hasPR             bool
+	hasPR, hasWP      bool
 	hasSystemInfo     bool
 }
 
@@ -181,18 +182,37 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 	if len(data) >= 110 {
 		s.finalWeight = float64(binary.LittleEndian.Uint16(data[108:110])) / 10
 	}
-	// Build list of active fields from mask.
+	// Build list of active fields from mask, in bit order. Each set bit
+	// occupies a fixed width in the sample record: v6 widened the elapsed-ms
+	// field (bit 0) to uint32, and an unknown bit (a field this parser does
+	// not know yet) still consumes its 2 bytes so it cannot shift the fields
+	// that follow (#1397).
 	type activeField struct {
 		key   string
 		scale float64
+		width int
 	}
 	var active []activeField
-	for _, f := range gaggiMateFieldDefs {
-		if fieldsMask&(1<<f.bit) != 0 {
-			active = append(active, activeField{f.key, f.scale})
+	computedSampleSize := 0
+	for bit := uint(0); bit < 32; bit++ {
+		if fieldsMask&(1<<bit) == 0 {
+			continue
 		}
+		width := 2
+		if bit == 0 && s.version >= 6 {
+			width = 4
+		}
+		computedSampleSize += width
+		af := activeField{width: width}
+		for _, f := range gaggiMateFieldDefs {
+			if f.bit == bit {
+				af.key = f.key
+				af.scale = f.scale
+				break
+			}
+		}
+		active = append(active, af)
 	}
-	computedSampleSize := len(active) * 2
 	// deviceSampleSize is a single attacker-controlled byte (data[5]).
 	// Trusting a value smaller than what the active fieldsMask actually
 	// needs turns available/maxSamples below into a huge, disproportionate
@@ -224,52 +244,60 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 			var sm gaggiMateSample
 			off := base
 			for _, af := range active {
-				if off+2 > base+sampleSize {
+				if off+af.width > base+sampleSize {
 					break
 				}
-				raw := int16(binary.LittleEndian.Uint16(data[off : off+2]))
-				off += 2
+				// Fields whose upstream type is uint16 (tt, ct, tp, cp, v,
+				// ev, pr, wp) are read unsigned; fl, tf, pf, vf stay int16.
 				switch af.key {
 				case "t":
-					sm.tickMs = float64(raw) * float64(s.sampleIntervalMs)
+					if af.width == 4 {
+						sm.tickMs = float64(binary.LittleEndian.Uint32(data[off : off+4]))
+					} else {
+						sm.tickMs = float64(int16(binary.LittleEndian.Uint16(data[off:off+2]))) * float64(s.sampleIntervalMs)
+					}
 					sm.hasTickMs = true
 				case "tt":
-					sm.tt = float64(raw) / af.scale
+					sm.tt = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasTT = true
 				case "ct":
-					sm.ct = float64(raw) / af.scale
+					sm.ct = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasCT = true
 				case "tp":
-					sm.tp = float64(raw) / af.scale
+					sm.tp = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasTP = true
 				case "cp":
-					sm.cp = float64(raw) / af.scale
+					sm.cp = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasCP = true
 				case "fl":
-					sm.fl = float64(raw) / af.scale
+					sm.fl = float64(int16(binary.LittleEndian.Uint16(data[off:off+2]))) / af.scale
 					sm.hasFL = true
 				case "tf":
-					sm.tf = float64(raw) / af.scale
+					sm.tf = float64(int16(binary.LittleEndian.Uint16(data[off:off+2]))) / af.scale
 					sm.hasTF = true
 				case "pf":
-					sm.pf = float64(raw) / af.scale
+					sm.pf = float64(int16(binary.LittleEndian.Uint16(data[off:off+2]))) / af.scale
 					sm.hasPF = true
 				case "vf":
-					sm.vf = float64(raw) / af.scale
+					sm.vf = float64(int16(binary.LittleEndian.Uint16(data[off:off+2]))) / af.scale
 					sm.hasVF = true
 				case "v":
-					sm.v = float64(raw) / af.scale
+					sm.v = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasV = true
 				case "ev":
-					sm.ev = float64(raw) / af.scale
+					sm.ev = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasEV = true
 				case "pr":
-					sm.pr = float64(raw) / af.scale
+					sm.pr = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasPR = true
+				case "wp":
+					sm.wp = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
+					sm.hasWP = true
 				case "systemInfo":
-					sm.bleScaleConnected = raw&0x04 != 0
+					sm.bleScaleConnected = int16(binary.LittleEndian.Uint16(data[off:off+2]))&0x04 != 0
 					sm.hasSystemInfo = true
 				}
+				off += af.width
 			}
 			s.samples = append(s.samples, sm)
 		}
@@ -293,6 +321,7 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 	puckFlow := make([]any, n)
 	volumetricFlow := make([]any, n)
 	puckResistance := make([]any, n)
+	waterPumped := make([]any, n)
 	var bleScaleConnected bool // true if any sample had BLE scale data
 
 	for i, sm := range slog.samples {
@@ -360,6 +389,9 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 		if sm.hasPR {
 			puckResistance[i] = sm.pr
 		}
+		if sm.hasWP {
+			waterPumped[i] = sm.wp
+		}
 	}
 
 	profileName := slog.profileName
@@ -398,6 +430,7 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 			"puckFlow":       puckFlow,
 			"volumetricFlow": volumetricFlow,
 			"puckResistance": puckResistance,
+			"waterPumped":    waterPumped,
 		},
 	}
 }
