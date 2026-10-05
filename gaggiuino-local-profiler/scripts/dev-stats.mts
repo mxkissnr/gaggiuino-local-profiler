@@ -362,7 +362,7 @@ export function historyScope(
         // A repo without origin refs returns empty output rather than failing, so
         // an actual throw means something else broke. Say so instead of silently
         // publishing branch-dependent numbers — that silence is what hid #529.
-        const detail = err instanceof Error ? err.message : String(err);
+        const detail = err instanceof Error ? err.message : 'unexpected non-Error thrown';
         console.warn(`dev-stats: could not read origin refs in ${dir}, falling back to HEAD (numbers will depend on the checked-out branch): ${detail}`);
     }
     return 'HEAD';
