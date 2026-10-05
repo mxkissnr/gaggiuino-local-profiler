@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sync"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
@@ -150,7 +151,12 @@ func sanitizeScalar(v any) (any, bool) {
 }
 
 // Handlers serves the ui-prefs REST routes.
-type Handlers struct{ repo *Repository }
+type Handlers struct {
+	repo *Repository
+	// mu serialises the read-merge-write in put so two concurrent PUTs carrying
+	// different keys cannot both read the old object and lose one update.
+	mu sync.Mutex
+}
 
 func NewHandlers(repo *Repository) *Handlers { return &Handlers{repo: repo} }
 
@@ -170,14 +176,27 @@ func (h *Handlers) get(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, prefs)
 }
 
-// put is a partial update: the body is merged into the stored object, a null
-// value deletes its key, and the merged result must pass Sanitize. The
-// response is the full stored object.
+// put is a partial update: the body is merged into the stored object and a null
+// value deletes its key. Only the keys the caller actually sent are validated
+// for the 400 response; a stored value that no longer passes Sanitize is dropped
+// silently from the result instead of rejecting the whole merge, so one stale
+// key cannot block every later PUT. The response is the full stored object.
+//
+// The read-merge-write runs under h.mu: the app is a single process over one
+// SQLite file, and without the lock two requests carrying different keys could
+// both read the old object and the later save would drop the other's key.
 func (h *Handlers) put(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSONBody(w, r)
 	if !ok {
 		return
 	}
+	// Issues here are the caller's to fix, because they name keys it just sent.
+	if _, issues := Sanitize(body); len(issues) > 0 {
+		httputil.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "Validation failed", "issues": issues})
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	stored, err := h.repo.Get()
 	if err != nil {
 		httputil.InternalError(w, "uiprefs", err)
@@ -193,6 +212,20 @@ func (h *Handlers) put(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		merged[k] = v
+	}
+	// Drop stored entries that no longer validate instead of rejecting: the
+	// caller can only fix the keys it sent, not an old one it never touched.
+	for k, v := range merged {
+		if !keyRe.MatchString(k) {
+			delete(merged, k)
+			continue
+		}
+		cleanedValue, ok := sanitizeValue(v)
+		if !ok {
+			delete(merged, k)
+			continue
+		}
+		merged[k] = cleanedValue
 	}
 	cleaned, issues := Sanitize(merged)
 	if len(issues) > 0 {

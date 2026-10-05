@@ -47,9 +47,10 @@ func newTestDB(t *testing.T) *sql.DB {
 // a real machine host — see internal/machines/ssrf.go/helpers_test.go's
 // own allowLoopbackMachineHost seam, which is unexported and not reachable
 // from this package). Only GetStatus/GetLiveSensorSnapshot/
-// GetLiveSystemState are ever called by poll.go; every other method is a
-// stub that would fail loudly (panic) if this package's code path ever
-// changed to call it, rather than silently returning zero values.
+// GetLiveSystemState are ever called by poll.go. Every other method is a
+// stub that fails loudly (panic) unless a test opts in through its
+// function field (the profile methods below; ListProfiles defaults to
+// the configured list), rather than silently returning zero values.
 type fakeAdapter struct {
 	mu            sync.Mutex
 	status        machines.Status
@@ -62,12 +63,13 @@ type fakeAdapter struct {
 	profileBodies map[string]json.RawMessage
 	profileErrs   map[string]error
 
-	// Opt-in stubs for the three profile-mutation methods — nil means
+	// Opt-in stubs for the profile methods the sync sweep calls — nil means
 	// "this test never expects a call", same notImplemented-panics
 	// convention as every other unset field here (profile_sync_test.go).
 	createProfileFn func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error)
 	updateProfileFn func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error)
 	deleteProfileFn func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error)
+	listProfilesFn  func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error)
 }
 
 var _ machines.Adapter = (*fakeAdapter)(nil)
@@ -109,8 +111,11 @@ func (f *fakeAdapter) notImplemented(name string) error {
 	panic("fakeAdapter: unexpected call to " + name)
 }
 
-func (f *fakeAdapter) ListProfiles(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
-	return nil, f.notImplemented("ListProfiles")
+func (f *fakeAdapter) ListProfiles(ctx context.Context, m *machines.Machine) ([]machines.ProfileSummary, error) {
+	if f.listProfilesFn != nil {
+		return f.listProfilesFn(ctx, m)
+	}
+	return f.profiles, f.profilesErr
 }
 func (f *fakeAdapter) GetProfile(context.Context, *machines.Machine, string) (json.RawMessage, error) {
 	return nil, f.notImplemented("GetProfile")
