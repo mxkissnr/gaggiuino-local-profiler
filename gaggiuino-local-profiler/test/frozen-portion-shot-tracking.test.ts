@@ -3,8 +3,7 @@ import type { CoffeeLibrary, LibraryRow } from '../public-src/state/index.js';
 
 // annotation.js imports state.js, which reads localStorage/navigator at
 // module load time — stub the minimum browser globals needed so the module
-// graph can be imported under vitest's node environment (same pattern as
-// test/milk-deduct-gate.test.js).
+// graph can be imported under vitest's node environment.
 // globalThis carries the full DOM type; stub only the sliver state.js reads.
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
