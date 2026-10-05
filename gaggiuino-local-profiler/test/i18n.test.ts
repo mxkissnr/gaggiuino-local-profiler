@@ -119,6 +119,14 @@ describe('index.html i18n wiring', () => {
         expect(html).toMatch(/id="shareCardBtn"[^>]*data-i18n-title="share_card_tooltip"/);
     });
 
+    it('wires the idle firmware-update hint to machine_update_available (#1409)', () => {
+        // The idle warning list is filled from JS; only the update hint is a
+        // plain data-i18n text node, so it must stay child-element-free.
+        expect(html).toMatch(/<p[^>]*id="liveIdleUpdateHint"[^>]*data-i18n="machine_update_available"[^>]*>Firmware-Update auf der Maschine verfügbar<\/p>/);
+        expect(html).toMatch(/<p[^>]*id="liveIdleWarnings"[^>]*><\/p>/);
+        expect(html).not.toMatch(/<p[^>]*id="liveIdleWarnings"[^>]*data-i18n=/);
+    });
+
     it('backup download control is no longer a plain <a href> (would 401 outside HA ingress)', () => {
         expect(html).not.toMatch(/<a[^>]*id="backupDownloadBtn"[^>]*href=/);
         expect(html).toMatch(/<button[^>]*id="backupDownloadBtn"/);
