@@ -1,0 +1,144 @@
+name: Track red dev
+
+# Strict "require branches to be up to date" is off for dev, so two PRs that
+# are each green on their own can still break dev once both are merged. Nobody
+# is notified because no PR is open any more — see #1418. This workflow opens
+# a `dev-red` tracking issue when the latest real result of the dev CI or the
+# dev image build is a failure, and closes it again on the next green result.
+#
+# Only push runs on dev count (workflow_run.branches already limits it to dev;
+# pull_request runs are ignored). A manual workflow_dispatch of the dev build
+# is a legitimate real result on dev, so it is included too.
+
+on:
+  workflow_run:
+    workflows: ["Test and build", "Build dev channel image"]
+    types: [completed]
+    branches: [dev]
+
+permissions:
+  issues: write
+  actions: read
+
+concurrency:
+  group: dev-red-tracking
+  cancel-in-progress: false
+
+jobs:
+  track:
+    name: Open or close the dev-red tracking issue
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch'
+    steps:
+      - name: Evaluate dev CI state
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const watched = ['test.yaml', 'build-dev.yaml'];
+            const LABEL = 'dev-red';
+
+            // Latest real result per workflow; cancelled/skipped runs say
+            // nothing about the state of dev, so look further back.
+            const latest = {};
+            for (const file of watched) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo,
+                workflow_id: file,
+                branch: 'dev',
+                status: 'completed',
+                per_page: 30,
+              });
+              const runs = data.workflow_runs.filter(r => r.event === 'push' || r.event === 'workflow_dispatch');
+              const real = runs.filter(r => r.conclusion !== 'cancelled' && r.conclusion !== 'skipped');
+              latest[file] = { run: real[0], runs: real };
+            }
+
+            const known = watched.map(f => latest[f]).filter(l => l.run);
+            const failing = known.filter(l => ['failure', 'timed_out'].includes(l.run.conclusion));
+            const red = failing.length > 0;
+            const green = !red && known.length === watched.length && known.every(l => l.run.conclusion === 'success');
+
+            try {
+              await github.rest.issues.createLabel({
+                owner, repo,
+                name: LABEL,
+                color: 'b60205',
+                description: 'dev branch CI is red',
+              });
+            } catch (e) {
+              if (e.status !== 422) throw e; // 422 = label already exists
+            }
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner, repo, labels: LABEL, state: 'open', per_page: 10,
+            });
+            const tracking = open.find(i => !i.pull_request);
+
+            const firstLine = async (sha) => {
+              const { data: c } = await github.rest.repos.getCommit({ owner, repo, ref: sha });
+              return c.commit.message.split('\n')[0];
+            };
+
+            if (red && !tracking) {
+              const lines = [];
+              for (const l of failing) {
+                const r = l.run;
+                lines.push(`- ${r.name}: ${r.html_url} (${r.conclusion})`);
+                lines.push(`  - head commit: ${r.head_sha.slice(0, 7)} ${await firstLine(r.head_sha)}`);
+                const lastGreen = l.runs.find(x => x.conclusion === 'success');
+                if (lastGreen) {
+                  lines.push(`  - compare since last green: https://github.com/${owner}/${repo}/compare/${lastGreen.head_sha}...${r.head_sha}`);
+                }
+              }
+              const body = [
+                'The latest result of the dev CI is a failure:',
+                '',
+                ...lines,
+                '',
+                'Fix forward or revert; this issue closes itself on the next green dev run.',
+              ].join('\n');
+              const { data: created } = await github.rest.issues.create({
+                owner, repo,
+                title: `dev is red: ${failing[0].run.name} failed`,
+                labels: ['bug', LABEL],
+                body,
+              });
+              core.info(`Red: opened tracking issue #${created.number}.`);
+            } else if (red && tracking) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number: tracking.number, per_page: 100,
+              });
+              const haystack = [tracking.body || '', ...comments.map(c => c.body || '')].join('\n');
+              let added = 0;
+              for (const l of failing) {
+                const r = l.run;
+                if (haystack.includes(`/actions/runs/${r.id}`)) {
+                  core.info(`Red: run ${r.id} already mentioned in #${tracking.number}, skipping.`);
+                  continue;
+                }
+                await github.rest.issues.createComment({
+                  owner, repo,
+                  issue_number: tracking.number,
+                  body: `Still red: ${r.name} failed: ${r.html_url}\nHead commit: ${r.head_sha.slice(0, 7)} ${await firstLine(r.head_sha)}`,
+                });
+                added++;
+              }
+              core.info(`Red: tracking issue #${tracking.number} exists, added ${added} comment(s).`);
+            } else if (green && tracking) {
+              const r = context.payload.workflow_run;
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: tracking.number,
+                body: `dev is green again: ${r.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner, repo,
+                issue_number: tracking.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+              core.info(`Green: closed tracking issue #${tracking.number}.`);
+            } else {
+              core.info(`Nothing to do (red=${red}, green=${green}, tracking=${tracking ? '#' + tracking.number : 'none'}).`);
+            }
