@@ -14,7 +14,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/evanw/esbuild v0.28.2
-	github.com/goccy/go-json v0.11.1
+	github.com/goccy/go-json v0.11.2
 	github.com/google/jsonschema-go v0.4.3
 	github.com/kanrichan/resvg-go v0.0.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0

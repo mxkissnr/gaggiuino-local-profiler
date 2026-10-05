@@ -1,5 +1,5 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints }    from '../../utils.js';
+import { mapShotDatapoints, isoToGerman } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 
@@ -38,9 +38,14 @@ type BeanRecord = {
 
 // ── Bean age ───────────────────────────────────────────────────────────────
 
+// Roast dates reach us as the server's ISO storage format (`YYYY-MM-DD`,
+// see validateBagRoastDate in go/internal/library/handlers_beans.go) or as
+// the German `DD.MM.YYYY` typed by hand. isoToGerman turns the former into
+// the latter and passes the latter through untouched, so one split covers
+// both; anything else falls through to NaN.
 function _parseDMY(str: string | null | undefined): number {
   if (!str) return NaN;
-  const p = str.split('.');
+  const p = isoToGerman(str).split('.');
   if (p.length !== 3) return NaN;
   const [day = '', month = '', year = ''] = p;
   return new Date(+year, +month - 1, +day).getTime();
