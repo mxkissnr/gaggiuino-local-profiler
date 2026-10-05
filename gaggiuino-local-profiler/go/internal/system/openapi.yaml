@@ -137,6 +137,14 @@ components:
         milkType:        { type: integer, nullable: true, description: Barista-order milk type id (orders feature) }
         score:           { type: number, nullable: true, description: Score snapshot read by the live view's reference-shot selector }
 
+    AnnotateResult:
+      type: object
+      required: [ok, annotation, score]
+      properties:
+        ok:         { type: boolean, example: true }
+        annotation: { $ref: '#/components/schemas/Annotation' }
+        score:      { type: integer, nullable: true, description: "Computed 0-100 score after the change; null when the shot has too little data to score" }
+
     Shot:
       type: object
       description: >
@@ -1284,7 +1292,9 @@ paths:
         Merges the posted fields into the shot's stored annotation: a key
         omitted from the body keeps its stored value, while a key sent as
         null or "" clears it. The orderedBy attribution is server-owned and
-        cannot be changed here.
+        cannot be changed here. Milk stock and frozen-portion counts follow a
+        drinkType/milkType/frozenPortionId change in the same save: the
+        previous choice is booked back and the new one booked out.
       parameters:
         - name: id
           in: path
@@ -1296,7 +1306,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/Annotation' }
       responses:
-        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/AnnotateResult' } } } }
         "400": { description: Invalid shot ID, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/shots/{id}/trash:

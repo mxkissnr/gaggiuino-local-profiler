@@ -450,7 +450,7 @@ export interface paths {
         put?: never;
         /**
          * Save or update annotation for a shot
-         * @description Merges the posted fields into the shot's stored annotation: a key omitted from the body keeps its stored value, while a key sent as null or "" clears it. The orderedBy attribution is server-owned and cannot be changed here.
+         * @description Merges the posted fields into the shot's stored annotation: a key omitted from the body keeps its stored value, while a key sent as null or "" clears it. The orderedBy attribution is server-owned and cannot be changed here. Milk stock and frozen-portion counts follow a drinkType/milkType/frozenPortionId change in the same save: the previous choice is booked back and the new one booked out.
          */
         post: {
             parameters: {
@@ -473,7 +473,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Ok"];
+                        "application/json": components["schemas"]["AnnotateResult"];
                     };
                 };
                 /** @description Invalid shot ID */
@@ -7007,6 +7007,13 @@ export interface components {
             milkType?: number | null;
             /** @description Score snapshot read by the live view's reference-shot selector */
             score?: number | null;
+        };
+        AnnotateResult: {
+            /** @example true */
+            ok: boolean;
+            annotation: components["schemas"]["Annotation"];
+            /** @description Computed 0-100 score after the change; null when the shot has too little data to score */
+            score: number | null;
         };
         /** @description Raw shot record from the Gaggiuino machine, enriched with annotation and trash metadata by the add-on. */
         Shot: {
