@@ -444,6 +444,9 @@ func TestSecurityHeaders(t *testing.T) {
 			"font-src 'self' data:; " +
 			"img-src 'self' data: blob:; " +
 			"connect-src 'self'; " +
+			"base-uri 'none'; " +
+			"object-src 'none'; " +
+			"form-action 'self'; " +
 			"frame-ancestors 'self';",
 	}
 	for header, expected := range want {

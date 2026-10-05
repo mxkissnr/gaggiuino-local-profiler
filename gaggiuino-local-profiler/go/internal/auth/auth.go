@@ -169,6 +169,9 @@ func SecurityHeaders(next http.Handler) http.Handler {
 				"font-src 'self' data:; "+
 				"img-src 'self' data: blob:; "+
 				"connect-src 'self'; "+
+				"base-uri 'none'; "+
+				"object-src 'none'; "+
+				"form-action 'self'; "+
 				"frame-ancestors 'self';")
 		next.ServeHTTP(w, r)
 	})
