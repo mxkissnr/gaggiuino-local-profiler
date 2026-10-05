@@ -147,7 +147,7 @@ async function fixtureResponse(entry: FixtureEntry, pathname: string, deltaMs: n
     // JSON fixtures get their recorded wall-clock timestamps moved to the
     // present (and the machine reported online); anything else — photos,
     // downloads, plain text — is replayed byte-for-byte.
-    const isJson = String(entry.contentType || '').split(';')[0].trim().toLowerCase() === 'application/json';
+    const isJson = (String(entry.contentType || '').split(';')[0] ?? '').trim().toLowerCase() === 'application/json';
     if (isJson) {
         const text = await response.text();
         try {
