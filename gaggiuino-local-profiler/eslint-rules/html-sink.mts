@@ -10,7 +10,7 @@
 // The rule only inspects the *value* half of a sink; `el.innerHTML = html`...``
 // therefore stays allowed, which is the point of the branding work.
 
-import { ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
+import { AST_NODE_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
 import type ts from 'typescript';
 
 const SINK_PROPERTIES = new Set(['innerHTML', 'outerHTML']);
@@ -26,11 +26,11 @@ function isHtmlValue(checker: ts.TypeChecker, type: ts.Type): boolean {
 
 function memberPropertyName(member: TSESTree.MemberExpression): string | null {
   if (member.computed) {
-    return member.property.type === 'Literal' && typeof member.property.value === 'string'
+    return member.property.type === AST_NODE_TYPES.Literal && typeof member.property.value === 'string'
       ? member.property.value
       : null;
   }
-  return member.property.type === 'Identifier' ? member.property.name : null;
+  return member.property.type === AST_NODE_TYPES.Identifier ? member.property.name : null;
 }
 
 export const htmlSinkRule: TSESLint.RuleModule<'htmlSink', []> = {
@@ -62,7 +62,7 @@ export const htmlSinkRule: TSESLint.RuleModule<'htmlSink', []> = {
     const checker = services.program.getTypeChecker();
 
     const checkValue = (node: TSESTree.Node | undefined): void => {
-      if (!node || node.type === 'SpreadElement') return;
+      if (!node || node.type === AST_NODE_TYPES.SpreadElement) return;
       const tsNode = services.esTreeNodeToTSNodeMap.get(node);
       if (!tsNode) return;
       if (!isHtmlValue(checker, checker.getTypeAtLocation(tsNode))) {
@@ -72,7 +72,7 @@ export const htmlSinkRule: TSESLint.RuleModule<'htmlSink', []> = {
 
     return {
       AssignmentExpression(node) {
-        if (node.left.type === 'MemberExpression') {
+        if (node.left.type === AST_NODE_TYPES.MemberExpression) {
           const name = memberPropertyName(node.left);
           if (name !== null && SINK_PROPERTIES.has(name)) {
             checkValue(node.right);
@@ -82,7 +82,7 @@ export const htmlSinkRule: TSESLint.RuleModule<'htmlSink', []> = {
       CallExpression(node) {
         const callee = node.callee;
         if (
-          callee.type === 'MemberExpression' &&
+          callee.type === AST_NODE_TYPES.MemberExpression &&
           memberPropertyName(callee) === 'insertAdjacentHTML'
         ) {
           checkValue(node.arguments[1]);
