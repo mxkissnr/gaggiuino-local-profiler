@@ -64,7 +64,7 @@ function canvasFingerprint(sel: string): number | null {
     const host = document.querySelector(sel);
     const canvas = host && (host.tagName === 'CANVAS' ? (host as HTMLCanvasElement) : host.querySelector<HTMLCanvasElement>('canvas'));
     if (!canvas || !canvas.width || !canvas.height) return null;
-    let ctx: CanvasRenderingContext2D | null = null;
+    let ctx: CanvasRenderingContext2D | null;
     try { ctx = canvas.getContext('2d'); } catch { return null; }
     if (!ctx) return null;
     const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -194,7 +194,7 @@ async function main(): Promise<void> {
 
     const baseUrl = await bootServer();
     if (fromBackup) {
-        const result = await restoreBackup(baseUrl, path.resolve(backupPath as string));
+        const result = await restoreBackup(baseUrl, path.resolve(backupPath));
         console.log(`Restored backup ${backupPath ?? ''} (${result.shots ?? 0} shots)`);
     } else {
         await seed(baseUrl);
