@@ -282,6 +282,16 @@ func TestPushDirtyProfiles_PendingDelete_HardDeletesLocallyOnSuccess(t *testing.
 	}
 }
 
+// shortenPushTimeout shrinks the per-call profile push timeout for the
+// duration of a test, so the lost-reply scenarios below run against the same
+// short deadline they would on a real machine.
+func shortenPushTimeout(t *testing.T) {
+	t.Helper()
+	old := profilePushTimeout
+	profilePushTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { profilePushTimeout = old })
+}
+
 // TestPushOneProfile_CreateTimeoutAdoptsProfileOnNextSweep reproduces
 // #1405's create case: the first push's CreateProfile reply is lost (times
 // out) but the machine stored the profile anyway. The next sweep must adopt
@@ -292,6 +302,7 @@ func TestPushOneProfile_CreateTimeoutAdoptsProfileOnNextSweep(t *testing.T) {
 	p, sqlDB := newTestPoller(t, fake)
 	repo := machines.NewProfilesRepository(sqlDB)
 	p.SetProfilesRepo(repo)
+	shortenPushTimeout(t)
 
 	row, err := repo.UpsertDirty(1, nil, nil, "Timed Out", json.RawMessage(`{"label":"Timed Out"}`))
 	if err != nil {
@@ -416,6 +427,7 @@ func TestPushOneProfile_DeleteTimeoutHardDeletesWhenAlreadyGone(t *testing.T) {
 	p, sqlDB := newTestPoller(t, fake)
 	repo := machines.NewProfilesRepository(sqlDB)
 	p.SetProfilesRepo(repo)
+	shortenPushTimeout(t)
 
 	if err := repo.UpsertSynced(1, "gm-1", "To Delete", json.RawMessage(`{}`), false); err != nil {
 		t.Fatalf("UpsertSynced: %v", err)
