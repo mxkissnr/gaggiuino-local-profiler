@@ -414,6 +414,15 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 		tx.Rollback()
 		return 0, fmt.Errorf("machines: clearing table: %w", err)
 	}
+	// The machine is the source of truth for its profiles, and a restored id
+	// may now name a different physical machine, so drop the local cache/outbox
+	// too — otherwise a leftover row (or one still pending a push) would be
+	// synced to whatever machine now owns that id. The next profile sync
+	// rebuilds the cache from each machine.
+	if _, err := tx.Exec(`DELETE FROM machine_profiles`); err != nil {
+		tx.Rollback()
+		return 0, fmt.Errorf("machines: clearing profile cache: %w", err)
+	}
 	stmt, err := tx.Prepare(
 		`INSERT INTO machines (id, name, type, host, switch_entity, theme, has_water_sensor, is_default, enabled, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
 	)

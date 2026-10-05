@@ -5,6 +5,7 @@
 - **Reorder opens the shop page a bean was imported from.** (#1373)
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
+- **Restoring a backup no longer pushes leftover profile edits to a machine that now has a different address.** Closes #1406
 - **View, filter and sort choices made shortly before closing the app or while offline are no longer lost, and one invalid setting can no longer stop syncing.** Closes #1403
 - **A slow GaggiMate no longer ends up with duplicate profiles after a profile save timed out.** Closes #1405
 - **Creating a profile whose name matches a different profile already on the machine no longer risks overwriting it.** Part of #1405
