@@ -6,6 +6,7 @@
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
 ### Fixed
 - **The sticker cut-out explains when its tools could not be downloaded and no longer spins forever when the browser stops the cut-out.** (#1404, #1399)
+- **The sticker cut-out no longer gives up on a slow first download that is still making progress, and a full disk is reported as a storage problem.** Part of #1404
 - **The Analytics month calendar moves on to the new month when the app stays open over a month change.** Closes #1401
 - **Restoring a backup no longer pushes leftover profile edits to a machine that now has a different address.** Closes #1406
 - **View, filter and sort choices made shortly before closing the app or while offline are no longer lost, and one invalid setting can no longer stop syncing.** Closes #1403
