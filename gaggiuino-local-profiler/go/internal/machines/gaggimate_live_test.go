@@ -343,6 +343,48 @@ func TestGaggiMateWaitForStatus_MergesPartialFrames(t *testing.T) {
 	}
 }
 
+// TestGaggiMateLiveClient_ShotSavedEventFiresHook covers #1409: firmware
+// v1.9.0+ announces a new history shot with evt:history-shot-saved, which must
+// fire the installed hook exactly once — while the evt:status frame that
+// follows must not fire it again.
+func TestGaggiMateLiveClient_ShotSavedEventFiresHook(t *testing.T) {
+	allowLoopbackMachineHost(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+		ctx := r.Context()
+		_ = conn.Write(ctx, websocket.MessageText, []byte(`{"tp":"evt:history-shot-saved","id":42}`))
+		_ = conn.Write(ctx, websocket.MessageText, []byte(`{"tp":"evt:status","ct":91.0}`))
+		<-ctx.Done()
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := newGaggiMateLiveClient()
+	c.idleTimeout = time.Hour
+	t.Cleanup(c.DisconnectAll)
+
+	var fired atomic.Int32
+	c.setOnShotSaved(func() { fired.Add(1) })
+
+	c.Status(srv.URL)
+	waitUntil(t, time.Second, func() bool {
+		st, ok := c.Status(srv.URL)
+		return fired.Load() == 1 && ok && st["ct"] == 91.0
+	})
+
+	// The status frame that arrives after the event must not fire the hook.
+	time.Sleep(30 * time.Millisecond)
+	if n := fired.Load(); n != 1 {
+		t.Fatalf("shot-saved hook fired %d times, want exactly 1 (a status frame must not fire it)", n)
+	}
+}
+
 func waitUntil(t *testing.T, d time.Duration, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(d)
