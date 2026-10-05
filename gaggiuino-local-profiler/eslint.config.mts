@@ -129,6 +129,11 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   }),
+  // Not ported in this slice (#1270): public-src/public/sw.js and
+  // demo/sw/demo-sw.js + demo/sw/sw-core.js become TypeScript in slices 2 and 3,
+  // and test/e2e/smoke.test.mjs in a later slice. They stay .js here, so the
+  // service-worker block above matches nothing yet and the existing classic-JS
+  // blocks still apply; slice 9 removes those blocks.
   ...tseslint.config({
     files: ['test/**/*.ts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
