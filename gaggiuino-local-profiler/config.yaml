@@ -75,3 +75,9 @@ schema:
   enable_orders: bool?
   debug_logging: bool?
   expose_api_port: bool?
+
+# Home Assistant backups skip the downloaded cut-out models: they are ~60 MB of
+# regenerable data the app re-downloads on first use, so a backup should not
+# carry them.
+backup_exclude:
+  - "*/cutout-models"

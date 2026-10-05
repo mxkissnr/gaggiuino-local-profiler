@@ -19,6 +19,7 @@
 - **Photos cached by the browser before the previous fix are re-checked too, so a replaced photo appears after a normal reload.** (#1357)
 - **The sticker cut-out now works in the installed app, not just in the Vite dev preview: the worker script is bundled into the image build.** Closes #1354
 ### Changed
+- **Updates are about 60 MB smaller: the sticker cut-out downloads its models once, the first time you use it.** (#1404)
 - **Frozen beans hang icicles under their bag on the shelf, and the open label no longer covers the bag photo.** Part of #1350
 - **On a phone a bean closes with a swipe down, and the flavour wheel grows out of the small wheel to full screen instead of opening behind the bean.** (#1374)
 - **The flavour wheel now sits right in a bean's details, and the large wheel opens on the full overview with readable labels and a legend.** (#1350)
