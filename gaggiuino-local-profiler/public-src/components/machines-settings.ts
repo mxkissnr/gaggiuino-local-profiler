@@ -10,7 +10,7 @@ import * as machinesApi from '../api/machines.js';
 import { getUiPref, setUiPref } from '../ui-prefs.js';
 import { t, tHtml } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
-import { WARNING_ICON_SVG, CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
+import { CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
 import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-presets.js';
 import { migrateLegacyAccent } from '../theme.js';
@@ -382,7 +382,6 @@ export function renderMachinesList(): void {
       <span class="machine-row-name">${escapeHtml(m.name)}</span>
       <span class="machine-row-type">${m.type === 'gaggimate' ? html`GaggiMate` : html`Gaggiuino`}</span>
       <span class="machine-row-shot-count">${tHtml('settings_machine_shot_count', shotCount)}</span>
-      ${m.type === 'gaggimate' ? html`<span class="machine-row-badge-experimental" title="${escapeHtml(t('settings_machine_type_gaggimate'))}">${WARNING_ICON_SVG} ${tHtml('settings_machine_experimental_badge')}</span>` : html``}
       ${m.isDefault ? html`<span class="machine-row-badge">${tHtml('settings_machine_default')}</span>` : html``}
       ${isGaggiuino ? html`<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : html``}
       <span class="machine-row-actions">

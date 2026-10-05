@@ -630,7 +630,6 @@
         .machine-row-type { font-size: var(--fs-1); color:var(--gray-500); background:var(--gray-900); border-radius:var(--radius); padding: 2px var(--sp-2); }
         .machine-row-shot-count { font-size: var(--fs-1); color:var(--gray-500); }
         .machine-row-badge { font-size: var(--fs-1); color:var(--err); background:rgba(239,68,68,.15); border-radius:var(--radius); padding: 2px var(--sp-2); }
-        .machine-row-badge-experimental { font-size: var(--fs-1); color:#f59e0b; background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.35); border-radius:var(--radius); padding: 2px var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         /* #1046: firmware status badge, moved here from #machineFormCard
            (#1044) so update-available is visible on the row without opening
            Edit. .machine-row-firmware-panel is a plain flex sibling of the
