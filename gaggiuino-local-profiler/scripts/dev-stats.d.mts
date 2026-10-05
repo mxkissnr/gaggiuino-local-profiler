@@ -9,6 +9,11 @@ export function historyScope(
 ): '--remotes=origin' | 'HEAD';
 export function monthsSinceStart(firstDateStr: string | null | undefined, today?: Date): number;
 export function clusterIntoSessions(timestampsMs: number[]): number;
+export function subscriptionCostSentence(
+  monthsCount: number,
+  firstDate: string | null | undefined,
+  costUsd: number,
+): string;
 export interface BarChartItem {
   label: string;
   value: number;

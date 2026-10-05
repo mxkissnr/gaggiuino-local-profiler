@@ -252,7 +252,7 @@ export function isAiCoAuthor(name) {
     return !NON_AI_COAUTHOR_PATTERNS.some(re => re.test(name));
 }
 
-// #1100: billing-type classification for the cost section. Claude is Max's
+// #1100: billing-type classification for the cost section. Claude is the maintainer's
 // flat-rate Claude Pro subscription (CLAUDE_PRO_MONTHLY_USD above); every
 // other model is billed by usage through its own API and has no flat
 // subscription cost derivable from git history. An unrecognized future
@@ -414,6 +414,10 @@ function statsForRepo(repo) {
 
 function fmtDate(d) { return d || '?'; }
 
+export function subscriptionCostSentence(monthsCount, firstDate, costUsd) {
+    return `The maintainer pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. Counting every calendar month touched since the first commit (${fmtDate(firstDate)}), ${monthsCount} month${monthsCount === 1 ? '' : 's'} works out to **$${costUsd.toFixed(2)}** for every Claude-model commit combined, regardless of which Claude model did the work.`;
+}
+
 function main() {
     const results = REPOS.map(statsForRepo).filter(Boolean);
     if (!results.length) {
@@ -497,7 +501,7 @@ function main() {
     lines.push('');
     lines.push('## Cost');
     lines.push('');
-    lines.push(`Max pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. ${monthsSinceStartCount} month${monthsSinceStartCount === 1 ? '' : 's'} since the first commit (${fmtDate(combined.firstDate)}) works out to **$${subscriptionCostUsd.toFixed(2)}** for every Claude-model commit combined, regardless of which Claude model did the work.`);
+    lines.push(subscriptionCostSentence(monthsSinceStartCount, combined.firstDate, subscriptionCostUsd));
     lines.push('');
     lines.push('This assumes a continuous subscription for the whole span — it does not account for any gaps where the subscription might have lapsed.');
     lines.push('');
