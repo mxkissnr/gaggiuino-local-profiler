@@ -32,6 +32,14 @@
 // ship no worker file. The worker's hashed output name is injected into the
 // page bundle as __GLP_SEGMENT_WORKER__ (see segment.ts).
 //
+// The worker's onnxruntime-web runtime is not served from a models directory
+// either (#1404): the two ort-wasm-simd-threaded runtime files are copied into
+// assets/ under content-hashed names and those names injected into the worker
+// bundle as __GLP_ORT_WASM__/__GLP_ORT_MJS__ (see segment-core.ts), so the SPA
+// owns them and internal/webapp can safely serve everything under assets/
+// immutable. Both bundles also receive the pinned model manifest
+// (internal/cutoutmodels) as __GLP_CUTOUT_MODELS__.
+//
 // esbuild resolves the SPA's bare imports (echarts, chart.js/auto,
 // topojson-client) out of node_modules, so the dependency tree is still a
 // prerequisite — but only `npm ci`, never `npm run build`: no Vite bundle is
@@ -46,6 +54,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -56,6 +65,7 @@ import (
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/cutoutmodels"
 )
 
 func main() {
@@ -230,6 +240,26 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 		return err
 	}
 
+	// The worker bundle imports onnxruntime-web, which loads its wasm module
+	// from env.wasm.wasmPaths at run time. Copy the two runtime files next to
+	// the worker under content-hashed names and inject those names below, so the
+	// worker resolves them same-origin from assets/ (#1404). The pair is fixed,
+	// so a missing source is a hard error like the rest of the build.
+	ortDist := filepath.Join(nodeModulesAbs, "onnxruntime-web", "dist")
+	ortNames := make(map[string]string, len(ortRuntimeFiles))
+	for _, f := range ortRuntimeFiles {
+		name, err := copyHashedAsset(filepath.Join(ortDist, f.base+f.ext), assetsDir, f.base, f.ext)
+		if err != nil {
+			return fmt.Errorf("copy onnxruntime %s: %w", f.base+f.ext, err)
+		}
+		ortNames[f.ext] = name
+	}
+
+	modelsDefine, err := cutoutModelsDefine()
+	if err != nil {
+		return fmt.Errorf("render cut-out model manifest: %w", err)
+	}
+
 	// The worker is validated and built first so its hashed output name can be
 	// handed to the page bundles through Define. Splitting is off: the worker
 	// is a single file, and onnxruntime-web is inlined (it loads its own wasm
@@ -244,6 +274,13 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 	}
 	workerOpts := baseBundleOptions(rootAbs, assetsDir, nodeModulesAbs)
 	workerOpts.EntryPoints = []string{workerEntry}
+	// segment-core.ts reads these to point onnxruntime-web at the hashed assets
+	// copied above, and to size each model download from the pinned manifest.
+	workerOpts.Define = map[string]string{
+		"__GLP_ORT_WASM__":      strconv.Quote("./" + ortNames[".wasm"]),
+		"__GLP_ORT_MJS__":       strconv.Quote("./" + ortNames[".mjs"]),
+		"__GLP_CUTOUT_MODELS__": modelsDefine,
+	}
 	workerResult := api.Build(workerOpts)
 	if len(workerResult.Errors) > 0 {
 		return buildError("worker build", workerResult.Errors)
@@ -269,6 +306,7 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 	// name under the identifier segment.ts reads (#1354).
 	opts.Define = map[string]string{
 		"__GLP_SEGMENT_WORKER__": strconv.Quote("./" + filepath.Base(workerOut)),
+		"__GLP_CUTOUT_MODELS__":  modelsDefine,
 	}
 	// style.css's three @font-face url()s are the only imported non-JS assets;
 	// everything else the SPA pulls in is either a fetch() against a path
@@ -451,6 +489,59 @@ func copyPublicDir(publicDir, outDir string) error {
 		return err
 	}
 	return os.CopyFS(outDir, os.DirFS(publicDir))
+}
+
+// ortRuntimeFile names one of the onnxruntime-web 1.30 runtime files the worker
+// needs beside it, by its extension-free base and extension.
+type ortRuntimeFile struct {
+	base string
+	ext  string
+}
+
+// ortRuntimeFiles is the fixed pair of onnxruntime-web runtime files the worker
+// bundle imports at run time (#1404): the wasm module and its JS loader. They
+// ship from node_modules/onnxruntime-web/dist and are copied into assets/ under
+// content-hashed names, so the SPA owns them same-origin and internal/webapp
+// can serve all of assets/ immutable.
+var ortRuntimeFiles = []ortRuntimeFile{
+	{base: "ort-wasm-simd-threaded", ext: ".wasm"},
+	{base: "ort-wasm-simd-threaded", ext: ".mjs"},
+}
+
+// copyHashedAsset copies one source file into assetsDir as
+// base-<first 8 hex of sha256><ext> and returns the written file name. The name
+// is content-derived, which is what makes everything under assets/ safe to
+// serve with a year-long immutable Cache-Control (internal/webapp).
+func copyHashedAsset(src, assetsDir, base, ext string) (string, error) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	name := fmt.Sprintf("%s-%x%s", base, sum[:4], ext)
+	if err := os.WriteFile(filepath.Join(assetsDir, name), data, 0o644); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+// cutoutModelsDefine renders the pinned model manifest (internal/cutoutmodels)
+// as the JSON object both bundles read through __GLP_CUTOUT_MODELS__: the
+// release version plus a name->bytes size map. Later slices use the sizes to
+// size a download-on-first-use fetch before the response reports a length.
+func cutoutModelsDefine() (string, error) {
+	sizes := make(map[string]int64, len(cutoutmodels.Files))
+	for _, f := range cutoutmodels.Files {
+		sizes[f.Name] = f.Size
+	}
+	raw, err := json.Marshal(struct {
+		Version string           `json:"version"`
+		Sizes   map[string]int64 `json:"sizes"`
+	}{Version: cutoutmodels.Version, Sizes: sizes})
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 // writePageHTML mirrors what Vite's HTML plugin does to a source page: strip
