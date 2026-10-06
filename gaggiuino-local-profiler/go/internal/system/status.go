@@ -28,6 +28,7 @@ type statusMachine struct {
 	Reachable       *bool           `json:"reachable"`
 	LastError       *string         `json:"lastError,omitempty"`
 	FirmwareVersion *string         `json:"firmwareVersion,omitempty"`
+	FirmwareName    *string         `json:"firmwareName,omitempty"`
 	On              *bool           `json:"on"`
 	Theme           *machines.Theme `json:"theme"`
 }
@@ -55,6 +56,7 @@ func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaul
 			sm.LastError = st.LastError
 		}
 		sm.FirmwareVersion = st.FirmwareVersion
+		sm.FirmwareName = st.FirmwareName
 		if m.IsDefault {
 			if sm.Reachable == nil {
 				sm.Reachable = defaultReachable

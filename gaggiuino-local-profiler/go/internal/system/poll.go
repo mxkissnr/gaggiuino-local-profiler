@@ -180,6 +180,16 @@ type machinePollState struct {
 	lastError    *string // last poll/sync error, redacted
 	lastSuccess  *int64
 	version      *string // cached firmware version, nil = not sniffed yet
+	// #1454: firmwareName is the name the machine reports in its own settings
+	// (GET /api/settings/system's "machineName"), nil when the firmware does
+	// not report one. firmwareNameFetched records that the one-off fetch
+	// finished (with a name or with none), so it is not repeated every tick;
+	// firmwareNameAttempt (unix ms) throttles the retry after a failed fetch.
+	// Both reset on an unreachable->reachable transition (markReachableLocked)
+	// so a rename while the machine was away is picked up.
+	firmwareName        *string
+	firmwareNameFetched bool
+	firmwareNameAttempt int64
 	// control is the #1324 opt-in machine-control snapshot for this machine,
 	// refreshed on every successful status poll and cleared on a failed poll
 	// or when live polling stops. nil when the machine has no machine control,
@@ -204,16 +214,69 @@ func (s *pollGlobalState) machine(id int64) *machinePollState {
 // markReachableLocked records a successful contact with one machine. An
 // unreachable->reachable transition clears the machine's cached firmware
 // version (#1197 point 3, #1201) so a version that changed while it was away
-// is re-sniffed from the next status poll or shot. Caller holds p.state.mu.
+// is re-sniffed from the next status poll or shot, and re-arms the #1454
+// firmware-name fetch so a rename made while the machine was away is picked
+// up. Caller holds p.state.mu.
 func markReachableLocked(m *machinePollState, now int64) {
 	wasDown := (m.reachable != nil && !*m.reachable) || (m.wasReachable != nil && !*m.wasReachable)
 	if wasDown {
 		m.version = nil
+		m.firmwareNameFetched = false
+		m.firmwareNameAttempt = 0
 	}
 	reachable := true
 	m.reachable = &reachable
 	m.lastError = nil
 	m.lastSuccess = &now
+}
+
+// maybeFetchFirmwareName reads a Gaggiuino's user-chosen machine name from its
+// firmware settings once per reachable stretch (#1454). The GET runs outside
+// p.state.mu because it is a network call; a failure leaves firmwareNameFetched
+// false so the next poll retries, throttled by firmwareNameRetryInterval so a
+// persistently erroring settings endpoint never costs one extra request per 1s
+// tick. A GaggiMate reports no such name, so it is skipped entirely.
+func (p *Poller) maybeFetchFirmwareName(ctx context.Context, machine *machines.Machine, adapter machines.Adapter) {
+	if machine.Type != "gaggiuino" {
+		return
+	}
+	now := time.Now().UnixMilli()
+	p.state.mu.Lock()
+	ms := p.state.machine(machine.ID)
+	if ms.firmwareNameFetched ||
+		(ms.firmwareNameAttempt != 0 && now-ms.firmwareNameAttempt < firmwareNameRetryInterval.Milliseconds()) {
+		p.state.mu.Unlock()
+		return
+	}
+	ms.firmwareNameAttempt = now
+	p.state.mu.Unlock()
+
+	fctx, cancel := context.WithTimeout(ctx, firmwareNameFetchTimeout)
+	defer cancel()
+	raw, err := adapter.GetSettings(fctx, machine, "system")
+	if err != nil {
+		debugLogf("system: firmware name fetch failed for machine %d: %v", machine.ID, err)
+		return
+	}
+	var parsed struct {
+		MachineName *string `json:"machineName"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		debugLogf("system: firmware name settings unmarshal failed for machine %d: %v", machine.ID, err)
+		return
+	}
+	var name *string
+	if parsed.MachineName != nil {
+		if trimmed := strings.TrimSpace(*parsed.MachineName); trimmed != "" {
+			name = &trimmed
+		}
+	}
+
+	p.state.mu.Lock()
+	ms = p.state.machine(machine.ID)
+	ms.firmwareNameFetched = true
+	ms.firmwareName = name
+	p.state.mu.Unlock()
 }
 
 // AdapterProvider is the subset of *machines.Handlers this package
@@ -307,6 +370,7 @@ type MachinePollStatus struct {
 	Reachable       *bool
 	LastError       *string
 	FirmwareVersion *string
+	FirmwareName    *string
 }
 
 // defaultMachineID resolves the configured default machine's id, or 0 when
@@ -345,7 +409,7 @@ func (p *Poller) MachineStatus(id int64) MachinePollStatus {
 	if ms == nil {
 		return MachinePollStatus{}
 	}
-	return MachinePollStatus{Reachable: ms.reachable, LastError: ms.lastError, FirmwareVersion: ms.version}
+	return MachinePollStatus{Reachable: ms.reachable, LastError: ms.lastError, FirmwareVersion: ms.version, FirmwareName: ms.firmwareName}
 }
 
 // Start runs this domain's startup sequence: load any persisted preheat
@@ -643,6 +707,12 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		}
 	}
 	p.state.mu.Unlock()
+
+	// #1454: one-off fetch of the machine's firmware-set name, gated to a
+	// Gaggiuino (a GaggiMate reports no such setting) and to once per reachable
+	// stretch. Runs after the reachability/version bookkeeping above so a
+	// markReachableLocked reset is already applied.
+	p.maybeFetchFirmwareName(ctx, machine, adapter)
 
 	// #725: unreachable->reachable recovery with an outstanding sync — catch
 	// up now instead of waiting for the next scheduled pull.

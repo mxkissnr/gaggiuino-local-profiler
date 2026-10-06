@@ -18,6 +18,15 @@ import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
 interface ProgressButton { textContent: string | null; disabled: boolean }
 interface SwitchPayload { configured?: boolean | undefined; state?: boolean | null | undefined }
 
+// One entry of /api/status's machines[] array (#317) — only the fields the
+// topbar display-name logic reads.
+interface StatusMachineEntry {
+  id?: number;
+  name?: string;
+  isDefault?: boolean;
+  firmwareName?: string | null;
+}
+
 // Shape of the /api/status body this module reads (Response.json() is `any`,
 // so naming it here keeps the untyped boundary in one place).
 interface StatusPayload {
@@ -31,6 +40,7 @@ interface StatusPayload {
   machineReachable?: boolean | null;
   machineHostname?: string | null;
   machineVersion?: string | null;
+  machines?: StatusMachineEntry[];
   glpVersion?: string | null;
   devBuild?: string | null;
   ordersFeature?: boolean;
@@ -141,21 +151,37 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // actually owns the viewed shot — this global/default-machine value
     // would otherwise clobber it on the next 30s poll tick regardless of
     // which machine's shot is on screen.
-    if (s.machineHostname) {
-      if (!S.primaryShotId) {
-        const el = document.getElementById('machineSubtitle');
-        if (el) el.textContent = s.machineVersion
-          ? `${s.machineHostname} · ${s.machineVersion}`
-          : s.machineHostname;
+    //
+    // #1454: the display name prefers the name the machine reports in its own
+    // firmware settings, then the name configured in GLP, and only falls back
+    // to the hostname. The machines[] entries (unlike machineHostname) need no
+    // auth token, so a name still renders on an unauthenticated response.
+    const machineEntries = s.machines ?? [];
+    const displayNameFor = (targetId?: string | number | null): string | null => {
+      const wanted = targetId != null && targetId !== 'all' ? String(targetId) : null;
+      const scoped = wanted ? machineEntries.find(m => String(m.id) === wanted) : undefined;
+      const entry = scoped ?? machineEntries.find(m => m.isDefault);
+      if (entry) {
+        const name = entry.firmwareName || entry.name;
+        if (name) return name;
       }
-      // #447: railMachineName (topbar) is the active/default machine, not
-      // the viewed shot's machine — it must always reflect s.machineHostname,
-      // unlike machineSubtitle above. Since mobile opens straight into shot
-      // detail (#431), S.primaryShotId is almost always set, so bundling this
-      // into the same guard left it permanently blank on mobile.
-      const railNameEl = document.getElementById('railMachineName');
-      if (railNameEl) railNameEl.textContent = s.machineHostname;
+      return s.machineHostname ?? null;
+    };
+    const subtitleName = displayNameFor(machineId);
+    if (subtitleName && !S.primaryShotId) {
+      const el = document.getElementById('machineSubtitle');
+      if (el) el.textContent = s.machineVersion
+        ? `${subtitleName} · ${s.machineVersion}`
+        : subtitleName;
     }
+    // #447: railMachineName (topbar) is the active/default machine, not
+    // the viewed shot's machine — it must always reflect the default machine,
+    // unlike machineSubtitle above. Since mobile opens straight into shot
+    // detail (#431), S.primaryShotId is almost always set, so bundling this
+    // into the same guard left it permanently blank on mobile.
+    const railName = displayNameFor(null);
+    const railNameEl = document.getElementById('railMachineName');
+    if (railNameEl && railName) railNameEl.textContent = railName;
     if (s.glpVersion) {
       const vEl = document.getElementById('glpVersionBadge');
       // s.devBuild is only ever present on the dev-channel image (see

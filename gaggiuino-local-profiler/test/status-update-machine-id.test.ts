@@ -56,6 +56,7 @@ function makeFakeDocument() {
 describe('updateStatus(machineId) — #464', () => {
   let doc: ReturnType<typeof makeFakeDocument>;
   let fetchCalls: string[];
+  let statusPayload: Record<string, unknown>;
 
   beforeEach(() => {
     doc = makeFakeDocument();
@@ -65,6 +66,7 @@ describe('updateStatus(machineId) — #464', () => {
     S.primaryShotId = null;
     S.currentLang = 'en';
 
+    statusPayload = { lastSync: '2026-01-01T00:00:00.000Z', machineHostname: 'kitchen.local' };
     fetchCalls = [];
     // `json: async () => …` would trip @typescript-eslint/require-await.
     g.fetch = vi.fn((url: unknown) => {
@@ -72,7 +74,7 @@ describe('updateStatus(machineId) — #464', () => {
       if (String(url).startsWith('api/status')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z', machineHostname: 'kitchen.local' }),
+          json: () => Promise.resolve(statusPayload),
         } as unknown as Response);
       }
       return Promise.resolve({ ok: false } as unknown as Response); // api/switch
@@ -107,5 +109,43 @@ describe('updateStatus(machineId) — #464', () => {
 
     expect(doc.getElementById('railMachineName').textContent).toBe('kitchen.local');
     expect(doc.getElementById('railStatusDot').className).toBe('status-dot ok');
+  });
+
+  // #1454: the scoped response's machines[] entries drive the topbar name. The
+  // subtitle follows the requested machineId, the rail stays on the default
+  // entry (#447), and the firmware name wins over the GLP name.
+  it('shows the requested machine\'s firmware name in the subtitle and the default name on the rail', async () => {
+    statusPayload = {
+      lastSync: '2026-01-01T00:00:00.000Z',
+      machineHostname: 'kitchen.local',
+      machineVersion: '1.2.3',
+      machines: [
+        { id: 1, name: 'Kitchen', isDefault: true },
+        { id: 7, name: 'Second', firmwareName: 'GC-07' },
+      ],
+    };
+
+    await updateStatus(7);
+
+    expect(doc.getElementById('machineSubtitle').textContent).toBe('GC-07 · 1.2.3');
+    expect(doc.getElementById('railMachineName').textContent).toBe('Kitchen');
+  });
+
+  it('falls back to the GLP name, then the hostname, when no firmware name is reported', async () => {
+    statusPayload = {
+      lastSync: '2026-01-01T00:00:00.000Z',
+      machineHostname: 'kitchen.local',
+      machines: [{ id: 1, name: 'Kitchen', isDefault: true }],
+    };
+    await updateStatus();
+    expect(doc.getElementById('railMachineName').textContent).toBe('Kitchen');
+
+    statusPayload = {
+      lastSync: '2026-01-01T00:00:00.000Z',
+      machineHostname: 'kitchen.local',
+      machines: [{ id: 1, isDefault: true }],
+    };
+    await updateStatus();
+    expect(doc.getElementById('railMachineName').textContent).toBe('kitchen.local');
   });
 });
