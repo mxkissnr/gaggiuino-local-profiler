@@ -24,6 +24,32 @@ declare global {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- formatter signatures are per-key; t() forwards the caller's args verbatim
 export type TranslationValue = string | ((...args: any[]) => string);
 
+// The interpolation object the "Did you know?" fact sentences receive (#1467).
+// Every field is required so the formatter parameters are typed instead of
+// `any`, which keeps the lint rules (no-unsafe-member-access,
+// restrict-template-expressions) happy. A caller only fills the fields its own
+// sentence reads.
+export interface FactVars {
+  avg: string | number;
+  count: string | number;
+  date: string;
+  days: string | number;
+  from: string;
+  hours: string | number;
+  len: string | number;
+  litres: string;
+  min: string | number;
+  minutes: string | number;
+  n: string | number;
+  nextL: string | number;
+  score: string | number;
+  seconds: string | number;
+  shots: string | number;
+  to: string;
+  toNext: string | number;
+  weekday: string;
+}
+
 // Canonical dictionary shape, anchored to the en locale (t()'s fallback
 // source). Indexable by string so dynamic keys (data-i18n attributes) work.
 export interface Translations {

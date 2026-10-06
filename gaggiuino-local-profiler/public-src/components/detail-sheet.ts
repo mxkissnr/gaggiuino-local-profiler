@@ -1,8 +1,8 @@
 // Shared detail popover (#1467): one overlay for small title/sub/body details,
 // first used by the coffee-year day cells and reused by the score-trend point
-// popover, the origin-map country click-through and the bean shelf. On phones
-// it is a bottom sheet; from 900px up, when an anchor is given, it becomes a
-// popover floating next to that anchor.
+// popover, the origin-map country click-through, the bean shelf and the
+// "Did you know?" fact cards. On phones it is a bottom sheet; from 900px up,
+// when an anchor is given, it becomes a popover floating next to that anchor.
 
 import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';

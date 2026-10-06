@@ -78,7 +78,8 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
 import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanShelf, buildProfileChart, _renderCalendar,
-         openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail, setDialinProgressionBean } from './views/analytics.js';
+         openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail, setDialinProgressionBean,
+         openFactDetail, shuffleFacts } from './views/analytics.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
          renderMaintenanceDashboard, maintStatusLabel,
@@ -1024,6 +1025,8 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'set-bean-shelf-sort': setBeanShelfSort(el.dataset.sort === 'shots' ? 'shots' : 'score'); break;
       case 'expand-bean-shelf':   expandBeanShelf(); break;
       case 'analytics-bean':      openBeanShelfDetail(el.dataset.name!, el); break;
+      case 'analytics-fact':      openFactDetail(el.dataset.fact!, el); break;
+      case 'analytics-facts-shuffle': shuffleFacts(); break;
       case 'open-bean-shelf-in-library':
         closeDetailSheet();
         switchMode('library');
