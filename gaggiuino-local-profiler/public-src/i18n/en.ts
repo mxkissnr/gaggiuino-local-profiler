@@ -250,6 +250,7 @@ const en: Translations = {
     analytics_time_of_day:'Time of Day', analytics_no_time:'No shot time data yet.',
     analytics_heatmap:'Weekday × Hour',
     analytics_bean_shelf:'Beans by score',
+    analytics_more:'More insights', analytics_more_count:(n)=>`${n} insights`,
     analytics_shelf_sort_score:'Score', analytics_shelf_sort_shots:'Shots',
     analytics_shelf_show_all:(n)=>`Show all ${n}`, analytics_shelf_perfect:'Perfect shots',
     analytics_open_in_library:'Open in library',
