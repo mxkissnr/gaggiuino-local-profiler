@@ -174,6 +174,12 @@ export type FirmwareProgress = components['schemas']['FirmwareProgress'];
 /** POST/PUT /api/machines body — the fields the Settings machine form sends. */
 export type MachineSaveInput = components['schemas']['MachineSaveInput'];
 
+/** GET/POST /api/machine/control/settings — the opt-in machine-control toggle (#1324). */
+export type MachineControlSettings = components['schemas']['MachineControlSettings'];
+
+/** GET /api/live/data's machineControl snapshot for the default machine (#1324). */
+export type MachineControlState = components['schemas']['MachineControlState'];
+
 // ── MQTT (go/internal/mqtt) ──────────────────────────────────────────────
 
 /**
