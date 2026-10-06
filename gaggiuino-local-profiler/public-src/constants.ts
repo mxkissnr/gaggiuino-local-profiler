@@ -66,6 +66,17 @@ export const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
   YE: [48.52, 15.55],  ZM: [27.85, -13.13], ZW: [29.15, -19.02],
 };
 
+// ── Home countries (ISO alpha-2 → topojson numeric id) ────────────────────
+// The country the user brews in, resolved from the browser locale (#1467):
+// routes on the world map run from each origin to this home point. Kept
+// separate from COFFEE_COUNTRIES (that list is origins only) and small on
+// purpose — an unknown home simply means the map draws no routes.
+export const HOME_COUNTRY_NUM: Record<string, string> = {
+  DE: '276', AT: '040', CH: '756', NL: '528', BE: '056', FR: '250', IT: '380',
+  ES: '724', GB: '826', US: '840', CA: '124', AU: '036', PL: '616', SE: '752',
+  DK: '208', NO: '578', FI: '246', IE: '372', PT: '620', CZ: '203',
+};
+
 export const VARIETY_SUGGESTIONS: string[] = ['Bourbon', 'Geisha',
   'Typica', 'Caturra', 'Catuai', 'SL28', 'SL34', 'Pacamara', 'Maragogype'];
 
