@@ -515,3 +515,76 @@ func TestPollViaGaggiuinoStatus_MQTTOnlyForGaggiuinoDefault(t *testing.T) {
 		})
 	}
 }
+
+// TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling pins #1498's sampling
+// guard: while the runtime is in standby the poll tick records no preheat
+// samples, even if a run is somehow still open, so the history never absorbs
+// the cold standby period.
+func TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	// Deliberately open a run and flag standby without the transition's close,
+	// so the sampling gate is what this test exercises (not the closed run).
+	onAt := time.Now().UnixMilli() - 60_000
+	p.openPreheatRun(onAt)
+	p.runtime.SetStandby(true)
+
+	st := okStatus(t, `{"waterLevel":80,"upTime":1234}`, 35.0, 0, 0, 0, false, "", 0)
+	st.Standby = true
+	fake.setStatus(st, nil)
+
+	p.pollViaGaggiuinoStatus(context.Background())
+
+	runs := p.PreheatHistory()
+	if len(runs) == 0 {
+		t.Fatal("expected the pre-opened run to still be present")
+	}
+	if n := len(runs[0].Samples); n != 0 {
+		t.Errorf("preheat run has %d samples, want 0 while in standby", n)
+	}
+}
+
+// TestPollViaGaggiuinoStatus_ErrorClearsStandby pins #1498's review fix: an
+// unreachable machine is not in standby, so a poll error clears the runtime
+// flag and /api/preheat then reports standby false.
+func TestPollViaGaggiuinoStatus_ErrorClearsStandby(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	p.runtime.SetStandby(true)
+	fake.setStatus(machinesStatusZero(), errBoom)
+
+	p.pollViaGaggiuinoStatus(context.Background())
+
+	if p.runtime.Get().Standby {
+		t.Error("Standby = true, want false after a poll error")
+	}
+	if p.PreheatStatus().Standby {
+		t.Error("PreheatStatus().Standby = true, want false after a poll error")
+	}
+}
+
+// TestPollViaGaggiuinoStatus_StandbyKeepsTempHistoryEmpty pins #1498's review
+// fix: standby readings never enter the temp history, so the poll tick cannot
+// accumulate cold standby samples towards a false stability.
+func TestPollViaGaggiuinoStatus_StandbyKeepsTempHistoryEmpty(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	p.runtime.SetStandby(true)
+	st := okStatus(t, `{"waterLevel":80,"upTime":1234}`, 30.0, 90.0, 0, 0, false, "", 0)
+	st.Standby = true
+	fake.setStatus(st, nil)
+
+	for i := 0; i < tempStableMin; i++ {
+		p.pollViaGaggiuinoStatus(context.Background())
+	}
+
+	p.runtime.mu.Lock()
+	n := len(p.runtime.tempHistory)
+	p.runtime.mu.Unlock()
+	if n != 0 {
+		t.Errorf("temp history len = %d, want 0 across standby ticks", n)
+	}
+}

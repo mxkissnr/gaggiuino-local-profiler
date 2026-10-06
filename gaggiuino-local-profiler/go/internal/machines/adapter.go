@@ -14,6 +14,8 @@ import (
 // per-machine-type dispatch.
 
 // Status is an adapter's GetStatus return shape.
+// Standby is true only when the machine itself reports a standby/sleep mode
+// (GaggiMate's evt:status m == 0); Gaggiuino never sets it.
 // TargetTemperature/Weight/SteamOn/ProfileID/ProfileName are pointers
 // because the GaggiMate adapter reports several as null (evt:status has no
 // weight field at all, no profile id, etc. — see gaggimate_adapter.go).
@@ -24,6 +26,7 @@ type Status struct {
 	Pressure          float64         `json:"pressure"`
 	Weight            *float64        `json:"weight"`
 	Brewing           bool            `json:"brewing"`
+	Standby           bool            `json:"standby"`
 	SteamOn           *bool           `json:"steamOn"`
 	ProfileID         *int            `json:"profileId"`
 	ProfileName       *string         `json:"profileName"`

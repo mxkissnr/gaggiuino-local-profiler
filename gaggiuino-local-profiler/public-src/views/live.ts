@@ -66,6 +66,9 @@ interface PreheatData {
   remaining: number;
   pct?: number;
   preheatTime?: number;
+  // #1498: true only when the machine itself reports standby/sleep (GaggiMate);
+  // a standby machine is off, so it must not count down to "ready".
+  standby?: boolean;
 }
 
 // The sticky, per-machine pre-shot setup draft persisted to localStorage.
@@ -518,7 +521,14 @@ export function updatePreheatWidget(d: PreheatData): void {
   _lastPreheat = d;
   syncMachineIcon(_lastLiveMsg);
 
-  if (d.ready) {
+  // #1498: a GaggiMate in standby is off, so neither the "ready" badge nor a
+  // warming countdown may show — the payload can still carry a stale remaining.
+  // The idle title is owned by the live-data handler (handleLiveData prefers
+  // machine_standby and keeps its unreachable branch first); don't write it here.
+  if (d.standby) {
+    readyBadge.style.display  = 'none';
+    warmingWrap.style.display = 'none';
+  } else if (d.ready) {
     readyBadge.style.display  = '';
     warmingWrap.style.display = 'none';
   } else if (d.remaining > 0) {
@@ -754,9 +764,11 @@ export function handleLiveData(msg: LiveMessage): void {
   // idea.
   // machineReachable == null means "never polled yet" (startup) — show
   // connecting rather than "Maschine bereit" which implies confirmed reachability.
+  const standby      = !!_lastPreheat?.standby;
   const stillWarming = _lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0;
   const neverPolled  = msg.machineReachable == null;
-  if (idleTitleEl) idleTitleEl.textContent = neverPolled ? t('live_connecting') : stillWarming ? t('preheat_warming') : t('machine_ready');
+  // #1498: a standby GaggiMate is off — say so instead of "warming"/"ready".
+  if (idleTitleEl) idleTitleEl.textContent = standby ? t('machine_standby') : neverPolled ? t('live_connecting') : stillWarming ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
   // #902: idle stats row -- always kept current (not gated behind the true-

@@ -32,6 +32,7 @@ import (
 // buildPreheatResponse below.
 type PreheatStatus struct {
 	Ready             bool     `json:"ready"`
+	Standby           bool     `json:"standby"`
 	Elapsed           int      `json:"elapsed"`
 	Remaining         int      `json:"remaining"`
 	Pct               float64  `json:"pct"`
@@ -56,7 +57,7 @@ func (p *Poller) PreheatInfo() (ready bool, remainingMin int) {
 	preheatMins := loadPreheatMinutes()
 	preheatMs := int64(preheatMins) * 60_000
 	snap := p.runtime.Get()
-	machineOff := !snap.MachineOn && p.defaultSwitchEntity() != ""
+	machineOff := snap.Standby || (!snap.MachineOn && p.defaultSwitchEntity() != "")
 	if machineOff || snap.SwitchOnAt == nil {
 		return false, preheatMins
 	}
@@ -92,10 +93,10 @@ func (p *Poller) buildPreheatResponse() PreheatStatus {
 	plannedSwitchOnAt := p.state.plannedSwitchOnAt
 	p.state.mu.Unlock()
 
-	machineOff := !snap.MachineOn && p.defaultSwitchEntity() != ""
+	machineOff := snap.Standby || (!snap.MachineOn && p.defaultSwitchEntity() != "")
 	if machineOff || snap.SwitchOnAt == nil {
 		return PreheatStatus{
-			Ready: false, Elapsed: 0, Remaining: preheatMins * 60, Pct: 0,
+			Ready: false, Standby: snap.Standby, Elapsed: 0, Remaining: preheatMins * 60, Pct: 0,
 			PreheatTime: preheatMins, Temp: snap.CurrentTemp, TargetTemp: snap.CurrentTargetTemp,
 			ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt,
 		}
@@ -118,7 +119,7 @@ func (p *Poller) buildPreheatResponse() PreheatStatus {
 	stabilityReady := ready && snap.StabilityReady
 
 	return PreheatStatus{
-		Ready: ready, Elapsed: elapsed, Remaining: remaining, Pct: pct, PreheatTime: preheatMins,
+		Ready: ready, Standby: snap.Standby, Elapsed: elapsed, Remaining: remaining, Pct: pct, PreheatTime: preheatMins,
 		StabilityReady: &stabilityReady, Temp: snap.CurrentTemp, TargetTemp: snap.CurrentTargetTemp,
 		ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt,
 	}

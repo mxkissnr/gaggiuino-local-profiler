@@ -30,6 +30,40 @@ func TestGaggiMateAdapter_GetStatus(t *testing.T) {
 	}
 }
 
+// TestGaggiMateAdapter_GetStatus_StandbyMapping pins #1498: only a frame that
+// carries the m key maps to standby, and only m == 0 does. A fast-only frame
+// without m (no slow state merged in) must not flip a running machine to
+// standby.
+func TestGaggiMateAdapter_GetStatus_StandbyMapping(t *testing.T) {
+	allowLoopbackMachineHost(t)
+
+	cases := []struct {
+		name   string
+		status map[string]any
+		want   bool
+	}{
+		{"m == 0 is standby", map[string]any{"tp": "evt:status", "ct": 30.0, "m": 0}, true},
+		{"m == 1 is not standby", map[string]any{"tp": "evt:status", "ct": 92.5, "m": 1}, false},
+		{"no m key is not standby", map[string]any{"tp": "evt:status", "ct": 92.5}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeGaggiMateMachine()
+			fake.setStatus(tc.status)
+			defer fake.Close()
+			a := newTestGaggiMateAdapter(t)
+
+			status, err := a.GetStatus(context.Background(), testGaggiMateMachine(fake.URL))
+			if err != nil {
+				t.Fatalf("GetStatus: %v", err)
+			}
+			if status.Standby != tc.want {
+				t.Errorf("Standby = %v, want %v (status: %+v)", status.Standby, tc.want, status)
+			}
+		})
+	}
+}
+
 func TestGaggiMateAdapter_ProfileListLoadSelect(t *testing.T) {
 	allowLoopbackMachineHost(t)
 	fake := newFakeGaggiMateMachine()

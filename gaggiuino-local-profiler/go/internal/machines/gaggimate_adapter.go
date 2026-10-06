@@ -82,6 +82,13 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 	}
 	steamOn := isSteaming
 
+	// Standby: the machine's own sleep/standby mode (m == 0). Only a frame
+	// that actually carries the m key counts — a fast-only frame (ct/pr/fl)
+	// merged without the slow state keys must not flip a running machine to
+	// standby.
+	_, hasMode := evt["m"]
+	standby := hasMode && looseFloat(evt["m"]) == 0
+
 	// Weight: cw (filtered scale weight) only when bc (BLE scale connected) is true.
 	var weight *float64
 	if looseTruthy(evt["bc"]) {
@@ -96,6 +103,7 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 		Pressure:          looseFloat(evt["pr"]),
 		Weight:            weight,
 		Brewing:           isBrewing,
+		Standby:           standby,
 		SteamOn:           &steamOn,
 		ProfileID:         nil,
 		ProfileName:       profileName,

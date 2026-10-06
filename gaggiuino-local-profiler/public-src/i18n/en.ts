@@ -127,6 +127,7 @@ const en: Translations = {
     easter_egg_hist_empty:'Your first shot will start the spiral.',
     live_waiting:'Waiting for shot …', live_disabled:'Live disabled (machine off)',
     machine_ready:'Machine ready',
+    machine_standby:'Standby',
     live_setup_toggle:'Set up shot', live_setup_reset:'Reset',
     ref_label:'Reference:', ref_none:'— no reference shot —', ref_clear:`${CLOSE_ICON_SVG} Clear`,
     ref_pressure:'Ref: Pressure', ref_flow:'Ref: Flow', ref_weight:'Ref: Weight', ref_temp:'Ref: Temp',
