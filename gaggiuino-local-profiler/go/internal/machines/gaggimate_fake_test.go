@@ -21,6 +21,18 @@ type fakeGaggiMateMachine struct {
 
 	mu       sync.Mutex
 	profiles []map[string]any
+	// status overrides the default evt:status frame pushed on connect when
+	// non-nil, so a test can vary the reported machine mode (e.g. m == 0,
+	// standby) without touching the shared default.
+	status map[string]any
+}
+
+// setStatus makes the fake push status as its evt:status frame instead of the
+// default one.
+func (f *fakeGaggiMateMachine) setStatus(status map[string]any) {
+	f.mu.Lock()
+	f.status = status
+	f.mu.Unlock()
 }
 
 func newFakeGaggiMateMachine() *fakeGaggiMateMachine {
@@ -41,7 +53,13 @@ func (f *fakeGaggiMateMachine) handleWS(w http.ResponseWriter, r *http.Request) 
 
 	// Push one evt:status frame immediately on connect — waitForStatus()
 	// (used by GetStatus) waits for exactly this, unsolicited.
-	statusFrame, _ := json.Marshal(map[string]any{"tp": "evt:status", "ct": 92.5, "tt": 93.0, "pr": 8.5, "m": 1, "p": "Espresso", "process": map[string]any{"a": 1, "s": "brew"}})
+	f.mu.Lock()
+	status := f.status
+	f.mu.Unlock()
+	if status == nil {
+		status = map[string]any{"tp": "evt:status", "ct": 92.5, "tt": 93.0, "pr": 8.5, "m": 1, "p": "Espresso", "process": map[string]any{"a": 1, "s": "brew"}}
+	}
+	statusFrame, _ := json.Marshal(status)
 	_ = conn.Write(ctx, websocket.MessageText, statusFrame)
 
 	for {

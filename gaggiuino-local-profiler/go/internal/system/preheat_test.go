@@ -118,3 +118,84 @@ func TestCheckReadyByPreheat_FiresSwitchOnAndClearsTarget(t *testing.T) {
 		t.Error("expected the ready-by target to be cleared after firing")
 	}
 }
+
+// TestBuildPreheatResponse_StandbyNoSwitchEntity pins #1498: with no switch
+// entity configured, a machine that reports standby must read as off — ready
+// false, elapsed 0, standby true — even once the preheat time has elapsed.
+func TestBuildPreheatResponse_StandbyNoSwitchEntity(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+
+	onAt := time.Now().UnixMilli() - 21*60_000 // past the 20-minute default
+	p.runtime.SetSwitchOnAt(&onAt)
+	p.runtime.SetStandby(true)
+
+	status := p.PreheatStatus()
+	if status.Ready {
+		t.Error("Ready = true, want false while the machine is in standby")
+	}
+	if status.Elapsed != 0 {
+		t.Errorf("Elapsed = %d, want 0 while the machine is in standby", status.Elapsed)
+	}
+	if !status.Standby {
+		t.Error("Standby = false, want true")
+	}
+}
+
+// TestBuildPreheatResponse_NoSwitchNoStandby_CountdownRuns is the Gaggiuino
+// case: with no switch entity and no standby signal, behaviour is unchanged —
+// the switchOnAt countdown still drives the response, so a switch-less
+// Gaggiuino is not mistaken for "off". Without this, gating on MachineOn (never
+// set when no switch entity is configured) would break every switch-less
+// install (#1498).
+func TestBuildPreheatResponse_NoSwitchNoStandby_CountdownRuns(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+
+	onAt := time.Now().UnixMilli() - 5*60_000 // 5 of the 20 default minutes
+	p.runtime.SetMachineOn(false)
+	p.runtime.SetStandby(false)
+	p.runtime.SetSwitchOnAt(&onAt)
+
+	status := p.PreheatStatus()
+	if status.Ready {
+		t.Error("Ready = true, want false (5 of 20 minutes elapsed)")
+	}
+	if status.Standby {
+		t.Error("Standby = true, want false")
+	}
+	if status.Elapsed < 299 || status.Elapsed > 301 {
+		t.Errorf("Elapsed = %d, want ~300s (switch-less countdown must still run)", status.Elapsed)
+	}
+}
+
+// TestApplyStandbyTransition_LeaveResetsClock pins #1498's wake-up path: a cold
+// machine leaving standby restarts the preheat clock from now, so the countdown
+// begins at zero instead of inheriting the pre-standby switchOnAt.
+func TestApplyStandbyTransition_LeaveResetsClock(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+
+	cold := 30.0
+	old := int64(0)
+	p.runtime.SetCurrentTemps(&cold, nil)
+	p.runtime.SetSwitchOnAt(&old)
+	p.runtime.SetStandby(true)
+
+	p.applyStandbyTransition(time.Now().UnixMilli(), false)
+
+	snap := p.runtime.Get()
+	if snap.Standby {
+		t.Error("Standby = true, want false after leaving standby")
+	}
+	if snap.SwitchOnAt == nil || time.Now().UnixMilli()-*snap.SwitchOnAt > 2000 {
+		t.Errorf("SwitchOnAt = %v, want reset to ~now for a cold machine", snap.SwitchOnAt)
+	}
+	status := p.PreheatStatus()
+	if status.Ready {
+		t.Error("Ready = true, want false right after the clock restarts")
+	}
+	if status.Elapsed < 0 || status.Elapsed > 2 {
+		t.Errorf("Elapsed = %d, want ~0 (countdown restarted)", status.Elapsed)
+	}
+}
