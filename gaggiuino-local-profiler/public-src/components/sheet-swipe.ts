@@ -18,7 +18,10 @@ export function shouldDismissSheet(dy: number, dtMs: number): boolean {
   return false;
 }
 
-function _isPhoneWidth(): boolean {
+// The phone/desktop split every sheet overlay shares; exported so sibling
+// overlays (components/detail-sheet.ts) branch on the same breakpoint instead
+// of duplicating the media query.
+export function isPhoneSheetWidth(): boolean {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
     && window.matchMedia('(max-width: 899px)').matches;
@@ -43,7 +46,7 @@ export function attachSheetSwipe(sheet: HTMLElement, handle: HTMLElement, onDism
   };
 
   const onDown = (e: PointerEvent): void => {
-    if (!_isPhoneWidth() || sheet.scrollTop > 0 || _isInteractiveTarget(e.target)) return;
+    if (!isPhoneSheetWidth() || sheet.scrollTop > 0 || _isInteractiveTarget(e.target)) return;
     pointerId = e.pointerId;
     startY = e.clientY;
     startT = Date.now();
