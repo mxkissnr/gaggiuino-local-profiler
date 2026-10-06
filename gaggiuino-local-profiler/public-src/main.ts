@@ -78,7 +78,7 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
 import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar,
-         setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
+         openCalendarDayDetail, setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
          renderMaintenanceDashboard, maintStatusLabel,
@@ -1021,6 +1021,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'set-maint-scope':    setMaintScope(el.dataset.scope!); break;
       case 'toggle-maint-detail': el.closest('.maint-card')?.classList.toggle('expanded'); break;
       case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key as Parameters<typeof setBeanRankSort>[0]); break;
+      case 'analytics-day':      openCalendarDayDetail(el.dataset.day!, el); break;
       case 'open-flavor-wheel':   void openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;

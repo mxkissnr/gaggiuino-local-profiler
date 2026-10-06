@@ -1,7 +1,6 @@
 import Chart from 'chart.js/auto';
 import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
-import * as timerRegistry from '../state/timers.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName } from '../constants.js';
 import { esc, html, joinHtml, scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
@@ -10,6 +9,7 @@ import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
 import { summaryLine } from './analytics-summary.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
+import { openDetailSheet } from '../components/detail-sheet.js';
 import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
 import type { ChartConfiguration, TooltipItem } from 'chart.js';
 
@@ -162,21 +162,90 @@ export function initAnalytics() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-function calcLongestStreak(shots: ShotRow[]): number {
-  if (!shots.length) return 0;
-  const days = [...new Set(shots.map(s => {
-    const d = new Date(s.timestamp * 1000);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }))].sort();
-  let max = 1, cur = 1;
-  for (let i = 1; i < days.length; i++) {
-    const day = days[i];
-    const prevDay = days[i - 1];
-    if (day === undefined || prevDay === undefined) continue;
-    const diff = (new Date(day).getTime() - new Date(prevDay).getTime()) / 86400000;
-    if (diff === 1) { max = Math.max(max, ++cur); } else cur = 1;
+// Day keys are built from LOCAL calendar fields — toISOString() is UTC and
+// shifts a late-evening shot into the next day (#1467).
+function _localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function _dayKeyOf(tsSeconds: number): string { return _localDayKey(new Date(tsSeconds * 1000)); }
+function _dateFromKey(key: string): Date {
+  const [y, m, d] = key.split('-');
+  return new Date(Number(y), Number(m) - 1, Number(d));
+}
+// Serial day number from the key's own fields, so consecutive days differ by
+// exactly one even across a DST change.
+function _dayKeyNum(key: string): number {
+  const [y, m, d] = key.split('-');
+  return Math.floor(Date.UTC(Number(y), Number(m) - 1, Number(d)) / 86400000);
+}
+function _keyFromNum(n: number): string {
+  const d = new Date(n * 86400000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+function _fmtCalendarDay(key: string, locale: string): string {
+  return _dateFromKey(key).toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+}
+
+export interface CalendarStats {
+  current: number;
+  longest: { len: number; start: string; end: string } | null;
+  busiest: { day: string; count: number } | null;
+  perfect: number;
+  perfectShare: number;
+}
+
+// Pure coffee-year numbers (#1467): current streak (consecutive days ending
+// today or yesterday), longest run with its dates, the busiest day and the
+// share of perfect (100-point) shots. Local day keys throughout.
+export function computeCalendarStats(
+  shots: ShotRow[],
+  scoreOf: (s: ShotRow) => number | null,
+  nowMs: number,
+): CalendarStats {
+  const counts = new Map<string, number>();
+  let perfect = 0;
+  for (const s of shots) {
+    const key = _dayKeyOf(s.timestamp);
+    counts.set(key, (counts.get(key) || 0) + 1);
+    const sc = scoreOf(s);
+    if (sc !== null && sc >= 100) perfect++;
   }
-  return max;
+  const perfectShare = shots.length > 0 ? Math.round((perfect / shots.length) * 100) : 0;
+
+  const nums = [...counts.keys()].map(_dayKeyNum).sort((a, b) => a - b);
+
+  let longest: CalendarStats['longest'] = null;
+  const first = nums[0];
+  if (first !== undefined) {
+    let runStart = first, runLen = 1;
+    let bestStart = first, bestLen = 1, bestEnd = first;
+    for (let i = 1; i < nums.length; i++) {
+      const n = nums[i];
+      const prev = nums[i - 1];
+      if (n === undefined || prev === undefined) continue;
+      if (n === prev + 1) runLen++;
+      else { runStart = n; runLen = 1; }
+      if (runLen > bestLen) { bestLen = runLen; bestStart = runStart; bestEnd = n; }
+    }
+    longest = { len: bestLen, start: _keyFromNum(bestStart), end: _keyFromNum(bestEnd) };
+  }
+
+  const todayNum = _dayKeyNum(_localDayKey(new Date(nowMs)));
+  let cursor: number | null = counts.has(_keyFromNum(todayNum)) ? todayNum
+    : counts.has(_keyFromNum(todayNum - 1)) ? todayNum - 1
+    : null;
+  let current = 0;
+  while (cursor !== null && counts.has(_keyFromNum(cursor))) { current++; cursor--; }
+
+  let busiest: CalendarStats['busiest'] = null;
+  for (const [day, count] of counts) {
+    if (!busiest || count > busiest.count
+      || (count === busiest.count && _dayKeyNum(day) < _dayKeyNum(busiest.day))) {
+      busiest = { day, count };
+    }
+  }
+
+  return { current, longest, busiest, perfect, perfectShare };
 }
 
 // #811: was the hardcoded #52525b (Tailwind zinc-600) on every chart's tick
@@ -214,7 +283,6 @@ export function buildSummaryKpis() {
   addPart(tHtml('analytics_summary_verdict', verdict.shots, verdict.avgScore !== null ? scoreNum(verdict.avgScore) : esc('—')));
   if (summary.delta) addPart(tHtml(`analytics_summary_delta_${summary.delta.bucket}`, scoreNum(summary.delta.avg7)));
   if (summary.context) addPart(tHtml('analytics_summary_best', esc(summary.context.name), scoreNum(summary.context.avgScore)));
-  if (summary.streakNote) addPart(tHtml('analytics_summary_streak', summary.streak));
 
   el.innerHTML = joinHtml(parts);
 
@@ -264,19 +332,15 @@ export function buildPersonalBests() {
     if (sc !== null && sc > bestScore) { bestScore = sc; bestShot = s; }
   }
 
-  const byBean: Record<string, number> = {}, byProfile: Record<string, number> = {}, byDay: Record<string, number> = {};
+  const byBean: Record<string, number> = {}, byProfile: Record<string, number> = {};
   for (const s of _shots()) {
     const bean = s.annotation?.coffee;
     if (bean) byBean[bean] = (byBean[bean] || 0) + 1;
     const prof = s.profile?.name || s.profileName;
     if (prof) byProfile[prof] = (byProfile[prof] || 0) + 1;
-    const key = new Date(s.timestamp * 1000).toISOString().slice(0, 10);
-    byDay[key] = (byDay[key] || 0) + 1;
   }
   const favBean    = Object.entries(byBean).sort((a, b) => b[1] - a[1])[0];
   const favProfile = Object.entries(byProfile).sort((a, b) => b[1] - a[1])[0];
-  const busiestDay = Object.entries(byDay).sort((a, b) => b[1] - a[1])[0];
-  const streak     = calcLongestStreak(_shots());
   const locale     = localeFor(S.currentLang);
 
   const rows: { lbl: Html; val: Html; link?: number }[] = [];
@@ -286,13 +350,8 @@ export function buildPersonalBests() {
       val: html`<span class="${esc(scoreClass(bestScore))}">${esc(bestScore)}</span> · ${esc(d)}`,
       link: bestShot.id });
   }
-  if (streak > 0) rows.push({ lbl: tHtml('analytics_longest_streak'), val: tHtml('analytics_days', streak) });
   if (favBean)    rows.push({ lbl: tHtml('analytics_fav_bean'),    val: html`${esc(favBean[0])} <span class="bests-count">${esc(favBean[1])} ${tHtml('bean_stat_shots')}</span>` });
   if (favProfile) rows.push({ lbl: tHtml('analytics_fav_profile'), val: html`${esc(favProfile[0])} <span class="bests-count">${esc(favProfile[1])} ${tHtml('bean_stat_shots')}</span>` });
-  if (busiestDay) {
-    const d = new Date(busiestDay[0]).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-    rows.push({ lbl: tHtml('analytics_busiest_day'), val: html`${esc(d)} <span class="bests-count">${esc(busiestDay[1])} ${tHtml('bean_stat_shots')}</span>` });
-  }
 
   el.innerHTML = html`<div class="bests-list">${joinHtml(rows.map(r =>
     html`<div class="bests-row"><span class="bests-lbl">${r.lbl}</span><span class="bests-val">${r.val}${
@@ -573,84 +632,195 @@ export function buildTrendChart() {
 }
 
 export function buildCalendar() {
-  const el = document.getElementById('shotCalendar');
-  if (!el) return;
-
-  if (!timerRegistry.get('_calendarResizeObserver')) {
-    const observer = new ResizeObserver(() => _renderCalendar());
-    timerRegistry.set('_calendarResizeObserver', observer);
-    observer.observe(el);
-  }
   _renderCalendar();
+}
+
+// One cup per day of a streak, up to a week (inline SVG, accent when filled).
+function _cups(n: number): Html {
+  const cups: Html[] = [];
+  for (let i = 0; i < 7; i++) {
+    const cls = i < n ? 'cal-cup filled' : 'cal-cup';
+    cups.push(html`<svg class="${esc(cls)}" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h11v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16 9h1.5a2.5 2.5 0 0 1 0 5H16"/></svg>`);
+  }
+  return html`<span class="cal-cups">${joinHtml(cups)}</span>`;
+}
+
+function _renderStreaks(stats: CalendarStats, locale: string): Html {
+  const longest = stats.longest;
+  const longestLbl = longest
+    ? t('analytics_streak_longest', _fmtCalendarDay(longest.start, locale), _fmtCalendarDay(longest.end, locale))
+    : '';
+  const busiestLbl = stats.busiest ? t('analytics_busiest', _fmtCalendarDay(stats.busiest.day, locale)) : '';
+  return html`
+    <div class="cal-fig cal-fig-current">
+      <span class="cal-fig-num">${esc(stats.current)}<span class="cal-fig-unit">${esc(t('analytics_unit_days', stats.current))}</span></span>
+      <span class="cal-fig-lbl">${esc(t('analytics_streak_current'))}</span>
+      ${_cups(stats.current)}
+    </div>
+    <div class="cal-fig cal-fig-longest" tabindex="0">
+      <span class="cal-fig-num">${esc(longest ? longest.len : 0)}<span class="cal-fig-unit">${esc(t('analytics_unit_days', longest ? longest.len : 0))}</span></span>
+      <span class="cal-fig-lbl">${esc(longestLbl)}</span>
+      ${_cups(longest ? longest.len : 0)}
+    </div>
+    <div class="cal-fig cal-fig-busiest">
+      <span class="cal-fig-num">${esc(stats.busiest ? stats.busiest.count : 0)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots'))}</span></span>
+      <span class="cal-fig-lbl">${esc(busiestLbl)}</span>
+    </div>
+    <div class="cal-fig cal-fig-perfect">
+      <span class="cal-fig-num">${esc(stats.perfect)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots'))}</span></span>
+      <span class="cal-fig-lbl">${esc(t('analytics_perfect', stats.perfectShare))}</span>
+    </div>`;
+}
+
+// Hover/focus on the longest-streak figure marks the run's cells and dims the
+// rest of the grid.
+function _wireStreakHover(grid: HTMLElement, figure: HTMLElement, longest: CalendarStats['longest']): void {
+  if (!longest || typeof grid.querySelectorAll !== 'function') return;
+  const run = new Set<string>();
+  for (let n = _dayKeyNum(longest.start); n <= _dayKeyNum(longest.end); n++) run.add(_keyFromNum(n));
+  const paint = (on: boolean): void => {
+    for (const cell of Array.from(grid.querySelectorAll<HTMLElement>('.cal-day'))) {
+      const day = cell.dataset?.day;
+      if (!on) { cell.classList?.remove('in-run'); cell.classList?.remove('cal-dim'); }
+      else if (day && run.has(day)) cell.classList?.add('in-run');
+      else cell.classList?.add('cal-dim');
+    }
+  };
+  figure.addEventListener('mouseenter', () => paint(true));
+  figure.addEventListener('mouseleave', () => paint(false));
+  figure.addEventListener('focus', () => paint(true));
+  figure.addEventListener('blur', () => paint(false));
+}
+
+export function openCalendarDayDetail(day: string, anchor: HTMLElement | null): void {
+  const shots = _shots().filter(s => _dayKeyOf(s.timestamp) === day);
+  const locale = localeFor(S.currentLang);
+  const scores = shots
+    .map(s => (window.calcShotScore ? window.calcShotScore(s) : null))
+    .filter((sc): sc is number => sc !== null);
+  const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  const sub = `${shots.length} ${t('analytics_unit_shots')}${avg !== null ? ` · Ø ${avg}` : ''}`;
+  const rows = shots.map(s => {
+    const time = new Date(s.timestamp * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    const name = s.annotation?.coffee || s.profile?.name || s.profileName || '';
+    const sc = window.calcShotScore ? window.calcShotScore(s) : null;
+    const scHtml = sc !== null ? html`<span class="${esc(scoreClass(sc))}">${esc(sc)}</span>` : esc('—');
+    return html`<div class="bests-row"><span class="bests-lbl">${esc(time)} · ${esc(name)}</span><span class="bests-val">${scHtml} <button type="button" class="bests-link" data-action="goto-shot" data-id="${esc(s.id)}">→</button></span></div>`;
+  });
+  openDetailSheet({
+    title: _dateFromKey(day).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    sub,
+    body: html`<div class="detail-rows">${joinHtml(rows)}</div>`,
+    anchor,
+  });
 }
 
 export function _renderCalendar() {
   const el = document.getElementById('shotCalendar');
   if (!el) return;
 
-  const dayMap: Record<string, { count: number; scores: number[]; lastId: number | null }> = {};
+  interface DayAgg { count: number; scores: number[]; hasPerfect: boolean; }
+  const dayMap = new Map<string, DayAgg>();
+  let firstTs: number | null = null;
   for (const s of _shots()) {
-    const key = new Date(s.timestamp * 1000).toISOString().slice(0, 10);
-    let day = dayMap[key];
-    if (!day) { day = { count: 0, scores: [], lastId: null }; dayMap[key] = day; }
+    const key = _dayKeyOf(s.timestamp);
+    let day = dayMap.get(key);
+    if (!day) { day = { count: 0, scores: [], hasPerfect: false }; dayMap.set(key, day); }
     day.count++;
-    day.lastId = s.id;
+    if (firstTs === null || s.timestamp < firstTs) firstTs = s.timestamp;
     if (window.calcShotScore) {
       const sc = window.calcShotScore(s);
-      if (sc !== null) day.scores.push(sc);
+      if (sc !== null) { day.scores.push(sc); if (sc >= 100) day.hasPerfect = true; }
     }
   }
 
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - 364);
-  const dow = (startDate.getDay() + 6) % 7;
-  startDate.setDate(startDate.getDate() - dow);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayKey = _localDayKey(today);
+
+  // Range: Monday on/before the later of (first shot, today - 364 days) to the
+  // Sunday of the current week.
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - 364);
+  let rangeStart = cutoff;
+  if (firstTs !== null) {
+    const f = new Date(firstTs * 1000);
+    const firstDay = new Date(f.getFullYear(), f.getMonth(), f.getDate());
+    if (firstDay > cutoff) rangeStart = firstDay;
+  }
+  const start = new Date(rangeStart);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const end = new Date(today);
+  end.setDate(end.getDate() + (6 - ((today.getDay() + 6) % 7)));
 
   const locale = localeFor(S.currentLang);
-  const months: { weekIdx: number; label: string }[] = [];
-  let lastMonth = -1;
-  const weeks: { date: Date; key: string; count: number; avgSc: number | null; lastId: number | null }[][] = [];
-  const cur = new Date(startDate);
+  const cls = (c: number): string => c === 0 ? 'cal-0' : c === 1 ? 'cal-1' : c === 2 ? 'cal-2' : c === 3 ? 'cal-3' : 'cal-4';
 
-  while (cur <= today) {
-    const week: { date: Date; key: string; count: number; avgSc: number | null; lastId: number | null }[] = [];
+  interface CalDay { date: Date; key: string; count: number; avg: number | null; hasPerfect: boolean; isFuture: boolean; isToday: boolean; }
+  const weeks: CalDay[][] = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    const week: CalDay[] = [];
     for (let d = 0; d < 7; d++) {
-      const key  = cur.toISOString().slice(0, 10);
-      const data = dayMap[key] || { count: 0, scores: [], lastId: null };
-      const avgSc = data.scores.length ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length) : null;
-      if (d === 0 && cur.getMonth() !== lastMonth) {
-        months.push({ weekIdx: weeks.length, label: cur.toLocaleDateString(locale, { month: 'short' }) });
-        lastMonth = cur.getMonth();
-      }
-      week.push({ date: new Date(cur), key, count: data.count, avgSc, lastId: data.lastId || null });
+      const key = _localDayKey(cur);
+      const agg = dayMap.get(key);
+      const count = agg ? agg.count : 0;
+      const avg = agg && agg.scores.length ? Math.round(agg.scores.reduce((a, b) => a + b, 0) / agg.scores.length) : null;
+      week.push({ date: new Date(cur), key, count, avg, hasPerfect: !!agg?.hasPerfect, isFuture: cur > today, isToday: key === todayKey });
       cur.setDate(cur.getDate() + 1);
     }
     weeks.push(week);
   }
 
-  const GAP      = 2;
-  const W        = Math.floor(el.getBoundingClientRect().width) || 600;
-  const cellSize = Math.max(4, Math.floor((W - (weeks.length - 1) * GAP) / weeks.length));
-  const CELL     = cellSize + GAP;
-  const cellSz   = `width:${cellSize}px;height:${cellSize}px`;
+  // Month labels above the first week of each month.
+  const monthRuns: { span: number; label: string }[] = [];
+  let lastMonth = -1;
+  for (const week of weeks) {
+    const monday = week[0];
+    if (!monday) continue;
+    const label = monday.date.toLocaleDateString(locale, { month: 'short' });
+    if (monday.date.getMonth() !== lastMonth) { monthRuns.push({ span: 1, label }); lastMonth = monday.date.getMonth(); }
+    else { const run = monthRuns[monthRuns.length - 1]; if (run) run.span++; }
+  }
+  const monthItems = monthRuns.map(m => html`<span class="cal-month" style="grid-column: span ${esc(m.span)}">${esc(m.label)}</span>`);
 
-  const cls = (c: number): string => c === 0 ? 'cal-0' : c === 1 ? 'cal-1' : c === 2 ? 'cal-2' : 'cal-3';
+  // First grid column: Monday/Wednesday/Friday labels; the rest empty.
+  const cells: Html[] = [];
+  for (let r = 0; r < 7; r++) {
+    const label = (r === 0 || r === 2 || r === 4)
+      ? new Date(2024, 0, 1 + r).toLocaleDateString(locale, { weekday: 'short' })
+      : '';
+    cells.push(html`<span class="cal-weekday">${esc(label)}</span>`);
+  }
 
-  const monthLabels = months.map(m => html`<span style="position:absolute;left:${esc(m.weekIdx * CELL)}px;font-size:.65rem;color:var(--gray-600)">${esc(m.label)}</span>`);
-  const weekCols = weeks.map(week => {
-    const dayCells: Html[] = [];
+  for (const week of weeks) {
     for (const day of week) {
-      const isFuture = day.date > today;
-      const dateStr  = day.date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const title    = day.count === 0 ? dateStr
-                     : `${dateStr}: ${day.count} Shot${day.count > 1 ? 's' : ''}${day.avgSc !== null ? ` · Ø ${day.avgSc}` : ''}`;
-      const clickable = !isFuture && day.count > 0 && day.lastId !== null;
-      dayCells.push(html`<div class="${esc(isFuture ? 'cal-future' : cls(day.count))} cal-day${clickable ? html` cal-day-link` : esc('')}" style="${esc(cellSz)}" title="${esc(title)}"${clickable ? html` data-action="goto-shot" data-id="${esc(day.lastId)}"` : esc('')}></div>`);
+      if (day.isFuture) { cells.push(html`<span class="cal-day cal-future" aria-hidden="true"></span>`); continue; }
+      const classes = ['cal-day', cls(day.count)];
+      if (day.hasPerfect) classes.push('cal-crema');
+      if (day.isToday) classes.push('cal-today');
+      if (day.count > 0) {
+        classes.push('cal-day-link');
+        const dateStr = day.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const aria = `${dateStr} · ${day.count} ${t('analytics_unit_shots')}${day.avg !== null ? ` · Ø ${day.avg}` : ''}`;
+        cells.push(html`<button type="button" class="${esc(classes.join(' '))}" data-action="analytics-day" data-day="${esc(day.key)}" aria-label="${esc(aria)}"></button>`);
+      } else {
+        cells.push(html`<span class="${esc(classes.join(' '))}" aria-hidden="true"></span>`);
+      }
     }
-    return html`<div class="cal-week" style="gap:${esc(GAP)}px">${joinHtml(dayCells)}</div>`;
-  });
-  el.innerHTML = html`<div style="position:relative;height:${esc(cellSize + 3)}px;margin-bottom:4px">${joinHtml(monthLabels)}</div><div class="cal-grid" style="gap:${esc(GAP)}px">${joinHtml(weekCols)}</div>`;
+  }
+
+  el.innerHTML = html`<div class="cal-months">${joinHtml(monthItems)}</div><div class="cal-grid">${joinHtml(cells)}</div>`;
+  // Today sits at the right edge; show it without scrolling on phones.
+  el.scrollLeft = el.scrollWidth;
+
+  const streaksEl = document.getElementById('calStreaks');
+  if (streaksEl) {
+    const stats = computeCalendarStats(_shots(), s => (window.calcShotScore ? window.calcShotScore(s) : null), Date.now());
+    streaksEl.innerHTML = _renderStreaks(stats, locale);
+    const fig = typeof streaksEl.querySelector === 'function' ? streaksEl.querySelector<HTMLElement>('.cal-fig-longest') : null;
+    if (fig) _wireStreakHover(el, fig, stats.longest);
+  }
 }
 
 export function buildBeanStats() {
