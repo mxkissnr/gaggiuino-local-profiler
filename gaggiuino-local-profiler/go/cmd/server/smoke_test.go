@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,28 +40,17 @@ const ingressHeader = "/api/hassio_ingress/0123456789abcdef0123456789abcdef"
 
 func newSmokeServer(t *testing.T) (base string, token string) {
 	t.Helper()
-	dir := t.TempDir()
-	cfg := appConfig{
-		dbPath:          filepath.Join(dir, "glp.db"),
-		tokenPath:       filepath.Join(dir, "api_token.txt"),
+	handler, _, dir := newTestApp(t, appConfig{
 		port:            "0",
 		rateLimitWindow: time.Minute,
 		rateLimitMax:    1_000_000, // this test fires ~10 requests; never rate-limit them
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	handler, sqlDB, err := buildApp(ctx, cfg)
-	if err != nil {
-		cancel()
-		t.Fatalf("buildApp: %v", err)
-	}
-	srv := httptest.NewServer(handler)
-	t.Cleanup(func() {
-		srv.Close()
-		cancel()
-		sqlDB.Close()
 	})
+	srv := httptest.NewServer(handler)
+	// Registered after newTestApp's cleanup, so on teardown it runs first (LIFO):
+	// the HTTP server stops before the data directory is removed.
+	t.Cleanup(srv.Close)
 
-	raw, err := os.ReadFile(cfg.tokenPath)
+	raw, err := os.ReadFile(filepath.Join(dir, "api_token.txt"))
 	if err != nil {
 		t.Fatalf("reading generated token file: %v", err)
 	}
