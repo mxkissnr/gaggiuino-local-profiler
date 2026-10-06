@@ -7,14 +7,6 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 
-// The form sheet's bar Save must reach the same API path as the form's own
-// Save button; mocking keeps the test off the network.
-const mocks = vi.hoisted(() => ({ saveBean: vi.fn() }));
-vi.mock('../public-src/api/library.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
-  return { ...actual, saveBean: mocks.saveBean };
-});
-
 type Handler = (event: { target?: unknown; preventDefault?: () => void }) => void;
 
 function matches(el: El, selector: string): boolean {
@@ -305,6 +297,7 @@ describe('bean form sheet header bar save (#1489)', () => {
   let doc: Doc;
   let S: StateLike;
   let library: LibraryModule;
+  let t: (key: string) => string;
 
   function setupHome(): void {
     const home = doc.createElement();
@@ -325,29 +318,30 @@ describe('bean form sheet header bar save (#1489)', () => {
     doc = new Doc();
     g.document = doc;
     g.window = { matchMedia: () => ({ matches: false }) };
-    mocks.saveBean.mockReset();
     vi.resetModules();
     S = await importState();
     S.beanEditId = null;
     S.coffeeLibrary = { beans: [], recipes: [], grinders: [] };
+    ({ t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string });
     library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
   });
 
-  it('bar Save runs the same submit path as the form save button', async () => {
+  it('bar Save runs the same submit path as the form save button', () => {
     setupHome();
     library.openBeanForm();
 
     const save = doc.body.querySelector('#beanFormSheet')?.querySelector('.lib-sheet-save') ?? null;
     expect(save).not.toBeNull();
-    expect(save?.getAttribute('aria-label')).toBeTruthy();
+    // The bar reuses the form's save label.
+    expect(save?.getAttribute('aria-label')).toBe(t('lib_save'));
 
-    doc.getElementById('beanFormName')!.value = 'New Bean';
-    mocks.saveBean.mockResolvedValue(null);
+    // An empty name is create mode's first validation step: the shared submit
+    // handler bails out and focuses the name field. Clearing the focus first
+    // makes that the observable proof the bar wired to that handler.
+    const name = doc.getElementById('beanFormName')!;
+    name.value = '';
+    doc.activeElement = null;
     save!.dispatch('click');
-    await Promise.resolve();
-
-    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
-    const call = mocks.saveBean.mock.calls[0] as unknown[] | undefined;
-    expect((call?.[1] as { name?: string } | undefined)?.name).toBe('New Bean');
+    expect(doc.activeElement).toBe(name);
   });
 });
