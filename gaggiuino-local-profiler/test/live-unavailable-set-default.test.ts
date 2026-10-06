@@ -5,8 +5,14 @@
 // SSE-driven handleLiveData() kept filling the idle stats with the default
 // machine's readings. These tests pin the gating: the not-capable branch hides
 // all three panels and handleLiveData() bails out early, while a
-// default-machine selection is unaffected. Same minimal-fake-document pattern
-// as test/live-stream-sse-fallback-gating.test.ts.
+// default-machine selection is unaffected.
+//
+// test/live-stream-sse-fallback-gating.test.ts is the setup template this file
+// follows (the minimal fake document + transport/chart.js mocks); it is not a
+// target of the change and is deliberately left untouched. Likewise
+// components/machines-settings.ts is only imported for getDefaultMachineId()
+// here (mocked below) -- setDefaultMachine() itself is reused unchanged from
+// main.ts's click delegation.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose
