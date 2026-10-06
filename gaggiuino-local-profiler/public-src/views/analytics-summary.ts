@@ -26,6 +26,33 @@ function _localKey(d: Date): string {
 
 const DAY_MS = 86400000;
 
+// The Analytics page filter (#1467): the period (0 = whole history) and the
+// free-text query, shared by the toolbar and every period-scoped builder.
+export type AnalyticsDays = 7 | 30 | 90 | 0;
+export interface AnalyticsPageFilter { days: AnalyticsDays; query: string }
+
+// Pure period + query filter shared by views/analytics.ts's _pageShots() and
+// the tests. Keeps shots from the last `days` days (rolling, local wall-clock)
+// matching `query` as a case-insensitive substring of the bean name
+// (annotation.coffee) or the profile name. Future-dated shots are dropped.
+export function filterAnalyticsShots<T extends SummaryShot>(
+  shots: readonly T[],
+  filter: AnalyticsPageFilter,
+  nowMs: number,
+  profileNameOf: (shot: T) => string,
+): T[] {
+  const q = String(filter.query ?? '').trim().toLowerCase();
+  const start = filter.days > 0 ? nowMs - filter.days * DAY_MS : null;
+  return shots.filter(s => {
+    const ms = s.timestamp * 1000;
+    if (ms > nowMs) return false;
+    if (start !== null && ms < start) return false;
+    if (!q) return true;
+    if (String(s.annotation?.coffee ?? '').toLowerCase().includes(q)) return true;
+    return profileNameOf(s).toLowerCase().includes(q);
+  });
+}
+
 export type SummaryDeltaBucket = 'well-above' | 'above' | 'on-par' | 'below' | 'well-below';
 
 export interface SummaryLine {
@@ -51,35 +78,39 @@ function _currentStreak(activeDays: Set<string>, nowMs: number): number {
   return streak;
 }
 
-// One-line summary of how the shots are going (#1331, part 2): the last 30
-// days (count + average score), the last 7 days against that average, the best
-// bean of the last 30 days, and the current streak. Pure and DOM-free so
+// One-line summary of how the shots are going (#1331, part 2; #1467): the
+// window (count + average score), the last 7 days against that average, the
+// best bean of the window, and the current streak. windowDays <= 0 means the
+// whole history; the 7-day delta is suppressed when the window IS 7 days
+// (comparing a week with itself is meaningless). Pure and DOM-free so
 // buildSummaryKpis() and the tests share the exact same numbers.
 export function summaryLine(
   shots: readonly SummaryShot[],
   scoreOf: (shot: SummaryShot) => number | null,
   nowMs: number,
+  windowDays = 30,
 ): SummaryLine {
-  const start30 = nowMs - 30 * DAY_MS;
+  const startWindow = windowDays > 0 ? nowMs - windowDays * DAY_MS : null;
   const start7 = nowMs - 7 * DAY_MS;
 
-  let shots30 = 0;
-  let sum30 = 0;
-  let n30 = 0;
+  let shotsWindow = 0;
+  let sumWindow = 0;
+  let nWindow = 0;
   let sum7 = 0;
   let n7 = 0;
-  const bean30 = new Map<number, { name: string; sum: number; n: number }>();
+  const beanWindow = new Map<number, { name: string; sum: number; n: number }>();
   const activeDays = new Set<string>();
 
   for (const s of shots) {
     const ms = s.timestamp * 1000;
     activeDays.add(_localKey(new Date(ms)));
-    if (ms < start30 || ms > nowMs) continue;
-    shots30++;
+    if (ms > nowMs) continue;
+    if (startWindow !== null && ms < startWindow) continue;
+    shotsWindow++;
     const sc = scoreOf(s);
     if (sc === null || !Number.isFinite(sc)) continue;
-    sum30 += sc;
-    n30++;
+    sumWindow += sc;
+    nWindow++;
     if (ms >= start7) {
       sum7 += sc;
       n7++;
@@ -87,21 +118,21 @@ export function summaryLine(
     const beanId = s.annotation?.beanId;
     const name = s.annotation?.coffee;
     if (typeof beanId === 'number' && name) {
-      const entry = bean30.get(beanId) ?? { name, sum: 0, n: 0 };
+      const entry = beanWindow.get(beanId) ?? { name, sum: 0, n: 0 };
       entry.name = name;
       entry.sum += sc;
       entry.n++;
-      bean30.set(beanId, entry);
+      beanWindow.set(beanId, entry);
     }
   }
 
-  const avgScore30 = n30 ? Math.round(sum30 / n30) : null;
-  const verdict = { shots: shots30, avgScore: avgScore30 };
+  const avgWindow = nWindow ? Math.round(sumWindow / nWindow) : null;
+  const verdict = { shots: shotsWindow, avgScore: avgWindow };
 
   let delta: SummaryLine['delta'] = null;
-  if (n7 >= 3 && avgScore30 !== null) {
+  if (windowDays !== 7 && n7 >= 3 && avgWindow !== null) {
     const avg7 = Math.round(sum7 / n7);
-    const diff = avg7 - avgScore30;
+    const diff = avg7 - avgWindow;
     const bucket: SummaryDeltaBucket = diff >= 5 ? 'well-above'
       : diff >= 2 ? 'above'
       : diff > -2 ? 'on-par'
@@ -111,7 +142,7 @@ export function summaryLine(
   }
 
   let context: SummaryLine['context'] = null;
-  for (const entry of bean30.values()) {
+  for (const entry of beanWindow.values()) {
     if (entry.n < 2) continue;
     const avg = Math.round(entry.sum / entry.n);
     if (!context || avg > context.avgScore) context = { name: entry.name, avgScore: avg };
