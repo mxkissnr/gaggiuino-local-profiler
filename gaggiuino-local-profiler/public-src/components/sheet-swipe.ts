@@ -205,7 +205,10 @@ export function startSheetEnter(sheet: HTMLElement | null, backdrop: HTMLElement
 // drag, as long as the content is scrolled to the top and the finger moves
 // down. Touch events (not pointer) keep native `pan-y` scrolling working; the
 // browser scroll is only suppressed with preventDefault once the drag starts.
-export function attachSheetSwipe(sheet: HTMLElement, backdrop: HTMLElement | null, onDismiss: () => void): void {
+// `onDismiss` returns `false` to say it declined the dismissal (e.g. a dirty
+// form showing its confirm bar); the sheet then springs back instead of being
+// left wherever the finger lifted. Any other return means a close was started.
+export function attachSheetSwipe(sheet: HTMLElement, backdrop: HTMLElement | null, onDismiss: () => boolean | void): void {
   let active = false;
   let touchId: number | null = null;
   let startY = 0;
@@ -225,6 +228,16 @@ export function attachSheetSwipe(sheet: HTMLElement, backdrop: HTMLElement | nul
       backdrop.style.transition = '';
       backdrop.style.opacity = '';
     }
+  };
+
+  const springBack = (): void => {
+    sheet.style.transition = `transform ${SPRING_BACK_MS}ms ${SHEET_OUT_BEZIER}`;
+    sheet.style.transform = '';
+    if (backdrop) {
+      backdrop.style.transition = `opacity ${SPRING_BACK_MS}ms ${SHEET_OUT_BEZIER}`;
+      backdrop.style.opacity = '1';
+    }
+    window.setTimeout(resetStyles, SPRING_BACK_MS + 40);
   };
 
   const applyTransform = (): void => {
@@ -247,7 +260,8 @@ export function attachSheetSwipe(sheet: HTMLElement, backdrop: HTMLElement | nul
   };
 
   const onTouchStart = (e: TouchEvent): void => {
-    if (!isPhoneSheetWidth() || e.touches.length !== 1) return;
+    // Ignore new gestures while a close is already sliding out.
+    if (_pending || !isPhoneSheetWidth() || e.touches.length !== 1) return;
     const t = e.touches[0];
     if (!t) return;
     touchId = t.identifier;
@@ -288,23 +302,22 @@ export function attachSheetSwipe(sheet: HTMLElement, backdrop: HTMLElement | nul
       raf = 0;
       applyTransform();
     }
-    if (!dragging) { resetStyles(); return; }
+    if (!dragging) {
+      // A stray tap must not wipe a close that is already sliding out.
+      if (!_pending) resetStyles();
+      return;
+    }
     dragging = false;
     const dy = lastDy;
     const heightPx = height();
     const velocity = recentVelocity(samples);
     if (!cancelled && shouldDismissSheet(dy, heightPx, velocity)) {
       // Leave the transform where it is; animateSheetOut slides out from here.
-      onDismiss();
+      // If the callback declined (dirty form), spring back to the open state.
+      if (onDismiss() === false) springBack();
       return;
     }
-    sheet.style.transition = `transform ${SPRING_BACK_MS}ms ${SHEET_OUT_BEZIER}`;
-    sheet.style.transform = '';
-    if (backdrop) {
-      backdrop.style.transition = `opacity ${SPRING_BACK_MS}ms ${SHEET_OUT_BEZIER}`;
-      backdrop.style.opacity = '1';
-    }
-    setTimeout(resetStyles, SPRING_BACK_MS + 40);
+    springBack();
   };
 
   sheet.addEventListener('touchstart', onTouchStart, { passive: true });

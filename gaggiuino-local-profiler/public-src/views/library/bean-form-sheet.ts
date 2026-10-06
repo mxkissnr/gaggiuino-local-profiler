@@ -341,10 +341,12 @@ function _animateFormSheetOut(done: () => void): void {
 }
 
 // Dirty-aware close: a form with unsaved edits asks before discarding. A real
-// close (X, backdrop, Esc, swipe, discard) slides the sheet out first.
-export function requestCloseBeanForm(): void {
-  if (_beanFormDirty) { _showFormConfirm(); return; }
+// close (X, backdrop, Esc, swipe, discard) slides the sheet out first. Returns
+// false when it only showed the confirm bar, so a swipe can spring back.
+export function requestCloseBeanForm(): boolean {
+  if (_beanFormDirty) { _showFormConfirm(); return false; }
   _animateFormSheetOut(closeBeanForm);
+  return true;
 }
 
 // Cancel / confirm-bar discard: an explicit "throw my edits away", no prompt.
