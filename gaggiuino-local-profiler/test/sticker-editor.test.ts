@@ -105,6 +105,7 @@ class FakeElement implements ClassHost {
   readonly attributes = new Map<string, string>();
   textContent = '';
   disabled = false;
+  hidden = false;
   focused = false;
   type = '';
   value = '';
