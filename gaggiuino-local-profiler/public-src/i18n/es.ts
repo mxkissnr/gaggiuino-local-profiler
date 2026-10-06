@@ -127,6 +127,7 @@ const es: Partial<Translations> = {
     easter_egg_hist_empty:'Tu primer shot iniciará la espiral.',
     live_waiting:'Esperando shot …', live_disabled:'Live desactivado (máquina apagada)',
     machine_ready:'Máquina lista',
+    machine_standby:'En espera',
     live_setup_toggle:'Configurar bebida', live_setup_reset:'Restablecer',
     ref_label:'Referencia:', ref_none:'— sin shot de referencia —', ref_clear:`${CLOSE_ICON_SVG} Quitar`,
     ref_pressure:'Ref: Presión', ref_flow:'Ref: Flujo', ref_weight:'Ref: Peso', ref_temp:'Ref: Temp',

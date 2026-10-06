@@ -127,6 +127,7 @@ const nl: Partial<Translations> = {
     easter_egg_hist_empty:'Je eerste shot start de spiraal.',
     live_waiting:'Wachten op shot …', live_disabled:'Live uitgeschakeld (machine uit)',
     machine_ready:'Machine klaar',
+    machine_standby:'Standby',
     live_setup_toggle:'Shot instellen', live_setup_reset:'Resetten',
     ref_label:'Referentie:', ref_none:'— geen referentieshot —', ref_clear:`${CLOSE_ICON_SVG} Verwijderen`,
     ref_pressure:'Ref: Druk', ref_flow:'Ref: Stroom', ref_weight:'Ref: Gewicht', ref_temp:'Ref: Temp',

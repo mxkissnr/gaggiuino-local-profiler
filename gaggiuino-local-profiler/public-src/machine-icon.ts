@@ -544,8 +544,11 @@ export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatF
 // caller-side fix lives in views/live.ts and components/topbar-machine-icon.ts.
 export function resolveMachineIconState(msg: unknown, preheat: unknown): MachineIconState {
     const m = msg as { machineReachable?: boolean; isLive?: boolean; isSteaming?: boolean; isFlushing?: boolean; isDescaling?: boolean } | null | undefined;
-    const p = preheat as { ready?: boolean; remaining?: number; pct?: number } | null | undefined;
+    const p = preheat as { ready?: boolean; remaining?: number; pct?: number; standby?: boolean } | null | undefined;
     if (m?.machineReachable === false) return { mode: 'off', heatFraction: 0 };
+    // #1498: a standby machine is off, not heating — reuse the off mode (no
+    // heating animation, no accent) rather than adding a seventh state.
+    if (p?.standby)                    return { mode: 'off', heatFraction: 0 };
     if (m?.isLive)                     return { mode: 'brewing', heatFraction: 1 };
     if (m?.isSteaming)                 return { mode: 'steaming', heatFraction: 1 };
     if (m?.isFlushing)                 return { mode: 'flushing', heatFraction: 1 };
