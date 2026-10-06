@@ -414,15 +414,24 @@ export function clearReferenceShot(): void {
 export function connectLiveStream(): void {
   const banner  = document.getElementById('liveMachineUnavailableBanner');
   const content = document.getElementById('live-content');
+  const idle    = document.getElementById('live-idle');
+  const refBar  = document.getElementById('live-ref-bar');
   if (!_isActiveMachineLiveCapable()) {
     disconnectLiveStream();
     if (banner)  banner.style.display  = '';
     if (content) content.style.display = 'none';
+    // #1449: handleLiveData() (SSE-driven) still carries the default
+    // machine's readings while a non-default machine is selected -- hide the
+    // idle panel and reference bar along with the live content so they don't
+    // keep showing another machine's numbers.
+    if (idle)    idle.style.display    = 'none';
+    if (refBar)  refBar.style.display  = 'none';
     setLiveBadge('error', t('live_machine_unavailable'));
     return;
   }
   if (banner)  banner.style.display  = 'none';
   if (content) content.style.display = '';
+  if (refBar)  refBar.style.display  = '';
   disconnectLiveStream();
   initLiveChart();
   renderLiveShotSetupPanel();
@@ -682,6 +691,9 @@ export function handlePreheatUpdateEvent(payload: PreheatData): void {
 }
 
 export function handleLiveData(msg: LiveMessage): void {
+  // #1449: while a non-default machine is selected, the backend still pushes
+  // the default machine's readings -- don't render them under the banner.
+  if (!_isActiveMachineLiveCapable()) return;
   const dp: LiveDatapoints = msg.datapoints || {};
   const times   = dp.timeInShot  || [];
   const lastIdx = times.length - 1;

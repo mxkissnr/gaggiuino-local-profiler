@@ -138,7 +138,7 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
-import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, setActiveMachine, resolveActiveMachineId, renderMachinesList,
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, setActiveMachine, resolveActiveMachineId, setDefaultMachine, renderMachinesList,
          onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange,
          applyActiveMachineAccentTheme, renderAccentSwatches } from './components/machines-settings.js';
 
@@ -1056,6 +1056,15 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'machine-flush-toggle':        void toggleFlush(); break;
       case 'brew-confirm-start':          void confirmBrewFromDialog(); break;
       case 'brew-confirm-cancel':         void cancelBrewFromDialog(); break;
+      // #1449: the Live tab's "not available for this machine" banner offers
+      // to make the currently selected machine the default. Reuses the existing
+      // setDefaultMachine() from components/machines-settings.ts unchanged -- it
+      // already reloads the machine list, and loadMachines() ->
+      // applyActiveMachineChange() reconnects the Live tab (window.connectLiveStream()
+      // when S.currentMode === 'live'), so no new reload logic lives here.
+      case 'live-set-default-machine':
+        if (typeof S.activeMachineId === 'number') void setDefaultMachine(S.activeMachineId);
+        break;
     }
   });
 
