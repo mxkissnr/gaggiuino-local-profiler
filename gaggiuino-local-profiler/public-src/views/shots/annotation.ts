@@ -376,11 +376,20 @@ export function selectFrozenPortion(id: string | null | undefined): void {
   scheduleAutoSave();
 }
 
-function _updateMilkFieldVisibility(): void {
+export function _updateMilkFieldVisibility(): void {
   const field   = document.getElementById('milkTypeField');
   if (!field) return;
   const drinkId = (document.getElementById('annDrinkType') as HTMLSelectElement | null)?.value;
-  field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
+  const drink   = drinkId ? (S.drinkMenu as DrinkRow[] | undefined)?.find(d => d.id === drinkId) : undefined;
+  // #1453: the backend books milk stock only when the drink's milkMl > 0, so
+  // only offer the milk picker for a drink that actually uses milk.
+  const usesMilk = Number(drink?.milkMl) > 0;
+  const visible  = !!(S.milkTypes?.length && drinkId && usesMilk);
+  field.style.display = visible ? '' : 'none';
+  if (!visible) {
+    const hidden = document.getElementById('annMilkType') as HTMLInputElement | null;
+    if (hidden?.value) _renderMilkPills('');
+  }
 }
 
 // Ported from PR #1120 (contributor branch origin/ppops-src/live-shot-setup)
