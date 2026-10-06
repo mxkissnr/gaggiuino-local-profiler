@@ -383,10 +383,16 @@ export function _updateMilkFieldVisibility(): void {
   const drink   = drinkId ? (S.drinkMenu as DrinkRow[] | undefined)?.find(d => d.id === drinkId) : undefined;
   // #1453: the backend books milk stock only when the drink's milkMl > 0, so
   // only offer the milk picker for a drink that actually uses milk.
-  const usesMilk = Number(drink?.milkMl) > 0;
-  const visible  = !!(S.milkTypes?.length && drinkId && usesMilk);
+  // A drink missing from S.drinkMenu (the menu has not loaded yet, or it was
+  // removed) keeps the pre-#1453 behaviour: show the picker whenever milk types
+  // exist, and never clear the saved milk, so opening such a shot cannot
+  // autosave milkType: null.
+  const unknownDrink = !!drinkId && !drink;
+  const visible      = unknownDrink
+    ? !!S.milkTypes?.length
+    : !!(S.milkTypes?.length && drinkId && Number(drink?.milkMl) > 0);
   field.style.display = visible ? '' : 'none';
-  if (!visible) {
+  if (!visible && !unknownDrink) {
     const hidden = document.getElementById('annMilkType') as HTMLInputElement | null;
     if (hidden?.value) _renderMilkPills('');
   }

@@ -93,4 +93,21 @@ describe('#1453 milk field visibility follows the chosen drink', () => {
     expect(el('milkTypeField').style.display).toBe('none');
     expect(el('annMilkType').value).toBe('');
   });
+
+  it('shows the field and keeps the saved milk when the drink is not in S.drinkMenu', () => {
+    el('annDrinkType').value = 'mystery';
+    el('annMilkType').value = '1';
+    _updateMilkFieldVisibility();
+    expect(el('milkTypeField').style.display).toBe('');
+    expect(el('annMilkType').value).toBe('1');
+  });
+
+  it('shows the field and keeps the saved milk when S.drinkMenu is empty', () => {
+    S.drinkMenu = [];
+    el('annDrinkType').value = 'latte';
+    el('annMilkType').value = '2';
+    _updateMilkFieldVisibility();
+    expect(el('milkTypeField').style.display).toBe('');
+    expect(el('annMilkType').value).toBe('2');
+  });
 });
