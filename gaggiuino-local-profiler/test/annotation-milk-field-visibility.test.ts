@@ -34,11 +34,11 @@ beforeEach(() => {
   // keep that save from firing (and hitting the unstubbed DOM) after teardown.
   vi.useFakeTimers();
   els = {
-    milkTypeField:       { style: {} },
-    annDrinkType:        { value: '' },
-    annMilkType:         { value: '' },
-    drinkPillsContainer: { innerHTML: '' },
-    milkPillsContainer:  { innerHTML: '' },
+    milkTypeField:       { value: '', innerHTML: '', style: {} },
+    annDrinkType:        { value: '', innerHTML: '', style: {} },
+    annMilkType:         { value: '', innerHTML: '', style: {} },
+    drinkPillsContainer: { value: '', innerHTML: '', style: {} },
+    milkPillsContainer:  { value: '', innerHTML: '', style: {} },
   };
   g.document = { getElementById: (id: string) => els[id] ?? null };
   S.drinkMenu = [
