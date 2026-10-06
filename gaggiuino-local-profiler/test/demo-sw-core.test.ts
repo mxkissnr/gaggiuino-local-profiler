@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { runInNewContext } from 'node:vm';
-import { fixtureKey as recorderFixtureKey } from '../scripts/demo-fixtures.mjs';
+import { GLPDemo, type Manifest } from '../demo/sw/sw-core.ts';
+import { fixtureKey as recorderFixtureKey } from '../scripts/demo-fixtures.mts';
 
 function at<T>(arr: readonly T[], i: number): T {
   const v = arr[i];
@@ -10,57 +8,9 @@ function at<T>(arr: readonly T[], i: number): T {
   return v;
 }
 
-// Part of #1193 (S2b): the pure routing surface of demo/sw/sw-core.js. The
-// script is a classic service-worker script, so it is loaded in a fresh
-// context with the globals it actually uses rather than imported.
-
-interface FixtureEntry {
-    status: number;
-    contentType: string;
-    file: string;
-}
-
-interface Manifest {
-    entries: Record<string, FixtureEntry>;
-}
-
-type Route =
-    | { kind: 'passthrough' }
-    | { kind: 'token' }
-    | { kind: 'sse' }
-    | { kind: 'fixture'; entry: FixtureEntry }
-    | { kind: 'write' }
-    | { kind: 'missing'; key: string };
-
-interface LiveFrame {
-    isLive: boolean;
-    machineReachable: boolean;
-    profileName: string;
-    datapoints: Record<string, unknown> | null;
-    seq: number;
-    temperature: number | null;
-    targetTemperature: number | null;
-    pressure: number | null;
-}
-
-interface GlpDemo {
-    fixtureKey(method: string, urlString: string): string;
-    route(method: string, requestUrl: string, scopeUrl: string, manifest: Manifest): Route;
-    shiftTimestamps(value: unknown, deltaMs: number): unknown;
-    patchMachineOnline(pathname: string, body: unknown, nowMs: number): unknown;
-    liveFrame(shot: unknown, elapsedTenths: number, seq: number): LiveFrame;
-    idleFrame(seq: number): LiveFrame;
-    shotsListKey(manifest: Manifest): string | null;
-}
-
-function loadGlpDemo(): GlpDemo {
-    const source = readFileSync(fileURLToPath(new URL('../demo/sw/sw-core.js', import.meta.url)), 'utf8');
-    const context = { self: {} as { GLPDemo?: GlpDemo }, URL, URLSearchParams };
-    runInNewContext(source, context);
-    const glp = context.self.GLPDemo;
-    if (!glp) throw new Error('sw-core.js did not expose self.GLPDemo');
-    return glp;
-}
+// Part of #1193 (S2b): the pure routing surface of demo/sw/sw-core.ts. The
+// module is bundled into the demo service worker, so the test imports it
+// directly rather than loading a classic script into a fresh context.
 
 const EMPTY_MANIFEST: Manifest = { entries: {} };
 
@@ -74,7 +24,7 @@ const MANIFEST: Manifest = {
 const SCOPE = 'https://demo.example/gaggiuino-local-profiler/';
 
 describe('sw-core fixtureKey matches the recorder (#1193)', () => {
-    const glp = loadGlpDemo();
+    const glp = GLPDemo;
     const cases: ReadonlyArray<readonly [string, string]> = [
         ['get', '/api/shots?limit=50'],
         ['GET', 'http://127.0.0.1:8199/api/status'],
@@ -87,14 +37,14 @@ describe('sw-core fixtureKey matches the recorder (#1193)', () => {
     ];
 
     for (const [method, url] of cases) {
-        it(`agrees with scripts/demo-fixtures.mjs on ${method} ${url}`, () => {
+        it(`agrees with scripts/demo-fixtures.mts on ${method} ${url}`, () => {
             expect(glp.fixtureKey(method, url)).toBe(recorderFixtureKey(method, url));
         });
     }
 });
 
 describe('sw-core route (#1193)', () => {
-    const glp = loadGlpDemo();
+    const glp = GLPDemo;
 
     it('serves the demo token without consulting the manifest', () => {
         expect(glp.route('GET', `${SCOPE}api/token`, SCOPE, EMPTY_MANIFEST)).toEqual({ kind: 'token' });
@@ -174,7 +124,7 @@ describe('sw-core route (#1193)', () => {
 const DAY_MS = 86_400_000;
 
 describe('sw-core shiftTimestamps (#1193)', () => {
-    const glp = loadGlpDemo();
+    const glp = GLPDemo;
 
     it('shifts epoch-millisecond values under timestamp-shaped keys', () => {
         const input = {
@@ -265,7 +215,7 @@ interface StatusFixture {
 }
 
 describe('sw-core patchMachineOnline (#1193)', () => {
-    const glp = loadGlpDemo();
+    const glp = GLPDemo;
     const status: StatusFixture = {
         machineReachable: false,
         machineOn: true,
@@ -368,7 +318,7 @@ const SIM_SHOT = {
 };
 
 describe('sw-core liveFrame (#1193 S3c)', () => {
-    const glp = loadGlpDemo();
+    const glp = GLPDemo;
 
     it('keeps only the samples reached at 0 and mid-shot', () => {
         const atZero = glp.liveFrame(SIM_SHOT, 0, 0);
@@ -413,7 +363,7 @@ describe('sw-core liveFrame (#1193 S3c)', () => {
 });
 
 describe('sw-core idleFrame (#1193 S3c)', () => {
-    const glp = loadGlpDemo();
+    const glp = GLPDemo;
 
     it('is the reachable idle frame carrying the incremented seq', () => {
         expect(glp.idleFrame(4)).toEqual({
@@ -430,7 +380,7 @@ describe('sw-core idleFrame (#1193 S3c)', () => {
 });
 
 describe('sw-core shotsListKey (#1193 S3c)', () => {
-    const glp = loadGlpDemo();
+    const glp = GLPDemo;
 
     it('picks the live newest-first page, skipping detail/trash/paged keys', () => {
         const manifest: Manifest = {

@@ -59,9 +59,11 @@ declare const process: {
     env: Record<string, string | undefined>;
     argv: string[];
     exit(code?: number): never;
+    cwd(): string;
 };
 declare class Buffer extends Uint8Array {
-    static from(data: readonly number[]): Buffer;
+    static from(data: readonly number[] | ArrayBuffer | Uint8Array | string, encoding?: string): Buffer;
+    toString(encoding?: string): string;
 }
 
 interface ImportMeta {

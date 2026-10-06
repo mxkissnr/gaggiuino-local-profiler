@@ -78,7 +78,7 @@ All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-l
   </tr>
 </table>
 
-More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in, Live, Orders, Settings). Regenerated on demand via `node scripts/screenshots.mjs`.
+More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in, Live, Orders, Settings). Regenerated on demand via `node scripts/screenshots.mts`.
 
 ---
 

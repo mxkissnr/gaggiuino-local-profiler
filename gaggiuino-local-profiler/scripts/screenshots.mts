@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Regenerates docs/screenshots/*.png for the README/wiki. Drives a headless
 // Chromium (Playwright) through each view of the throwaway, seeded (or
-// backup-restored) instance booted by scripts/e2e-harness.mjs (shared with
-// test/e2e/smoke.test.mjs — see that module for what "throwaway" means: its
+// backup-restored) instance booted by scripts/e2e-harness.mts (shared with
+// test/e2e/smoke.test.mts — see that module for what "throwaway" means: its
 // own tmp DATA_DIR and port, never touches /data or 8099). Run on demand:
-// `node scripts/screenshots.mjs`. Requires `npx playwright install chromium`
+// `node scripts/screenshots.mts`. Requires `npx playwright install chromium`
 // once beforehand.
 //
 // #1181: set GLP_SCREENSHOT_BACKUP=/path/to/glp-backup.zip to restore that
@@ -39,7 +39,8 @@
 import { mkdirSync, cpSync, existsSync } from 'fs';
 import path from 'path';
 import { chromium } from 'playwright';
-import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harness.mjs';
+import type { Page } from 'playwright';
+import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harness.mts';
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
 
@@ -51,7 +52,7 @@ const fromBackup = !!backupPath;
 /* eslint-disable no-undef -- the callbacks below are serialised and run
    inside the Chromium tab via Playwright's page.waitForFunction/evaluate,
    where `document` is a real global; ESLint lints this file with Node
-   globals only. Same pattern as test/e2e/smoke.test.mjs. */
+   globals only. Same pattern as test/e2e/smoke.test.mts. */
 
 // Runs inside the page: a coarse fingerprint of whatever `sel` resolves to
 // as a <canvas> (or an element containing one — ECharts mounts its canvas
@@ -59,11 +60,11 @@ const fromBackup = !!backupPath;
 // flat colour; otherwise a hash of a sparse pixel sample. Covers both
 // Chart.js (the canvas is the element) and ECharts (world map, flavor
 // wheel) without needing either library's globals.
-function canvasFingerprint(sel) {
+function canvasFingerprint(sel: string): number | null {
     const host = document.querySelector(sel);
-    const canvas = host && (host.tagName === 'CANVAS' ? host : host.querySelector('canvas'));
+    const canvas = host && (host.tagName === 'CANVAS' ? (host as HTMLCanvasElement) : host.querySelector<HTMLCanvasElement>('canvas'));
     if (!canvas || !canvas.width || !canvas.height) return null;
-    let ctx;
+    let ctx: CanvasRenderingContext2D | null;
     try { ctx = canvas.getContext('2d'); } catch { return null; }
     if (!ctx) return null;
     const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -72,7 +73,7 @@ function canvasFingerprint(sel) {
     let first = -1;
     // Prime stride: hits an aperiodic scatter of pixels across the buffer.
     for (let i = 0; i < data.length; i += 1021 * 4) {
-        const v = data[i] + data[i + 1] * 7 + data[i + 2] * 13 + data[i + 3] * 17;
+        const v = (data[i] ?? 0) + (data[i + 1] ?? 0) * 7 + (data[i + 2] ?? 0) * 13 + (data[i + 3] ?? 0) * 17;
         hash = (Math.imul(hash, 31) + v) >>> 0;
         if (first === -1) first = v;
         else if (v !== first) distinct++;
@@ -82,9 +83,9 @@ function canvasFingerprint(sel) {
 
 // Waits until the canvas has painted AND stopped changing between polls —
 // i.e. any entry animation (ECharts sunburst/map, Chart.js) has finished.
-async function waitForPaint(page, sel, { timeout = 20000, quietMs = 500 } = {}) {
+async function waitForPaint(page: Page, sel: string, { timeout = 20000, quietMs = 500 }: { timeout?: number; quietMs?: number } = {}): Promise<void> {
     const start = Date.now();
-    let prev = null;
+    let prev: number | null = null;
     let stableSince = 0;
     for (;;) {
         const fp = await page.evaluate(canvasFingerprint, sel);
@@ -111,9 +112,9 @@ async function waitForPaint(page, sel, { timeout = 20000, quietMs = 500 } = {}) 
 // is not treated as ready: a blob fetch that 404'd never assigns a src, and an
 // image mid-load reports complete===true with naturalWidth===0 — both used to
 // count as ready and screenshot blank (#1184).
-async function waitForImages(page, sel, { timeout = 10000 } = {}) {
+async function waitForImages(page: Page, sel: string, { timeout = 10000 }: { timeout?: number } = {}): Promise<void> {
     await page.waitForFunction((selector) => {
-        const imgs = [...document.querySelectorAll(selector)];
+        const imgs = [...document.querySelectorAll<HTMLImageElement>(selector)];
         return imgs.every(i => i.hasAttribute('src') && i.complete && i.naturalWidth > 0);
     }, sel, { timeout }).catch(() => {
         console.warn(`waitForImages: ${sel} not decoded within ${timeout}ms — capturing anyway`);
@@ -125,10 +126,10 @@ async function waitForImages(page, sel, { timeout = 10000 } = {}) {
 // naturalWidth 0), which screenshots as an empty dark square with no warning.
 // Reports each entity id so a backed-up-but-unserved photo is visible in the
 // run log instead of silently shipping a blank screenshot.
-async function reportUnhydratedThumbs(page) {
+async function reportUnhydratedThumbs(page: Page): Promise<void> {
     const missing = await page.evaluate(() => {
         const sels = '.lib-bean-thumb, .lib-grinder-thumb, .lib-basket-thumb, .lib-puckscreen-thumb';
-        return [...document.querySelectorAll(sels)]
+        return [...document.querySelectorAll<HTMLImageElement>(sels)]
             .filter(img => !img.hasAttribute('src') || img.naturalWidth === 0)
             .map(img => ({
                 kind: img.className,
@@ -143,7 +144,7 @@ async function reportUnhydratedThumbs(page) {
 // Scrolls `viewSel`'s own overflow:auto box so that `targetSel` (or the
 // .analytics-card wrapping it) sits flush at the top of the frame — exact,
 // unlike Element.scrollIntoView() which stops a scroll-padding short.
-async function alignToTop(page, viewSel, targetSel) {
+async function alignToTop(page: Page, viewSel: string, targetSel: string): Promise<void> {
     await page.evaluate(({ viewSel, targetSel }) => {
         const view = document.querySelector(viewSel);
         const el = document.querySelector(targetSel);
@@ -161,7 +162,7 @@ async function alignToTop(page, viewSel, targetSel) {
 // clientHeight, so that can't be measured — walk the leaf descendants for
 // the real content extent instead). Height is trimmed to whichever is
 // shorter: the visible frame, or the content that's actually there.
-async function shootView(page, sel, filePath, { fromTop = true, pad = 24 } = {}) {
+async function shootView(page: Page, sel: string, filePath: string, { fromTop = true, pad = 24 }: { fromTop?: boolean; pad?: number } = {}): Promise<void> {
     if (fromTop) {
         await page.locator(sel).evaluate(el => el.scrollTo(0, 0));
         await page.waitForTimeout(120);
@@ -170,13 +171,13 @@ async function shootView(page, sel, filePath, { fromTop = true, pad = 24 } = {})
         const vr = el.getBoundingClientRect();
         let bottom = vr.top;
         const paint = /^(CANVAS|IMG|SVG|VIDEO)$/;
-        (function walk(node) {
+        (function walk(node: Element): void {
             for (const c of node.children) {
                 const r = c.getBoundingClientRect();
                 // inline <svg> reports tagName 'svg' (lowercase, SVG namespace)
                 const painty = paint.test((c.tagName || '').toUpperCase());
                 const leaf = c.children.length === 0;
-                if (r.height > 0 && (painty || (leaf && c.textContent.trim()))) {
+                if (r.height > 0 && (painty || (leaf && (c.textContent ?? '').trim()))) {
                     bottom = Math.max(bottom, r.bottom);
                 }
                 walk(c);
@@ -188,13 +189,13 @@ async function shootView(page, sel, filePath, { fromTop = true, pad = 24 } = {})
     await page.screenshot({ path: filePath, clip: box });
 }
 
-async function main() {
+async function main(): Promise<void> {
     mkdirSync(outDir, { recursive: true });
 
     const baseUrl = await bootServer();
     if (fromBackup) {
         const result = await restoreBackup(baseUrl, path.resolve(backupPath));
-        console.log(`Restored backup ${backupPath} (${result.shots ?? 0} shots)`);
+        console.log(`Restored backup ${backupPath ?? ''} (${result.shots ?? 0} shots)`);
     } else {
         await seed(baseUrl);
     }
@@ -248,11 +249,11 @@ async function main() {
     // when the selected shot has one. Seed shots carry no photo, so only wait
     // when the view indicates one — never hang on its absence.
     await page.waitForFunction(() => {
-        const hero = document.getElementById('shotHeroPhoto');
-        const thumb = document.getElementById('shotHeaderThumb');
+        const hero = document.getElementById('shotHeroPhoto') as HTMLImageElement | null;
+        const thumb = document.getElementById('shotHeaderThumb') as HTMLImageElement | null;
         const indicated = !!(hero && hero.classList.contains('has-photo')) || !!(thumb && thumb.style.display !== 'none');
         if (!indicated) return true;
-        const decoded = el => !!el && el.hasAttribute('src') && el.complete && el.naturalWidth > 0;
+        const decoded = (el: HTMLImageElement | null): boolean => !!el && el.hasAttribute('src') && el.complete && el.naturalWidth > 0;
         return decoded(hero) || decoded(thumb);
     }, undefined, { timeout: 10000 }).catch(() => console.warn('shots: shot photo not decoded within 10000ms — capturing anyway'));
     await page.screenshot({ path: path.join(outDir, 'shots.png') });
@@ -330,12 +331,12 @@ async function main() {
     await page.waitForFunction(() => {
         const grid = document.getElementById('dialinGrid');
         return !!grid && grid.children.length > 0 && !grid.querySelector('.dialin-empty');
-    }, undefined, { timeout: 15000 }).catch(err => {
+    }, undefined, { timeout: 15000 }).catch((err: unknown) => {
         if (fromBackup) {
             console.warn('dialin: no dial-in data in backup — capturing anyway');
             return;
         }
-        throw err;
+        throw err instanceof Error ? err : new Error(String(err));
     });
     await shootView(page, '#dialin-view', path.join(outDir, 'dialin.png'));
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isAiCoAuthor, billingTypeFor } from '../scripts/dev-stats.mjs';
+import { isAiCoAuthor, billingTypeFor } from '../scripts/dev-stats.mts';
 
 // #1100: the model breakdown used to only recognize `Claude ...` co-author
 // strings, so every DeepSeek/openhands/future-model commit silently fell out

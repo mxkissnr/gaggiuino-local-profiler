@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkAcceptanceProtocol } from '../scripts/release-check.mjs';
+import { checkAcceptanceProtocol } from '../scripts/release-check.mts';
 
 // #1241: the release's acceptance protocol (docs/acceptance/v<version>.md) is
 // a public Markdown file with one results table. Check 6 only inspects its

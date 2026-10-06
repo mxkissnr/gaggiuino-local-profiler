@@ -1,35 +1,77 @@
 // Pure routing helpers for the static demo service worker (#1193).
 //
-// This is a classic script, not a module: demo-sw.js loads it with
-// importScripts(), and the unit test loads it with vm.runInNewContext(). It
-// must therefore export through `self.GLPDemo` and use no import/export.
+// This is an ES module (#1270): demo-sw.ts imports it and the demo build
+// bundles both into demo-dist/demo-sw.js, and test/demo-sw-core.test.ts
+// imports it directly. It is type-checked under both the DOM and the WebWorker
+// lib, so it uses only ES2022, URL and URLSearchParams.
 //
-// fixtureKey() is a deliberate copy of the recorder's (scripts/demo-fixtures.mjs):
+// fixtureKey() is a deliberate copy of the recorder's (scripts/demo-fixtures.mts):
 // the manifest keys it wrote are the exact strings looked up here, so the two
 // implementations have to normalise identically. test/demo-sw-core.test.ts
 // asserts they agree on a table of URLs.
-self.GLPDemo = (() => {
+
+/** One recorded response: the status, content type and fixture file to replay. */
+export interface FixtureEntry {
+    status: number;
+    contentType: string;
+    file: string;
+}
+
+/** The recorded fixtures index: manifest key -> fixture entry. */
+export interface Manifest {
+    entries: Record<string, FixtureEntry>;
+    /** ISO timestamp of the recording, used to age-shift JSON fixtures. */
+    generated?: string;
+}
+
+/** How one request should be answered; see route(). */
+export type Route =
+    | { kind: 'passthrough' }
+    | { kind: 'token' }
+    | { kind: 'sse' }
+    | { kind: 'fixture'; entry: FixtureEntry }
+    | { kind: 'write' }
+    | { kind: 'missing'; key: string };
+
+/** One live-snapshot payload pushed over api/events during a shot replay. */
+export interface LiveFrame {
+    isLive: boolean;
+    machineReachable: boolean;
+    profileName: string;
+    datapoints: Record<string, unknown> | null;
+    seq: number;
+    temperature: number | null;
+    targetTemperature: number | null;
+    pressure: number | null;
+}
+
+export const GLPDemo = (() => {
     // Cache-buster query keys the SPA appends to force a fresh fetch; a static
     // snapshot keys by the real resource, so both are dropped. Kept in sync
-    // with CACHE_BUSTER_PARAMS in scripts/demo-fixtures.mjs.
+    // with CACHE_BUSTER_PARAMS in scripts/demo-fixtures.mts.
     const CACHE_BUSTER_PARAMS = new Set(['t', '_']);
+
+    /** True for a plain JSON object (not null, not an array). */
+    function isJsonObject(value: unknown): value is Record<string, unknown> {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
 
     /**
      * Normalises a request into the manifest key `"<METHOD> <path>?<sorted query>"`.
      * Query params are sorted so ordering differences do not split one resource
      * across two fixtures, and the cache-buster params above are dropped.
      */
-    function fixtureKey(method, urlString) {
+    function fixtureKey(method: string, urlString: string): string {
         const url = new URL(urlString, 'http://fixture.invalid');
         const params = [...url.searchParams.entries()]
             .filter(([name]) => !CACHE_BUSTER_PARAMS.has(name))
             .sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0) : a[0] < b[0] ? -1 : 1));
         const query = params.map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`).join('&');
-        return `${String(method).toUpperCase()} ${url.pathname}${query ? `?${query}` : ''}`;
+        return `${method.toUpperCase()} ${url.pathname}${query ? `?${query}` : ''}`;
     }
 
     /** A scope always has a trailing slash, even if the caller passed it bare. */
-    function scopeOf(scopeUrl) {
+    function scopeOf(scopeUrl: string): URL {
         const scope = new URL(scopeUrl, 'http://fixture.invalid');
         if (!scope.pathname.endsWith('/')) scope.pathname += '/';
         return scope;
@@ -45,13 +87,13 @@ self.GLPDemo = (() => {
 
     // Fixtures are recorded in this window (2017-07-14 .. 2096-10-02), which
     // is what lets a bare number be told apart from a duration/weight/count.
-    const EPOCH_MS = [1_500_000_000_000, 4_000_000_000_000];
-    const EPOCH_SECONDS = [1_500_000_000, 4_000_000_000];
+    const EPOCH_MS = [1_500_000_000_000, 4_000_000_000_000] as const;
+    const EPOCH_SECONDS = [1_500_000_000, 4_000_000_000] as const;
     const MS_PER_DAY = 86_400_000;
     const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
     const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 
-    function shiftDateString(value, deltaMs) {
+    function shiftDateString(value: string, deltaMs: number): string {
         if (DATE_ONLY.test(value)) {
             const parsed = Date.parse(`${value}T00:00:00.000Z`);
             if (Number.isNaN(parsed)) return value;
@@ -67,21 +109,21 @@ self.GLPDemo = (() => {
     }
 
     /** Shifts one scalar found under a timestamp-shaped key. */
-    function shiftTimestampValue(value, deltaMs) {
+    function shiftTimestampValue(value: unknown, deltaMs: number): unknown {
         if (typeof value === 'number') {
             if (value >= EPOCH_MS[0] && value <= EPOCH_MS[1]) return value + deltaMs;
             if (value >= EPOCH_SECONDS[0] && value <= EPOCH_SECONDS[1]) return value + Math.round(deltaMs / 1000);
             return value;
         }
         if (typeof value === 'string') return shiftDateString(value, deltaMs);
-        if (value && typeof value === 'object') return shiftNode(value, deltaMs);
+        if (typeof value === 'object' && value !== null) return shiftNode(value, deltaMs);
         return value;
     }
 
-    function shiftNode(value, deltaMs) {
-        if (Array.isArray(value)) return value.map(item => shiftNode(item, deltaMs));
-        if (value && typeof value === 'object') {
-            const out = {};
+    function shiftNode(value: unknown, deltaMs: number): unknown {
+        if (Array.isArray(value)) return (value as unknown[]).map(item => shiftNode(item, deltaMs));
+        if (isJsonObject(value)) {
+            const out: Record<string, unknown> = {};
             for (const [key, child] of Object.entries(value)) {
                 out[key] = TIMESTAMP_KEY.test(key) ? shiftTimestampValue(child, deltaMs) : shiftNode(child, deltaMs);
             }
@@ -97,7 +139,7 @@ self.GLPDemo = (() => {
      * weights, scores and every other number pass through untouched. A
      * non-finite delta (a manifest with no usable `generated`) is a no-op.
      */
-    function shiftTimestamps(value, deltaMs) {
+    function shiftTimestamps(value: unknown, deltaMs: number): unknown {
         const delta = typeof deltaMs === 'number' && Number.isFinite(deltaMs) ? deltaMs : 0;
         return shiftNode(value, delta);
     }
@@ -129,12 +171,12 @@ self.GLPDemo = (() => {
      *
      * Any other pathname (or a non-object body) is returned untouched.
      */
-    function patchMachineOnline(pathname, body, nowMs) {
-        if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+    function patchMachineOnline(pathname: string, body: unknown, nowMs: number): unknown {
+        if (!isJsonObject(body)) return body;
         const path = String(pathname);
 
         if (STATUS_PATH.test(path)) {
-            const next = {
+            const next: Record<string, unknown> = {
                 ...body,
                 machineReachable: true,
                 machineOn: false,
@@ -149,8 +191,8 @@ self.GLPDemo = (() => {
             if ('lastMachineError' in next) next.lastMachineError = null;
             if ('lastSyncError' in next) next.lastSyncError = null;
             if (Array.isArray(next.machines)) {
-                next.machines = next.machines.map(machine => (
-                    machine && typeof machine === 'object' && machine.isDefault
+                next.machines = (next.machines as unknown[]).map(machine => (
+                    isJsonObject(machine) && machine.isDefault
                         ? { ...machine, reachable: true, on: false }
                         : machine
                 ));
@@ -197,27 +239,32 @@ self.GLPDemo = (() => {
      * units (the /10 the frontend charts apply), matching the idle-stat fields
      * the online patch (S3b2) sets; `seq` is passed through untouched.
      */
-    function liveFrame(shot, elapsedTenths, seq) {
-        const source = (shot && shot.datapoints) || {};
-        const times = Array.isArray(source.timeInShot) ? source.timeInShot : [];
+    function liveFrame(shot: unknown, elapsedTenths: number, seq: number): LiveFrame {
+        const source = isJsonObject(shot) && isJsonObject(shot.datapoints) ? shot.datapoints : {};
+        const times = Array.isArray(source.timeInShot) ? (source.timeInShot as unknown[]) : [];
         let count = 0;
-        while (count < times.length && times[count] <= elapsedTenths) count += 1;
+        while (count < times.length) {
+            const sample = times[count];
+            if (typeof sample !== 'number' || sample > elapsedTenths) break;
+            count += 1;
+        }
 
-        const datapoints = {};
+        const datapoints: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(source)) {
-            datapoints[key] = Array.isArray(value) ? value.slice(0, count) : value;
+            datapoints[key] = Array.isArray(value) ? (value as unknown[]).slice(0, count) : value;
         }
 
         const last = count - 1;
-        const lastTenth = key => {
+        const lastTenth = (key: string): number | null => {
             const series = datapoints[key];
             if (last < 0 || !Array.isArray(series)) return null;
-            return typeof series[last] === 'number' ? series[last] / 10 : null;
+            const value = (series as unknown[])[last];
+            return typeof value === 'number' ? value / 10 : null;
         };
         return {
             isLive: true,
             machineReachable: true,
-            profileName: (shot && shot.profileName) || '',
+            profileName: isJsonObject(shot) && typeof shot.profileName === 'string' ? shot.profileName : '',
             datapoints,
             seq,
             temperature: lastTenth('temperature'),
@@ -233,7 +280,7 @@ self.GLPDemo = (() => {
      * keys its post-brew shot reload off; 93 °C / 0 bar is what that patch also
      * reports for a reachable idle machine.
      */
-    function idleFrame(seq) {
+    function idleFrame(seq: number): LiveFrame {
         return {
             isLive: false,
             machineReachable: true,
@@ -252,8 +299,8 @@ self.GLPDemo = (() => {
      * reads (`GET /api/shots/{id}`, no `?`) and the trash/paged variants are
      * skipped so the plain newest-first page wins.
      */
-    function shotsListKey(manifest) {
-        const entries = (manifest && manifest.entries) || {};
+    function shotsListKey(manifest: Manifest): string | null {
+        const entries = manifest.entries;
         for (const key of Object.keys(entries)) {
             if (!key.startsWith('GET /api/shots?')) continue;
             const query = key.slice('GET /api/shots?'.length);
@@ -275,7 +322,7 @@ self.GLPDemo = (() => {
      *   { kind: 'write' }                 any non-GET/HEAD under api/
      *   { kind: 'missing', key }          GET with no recorded response
      */
-    function route(method, requestUrl, scopeUrl, manifest) {
+    function route(method: string, requestUrl: string, scopeUrl: string, manifest: Manifest): Route {
         const scope = scopeOf(scopeUrl);
         const url = new URL(requestUrl, scope.href);
         if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) {
@@ -286,19 +333,19 @@ self.GLPDemo = (() => {
         const isApi = relative.startsWith('api/');
         if (!isApi && relative !== 'shots.json') return { kind: 'passthrough' };
 
-        const upper = String(method).toUpperCase();
+        const upper = method.toUpperCase();
         if (upper === 'GET' && relative === 'api/token') return { kind: 'token' };
         if (upper === 'GET' && relative === 'api/events') return { kind: 'sse' };
         if (upper !== 'GET' && upper !== 'HEAD') {
             // Writes under api/ are accepted and discarded a little further
-            // down, in demo-sw.js; anything else is not ours to touch.
+            // down, in demo-sw.ts; anything else is not ours to touch.
             return isApi ? { kind: 'write' } : { kind: 'passthrough' };
         }
 
         // Reads are only ever recorded as GET, so a HEAD request probes the
         // GET fixture rather than a "HEAD /..." key that cannot exist.
         const key = fixtureKey(upper === 'HEAD' ? 'GET' : upper, `/${relative}${url.search}`);
-        const entry = manifest && manifest.entries ? manifest.entries[key] : undefined;
+        const entry = manifest.entries[key];
         return entry ? { kind: 'fixture', entry } : { kind: 'missing', key };
     }
 

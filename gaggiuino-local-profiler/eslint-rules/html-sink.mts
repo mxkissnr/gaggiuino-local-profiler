@@ -1,5 +1,3 @@
-'use strict';
-
 // #1104 L1: enforce the Html brand at every markup sink in the migrated
 // TypeScript sources (public-src/**/*.ts). `Html` (public-src/utils.ts) is
 // `string & { readonly __html: unique symbol }`, so any value that has not been
@@ -12,7 +10,8 @@
 // The rule only inspects the *value* half of a sink; `el.innerHTML = html`...``
 // therefore stays allowed, which is the point of the branding work.
 
-const { ESLintUtils } = require('@typescript-eslint/utils');
+import { AST_NODE_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
+import type ts from 'typescript';
 
 const SINK_PROPERTIES = new Set(['innerHTML', 'outerHTML']);
 
@@ -21,20 +20,20 @@ const HTML_BRAND = '__html';
 
 // Whether a resolved expression type carries the Html brand. Given a plain
 // `string` (or `any`) this is false, so the value is reported.
-function isHtmlValue(checker, type) {
+function isHtmlValue(checker: ts.TypeChecker, type: ts.Type): boolean {
   return checker.getPropertyOfType(type, HTML_BRAND) !== undefined;
 }
 
-function memberPropertyName(member) {
+function memberPropertyName(member: TSESTree.MemberExpression): string | null {
   if (member.computed) {
-    return member.property.type === 'Literal' && typeof member.property.value === 'string'
+    return member.property.type === AST_NODE_TYPES.Literal && typeof member.property.value === 'string'
       ? member.property.value
       : null;
   }
-  return member.property.type === 'Identifier' ? member.property.name : null;
+  return member.property.type === AST_NODE_TYPES.Identifier ? member.property.name : null;
 }
 
-const htmlSinkRule = {
+export const htmlSinkRule: TSESLint.RuleModule<'htmlSink', []> = {
   meta: {
     type: 'problem',
     docs: {
@@ -47,19 +46,23 @@ const htmlSinkRule = {
     },
     schema: [],
   },
+  defaultOptions: [],
   create(context) {
-    let services;
-    try {
-      services = ESLintUtils.getParserServices(context);
-    } catch {
-      // No type information (e.g. a file outside the typed project): stay quiet
-      // rather than reporting on a value we cannot inspect.
-      return {};
-    }
+    const services = (() => {
+      try {
+        return ESLintUtils.getParserServices(context);
+      } catch {
+        // No type information (e.g. a file outside the typed project): stay quiet
+        // rather than reporting on a value we cannot inspect.
+        return null;
+      }
+    })();
+    if (!services) return {};
+
     const checker = services.program.getTypeChecker();
 
-    const checkValue = (node) => {
-      if (!node || node.type === 'SpreadElement') return;
+    const checkValue = (node: TSESTree.Node | undefined): void => {
+      if (!node || node.type === AST_NODE_TYPES.SpreadElement) return;
       const tsNode = services.esTreeNodeToTSNodeMap.get(node);
       if (!tsNode) return;
       if (!isHtmlValue(checker, checker.getTypeAtLocation(tsNode))) {
@@ -69,14 +72,17 @@ const htmlSinkRule = {
 
     return {
       AssignmentExpression(node) {
-        if (node.left.type === 'MemberExpression' && SINK_PROPERTIES.has(memberPropertyName(node.left))) {
-          checkValue(node.right);
+        if (node.left.type === AST_NODE_TYPES.MemberExpression) {
+          const name = memberPropertyName(node.left);
+          if (name !== null && SINK_PROPERTIES.has(name)) {
+            checkValue(node.right);
+          }
         }
       },
       CallExpression(node) {
         const callee = node.callee;
         if (
-          callee.type === 'MemberExpression' &&
+          callee.type === AST_NODE_TYPES.MemberExpression &&
           memberPropertyName(callee) === 'insertAdjacentHTML'
         ) {
           checkValue(node.arguments[1]);
@@ -85,5 +91,3 @@ const htmlSinkRule = {
     };
   },
 };
-
-module.exports = { htmlSinkRule };

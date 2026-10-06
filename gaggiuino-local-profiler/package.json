@@ -7,14 +7,14 @@
     "dev": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "node --test --test-force-exit test/e2e/*.test.mjs",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "test:e2e": "node --test --test-force-exit test/e2e/*.test.mts",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "types:api": "openapi-typescript go/internal/system/openapi.yaml -o public-src/api/schema.gen.ts",
-    "release:check": "node scripts/release-check.mjs",
+    "release:check": "node scripts/release-check.mts",
     "changelog:collect": "node scripts/changelog-collect.mts",
-    "demo:fixtures": "node scripts/demo-fixtures.mjs",
-    "demo:smoke": "node scripts/demo-smoke.mjs"
+    "demo:fixtures": "node scripts/demo-fixtures.mts",
+    "demo:smoke": "node scripts/demo-smoke.mts"
   },
   "dependencies": {
     "chart.js": "4.5.1",

@@ -30,17 +30,29 @@ const TOP_LEVEL_KEY = /^[^\s#]/;
 const OPTION_KEY    = /^\s{2}([A-Za-z0-9_]+):\s*(.*)$/;
 const OPTION_COMMENT = /^\s{2}#/;
 
+interface Block {
+    start: number;
+    end: number;
+}
+
+interface OptionEntry {
+    key: string;
+    lines: string[];
+}
+
 // Returns { startLine, endLine } (endLine exclusive) for the block whose
 // header is an exact `${key}:` line at column 0 -- i.e. from that header
 // through the line before the next top-level key, or EOF.
-function findBlock(lines, key) {
+function findBlock(lines: string[], key: string): Block {
     const start = lines.findIndex((line) => line === `${key}:`);
     if (start === -1) {
         throw new Error(`no top-level "${key}:" block found`);
     }
     let end = lines.length;
     for (let i = start + 1; i < lines.length; i++) {
-        if (TOP_LEVEL_KEY.test(lines[i])) {
+        const line = lines[i];
+        if (line === undefined) break;
+        if (TOP_LEVEL_KEY.test(line)) {
             end = i;
             break;
         }
@@ -51,9 +63,9 @@ function findBlock(lines, key) {
 // Parses an options block's body (everything after the `options:` header
 // line, up to the block's end) into ordered {key, lines} entries, where
 // `lines` includes any comment lines directly preceding the key.
-function parseOptionEntries(bodyLines) {
-    const entries = [];
-    let pendingComments = [];
+function parseOptionEntries(bodyLines: string[]): OptionEntry[] {
+    const entries: OptionEntry[] = [];
+    let pendingComments: string[] = [];
     for (const line of bodyLines) {
         if (line.trim() === '') {
             // A blank line is formatting, not a key -- there's nothing to
@@ -76,7 +88,7 @@ function parseOptionEntries(bodyLines) {
         if (!match) {
             throw new Error(`unrecognized line inside options block: ${JSON.stringify(line)}`);
         }
-        entries.push({ key: match[1], lines: [...pendingComments, line] });
+        entries.push({ key: match[1] ?? '', lines: [...pendingComments, line] });
         pendingComments = [];
     }
     if (pendingComments.length > 0) {
@@ -85,10 +97,16 @@ function parseOptionEntries(bodyLines) {
     return entries;
 }
 
+export interface SyncDevConfigResult {
+    text: string;
+    added: string[];
+    removed: string[];
+}
+
 // sourceText: this repo's config.yaml. targetText: the dev manifest's
 // config.yaml. Returns the new target text plus a short summary of what
 // changed, for the workflow log.
-export function syncDevConfig(sourceText, targetText) {
+export function syncDevConfig(sourceText: string, targetText: string): SyncDevConfigResult {
     const sourceLines = sourceText.split('\n');
     const targetLines = targetText.split('\n');
 
@@ -99,13 +117,13 @@ export function syncDevConfig(sourceText, targetText) {
 
     const sourceEntries = parseOptionEntries(sourceLines.slice(sourceOptions.start + 1, sourceOptions.end));
     const targetEntries = parseOptionEntries(targetLines.slice(targetOptions.start + 1, targetOptions.end));
-    const targetByKey = new Map(targetEntries.map((entry) => [entry.key, entry]));
+    const targetByKey = new Map<string, OptionEntry>(targetEntries.map((entry) => [entry.key, entry]));
     const sourceKeys = new Set(sourceEntries.map((entry) => entry.key));
 
-    const added = [];
+    const added: string[] = [];
     const removed = targetEntries.filter((entry) => !sourceKeys.has(entry.key)).map((entry) => entry.key);
 
-    const mergedOptionLines = ['options:'];
+    const mergedOptionLines: string[] = ['options:'];
     for (const sourceEntry of sourceEntries) {
         const existing = targetByKey.get(sourceEntry.key);
         if (existing) {
@@ -128,12 +146,12 @@ export function syncDevConfig(sourceText, targetText) {
     return { text: result.join('\n'), added, removed };
 }
 
-// CLI: node sync-dev-config.mjs <source config.yaml> <target config.yaml>
+// CLI: node sync-dev-config.mts <source config.yaml> <target config.yaml>
 // Overwrites the target in place.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1] ?? ''}`) {
     const [sourcePath, targetPath] = process.argv.slice(2);
     if (!sourcePath || !targetPath) {
-        console.error('usage: sync-dev-config.mjs <source config.yaml> <target config.yaml>');
+        console.error('usage: sync-dev-config.mts <source config.yaml> <target config.yaml>');
         process.exit(1);
     }
     const sourceText = readFileSync(sourcePath, 'utf8');

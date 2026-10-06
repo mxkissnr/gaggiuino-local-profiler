@@ -68,10 +68,24 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 	}
 
 	// Vite's "public dir" convention is preserved: these ship unbundled.
-	for _, name := range []string{"manifest.json", "sw.js", "icon.png", "countries-110m.json"} {
+	for _, name := range []string{"manifest.json", "icon.png", "countries-110m.json"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
-			t.Errorf("public/%s was not copied into the output: %v", name, err)
+			t.Errorf("public asset %s was not copied into the output: %v", name, err)
 		}
+	}
+
+	// The app-shell service worker is built from public-src/sw.ts (#1270)
+	// into an unhashed sw.js at the output root, as a classic script: it must
+	// carry the shell cache name and no import/export statement.
+	swJS, err := os.ReadFile(filepath.Join(out, "sw.js"))
+	if err != nil {
+		t.Fatalf("read sw.js: %v", err)
+	}
+	if !strings.Contains(string(swJS), "glp-shell-v1") {
+		t.Error("sw.js does not contain the shell cache name glp-shell-v1")
+	}
+	if regexp.MustCompile(`\b(import|export)\b`).Match(swJS) {
+		t.Errorf("sw.js must be a classic script, but matches import/export:\n%s", headOf(string(swJS)))
 	}
 
 	// CSS extracted from main.ts's own `import './style.css'`.

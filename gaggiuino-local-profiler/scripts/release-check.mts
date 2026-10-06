@@ -32,7 +32,7 @@
 //     on disk — its notes never reached CHANGELOG.md (run
 //     `npm run changelog:collect`)
 
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, type Dirent } from 'fs';
 import { execFileSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -42,11 +42,11 @@ const packageRoot = path.join(__dirname, '..');          // .../gaggiuino-local-
 const repoRoot     = path.join(packageRoot, '..');        // git checkout root
 const pkgRelDir    = path.relative(repoRoot, packageRoot);
 
-function fmtTime(unixSeconds) {
+function fmtTime(unixSeconds: number): string {
     return new Date(unixSeconds * 1000).toISOString();
 }
 
-export function gitLastCommitTime(gitRoot, relPathFromRoot) {
+export function gitLastCommitTime(gitRoot: string, relPathFromRoot: string): number | null {
     try {
         const out = execFileSync(
             'git', ['log', '-1', '--format=%ct', '--', relPathFromRoot],
@@ -107,7 +107,7 @@ const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 // it (`x/*c*/y` must not become `xy`), so every comment is replaced with a
 // single space rather than nothing, and newlines inside removed comments
 // are preserved so blank-line-only differences keep comparing equal.
-function stripJsLikeComments(src) {
+function stripJsLikeComments(src: string): string {
     let out = '';
     let mode = 'NORMAL'; // NORMAL | LINE_COMMENT | BLOCK_COMMENT | STRING_SINGLE | STRING_DOUBLE | TEMPLATE
     // Each open `${...}` inside a template literal pushes a frame here so
@@ -116,13 +116,13 @@ function stripJsLikeComments(src) {
     // This is what makes nested template literals (`${a.map(x => \`...\`)}`,
     // common in this codebase) work: entering a nested backtick from
     // inside a `${}` just sets mode = TEMPLATE without touching the stack.
-    const templateExprStack = [];
+    const templateExprStack: { braceDepth: number }[] = [];
     let i = 0;
     const n = src.length;
 
     while (i < n) {
-        const c = src[i];
-        const c2 = i + 1 < n ? src[i + 1] : '';
+        const c = src[i]!;
+        const c2 = i + 1 < n ? src[i + 1]! : '';
 
         if (mode === 'LINE_COMMENT') {
             if (c === '\n') { out += '\n'; mode = 'NORMAL'; }
@@ -137,14 +137,14 @@ function stripJsLikeComments(src) {
         }
         if (mode === 'STRING_SINGLE' || mode === 'STRING_DOUBLE') {
             const quote = mode === 'STRING_SINGLE' ? "'" : '"';
-            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]!; i += 2; continue; }
             out += c;
             if (c === quote) mode = 'NORMAL';
             i++;
             continue;
         }
         if (mode === 'TEMPLATE') {
-            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]!; i += 2; continue; }
             if (c === '`') { out += c; mode = 'NORMAL'; i++; continue; }
             if (c === '$' && c2 === '{') {
                 out += '${';
@@ -161,7 +161,7 @@ function stripJsLikeComments(src) {
         // NORMAL — also covers "inside a template's ${...} expression",
         // tracked via templateExprStack rather than a distinct mode.
         if (templateExprStack.length) {
-            const top = templateExprStack[templateExprStack.length - 1];
+            const top = templateExprStack[templateExprStack.length - 1]!;
             if (c === '{') { top.braceDepth++; out += c; i++; continue; }
             if (c === '}') {
                 if (top.braceDepth === 0) {
@@ -188,15 +188,15 @@ function stripJsLikeComments(src) {
     return out;
 }
 
-function stripCssComments(src) {
+function stripCssComments(src: string): string {
     let out = '';
     let mode = 'NORMAL'; // NORMAL | BLOCK_COMMENT | STRING_SINGLE | STRING_DOUBLE
     let i = 0;
     const n = src.length;
 
     while (i < n) {
-        const c = src[i];
-        const c2 = i + 1 < n ? src[i + 1] : '';
+        const c = src[i]!;
+        const c2 = i + 1 < n ? src[i + 1]! : '';
 
         if (mode === 'BLOCK_COMMENT') {
             if (c === '\n') { out += '\n'; i++; continue; }
@@ -206,7 +206,7 @@ function stripCssComments(src) {
         }
         if (mode === 'STRING_SINGLE' || mode === 'STRING_DOUBLE') {
             const quote = mode === 'STRING_SINGLE' ? "'" : '"';
-            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]; i += 2; continue; }
+            if (c === '\\' && i + 1 < n) { out += c + src[i + 1]!; i += 2; continue; }
             out += c;
             if (c === quote) mode = 'NORMAL';
             i++;
@@ -231,7 +231,7 @@ function stripCssComments(src) {
 // exactly as-is rather than treated as an open-ended comment, so a
 // malformed/truncated file can't cause real trailing content to vanish
 // from the comparison.
-function stripHtmlComments(src) {
+function stripHtmlComments(src: string): string {
     let out = '';
     let i = 0;
     const n = src.length;
@@ -249,13 +249,13 @@ function stripHtmlComments(src) {
             i = end + 3;
             continue;
         }
-        out += src[i];
+        out += src[i]!;
         i++;
     }
     return out;
 }
 
-const COMMENT_STRIPPERS = {
+const COMMENT_STRIPPERS: Record<string, (src: string) => string> = {
     '.js':  stripJsLikeComments,
     '.mjs': stripJsLikeComments,
     '.cjs': stripJsLikeComments,
@@ -272,14 +272,14 @@ const COMMENT_STRIPPERS = {
 // as-is: an actual code line was untouched by the comment strip, so if the
 // stripped comparison as a whole differs, something other than comments/
 // blank lines changed and that's exactly what should count as relevant.
-function normalizeForCompare(stripped) {
+function normalizeForCompare(stripped: string): string {
     return stripped.split('\n').filter((line) => line.trim() !== '').join('\n');
 }
 
 export { stripJsLikeComments, stripCssComments, stripHtmlComments };
 
-function commitsTouching(gitRoot, pathSpec) {
-    let out;
+function commitsTouching(gitRoot: string, pathSpec: string): { hash: string; time: number }[] {
+    let out: string;
     try {
         out = execFileSync(
             'git', ['log', '--format=%H %ct', '--', pathSpec],
@@ -303,8 +303,8 @@ function commitsTouching(gitRoot, pathSpec) {
 // change gets read as "old path deleted (had content), new path added (has
 // content)" — i.e. relevant — which is the safe direction (over-flagging,
 // never under-flagging), not a correctness bug.
-function changedFilesNameStatus(gitRoot, parentHash, hash, pathSpec) {
-    let raw;
+function changedFilesNameStatus(gitRoot: string, parentHash: string, hash: string, pathSpec: string): { status: string; filePath: string }[] | null {
+    let raw: string;
     try {
         raw = execFileSync(
             'git', ['diff', '--no-color', '--no-renames', '--name-status', '-z', parentHash, hash, '--', pathSpec],
@@ -314,15 +314,15 @@ function changedFilesNameStatus(gitRoot, parentHash, hash, pathSpec) {
         return null;
     }
     const tokens = raw.split('\0').filter((t) => t !== '');
-    const files = [];
+    const files: { status: string; filePath: string }[] = [];
     for (let i = 0; i + 1 < tokens.length; i += 2) {
-        files.push({ status: tokens[i], filePath: tokens[i + 1] });
+        files.push({ status: tokens[i]!, filePath: tokens[i + 1]! });
     }
     return files;
 }
 
-function binaryPathSet(gitRoot, parentHash, hash, pathSpec) {
-    let raw;
+function binaryPathSet(gitRoot: string, parentHash: string, hash: string, pathSpec: string): Set<string> | null {
+    let raw: string;
     try {
         raw = execFileSync(
             'git', ['diff', '--no-color', '--no-renames', '--numstat', '-z', parentHash, hash, '--', pathSpec],
@@ -332,14 +332,14 @@ function binaryPathSet(gitRoot, parentHash, hash, pathSpec) {
         return null;
     }
     const tokens = raw.split('\0').filter((t) => t !== '');
-    const binary = new Set();
+    const binary = new Set<string>();
     for (let i = 0; i + 2 < tokens.length; i += 3) {
-        if (tokens[i] === '-' && tokens[i + 1] === '-') binary.add(tokens[i + 2]);
+        if (tokens[i] === '-' && tokens[i + 1] === '-') binary.add(tokens[i + 2]!);
     }
     return binary;
 }
 
-function blobContent(gitRoot, hash, filePath) {
+function blobContent(gitRoot: string, hash: string, filePath: string): string | null {
     try {
         return execFileSync('git', ['show', `${hash}:${filePath}`], { cwd: gitRoot, encoding: 'utf8' });
     } catch {
@@ -352,8 +352,8 @@ function blobContent(gitRoot, hash, filePath) {
 // code (A/M/D/T); only A and D legitimately mean "one side doesn't exist"
 // — anywhere else, a missing blob is a real error, not an expected
 // deletion/addition, so it's treated as relevant rather than as ''.
-function isFileChangeVisuallyRelevant(gitRoot, parentHash, hash, filePath, status) {
-    let oldContent;
+function isFileChangeVisuallyRelevant(gitRoot: string, parentHash: string, hash: string, filePath: string, status: string): boolean {
+    let oldContent: string | null;
     if (status === 'A') {
         oldContent = '';
     } else {
@@ -361,7 +361,7 @@ function isFileChangeVisuallyRelevant(gitRoot, parentHash, hash, filePath, statu
         if (oldContent === null) return true;
     }
 
-    let newContent;
+    let newContent: string | null;
     if (status === 'D') {
         newContent = '';
     } else {
@@ -380,8 +380,8 @@ function isFileChangeVisuallyRelevant(gitRoot, parentHash, hash, filePath, statu
 // clean diff for are treated as relevant without inspection — combined
 // merge diffs aren't per-file-addressable the same way, and "can't tell"
 // must resolve to "assume relevant" (see the module doc comment on check 3).
-export function isVisuallyRelevantCommit(gitRoot, hash, pathSpec) {
-    let parents;
+export function isVisuallyRelevantCommit(gitRoot: string, hash: string, pathSpec: string): boolean {
+    let parents: string[];
     try {
         parents = execFileSync(
             'git', ['rev-list', '--parents', '-1', hash],
@@ -392,7 +392,7 @@ export function isVisuallyRelevantCommit(gitRoot, hash, pathSpec) {
     }
     if (parents.length > 2) return true; // merge commit (2+ parents)
 
-    const parentHash = parents.length === 2 ? parents[1] : EMPTY_TREE_HASH;
+    const parentHash = parents.length === 2 ? parents[1]! : EMPTY_TREE_HASH;
 
     const files = changedFilesNameStatus(gitRoot, parentHash, hash, pathSpec);
     if (files === null) return true;
@@ -413,8 +413,8 @@ export function isVisuallyRelevantCommit(gitRoot, hash, pathSpec) {
 // (which assumes it's sitting inside the actual gaggiuino-local-profiler
 // checkout). gitRoot is the repo root; publicSrcRel/screenshotsDirRel are
 // paths relative to it.
-export function checkScreenshotFreshness(gitRoot, publicSrcRel, screenshotsDirRel) {
-    const failures = [];
+export function checkScreenshotFreshness(gitRoot: string, publicSrcRel: string, screenshotsDirRel: string): string[] {
+    const failures: string[] = [];
     const screenshotsDirAbs = path.join(gitRoot, screenshotsDirRel);
 
     if (!existsSync(screenshotsDirAbs)) {
@@ -428,12 +428,12 @@ export function checkScreenshotFreshness(gitRoot, publicSrcRel, screenshotsDirRe
         return failures;
     }
 
-    const relevanceCache = new Map();
-    const isRelevant = (hash) => {
+    const relevanceCache = new Map<string, boolean>();
+    const isRelevant = (hash: string): boolean => {
         if (!relevanceCache.has(hash)) {
             relevanceCache.set(hash, isVisuallyRelevantCommit(gitRoot, hash, publicSrcRel));
         }
-        return relevanceCache.get(hash);
+        return relevanceCache.get(hash)!;
     };
 
     const pngFiles = readdirSync(screenshotsDirAbs).filter((f) => f.endsWith('.png'));
@@ -465,13 +465,13 @@ export function checkScreenshotFreshness(gitRoot, publicSrcRel, screenshotsDirRe
 // private infrastructure out of a public file. Pure — takes the protocol
 // Markdown and the release version, returns one message per problem — so it
 // can be exercised in tests without touching the file system.
-export function checkAcceptanceProtocol(markdown, version) {
-    const failures = [];
+export function checkAcceptanceProtocol(markdown: string, version: string | null): string[] {
+    const failures: string[] = [];
     const versionLabel = version ? `v${version}` : 'the release';
 
     // A table row is a line whose first non-space character is "|". Split on
     // the pipes and trim each cell; the outer pipes drop as empty edge cells.
-    const splitRow = (line) => {
+    const splitRow = (line: string): string[] => {
         let s = line.trim();
         if (s.startsWith('|')) s = s.slice(1);
         if (s.endsWith('|')) s = s.slice(0, -1);
@@ -485,8 +485,8 @@ export function checkAcceptanceProtocol(markdown, version) {
     let resultCol = -1;
     let caseCol = -1;
     for (let i = 0; i < lines.length; i++) {
-        if (!lines[i].trim().startsWith('|')) continue;
-        const cells = splitRow(lines[i]);
+        if (!lines[i]!.trim().startsWith('|')) continue;
+        const cells = splitRow(lines[i]!);
         const rIdx = cells.findIndex((c) => /\bresult\b/i.test(c));
         if (rIdx === -1) continue;
         headerIdx = i;
@@ -500,8 +500,8 @@ export function checkAcceptanceProtocol(markdown, version) {
     } else {
         let dataRows = 0;
         for (let i = headerIdx + 1; i < lines.length; i++) {
-            if (!lines[i].trim().startsWith('|')) break; // table ends here
-            const cells = splitRow(lines[i]);
+            if (!lines[i]!.trim().startsWith('|')) break; // table ends here
+            const cells = splitRow(lines[i]!);
             // The header's separator row ("| --- | --- |") is not a case.
             if (cells.every((c) => c === '' || /^:?-{2,}:?$/.test(c))) continue;
             if (cells.length <= resultCol) continue;
@@ -510,7 +510,7 @@ export function checkAcceptanceProtocol(markdown, version) {
             const id = (cells[0] || '').trim();
             const caseName = caseCol !== -1 ? (cells[caseCol] || '').trim() : '';
             const label = caseName ? `${id} "${caseName}"` : id;
-            const raw = cells[resultCol].trim();
+            const raw = cells[resultCol]!.trim();
             const result = raw.toLowerCase();
 
             if (result === 'pass') {
@@ -561,11 +561,11 @@ export function checkAcceptanceProtocol(markdown, version) {
 // optional — a checkout that predates fragments simply has none. Filesystem
 // read only: takes the directory path, returns one message if any fragment is
 // left after README.md is discounted.
-export function checkChangelogFragments(fragmentsDir) {
-    const failures = [];
+export function checkChangelogFragments(fragmentsDir: string): string[] {
+    const failures: string[] = [];
     if (!existsSync(fragmentsDir)) return failures;
 
-    let entries;
+    let entries: Dirent[];
     try {
         entries = readdirSync(fragmentsDir, { withFileTypes: true });
     } catch {
@@ -586,8 +586,8 @@ export function checkChangelogFragments(fragmentsDir) {
     return failures;
 }
 
-function main() {
-    const failures = [];
+function main(): void {
+    const failures: string[] = [];
 
     // ── Check 1: version consistency ────────────────────────────────────
     // config.yaml's version: is canonical (HA Supervisor reads it directly).
@@ -597,7 +597,7 @@ function main() {
     const configPath        = path.join(packageRoot, 'config.yaml');
     const configSrc         = readFileSync(configPath, 'utf8');
     const configVersionMatch = configSrc.match(/^version:\s*"?([^"\n]+?)"?\s*$/m);
-    const configVersion     = configVersionMatch ? configVersionMatch[1] : null;
+    const configVersion     = configVersionMatch ? configVersionMatch[1]! : null;
     // `glpVersion` name kept for checks 2 and 4 below — it is the canonical
     // version they compare against.
     const glpVersion        = configVersion;
@@ -618,7 +618,7 @@ function main() {
             if (!m) {
                 failures.push(`Check 1 (version match): could not read a version from ${spot.label}`);
             } else if (m[1] !== configVersion) {
-                failures.push(`Check 1 (version match): ${spot.label}="${m[1]}" does not match config.yaml version="${configVersion}"`);
+                failures.push(`Check 1 (version match): ${spot.label}="${m[1]!}" does not match config.yaml version="${configVersion}"`);
             }
         }
     }
@@ -626,7 +626,7 @@ function main() {
     // ── Check 2: CHANGELOG heading ───────────────────────────────────────
     const changelogPath = path.join(packageRoot, 'CHANGELOG.md');
     const changelogSrc  = readFileSync(changelogPath, 'utf8');
-    const headings      = [...changelogSrc.matchAll(/^##\s*\[([^\]]+)\]/gm)].map((m) => m[1]);
+    const headings      = [...changelogSrc.matchAll(/^##\s*\[([^\]]+)\]/gm)].map((m) => m[1]!);
     const releasedHeadings = headings.filter((h) => h.toLowerCase() !== 'unreleased');
     const topHeading = releasedHeadings[0] || null;
 
@@ -647,8 +647,8 @@ function main() {
     const devStatsPathRel = 'DEVELOPMENT.md';
     const devStatsPathAbs = path.join(repoRoot, devStatsPathRel);
     const featureDirs      = ['go', 'public-src'].map((p) => path.join(pkgRelDir, p));
-    let latestFeatureTime  = null;
-    let latestFeaturePath  = null;
+    let latestFeatureTime: number | null = null;
+    let latestFeaturePath: string | null = null;
     for (const p of featureDirs) {
         const t = gitLastCommitTime(repoRoot, p);
         if (t != null && (latestFeatureTime == null || t > latestFeatureTime)) {
@@ -658,21 +658,21 @@ function main() {
     }
 
     if (!existsSync(devStatsPathAbs)) {
-        failures.push(`Check 4 (dev-stats freshness): ${devStatsPathAbs} does not exist — run scripts/dev-stats.mjs`);
+        failures.push(`Check 4 (dev-stats freshness): ${devStatsPathAbs} does not exist — run node scripts/dev-stats.mts`);
     } else {
         const devStatsTime = gitLastCommitTime(repoRoot, devStatsPathRel);
         if (devStatsTime != null && latestFeatureTime != null && devStatsTime < latestFeatureTime) {
-            failures.push(`Check 4 (dev-stats freshness): DEVELOPMENT.md last committed ${fmtTime(devStatsTime)}, older than the most recent feature commit (${latestFeaturePath}, ${fmtTime(latestFeatureTime)}) — run scripts/dev-stats.mjs`);
+            failures.push(`Check 4 (dev-stats freshness): DEVELOPMENT.md last committed ${fmtTime(devStatsTime)}, older than the most recent feature commit (${latestFeaturePath}, ${fmtTime(latestFeatureTime)}) — run node scripts/dev-stats.mts`);
         }
     }
 
     // ── Check 5: DOCS.md / DOCS.de.md heading-structure parity ─────────
-    function headingSequence(filePath) {
+    function headingSequence(filePath: string): number[] {
         const src = readFileSync(filePath, 'utf8');
-        const seq = [];
+        const seq: number[] = [];
         for (const line of src.split('\n')) {
             const m = line.match(/^(#{1,6})\s+/);
-            if (m) seq.push(m[1].length);
+            if (m) seq.push(m[1]!.length);
         }
         return seq;
     }

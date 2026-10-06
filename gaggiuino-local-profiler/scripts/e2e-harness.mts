@@ -2,8 +2,8 @@
 // Go backend (`glp-server`) against its own tmp data dir, image dir and
 // port — never touches /data or 8099 — seeds the built-in demo dataset plus a second
 // machine so Library / Analytics / the multi-machine switcher aren't empty,
-// and exposes the resulting baseUrl. Used by both scripts/screenshots.mjs
-// (README/wiki screenshots) and test/e2e/smoke.test.mjs (Playwright smoke
+// and exposes the resulting baseUrl. Used by both scripts/screenshots.mts
+// (README/wiki screenshots) and test/e2e/smoke.test.mts (Playwright smoke
 // test, #798).
 //
 // The Node backend this used to boot in-process was removed in 3.0.0
@@ -16,6 +16,7 @@
 // that drive Chromium (this module itself never touches Playwright).
 
 import { spawn, execFileSync } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import { mkdtempSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -36,9 +37,15 @@ export const tmpDataDir = mkdtempSync(path.join(tmpdir(), 'glp-e2e-'));
 // here via GLP_IMAGE_DIR, never into the real /data/bean-images.
 export const tmpImageDir = path.join(tmpDataDir, 'bean-images');
 
-let serverProc = null;
+let serverProc: ChildProcess | null = null;
 
-async function waitForServer(url, timeoutMs = 30000) {
+interface RestoreResult {
+    ok: boolean;
+    images: number;
+    shots?: number;
+}
+
+async function waitForServer(url: string, timeoutMs = 30000): Promise<void> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
         try {
@@ -54,7 +61,7 @@ async function waitForServer(url, timeoutMs = 30000) {
 // produced by go/cmd/frontend-build (esbuild's Go API, #1033), which owns
 // the git-ignored dist tree and wipes it first; the committed placeholder
 // index.html is restored afterwards so the working tree is left clean.
-function buildServerBinary() {
+function buildServerBinary(): string {
     const placeholderIndex = readFileSync(path.join(distDir, 'index.html'));
     const binPath = path.join(tmpDataDir, 'glp-server');
 
@@ -81,7 +88,7 @@ function buildServerBinary() {
 // of enable_orders) never exists in this throwaway environment and the
 // server falls back to this env var — gives the Orders view something to
 // show instead of the tab not existing at all.
-export async function bootServer() {
+export async function bootServer(): Promise<string> {
     mkdirSync(tmpDataDir, { recursive: true });
     mkdirSync(tmpImageDir, { recursive: true });
     const binPath = buildServerBinary();
@@ -99,7 +106,7 @@ export async function bootServer() {
         },
     });
     serverProc.on('exit', (code, signal) => {
-        if (code && code !== 0) console.error(`glp-server exited with code ${code} (signal ${signal})`);
+        if (code && code !== 0) console.error(`glp-server exited with code ${code} (signal ${String(signal)})`);
     });
 
     const baseUrl = `http://127.0.0.1:${PORT}`;
@@ -107,7 +114,7 @@ export async function bootServer() {
     return baseUrl;
 }
 
-export function stopServer() {
+export function stopServer(): void {
     if (serverProc && !serverProc.killed) serverProc.kill('SIGTERM');
     serverProc = null;
 }
@@ -116,16 +123,16 @@ export function stopServer() {
 // recipe — see go/internal/system/demo.go) and adds a second machine so
 // the multi-machine switcher, per-machine analytics and the Settings
 // machine list have more than the single default row to render.
-export async function seed(baseUrl) {
-    const { apiToken } = await fetch(`${baseUrl}/api/token`).then(r => r.json());
-    const post = (p, body) => fetch(`${baseUrl}${p}`, {
+export async function seed(baseUrl: string): Promise<{ machine2: unknown }> {
+    const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken: string };
+    const post = (p: string, body?: unknown): Promise<unknown> => fetch(`${baseUrl}${p}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-glp-token': apiToken },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? null : JSON.stringify(body),
     }).then(async r => {
         const text = await r.text();
         if (!r.ok) throw new Error(`POST ${p} -> ${r.status}: ${text}`);
-        return text ? JSON.parse(text) : {};
+        return text ? (JSON.parse(text) as unknown) : {};
     });
 
     await post('/api/demo/seed');
@@ -138,7 +145,7 @@ export async function seed(baseUrl) {
 }
 
 // Restores a GLP backup zip into the throwaway instance through the app's own
-// POST /api/restore endpoint (#1181), in place of seed(). screenshots.mjs
+// POST /api/restore endpoint (#1181), in place of seed(). screenshots.mts
 // calls this only when GLP_SCREENSHOT_BACKUP is set. The zip is sent raw with
 // Content-Type: application/zip; GLP_SCREENSHOT_BACKUP_PASSPHRASE supplies the
 // passphrase for an encrypted backup. Real backups sit well under the
@@ -147,18 +154,19 @@ export async function seed(baseUrl) {
 // un-restored instance. The restored token is written to disk but the running
 // process keeps the one it started with (see go/internal/backup/doc.go), so
 // fetching the token before the restore is fine.
-export async function restoreBackup(baseUrl, zipPath) {
-    let zip;
+export async function restoreBackup(baseUrl: string, zipPath: string): Promise<RestoreResult> {
+    let zip: Buffer;
     try {
         zip = readFileSync(zipPath);
     } catch (err) {
-        throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${err.message}`, { cause: err });
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${message}`, { cause: err });
     }
 
     // Same auth the SPA and seed() use: the token from the already-public
     // GET /api/token, sent back as the x-glp-token header.
-    const { apiToken } = await fetch(`${baseUrl}/api/token`).then(r => r.json());
-    const headers = { 'Content-Type': 'application/zip', 'x-glp-token': apiToken };
+    const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken: string };
+    const headers: Record<string, string> = { 'Content-Type': 'application/zip', 'x-glp-token': apiToken };
     if (process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE) {
         headers['X-GLP-Passphrase'] = process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE;
     }
@@ -167,9 +175,9 @@ export async function restoreBackup(baseUrl, zipPath) {
     const text = await r.text();
     if (!r.ok) throw new Error(`POST /api/restore -> ${r.status}: ${text}`);
 
-    let parsed;
+    let parsed: RestoreResult;
     try {
-        parsed = text ? JSON.parse(text) : {};
+        parsed = text ? (JSON.parse(text) as RestoreResult) : { ok: false, images: 0 };
     } catch {
         throw new Error(`POST /api/restore -> ${r.status}: invalid JSON: ${text}`);
     }
