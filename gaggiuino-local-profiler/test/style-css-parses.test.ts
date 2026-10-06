@@ -4,9 +4,6 @@
 // this round -- an explanatory comment mentioned the token names
 // "--gray-*/--err", and the "*/" inside it closed the comment early, so the
 // rest of the prose was parsed as CSS.
-// flavor-wheel-no-root-crossfade.test.ts (#1482) reads this same stylesheet
-// and asserts the root view-transition rule, so keep this parse check over
-// the whole file.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

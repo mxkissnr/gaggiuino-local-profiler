@@ -22,6 +22,14 @@ function disablesRootCrossfade(rule: Rule): boolean {
   );
 }
 
+function sets(rule: Rule, prop: string, value: string): boolean {
+  return (
+    rule.nodes?.some(
+      (node) => node.type === 'decl' && node.prop === prop && node.value.trim() === value,
+    ) ?? false
+  );
+}
+
 function nestedInMedia(rule: Rule): boolean {
   let node: Node | undefined = rule.parent;
   while (node) {
@@ -38,17 +46,19 @@ describe('public-src/style.css root view-transition cross-fade (#1482)', () => {
     if (disablesRootCrossfade(rule)) rules.push(rule);
   });
 
-  it('sets animation: none on the root view-transition pair', () => {
+  it('sets animation: none and mix-blend-mode: normal on the root view-transition pair', () => {
     expect(
       rules,
       'style.css has no ::view-transition-old(root), ::view-transition-new(root) rule',
     ).not.toHaveLength(0);
-    const disabled = rules.filter((rule) =>
-      rule.nodes?.some(
-        (node) => node.type === 'decl' && node.prop === 'animation' && node.value.trim() === 'none',
-      ),
+    const disabled = rules.filter(
+      (rule) => sets(rule, 'animation', 'none') && sets(rule, 'mix-blend-mode', 'normal'),
     );
-    expect(disabled, 'the root view-transition rule does not set `animation: none`').not.toHaveLength(0);
+    expect(
+      disabled,
+      'the root view-transition rule must set `animation: none` and `mix-blend-mode: normal`; ' +
+        'the UA default plus-lighter would otherwise stack the two full-opacity snapshots',
+    ).not.toHaveLength(0);
   });
 
   it('keeps the rule outside any @media block so it always applies', () => {

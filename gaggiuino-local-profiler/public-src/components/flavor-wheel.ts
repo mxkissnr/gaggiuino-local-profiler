@@ -342,11 +342,6 @@ function renderLegend(flavors: unknown, lang: FlavorLang): Html {
 }
 
 // ── Shared-element growth (#1374) ─────────────────────────────────────────
-// #1482: this transition animates only the `flavor-wheel` group. The default
-// root cross-fade (::view-transition-old/new(root)) is switched off in
-// style.css so the page under the modal does not flash on phones (#1452 has
-// the same shape). The fix is CSS-only; the JS below and the `flavor-wheel`
-// group rule stay as they are.
 
 interface WheelViewTransition {
   updateCallbackDone?: Promise<void>;
