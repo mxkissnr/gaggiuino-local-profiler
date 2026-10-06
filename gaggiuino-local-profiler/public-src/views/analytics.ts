@@ -79,7 +79,7 @@ function _loadAnalyticsFilter(): AnalyticsPageFilter {
   }
 }
 
-let _pageFilter: AnalyticsPageFilter = _loadAnalyticsFilter();
+const _pageFilter: AnalyticsPageFilter = _loadAnalyticsFilter();
 
 function _saveAnalyticsFilter(): void {
   try { localStorage.setItem(ANALYTICS_PREFS_KEY, JSON.stringify(_pageFilter)); } catch { /* private mode / quota */ }
