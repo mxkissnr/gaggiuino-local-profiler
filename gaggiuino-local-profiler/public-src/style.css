@@ -2945,18 +2945,29 @@
         .flavor-wheel-modal { max-width: min(960px, 96vw); }
         .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); grid-template-rows: minmax(0, 1fr); gap: var(--sp-4); }
     }
-    /* #1374: on a phone the wheel takes the whole screen (minus the dev-build
-       banner) and grows out of the small wheel in the bean sheet through a
-       shared-element view transition. */
+    /* #1374/#1482: on a phone the wheel takes the whole screen (minus the
+       dev-build banner). It opens and closes without a view transition now
+       (see the fade below) — a view transition snapshotted the whole page and
+       stretched a snapshot of the small sheet wheel to full screen, which read
+       as a full refresh. */
     @media (max-width: 899px) {
         #flavorWheelModal { padding: 0; }
         .flavor-wheel-modal { width:100%; max-width:none; height: calc(100dvh - var(--dev-banner-h, 0px)); max-height:none; border-radius:0; }
     }
+    /* #1482 (follow-up to #1452/#1455): the wheel opens and closes without a
+       view transition — the full-screen overlay simply fades in on open (the
+       panel rises slightly) and fades out on close before it is hidden. The
+       animations run only when the user has not asked for reduced motion; with
+       `reduce` the close hides the overlay at once (see closeFlavorWheel). */
     @media (prefers-reduced-motion: no-preference) {
-        ::view-transition-group(flavor-wheel) { animation-duration: 320ms; animation-timing-function: cubic-bezier(.2,0,0,1); }
+        #flavorWheelModal { animation: fw-modal-in 180ms cubic-bezier(.2,0,0,1); }
+        #flavorWheelModal .flavor-wheel-modal { animation: fw-panel-in 180ms cubic-bezier(.2,0,0,1); }
+        #flavorWheelModal.is-closing { animation: fw-modal-out 140ms cubic-bezier(.2,0,0,1) forwards; }
+        #flavorWheelModal.is-closing .flavor-wheel-modal { animation: none; }
     }
-    /* #1482: only the wheel grows; the page under it switches at once instead of cross-fading (full-screen flash on phones). The UA blends the snapshots with plus-lighter, so once no fade runs the two full-opacity images would stack; reset the blend mode too. */
-    ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+    @keyframes fw-modal-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fw-panel-in { from { transform: translateY(12px); } to { transform: translateY(0); } }
+    @keyframes fw-modal-out { from { opacity: 1; } to { opacity: 0; } }
 
         /* Photo picker button (replaces native <input type=file>, #286) */
         .photo-picker-row { display:flex; align-items:center; gap: var(--sp-2); flex-wrap:wrap; }
