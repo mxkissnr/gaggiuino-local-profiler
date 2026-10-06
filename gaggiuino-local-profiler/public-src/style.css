@@ -2852,6 +2852,7 @@
         .sticker-mode-btn:disabled { opacity:.5; cursor:default; }
         .sticker-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap: var(--sp-2); width:100%; }
         .sticker-tools .lib-btn-sm { min-width:44px; }
+        .sticker-fit[hidden] { display:none; }
         .sticker-size { display:flex; align-items:center; gap: var(--sp-2); flex:1 1 160px; color:var(--gray-300); font-size: var(--fs-1); }
         .sticker-size .sticker-brush-size { flex:1; min-height:44px; accent-color:var(--accent); }
         .sticker-working { color:var(--gray-500); font-size: var(--fs-1); margin:0; text-align:center; }
