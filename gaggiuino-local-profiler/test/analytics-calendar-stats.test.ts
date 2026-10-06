@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
 // analytics.js's import chain reads localStorage/navigator at module load and
 // zrender's env detection wants a Node.js UA (same stubs as
@@ -40,9 +40,14 @@ function scoreOf(map: Record<number, number>): (s: ShotRow) => number | null {
   return s => map[s.id] ?? null;
 }
 
-const NOW = at(2026, 5, 20, 12, 0); // 2026-05-20
+// computeCalendarStats() takes milliseconds (Date.now()), while the shots and
+// `at()` above use Unix seconds.
+const NOW = at(2026, 5, 20, 12, 0) * 1000; // 2026-05-20
 
 describe('computeCalendarStats (#1467)', () => {
+  // Deterministic ids so the score map below lines up per test.
+  beforeEach(() => { _id = 0; });
+
   it('counts a current streak that ends yesterday', () => {
     const shots = [shot(at(2026, 5, 18)), shot(at(2026, 5, 19))];
     const stats = computeCalendarStats(shots, scoreOf({}), NOW);
