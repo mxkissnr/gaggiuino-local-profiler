@@ -931,7 +931,8 @@ export function buildTrendChart() {
                 const d = _dateFromKey(dayKey);
                 return d.getDate() === 1 ? d.toLocaleDateString(locale, { month: 'short' }) : '';
               } },
-            grid: { color: themeColor('--gray-700', '#2b2f33') } },
+            // A line per day would drown the calm; the month labels carry the axis.
+            grid: { display: false } },
           y: { min: _trendAxisMin(scoreData), max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
         }
       }
