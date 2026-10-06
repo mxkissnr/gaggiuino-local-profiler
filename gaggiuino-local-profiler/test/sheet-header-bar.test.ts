@@ -15,196 +15,144 @@ vi.mock('../public-src/api/library.js', async (importOriginal) => {
   return { ...actual, saveBean: mocks.saveBean };
 });
 
-type Listener = (event: FakeEvent) => void;
-interface FakeEvent { target?: unknown; key?: string; preventDefault?: () => void }
+type Handler = (event: { target?: unknown; preventDefault?: () => void }) => void;
 
-class FakeClassList {
-  private readonly host: FakeElement;
-
-  constructor(host: FakeElement) {
-    this.host = host;
-  }
-
-  private names(): Set<string> {
-    return new Set(this.host.className.split(' ').filter(Boolean));
-  }
-
-  add(...names: string[]): void {
-    const set = this.names();
-    names.forEach(n => set.add(n));
-    this.host.className = [...set].join(' ');
-  }
-
-  remove(...names: string[]): void {
-    const set = this.names();
-    names.forEach(n => set.delete(n));
-    this.host.className = [...set].join(' ');
-  }
-
-  contains(name: string): boolean {
-    return this.names().has(name);
-  }
-
-  toggle(name: string, force?: boolean): boolean {
-    const on = force ?? !this.contains(name);
-    if (on) this.add(name); else this.remove(name);
-    return on;
-  }
+function matches(el: El, selector: string): boolean {
+  return selector.startsWith('.') ? el.classList.contains(selector.slice(1)) : el.id === selector.slice(1);
 }
 
-// A small but tree-aware fake DOM: the form sheet moves #beanAddForm between
-// parents and wires real click listeners on the bar, so appendChild /
-// insertBefore / parentNode / dispatch are real here (same shape as the
-// library-bean-form-sheet test).
-class FakeElement {
+// Compact tree-aware fake element: enough for the form sheet, which moves
+// #beanAddForm between parents and wires real click listeners on the bar.
+class El {
   id = '';
   className = '';
-  style: Record<string, string> = {};
-  dataset: Record<string, string> = {};
   innerHTML = '';
   textContent = '';
-  hidden = false;
   value = '';
-  checked = false;
   type = '';
-  parentNode: FakeElement | null = null;
-  readonly children: FakeElement[] = [];
-  readonly attributes = new Map<string, string>();
-  readonly listeners = new Map<string, Listener[]>();
-  readonly classList: FakeClassList;
-  private readonly docRef: FakeDocument;
+  style: Record<string, string> = {};
+  parent: El | null = null;
+  readonly kids: El[] = [];
+  private readonly attrs = new Map<string, string>();
+  private readonly handlers = new Map<string, Handler[]>();
+  private readonly doc: Doc;
+  readonly classList = {
+    contains: (name: string): boolean => this.hasClass(name),
+    add: (...names: string[]): void => this.setClass(names, true),
+    remove: (...names: string[]): void => this.setClass(names, false),
+    toggle: (name: string, on: boolean): boolean => { this.setClass([name], on); return on; },
+  };
 
-  constructor(docRef: FakeDocument) {
-    this.docRef = docRef;
-    this.classList = new FakeClassList(this);
+  constructor(doc: Doc) {
+    this.doc = doc;
   }
 
-  get firstChild(): FakeElement | null {
-    return this.children[0] ?? null;
+  private hasClass(name: string): boolean {
+    return this.className.split(' ').includes(name);
   }
 
-  get nextSibling(): FakeElement | null {
-    const parent = this.parentNode;
+  private setClass(names: string[], on: boolean): void {
+    const set = new Set(this.className.split(' ').filter(Boolean));
+    for (const name of names) { if (on) set.add(name); else set.delete(name); }
+    this.className = [...set].join(' ');
+  }
+
+  get firstChild(): El | null {
+    return this.kids[0] ?? null;
+  }
+
+  get nextSibling(): El | null {
+    const parent = this.parent;
     if (!parent) return null;
-    const index = parent.children.indexOf(this);
-    return index >= 0 ? (parent.children[index + 1] ?? null) : null;
+    const index = parent.kids.indexOf(this);
+    return index >= 0 ? (parent.kids[index + 1] ?? null) : null;
   }
 
-  appendChild(child: FakeElement): FakeElement {
+  appendChild(child: El): El {
     child.detach();
-    child.parentNode = this;
-    this.children.push(child);
-    this.docRef.register(child);
+    child.parent = this;
+    this.kids.push(child);
+    this.doc.register(child);
     return child;
   }
 
-  insertBefore(node: FakeElement, ref: FakeElement | null): FakeElement {
+  insertBefore(node: El, ref: El | null): El {
     node.detach();
-    node.parentNode = this;
-    if (ref) {
-      const index = this.children.indexOf(ref);
-      if (index >= 0) { this.children.splice(index, 0, node); return node; }
-    }
-    this.children.push(node);
+    node.parent = this;
+    const index = ref ? this.kids.indexOf(ref) : -1;
+    if (index >= 0) this.kids.splice(index, 0, node); else this.kids.push(node);
     return node;
   }
 
-  removeChild(child: FakeElement): void {
-    const index = this.children.indexOf(child);
-    if (index >= 0) { this.children.splice(index, 1); child.parentNode = null; }
-  }
-
-  remove(): void {
-    this.parentNode?.removeChild(this);
+  removeChild(child: El): void {
+    const index = this.kids.indexOf(child);
+    if (index >= 0) { this.kids.splice(index, 1); child.parent = null; }
   }
 
   detach(): void {
-    this.parentNode?.removeChild(this);
+    this.parent?.removeChild(this);
   }
 
   setAttribute(name: string, value: string): void {
-    this.attributes.set(name, value);
-    if (name === 'hidden') this.hidden = true;
-  }
-
-  removeAttribute(name: string): void {
-    this.attributes.delete(name);
-    if (name === 'hidden') this.hidden = false;
+    this.attrs.set(name, value);
   }
 
   getAttribute(name: string): string | null {
-    return this.attributes.get(name) ?? null;
+    return this.attrs.get(name) ?? null;
   }
 
-  addEventListener(type: string, listener: Listener): void {
-    const list = this.listeners.get(type) ?? [];
+  addEventListener(type: string, listener: Handler): void {
+    const list = this.handlers.get(type) ?? [];
     list.push(listener);
-    this.listeners.set(type, list);
+    this.handlers.set(type, list);
   }
 
-  removeEventListener(type: string, listener: Listener): void {
-    const list = this.listeners.get(type);
-    if (list) this.listeners.set(type, list.filter(entry => entry !== listener));
-  }
-
-  dispatch(type: string, event: FakeEvent = {}): void {
-    for (const listener of this.listeners.get(type) ?? []) {
-      listener({ target: this, preventDefault: () => {}, ...event });
+  dispatch(type: string): void {
+    for (const listener of this.handlers.get(type) ?? []) {
+      listener({ target: this, preventDefault: () => {} });
     }
   }
 
   focus(): void {
-    this.docRef.activeElement = this;
+    this.doc.activeElement = this;
   }
 
-  querySelector(selector: string): FakeElement | null {
-    for (const child of this.children) {
-      if (this.matches(child, selector)) return child;
+  querySelector(selector: string): El | null {
+    for (const child of this.kids) {
+      if (matches(child, selector)) return child;
       const nested = child.querySelector(selector);
       if (nested) return nested;
     }
     return null;
   }
 
-  querySelectorAll(selector: string): FakeElement[] {
-    const found: FakeElement[] = [];
-    const walk = (el: FakeElement): void => {
-      for (const child of el.children) {
-        if (this.matches(child, selector)) found.push(child);
+  querySelectorAll(selector: string): El[] {
+    const out: El[] = [];
+    const walk = (el: El): void => {
+      for (const child of el.kids) {
+        if (matches(child, selector)) out.push(child);
         walk(child);
       }
     };
     walk(this);
-    return found;
-  }
-
-  private matches(el: FakeElement, selector: string): boolean {
-    if (selector.startsWith('.')) return el.classList.contains(selector.slice(1));
-    if (selector.startsWith('#')) return el.id === selector.slice(1);
-    return false;
+    return out;
   }
 }
 
-class FakeDocument {
-  readonly body = new FakeElement(this);
-  readonly documentElement = new FakeElement(this);
-  activeElement: FakeElement | null = null;
-  private readonly nodes = new Map<string, FakeElement>();
-  private readonly listeners = new Map<string, Listener[]>();
+class Doc {
+  readonly body = new El(this);
+  activeElement: El | null = null;
+  private readonly nodes = new Map<string, El>();
 
-  constructor() {
-    this.documentElement.id = 'html';
+  createElement(): El {
+    return new El(this);
   }
 
-  createElement(): FakeElement {
-    return new FakeElement(this);
-  }
-
-  register(el: FakeElement): void {
+  register(el: El): void {
     if (el.id) this.nodes.set(el.id, el);
   }
 
-  getElementById(id: string): FakeElement | null {
+  getElementById(id: string): El | null {
     const known = this.nodes.get(id);
     if (known) return known;
     const found = this.body.querySelector(`#${id}`);
@@ -212,26 +160,17 @@ class FakeDocument {
     // The sheet hosts must genuinely be created, never auto-vivified, so a
     // missing host stays observable. Every field is a permissive stub.
     if (id === 'beanSheet' || id === 'beanFormSheet') return null;
-    const el = new FakeElement(this);
+    const el = new El(this);
     el.id = id;
     this.nodes.set(id, el);
     return el;
   }
 
-  querySelector(): FakeElement | null { return null; }
-  querySelectorAll(): FakeElement[] { return []; }
+  addEventListener(): void { /* the sheet key listeners are irrelevant here */ }
+  removeEventListener(): void {}
   contains(): boolean { return true; }
-
-  addEventListener(type: string, listener: Listener): void {
-    const list = this.listeners.get(type) ?? [];
-    list.push(listener);
-    this.listeners.set(type, list);
-  }
-
-  removeEventListener(type: string, listener: Listener): void {
-    const list = this.listeners.get(type);
-    if (list) this.listeners.set(type, list.filter(entry => entry !== listener));
-  }
+  querySelector(): El | null { return null; }
+  querySelectorAll(): El[] { return []; }
 }
 
 interface StateLike {
@@ -250,7 +189,7 @@ function count(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
-// The slice of the markup from the bar's opening div up to the content block
+// The slice of the rendered markup from the header bar up to the content block
 // that follows it, so placement can be asserted inside the bar only.
 function barSlice(inner: string): string {
   const start = inner.indexOf('class="lib-sheet-bar"');
@@ -261,21 +200,26 @@ function barSlice(inner: string): string {
   return inner.slice(start, stops.length ? Math.min(...stops) : undefined);
 }
 
+async function importState(): Promise<StateLike> {
+  const { S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike };
+  S.currentLang = 'en';
+  S.shots = [];
+  return S;
+}
+
 describe('bean sheet header bar (#1489)', () => {
-  let doc: FakeDocument;
+  let doc: Doc;
   let S: StateLike;
   let library: LibraryModule;
   let t: (key: string) => string;
 
   beforeEach(async () => {
-    doc = new FakeDocument();
+    doc = new Doc();
     g.document = doc;
     g.window = { matchMedia: () => ({ matches: false }) };
     vi.resetModules();
-    ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
-    ({ t } = (await import('../public-src/i18n.js')) as unknown as { t: typeof t });
-    S.currentLang = 'en';
-    S.shots = [];
+    S = await importState();
+    ({ t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string });
     S.coffeeLibrary = {
       beans: [{
         id: 1,
@@ -293,20 +237,17 @@ describe('bean sheet header bar (#1489)', () => {
 
   it('puts close first, then the name, then the two icons and the menu', () => {
     library.openBeanSheet(1);
-    const inner = doc.body.querySelector('#beanSheet')!.innerHTML;
-    const bar = barSlice(inner);
+    const bar = barSlice(doc.body.querySelector('#beanSheet')!.innerHTML);
     expect(bar).not.toBe('');
 
     const close = bar.indexOf('class="lib-sheet-close"');
     const title = bar.indexOf('id="beanSheetTitle"');
     const shot = bar.indexOf('data-action="filter-by-bean"');
     const edit = bar.indexOf('data-action="edit-bean"');
-    expect(close).toBeGreaterThanOrEqual(0);
     expect(title).toBeGreaterThan(close);
     expect(shot).toBeGreaterThan(title);
     expect(edit).toBeGreaterThan(shot);
 
-    // The two icon actions plus the ⋮ menu live in the bar.
     expect(count(bar, 'class="lib-sheet-iconbtn"')).toBe(2);
     expect(bar).toContain('lib-sheet-more');
     expect(bar).toContain('class="lib-sheet-bar-actions"');
@@ -331,7 +272,7 @@ describe('bean sheet header bar (#1489)', () => {
 
 describe('detail sheet header bar (#1489)', () => {
   it('renders the close and the title in the bar, and no action icons', async () => {
-    const doc = new FakeDocument();
+    const doc = new Doc();
     g.document = doc;
     g.window = { matchMedia: (q: string) => ({ matches: q.includes('max-width') }) };
     vi.resetModules();
@@ -346,10 +287,8 @@ describe('detail sheet header bar (#1489)', () => {
 
     const inner = host.innerHTML;
     const bar = barSlice(inner);
-    // The bar holds the close button (before) and the title.
     const close = bar.indexOf('class="lib-sheet-close"');
     const title = bar.indexOf('id="detailSheetTitle"');
-    expect(close).toBeGreaterThanOrEqual(0);
     expect(title).toBeGreaterThan(close);
     // No action icons at all.
     expect(inner).not.toContain('lib-sheet-iconbtn');
@@ -358,16 +297,16 @@ describe('detail sheet header bar (#1489)', () => {
     expect(inner).not.toContain('lib-sheet-save');
     // The sub moved out of the bar into the content.
     expect(bar).not.toContain('detail-sheet-sub');
-    expect(inner.indexOf('detail-sheet-sub')).toBeGreaterThan(inner.indexOf('id="detailSheetTitle"'));
+    expect(inner.indexOf('detail-sheet-sub')).toBeGreaterThan(title);
   });
 });
 
 describe('bean form sheet header bar save (#1489)', () => {
-  let doc: FakeDocument;
+  let doc: Doc;
   let S: StateLike;
   let library: LibraryModule;
 
-  function setupHome(): { home: FakeElement; form: FakeElement } {
+  function setupHome(): void {
     const home = doc.createElement();
     home.id = 'libSectionBeans';
     const trigger = doc.createElement();
@@ -380,18 +319,15 @@ describe('bean form sheet header bar save (#1489)', () => {
     doc.register(trigger);
     doc.register(form);
     doc.body.appendChild(home);
-    return { home, form };
   }
 
   beforeEach(async () => {
-    doc = new FakeDocument();
+    doc = new Doc();
     g.document = doc;
     g.window = { matchMedia: () => ({ matches: false }) };
     mocks.saveBean.mockReset();
     vi.resetModules();
-    ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
-    S.currentLang = 'en';
-    S.shots = [];
+    S = await importState();
     S.beanEditId = null;
     S.coffeeLibrary = { beans: [], recipes: [], grinders: [] };
     library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
