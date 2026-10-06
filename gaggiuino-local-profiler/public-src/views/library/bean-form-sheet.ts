@@ -111,7 +111,6 @@ function _beanFormSheetHost(): HTMLElement | null {
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'lib-sheet-save';
-  save.setAttribute('data-action', 'save-bean-form-sheet');
   save.setAttribute('aria-label', t('lib_save'));
   save.textContent = t('lib_save');
   save.addEventListener('click', () => { void saveBean(); });
