@@ -25,6 +25,16 @@ const (
 	// pollInterval is the live-polling cadence: one poll tick per second.
 	pollInterval = 1 * time.Second
 
+	// firmwareNameFetchTimeout bounds the one-off GetSettings("system") request
+	// the live poll makes to read a Gaggiuino's firmware-set machine name
+	// (#1454).
+	firmwareNameFetchTimeout = 3 * time.Second
+
+	// firmwareNameRetryInterval throttles a failed firmware-name fetch: a
+	// machine whose settings endpoint keeps erroring costs at most one extra
+	// request per interval, never one per 1s poll tick (#1454).
+	firmwareNameRetryInterval = 60 * time.Second
+
 	// backgroundHaCheckInterval / preheatWatchInterval are the cadences of the
 	// two 30s background tasks: HA reachability checks and preheat watching.
 	backgroundHaCheckInterval = 30 * time.Second

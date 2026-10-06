@@ -565,6 +565,7 @@ components:
               reachable: { type: boolean, nullable: true, description: "Per-machine reachability (#1201)" }
               lastError: { type: string, nullable: true, description: "Last poll/sync error for this machine (#1201); authenticated callers only (valid X-GLP-Token), like lastMachineError" }
               firmwareVersion: { type: string, nullable: true, description: "Cached firmware version for this machine (#1201)" }
+              firmwareName: { type: string, nullable: true, description: "Machine name set in the machine's firmware, when it reports one (#1454)" }
               on:        { type: boolean, nullable: true }
               theme:     { type: string, nullable: true, description: "#701 accent color, synced from Settings → Machines" }
         # ── authenticated only (H1) ──────────────────────────────────────

@@ -7769,6 +7769,8 @@ export interface components {
                 lastError?: string | null;
                 /** @description Cached firmware version for this machine (#1201) */
                 firmwareVersion?: string | null;
+                /** @description Machine name set in the machine's firmware, when it reports one (#1454) */
+                firmwareName?: string | null;
                 on?: boolean | null;
                 /** @description #701 accent color, synced from Settings → Machines */
                 theme?: string | null;
