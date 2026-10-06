@@ -114,9 +114,18 @@ export interface ShelfTileOpts {
   muted: boolean;
 }
 
+// The fields the bag photo block reads; a full ShelfBean and the lighter
+// bean view the analytics shelf builds both satisfy it.
+export interface ShelfBagImageBean {
+  id?: number | null | undefined;
+  name?: string | null | undefined;
+  roaster?: string | null | undefined;
+  image?: string | null | undefined;
+}
+
 // Shared photo block: the bean's image or its initials placeholder. The
 // lib-shelf-img class + data-bean-id let loadBeanThumbnails fill the blob URL.
-function shelfBagImage(b: ShelfBean): Html {
+export function shelfBagImage(b: ShelfBagImageBean): Html {
   return b.image
     ? html`<img class="lib-shelf-img${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">`
     : html`<span class="lib-shelf-ph" aria-hidden="true">${esc(beanInitials(b.roaster || b.name || ''))}</span>`;
