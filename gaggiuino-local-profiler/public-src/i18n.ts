@@ -44,6 +44,7 @@ export interface FactVars {
   nextL: string | number;
   score: string | number;
   seconds: string | number;
+  shots: string | number;
   to: string;
   toNext: string | number;
   weekday: string;
