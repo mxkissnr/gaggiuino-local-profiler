@@ -27,6 +27,7 @@ interface ShotOverrides {
   machineId?: number | null | undefined;
   score?: number | undefined;
   coffee?: string | null | undefined;
+  beanId?: number | null | undefined;
   grindSetting?: string | number | null | undefined;
   datapoints?: { temperature?: (number | null)[]; targetTemperature?: (number | null)[] } | null | undefined;
 }
@@ -56,7 +57,7 @@ const shot = (overrides: ShotOverrides = {}): ShotRow => ({
   duration: overrides.duration ?? 280, // 28.0s
   ...(overrides.machineId !== undefined && { machineId: overrides.machineId }),
   score: overrides.score,
-  annotation: { coffee: overrides.coffee, grindSetting: overrides.grindSetting },
+  annotation: { coffee: overrides.coffee, beanId: overrides.beanId, grindSetting: overrides.grindSetting },
   datapoints: overrides.datapoints,
 });
 

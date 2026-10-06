@@ -8,9 +8,12 @@ import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
 import { summaryLine } from './analytics-summary.js';
-import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
+import { WARNING_ICON_SVG } from '../icons.js';
 import { openDetailSheet } from '../components/detail-sheet.js';
 import type { DetailAnchorPoint } from '../components/detail-sheet.js';
+import { shelfBagImage } from './library/shelf.js';
+import type { ShelfBagImageBean } from './library/shelf.js';
+import { loadBeanImageBlobUrl } from '../bean-image.js';
 import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
 import type { ChartConfiguration, TooltipItem } from 'chart.js';
 
@@ -64,16 +67,21 @@ interface EquipStatEntry {
   avgDuration: number | null;
 }
 
-// Bean ranking table (#394).
+// One bean's aggregate for the "Beans by score" shelf (#1467) and its detail
+// sheet.
 interface BeanRankRow {
   name: string;
+  // The most recent shot's annotation.beanId, or null when it carried none.
+  beanId: number | null;
   shots: number;
   avgScore: number | null;
+  best: number | null;
+  hundreds: number;
+  avgTime: number | null;
+  firstGood: number | null;
   lastGrind: string | number | null | undefined;
   trend: number | null;
 }
-
-type BeanRankKey = 'name' | 'shots' | 'avgScore' | 'lastGrind' | 'trend';
 
 // CoffeeLibrary (state/index.ts) types beans/grinders only; the world map
 // additionally reads each bean's origin list and geocoded location.
@@ -156,8 +164,7 @@ export function initAnalytics() {
   buildTrendChart();
   buildRecipeSummary();
   buildCalendar();
-  buildPersonalBests();
-  buildBeanStats();
+  buildBeanShelf();
   void buildWorldMap();
   buildProfileChart();
   buildGrinderStats();
@@ -166,7 +173,6 @@ export function initAnalytics() {
   buildDistribution();
   buildTimeOfDay();
   buildWeekdayHourHeatmap();
-  buildBeanRanking();
   buildMachineComparison();
   buildDialinProgression();
 }
@@ -292,7 +298,6 @@ export function buildSummaryKpis() {
   const verdict = summary.verdict;
   addPart(tHtml('analytics_summary_verdict', verdict.shots, verdict.avgScore !== null ? scoreNum(verdict.avgScore) : esc('—')));
   if (summary.delta) addPart(tHtml(`analytics_summary_delta_${summary.delta.bucket}`, scoreNum(summary.delta.avg7)));
-  if (summary.context) addPart(tHtml('analytics_summary_best', esc(summary.context.name), scoreNum(summary.context.avgScore)));
 
   el.innerHTML = joinHtml(parts);
 
@@ -324,49 +329,6 @@ export function buildSummaryKpis() {
       warnEl.style.display = 'none';
     }
   }
-}
-
-// ── Personal Bests ────────────────────────────────────────────────────────
-export function buildPersonalBests() {
-  const el = document.getElementById('personalBests');
-  if (!el) return;
-  if (_shots().length < 3) {
-    el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_bests')}</p>`;
-    return;
-  }
-
-  let bestShot: ShotRow | null = null, bestScore = -1;
-  for (const s of _shots()) {
-    if (!window.calcShotScore) continue;
-    const sc = window.calcShotScore(s);
-    if (sc !== null && sc > bestScore) { bestScore = sc; bestShot = s; }
-  }
-
-  const byBean: Record<string, number> = {}, byProfile: Record<string, number> = {};
-  for (const s of _shots()) {
-    const bean = s.annotation?.coffee;
-    if (bean) byBean[bean] = (byBean[bean] || 0) + 1;
-    const prof = s.profile?.name || s.profileName;
-    if (prof) byProfile[prof] = (byProfile[prof] || 0) + 1;
-  }
-  const favBean    = Object.entries(byBean).sort((a, b) => b[1] - a[1])[0];
-  const favProfile = Object.entries(byProfile).sort((a, b) => b[1] - a[1])[0];
-  const locale     = localeFor(S.currentLang);
-
-  const rows: { lbl: Html; val: Html; link?: number }[] = [];
-  if (bestShot) {
-    const d  = new Date(bestShot.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-    rows.push({ lbl: tHtml('analytics_best_shot'),
-      val: html`<span class="${esc(scoreClass(bestScore))}">${esc(bestScore)}</span> · ${esc(d)}`,
-      link: bestShot.id });
-  }
-  if (favBean)    rows.push({ lbl: tHtml('analytics_fav_bean'),    val: html`${esc(favBean[0])} <span class="bests-count">${esc(favBean[1])} ${tHtml('bean_stat_shots')}</span>` });
-  if (favProfile) rows.push({ lbl: tHtml('analytics_fav_profile'), val: html`${esc(favProfile[0])} <span class="bests-count">${esc(favProfile[1])} ${tHtml('bean_stat_shots')}</span>` });
-
-  el.innerHTML = html`<div class="bests-list">${joinHtml(rows.map(r =>
-    html`<div class="bests-row"><span class="bests-lbl">${r.lbl}</span><span class="bests-val">${r.val}${
-      r.link ? html` <button class="bests-link" data-action="goto-shot" data-id="${esc(r.link)}">→</button>` : esc('')}</span></div>`
-  ))}</div>`;
 }
 
 // ── Grinder, Basket & Puck Screen Stats (#668, #674) ────────────────────────
@@ -960,55 +922,6 @@ export function _renderCalendar() {
     const fig = typeof streaksEl.querySelector === 'function' ? streaksEl.querySelector<HTMLElement>('.cal-fig-longest') : null;
     if (fig) _wireStreakHover(el, fig, stats.longest);
   }
-}
-
-export function buildBeanStats() {
-  const el = document.getElementById('beanStats');
-  if (!el) return;
-
-  const byBean: Record<string, { count: number; scores: number[]; durations: number[]; dialinShot: number | null }> = {};
-  for (const s of _shots()) {
-    const name = s.annotation?.coffee;
-    if (!name) continue;
-    let bean = byBean[name];
-    if (!bean) { bean = { count: 0, scores: [], durations: [], dialinShot: null }; byBean[name] = bean; }
-    bean.count++;
-    if (window.calcShotScore) {
-      const sc = window.calcShotScore(s);
-      if (sc !== null) {
-        bean.scores.push(sc);
-        if (bean.dialinShot === null && sc >= 80)
-          bean.dialinShot = bean.count;
-      }
-    }
-    const dur = (s.duration || 0) / 10;
-    if (dur > 5) bean.durations.push(dur);
-  }
-
-  const beans = Object.entries(byBean).sort((a, b) => b[1].count - a[1].count);
-
-  if (beans.length === 0) {
-    el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_beans')}</p>`;
-    return;
-  }
-
-  const cards = beans.map(([name, d]) => {
-    const avgSc  = d.scores.length    ? Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length) : null;
-    const bestSc = d.scores.length    ? Math.max(...d.scores) : null;
-    const avgDur = d.durations.length ? (d.durations.reduce((a, b) => a + b, 0) / d.durations.length).toFixed(1) : null;
-    const scCls  = avgSc !== null ? scoreClass(avgSc) : '';
-    return html`<div class="bean-card">
-      <div class="bean-card-name" title="${esc(name)}">${esc(name)}</div>
-      <div class="bean-card-stats">
-        <div class="bean-stat"><span class="bean-stat-val">${esc(d.count)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_shots')}</span></div>
-        ${avgSc  !== null ? html`<div class="bean-stat"><span class="bean-stat-val ${esc(scCls)}">${esc(avgSc)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_avg')}</span></div>` : esc('')}
-        ${bestSc !== null ? html`<div class="bean-stat"><span class="bean-stat-val">${esc(bestSc)}</span><span class="bean-stat-lbl">${tHtml('bean_stat_best')}</span></div>` : esc('')}
-        ${avgDur !== null ? html`<div class="bean-stat"><span class="bean-stat-val">${esc(avgDur)}s</span><span class="bean-stat-lbl">${tHtml('bean_stat_duration')}</span></div>` : esc('')}
-      </div>
-      ${d.dialinShot !== null ? html`<div class="bean-stat-dialin">${TARGET_ICON_SVG} ${tHtml('analytics_dialin', d.dialinShot)}</div>` : (d.scores.length >= 3 ? html`<div class="bean-stat-dialin" style="color:var(--gray-600)">${tHtml('analytics_dialin_none')}</div>` : esc(''))}
-    </div>`;
-  });
-  el.innerHTML = html`<div class="bean-cards">${joinHtml(cards)}</div>`;
 }
 
 // ── Origin world map ──────────────────────────────────────────────────────
@@ -1882,10 +1795,10 @@ export function buildWeekdayHourHeatmap() {
   el.innerHTML = html`<div class="wh-heatmap"><div class="wh-row wh-header"><div class="wh-label"></div>${joinHtml(hourLabels)}</div>${joinHtml(dayRows)}</div>`;
 }
 
-// ── Bean ranking ────────────────────────────────────────────────────────────
-// Sortable table: bean, shots, avg score, last grind setting used, and a
-// last-5-vs-previous-5 scored trend. Pure aggregation kept separate from
-// rendering so it's unit-testable without a DOM.
+// ── Beans by score (#1467) ──────────────────────────────────────────────────
+// One shelf of beans, sorted by average score (or shot count), each tile a
+// tap away from the bean's detail sheet. Pure aggregation kept separate from
+// rendering (unit-testable without a DOM).
 export function _computeBeanRanking(shots: ShotRow[]): BeanRankRow[] {
   const byBean: Record<string, ShotRow[]> = {};
   for (const s of shots) {
@@ -1903,6 +1816,29 @@ export function _computeBeanRanking(shots: ShotRow[]): BeanRankRow[] {
       .map(s => ({ s, sc: window.calcShotScore ? window.calcShotScore(s) : null }))
       .filter((x): x is { s: ShotRow; sc: number } => x.sc !== null);
     const avgScore = scored.length ? Math.round(scored.reduce((a, x) => a + x.sc, 0) / scored.length) : null;
+    const best = scored.length ? Math.max(...scored.map(x => x.sc)) : null;
+    const hundreds = scored.reduce((a, x) => a + (x.sc >= 100 ? 1 : 0), 0);
+
+    // The first shot (1-based, chronological) to reach 80 — the old dial-in
+    // figure the bean cards reported.
+    let firstGood: number | null = null;
+    if (window.calcShotScore) {
+      for (let i = 0; i < sorted.length; i++) {
+        const shot = sorted[i];
+        if (!shot) continue;
+        const sc = window.calcShotScore(shot);
+        if (sc !== null && sc >= 80) { firstGood = i + 1; break; }
+      }
+    }
+
+    // Brew time in seconds from the ×10-scaled duration, ignoring the ≤ 5 s
+    // noise of aborted shots.
+    const times = sorted.map(s => (s.duration || 0) / 10).filter(d => d > 5);
+    const avgTime = times.length ? Math.round((times.reduce((a, b) => a + b, 0) / times.length) * 10) / 10 : null;
+
+    const lastShot = sorted[sorted.length - 1];
+    const lastBeanId = lastShot?.annotation?.beanId;
+    const beanId = typeof lastBeanId === 'number' ? lastBeanId : null;
 
     const lastGrindShot = [...sorted].reverse().find(s => s.annotation?.grindSetting);
     const lastGrind = lastGrindShot ? lastGrindShot.annotation!.grindSetting : null;
@@ -1917,67 +1853,175 @@ export function _computeBeanRanking(shots: ShotRow[]): BeanRankRow[] {
       }
     }
 
-    rows.push({ name, shots: sorted.length, avgScore, lastGrind, trend });
+    rows.push({ name, beanId, shots: sorted.length, avgScore, best, hundreds, avgTime, firstGood, lastGrind, trend });
   }
   return rows;
 }
 
-function _cmpNullsLast(a: string | number | null | undefined, b: string | number | null | undefined, dir: 'asc' | 'desc'): number {
-  if (a == null && b == null) return 0;
-  if (a == null) return 1;
-  if (b == null) return -1;
-  return dir === 'asc' ? (a > b ? 1 : a < b ? -1 : 0) : (a < b ? 1 : a > b ? -1 : 0);
+// Sort rows for the shelf. Score: descending, nulls last, ties broken by shot
+// count. Shots: descending, then the same score order.
+export function _sortBeanShelfRows(rows: BeanRankRow[], key: 'score' | 'shots'): BeanRankRow[] {
+  const scoreDesc = (a: BeanRankRow, b: BeanRankRow): number => {
+    if (a.avgScore == null && b.avgScore == null) return b.shots - a.shots;
+    if (a.avgScore == null) return 1;
+    if (b.avgScore == null) return -1;
+    return b.avgScore - a.avgScore || b.shots - a.shots;
+  };
+  const copy = [...rows];
+  copy.sort(key === 'shots' ? (a, b) => b.shots - a.shots || scoreDesc(a, b) : scoreDesc);
+  return copy;
 }
 
-let _beanRankSort: { key: BeanRankKey; dir: 'asc' | 'desc' } = { key: 'shots', dir: 'desc' };
-
-export function setBeanRankSort(key: BeanRankKey): void {
-  if (_beanRankSort.key === key) _beanRankSort.dir = _beanRankSort.dir === 'desc' ? 'asc' : 'desc';
-  else _beanRankSort = { key, dir: key === 'name' ? 'asc' : 'desc' };
-  buildBeanRanking();
+// The library bean a shelf row belongs to: by the most recent shot's beanId
+// first, else by case-insensitive name.
+function _matchLibraryBean(row: BeanRankRow): SharedBean | null {
+  const beans = _beans();
+  if (row.beanId !== null) {
+    const byId = beans.find(b => b.id === row.beanId);
+    if (byId) return byId;
+  }
+  const name = row.name.toLowerCase();
+  return beans.find(b => String(b.name || '').toLowerCase() === name) ?? null;
 }
 
-export function buildBeanRanking() {
-  const el = document.getElementById('beanRanking');
+function _shelfImageBean(row: BeanRankRow, bean: SharedBean | null): ShelfBagImageBean {
+  if (!bean) return { name: row.name };
+  return {
+    id: typeof bean.id === 'number' ? bean.id : null,
+    name: bean.name,
+    roaster: typeof bean.roaster === 'string' ? bean.roaster : null,
+    image: typeof bean.image === 'string' ? bean.image : null,
+  };
+}
+
+const _BEAN_SHELF_LIMIT = 16;
+let _beanShelfSort: 'score' | 'shots' = 'score';
+let _beanShelfColumnsWired = false;
+
+// The shelf grid is 3 columns on phones and 8 from 900px up. Showing a
+// partial last row leaves a lone tile on the second row, so the visible
+// shelf carries only complete rows; the rest waits behind "show all".
+function _beanShelfColumns(): number {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 900px)').matches ? 8 : 3;
+}
+
+function _beanShelfHeadCount(total: number): number {
+  const columns = _beanShelfColumns();
+  const cap = Math.min(_BEAN_SHELF_LIMIT, total);
+  if (cap < columns) return cap; // fewer beans than one row: show them all
+  return Math.floor(cap / columns) * columns;
+}
+
+// Re-render when the grid crosses the 900px 3→8 column breakpoint.
+function _watchBeanShelfColumns(): void {
+  if (_beanShelfColumnsWired || typeof window.matchMedia !== 'function') return;
+  _beanShelfColumnsWired = true;
+  window.matchMedia('(min-width: 900px)').addEventListener('change', () => buildBeanShelf());
+}
+
+// Bean photos need the auth token, so <img src> can't point at the API
+// (see bean-image.js). Load them directly here rather than through
+// views/library.js, whose loadBeanThumbnails would pull in the whole
+// Library module (and its lightbox) just to fill these tiles.
+function _loadBeanShelfThumbnails(): void {
+  document.querySelectorAll<HTMLImageElement>('#beanShelf .lib-shelf-img[data-bean-id]').forEach(img => {
+    const id = Number(img.dataset.beanId);
+    void loadBeanImageBlobUrl(id).then(url => { if (url) img.src = url; });
+  });
+}
+
+function _beanShelfTile(row: BeanRankRow, rank: number): Html {
+  const bean = _matchLibraryBean(row);
+  const avg = row.avgScore;
+  const score = avg !== null
+    ? html`<span class="analytics-shelf-score" style="color:${esc(scoreColor(avg))}">${esc(avg)}</span>`
+    : html`<span class="analytics-shelf-score">–</span>`;
+  const crema = row.hundreds > 0
+    ? html`<span class="analytics-shelf-crema" title="${esc(t('analytics_shelf_perfect'))}"></span>`
+    : esc('');
+  return html`<button type="button" class="analytics-shelf-tile" data-action="analytics-bean" data-name="${esc(row.name)}">
+    <span class="analytics-shelf-rank${esc(rank <= 3 ? ' top' : '')}">${esc(rank)}</span>
+    <span class="analytics-shelf-bag">${shelfBagImage(_shelfImageBean(row, bean))}</span>
+    <span class="analytics-shelf-name serif-display">${esc(row.name)}</span>
+    <span class="analytics-shelf-row2">${score}${crema}</span>
+    <span class="analytics-shelf-shots">${esc(row.shots)} ${tHtml('bean_stat_shots')}</span>
+  </button>`;
+}
+
+export function buildBeanShelf(): void {
+  const el = document.getElementById('beanShelf');
   if (!el) return;
+  _watchBeanShelfColumns();
 
-  const rows = _computeBeanRanking(_shots());
+  const rows = _sortBeanShelfRows(_computeBeanRanking(_shots()), _beanShelfSort);
+  const countEl = document.getElementById('beanShelfCount');
+  if (countEl) countEl.textContent = rows.length ? String(rows.length) : '';
   if (!rows.length) {
     el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_beans')}</p>`;
     return;
   }
 
-  const { key, dir } = _beanRankSort;
-  rows.sort((a, b) => key === 'name' ? _cmpNullsLast(a.name.toLowerCase(), b.name.toLowerCase(), dir) : _cmpNullsLast(a[key], b[key], dir));
+  const total = rows.length;
+  const headCount = _beanShelfHeadCount(total);
+  const head = rows.slice(0, headCount);
+  const rest = rows.slice(headCount);
+  el.innerHTML = html`
+    <div class="analytics-shelf">${joinHtml(head.map((r, i) => _beanShelfTile(r, i + 1)))}</div>
+    ${rest.length ? html`
+      <div class="analytics-shelf analytics-shelf-rest" id="beanShelfRest" style="display:none">${joinHtml(rest.map((r, i) => _beanShelfTile(r, headCount + i + 1)))}</div>
+      <button type="button" class="analytics-shelf-more" id="beanShelfMore" data-action="expand-bean-shelf">${tHtml('analytics_shelf_show_all', total)}</button>` : esc('')}`;
 
-  const arrow = (k: string): Html => k === key ? html`<span class="sort-arrow">${esc(dir === 'asc' ? '▲' : '▼')}</span>` : esc('');
-  const cols: [string, string][] = [
-    ['name', t('lib_recipe_bean')], ['shots', t('bean_stat_shots')], ['avgScore', t('bean_stat_avg')],
-    ['lastGrind', t('ann_grind_setting')], ['trend', t('analytics_bean_rank_trend')],
-  ];
+  _loadBeanShelfThumbnails();
+}
 
-  const headerHtml = joinHtml(cols.map(([k, lbl]) =>
-    html`<th data-action="set-bean-rank-sort" data-key="${esc(k)}">${esc(lbl)}${arrow(k)}</th>`));
+export function setBeanShelfSort(key: 'score' | 'shots'): void {
+  _beanShelfSort = key;
+  document.querySelectorAll<HTMLElement>('[data-action="set-bean-shelf-sort"]').forEach(chip => {
+    const on = chip.dataset.sort === key;
+    chip.classList.toggle('active', on);
+    chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  buildBeanShelf();
+}
 
-  const rowsHtml = joinHtml(rows.map(r => {
-    const scoreCell = r.avgScore !== null ? html`<span class="${esc(scoreClass(r.avgScore))}">${esc(r.avgScore)}</span>` : esc('–');
-    const trendCell = r.trend === null ? html`<span class="trend-flat">–</span>`
-      : r.trend > 0.5  ? html`<span class="trend-up">▲ ${esc(r.trend > 0 ? '+' : '')}${esc(r.trend)}</span>`
-      : r.trend < -0.5 ? html`<span class="trend-down">▼ ${esc(r.trend)}</span>`
-      : html`<span class="trend-flat">▬ ${esc(r.trend)}</span>`;
-    return html`<tr>
-      <td>${esc(r.name)}</td>
-      <td class="num">${esc(r.shots)}</td>
-      <td class="num">${scoreCell}</td>
-      <td>${r.lastGrind ? esc(r.lastGrind) : esc('–')}</td>
-      <td>${trendCell}</td>
-    </tr>`;
-  }));
+export function expandBeanShelf(): void {
+  const rest = document.getElementById('beanShelfRest');
+  if (rest) rest.style.display = '';
+  document.getElementById('beanShelfMore')?.remove();
+}
 
-  el.innerHTML = html`<div class="analytics-table-wrap"><table class="analytics-table">
-    <thead><tr>${headerHtml}</tr></thead>
-    <tbody>${rowsHtml}</tbody>
-  </table></div>`;
+// Detail sheet for one bean on the shelf: its numbers, its dial-in figure and
+// trend — and, when the bean exists in the library, a shortcut to its sheet.
+export function openBeanShelfDetail(name: string, anchor: HTMLElement | null): void {
+  const row = _computeBeanRanking(_shots()).find(r => r.name === name);
+  if (!row) return;
+  const bean = _matchLibraryBean(row);
+  const line = (lbl: string, val: Html): Html =>
+    html`<div class="bests-row"><span class="bests-lbl">${esc(lbl)}</span><span class="bests-val">${val}</span></div>`;
+
+  const parts: Html[] = [line(t('bean_stat_shots'), esc(row.shots))];
+  if (row.avgScore !== null) parts.push(line(t('bean_stat_avg'), html`<span class="${esc(scoreClass(row.avgScore))}">${esc(row.avgScore)}</span>`));
+  if (row.best !== null) parts.push(line(t('bean_stat_best'), html`<span class="${esc(scoreClass(row.best))}">${esc(row.best)}</span>`));
+  if (row.hundreds > 0) parts.push(line(t('analytics_shelf_perfect'), esc(row.hundreds)));
+  if (row.avgTime !== null) parts.push(line(t('bean_stat_duration'), esc(`${row.avgTime} s`)));
+  if (row.lastGrind != null && row.lastGrind !== '') parts.push(line(t('ann_grind_setting'), esc(String(row.lastGrind))));
+  if (row.firstGood !== null) parts.push(line(t('analytics_bean_dialed_in'), tHtml('analytics_bean_dialed_in_at', row.firstGood)));
+  if (row.trend !== null) {
+    const color = row.trend > 0 ? scoreColor(100) : row.trend < 0 ? scoreColor(0) : 'var(--gray-500)';
+    const sign = row.trend > 0 ? '+' : '';
+    parts.push(line(t('analytics_bean_rank_trend'), html`<span style="color:${esc(color)}">${esc(`${sign}${row.trend}`)}</span>`));
+  }
+  if (bean && typeof bean.id === 'number') {
+    parts.push(html`<div class="bests-row"><span class="bests-lbl"></span><span class="bests-val"><button type="button" class="bests-link" data-action="open-bean-shelf-in-library" data-id="${esc(bean.id)}">${tHtml('analytics_open_in_library')}</button></span></div>`);
+  }
+
+  const roaster = bean && typeof bean.roaster === 'string' ? bean.roaster : '';
+  openDetailSheet({
+    title: row.name,
+    sub: roaster,
+    body: html`<div class="detail-rows">${joinHtml(parts)}</div>`,
+    anchor,
+  });
 }
 
 // ── Machine comparison ──────────────────────────────────────────────────────
