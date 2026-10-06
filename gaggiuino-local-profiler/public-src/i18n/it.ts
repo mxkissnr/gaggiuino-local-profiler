@@ -718,6 +718,7 @@ const it: Partial<Translations> = {
     gm_new_phase_label:'Nuova fase',
     gm_editor_title_new:'Nuovo profilo GaggiMate',
     gm_editor_title_edit:(label)=>`Profilo GaggiMate: ${label}`,
+    gm_editor_save_to_machine:'Salva sulla macchina',
     gm_chart_pressure:'Pressione (bar)',
     gm_chart_flow:'Flusso (ml/s)',
     gm_chart_power:'Pompa (%)',

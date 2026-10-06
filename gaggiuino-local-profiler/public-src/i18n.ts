@@ -145,4 +145,11 @@ export function applyTranslations(): void {
     const key = el.dataset.i18nHtml;
     if (key) el.innerHTML = tHtml(key);
   });
+  // The easter-egg close button's only label is its aria-label (its text node
+  // is the × glyph), so the scans above can't reach it — set it by id (#1499).
+  const easterEggCloseBtn = document.getElementById('easterEggPanelCloseBtn');
+  if (easterEggCloseBtn) easterEggCloseBtn.setAttribute('aria-label', t('easter_egg_close'));
+  // Keep <html lang> in sync so browsers don't treat an English UI as German
+  // and offer/auto-apply page translation (#1499); kiosk.ts does the same.
+  document.documentElement.lang = S.currentLang;
 }
