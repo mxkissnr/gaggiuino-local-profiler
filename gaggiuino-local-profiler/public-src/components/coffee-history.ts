@@ -202,9 +202,9 @@ export function renderCoffeeHistory(host: HTMLElement): () => void {
   const tiles = historyTiles(shots, PHOTO_CAP);
   const bags = shelfBeans(shots, beans);
   // A bean without a stored photo has nothing to fetch; requesting it would
-  // 404 and log a console error. The month calendar states the same rule as
-  // beanHasPhoto() (views/analytics-month.ts) — kept local so this panel does
-  // not pull the library view into its import graph.
+  // 404 and log a console error. The same rule is kept local rather than
+  // shared with the gallery, so this panel does not pull the library view into
+  // its import graph.
   const beansWithPhoto = new Set(beans.filter(bean => bean.id != null && bean.image).map(bean => bean.id));
   const reduced = prefersReducedMotion();
 

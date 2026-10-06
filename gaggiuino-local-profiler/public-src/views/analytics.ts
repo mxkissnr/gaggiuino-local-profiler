@@ -8,7 +8,7 @@ import { esc, html, joinHtml, scoreClass, chartColors, themeColor, onThemeChange
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
-import { renderMonthCalendar, summaryLine } from './analytics-month.js';
+import { summaryLine } from './analytics-summary.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
 import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
 import type { ChartConfiguration, TooltipItem } from 'chart.js';
@@ -573,9 +573,6 @@ export function buildTrendChart() {
 }
 
 export function buildCalendar() {
-  const monthEl = document.getElementById('shotMonthCalendar');
-  if (monthEl) renderMonthCalendar(monthEl);
-
   const el = document.getElementById('shotCalendar');
   if (!el) return;
 
