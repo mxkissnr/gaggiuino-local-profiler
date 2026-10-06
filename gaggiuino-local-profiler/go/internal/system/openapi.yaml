@@ -1037,6 +1037,16 @@ components:
         hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
         enabled: { type: boolean, description: "Defaults to true when omitted" }
 
+    MachineControlSettings:
+      type: object
+      required: [enabled]
+      description: >
+        GET/POST /api/machine/control/settings body and response — the opt-in
+        machine-control toggle (off by default; deliberately not part of
+        backup/restore, #1324).
+      properties:
+        enabled: { type: boolean, description: "Whether opt-in machine control (flush, brew confirmation) is enabled" }
+
     # ── MQTT ───────────────────────────────────────────────────────────────
 
     MqttSettings:
@@ -2980,6 +2990,62 @@ paths:
         "409": { description: no connected GaggiMate on firmware v1.9.0+ }
         "501": { description: machine type does not support machine control }
         "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/brew-confirm/confirm:
+    post:
+      tags: [MachineControl]
+      summary: Accept a pending brew confirmation and start the brew (req:process:activate with ignoreWarnings over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: no brew confirmation is pending, or no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/brew-confirm/cancel:
+    post:
+      tags: [MachineControl]
+      summary: Decline a pending brew confirmation for every UI (req:brew:confirm:cancel over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/control/settings:
+    get:
+      tags: [MachineControl]
+      summary: Read the opt-in machine-control setting (off by default; deliberately not part of backup/restore)
+      responses:
+        "200":
+          description: "{ enabled }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineControlSettings' }
+    post:
+      tags: [MachineControl]
+      summary: Set the opt-in machine-control setting (off by default; deliberately not part of backup/restore)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineControlSettings' }
+      responses:
+        "200":
+          description: "{ enabled }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineControlSettings' }
+        "400": { description: enabled is missing or not a boolean }
 
   /api/mcp/settings:
     get:
