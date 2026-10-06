@@ -135,6 +135,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	h.registerRegistryRoutes(mux)
 	h.registerControlRoutes(mux)
 	h.registerProfileRoutes(mux)
+	h.registerMachineControlRoutes(mux)
 }
 
 // ── response helpers (see internal/httputil) ─────────────────────────────

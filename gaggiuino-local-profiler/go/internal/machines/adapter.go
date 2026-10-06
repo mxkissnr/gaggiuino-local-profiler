@@ -80,6 +80,7 @@ type Capabilities struct {
 	History              bool  `json:"history"`
 	NativeMaintenanceLog bool  `json:"nativeMaintenanceLog,omitempty"`
 	SettingsProxy        bool  `json:"settingsProxy,omitempty"`
+	MachineControl       bool  `json:"machineControl,omitempty"` // GaggiMate firmware v1.9.0+ flush/brew-confirm control, #1324
 }
 
 // Adapter is the documented per-machine-type contract, extended with the

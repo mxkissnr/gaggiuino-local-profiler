@@ -217,12 +217,13 @@ func (a *GaggiMateAdapter) SelectProfile(ctx context.Context, m *Machine, id str
 
 func (a *GaggiMateAdapter) Capabilities() Capabilities {
 	return Capabilities{
-		ProfileEdit:   true,
-		BrewStart:     false, // GaggiMate has no start/stop API at all
-		Preheat:       nil,   // not modeled yet — unknown until verified against hardware
-		Volumetric:    nil,   // determined per-shot from slog systemInfo.volumetricCapable, not a static capability
-		History:       true,
-		SettingsProxy: false,
+		ProfileEdit:    true,
+		BrewStart:      false, // GaggiMate has no start/stop API at all
+		Preheat:        nil,   // not modeled yet — unknown until verified against hardware
+		Volumetric:     nil,   // determined per-shot from slog systemInfo.volumetricCapable, not a static capability
+		History:        true,
+		SettingsProxy:  false,
+		MachineControl: true,
 	}
 }
 
