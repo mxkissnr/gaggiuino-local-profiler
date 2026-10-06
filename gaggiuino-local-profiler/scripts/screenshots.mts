@@ -142,14 +142,14 @@ async function reportUnhydratedThumbs(page: Page): Promise<void> {
 }
 
 // Scrolls `viewSel`'s own overflow:auto box so that `targetSel` (or the
-// .analytics-card wrapping it) sits flush at the top of the frame — exact,
+// .analytics-sec section wrapping it) sits flush at the top of the frame — exact,
 // unlike Element.scrollIntoView() which stops a scroll-padding short.
 async function alignToTop(page: Page, viewSel: string, targetSel: string): Promise<void> {
     await page.evaluate(({ viewSel, targetSel }) => {
         const view = document.querySelector(viewSel);
         const el = document.querySelector(targetSel);
         if (!view || !el) return;
-        const target = el.closest('.analytics-card') || el;
+        const target = el.closest('.analytics-sec') || el;
         view.scrollTop += target.getBoundingClientRect().top - view.getBoundingClientRect().top;
     }, { viewSel, targetSel });
 }
@@ -304,14 +304,24 @@ async function main(): Promise<void> {
     // Capture 1: summary KPIs + score trend + calendar.
     await shootView(page, '#analytics-view', path.join(outDir, 'analytics.png'));
 
-    // Capture 2: bean ranking + machine comparison + dial-in progression
-    // (#394) — the machine-comparison card only renders once >=2 machines
-    // exist, which seed() sets up. A real backup may restore only one machine,
-    // so the comparison card can be absent in backup mode; the capture still
-    // happens, just without that card. Scroll toward the bean-ranking card (it
-    // ends up near the top, clamped by the view's own scroll extent) and
-    // clip-shoot the frame at that position.
-    await alignToTop(page, '#analytics-view', '#beanRanking');
+    // Capture 2: the "More insights" fold with its lazily-built charts
+    // (#1467). It starts closed, and the fold only builds its charts once
+    // opened, so open it first — a closed capture would show the summary plus
+    // empty canvases. seed() registers >=2 machines, so the machine-comparison
+    // section is present; a real backup may restore only one machine and leave
+    // it hidden, in which case fall back to aligning the fold itself rather
+    // than scrolling to a zero-height box.
+    await page.locator('#analyticsMore').evaluate(el => el.setAttribute('open', ''));
+    await page.waitForSelector('#analyticsMore[open]');
+    // Opening runs the builders on the toggle event; wait for the charts that
+    // exist (a sparse backup can replace a canvas with an empty-state note).
+    for (const sel of ['#profileChart', '#dialinProgressionChart']) {
+        if (await page.locator(sel).count()) await waitForPaint(page, sel);
+    }
+    const moreTarget = (await page.locator('#machineComparisonCard').isVisible())
+        ? '#machineComparisonCard'
+        : '#analyticsMore';
+    await alignToTop(page, '#analytics-view', moreTarget);
     await page.waitForTimeout(200);
     await shootView(page, '#analytics-view', path.join(outDir, 'analytics-machines.png'), { fromTop: false });
 

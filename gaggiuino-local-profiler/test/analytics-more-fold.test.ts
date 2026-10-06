@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // without a DOM.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let shouldBuildAnalyticsMore: Analytics['shouldBuildAnalyticsMore'];
+let countVisibleMoreSections: Analytics['countVisibleMoreSections'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -24,7 +25,7 @@ beforeAll(async () => {
     },
     configurable: true, writable: true,
   });
-  ({ shouldBuildAnalyticsMore } = await import('../public-src/views/analytics.js'));
+  ({ shouldBuildAnalyticsMore, countVisibleMoreSections } = await import('../public-src/views/analytics.js'));
 });
 
 describe('"More insights" fold (#1467)', () => {
@@ -38,5 +39,24 @@ describe('"More insights" fold (#1467)', () => {
 
   it('skips them while the filter has no shots, even with the fold open', () => {
     expect(shouldBuildAnalyticsMore(true, true)).toBe(false);
+  });
+});
+
+describe('"More insights" visible section counter (#1467 review)', () => {
+  const fold = [
+    { id: 'profile', periodHidden: false },
+    { id: 'machineComparisonCard', periodHidden: false },
+  ];
+
+  it('drops the machine comparison while only one machine exists', () => {
+    expect(countVisibleMoreSections(fold, 1)).toBe(1);
+  });
+
+  it('keeps the machine comparison once a second machine exists', () => {
+    expect(countVisibleMoreSections(fold, 2)).toBe(2);
+  });
+
+  it('drops the period-bound sections hidden by an empty filter', () => {
+    expect(countVisibleMoreSections([{ id: 'profile', periodHidden: true }], 1)).toBe(0);
   });
 });

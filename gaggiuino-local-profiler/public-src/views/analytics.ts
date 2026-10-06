@@ -244,15 +244,37 @@ function _saveMoreOpen(open: boolean): void {
 
 let _moreWired = false;
 
+// Pure decision behind the fold's grey counter, exported for the test: the
+// machine comparison stays hidden until >= 2 machines exist, and a section the
+// empty filter hid is left out.
+export function countVisibleMoreSections(sections: { id: string; periodHidden: boolean }[], machineCount: number): number {
+  return sections.filter(s => !(s.id === 'machineComparisonCard' && machineCount < 2) && !s.periodHidden).length;
+}
+
+function _moreSectionCount(fold: HTMLElement): number {
+  const sections = Array.from(fold.querySelectorAll<HTMLElement>('.analytics-sec')).map(el => {
+    const periodWrap = el.closest<HTMLElement>('[data-analytics-period]');
+    return { id: el.id, periodHidden: !!periodWrap && periodWrap.style.display === 'none' };
+  });
+  return countVisibleMoreSections(sections, (_machines() || []).length);
+}
+
 function _updateMoreCount(): void {
   const fold = _moreFold();
   const countEl = document.getElementById('analyticsMoreCount');
   if (!fold || !countEl) return;
-  countEl.textContent = t('analytics_more_count', fold.querySelectorAll('.analytics-sec').length);
+  countEl.textContent = t('analytics_more_count', _moreSectionCount(fold));
 }
 
 function _rebuildMore(): void {
-  if (!shouldBuildAnalyticsMore(_moreFold()?.open ?? false, _pageShots().length === 0)) return;
+  const fold = _moreFold();
+  if (!fold || !fold.open) return;
+  // The machine comparison reads the whole history and renders a table, not a
+  // canvas, so it belongs to no filter and stays correct for an empty filter.
+  // The filter-bound charts below only run when the filter has shots.
+  buildMachineComparison();
+  _updateMoreCount();
+  if (!shouldBuildAnalyticsMore(fold.open, _pageShots().length === 0)) return;
   buildProfileChart();
   buildGrinderStats();
   buildBasketStats();
@@ -260,7 +282,6 @@ function _rebuildMore(): void {
   buildDistribution();
   buildTimeOfDay();
   buildWeekdayHourHeatmap();
-  buildMachineComparison();
   buildDialinProgression();
 }
 
@@ -303,7 +324,8 @@ export function initAnalytics() {
 // the empty state: an all-empty filter shows one quiet line and hides those
 // sections instead of drawing empty charts. The whole-history sections
 // (coffee year, lifetime facts) are rebuilt separately by initAnalytics(); the
-// folded charts below only run while the fold is open.
+// folded charts run only while the fold is open, with the machine comparison
+// exempt from the empty state because it reads the whole history.
 export function rebuildAnalyticsPage(): void {
   const empty = _pageShots().length === 0;
   const emptyEl = document.getElementById('analyticsFilterEmpty');
@@ -311,6 +333,10 @@ export function rebuildAnalyticsPage(): void {
   document.querySelectorAll<HTMLElement>('[data-analytics-period]').forEach(el => {
     el.style.display = empty ? 'none' : '';
   });
+
+  // Runs before the empty-state return: the fold's machine comparison is not
+  // filter-bound, and the filter-bound charts inside the fold skip themselves.
+  _rebuildMore();
   if (empty) return;
 
   buildSummaryKpis();
@@ -318,7 +344,6 @@ export function rebuildAnalyticsPage(): void {
   buildRecipeSummary();
   buildBeanShelf();
   void buildWorldMap();
-  _rebuildMore();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
