@@ -317,11 +317,10 @@ function _unwireSheetKeys(): void {
   document.removeEventListener('keydown', handler);
 }
 
-// `onPainted` runs after the sheet's content is in the DOM. The paint may be
-// deferred (it goes through a view transition when motion is allowed), so
-// callers that need to touch elements inside the fresh card — e.g. revealing
-// the inline bag form after "Save and add bag" (#1398) — must wait for this
-// rather than assume the sheet is already built.
+// `onPainted` runs after the sheet's content is in the DOM, synchronously
+// within openBeanSheet. Callers that need to touch elements inside the fresh
+// card — e.g. revealing the inline bag form after "Save and add bag" (#1398) —
+// use it rather than reaching into the sheet themselves.
 export function openBeanSheet(id: number, onPainted?: () => void): void {
   const bean = _beanList().find(b => b.id === id);
   if (!bean) return;
@@ -335,9 +334,9 @@ export function openBeanSheet(id: number, onPainted?: () => void): void {
     _focusSheetClose();
     onPainted?.();
   };
-  const doc = document as Document & { startViewTransition?: (cb: () => void) => void };
-  if (typeof doc.startViewTransition === 'function' && _sheetMotionOk()) doc.startViewTransition(paint);
-  else paint();
+  // The sheet's own enter animation is the transition; a root view transition
+  // faded the whole page (#1452).
+  paint();
 }
 
 export function closeBeanSheet(): void {
