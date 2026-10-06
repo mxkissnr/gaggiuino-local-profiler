@@ -31,9 +31,9 @@ function ts(y: number, m: number, d: number, h = 8): number {
   return new Date(y, m - 1, d, h).getTime() / 1000;
 }
 function shot(timestamp: number, score: number | null): ShotRow {
-  return { id: 1, timestamp, score } as unknown as ShotRow;
+  return { id: 1, timestamp, score };
 }
-const scoreOf = (s: ShotRow): number | null => (s as { score?: number | null }).score ?? null;
+const scoreOf = (s: ShotRow): number | null => (typeof s.score === 'number' ? s.score : null);
 
 describe('trendDailyBand (#1490)', () => {
   it('gives one entry per calendar day with a 7-day rolling mean, min and max', () => {
