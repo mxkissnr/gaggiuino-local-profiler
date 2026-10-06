@@ -718,6 +718,7 @@ const en: Translations = {
     gm_new_phase_label:'New phase',
     gm_editor_title_new:'New GaggiMate profile',
     gm_editor_title_edit:(label)=>`GaggiMate profile: ${label}`,
+    gm_editor_save_to_machine:'Save to machine',
     gm_chart_pressure:'Pressure (bar)',
     gm_chart_flow:'Flow (ml/s)',
     gm_chart_power:'Pump (%)',
