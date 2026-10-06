@@ -14,7 +14,9 @@ The redesigned coffee library is the reference for every page of the app.
 Statistics (`gaggiuino-local-profiler/public-src/views/analytics.ts`, #1467) is
 the reference for the first two: a one-line verdict with the period's average
 score, and one sticky toolbar that filters the whole page by period, bean or
-profile.
+profile. It also puts rules 3 and 6 to work: boxless sections under an accent
+heading with a grey counter, and the rarer charts folded away behind a "More
+insights" summary, with a two-column desktop layout for the rest.
 
 ## Rules
 

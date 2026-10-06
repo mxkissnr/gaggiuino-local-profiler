@@ -69,7 +69,7 @@ All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-l
     <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="100%"/></td>
   </tr>
   <tr>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison and dial-in progression in the More insights fold" width="100%"/></td>
     <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
   </tr>
   <tr>

@@ -462,21 +462,58 @@
             padding: var(--analytics-pad);
             gap: var(--sp-5);
         }
-        .analytics-container { display: flex; flex-direction: column; gap: var(--sp-5); width: 100%; }
-        .analytics-card {
-            background: var(--gray-900);
-            border-radius:var(--radius);
-            padding: var(--sp-5);
-            min-width: 0;
-        }
+        /* #1467: one column of boxless sections; the desktop media query below
+           lays the few visible sections out in two columns. */
+        .analytics-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); width: 100%; }
+        .analytics-sec { min-width: 0; }
+        /* The verdict is the page's one emphasised block, so it keeps a surface. */
+        .analytics-verdict-card { background: var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); }
         .analytics-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-4); }
         .world-map-wrap { position: relative; aspect-ratio: 16 / 9; min-height: 200px; max-height: 420px; width: 100%; }
         .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: var(--fs-1); color: var(--gray-500); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 16px); }
         @media (hover: none) { .world-map-hint { display: none; } }
         .map-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
-        .analytics-section-title { margin: 0 0 var(--sp-4) 0; font-size: var(--fs-3); font-weight: 600; color: var(--gray-200); }
+        /* #1467: headings use the library shelf heading look — small, semibold,
+           accent — with the grey counters sitting next to them. */
+        .analytics-section-title { margin: 0 0 var(--sp-3) 0; font-size: var(--fs-1); font-weight: 600; color: var(--accent); }
         .analytics-card-head .analytics-section-title { margin-bottom: 0; }
         .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--sp-5); }
+
+        /* "More insights" fold (#1467): the rarer charts stay folded away, like
+           the library's Empty & archive. Only the first open builds their charts. */
+        .analytics-more { min-width: 0; }
+        .analytics-more-summary { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; margin: 0; cursor: pointer; list-style: none; font-size: var(--fs-1); font-weight: 600; color: var(--accent); }
+        .analytics-more-summary::-webkit-details-marker { display: none; }
+        .analytics-more-summary::before { content: '\25B8'; transition: transform .2s ease; }
+        .analytics-more[open] > .analytics-more-summary::before { transform: rotate(90deg); }
+        .analytics-more-body { display: flex; flex-direction: column; gap: var(--sp-6); margin-top: var(--sp-4); }
+
+        /* Use the width: from 900px up the visible sections form two balanced
+           columns, the origin map beside the trend and the recipe (#1467). */
+        @media (min-width: 900px) {
+            .analytics-container {
+                grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+                grid-template-areas:
+                    "verdict verdict"
+                    "trend map"
+                    "recipe map"
+                    "year year"
+                    "shelf shelf"
+                    "facts facts"
+                    "more more";
+                column-gap: var(--sp-6);
+                align-items: start;
+            }
+            .analytics-verdict-card { grid-area: verdict; }
+            .analytics-trend { grid-area: trend; }
+            .analytics-recipe { grid-area: recipe; }
+            .cal-card { grid-area: year; }
+            .analytics-shelf-sec { grid-area: shelf; }
+            .analytics-facts-sec { grid-area: facts; }
+            .analytics-map { grid-area: map; }
+            .analytics-more { grid-area: more; }
+        }
+
         .analytics-filter-row { display: flex; gap: var(--sp-2); }
         .analytics-filter-btn {
             background: transparent; border: 1px solid var(--gray-700); color: var(--gray-500);

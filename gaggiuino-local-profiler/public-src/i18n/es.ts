@@ -250,6 +250,7 @@ const es: Partial<Translations> = {
     analytics_time_of_day:'Hora del día', analytics_no_time:'Aún no hay datos horarios.',
     analytics_heatmap:'Día × Hora',
     analytics_bean_shelf:'Cafés por puntuación',
+    analytics_more:'Más análisis', analytics_more_count:(n)=>`${n} análisis`,
     analytics_shelf_sort_score:'Puntuación', analytics_shelf_sort_shots:'Shots',
     analytics_shelf_show_all:(n)=>`Mostrar los ${n}`, analytics_shelf_perfect:'Shots perfectos',
     analytics_open_in_library:'Abrir en la biblioteca',

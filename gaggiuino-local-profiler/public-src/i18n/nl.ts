@@ -250,6 +250,7 @@ const nl: Partial<Translations> = {
     analytics_time_of_day:'Tijdstip van de dag', analytics_no_time:'Nog geen tijdsdata.',
     analytics_heatmap:'Weekdag × Uur',
     analytics_bean_shelf:'Bonen op score',
+    analytics_more:'Meer analyses', analytics_more_count:(n)=>`${n} analyses`,
     analytics_shelf_sort_score:'Score', analytics_shelf_sort_shots:'Shots',
     analytics_shelf_show_all:(n)=>`Alle ${n} tonen`, analytics_shelf_perfect:'Perfecte shots',
     analytics_open_in_library:'Openen in bibliotheek',
