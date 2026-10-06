@@ -13,7 +13,7 @@ import { openDetailSheet } from '../components/detail-sheet.js';
 import type { DetailAnchorPoint } from '../components/detail-sheet.js';
 import { shelfBagImage } from './library/shelf.js';
 import type { ShelfBagImageBean } from './library/shelf.js';
-import { loadBeanThumbnails } from './library.js';
+import { loadBeanImageBlobUrl } from '../bean-image.js';
 import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
 import type { ChartConfiguration, TooltipItem } from 'chart.js';
 
@@ -1896,6 +1896,39 @@ function _shelfImageBean(row: BeanRankRow, bean: SharedBean | null): ShelfBagIma
 
 const _BEAN_SHELF_LIMIT = 16;
 let _beanShelfSort: 'score' | 'shots' = 'score';
+let _beanShelfColumnsWired = false;
+
+// The shelf grid is 3 columns on phones and 8 from 900px up. Showing a
+// partial last row leaves a lone tile on the second row, so the visible
+// shelf carries only complete rows; the rest waits behind "show all".
+function _beanShelfColumns(): number {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 900px)').matches ? 8 : 3;
+}
+
+function _beanShelfHeadCount(total: number): number {
+  const columns = _beanShelfColumns();
+  const cap = Math.min(_BEAN_SHELF_LIMIT, total);
+  if (cap < columns) return cap; // fewer beans than one row: show them all
+  return Math.floor(cap / columns) * columns;
+}
+
+// Re-render when the grid crosses the 900px 3→8 column breakpoint.
+function _watchBeanShelfColumns(): void {
+  if (_beanShelfColumnsWired || typeof window.matchMedia !== 'function') return;
+  _beanShelfColumnsWired = true;
+  window.matchMedia('(min-width: 900px)').addEventListener('change', () => buildBeanShelf());
+}
+
+// Bean photos need the auth token, so <img src> can't point at the API
+// (see bean-image.js). Load them directly here rather than through
+// views/library.js, whose loadBeanThumbnails would pull in the whole
+// Library module (and its lightbox) just to fill these tiles.
+function _loadBeanShelfThumbnails(): void {
+  document.querySelectorAll<HTMLImageElement>('#beanShelf .lib-shelf-img[data-bean-id]').forEach(img => {
+    const id = Number(img.dataset.beanId);
+    void loadBeanImageBlobUrl(id).then(url => { if (url) img.src = url; });
+  });
+}
 
 function _beanShelfTile(row: BeanRankRow, rank: number): Html {
   const bean = _matchLibraryBean(row);
@@ -1918,6 +1951,7 @@ function _beanShelfTile(row: BeanRankRow, rank: number): Html {
 export function buildBeanShelf(): void {
   const el = document.getElementById('beanShelf');
   if (!el) return;
+  _watchBeanShelfColumns();
 
   const rows = _sortBeanShelfRows(_computeBeanRanking(_shots()), _beanShelfSort);
   const countEl = document.getElementById('beanShelfCount');
@@ -1927,15 +1961,17 @@ export function buildBeanShelf(): void {
     return;
   }
 
-  const head = rows.slice(0, _BEAN_SHELF_LIMIT);
-  const rest = rows.slice(_BEAN_SHELF_LIMIT);
+  const total = rows.length;
+  const headCount = _beanShelfHeadCount(total);
+  const head = rows.slice(0, headCount);
+  const rest = rows.slice(headCount);
   el.innerHTML = html`
     <div class="analytics-shelf">${joinHtml(head.map((r, i) => _beanShelfTile(r, i + 1)))}</div>
     ${rest.length ? html`
-      <div class="analytics-shelf analytics-shelf-rest" id="beanShelfRest" style="display:none">${joinHtml(rest.map((r, i) => _beanShelfTile(r, _BEAN_SHELF_LIMIT + i + 1)))}</div>
-      <button type="button" class="analytics-shelf-more" id="beanShelfMore" data-action="expand-bean-shelf">${tHtml('analytics_shelf_show_all')}</button>` : esc('')}`;
+      <div class="analytics-shelf analytics-shelf-rest" id="beanShelfRest" style="display:none">${joinHtml(rest.map((r, i) => _beanShelfTile(r, headCount + i + 1)))}</div>
+      <button type="button" class="analytics-shelf-more" id="beanShelfMore" data-action="expand-bean-shelf">${tHtml('analytics_shelf_show_all', total)}</button>` : esc('')}`;
 
-  loadBeanThumbnails();
+  _loadBeanShelfThumbnails();
 }
 
 export function setBeanShelfSort(key: 'score' | 'shots'): void {
@@ -1969,7 +2005,7 @@ export function openBeanShelfDetail(name: string, anchor: HTMLElement | null): v
   if (row.hundreds > 0) parts.push(line(t('analytics_shelf_perfect'), esc(row.hundreds)));
   if (row.avgTime !== null) parts.push(line(t('bean_stat_duration'), esc(`${row.avgTime} s`)));
   if (row.lastGrind != null && row.lastGrind !== '') parts.push(line(t('ann_grind_setting'), esc(String(row.lastGrind))));
-  if (row.firstGood !== null) parts.push(line('', tHtml('analytics_shelf_first_good', row.firstGood)));
+  if (row.firstGood !== null) parts.push(line(t('analytics_bean_dialed_in'), tHtml('analytics_bean_dialed_in_at', row.firstGood)));
   if (row.trend !== null) {
     const color = row.trend > 0 ? scoreColor(100) : row.trend < 0 ? scoreColor(0) : 'var(--gray-500)';
     const sign = row.trend > 0 ? '+' : '';
