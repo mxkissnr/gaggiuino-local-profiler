@@ -82,7 +82,15 @@ describe('computeFacts odd_hour (#1467)', () => {
       shot(at(2024, 3, 4, 0, 34), { duration: 300, score: 94 }),
       shot(at(2024, 3, 4, 23, 30), { duration: 300, score: 88 }),
     ];
-    const facts = computeFacts([...shots, ...pad100(at(2024, 3, 6, 10, 0))], scoreOf, 'en-US');
+    // The extra facts come from perfect shots kept near midnight too, so the
+    // 23:30 shot is the only one far from the median and its circular distance
+    // (1 h) is what decides the result.
+    const facts = computeFacts([
+      ...shots,
+      shot(at(2024, 3, 4, 0, 40), { duration: 300, score: 100 }),
+      shot(at(2024, 3, 4, 0, 41), { duration: 300, score: 100 }),
+      shot(at(2024, 3, 4, 0, 42), { duration: 300, score: 100 }),
+    ], scoreOf, 'en-US');
     expect(facts.length).toBeGreaterThanOrEqual(3);
     expect(ids(facts)).not.toContain('odd_hour');
   });
