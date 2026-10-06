@@ -1669,7 +1669,7 @@
            on real installs). */
         .lib-sheet-backdrop { position: fixed; top: var(--dev-banner-h, 0px); left: 0; right: 0; bottom: 0; z-index: 900; background: rgba(0,0,0,.55); }
         .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: calc(88dvh - var(--dev-banner-h, 0px)); overflow-y: auto; overscroll-behavior-y: contain; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
-        .lib-sheet-bar { position: sticky; top: calc(-1 * var(--sp-4)); z-index: 3; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: var(--sp-4) 0 var(--sp-2); margin-top: calc(-1 * var(--sp-4)); margin-bottom: var(--sp-3); background: var(--gray-900); border-bottom: 1px solid transparent; }
+        .lib-sheet-bar { position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; margin-bottom: var(--sp-3); background: var(--gray-900); border-bottom: 1px solid transparent; }
         .lib-sheet-bar.is-scrolled { border-bottom-color: var(--gray-700); }
         .lib-sheet-bar-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-3); font-weight: 600; color: var(--gray-100); }
         .lib-sheet-bar-actions { display: flex; align-items: center; gap: var(--sp-1); justify-self: end; }
