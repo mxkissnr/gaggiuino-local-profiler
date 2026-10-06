@@ -8,7 +8,7 @@
 //
 // # File layout
 //
-//	registry.go    the 48 open + 6 secret badge catalogue and every
+//	registry.go    the 56 open + 7 secret badge catalogue and every
 //	               check()/progress() predicate, plus CARD_KEYS.
 //	helpers.go     the pure math the checks share (stddev,
 //	               pressure-plateau, bag-rest ages, day streaks, the
@@ -16,7 +16,7 @@
 //	context.go     buildContext(): the single read snapshot every check
 //	               runs against, gathered across ALL machines (per-install,
 //	               not per-machine — see registry.go's header).
-//	secrets.go     the 6 secret badges' base64-obfuscated name/description
+//	secrets.go     the 7 secret badges' base64-obfuscated name/description
 //	               text. Kept encoded server-side because it keeps the
 //	               plaintext out of the shipped i18n bundle / a casual
 //	               `grep`, and the bytes never reach a browser until the
