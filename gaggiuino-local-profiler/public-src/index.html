@@ -1221,10 +1221,11 @@
                 <div style="height:200px;position:relative"><canvas id="trendChart"></canvas></div>
             </div>
 
-            <!-- Shot Calendar -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_calendar">Shot-Kalender</h3>
+            <!-- Coffee year -->
+            <div class="analytics-card cal-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_calendar">Kaffeejahr</h3>
                 <div id="shotCalendar" class="cal-wrapper"></div>
+                <div id="calStreaks" class="cal-streaks"></div>
             </div>
 
             <!-- Personal Bests -->
@@ -1738,6 +1739,9 @@
         </div>
     </div>
 </div>
+
+<!-- Shared detail popover/sheet (#1467); filled by components/detail-sheet.ts -->
+<div id="detailSheet" class="lib-sheet-host"></div>
 
 <script type="module" src="./main.ts"></script>
 </body>

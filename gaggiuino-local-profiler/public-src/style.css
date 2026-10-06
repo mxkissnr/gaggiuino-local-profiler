@@ -480,18 +480,50 @@
         .analytics-filter-btn:hover { color: var(--gray-200); border-color: var(--gray-600); }
         .analytics-filter-btn.active { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
 
-        /* Calendar heatmap */
-        .cal-wrapper { overflow-x: hidden; padding-bottom: var(--sp-1); }
-        .cal-grid { display: flex; }
-        .cal-week { display: flex; flex-direction: column; }
-        .cal-day { border-radius: 2px; cursor: default; flex-shrink: 0; }
-        .cal-day-link { cursor: pointer; }
-        .cal-day-link:hover { filter: brightness(1.35); outline: 1px solid rgba(255,255,255,.3); }
+        /* Coffee year: one column per week, Monday at the top (#1467). Real CSS
+           grid instead of measuring the wrapper, so the fixed cell size keeps
+           the whole year scrollable on phones. */
+        .cal-wrapper { --cal-cell: 12px; overflow-x: auto; padding-bottom: var(--sp-1); }
+        .cal-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--cal-cell)); grid-auto-columns: var(--cal-cell); gap: 3px; width: max-content; }
+        .cal-weekday { font-size: .6rem; line-height: var(--cal-cell); color: var(--gray-600); text-align: right; padding-right: 2px; }
+        .cal-months { display: grid; grid-auto-flow: column; grid-auto-columns: var(--cal-cell); gap: 3px; padding-left: calc(var(--cal-cell) + 3px); margin-bottom: 3px; width: max-content; }
+        .cal-month { font-size: .65rem; color: var(--gray-600); white-space: nowrap; overflow: visible; }
+        .cal-day { border: none; padding: 0; border-radius: 2px; background: var(--gray-800); cursor: default; }
+        button.cal-day { cursor: pointer; font: inherit; }
+        .cal-day-link:hover { filter: brightness(1.35); }
         .cal-0 { background: var(--gray-800); }
         .cal-1 { background: color-mix(in srgb, var(--accent) 30%, transparent); }
         .cal-2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
         .cal-3 { background: color-mix(in srgb, var(--accent) 85%, transparent); }
-        .cal-future { background: transparent; border: none; }
+        .cal-4 { background: color-mix(in srgb, var(--accent) 100%, transparent); }
+        .cal-future { background: transparent; }
+        .cal-today { outline: 1px solid var(--gray-300); outline-offset: 1px; }
+        /* A day that held at least one 100-point shot gets a cream dot. */
+        .cal-crema { position: relative; }
+        .cal-crema::after { content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #f3e1c0; }
+        .cal-day.in-run { outline: 1px solid var(--accent); outline-offset: 1px; }
+        .cal-day.cal-dim { opacity: .3; }
+        @media (prefers-reduced-motion: no-preference) {
+            .cal-day { transition: transform .12s ease; }
+            .cal-day:hover { transform: scale(1.3); }
+        }
+
+        /* Streak figures under the coffee-year grid (#1467). */
+        .cal-streaks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin-top: var(--sp-4); }
+        .cal-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .cal-fig-num { display: flex; align-items: baseline; gap: 3px; font-size: var(--fs-4); font-weight: 700; color: var(--gray-100); }
+        .cal-fig-unit { font-size: var(--fs-1); font-weight: 500; color: var(--gray-500); }
+        .cal-fig-lbl { font-size: var(--fs-1); color: var(--gray-500); }
+        .cal-cups { display: flex; gap: 2px; margin-top: 3px; }
+        .cal-cup { width: 12px; height: 12px; color: var(--gray-700); }
+        .cal-cup.filled { color: var(--accent); }
+        .cal-fig-longest:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+        @media (min-width: 900px) {
+            .cal-wrapper { --cal-cell: 15px; }
+            .cal-card { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--sp-5); align-items: start; }
+            .cal-card > .analytics-section-title { grid-column: 1 / -1; }
+            .cal-streaks { margin-top: 0; }
+        }
 
         /* Weekday x Hour heatmap (#394) */
         .wh-heatmap { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; }
@@ -1525,6 +1557,21 @@
         .lib-sheet-head { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--sp-3); align-items: start; }
         /* #1374: the grab pill drags the sheet down to close it on phones. */
         .lib-sheet-grab { width: 36px; height: 4px; margin: 0 auto var(--sp-3); border-radius: 999px; background: var(--gray-600); }
+        /* Shared detail popover/sheet (#1467). On phones the host keeps the
+           bottom-sheet look; from 900px up an anchored open gets .detail-pop
+           and floats next to the anchor instead. */
+        .detail-sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+        .detail-sheet-titles { min-width: 0; }
+        .detail-sheet-title { margin: 0; font-size: var(--fs-3); color: var(--gray-100); }
+        .detail-sheet-sub { margin: 2px 0 0; font-size: var(--fs-1); color: var(--gray-500); }
+        .detail-sheet-close { flex-shrink: 0; }
+        .detail-backdrop { background: transparent; }
+        .lib-sheet.detail-pop { left: 0; right: auto; bottom: auto; top: var(--dev-banner-h, 0px); width: min(360px, calc(100vw - 24px)); max-height: min(70vh, 560px); border-radius: var(--radius-lg); box-shadow: 0 8px 32px rgba(0,0,0,.45); }
+        .detail-pop .lib-sheet-grab { display: none; }
+        @keyframes detail-pop-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+        @media (prefers-reduced-motion: no-preference) {
+            .detail-pop { animation: detail-pop-in 140ms ease-out; }
+        }
         /* #1374: the drag surfaces must opt out of native touch panning below
            900px, or the browser scrolls/overscrolls the sheet and fires
            pointercancel after a few pixels, so the swipe never dismisses. */
