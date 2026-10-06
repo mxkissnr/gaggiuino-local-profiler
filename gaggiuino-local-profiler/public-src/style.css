@@ -477,6 +477,11 @@
            accent — with the grey counters sitting next to them. */
         .analytics-section-title { margin: 0 0 var(--sp-3) 0; font-size: var(--fs-1); font-weight: 600; color: var(--accent); }
         .analytics-card-head .analytics-section-title { margin-bottom: 0; }
+        /* #1490: the trend heading carries a grey section counter for the long
+           periods ("7-day average"), nothing for 7/30 days. */
+        .analytics-trend-head { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+        .analytics-trend-head .analytics-section-title { margin-bottom: 0; }
+        .analytics-trend-counter { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); }
         .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--sp-5); }
 
         /* "More insights" fold (#1467): the rarer charts stay folded away, like
@@ -583,6 +588,13 @@
         .cal-cup { width: 12px; height: 12px; color: var(--gray-700); }
         .cal-cup.filled { color: var(--accent); }
         .cal-fig-longest:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+        /* #1490: grid and legend form one column, so the legend stays directly
+           under the grid on phones and under the left column on desktop. */
+        .cal-year { min-width: 0; }
+        .cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-top: var(--sp-2); font-size: var(--fs-1); color: var(--gray-500); }
+        .cal-legend-part { display: inline-flex; align-items: center; gap: var(--sp-1); }
+        .cal-legend-swatches { display: inline-flex; align-items: center; gap: 3px; }
+        .cal-legend-swatch { display: inline-block; width: 12px; height: 12px; }
         @media (min-width: 900px) {
             .cal-wrapper { --cal-cell: 15px; }
             .cal-card { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--sp-5); align-items: start; }

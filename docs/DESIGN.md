@@ -22,6 +22,7 @@ insights" summary, with a two-column desktop layout for the rest.
 
 - **Nothing twice.** Every number or fact appears once per page. Before adding one, check the verdict, the other sections and the charts.
 - **Use space well.** No empty boxes and no half-empty rows or columns. Desktop gets its own two-column layout with balanced columns, never a stretched phone view. Maps and charts zoom to the part that matters.
+- **Long periods stay calm.** Past a month or so, the score trend draws one point per calendar day — a 7-day rolling mean with a low/high band and month-first tick labels — and a day opens its own detail. The coffee year sizes its cells so the last 22 weeks fill a phone's width and scrolls to the newest week, with a legend for the heat scale and the crema dot.
 - **Love for detail.** Every view gets small coffee touches (a crema dot for a 100, ice for frozen beans, cup streaks, travelling bean routes, fact cards). They respect `prefers-reduced-motion` and are never loud. Easter eggs never appear in release notes, docs or public issues.
 - **Mobile is designed, not shrunk.** Design at 390 px first; touch targets are at least 44 px.
 - **One sheet header.** Every bottom sheet and its desktop popover share the same bar: close on the left, the title, then the main actions as 44 px icons on the right, each with an `aria-label` through `t()`. It stays at the top while the content scrolls and only then draws a hairline. The more menu keeps only what the bar does not already show.
