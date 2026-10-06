@@ -27,6 +27,10 @@ const BRUSH_MAX = 60;
 // How long a model-compute stage may ease before its share of the bar is full.
 const EASE_MS = 6000;
 const PROGRESS_TICK_MS = 250;
+// How long the reset button stays armed for a second, confirming tap.
+const RESET_ARM_MS = 3000;
+// How long the brush-size preview stays up after the last slider input.
+const BRUSH_PREVIEW_MS = 600;
 
 export interface MaskBounds {
   x0: number;
@@ -362,6 +366,22 @@ function buildEditor(
   viewport.appendChild(canvas);
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
+  // Centred circle that previews the brush diameter while the slider moves.
+  const brushPreview = element('span', 'sticker-brush-preview');
+  brushPreview.setAttribute('aria-hidden', 'true');
+  brushPreview.style.display = 'none';
+  viewport.appendChild(brushPreview);
+
+  const hint = element('p', 'sticker-hint');
+  hint.setAttribute('role', 'status');
+  hint.setAttribute('aria-live', 'polite');
+  hint.style.display = 'none';
+  const hintText = element('span', 'sticker-hint-text');
+  const hintZoom = element('span', 'sticker-hint-zoom');
+  hintZoom.textContent = t('sticker_hint_zoom');
+  hint.appendChild(hintText);
+  hint.appendChild(hintZoom);
+
   const workingLine = element('p', 'sticker-working');
   workingLine.textContent = t('sticker_step', 1, 3, t('sticker_stage_download'));
   workingLine.setAttribute('role', 'status');
@@ -374,21 +394,29 @@ function buildEditor(
   const progressFill = element('div', 'sticker-progress-fill');
   progress.appendChild(progressFill);
 
+  const modeGroup = element('div', 'sticker-mode');
+  modeGroup.setAttribute('role', 'group');
+  const addBtn = themedButton('sticker-mode-btn sticker-mode-add', t('sticker_add'));
+  const removeBtn = themedButton('sticker-mode-btn sticker-mode-remove', t('sticker_remove'));
+  modeGroup.appendChild(addBtn);
+  modeGroup.appendChild(removeBtn);
+
   const tools = element('div', 'sticker-tools');
-  const addBtn = themedButton('lib-btn-sm sticker-mode-add', t('sticker_add'));
-  const removeBtn = themedButton('lib-btn-sm sticker-mode-remove', t('sticker_remove'));
-  const brushBtn = themedButton('lib-btn-sm sticker-brush-toggle', t('sticker_brush'));
   const sizeInput = element('input', 'sticker-brush-size');
   sizeInput.type = 'range';
   sizeInput.min = String(BRUSH_MIN);
   sizeInput.max = String(BRUSH_MAX);
   sizeInput.value = String(DEFAULT_BRUSH);
   sizeInput.setAttribute('aria-label', t('sticker_brush_size'));
+  const sizeLabel = element('label', 'sticker-size');
+  sizeLabel.textContent = t('sticker_brush_size');
+  sizeLabel.appendChild(sizeInput);
   const undoBtn = themedButton('lib-btn-sm sticker-undo', t('sticker_undo'));
   const resetBtn = themedButton('lib-btn-sm sticker-reset', t('sticker_reset'));
   const originalBtn = themedButton('lib-btn-sm sticker-original', t('sticker_original'));
   const fitBtn = themedButton('lib-btn-sm sticker-fit', t('sticker_fit'));
-  for (const child of [addBtn, removeBtn, brushBtn, sizeInput, undoBtn, resetBtn, originalBtn, fitBtn]) {
+  fitBtn.hidden = true;
+  for (const child of [sizeLabel, undoBtn, originalBtn, fitBtn, resetBtn]) {
     tools.appendChild(child);
   }
 
@@ -399,7 +427,7 @@ function buildEditor(
   closeBtn.style.display = 'none';
   for (const child of [cancelBtn, applyBtn, closeBtn]) actions.appendChild(child);
 
-  for (const child of [title, viewport, workingLine, progress, tools, actions]) modal.appendChild(child);
+  for (const child of [title, viewport, workingLine, progress, hint, modeGroup, tools, actions]) modal.appendChild(child);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
@@ -412,7 +440,6 @@ function buildEditor(
   let current: Uint8Array | null = null;
   let autoMask: Uint8Array | null = null;
   let mode: 'add' | 'remove' = 'add';
-  let brushOn = false;
   let brushSize = DEFAULT_BRUSH;
   let busy = false;
   let working = true;
@@ -420,6 +447,9 @@ function buildEditor(
   let closed = false;
   let progressTimer: ReturnType<typeof setInterval> | null = null;
   let peelTimer: ReturnType<typeof setTimeout> | null = null;
+  let resetTimer: ReturnType<typeof setTimeout> | null = null;
+  let resetArmed = false;
+  let previewTimer: ReturnType<typeof setTimeout> | null = null;
   let view: StickerView = { scale: 1, x: 0, y: 0 };
   let stage: CutoutStage = 'download';
   let fraction: number | null = null;
@@ -446,18 +476,23 @@ function buildEditor(
     view = clampView(view, rect.width || layout.w, rect.height || layout.h, layout.w, layout.h);
   }
 
-  function drawCheckerboard(): void {
-    const light = themeColor('--gray-800') ?? 'rgba(255,255,255,.08)';
-    const dark = themeColor('--gray-900') ?? 'rgba(255,255,255,.16)';
-    const size = 8;
-    for (let y = 0; y < workH; y += size) {
-      for (let x = 0; x < workW; x += size) {
-        ctx.fillStyle = (x / size + y / size) % 2 === 0 ? light : dark;
-        ctx.fillRect(x, y, size, size);
-      }
+  function parseHexColor(value: string, fallback: [number, number, number]): [number, number, number] {
+    const six = /^#?([0-9a-f]{6})$/i.exec(value.trim());
+    if (six) {
+      const n = parseInt(six[1]!, 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
     }
+    const three = /^#?([0-9a-f]{3})$/i.exec(value.trim());
+    if (three) {
+      const s = three[1]!;
+      return [parseInt(s[0]! + s[0]!, 16), parseInt(s[1]! + s[1]!, 16), parseInt(s[2]! + s[2]!, 16)];
+    }
+    return fallback;
   }
 
+  // Removed pixels are the photo mixed halfway towards the error colour, drawn
+  // at low alpha over the theme background, so the user sees at a glance what
+  // is kept and what is not — the checkerboard read as "already cut out".
   function draw(): void {
     ctx.clearRect(0, 0, workW, workH);
     if (working) {
@@ -470,13 +505,23 @@ function buildEditor(
       ctx.drawImage(decoded.source, 0, 0, workW, workH);
       return;
     }
-    drawCheckerboard();
+    ctx.fillStyle = themeColor('--gray-950') ?? '#111';
+    ctx.fillRect(0, 0, workW, workH);
+    const err = parseHexColor(themeColor('--err') ?? '', [0xd6, 0x45, 0x45]);
+    const removedAlpha = Math.round(0.35 * 255);
     const out = new Uint8ClampedArray(rgba.length);
     for (let i = 0; i < current.length; i++) {
-      out[i * 4] = rgba[i * 4]!;
-      out[i * 4 + 1] = rgba[i * 4 + 1]!;
-      out[i * 4 + 2] = rgba[i * 4 + 2]!;
-      out[i * 4 + 3] = current[i] ? 255 : 0;
+      if (current[i]) {
+        out[i * 4] = rgba[i * 4]!;
+        out[i * 4 + 1] = rgba[i * 4 + 1]!;
+        out[i * 4 + 2] = rgba[i * 4 + 2]!;
+        out[i * 4 + 3] = 255;
+      } else {
+        out[i * 4] = (rgba[i * 4]! + err[0]) / 2;
+        out[i * 4 + 1] = (rgba[i * 4 + 1]! + err[1]) / 2;
+        out[i * 4 + 2] = (rgba[i * 4 + 2]! + err[2]) / 2;
+        out[i * 4 + 3] = removedAlpha;
+      }
     }
     const image = offCtx.createImageData(workW, workH);
     image.data.set(out);
@@ -489,16 +534,35 @@ function buildEditor(
     const hasMask = canEdit && current !== null && maskBounds(current, workW, workH) !== null;
     addBtn.disabled = !canEdit;
     removeBtn.disabled = !canEdit;
-    brushBtn.disabled = !canEdit;
     sizeInput.disabled = !canEdit;
     resetBtn.disabled = !canEdit || autoMask === null;
     originalBtn.disabled = !canEdit;
     fitBtn.disabled = view.scale === 1;
+    fitBtn.hidden = view.scale === 1;
     undoBtn.disabled = !canEdit || !history.canUndo;
     applyBtn.disabled = !hasMask;
     addBtn.setAttribute('aria-pressed', String(mode === 'add'));
     removeBtn.setAttribute('aria-pressed', String(mode === 'remove'));
-    brushBtn.setAttribute('aria-pressed', String(brushOn));
+    originalBtn.setAttribute('aria-pressed', String(showOriginal));
+    refreshHint();
+  }
+
+  function refreshHint(): void {
+    hintText.textContent = mode === 'add' ? t('sticker_hint_keep') : t('sticker_hint_remove');
+  }
+
+  function showBrushPreview(): void {
+    const rect = canvas.getBoundingClientRect();
+    const displayW = rect.width || workW;
+    const diameter = brushSize * (displayW / workW) * view.scale;
+    brushPreview.style.width = `${diameter}px`;
+    brushPreview.style.height = `${diameter}px`;
+    brushPreview.style.display = '';
+    if (previewTimer !== null) clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      previewTimer = null;
+      brushPreview.style.display = 'none';
+    }, BRUSH_PREVIEW_MS);
   }
 
   function stepLabel(current: CutoutStage, currentFraction: number | null): string {
@@ -571,6 +635,14 @@ function buildEditor(
       clearTimeout(peelTimer);
       peelTimer = null;
     }
+    if (resetTimer !== null) {
+      clearTimeout(resetTimer);
+      resetTimer = null;
+    }
+    if (previewTimer !== null) {
+      clearTimeout(previewTimer);
+      previewTimer = null;
+    }
     document.removeEventListener('keydown', onKeyDown);
     overlay.remove();
     closeSource(decoded.source);
@@ -591,6 +663,7 @@ function buildEditor(
     workingLine.textContent = t(failureMessageKey(err));
     workingLine.classList.add('sticker-failed');
     tools.style.display = 'none';
+    modeGroup.style.display = 'none';
     cancelBtn.style.display = 'none';
     applyBtn.style.display = 'none';
     closeBtn.style.display = '';
@@ -613,6 +686,7 @@ function buildEditor(
     progress.style.display = 'none';
     workingLine.textContent = '';
     workingLine.style.display = 'none';
+    hint.style.display = '';
     refreshControls();
     draw();
     applyBtn.focus();
@@ -629,6 +703,7 @@ function buildEditor(
 
   function paintAt(clientX: number, clientY: number): void {
     if (!current) return;
+    showOriginal = false;
     const point = toImagePoint(clientX, clientY);
     current = paintBrush(current, workW, workH, point.x, point.y, brushSize / 2, mode === 'add' ? 1 : 0);
     draw();
@@ -637,8 +712,15 @@ function buildEditor(
   async function handleTap(clientX: number, clientY: number): Promise<void> {
     if (working || busy) return;
     busy = true;
+    showOriginal = false;
     refreshControls();
     overlay.classList.add('sticker-busy');
+    const rect = viewport.getBoundingClientRect();
+    const marker = element('span', 'sticker-tap-marker');
+    marker.setAttribute('aria-hidden', 'true');
+    marker.style.left = `${clientX - rect.left}px`;
+    marker.style.top = `${clientY - rect.top}px`;
+    viewport.appendChild(marker);
     try {
       const point = toImagePoint(clientX, clientY);
       const tap = await tapMask(point.x, point.y, mode === 'add' ? 1 : 0, workW, workH);
@@ -654,6 +736,7 @@ function buildEditor(
     } catch (err) {
       fail(err);
     } finally {
+      marker.remove();
       busy = false;
       overlay.classList.remove('sticker-busy');
       refreshControls();
@@ -725,39 +808,50 @@ function buildEditor(
 
   addBtn.addEventListener('click', () => {
     mode = 'add';
+    showOriginal = false;
     refreshControls();
+    draw();
   });
   removeBtn.addEventListener('click', () => {
     mode = 'remove';
+    showOriginal = false;
     refreshControls();
-  });
-  brushBtn.addEventListener('click', () => {
-    brushOn = !brushOn;
-    refreshControls();
+    draw();
   });
   sizeInput.addEventListener('input', () => {
     brushSize = Number(sizeInput.value) || DEFAULT_BRUSH;
+    showBrushPreview();
   });
   undoBtn.addEventListener('click', doUndo);
   resetBtn.addEventListener('click', () => {
     if (working || busy || !autoMask) return;
+    if (!resetArmed) {
+      resetArmed = true;
+      resetBtn.textContent = t('sticker_reset_confirm');
+      if (resetTimer !== null) clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        resetTimer = null;
+        resetArmed = false;
+        resetBtn.textContent = t('sticker_reset');
+      }, RESET_ARM_MS);
+      return;
+    }
+    if (resetTimer !== null) {
+      clearTimeout(resetTimer);
+      resetTimer = null;
+    }
+    resetArmed = false;
+    resetBtn.textContent = t('sticker_reset');
     current = new Uint8Array(autoMask);
     history.push(current);
     refreshControls();
     draw();
   });
-  originalBtn.addEventListener('pointerdown', () => {
-    showOriginal = true;
+  originalBtn.addEventListener('click', () => {
+    showOriginal = !showOriginal;
+    refreshControls();
     draw();
   });
-  const endOriginal = (): void => {
-    if (!showOriginal) return;
-    showOriginal = false;
-    draw();
-  };
-  for (const eventName of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) {
-    originalBtn.addEventListener(eventName, endOriginal);
-  }
   fitBtn.addEventListener('click', () => {
     view = { scale: 1, x: 0, y: 0 };
     applyView();
@@ -785,10 +879,9 @@ function buildEditor(
     strokeId = event.pointerId;
     strokeStart = { x: event.clientX, y: event.clientY };
     strokeMoved = 0;
-    strokePainting = brushOn;
-    strokeStartMask = brushOn ? current : null;
+    strokePainting = false;
+    strokeStartMask = current;
     if (typeof viewport.setPointerCapture === 'function') viewport.setPointerCapture(event.pointerId);
-    if (strokePainting) paintAt(event.clientX, event.clientY);
   }
 
   function abortStroke(): void {
@@ -883,6 +976,12 @@ function buildEditor(
     }
     if (strokeId !== event.pointerId || !strokeStart) return;
     strokeMoved = Math.max(strokeMoved, Math.hypot(event.clientX - strokeStart.x, event.clientY - strokeStart.y));
+    // A pointer that travels past the slop becomes a brush stroke: paint from
+    // where it started, then follow it. A shorter pointer is a smart tap.
+    if (!strokePainting && strokeMoved > TAP_SLOP_PX && current) {
+      strokePainting = true;
+      paintAt(strokeStart.x, strokeStart.y);
+    }
     if (strokePainting) paintAt(event.clientX, event.clientY);
   });
 
