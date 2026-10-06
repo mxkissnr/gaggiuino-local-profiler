@@ -1881,7 +1881,7 @@ function _matchLibraryBean(row: BeanRankRow): SharedBean | null {
     if (byId) return byId;
   }
   const name = row.name.toLowerCase();
-  return beans.find(b => typeof b.name === 'string' && b.name.toLowerCase() === name) ?? null;
+  return beans.find(b => String(b.name || '').toLowerCase() === name) ?? null;
 }
 
 function _shelfImageBean(row: BeanRankRow, bean: SharedBean | null): ShelfBagImageBean {
@@ -1907,7 +1907,7 @@ function _beanShelfTile(row: BeanRankRow, rank: number): Html {
     ? html`<span class="analytics-shelf-crema" title="${esc(t('analytics_shelf_perfect'))}"></span>`
     : esc('');
   return html`<button type="button" class="analytics-shelf-tile" data-action="analytics-bean" data-name="${esc(row.name)}">
-    <span class="analytics-shelf-rank${rank <= 3 ? ' top' : ''}">${esc(rank)}</span>
+    <span class="analytics-shelf-rank${esc(rank <= 3 ? ' top' : '')}">${esc(rank)}</span>
     <span class="analytics-shelf-bag">${shelfBagImage(_shelfImageBean(row, bean))}</span>
     <span class="analytics-shelf-name serif-display">${esc(row.name)}</span>
     <span class="analytics-shelf-row2">${score}${crema}</span>

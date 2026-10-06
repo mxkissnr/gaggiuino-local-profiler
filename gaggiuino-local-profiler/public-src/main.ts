@@ -77,8 +77,8 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          fetchPreheatData, updatePreheatWidget, fetchLiveData,
          handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
-import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar,
-         openCalendarDayDetail, setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
+import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanShelf, buildProfileChart, _renderCalendar,
+         openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail, setDialinProgressionBean } from './views/analytics.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
          renderMaintenanceDashboard, maintStatusLabel,
@@ -88,6 +88,7 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, s
 import { loadAchievementsView } from './views/achievements.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from './components/flavor-wheel.js';
 import { highlightSheetFlavor } from './components/flavor-mini-wheel.js';
+import { closeDetailSheet } from './components/detail-sheet.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
          toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
@@ -364,7 +365,7 @@ Object.assign(window, {
   setTrendWindow,
   buildCalendar,
   buildTrendChart,
-  buildBeanStats,
+  buildBeanShelf,
   buildProfileChart,
   _renderCalendar,
 
@@ -1020,7 +1021,14 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'guided-maint-cancel': closeGuidedMaint(); break;
       case 'set-maint-scope':    setMaintScope(el.dataset.scope!); break;
       case 'toggle-maint-detail': el.closest('.maint-card')?.classList.toggle('expanded'); break;
-      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key as Parameters<typeof setBeanRankSort>[0]); break;
+      case 'set-bean-shelf-sort': setBeanShelfSort(el.dataset.sort === 'shots' ? 'shots' : 'score'); break;
+      case 'expand-bean-shelf':   expandBeanShelf(); break;
+      case 'analytics-bean':      openBeanShelfDetail(el.dataset.name!, el); break;
+      case 'open-bean-shelf-in-library':
+        closeDetailSheet();
+        switchMode('library');
+        openBeanSheet(numId());
+        break;
       case 'analytics-day':      openCalendarDayDetail(el.dataset.day!, el); break;
       case 'open-flavor-wheel':   void openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;

@@ -548,13 +548,9 @@
             white-space: nowrap; cursor: pointer; user-select: none;
         }
         table.analytics-table th:hover { color: var(--gray-300); }
-        table.analytics-table th .sort-arrow { color: var(--accent-ink); margin-left: var(--sp-1); }
         table.analytics-table td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--gray-800); color: var(--gray-400); }
         table.analytics-table tr:last-child td { border-bottom: none; }
         table.analytics-table td:first-child { color: var(--gray-200); font-weight: 600; }
-        .trend-up   { color: var(--ok); }
-        .trend-down { color: var(--err); }
-        .trend-flat { color: var(--gray-600); }
 
         .analytics-bean-select {
             background: var(--gray-800); border: 1px solid var(--gray-700); border-radius:var(--radius);
@@ -564,9 +560,9 @@
         /* Summary line (#1331): one line on desktop, wraps on narrow screens */
         .analytics-summary { font-size: var(--fs-2); color: var(--gray-200); line-height: 1.6; }
         .trend-warning { margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius:var(--radius); font-size: var(--fs-1); background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
-        .bean-stat-dialin { font-size: var(--fs-1); color: var(--gray-500); margin-top: var(--sp-1); display: flex; align-items: center; gap: var(--sp-1); }
 
-        /* Personal Bests */
+        /* Detail rows shared by the popovers/sheets (coffee-year day, trend
+           point, origin country, bean shelf). */
         .bests-list  { display: flex; flex-direction: column; gap: var(--sp-2); }
         .bests-row   { display: flex; justify-content: space-between; align-items: center; padding: var(--sp-2) 0; border-bottom: 1px solid var(--gray-800); gap: var(--sp-3); }
         .bests-row:last-child { border-bottom: none; }
@@ -587,6 +583,27 @@
         .bean-stat { display: flex; flex-direction: column; align-items: center; }
         .bean-stat-val { font-size: var(--fs-2); font-weight: 600; color: var(--gray-200); }
         .bean-stat-lbl { font-size: var(--fs-1); color: var(--gray-600); }
+
+        /* Beans by score shelf (#1467): one tile per bean. */
+        .analytics-shelf-tools { display: flex; align-items: center; gap: var(--sp-3); }
+        .analytics-shelf-count { font-size: var(--fs-1); color: var(--gray-500); font-weight: 600; }
+        .analytics-shelf { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+        .analytics-shelf + .analytics-shelf { margin-top: var(--sp-3); }
+        .analytics-shelf-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); min-width: 44px; min-height: 44px; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
+        .analytics-shelf-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .analytics-shelf-rank { font-size: var(--fs-1); font-weight: 700; color: var(--gray-500); font-variant-numeric: tabular-nums; }
+        .analytics-shelf-rank.top { color: var(--accent); }
+        .analytics-shelf-bag { position: relative; display: block; width: 100%; }
+        .analytics-shelf-name { max-width: 100%; font-size: var(--fs-1); font-weight: 600; color: var(--gray-200); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .analytics-shelf-row2 { display: flex; align-items: center; gap: var(--sp-1); }
+        .analytics-shelf-score { font-size: var(--fs-3); font-weight: 700; }
+        .analytics-shelf-crema { width: 6px; height: 6px; border-radius: 50%; background: #f3e1c0; flex-shrink: 0; }
+        .analytics-shelf-shots { font-size: var(--fs-1); color: var(--gray-500); white-space: nowrap; }
+        .analytics-shelf-more { margin-top: var(--sp-3); padding: 0; border: none; background: none; color: var(--accent-ink); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
+        .analytics-shelf-more:hover { text-decoration: underline; }
+        @media (min-width: 900px) {
+            .analytics-shelf { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+        }
 
         @media (max-width: 768px) {
             .analytics-two-col { grid-template-columns: 1fr; }

@@ -1234,22 +1234,25 @@
                 <div id="calStreaks" class="cal-streaks"></div>
             </div>
 
-            <!-- Personal Bests -->
+            <!-- Beans by score (#1467) -->
             <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_personal_bests">Persönliche Bestleistungen</h3>
-                <div id="personalBests"></div>
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_bean_shelf">Bohnen nach Score</h3>
+                    <div class="analytics-shelf-tools">
+                        <span id="beanShelfCount" class="analytics-shelf-count"></span>
+                        <div class="analytics-filter-row">
+                            <button type="button" class="analytics-filter-btn active" data-action="set-bean-shelf-sort" data-sort="score" aria-pressed="true" data-i18n="analytics_shelf_sort_score">Score</button>
+                            <button type="button" class="analytics-filter-btn" data-action="set-bean-shelf-sort" data-sort="shots" aria-pressed="false" data-i18n="analytics_shelf_sort_shots">Shots</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="beanShelf" class="analytics-shelf-wrap"></div>
             </div>
 
-            <!-- Bean stats + Profile chart -->
-            <div class="analytics-two-col">
-                <div class="analytics-card">
-                    <h3 class="analytics-section-title" data-i18n="analytics_beans">Bohnen-Auswertung</h3>
-                    <div id="beanStats"></div>
-                </div>
-                <div class="analytics-card">
-                    <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
-                    <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
-                </div>
+            <!-- Profile chart -->
+            <div class="analytics-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
+                <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
             </div>
 
             <!-- Origin world map -->
@@ -1296,12 +1299,6 @@
             <div class="analytics-card">
                 <h3 class="analytics-section-title" data-i18n="analytics_heatmap">Wochentag × Uhrzeit</h3>
                 <div id="weekdayHourHeatmap"></div>
-            </div>
-
-            <!-- Bean ranking -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_bean_ranking">Bohnen-Rangliste</h3>
-                <div id="beanRanking"></div>
             </div>
 
             <!-- Machine comparison (>=2 machines only) -->
