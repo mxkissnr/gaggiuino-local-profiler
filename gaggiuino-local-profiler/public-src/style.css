@@ -2848,8 +2848,8 @@
         .sticker-canvas { max-width:100%; border-radius:var(--radius); background:var(--gray-950); transform-origin:0 0; }
         .sticker-overlay .crop-editor-modal { max-width:440px; }
         .sticker-overlay .lib-btn-sm, .sticker-overlay .lib-save-btn { min-height:44px; }
-        .sticker-mode { display:flex; width:100%; border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; }
-        .sticker-mode-btn { flex:1 1 50%; min-height:48px; border:1px solid transparent; background:transparent; color:var(--gray-300); font-size: var(--fs-1); font-weight:600; cursor:pointer; }
+        .sticker-mode { display:flex; width:100%; border:1px solid var(--gray-700); border-radius:var(--radius); padding:3px; gap:3px; }
+        .sticker-mode-btn { flex:1 1 50%; min-height:44px; border:1px solid transparent; border-radius: calc(var(--radius) - 3px); background:transparent; color:var(--gray-300); font-size: var(--fs-1); font-weight:600; cursor:pointer; }
         .sticker-mode-add[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); color: var(--accent-ink); }
         .sticker-mode-remove[aria-pressed="true"] { background: color-mix(in srgb, var(--err) 22%, transparent); border-color: var(--err); color: var(--err); }
         .sticker-mode-btn:disabled { opacity:.5; cursor:default; }
@@ -2862,7 +2862,7 @@
         .sticker-working.sticker-failed { color:var(--err); }
         .sticker-hint { color: var(--gray-300); font-size: var(--fs-1); margin:0; text-align:center; }
         .sticker-hint-zoom { display:block; color: var(--gray-500); }
-        .sticker-tap-marker { position:absolute; width:24px; height:24px; border-radius:50%; border:2px solid var(--accent); transform: translate(-50%,-50%); pointer-events:none; }
+        .sticker-tap-marker { position:absolute; width:24px; height:24px; border-radius:50%; border:2px solid var(--accent); border-top-color: transparent; transform: translate(-50%,-50%); pointer-events:none; }
         .sticker-brush-preview { position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); border-radius:50%; border:2px solid var(--gray-100); pointer-events:none; }
         .sticker-progress { height:6px; width:100%; border-radius:999px; background:var(--gray-800); overflow:hidden; }
         .sticker-progress-fill { height:100%; width:0; border-radius:999px; background:var(--accent); }
