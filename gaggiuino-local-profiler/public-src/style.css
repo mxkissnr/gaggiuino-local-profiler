@@ -412,6 +412,12 @@
             background: var(--gray-900); border-radius:var(--radius);
             padding: var(--sp-4); margin: 0 0 var(--sp-4); color: var(--gray-400); font-size: var(--fs-2); text-align: center;
         }
+        /* #1449: "set as default" offer under the banner text. */
+        #liveMachineUnavailableBanner button {
+            display: inline-block; margin-top: var(--sp-3);
+            background: none; border: none; color: var(--accent);
+            cursor: pointer; font-size: var(--fs-2);
+        }
         .shot-machine-badge {
             display: inline-block; font-size: var(--fs-1); color: var(--gray-500); background: var(--gray-800);
             border-radius:var(--radius); padding: 1px var(--sp-2); margin-left: var(--sp-2); vertical-align: middle;
