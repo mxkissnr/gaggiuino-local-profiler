@@ -232,7 +232,7 @@ const nl: Partial<Translations> = {
     analytics_streak_longest:(start,end)=>`Langste reeks, ${start} tot ${end}`,
     analytics_busiest:(date)=>`Drukste dag, ${date}`,
     analytics_perfect:(pct)=>`Perfecte shots, ${pct} % van alle shots`,
-    analytics_unit_days:(n)=>`${n} dag${n!==1?'en':''}`,
+    analytics_unit_days:(n)=>n===1?'dag':'dagen',
     analytics_unit_shots:'Shots',
     analytics_no_bests:'Nog niet genoeg shots voor persoonlijke records.',
     analytics_trend_warning:(n,drop)=>`Score trend: laatste ${n} shots daalden gem. ${drop} punten`,

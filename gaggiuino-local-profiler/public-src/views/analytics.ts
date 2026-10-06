@@ -640,12 +640,12 @@ function _cups(n: number): Html {
   const cups: Html[] = [];
   for (let i = 0; i < 7; i++) {
     const cls = i < n ? 'cal-cup filled' : 'cal-cup';
-    cups.push(html`<svg class="${esc(cls)}" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h11v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16 9h1.5a2.5 2.5 0 0 1 0 5H16"/></svg>`);
+    cups.push(html`<svg class="${esc(cls)}" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h11v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z" fill="currentColor"/><path d="M16 9h1.5a2.5 2.5 0 0 1 0 5H16" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`);
   }
   return html`<span class="cal-cups">${joinHtml(cups)}</span>`;
 }
 
-function _renderStreaks(stats: CalendarStats, locale: string): Html {
+export function _renderStreaks(stats: CalendarStats, locale: string): Html {
   const longest = stats.longest;
   const longestLbl = longest
     ? t('analytics_streak_longest', _fmtCalendarDay(longest.start, locale), _fmtCalendarDay(longest.end, locale))

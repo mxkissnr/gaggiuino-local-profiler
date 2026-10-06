@@ -232,7 +232,7 @@ const it: Partial<Translations> = {
     analytics_streak_longest:(start,end)=>`Serie più lunga, ${start} a ${end}`,
     analytics_busiest:(date)=>`Giorno più produttivo, ${date}`,
     analytics_perfect:(pct)=>`Shot perfetti, ${pct} % di tutti gli shot`,
-    analytics_unit_days:(n)=>`${n} giorn${n===1?'o':'i'}`,
+    analytics_unit_days:(n)=>n===1?'giorno':'giorni',
     analytics_unit_shots:'Shot',
     analytics_no_bests:'Non abbastanza shot per i record personali.',
     analytics_trend_warning:(n,drop)=>`Trend score: ultimi ${n} shot calati di ${drop} punti`,

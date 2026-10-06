@@ -232,7 +232,7 @@ const es: Partial<Translations> = {
     analytics_streak_longest:(start,end)=>`Racha más larga, ${start} a ${end}`,
     analytics_busiest:(date)=>`Día más productivo, ${date}`,
     analytics_perfect:(pct)=>`Shots perfectos, ${pct} % de todos los shots`,
-    analytics_unit_days:(n)=>`${n} día${n!==1?'s':''}`,
+    analytics_unit_days:(n)=>n===1?'día':'días',
     analytics_unit_shots:'Shots',
     analytics_no_bests:'Todavía no hay suficientes shots para los records personales.',
     analytics_trend_warning:(n,drop)=>`Tendencia score: últimos ${n} shots bajaron ${drop} pts`,

@@ -232,7 +232,7 @@ const de: Partial<Translations> = {
     analytics_streak_longest:(start,end)=>`Längste Serie, ${start} bis ${end}`,
     analytics_busiest:(date)=>`Fleißigster Tag, ${date}`,
     analytics_perfect:(pct)=>`Perfekte Shots, ${pct} % aller Shots`,
-    analytics_unit_days:(n)=>`${n} Tag${n!==1?'e':''}`,
+    analytics_unit_days:(n)=>n===1?'Tag':'Tage',
     analytics_unit_shots:'Shots',
     analytics_no_bests:'Noch zu wenig Shots für persönliche Bestleistungen.',
     analytics_trend_warning:(n,drop)=>`Score-Trend: letzte ${n} Shots um ⌀ ${drop} Punkte gefallen`,

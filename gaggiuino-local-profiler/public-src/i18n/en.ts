@@ -232,7 +232,7 @@ const en: Translations = {
     analytics_streak_longest:(start,end)=>`Longest streak, ${start} to ${end}`,
     analytics_busiest:(date)=>`Busiest day, ${date}`,
     analytics_perfect:(pct)=>`Perfect shots, ${pct}% of all shots`,
-    analytics_unit_days:(n)=>`${n} day${n!==1?'s':''}`,
+    analytics_unit_days:(n)=>n===1?'day':'days',
     analytics_unit_shots:'Shots',
     analytics_no_bests:'Not enough shots for personal bests yet.',
     analytics_trend_warning:(n,drop)=>`Score trend: last ${n} shots dropped avg ${drop} pts`,
