@@ -5,6 +5,9 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 // analytics-new-charts.test.js). computeCalendarStats() itself is pure.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let computeCalendarStats: Analytics['computeCalendarStats'];
+let renderStreaks: Analytics['_renderStreaks'];
+type State = typeof import('../public-src/state/index.js');
+let S: State['S'];
 
 type ShotRow = Parameters<Analytics['computeCalendarStats']>[0][number];
 
@@ -21,7 +24,9 @@ beforeAll(async () => {
     value: { calcShotScore: () => null, getShotData: () => ({}) },
     configurable: true, writable: true,
   });
-  ({ computeCalendarStats } = await import('../public-src/views/analytics.js'));
+  ({ computeCalendarStats, _renderStreaks: renderStreaks } = await import('../public-src/views/analytics.js'));
+  ({ S } = await import('../public-src/state/index.js'));
+  S.currentLang = 'en';
 });
 
 // Local wall-clock timestamps, so the local-day bucketing under test matches
@@ -97,5 +102,15 @@ describe('computeCalendarStats (#1467)', () => {
   it('returns zeroed figures with no shots', () => {
     const stats = computeCalendarStats([], scoreOf({}), NOW);
     expect(stats).toEqual({ current: 0, longest: null, busiest: null, perfect: 0, perfectShare: 0 });
+  });
+});
+
+describe('_renderStreaks (#1467)', () => {
+  it('shows the day count exactly once for a 15-day run', () => {
+    const markup = renderStreaks(
+      { current: 15, longest: null, busiest: null, perfect: 0, perfectShare: 0 },
+      'en',
+    );
+    expect(markup.split('15')).toHaveLength(2); // "15" once -> one split point
   });
 });
