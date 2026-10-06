@@ -2,7 +2,7 @@ import Chart from 'chart.js/auto';
 import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
-import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName } from '../constants.js';
+import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, HOME_COUNTRY_NUM } from '../constants.js';
 import { esc, html, joinHtml, scoreClass, scoreColor, chartColors, themeColor, onThemeChange } from '../utils.js';
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
@@ -100,7 +100,15 @@ function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, unknown
 // hands a tooltip formatter.
 interface MapOrigin { code: string; weight: number }
 interface MapEntry { bean: SharedBean; origins: MapOrigin[] }
-interface MapStats { shots: number; beans: Set<string>; beanShots: Map<string, number> }
+interface MapStats {
+  shots: number;
+  beans: Set<string>;
+  beanShots: Map<string, number>;
+  scoreSum: number;
+  scoreCount: number;
+  beanScoreSum: Map<string, number>;
+  beanScoreCount: Map<string, number>;
+}
 
 interface MapTooltipParams {
   seriesType?: string;
@@ -1030,6 +1038,19 @@ let _mapLibsPromise: Promise<[typeof import('echarts'), TopojsonModule]> | null 
 // still-latest call writes _worldTopo / touches the DOM after the await.
 let _worldMapReqToken = 0;
 
+// #1467: the home point ([lon, lat]) resolved once from the registered world
+// geometry for the locale's country — null when the locale has no region or
+// it isn't a HOME_COUNTRY_NUM entry, which just means no routes are drawn.
+let _worldMapHome: [number, number] | null = null;
+// #1467: the map click handler is bound once per echarts instance, so it
+// reads the latest aggregation/home from here instead of closing over one
+// build's locals.
+let _mapClickData: { byCode: Record<string, MapStats>; home: [number, number] | null } | null = null;
+// #1467: ECharts names a map region from its GeoJSON properties.name (the
+// full country name), while the map data and detail sheet key countries by
+// ISO code — this maps the former to the latter for click-through.
+let _mapNameToCode: Map<string, string> | null = null;
+
 // Converts a #rrggbb (or #rgb) hex color to an rgba() string at the given
 // alpha; falls back to the raw input unchanged if it isn't hex (e.g. an
 // already-rgba CSS custom property value).
@@ -1094,6 +1115,8 @@ function _repaintWorldMapTheme() {
     series: [
       { itemStyle: { areaColor: c.accentTo, borderColor: c.borderColor } },
       { itemStyle: { color: c.accentTo, shadowColor: _hexToRgba(c.accentTo, .6) }, label: { color: c.mutedText, textBorderColor: c.textBorderColor } },
+      { lineStyle: { color: _hexToRgba(c.accentTo, .35) } },
+      { itemStyle: { color: themeColor('--gray-300', '#d4d4d8') } },
     ],
   });
 }
@@ -1283,6 +1306,183 @@ export function worldMapTooltipFormatter(params: MapTooltipParams) {
   return `${esc(params.name)}${region ? ' · ' + esc(region) : ''}`;
 }
 
+// ── Origin map: home country, routes, chips and click-through (#1467) ─────
+// The country the user brews in, from the browser's UI language. Intl.Locale
+// maximize() fills in the likely region ("de" -> DE, "nl" -> NL); null when
+// the tag can't be resolved, which simply means the map draws no routes.
+// Nothing is stored or sent — a local convenience, not a setting.
+export function homeCountryFromLocale(lang: string | undefined): string | null {
+  if (typeof lang !== 'string' || !lang.trim()) return null;
+  try {
+    const region = new Intl.Locale(lang).maximize().region;
+    return region ? region.toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+// [lon, lat] centre of the largest polygon's bounding box in a Polygon or
+// MultiPolygon. Ranking by area keeps e.g. mainland France from being pulled
+// out to its overseas territories.
+export function featureLabelPoint(geometry: GeoJsonGeometry | null | undefined): [number, number] | null {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return null;
+  const polygons: Polygon[] = geometry.type === 'Polygon'
+    ? [geometry.coordinates as Polygon]
+    : geometry.type === 'MultiPolygon' ? (geometry.coordinates as MultiPolygon) : [];
+  let best: { area: number; bbox: [number, number, number, number] } | null = null;
+  for (const rings of polygons) {
+    const outer = rings?.[0];
+    if (!Array.isArray(outer) || outer.length < 3) continue;
+    const bbox = _ringBbox(outer);
+    if (!bbox) continue;
+    const area = Math.abs(_ringArea(outer));
+    if (!best || area > best.area) best = { area, bbox };
+  }
+  if (!best) return null;
+  const [minLon, minLat, maxLon, maxLat] = best.bbox;
+  return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+}
+
+function _ringBbox(ring: number[][]): [number, number, number, number] | null {
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  let any = false;
+  for (const point of ring) {
+    const lon = point?.[0], lat = point?.[1];
+    if (typeof lon !== 'number' || typeof lat !== 'number') continue;
+    any = true;
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return any ? [minLon, minLat, maxLon, maxLat] : null;
+}
+
+// Shoelace area (absolute) — only used to rank a MultiPolygon's parts, so raw
+// lon/lat units (not km) are fine.
+function _ringArea(ring: number[][]): number {
+  let sum = 0;
+  for (let i = 0, n = ring.length; i < n; i++) {
+    const a = ring[i], b = ring[(i + 1) % n];
+    const ax = a?.[0] ?? 0, ay = a?.[1] ?? 0, bx = b?.[0] ?? 0, by = b?.[1] ?? 0;
+    sum += ax * by - bx * ay;
+  }
+  return sum / 2;
+}
+
+// Great-circle distance in km (haversine) between two [lon, lat] points.
+export function greatCircleKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const toRad = (deg: number): number => (deg * Math.PI) / 180;
+  const dLat = toRad(b[1] - a[1]);
+  const dLon = toRad(b[0] - a[0]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Chips live just below the fixed-height map wrapper, as a sibling in the
+// same analytics card.
+function _mapChipsHost(wrap: HTMLElement): HTMLElement | null {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
+  const card = wrap.parentElement;
+  if (!card) return null;
+  const existing = typeof card.querySelector === 'function' ? card.querySelector<HTMLElement>('.map-chips') : null;
+  if (existing) return existing;
+  const chips = document.createElement('div');
+  chips.className = 'map-chips';
+  if (typeof wrap.insertAdjacentElement === 'function') wrap.insertAdjacentElement('afterend', chips);
+  else card.appendChild(chips);
+  return chips;
+}
+
+function _clearMapExtras(wrap: HTMLElement): void {
+  const card = wrap.parentElement;
+  if (!card || typeof card.querySelector !== 'function') return;
+  const chips = card.querySelector<HTMLElement>('.map-chips');
+  if (chips) chips.innerHTML = '';
+  const count = card.querySelector<HTMLElement>('.analytics-map-count');
+  if (count) count.remove();
+}
+
+function _renderMapChips(wrap: HTMLElement, countries: string[], byCode: Record<string, MapStats>): void {
+  const host = _mapChipsHost(wrap);
+  if (!host) return;
+  host.innerHTML = joinHtml(countries.map(code =>
+    html`<button type="button" class="chip analytics-filter-btn" data-code="${esc(code)}">${esc(countryName(code, S.currentLang))} ${esc(byCode[code]?.shots ?? 0)}</button>`));
+  if (typeof host.querySelectorAll !== 'function') return;
+  host.querySelectorAll<HTMLElement>('.chip').forEach(chip => {
+    const code = chip.dataset.code;
+    if (!code) return;
+    chip.addEventListener('click', () => _openCountryDetail(code, chip));
+  });
+}
+
+function _renderMapHeadingCount(wrap: HTMLElement, n: number): void {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') return;
+  const card = wrap.parentElement;
+  if (!card || typeof card.querySelector !== 'function') return;
+  const title = card.querySelector<HTMLElement>('.analytics-section-title');
+  if (!title) return;
+  const old = title.querySelector<HTMLElement>('.analytics-map-count');
+  if (old) old.remove();
+  const span = document.createElement('span');
+  span.className = 'meta-sub analytics-map-count';
+  span.textContent = t('analytics_map_count', n);
+  title.appendChild(span);
+}
+
+// Detail sheet for one origin country: its beans (shot count + average score)
+// and — when a home point exists — the distance to the user's cup.
+function _openCountryDetail(code: string, anchor: HTMLElement | DetailAnchorPoint | null): void {
+  const stats = _mapClickData?.byCode[code];
+  if (!stats) return;
+  const locale = localeFor(S.currentLang);
+  const avg = stats.scoreCount ? Math.round(stats.scoreSum / stats.scoreCount) : null;
+  const rows: Html[] = [...stats.beanShots.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([beanName, share]) => {
+      const count = stats.beanScoreCount.get(beanName) ?? 0;
+      const sum = stats.beanScoreSum.get(beanName) ?? 0;
+      const beanAvg = count ? Math.round(sum / count) : null;
+      const scHtml = beanAvg !== null ? html`<span class="${esc(scoreClass(beanAvg))}">${esc(beanAvg)}</span>` : esc('—');
+      return html`<div class="bests-row"><span class="bests-lbl">${esc(beanName)}</span><span class="bests-val">${esc(share)} · ${scHtml}</span></div>`;
+    });
+  const centroid = COUNTRY_CENTROIDS[code];
+  const home = _mapClickData?.home;
+  if (home && centroid) {
+    const km = Math.round(greatCircleKm(centroid, home) / 10) * 10;
+    rows.push(html`<div class="bests-row"><span class="bests-lbl">${tHtml('analytics_map_distance')}</span><span class="bests-val">${esc(km.toLocaleString(locale))} km</span></div>`);
+  }
+  openDetailSheet({
+    title: countryName(code, S.currentLang),
+    sub: t('analytics_map_sub', stats.shots, avg),
+    body: html`<div class="detail-rows">${joinHtml(rows)}</div>`,
+    anchor,
+  });
+}
+
+interface MapClickParams {
+  seriesType?: string;
+  name?: string;
+  data?: { _code?: string };
+  event?: { clientX?: number; clientY?: number; event?: { clientX?: number; clientY?: number } };
+}
+
+// Bound once per echarts instance; reads _mapClickData for the latest build.
+function _onMapClick(raw: unknown): void {
+  const params = raw as MapClickParams;
+  let code = params.seriesType === 'map' ? params.name : params.data?._code;
+  if (!code) return;
+  // Map regions are named by full country name; translate to the ISO code the
+  // detail sheet keys on (an already-code name passes through unchanged).
+  code = _mapNameToCode?.get(code) ?? code;
+  const native = params.event?.event ?? params.event;
+  const anchor = native && typeof native.clientX === 'number' && typeof native.clientY === 'number'
+    ? { x: native.clientX, y: native.clientY }
+    : null;
+  _openCountryDetail(code, anchor);
+}
+
 export async function buildWorldMap() {
   const token = ++_worldMapReqToken;
   const wrap = document.getElementById('worldMapWrap');
@@ -1336,7 +1536,10 @@ export async function buildWorldMap() {
   for (const { bean, origins } of nameToBean.values()) {
     for (const o of origins) {
       let codeStats = byCode[o.code];
-      if (!codeStats) { codeStats = { shots: 0, beans: new Set(), beanShots: new Map() }; byCode[o.code] = codeStats; }
+      if (!codeStats) {
+        codeStats = { shots: 0, beans: new Set(), beanShots: new Map(), scoreSum: 0, scoreCount: 0, beanScoreSum: new Map(), beanScoreCount: new Map() };
+        byCode[o.code] = codeStats;
+      }
       codeStats.beans.add(bean.name);
       if (!codeStats.beanShots.has(bean.name)) codeStats.beanShots.set(bean.name, 0);
     }
@@ -1344,11 +1547,18 @@ export async function buildWorldMap() {
   for (const s of _shots()) {
     const entry = resolveMapEntry(s.annotation);
     if (!entry) continue;
+    const score = window.calcShotScore ? window.calcShotScore(s) : null;
     for (const o of entry.origins) {
       const stats = byCode[o.code];
       if (!stats) continue;
       stats.shots += o.weight;
       stats.beanShots.set(entry.bean.name, (stats.beanShots.get(entry.bean.name) ?? 0) + o.weight);
+      if (score !== null) {
+        stats.scoreSum += score;
+        stats.scoreCount++;
+        stats.beanScoreSum.set(entry.bean.name, (stats.beanScoreSum.get(entry.bean.name) ?? 0) + score);
+        stats.beanScoreCount.set(entry.bean.name, (stats.beanScoreCount.get(entry.bean.name) ?? 0) + 1);
+      }
     }
   }
   for (const stats of Object.values(byCode)) {
@@ -1359,8 +1569,15 @@ export async function buildWorldMap() {
   if (Object.keys(byCode).length === 0) {
     if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
     wrap.innerHTML = html`<p class="empty-note">${tHtml('analytics_map_empty')}</p>`;
+    _clearMapExtras(wrap);
     return;
   }
+
+  // #1467: origin countries that actually have shots, most-brewed first —
+  // the chips row, the heading counter and the routes all key off this list.
+  const countriesWithShots = Object.keys(byCode)
+    .filter(code => (byCode[code]?.shots ?? 0) > 0)
+    .sort((a, b) => (byCode[b]?.shots ?? 0) - (byCode[a]?.shots ?? 0));
   if (!wrap.querySelector('.world-map-canvas')) {
     wrap.innerHTML = html`<div class="world-map-canvas" style="width:100%;height:100%"></div>
       <div class="world-map-hint">${tHtml('analytics_map_zoom_hint')}</div>`;
@@ -1412,6 +1629,21 @@ export async function buildWorldMap() {
     for (const f of geo.features) f.geometry = _splitGeometryAtAntimeridian(f.geometry);
     const numToCode = new Map(COFFEE_COUNTRIES.map(c => [c.num, c.code]));
     for (const f of geo.features) f.properties = { ...f.properties, code: numToCode.get(String(f.id)) || null };
+    // #1467: ECharts fires a map click with the region's full name; remember
+    // the name -> ISO code relationship so click-through can resolve it.
+    _mapNameToCode = new Map(
+      geo.features
+        .map(f => [String(f.properties.name), String(f.properties.code)] as const)
+        .filter(([, code]) => code !== 'null' && code !== 'undefined' && code !== ''),
+    );
+    // #1467: place the home point on the registered geometry once — the
+    // bounding-box centre of the home country's largest landmass.
+    if (!_worldMapHome) {
+      const homeCode = homeCountryFromLocale(typeof navigator !== 'undefined' ? navigator.language : undefined);
+      const homeNum = homeCode ? HOME_COUNTRY_NUM[homeCode] : undefined;
+      const homeFeature = homeNum ? geo.features.find(f => String(f.id) === homeNum) : undefined;
+      _worldMapHome = homeFeature ? featureLabelPoint(homeFeature.geometry) : null;
+    }
     // topojson-client ships no types, so its GeoJSON output can't be matched to ECharts' map input.
     echarts.registerMap('world', geo as unknown as Parameters<typeof echarts.registerMap>[1]);
     _worldMapRegistered = true;
@@ -1426,7 +1658,7 @@ export async function buildWorldMap() {
   // Scatter points: bean.location if geocoded, else the country centroid
   // (jittered a few tenths of a degree per extra bean so points don't stack).
   const seenAtCentroid: Record<string, number> = {};
-  const points: { name: string; value: number[]; _region: string | null; label?: unknown }[] = [];
+  const points: { name: string; value: number[]; _region: string | null; _code: string }[] = [];
   for (const { bean, origins } of nameToBean.values()) {
     // Even a blend gets exactly one map point — from its geocoded growing
     // region if resolved, else a centroid fallback keyed on its primary
@@ -1445,13 +1677,10 @@ export async function buildWorldMap() {
     const shots = byCode[primaryCode]?.beans.has(bean.name)
       ? _shots().filter(s => resolveMapEntry(s.annotation)?.bean === bean).length
       : 0;
-    // Always-visible label for beans that actually have shots logged (kept
-    // off for zero-shot points so the map doesn't get cluttered with beans
-    // that are only sitting in the Library with an origin set).
-    const label = shots > 0
-      ? { show: true, formatter: '{b}', position: 'right', distance: 5, fontSize: 9, fontWeight: 500 }
-      : undefined;
-    points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null, label });
+    // #1467: the always-visible bean-name labels are gone (the chips below
+    // the map replace them); the tooltip still names the bean. _code keys the
+    // point back to its primary origin country for click-through.
+    points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null, _code: primaryCode });
   }
 
   // Brand + chrome colors, read live from the CSS custom properties so the
@@ -1462,13 +1691,31 @@ export async function buildWorldMap() {
   if (!_echartsInstance) {
     container.innerHTML = html``; // clear the loading message before echarts takes over this node
     _echartsInstance = echarts.init(container);
+    // #1467: one click handler per instance; it reads _mapClickData.
+    _echartsInstance.on('click', _onMapClick);
   }
 
+  const home = _worldMapHome;
   const boundingCoords = [
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
     ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
+    // #1467: include the home point so the routes to it stay fully visible.
+    ...(home ? [home] : []),
   ];
   const { center, zoom } = computeMapBoundingView(boundingCoords);
+
+  // #1467: routes ("travelling beans") — one line per origin country with
+  // shots, from its centroid to the home point. Animated only when the user
+  // hasn't asked for reduced motion.
+  const animateRoutes = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+  const routeData = home
+    ? countriesWithShots
+        .map(code => COUNTRY_CENTROIDS[code])
+        .filter((c): c is [number, number] => Array.isArray(c))
+        .map(c => ({ coords: [c, home] }))
+    : [];
+  _mapClickData = { byCode, home };
 
   _echartsInstance.setOption({
     backgroundColor: c.backgroundColor,
@@ -1496,8 +1743,28 @@ export async function buildWorldMap() {
         labelLayout: { hideOverlap: true },
         rippleEffect: { scale: 2.5 },
       },
+      {
+        // #1467: routes from each origin country to the user's cup.
+        type: 'lines', coordinateSystem: 'geo',
+        data: routeData, polyline: false, silent: true,
+        lineStyle: { color: _hexToRgba(c.accentTo, .35), width: 1, curveness: 0.25 },
+        ...(animateRoutes ? { effect: { show: true, period: 6, trailLength: 0, symbol: 'circle', symbolSize: 3 } } : {}),
+      },
+      {
+        // #1467: a small static dot marking the home point.
+        type: 'scatter', coordinateSystem: 'geo',
+        name: t('analytics_map_home'),
+        data: home ? [{ name: t('analytics_map_home'), value: [home[0], home[1]] }] : [],
+        symbolSize: 6,
+        itemStyle: { color: themeColor('--gray-300', '#d4d4d8') },
+        label: { show: false },
+      },
     ],
   }, true);
+
+  // #1467: chips + heading counter live outside the fixed-height map wrapper.
+  _renderMapChips(wrap, countriesWithShots, byCode);
+  _renderMapHeadingCount(wrap, countriesWithShots.length);
 
   if (!_resizeBound) {
     window.addEventListener('resize', () => _echartsInstance?.resize());
