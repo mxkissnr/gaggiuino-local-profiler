@@ -18,7 +18,7 @@ const nl: Partial<Translations> = {
     recipe_dose_yield:'Dosis → Opbrengst', recipe_ratio:'Ratio', recipe_bean:'Bonen', recipe_grinder:'Molen', recipe_grinder_grind:(g,s)=>g?`${g} · maalgraad ${s}`:`Maalgraad ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · maalgraad ${s} (laatst ${p})`:`Maalgraad ${s} (laatst ${p})`,
     process_pressure:'Druk (gem / max)', process_flow:'Pompstroom (gem)', process_temp:'Temperatuur (gem ±σ)',
     conn_error:'Verbindingsfout',
-    // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
+    // #812 achievements: 56 open badges. The 7 secret ones are NOT here on
     // purpose — their copy is only sent to the browser once unlocked, so it
     // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Verbonden', ach_first_connect_d:'De machine met succes verbonden.',
@@ -48,11 +48,19 @@ const nl: Partial<Translations> = {
     ach_shots_100_n:'Honderd', ach_shots_100_d:'Honderd shots vastgelegd.',
     ach_shots_500_n:'Vijfhonderd', ach_shots_500_d:'Vijfhonderd shots vastgelegd.',
     ach_shots_1000_n:'Duizend', ach_shots_1000_d:'Duizend shots vastgelegd.',
+    ach_shots_2500_n:'Onvermoeibaar', ach_shots_2500_d:'2.500 shots.',
     ach_streak_7_n:'Reeks', ach_streak_7_d:'Zeven dagen achter elkaar gezet.',
     ach_streak_30_n:'Lange reeks', ach_streak_30_d:'Dertig dagen achter elkaar gezet.',
+    ach_litres_50_n:'Bodemloos vat', ach_litres_50_d:'50 liter espresso getrokken.',
+    ach_year_round_n:'Een jaar mee', ach_year_round_d:'Je eerste shot is minstens een jaar geleden.',
     ach_marathon_n:'Marathon', ach_marathon_d:'Vijf shots op één dag.',
     ach_night_n:'Nachtdienst', ach_night_d:'Een shot na 23 uur.',
     ach_early_n:'Vroege vogel', ach_early_d:'Een shot voor 6 uur \'s ochtends.',
+    ach_midnight_round_n:'Middernachtronde', ach_midnight_round_d:'Drie shots na 23 uur in één nacht.',
+    ach_five_hundreds_n:'Vijf op een rij', ach_five_hundreds_d:'Vijf shots op een rij met score 100.',
+    ach_litres_10_n:'Per liter', ach_litres_10_d:'10 liter espresso getrokken.',
+    ach_comeback_n:'Comeback', ach_comeback_d:'Score 95 of hoger op de eerste shot na een pauze van 5 dagen of langer.',
+    ach_second_helping_n:'Tweede portie', ach_second_helping_d:'Twee shots binnen een minuut.',
     ach_maint_30_n:'Goed onderhouden', ach_maint_30_d:'Dertig dagen zonder achterstallig onderhoud.',
     ach_maint_all_n:'Compleet', ach_maint_all_d:'Elk soort onderhoud minstens één keer gedaan.',
     ach_backflush_10_n:'Terugspoelen', ach_backflush_10_d:'Tien backflushes vastgelegd.',
@@ -75,6 +83,7 @@ const nl: Partial<Translations> = {
     ach_card_of:(n,total)=>`Kaart ${n} van ${total}`,
     ach_card_basics:'Basis', ach_card_craft:'Vakmanschap', ach_card_beans:'Bonen',
     ach_card_endurance:'Uithoudingsvermogen', ach_card_care:'Onderhoud', ach_card_house:'Huis en gasten',
+    ach_card_moments:'Momenten',
     ach_card_secret:'Geheim',
     ach_tap_hint:'Tik op een stempel om te zien wat hij betekent.',
     ach_not_yet:'Nog niet gestempeld.',

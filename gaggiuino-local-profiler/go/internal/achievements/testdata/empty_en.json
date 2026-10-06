@@ -4,6 +4,7 @@
     "craft",
     "beans",
     "endurance",
+    "moments",
     "care",
     "house",
     "secret"
@@ -254,6 +255,18 @@
       "stamp": "1000"
     },
     {
+      "id": "shots_2500",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "2500",
+      "progress": {
+        "current": 0,
+        "target": 2500
+      }
+    },
+    {
       "id": "streak_7",
       "card": "endurance",
       "secret": false,
@@ -278,8 +291,28 @@
       "stamp": "30d"
     },
     {
-      "id": "marathon",
+      "id": "litres_50",
       "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "50l",
+      "progress": {
+        "current": 0,
+        "target": 50
+      }
+    },
+    {
+      "id": "year_round",
+      "card": "endurance",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "1y"
+    },
+    {
+      "id": "marathon",
+      "card": "moments",
       "secret": false,
       "unlocked": false,
       "unlockedAt": null,
@@ -287,7 +320,7 @@
     },
     {
       "id": "night",
-      "card": "endurance",
+      "card": "moments",
       "secret": false,
       "unlocked": false,
       "unlockedAt": null,
@@ -295,11 +328,55 @@
     },
     {
       "id": "early",
-      "card": "endurance",
+      "card": "moments",
       "secret": false,
       "unlocked": false,
       "unlockedAt": null,
       "stamp": "sun"
+    },
+    {
+      "id": "midnight_round",
+      "card": "moments",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "moon"
+    },
+    {
+      "id": "five_hundreds",
+      "card": "moments",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "star"
+    },
+    {
+      "id": "litres_10",
+      "card": "moments",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "10l",
+      "progress": {
+        "current": 0,
+        "target": 10
+      }
+    },
+    {
+      "id": "comeback",
+      "card": "moments",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "leaf"
+    },
+    {
+      "id": "second_helping",
+      "card": "moments",
+      "secret": false,
+      "unlocked": false,
+      "unlockedAt": null,
+      "stamp": "cup"
     },
     {
       "id": "maint_30",
@@ -490,6 +567,13 @@
     },
     {
       "id": "secret_golden_shot",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
+    },
+    {
+      "id": "secret_wish",
       "card": "secret",
       "secret": true,
       "unlocked": false,

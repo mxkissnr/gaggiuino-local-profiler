@@ -18,7 +18,7 @@ const de: Partial<Translations> = {
     recipe_dose_yield:'Dosis → Yield', recipe_ratio:'Ratio', recipe_bean:'Bohne', recipe_grinder:'Mühle', recipe_grinder_grind:(g,s)=>g?`${g} · Mahlgrad ${s}`:`Mahlgrad ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · Mahlgrad ${s} (zuletzt ${p})`:`Mahlgrad ${s} (zuletzt ${p})`,
     process_pressure:'Druck (Ø / Max)', process_flow:'Pumpenfluss (Ø)', process_temp:'Temperatur (Ø ±σ)',
     conn_error:'Verbindungsfehler',
-    // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
+    // #812 achievements: 56 open badges. The 7 secret ones are NOT here on
     // purpose — their copy is only sent to the browser once unlocked, so it
     // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Angeschlossen', ach_first_connect_d:'Die Maschine erfolgreich verbunden.',
@@ -48,11 +48,19 @@ const de: Partial<Translations> = {
     ach_shots_100_n:'Hundert', ach_shots_100_d:'Einhundert Bezüge protokolliert.',
     ach_shots_500_n:'Fünfhundert', ach_shots_500_d:'Fünfhundert Bezüge protokolliert.',
     ach_shots_1000_n:'Tausend', ach_shots_1000_d:'Eintausend Bezüge protokolliert.',
+    ach_shots_2500_n:'Unermüdlich', ach_shots_2500_d:'2.500 Bezüge.',
     ach_streak_7_n:'Serie', ach_streak_7_d:'Sieben Tage hintereinander gebrüht.',
     ach_streak_30_n:'Lange Serie', ach_streak_30_d:'Dreißig Tage hintereinander gebrüht.',
+    ach_litres_50_n:'Fass ohne Boden', ach_litres_50_d:'50 Liter Espresso bezogen.',
+    ach_year_round_n:'Ein Jahr dabei', ach_year_round_d:'Dein erster Bezug ist mindestens ein Jahr her.',
     ach_marathon_n:'Marathon', ach_marathon_d:'Fünf Bezüge an einem Tag.',
     ach_night_n:'Nachtschicht', ach_night_d:'Ein Bezug nach 23 Uhr.',
     ach_early_n:'Frühaufsteher', ach_early_d:'Ein Bezug vor 6 Uhr morgens.',
+    ach_midnight_round_n:'Mitternachtsrunde', ach_midnight_round_d:'Drei Bezüge nach 23 Uhr in einer Nacht.',
+    ach_five_hundreds_n:'Fünferpack', ach_five_hundreds_d:'Fünf Bezüge mit Score 100 direkt hintereinander.',
+    ach_litres_10_n:'Literweise', ach_litres_10_d:'10 Liter Espresso bezogen.',
+    ach_comeback_n:'Comeback', ach_comeback_d:'Nach mindestens 5 Tagen Pause gleich wieder Score 95 oder mehr.',
+    ach_second_helping_n:'Nachschlag', ach_second_helping_d:'Zwei Bezüge innerhalb einer Minute.',
     ach_maint_30_n:'Gepflegt', ach_maint_30_d:'Dreißig Tage ohne überfällige Wartung.',
     ach_maint_all_n:'Rundum', ach_maint_all_d:'Jede Wartungsart mindestens einmal erledigt.',
     ach_backflush_10_n:'Rückspüler', ach_backflush_10_d:'Zehn Backflushes protokolliert.',
@@ -75,6 +83,7 @@ const de: Partial<Translations> = {
     ach_card_of:(n,total)=>`Karte ${n} von ${total}`,
     ach_card_basics:'Grundlagen', ach_card_craft:'Handwerk', ach_card_beans:'Bohnenkunde',
     ach_card_endurance:'Ausdauer', ach_card_care:'Pflege', ach_card_house:'Haus & Gäste',
+    ach_card_moments:'Momente',
     ach_card_secret:'Geheim',
     ach_tap_hint:'Auf einen Stempel tippen, um zu sehen, was er bedeutet.',
     ach_not_yet:'Noch nicht gestempelt.',

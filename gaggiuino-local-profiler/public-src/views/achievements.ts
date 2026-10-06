@@ -1,7 +1,7 @@
-// #812: the achievements ("stamp card") view. Renders the 54-badge catalogue
+// #812: the achievements ("stamp card") view. Renders the 63-badge catalogue
 // (go/internal/achievements) as a
 // printed cardboard card, per PLAN.md section 5 — not an app panel, not a
-// level/score UI. Seven categories sit side by side from the very first
+// level/score UI. Eight categories sit side by side from the very first
 // visit (CARD_KEYS below, mirrored from the backend) so an unlockable-only-
 // by-chance secret badge never strands anyone on one page.
 //
@@ -31,11 +31,11 @@ interface Achievement {
   progress?: { current: number; target: number } | null;
 }
 
-const CARD_KEYS: string[] = ['basics', 'craft', 'beans', 'endurance', 'care', 'house', 'secret'];
+const CARD_KEYS: string[] = ['basics', 'craft', 'beans', 'endurance', 'moments', 'care', 'house', 'secret'];
 const CARD_NAME_KEYS: Record<string, string> = {
   basics: 'ach_card_basics', craft: 'ach_card_craft', beans: 'ach_card_beans',
-  endurance: 'ach_card_endurance', care: 'ach_card_care', house: 'ach_card_house',
-  secret: 'ach_card_secret',
+  endurance: 'ach_card_endurance', moments: 'ach_card_moments', care: 'ach_card_care',
+  house: 'ach_card_house', secret: 'ach_card_secret',
 };
 
 // Stamp motifs — ported from redesign-2026-08/build-prototype.py's
