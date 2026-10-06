@@ -8,6 +8,7 @@ Working rules for this repo. Follow these in every session.
 - **DOCS.md, README.md** → English (primary)
 - **DOCS.de.md** → German (supplementary, always kept in sync with DOCS.md)
 - **UI strings in index.html** → translated via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL); add new keys to **all 6 language files** when adding UI text
+- **UI design** → every visible change follows [docs/DESIGN.md](docs/DESIGN.md) (bean-library design language, "nothing twice", desktop layout of its own).
 
 ## Workflow
 
