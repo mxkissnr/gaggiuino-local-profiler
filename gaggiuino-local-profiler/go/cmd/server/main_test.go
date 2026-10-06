@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -50,20 +48,11 @@ func TestGetEnvNumber(t *testing.T) {
 }
 
 func TestRequireKnownHostOnBuiltHandler(t *testing.T) {
-	dir := t.TempDir()
-	ctx, cancel := context.WithCancel(context.Background())
-	handler, sqlDB, err := buildApp(ctx, appConfig{
-		dbPath:          filepath.Join(dir, "glp.db"),
-		tokenPath:       filepath.Join(dir, "api_token.txt"),
+	handler, _, _ := newTestApp(t, appConfig{
 		port:            "0",
 		rateLimitWindow: time.Minute,
 		rateLimitMax:    1_000_000,
 	})
-	if err != nil {
-		cancel()
-		t.Fatalf("buildApp: %v", err)
-	}
-	t.Cleanup(func() { cancel(); sqlDB.Close() })
 
 	// An unknown Host is refused with 421 before even the public GET /api/token
 	// handler runs (#1430).
