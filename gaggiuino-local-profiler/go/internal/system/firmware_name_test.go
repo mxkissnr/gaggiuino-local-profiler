@@ -35,6 +35,9 @@ func TestFirmwareName_FetchedOnceAndCached(t *testing.T) {
 	if got := fake.settingsCalls(); got != 1 {
 		t.Errorf("GetSettings calls = %d, want 1", got)
 	}
+	if got := fake.settingsCategory(); got != "system" {
+		t.Errorf("GetSettings category = %q, want system", got)
+	}
 }
 
 // TestFirmwareName_EmptySettingsCachesNil covers firmware that reports no name

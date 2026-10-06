@@ -182,6 +182,14 @@ func (f *fakeAdapter) settingsCalls() int {
 	defer f.mu.Unlock()
 	return f.getSettingsCalls
 }
+
+// settingsCategory reports the category of the most recent GetSettings call
+// (#1454).
+func (f *fakeAdapter) settingsCategory() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.getSettingsCat
+}
 func (f *fakeAdapter) UpdateSettings(context.Context, *machines.Machine, string, json.RawMessage) (json.RawMessage, error) {
 	return nil, f.notImplemented("UpdateSettings")
 }
