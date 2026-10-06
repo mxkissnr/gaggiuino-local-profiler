@@ -376,11 +376,31 @@ export function selectFrozenPortion(id: string | null | undefined): void {
   scheduleAutoSave();
 }
 
-function _updateMilkFieldVisibility(): void {
+export function _updateMilkFieldVisibility(): void {
   const field   = document.getElementById('milkTypeField');
   if (!field) return;
   const drinkId = (document.getElementById('annDrinkType') as HTMLSelectElement | null)?.value;
-  field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
+  const drink   = drinkId ? (S.drinkMenu as DrinkRow[] | undefined)?.find(d => d.id === drinkId) : undefined;
+  // #1453: the backend books milk stock only when the drink's milkMl > 0, so
+  // only offer the milk picker for a drink that actually uses milk.
+  // A drink missing from S.drinkMenu (the menu has not loaded yet, or it was
+  // removed) keeps the pre-#1453 behaviour: show the picker whenever milk types
+  // exist, and never clear the saved milk, so opening such a shot cannot
+  // autosave milkType: null.
+  // No drink selected also keeps the saved milk: the picker is hidden as before,
+  // but a shot annotated with a milk but no drink (older data, MCP annotate)
+  // must not lose its milk on the next autosave. The milk is cleared only for a
+  // known drink that does not use it.
+  const unknownDrink = !!drinkId && !drink;
+  const drinkUsesMilk = Number(drink?.milkMl) > 0;
+  const visible      = unknownDrink
+    ? !!S.milkTypes?.length
+    : !!(S.milkTypes?.length && drinkId && drinkUsesMilk);
+  field.style.display = visible ? '' : 'none';
+  if (drink && !drinkUsesMilk) {
+    const hidden = document.getElementById('annMilkType') as HTMLInputElement | null;
+    if (hidden?.value) _renderMilkPills('');
+  }
 }
 
 // Ported from PR #1120 (contributor branch origin/ppops-src/live-shot-setup)
