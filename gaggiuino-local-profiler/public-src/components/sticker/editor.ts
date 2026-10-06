@@ -881,16 +881,17 @@ function buildEditor(
     strokeMoved = 0;
     strokePainting = false;
     strokeStartMask = current;
-    if (typeof viewport.setPointerCapture === 'function') viewport.setPointerCapture(event.pointerId);
   }
 
+  // The pointer that owns the stroke is still down when a second finger starts
+  // a pinch, so its capture is deliberately left alone here: finishPointer
+  // releases it once the pointer really ends. Releasing it now is what let a
+  // finger lifted outside the viewport miss its pointerup and wedge the editor
+  // in gesture mode.
   function abortStroke(): void {
     if (strokePainting && strokeStartMask) {
       current = strokeStartMask;
       draw();
-    }
-    if (strokeId !== null && typeof viewport.releasePointerCapture === 'function') {
-      viewport.releasePointerCapture(strokeId);
     }
     strokeId = null;
     strokeStart = null;
@@ -957,6 +958,16 @@ function buildEditor(
 
   viewport.addEventListener('pointerdown', (event) => {
     if (closed) return;
+    // A primary pointer opens a fresh touch/mouse sequence: drop anything an
+    // earlier sequence left behind. A finger lifted outside the viewport can
+    // miss its pointerup, and the stale entry would otherwise keep the editor
+    // in gesture mode forever. Tests omit isPrimary, so only true resets.
+    if (event.isPrimary === true) {
+      pointers.clear();
+      gestureMode = false;
+      gestureStart = null;
+    }
+    if (typeof viewport.setPointerCapture === 'function') viewport.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.size >= 2) {
       if (gestureMode) rebaseGesture();
@@ -986,7 +997,9 @@ function buildEditor(
   });
 
   function finishPointer(event: PointerEvent, cancelled: boolean): void {
-    pointers.delete(event.pointerId);
+    // A repeated finish (a lostpointercapture after pointerup) finds the pointer
+    // already gone, so it must not touch the capture again.
+    const known = pointers.delete(event.pointerId);
     if (gestureMode) {
       if (pointers.size === 0) {
         gestureMode = false;
@@ -994,12 +1007,13 @@ function buildEditor(
       } else if (pointers.size >= 2) {
         rebaseGesture();
       }
-      if (typeof viewport.releasePointerCapture === 'function') viewport.releasePointerCapture(event.pointerId);
+      if (known && typeof viewport.releasePointerCapture === 'function') viewport.releasePointerCapture(event.pointerId);
       return;
     }
     if (strokeId !== event.pointerId) return;
     if (cancelled) {
       abortStroke();
+      if (known && typeof viewport.releasePointerCapture === 'function') viewport.releasePointerCapture(event.pointerId);
       refreshControls();
       return;
     }
@@ -1022,6 +1036,9 @@ function buildEditor(
 
   viewport.addEventListener('pointerup', (event) => finishPointer(event, false));
   viewport.addEventListener('pointercancel', (event) => finishPointer(event, true));
+  // A pointer that stops being captured without a pointerup would otherwise
+  // linger in `pointers`; end it exactly like a cancel.
+  viewport.addEventListener('lostpointercapture', (event) => finishPointer(event, true));
 
   cancelBtn.addEventListener('click', () => close(null));
   closeBtn.addEventListener('click', () => close(null));

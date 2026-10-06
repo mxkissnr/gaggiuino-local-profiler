@@ -25,6 +25,7 @@ interface FakeEvent {
   pointerId?: number;
   clientX?: number;
   clientY?: number;
+  isPrimary?: boolean;
   deltaY?: number;
   preventDefault?: () => void;
 }
@@ -169,8 +170,8 @@ class FakeElement implements ClassHost {
     return { left: 0, top: 0, width: this.width, height: this.height };
   }
 
-  setPointerCapture(): void {}
-  releasePointerCapture(): void {}
+  setPointerCapture(_pointerId: number): void {}
+  releasePointerCapture(_pointerId: number): void {}
 
   remove(): void {
     const parent = this.parent;
@@ -704,6 +705,58 @@ describe('openStickerEditor overlay', () => {
     viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40 });
     viewport.dispatch('pointermove', { pointerId: 1, clientX: 43, clientY: 41 });
     viewport.dispatch('pointerup', { pointerId: 1, clientX: 43, clientY: 41 });
+
+    await vi.waitFor(() => expect(tapMaskMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('captures every pointer that goes down', async () => {
+    const { overlay } = await openReady();
+    const viewport = node(overlay, '.sticker-viewport');
+    const capture = vi.spyOn(FakeElement.prototype, 'setPointerCapture');
+
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40, isPrimary: true });
+    viewport.dispatch('pointerdown', { pointerId: 2, clientX: 100, clientY: 40, isPrimary: false });
+
+    expect(capture).toHaveBeenCalledWith(1);
+    expect(capture).toHaveBeenCalledWith(2);
+  });
+
+  it('keeps tapping after a pinch leaves a stale pointer behind', async () => {
+    const { overlay } = await openReady();
+    const viewport = node(overlay, '.sticker-viewport');
+
+    // A primary finger starts the sequence, a second finger turns it into a pinch.
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40, isPrimary: true });
+    viewport.dispatch('pointerdown', { pointerId: 2, clientX: 100, clientY: 40, isPrimary: false });
+    // The first finger lifts; the second is lifted outside the viewport and is
+    // never seen to end, so it stays stuck in the pointer map.
+    viewport.dispatch('pointerup', { pointerId: 1, clientX: 40, clientY: 40 });
+
+    // A fresh primary touch clears the stale pointer and taps again.
+    viewport.dispatch('pointerdown', { pointerId: 3, clientX: 70, clientY: 80, isPrimary: true });
+    viewport.dispatch('pointerup', { pointerId: 3, clientX: 70, clientY: 80 });
+
+    await vi.waitFor(() => expect(tapMaskMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('aborts a stroke when its pointer capture is lost, then still taps', async () => {
+    const { overlay } = await openReady();
+    const viewport = node(overlay, '.sticker-viewport');
+    const undo = node(overlay, '.sticker-undo');
+
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40, isPrimary: true });
+    viewport.dispatch('pointermove', { pointerId: 1, clientX: 70, clientY: 40 });
+    // Losing capture ends the pointer like a cancel: the running stroke rolls
+    // back and the later pointerup neither commits it nor taps.
+    viewport.dispatch('lostpointercapture', { pointerId: 1, clientX: 70, clientY: 40 });
+    viewport.dispatch('pointerup', { pointerId: 1, clientX: 70, clientY: 40 });
+
+    expect(tapMaskMock).not.toHaveBeenCalled();
+    expect(undo.disabled).toBe(true);
+
+    // The next touch is a plain tap again.
+    viewport.dispatch('pointerdown', { pointerId: 2, clientX: 40, clientY: 40, isPrimary: true });
+    viewport.dispatch('pointerup', { pointerId: 2, clientX: 40, clientY: 40 });
 
     await vi.waitFor(() => expect(tapMaskMock).toHaveBeenCalledTimes(1));
   });
