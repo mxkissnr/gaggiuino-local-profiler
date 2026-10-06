@@ -265,7 +265,7 @@ describe('bean sheet header bar (#1489)', () => {
   let doc: FakeDocument;
   let S: StateLike;
   let library: LibraryModule;
-  let t: (key: string, ...args: unknown[]) => string;
+  let t: (key: string) => string;
 
   beforeEach(async () => {
     doc = new FakeDocument();
@@ -411,7 +411,7 @@ describe('bean form sheet header bar save (#1489)', () => {
     await Promise.resolve();
 
     expect(mocks.saveBean).toHaveBeenCalledTimes(1);
-    const [, payload] = mocks.saveBean.mock.calls[0] ?? [];
-    expect((payload as { name?: string } | undefined)?.name).toBe('New Bean');
+    const call = mocks.saveBean.mock.calls[0] as unknown[] | undefined;
+    expect((call?.[1] as { name?: string } | undefined)?.name).toBe('New Bean');
   });
 });
