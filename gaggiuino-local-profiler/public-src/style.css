@@ -10,6 +10,11 @@
             /* #397: fixed-width digits everywhere — metrics, scores,
                durations, timestamps never jitter/reflow as values change. */
             font-variant-numeric: tabular-nums;
+            /* #1458: Android WebViews (Home Assistant companion app,
+               Chrome) paint a blue box over every tapped element.
+               kiosk.css already opts out; this is the app-wide
+               equivalent, inherited by every element. */
+            -webkit-tap-highlight-color: transparent;
             display: flex;
             height: 100vh;
             overflow: hidden;
