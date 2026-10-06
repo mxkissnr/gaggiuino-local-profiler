@@ -467,7 +467,10 @@
             min-width: 0;
         }
         .analytics-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-4); }
-        .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: var(--fs-1); color: var(--gray-500); pointer-events: none; }
+        .world-map-wrap { position: relative; aspect-ratio: 16 / 9; min-height: 200px; max-height: 420px; width: 100%; }
+        .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: var(--fs-1); color: var(--gray-500); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 16px); }
+        @media (hover: none) { .world-map-hint { display: none; } }
+        .map-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
         .analytics-section-title { margin: 0 0 var(--sp-4) 0; font-size: var(--fs-3); font-weight: 600; color: var(--gray-200); }
         .analytics-card-head .analytics-section-title { margin-bottom: 0; }
         .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--sp-5); }
