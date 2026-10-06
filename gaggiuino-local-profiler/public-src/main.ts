@@ -79,7 +79,6 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
 
 import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar,
          setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
-import { analyticsMonthPrev, analyticsMonthNext, analyticsMonthDay } from './views/analytics-month.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
          renderMaintenanceDashboard, maintStatusLabel,
@@ -1029,9 +1028,6 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'highlight-flavor-wheel':  highlightFlavorWheelNode(el.dataset.nodeId || null); break;
       case 'delete-maint-log':   void deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
-      case 'analytics-month-prev': analyticsMonthPrev(); break;
-      case 'analytics-month-next': analyticsMonthNext(); break;
-      case 'analytics-month-day':  analyticsMonthDay(el.dataset.day); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
       case 'start-dialin':           openDialinWizard(); break;
       case 'start-dialin-from-bean': closeBeanSheet(); startDialinFromBean(numId()); break;
