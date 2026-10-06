@@ -151,15 +151,18 @@ describe('_sortBeanShelfRows (#1467)', () => {
 describe('bean shelf import boundary (#1467)', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '../public-src/views/analytics.ts'), 'utf8');
+  // Only the import list matters — a prose mention of the old symbol in a
+  // comment must not read as an import.
+  const imports = src.split('\n').filter(line => /^import\b/.test(line)).join('\n');
 
   it('fills the shelf photos without importing views/library', () => {
-    // Regression: analytics.ts imported loadBeanThumbnails from ./library.js,
-    // which is not initialised yet when statistics render, so the console threw
-    // "Cannot read properties of undefined (reading 'loadBeanThumbnails')".
-    // The shelf loads its own blob URLs straight from bean-image instead.
-    expect(src).not.toMatch(/from '\.\/library\.js'/);
-    expect(src).not.toContain('loadBeanThumbnails');
-    expect(src).toContain("from '../bean-image.js'");
+    // Regression: analytics.ts imported the loader from ./library.js, which is
+    // not initialised yet when statistics render, so the console threw "Cannot
+    // read properties of undefined (reading 'loadBeanThumbnails')". The shelf
+    // loads its own blob URLs straight from bean-image instead.
+    expect(imports).not.toMatch(/from '\.\/library\.js'/);
+    expect(imports).not.toContain('loadBeanThumbnails');
+    expect(imports).toContain("from '../bean-image.js'");
     expect(src).toContain("'#beanShelf .lib-shelf-img[data-bean-id]'");
   });
 });
