@@ -502,6 +502,7 @@ describe('openStickerEditor overlay', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -549,10 +550,6 @@ describe('openStickerEditor overlay', () => {
     const canvas = node(overlay, '.sticker-canvas');
     const viewport = node(overlay, '.sticker-viewport');
     const undo = node(overlay, '.sticker-undo');
-    const brush = node(overlay, '.sticker-brush-toggle');
-
-    brush.click();
-    expect(brush.getAttribute('aria-pressed')).toBe('true');
 
     viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40 });
     viewport.dispatch('pointermove', { pointerId: 1, clientX: 55, clientY: 40 });
@@ -683,5 +680,93 @@ describe('openStickerEditor overlay', () => {
     close.click();
     await expect(promise).resolves.toBeNull();
     expect(doc.body.children.length).toBe(0);
+  });
+
+  it('paints when a pointer moves past the slop and never taps', async () => {
+    const { overlay } = await openReady();
+    const viewport = node(overlay, '.sticker-viewport');
+    const undo = node(overlay, '.sticker-undo');
+    expect(undo.disabled).toBe(true);
+
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40 });
+    viewport.dispatch('pointermove', { pointerId: 1, clientX: 70, clientY: 40 });
+    viewport.dispatch('pointerup', { pointerId: 1, clientX: 70, clientY: 40 });
+
+    expect(tapMaskMock).not.toHaveBeenCalled();
+    expect(undo.disabled).toBe(false);
+  });
+
+  it('treats a pointer released within the slop as a smart tap', async () => {
+    const { overlay } = await openReady();
+    const viewport = node(overlay, '.sticker-viewport');
+
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40 });
+    viewport.dispatch('pointermove', { pointerId: 1, clientX: 43, clientY: 41 });
+    viewport.dispatch('pointerup', { pointerId: 1, clientX: 43, clientY: 41 });
+
+    await vi.waitFor(() => expect(tapMaskMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('switches the hint text with the mode buttons', async () => {
+    const { overlay } = await openReady();
+    const hint = node(overlay, '.sticker-hint');
+    const hintText = (): string => node(overlay, '.sticker-hint-text').textContent;
+
+    expect(hint.style.display).toBe('');
+    expect(node(overlay, '.sticker-hint-zoom').textContent).toBe('Two fingers to zoom and move');
+    expect(hintText()).toBe('Tap or paint over parts that are missing');
+
+    node(overlay, '.sticker-mode-remove').click();
+    expect(hintText()).toBe('Tap or paint over background that should go');
+
+    node(overlay, '.sticker-mode-add').click();
+    expect(hintText()).toBe('Tap or paint over parts that are missing');
+  });
+
+  it('needs a second tap on reset within three seconds', async () => {
+    const { overlay } = await openReady();
+    const reset = node(overlay, '.sticker-reset');
+
+    vi.useFakeTimers();
+    try {
+      reset.click();
+      expect(reset.textContent).toBe('Tap again to discard all');
+      vi.advanceTimersByTime(2999);
+      expect(reset.textContent).toBe('Tap again to discard all');
+      vi.advanceTimersByTime(1);
+      expect(reset.textContent).toBe('Start over');
+
+      reset.click();
+      reset.click();
+      expect(reset.textContent).toBe('Start over');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hides the fit button until the view is zoomed', async () => {
+    const { overlay } = await openReady();
+    const viewport = node(overlay, '.sticker-viewport');
+    const fit = node(overlay, '.sticker-fit');
+
+    expect(fit.hidden).toBe(true);
+    viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40 });
+    viewport.dispatch('pointerdown', { pointerId: 2, clientX: 100, clientY: 40 });
+    viewport.dispatch('pointermove', { pointerId: 2, clientX: 160, clientY: 40 });
+    expect(fit.hidden).toBe(false);
+
+    fit.click();
+    expect(fit.hidden).toBe(true);
+  });
+
+  it('toggles the original photo with the original button', async () => {
+    const { overlay } = await openReady();
+    const original = node(overlay, '.sticker-original');
+
+    expect(original.getAttribute('aria-pressed')).toBe('false');
+    original.click();
+    expect(original.getAttribute('aria-pressed')).toBe('true');
+    original.click();
+    expect(original.getAttribute('aria-pressed')).toBe('false');
   });
 });
