@@ -279,7 +279,7 @@ export function computeFacts(
         textKey: 'analytics_fact_total_yield',
         vars: { litres: litres.toFixed(1), grams: Math.round(grams), shots: nShots, avg: avgG.toFixed(1), toNext },
         rows: [
-          ['analytics_fact_row_total_grams', `${Math.round(grams)} g`],
+          ['analytics_fact_row_total_grams', `${Math.round(grams)} g · ${nShots}`],
           ['analytics_fact_row_avg_grams', `${avgG.toFixed(1)} g`],
           ['analytics_fact_row_to_next', String(toNext)],
         ],
