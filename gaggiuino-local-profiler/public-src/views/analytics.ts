@@ -1399,7 +1399,7 @@ function _clearMapExtras(wrap: HTMLElement): void {
   const card = wrap.parentElement;
   if (!card || typeof card.querySelector !== 'function') return;
   const chips = card.querySelector<HTMLElement>('.map-chips');
-  if (chips) chips.innerHTML = '';
+  if (chips) chips.innerHTML = html``;
   const count = card.querySelector<HTMLElement>('.analytics-map-count');
   if (count) count.remove();
 }
@@ -1631,11 +1631,11 @@ export async function buildWorldMap() {
     for (const f of geo.features) f.properties = { ...f.properties, code: numToCode.get(String(f.id)) || null };
     // #1467: ECharts fires a map click with the region's full name; remember
     // the name -> ISO code relationship so click-through can resolve it.
-    _mapNameToCode = new Map(
-      geo.features
-        .map(f => [String(f.properties.name), String(f.properties.code)] as const)
-        .filter(([, code]) => code !== 'null' && code !== 'undefined' && code !== ''),
-    );
+    _mapNameToCode = new Map<string, string>();
+    for (const f of geo.features) {
+      const props = f.properties as { name?: string; code?: string | null };
+      if (props.name && props.code) _mapNameToCode.set(props.name, props.code);
+    }
     // #1467: place the home point on the registered geometry once — the
     // bounding-box centre of the home country's largest landmass.
     if (!_worldMapHome) {
@@ -1712,8 +1712,8 @@ export async function buildWorldMap() {
   const routeData = home
     ? countriesWithShots
         .map(code => COUNTRY_CENTROIDS[code])
-        .filter((c): c is [number, number] => Array.isArray(c))
-        .map(c => ({ coords: [c, home] }))
+        .filter((centroid): centroid is [number, number] => Array.isArray(centroid))
+        .map(centroid => ({ coords: [centroid, home] }))
     : [];
   _mapClickData = { byCode, home };
 
