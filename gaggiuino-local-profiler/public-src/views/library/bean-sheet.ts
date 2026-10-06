@@ -4,7 +4,7 @@ import { esc, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { SLIDERS_ICON_SVG, TARGET_ICON_SVG, SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG } from '../../icons.js';
 import { applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../../components/flavor-mini-wheel.js';
-import { attachSheetSwipe } from '../../components/sheet-swipe.js';
+import { attachSheetSwipe, animateSheetOut, settleSheetOut } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
 import { shelfStock, beanInitials } from './shelf.js';
 import { renderBeanCard, beanFreshBadge, originDisplay } from './bean-card.js';
@@ -192,7 +192,7 @@ export function renderBeanSheet(enter = false): void {
   const restoreScroll = beanSheetRestoredScroll(_sheetRenderedBeanId, id, _sheetScrollTop(host), enter);
   // Only a rebuild of the bean already shown keeps its open forms; a fresh open starts closed.
   const openForms = !enter && _sheetRenderedBeanId === id ? captureOpenSheetForms(host) : null;
-  host.innerHTML = html`<div class="lib-sheet-backdrop" data-action="close-bean-sheet"></div>
+  host.innerHTML = html`<div class="lib-sheet-backdrop${esc(enter ? ' lib-sheet-backdrop-enter' : '')}" data-action="close-bean-sheet"></div>
     <section class="lib-sheet${esc(enter ? ' lib-sheet-enter' : '')}" role="dialog" aria-modal="true" aria-labelledby="beanSheetTitle">
       <div class="lib-sheet-grab" aria-hidden="true"></div>
       <div class="lib-sheet-head">
@@ -229,13 +229,12 @@ export function renderBeanSheet(enter = false): void {
     ? host.querySelector<HTMLDetailsElement>('.lib-sheet-more')
     : null;
   if (details) details.ontoggle = () => { _sheetMoreOpen = details.open; };
-  // #1374: the rebuilt sheet gets fresh drag surfaces, so re-attach the
-  // swipe-to-close each render (the old elements were discarded).
+  // #1374/#1488: the rebuilt sheet gets a fresh drag surface, so re-attach the
+  // swipe-to-close each render (the old element was discarded). One listener on
+  // the sheet covers the grab pill, the head and the content.
   const sheetEl = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
-  const grab = sheetEl && typeof sheetEl.querySelector === 'function' ? sheetEl.querySelector<HTMLElement>('.lib-sheet-grab') : null;
-  const head = sheetEl && typeof sheetEl.querySelector === 'function' ? sheetEl.querySelector<HTMLElement>('.lib-sheet-head') : null;
-  if (sheetEl && grab) attachSheetSwipe(sheetEl, grab, closeBeanSheet);
-  if (sheetEl && head) attachSheetSwipe(sheetEl, head, closeBeanSheet);
+  const backdropEl = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
+  if (sheetEl && typeof sheetEl.addEventListener === 'function') attachSheetSwipe(sheetEl, backdropEl, requestCloseBeanSheet);
   libraryView.loadBeanThumbnails();
 }
 
@@ -296,7 +295,7 @@ function _onSheetKeydown(e: KeyboardEvent): void {
     const tag = document.activeElement?.tagName?.toLowerCase() || '';
     if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
     e.preventDefault();
-    closeBeanSheet();
+    requestCloseBeanSheet();
     return;
   }
   if (e.key !== 'Tab') return;
@@ -321,6 +320,9 @@ function _unwireSheetKeys(): void {
 // card — e.g. revealing the inline bag form after "Save and add bag" (#1398) —
 // use it rather than reaching into the sheet themselves.
 export function openBeanSheet(id: number, onPainted?: () => void): void {
+  // Finish a still-sliding close before painting, so its timer cannot wipe the
+  // sheet we are about to open.
+  settleSheetOut();
   const bean = _beanList().find(b => b.id === id);
   if (!bean) return;
   _sheetReturnFocus = (document.activeElement as HTMLElement | null) ?? null;
@@ -336,6 +338,16 @@ export function openBeanSheet(id: number, onPainted?: () => void): void {
   // The sheet's own enter animation is the transition; a root view transition
   // faded the whole page (#1452).
   paint();
+}
+
+// Every user close (X, backdrop tap, Esc, swipe) slides the sheet out first;
+// the sync close stays for internal callers (re-render, delete, view switch).
+export function requestCloseBeanSheet(): void {
+  const host = _sheetHost();
+  const sheet = host && typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
+  if (!host || !sheet) { closeBeanSheet(); return; }
+  const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
+  animateSheetOut(sheet, backdrop, closeBeanSheet);
 }
 
 export function closeBeanSheet(): void {

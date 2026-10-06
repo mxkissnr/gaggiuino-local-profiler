@@ -106,7 +106,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, reset
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openEditBag, closeEditBag, saveEditBag,
-         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags, openBeanSheet, closeBeanSheet,
+         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags, openBeanSheet, closeBeanSheet, requestCloseBeanSheet,
          toggleBagCard, reorderBags,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
@@ -990,7 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
       case 'toggle-past-bags':     togglePastBags(numId()); break;
       case 'open-bean-sheet':     openBeanSheet(numId()); break;
-      case 'close-bean-sheet':    closeBeanSheet(); break;
+      case 'close-bean-sheet':    requestCloseBeanSheet(); break;
     case 'close-bean-form-sheet': requestCloseBeanForm(); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;

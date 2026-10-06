@@ -8,7 +8,7 @@ import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';
 import type { Html } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
-import { attachSheetSwipe, isPhoneSheetWidth } from './sheet-swipe.js';
+import { attachSheetSwipe, animateSheetOut, isPhoneSheetWidth, settleSheetOut, startSheetEnter } from './sheet-swipe.js';
 
 // A viewport-coordinate point (e.g. the clicked point on a chart); positioned
 // like a zero-size rect, for when there is no element to anchor the popover to.
@@ -40,7 +40,7 @@ function _isDesktop(): boolean {
 function _onKeydown(e: KeyboardEvent): void {
   if (e.key !== 'Escape') return;
   e.preventDefault();
-  closeDetailSheet();
+  requestCloseDetailSheet();
 }
 
 function _wireKeys(): void {
@@ -91,6 +91,9 @@ function _positionPop(sheet: HTMLElement, anchor: HTMLElement | DetailAnchorPoin
 // clicked viewport point for a trend chart shot — and is ignored on phone
 // widths, where the overlay is always a bottom sheet.
 export function openDetailSheet(opts: DetailSheetOptions): void {
+  // A previous close may still be sliding; finish it before painting the new
+  // sheet so its timer cannot empty the host we are about to fill.
+  settleSheetOut();
   const host = _host();
   if (!host) return;
 
@@ -120,19 +123,28 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
   if (typeof document !== 'undefined') document.body?.classList?.add('lib-sheet-open');
 
   const sheet = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
-  const grab = sheet && typeof sheet.querySelector === 'function' ? sheet.querySelector<HTMLElement>('.lib-sheet-grab') : null;
-  const head = sheet && typeof sheet.querySelector === 'function' ? sheet.querySelector<HTMLElement>('.detail-sheet-head') : null;
-  if (sheet && grab) attachSheetSwipe(sheet, grab, closeDetailSheet);
-  if (sheet && head) attachSheetSwipe(sheet, head, closeDetailSheet);
-  if (desktop && sheet && anchor) _positionPop(sheet, anchor);
-
   const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
+  // #1488: one sheet-level drag covers the grab pill, the head and the content.
+  if (sheet && typeof sheet.addEventListener === 'function') attachSheetSwipe(sheet, backdrop, requestCloseDetailSheet);
+  if (desktop && sheet && anchor) _positionPop(sheet, anchor);
+  startSheetEnter(sheet, backdrop);
+
   const closeBtn = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.detail-sheet-close') : null;
-  backdrop?.addEventListener?.('click', closeDetailSheet);
-  closeBtn?.addEventListener?.('click', closeDetailSheet);
+  backdrop?.addEventListener?.('click', requestCloseDetailSheet);
+  closeBtn?.addEventListener?.('click', requestCloseDetailSheet);
 
   _wireKeys();
   closeBtn?.focus?.();
+}
+
+// Every user close (X, backdrop tap, Esc, swipe) slides the sheet out first;
+// the sync close stays for internal callers (view switch, content replacement).
+export function requestCloseDetailSheet(): void {
+  const host = _host();
+  const sheet = host && typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
+  if (!host || !sheet) { closeDetailSheet(); return; }
+  const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
+  animateSheetOut(sheet, backdrop, closeDetailSheet);
 }
 
 export function closeDetailSheet(): void {
