@@ -483,6 +483,27 @@
         .analytics-filter-btn:hover { color: var(--gray-200); border-color: var(--gray-600); }
         .analytics-filter-btn.active { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
 
+        /* Analytics toolbar (#1467): one sticky filter row for the whole page.
+           The page background keeps the cards scrolling underneath it. */
+        .analytics-toolbar {
+            position: sticky; top: 0; z-index: 5;
+            display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+            padding: var(--sp-2) 0;
+            background: var(--gray-950);
+        }
+        .analytics-toolbar .lib-shelf-search { flex: 1 1 220px; min-width: 0; }
+        .analytics-filter-empty { flex: 1 1 100%; margin: 0; }
+
+        /* Verdict header (#1467): one-sentence verdict on the left, the
+           period's average score on the right. */
+        .analytics-verdict-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); }
+        .analytics-verdict-text { min-width: 0; }
+        .analytics-verdict-title { margin: 0; font-size: var(--fs-5); font-weight: 600; color: var(--gray-100); line-height: 1.2; }
+        .analytics-verdict-sub { margin: var(--sp-1) 0 0; font-size: var(--fs-1); color: var(--gray-500); }
+        .analytics-verdict-score { display: flex; flex-direction: column; align-items: flex-end; flex: 0 0 auto; }
+        .analytics-verdict-score-num { font-size: var(--fs-6); font-weight: 700; line-height: 1; }
+        .analytics-verdict-score-lbl { margin-top: var(--sp-1); font-size: var(--fs-1); color: var(--gray-500); }
+
         /* Coffee year: one column per week, Monday at the top (#1467). Real CSS
            grid instead of measuring the wrapper, so the fixed cell size keeps
            the whole year scrollable on phones. */
