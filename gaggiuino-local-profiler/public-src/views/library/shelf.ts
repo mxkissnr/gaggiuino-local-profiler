@@ -137,6 +137,12 @@ function shelfStockBar(pct: number | null): Html {
     : esc('');
 }
 
+// An empty row a bean has no content for: renderShelfTile always emits six
+// direct children so every tile shares the same subgrid row tracks (#1460).
+function emptySlot(): Html {
+  return html`<span class="lib-shelf-slot" aria-hidden="true"></span>`;
+}
+
 // Deterministic xorshift seeded with the bean id: a bean's icicles never
 // reshuffle between renders (no Math.random anywhere in this module).
 function icicleRng(seed: number): () => number {
@@ -208,10 +214,10 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
       ${archived ? html`<span class="lib-shelf-archived-tag">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}
     </span>
     <span class="lib-shelf-name serif-display">${esc(b.name)}</span>
-    ${b.roaster ? html`<span class="lib-shelf-roaster">${esc(b.roaster)}</span>` : esc('')}
-    ${shelfStockBar(pct)}
-    ${openG != null ? html`<span class="lib-shelf-stock-line">${esc(openG)} g${sealedBags > 0 ? html`<span class="lib-shelf-sealed">${tHtml('lib_shelf_full_bags', sealedBags)}</span>` : esc('')}</span>` : esc('')}
-    ${frozenG > 0 ? html`<span class="lib-shelf-frozen-line">${SNOWFLAKE_ICON_SVG}${esc(frozenG)} g</span>` : esc('')}
+    ${b.roaster ? html`<span class="lib-shelf-roaster">${esc(b.roaster)}</span>` : emptySlot()}
+    ${pct != null ? shelfStockBar(pct) : emptySlot()}
+    ${openG != null ? html`<span class="lib-shelf-stock-line">${esc(openG)} g${sealedBags > 0 ? html`<span class="lib-shelf-sealed">${tHtml('lib_shelf_full_bags', sealedBags)}</span>` : esc('')}</span>` : emptySlot()}
+    ${frozenG > 0 ? html`<span class="lib-shelf-frozen-line">${SNOWFLAKE_ICON_SVG}${esc(frozenG)} g</span>` : emptySlot()}
   </button>`;
 }
 
