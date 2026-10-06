@@ -142,7 +142,7 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
 export function requestCloseDetailSheet(): void {
   const host = _host();
   const sheet = host && typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
-  if (!sheet) { closeDetailSheet(); return; }
+  if (!host || !sheet) { closeDetailSheet(); return; }
   const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
   animateSheetOut(sheet, backdrop, closeDetailSheet);
 }

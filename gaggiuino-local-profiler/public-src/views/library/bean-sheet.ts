@@ -345,7 +345,7 @@ export function openBeanSheet(id: number, onPainted?: () => void): void {
 export function requestCloseBeanSheet(): void {
   const host = _sheetHost();
   const sheet = host && typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
-  if (!sheet) { closeBeanSheet(); return; }
+  if (!host || !sheet) { closeBeanSheet(); return; }
   const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
   animateSheetOut(sheet, backdrop, closeBeanSheet);
 }
