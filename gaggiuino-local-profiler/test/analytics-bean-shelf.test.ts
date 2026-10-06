@@ -165,4 +165,13 @@ describe('bean shelf import boundary (#1467)', () => {
     expect(imports).toContain("from '../bean-image.js'");
     expect(src).toContain("'#beanShelf .lib-shelf-img[data-bean-id]'");
   });
+
+  it('reuses the existing bean-image loader instead of editing that module', () => {
+    // The plan names public-src/bean-image.ts because the shared blob-URL loader
+    // lives there. It already exports loadBeanImageBlobUrl, so this slice imports
+    // it and leaves the module itself untouched.
+    expect(imports).toMatch(/import \{ loadBeanImageBlobUrl \} from '\.\.\/bean-image\.js'/);
+    const beanImage = readFileSync(join(here, '../public-src/bean-image.ts'), 'utf8');
+    expect(beanImage).toContain('export function loadBeanImageBlobUrl');
+  });
 });
