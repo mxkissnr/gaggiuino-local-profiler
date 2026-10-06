@@ -7816,6 +7816,8 @@ export interface components {
         };
         PreheatStatus: {
             ready?: boolean;
+            /** @description True only when the machine itself reports a standby/sleep mode (GaggiMate m == 0); Gaggiuino never sets it */
+            standby?: boolean;
             /** @description Elapsed seconds */
             elapsed?: number;
             /** @description Remaining seconds */

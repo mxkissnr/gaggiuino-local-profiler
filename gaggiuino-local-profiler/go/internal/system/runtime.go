@@ -29,6 +29,7 @@ type RuntimeState struct {
 	mu sync.Mutex
 
 	machineOn         bool
+	standby           bool
 	currentTemp       *float64
 	currentTargetTemp *float64
 	tempHistory       []float64
@@ -48,6 +49,7 @@ func NewRuntimeState() *RuntimeState {
 // need — computed once under the lock, then read freely.
 type Snapshot struct {
 	MachineOn         bool
+	Standby           bool
 	CurrentTemp       *float64
 	CurrentTargetTemp *float64
 	SwitchOnAt        *int64
@@ -62,6 +64,7 @@ func (rs *RuntimeState) Get() Snapshot {
 	defer rs.mu.Unlock()
 	return Snapshot{
 		MachineOn:         rs.machineOn,
+		Standby:           rs.standby,
 		CurrentTemp:       rs.currentTemp,
 		CurrentTargetTemp: rs.currentTargetTemp,
 		SwitchOnAt:        rs.switchOnAt,
@@ -75,6 +78,14 @@ func (rs *RuntimeState) Get() Snapshot {
 func (rs *RuntimeState) SetMachineOn(on bool) {
 	rs.mu.Lock()
 	rs.machineOn = on
+	rs.mu.Unlock()
+}
+
+// SetStandby sets whether the machine reports its own standby/sleep mode
+// (#1498). Only the GaggiMate adapter ever drives this true.
+func (rs *RuntimeState) SetStandby(on bool) {
+	rs.mu.Lock()
+	rs.standby = on
 	rs.mu.Unlock()
 }
 

@@ -612,6 +612,7 @@ components:
       type: object
       properties:
         ready:       { type: boolean }
+        standby:     { type: boolean, description: "True only when the machine itself reports a standby/sleep mode (GaggiMate m == 0); Gaggiuino never sets it" }
         elapsed:     { type: integer, description: Elapsed seconds }
         remaining:   { type: integer, description: Remaining seconds }
         pct:         { type: number, minimum: 0, maximum: 1 }

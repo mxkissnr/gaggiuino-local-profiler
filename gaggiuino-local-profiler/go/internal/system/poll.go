@@ -610,6 +610,36 @@ func (p *Poller) stopLivePolling() {
 	p.emitLiveSnapshot()
 }
 
+// applyStandbyTransition reconciles the runtime's standby flag with the
+// adapter's latest status (#1498). GaggiMate reports m == 0 (standby) while
+// still reachable, so live polling keeps running in standby; this flag is what
+// tells buildPreheatResponse the machine is off and restarts the preheat clock
+// when it wakes. Entering standby mirrors stopLivePolling's bookkeeping
+// (switch-off time, cleared notify flag); leaving it mirrors startLivePolling's
+// fresh-session path unless the boiler is still warm.
+func (p *Poller) applyStandbyTransition(now int64, standby bool) {
+	snap := p.runtime.Get()
+	if standby == snap.Standby {
+		return
+	}
+	p.runtime.SetStandby(standby)
+	if standby {
+		p.runtime.SetSwitchOffAt(&now)
+		p.state.mu.Lock()
+		p.state.preheatNotifySent = false
+		p.state.mu.Unlock()
+		log.Printf("system: machine standby -- preheat clock held")
+	} else {
+		if snap.SwitchOnAt == nil || !p.runtime.IsStillWarm(now) {
+			p.runtime.SetSwitchOnAt(&now)
+			p.openPreheatRun(now)
+		}
+		log.Printf("system: machine left standby -- preheat clock reset")
+	}
+	p.savePreheatState()
+	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+}
+
 // pollTick is the isPollRunning mutex guard around one pollViaGaggiuinoStatus
 // call, so a slow poll (e.g. a machine taking >1s to answer) can never overlap
 // with the next tick.
@@ -686,6 +716,13 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		return
 	}
 
+	// #1498: reconcile the machine's own standby signal with the runtime
+	// before anything below reads it. A standby GaggiMate is still reachable,
+	// so live polling keeps running; without this the time-only preheat
+	// countdown starts from startLivePolling and reports "ready" from a cold
+	// boiler.
+	p.applyStandbyTransition(time.Now().UnixMilli(), status.Standby)
+
 	// #1324: refresh the opt-in machine-control snapshot. ControlStateFor
 	// reads only the registry cache and one KV row (no network), so it runs
 	// outside p.state.mu; a nil result (unsupported adapter, setting off or no
@@ -759,7 +796,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if derived.Temperature > 0 && !result.IsBrewing {
 		p.runtime.PushTempHistory(derived.Temperature)
 		p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
-		if snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
+		if !snap.Standby && snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
 			derived.Temperature >= derived.TargetTemperature-2 && p.runtime.IsTempStable() {
 			preheatMs := int64(loadPreheatMinutes()) * 60_000
 			if now-*snap.SwitchOnAt < preheatMs {
