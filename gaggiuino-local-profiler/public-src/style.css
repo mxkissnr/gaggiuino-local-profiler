@@ -2937,6 +2937,8 @@
     @media (prefers-reduced-motion: no-preference) {
         ::view-transition-group(flavor-wheel) { animation-duration: 320ms; animation-timing-function: cubic-bezier(.2,0,0,1); }
     }
+    /* #1482: only the wheel grows; the page under it switches at once instead of cross-fading (full-screen flash on phones). */
+    ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 
         /* Photo picker button (replaces native <input type=file>, #286) */
         .photo-picker-row { display:flex; align-items:center; gap: var(--sp-2); flex-wrap:wrap; }
