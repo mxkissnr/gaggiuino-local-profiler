@@ -81,7 +81,7 @@ describe('bean sheet open does not run a view transition (#1452)', () => {
     // Painted on the same tick, not deferred behind a transition callback.
     expect(onPainted).toHaveBeenCalledTimes(1);
     const host = elements.beanSheet;
-    expect(host).toBeDefined();
+    if (!host) throw new Error('bean sheet host missing');
     expect(host.classList.contains('open')).toBe(true);
     expect(host.innerHTML).toContain('lib-sheet-enter');
     expect(bodyClasses).toContain('lib-sheet-open');
