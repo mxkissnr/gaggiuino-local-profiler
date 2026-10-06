@@ -43,7 +43,7 @@ function installDom(host: FakeHost, activeElement: unknown, desktop: boolean): D
   const listeners: Record<string, KeyHandler[]> = {};
   const bodyClasses = new Set<string>();
   g.window = {
-    matchMedia: (query: string) => ({ matches: desktop && query.includes('900') }),
+    matchMedia: (query: string) => ({ matches: query.includes('max-width') ? !desktop : desktop }),
     innerWidth: 1200,
     innerHeight: 800,
   };

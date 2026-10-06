@@ -7,7 +7,7 @@ import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';
 import type { Html } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
-import { attachSheetSwipe } from './sheet-swipe.js';
+import { attachSheetSwipe, isPhoneSheetWidth } from './sheet-swipe.js';
 
 export interface DetailSheetOptions {
   title: string;
@@ -26,7 +26,7 @@ function _host(): HTMLElement | null {
 function _isDesktop(): boolean {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
-    && window.matchMedia('(min-width: 900px)').matches;
+    && !isPhoneSheetWidth();
 }
 
 function _onKeydown(e: KeyboardEvent): void {
