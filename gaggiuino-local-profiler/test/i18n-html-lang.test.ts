@@ -60,7 +60,7 @@ describe('index.html has no hardcoded-German button left (#1499)', () => {
     it('every <button> whose visible text is "Abbrechen" carries a data-i18n attribute', () => {
         const offenders: string[] = [];
         for (const m of html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)) {
-            const visible = (m[1] ?? '').replace(/<[^>]*>/g, '').trim();
+            const visible = (m[1] ?? '').trim();
             if (visible === 'Abbrechen' && !/data-i18n=/.test(m[0])) offenders.push(m[0].slice(0, 140));
         }
         expect(offenders, `German buttons without data-i18n:\n${offenders.join('\n')}`).toEqual([]);
