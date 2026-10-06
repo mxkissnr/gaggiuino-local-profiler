@@ -2990,9 +2990,9 @@ paths:
       responses:
         "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
         "403": { description: machine control is disabled }
-        "409": { description: machine is not idle in brew mode, or no connected GaggiMate on firmware v1.9.0+ }
+        "409": { description: "machine is not idle in brew mode, or no connected GaggiMate on firmware v1.9.0+" }
         "501": { description: machine type does not support machine control }
-        "502": { description: Machine unreachable, timed out, or rejected the command }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
 
   /api/machine/flush/stop:
     post:
@@ -3007,7 +3007,7 @@ paths:
         "403": { description: machine control is disabled }
         "409": { description: no connected GaggiMate on firmware v1.9.0+ }
         "501": { description: machine type does not support machine control }
-        "502": { description: Machine unreachable, timed out, or rejected the command }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
 
   /api/machine/brew-confirm/confirm:
     post:
@@ -3020,9 +3020,9 @@ paths:
       responses:
         "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
         "403": { description: machine control is disabled }
-        "409": { description: no brew confirmation is pending, or no connected GaggiMate on firmware v1.9.0+ }
+        "409": { description: "no brew confirmation is pending, or no connected GaggiMate on firmware v1.9.0+" }
         "501": { description: machine type does not support machine control }
-        "502": { description: Machine unreachable, timed out, or rejected the command }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
 
   /api/machine/brew-confirm/cancel:
     post:
@@ -3037,7 +3037,7 @@ paths:
         "403": { description: machine control is disabled }
         "409": { description: no connected GaggiMate on firmware v1.9.0+ }
         "501": { description: machine type does not support machine control }
-        "502": { description: Machine unreachable, timed out, or rejected the command }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
 
   /api/machine/control/settings:
     get:

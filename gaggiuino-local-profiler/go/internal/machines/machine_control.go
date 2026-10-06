@@ -274,67 +274,20 @@ func (h *Handlers) registerMachineControlRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handlers) flushStart(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		MachineID *int64 `json:"machineId"`
-	}
-	if !decodeJSONBody(w, r, &body) {
-		return
-	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
-	if !ok {
-		return
-	}
-	if _, err := ControlStateFor(h.registry, adapter, machine); err != nil {
-		writeControlError(w, machine, err)
-		return
-	}
-	mc, ok := adapter.(MachineController)
-	if !ok {
-		writeControlError(w, machine, ErrMachineControlUnsupported)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	if err := mc.FlushStart(ctx, machine); err != nil {
-		writeControlError(w, machine, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	h.controlAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
+		return mc.FlushStart(ctx, m)
+	})
 }
 
 func (h *Handlers) flushStop(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		MachineID *int64 `json:"machineId"`
-	}
-	if !decodeJSONBody(w, r, &body) {
-		return
-	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
-	if !ok {
-		return
-	}
-	if _, err := ControlStateFor(h.registry, adapter, machine); err != nil {
-		writeControlError(w, machine, err)
-		return
-	}
-	mc, ok := adapter.(MachineController)
-	if !ok {
-		writeControlError(w, machine, ErrMachineControlUnsupported)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	if err := mc.FlushStop(ctx, machine); err != nil {
-		writeControlError(w, machine, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	h.controlAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
+		return mc.FlushStop(ctx, m)
+	})
 }
 
-// brewConfirmAction is the shared shape behind brewConfirmConfirm and
-// brewConfirmCancel: decode, resolve, run the same ControlStateFor gate the
-// flush routes use, then run action.
-func (h *Handlers) brewConfirmAction(w http.ResponseWriter, r *http.Request, action func(context.Context, MachineController, *Machine) error) {
+// controlAction is the shared shape behind the flush and brew-confirm routes:
+// decode, resolve, run the same ControlStateFor gate, then run action.
+func (h *Handlers) controlAction(w http.ResponseWriter, r *http.Request, action func(context.Context, MachineController, *Machine) error) {
 	var body struct {
 		MachineID *int64 `json:"machineId"`
 	}
@@ -364,13 +317,13 @@ func (h *Handlers) brewConfirmAction(w http.ResponseWriter, r *http.Request, act
 }
 
 func (h *Handlers) brewConfirmConfirm(w http.ResponseWriter, r *http.Request) {
-	h.brewConfirmAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
+	h.controlAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
 		return mc.ConfirmBrew(ctx, m)
 	})
 }
 
 func (h *Handlers) brewConfirmCancel(w http.ResponseWriter, r *http.Request) {
-	h.brewConfirmAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
+	h.controlAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
 		return mc.CancelBrewConfirm(ctx, m)
 	})
 }
