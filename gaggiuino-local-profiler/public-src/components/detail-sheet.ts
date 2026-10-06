@@ -1,7 +1,8 @@
 // Shared detail popover (#1467): one overlay for small title/sub/body details,
-// first used by the coffee-year day cells and reused by later statistics
-// slices. On phones it is a bottom sheet; from 900px up, when an anchor is
-// given, it becomes a popover floating next to that anchor.
+// first used by the coffee-year day cells and reused by the score-trend point
+// popover (and later statistics slices). On phones it is a bottom sheet; from
+// 900px up, when an anchor is given, it becomes a popover floating next to
+// that anchor.
 
 import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';
@@ -9,11 +10,18 @@ import type { Html } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
 import { attachSheetSwipe, isPhoneSheetWidth } from './sheet-swipe.js';
 
+// A viewport-coordinate point (e.g. the clicked point on a chart); positioned
+// like a zero-size rect, for when there is no element to anchor the popover to.
+export interface DetailAnchorPoint {
+  x: number;
+  y: number;
+}
+
 export interface DetailSheetOptions {
   title: string;
   sub?: string;
   body: Html;
-  anchor?: HTMLElement | null;
+  anchor?: HTMLElement | DetailAnchorPoint | null;
 }
 
 let _returnFocus: HTMLElement | null = null;
@@ -48,11 +56,21 @@ function _unwireKeys(): void {
   document.removeEventListener('keydown', _onKeydown);
 }
 
+function _isPointAnchor(anchor: HTMLElement | DetailAnchorPoint): anchor is DetailAnchorPoint {
+  const a = anchor as DetailAnchorPoint;
+  return typeof a.x === 'number' && typeof a.y === 'number'
+    && typeof (anchor as HTMLElement).getBoundingClientRect !== 'function';
+}
+
 // Place the popover next to its anchor: right of it when it fits, else left,
-// vertically centred and clamped 12px inside the viewport.
-function _positionPop(sheet: HTMLElement, anchor: HTMLElement): void {
-  if (typeof anchor.getBoundingClientRect !== 'function') return;
-  const r = anchor.getBoundingClientRect();
+// vertically centred and clamped 12px inside the viewport. A point anchor is
+// treated as a zero-size rect at those viewport coordinates.
+function _positionPop(sheet: HTMLElement, anchor: HTMLElement | DetailAnchorPoint): void {
+  const point = _isPointAnchor(anchor);
+  if (!point && typeof anchor.getBoundingClientRect !== 'function') return;
+  const r = point
+    ? { left: anchor.x, right: anchor.x, top: anchor.y, height: 0 }
+    : anchor.getBoundingClientRect();
   const vw = window.innerWidth || 0;
   const vh = window.innerHeight || 0;
   const w = sheet.offsetWidth || 360;
@@ -68,6 +86,10 @@ function _positionPop(sheet: HTMLElement, anchor: HTMLElement): void {
   sheet.style.top = `${Math.round(top)}px`;
 }
 
+// Opens the overlay, replacing its content in place on a second call. `anchor`
+// is what the desktop popover floats next to — a coffee-year day cell, or the
+// clicked viewport point for a trend chart shot — and is ignored on phone
+// widths, where the overlay is always a bottom sheet.
 export function openDetailSheet(opts: DetailSheetOptions): void {
   const host = _host();
   if (!host) return;
