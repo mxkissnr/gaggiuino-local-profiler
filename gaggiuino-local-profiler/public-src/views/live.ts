@@ -523,11 +523,11 @@ export function updatePreheatWidget(d: PreheatData): void {
 
   // #1498: a GaggiMate in standby is off, so neither the "ready" badge nor a
   // warming countdown may show — the payload can still carry a stale remaining.
+  // The idle title is owned by the live-data handler (handleLiveData prefers
+  // machine_standby and keeps its unreachable branch first); don't write it here.
   if (d.standby) {
     readyBadge.style.display  = 'none';
     warmingWrap.style.display = 'none';
-    const idleTitleEl = document.getElementById('liveIdleTitle');
-    if (idleTitleEl) idleTitleEl.textContent = t('machine_standby');
   } else if (d.ready) {
     readyBadge.style.display  = '';
     warmingWrap.style.display = 'none';

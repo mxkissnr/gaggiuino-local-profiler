@@ -530,6 +530,29 @@ func (p *Poller) livePollActive() bool {
 	return p.liveTicker != nil
 }
 
+// endPreheatSession ends the current preheat session: stamps the switch-off
+// time, closes the open preheat run, clears the stability flag and the temp
+// history, then persists. Shared by stopLivePolling and applyStandbyTransition
+// so both end a session the same way.
+func (p *Poller) endPreheatSession(now int64) {
+	p.runtime.SetSwitchOffAt(&now)
+	p.closePreheatRun(now)
+	p.runtime.SetStabilityReady(false)
+	p.runtime.ClearTempHistory()
+	p.savePreheatState()
+}
+
+// beginPreheatSession starts a fresh preheat session at now: stamps the
+// switch-on time, opens a new preheat run, clears the temp history and
+// persists. Shared by startLivePolling and applyStandbyTransition's
+// leave-standby path.
+func (p *Poller) beginPreheatSession(now int64) {
+	p.runtime.SetSwitchOnAt(&now)
+	p.openPreheatRun(now)
+	p.runtime.ClearTempHistory()
+	p.savePreheatState()
+}
+
 // startLivePolling starts the 1s live-poll ticker.
 func (p *Poller) startLivePolling() {
 	p.liveMu.Lock()
@@ -540,11 +563,10 @@ func (p *Poller) startLivePolling() {
 	now := time.Now().UnixMilli()
 	snap := p.runtime.Get()
 	if snap.SwitchOnAt == nil || !p.runtime.IsStillWarm(now) {
-		p.runtime.SetSwitchOnAt(&now)
-		p.openPreheatRun(now)
-		p.savePreheatState()
+		p.beginPreheatSession(now)
+	} else {
+		p.runtime.ClearTempHistory()
 	}
-	p.runtime.ClearTempHistory()
 	log.Printf("system: live polling started")
 	ticker := time.NewTicker(pollInterval)
 	stop := make(chan struct{})
@@ -596,12 +618,9 @@ func (p *Poller) stopLivePolling() {
 			p.state.machine(defaultID).control = nil
 		}
 		p.state.mu.Unlock()
-		now := time.Now().UnixMilli()
-		p.runtime.SetSwitchOffAt(&now)
-		p.closePreheatRun(now)
-		p.runtime.SetStabilityReady(false)
-		p.runtime.ClearTempHistory()
-		p.savePreheatState()
+		// #1498: a switched-off machine is not in standby.
+		p.runtime.SetStandby(false)
+		p.endPreheatSession(time.Now().UnixMilli())
 		log.Printf("system: live polling stopped")
 	}
 	p.liveMu.Unlock()
@@ -614,37 +633,38 @@ func (p *Poller) stopLivePolling() {
 // adapter's latest status (#1498). GaggiMate reports m == 0 (standby) while
 // still reachable, so live polling keeps running in standby; this flag is what
 // tells buildPreheatResponse the machine is off and restarts the preheat clock
-// when it wakes. Entering standby mirrors stopLivePolling's switch-off
-// bookkeeping (switch-off time, closed preheat run, cleared stability flag and
-// temp history, cleared notify flag); leaving it mirrors startLivePolling's
-// fresh-session path unless the boiler is still warm.
+// when it wakes. Entering standby ends the session exactly like
+// stopLivePolling; leaving it always starts a fresh session — GaggiMate turns
+// its heater off in standby, so the old clock must never be kept (the temp
+// stability check marks preheat complete quickly if the boiler is still hot).
+//
+// The bookkeeping runs under liveMu and is skipped when live polling is not
+// active, so a late transition cannot open a run after stopLivePolling ended
+// the session. The SSE event is published after releasing the lock.
 func (p *Poller) applyStandbyTransition(now int64, standby bool) {
+	p.liveMu.Lock()
+	if p.liveTicker == nil {
+		p.liveMu.Unlock()
+		return
+	}
 	snap := p.runtime.Get()
 	if standby == snap.Standby {
+		p.liveMu.Unlock()
 		return
 	}
 	p.runtime.SetStandby(standby)
 	if standby {
-		// Mirror stopLivePolling's switch-off bookkeeping: end the running
-		// preheat, drop a stale stability flag and the temp window, so a later
-		// wake-up cannot report stabilityReady from the pre-standby session and
-		// cold standby readings never land in the open run's samples.
-		p.runtime.SetSwitchOffAt(&now)
-		p.closePreheatRun(now)
-		p.runtime.SetStabilityReady(false)
-		p.runtime.ClearTempHistory()
-		p.state.mu.Lock()
-		p.state.preheatNotifySent = false
-		p.state.mu.Unlock()
+		// End the running preheat, drop the stale stability flag and the temp
+		// window, so a later wake-up cannot report stabilityReady from the
+		// pre-standby session and cold standby readings never land in the open
+		// run's samples.
+		p.endPreheatSession(now)
 		log.Printf("system: machine standby -- preheat clock held")
 	} else {
-		if snap.SwitchOnAt == nil || !p.runtime.IsStillWarm(now) {
-			p.runtime.SetSwitchOnAt(&now)
-			p.openPreheatRun(now)
-		}
-		log.Printf("system: machine left standby -- preheat clock reset")
+		p.beginPreheatSession(now)
+		log.Printf("machine left standby -- preheat session started")
 	}
-	p.savePreheatState()
+	p.liveMu.Unlock()
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
@@ -719,6 +739,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		// #1324: an unreachable machine has no machine-control snapshot.
 		ms.control = nil
 		p.state.mu.Unlock()
+		// #1498: an unreachable machine is not in standby.
+		p.runtime.SetStandby(false)
 		log.Printf("system: live poll error: %v", err)
 		p.emitLiveSnapshot()
 		return
@@ -802,8 +824,10 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 
 	snap := p.runtime.Get()
 	if derived.Temperature > 0 && !result.IsBrewing {
-		p.runtime.PushTempHistory(derived.Temperature)
+		// #1498: standby readings are cold/idle — never let them into the temp
+		// history or the open run's samples.
 		if !snap.Standby {
+			p.runtime.PushTempHistory(derived.Temperature)
 			p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
 		}
 		if !snap.Standby && snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
