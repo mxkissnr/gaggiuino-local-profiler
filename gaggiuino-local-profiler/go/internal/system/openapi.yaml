@@ -625,7 +625,7 @@ components:
       description: >
         GET /api/live/data and the SSE live-snapshot payload (one shared Go
         builder, so every key below is always present — null where noted).
-      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable]
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable, machineControl]
       properties:
         isLive:      { type: boolean }
         profileName: { type: string }
@@ -683,6 +683,10 @@ components:
         waterLevel: { type: integer, nullable: true, description: "#902 idle stats: current water level" }
         machineWarnings: { type: array, items: { type: string }, description: "#1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino" }
         machineUpdateAvailable: { type: boolean, description: "#1409: GaggiMate reports a firmware update; always false for Gaggiuino" }
+        machineControl:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/MachineControlState'
 
     # ── Backup ────────────────────────────────────────────────────────────
 
@@ -1046,6 +1050,20 @@ components:
         backup/restore, #1324).
       properties:
         enabled: { type: boolean, description: "Whether opt-in machine control (flush, brew confirmation) is enabled" }
+
+    MachineControlState:
+      type: object
+      required: [machineId, canFlush, flushing, brewConfirm]
+      description: >
+        GET /api/live/data's machineControl and the SSE live-snapshot's
+        equivalent — the opt-in machine-control snapshot for the default
+        machine (#1324). Null when the machine has no machine control, the
+        opt-in setting is off, or the machine is unreachable.
+      properties:
+        machineId:   { type: integer, description: Owning machine id }
+        canFlush:    { type: boolean, description: "Whether a flush may be started (connected GaggiMate, idle in brew mode)" }
+        flushing:    { type: boolean, description: "Whether a flush is currently running" }
+        brewConfirm: { type: array, nullable: true, items: { type: string }, description: "Warning keys of a pending brew confirmation, in order; null when none is pending" }
 
     # ── MQTT ───────────────────────────────────────────────────────────────
 

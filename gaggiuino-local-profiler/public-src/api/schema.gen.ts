@@ -7890,6 +7890,7 @@ export interface components {
             machineWarnings: string[];
             /** @description #1409: GaggiMate reports a firmware update; always false for Gaggiuino */
             machineUpdateAvailable: boolean;
+            machineControl: components["schemas"]["MachineControlState"] | null;
         };
         BackupBundle: {
             /** @example true */
@@ -8137,6 +8138,17 @@ export interface components {
         MachineControlSettings: {
             /** @description Whether opt-in machine control (flush, brew confirmation) is enabled */
             enabled: boolean;
+        };
+        /** @description GET /api/live/data's machineControl and the SSE live-snapshot's equivalent — the opt-in machine-control snapshot for the default machine (#1324). Null when the machine has no machine control, the opt-in setting is off, or the machine is unreachable. */
+        MachineControlState: {
+            /** @description Owning machine id */
+            machineId: number;
+            /** @description Whether a flush may be started (connected GaggiMate, idle in brew mode) */
+            canFlush: boolean;
+            /** @description Whether a flush is currently running */
+            flushing: boolean;
+            /** @description Warning keys of a pending brew confirmation, in order; null when none is pending */
+            brewConfirm: string[] | null;
         };
         /** @description GET/POST /api/mqtt/settings response (go/internal/mqtt's SettingsView): the redacted view, which reports hasPassword instead of the stored password and never echoes the password back (#1050). The POST request body is MqttSettingsInput instead, since it additionally carries the write-only password/clearPassword pair. */
         MqttSettings: {
