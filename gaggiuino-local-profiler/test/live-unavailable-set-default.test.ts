@@ -134,11 +134,14 @@ describe('Live tab gating for a non-default selected machine (#1449)', () => {
     expect(doc.getElementById('liveIdleTemp').textContent).toBe('sentinel');
   });
 
-  it('keeps the existing live behaviour when the selected machine is the default', () => {
+  it('keeps the existing live behaviour when the selected machine is the default', async () => {
     g.__defaultMachineId = 1;
     S.activeMachineId = 1;
 
     connectLiveStream();
+    // Flush the immediate fetchLiveData()/fetchPreheatData() the capable branch
+    // starts, so nothing resolves mid-assertion.
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(doc.getElementById('liveMachineUnavailableBanner').style.display).toBe('none');
     expect(doc.getElementById('live-content').style.display).toBe('');
