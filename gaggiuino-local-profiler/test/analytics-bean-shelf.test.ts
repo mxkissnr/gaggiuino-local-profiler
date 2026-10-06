@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Same harness as analytics-new-charts.test.js: analytics.js pulls in
 // state.js/i18n.js (localStorage/navigator at module load) and calls
@@ -142,5 +145,21 @@ describe('_sortBeanShelfRows (#1467)', () => {
     const rows = [row({ name: 'A', avgScore: 50 }), row({ name: 'B', avgScore: 90 })];
     _sortBeanShelfRows(rows, 'score');
     expect(rows.map(r => r.name)).toEqual(['A', 'B']);
+  });
+});
+
+describe('bean shelf import boundary (#1467)', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '../public-src/views/analytics.ts'), 'utf8');
+
+  it('fills the shelf photos without importing views/library', () => {
+    // Regression: analytics.ts imported loadBeanThumbnails from ./library.js,
+    // which is not initialised yet when statistics render, so the console threw
+    // "Cannot read properties of undefined (reading 'loadBeanThumbnails')".
+    // The shelf loads its own blob URLs straight from bean-image instead.
+    expect(src).not.toMatch(/from '\.\/library\.js'/);
+    expect(src).not.toContain('loadBeanThumbnails');
+    expect(src).toContain("from '../bean-image.js'");
+    expect(src).toContain("'#beanShelf .lib-shelf-img[data-bean-id]'");
   });
 });
