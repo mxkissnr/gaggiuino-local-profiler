@@ -582,7 +582,7 @@ export function setTrendWindow(n: number): void {
 function _trendPointColor(sc: number): string {
   const token = scoreColor(sc);
   const name = token.startsWith('var(') ? token.slice(4, -1) : '';
-  const fallback = sc >= 90 ? '#5cb98a' : sc >= 70 ? '#d9a441' : '#e05252';
+  const fallback = sc >= 90 ? '#5cb98a' : sc >= 70 ? '#d3a03f' : '#e0705f';
   return themeColor(name, fallback);
 }
 
