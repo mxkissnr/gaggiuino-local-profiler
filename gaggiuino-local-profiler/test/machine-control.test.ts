@@ -156,7 +156,7 @@ describe('machine-control settings toggle (#1324)', () => {
 
     const cb = doc.getElementById('machineControlEnabled');
     cb.checked = false;
-    api.saveMachineControlSettings.mockResolvedValue({ ok: false, status: 500 } as Response);
+    api.saveMachineControlSettings.mockResolvedValue({ ok: false, status: 500 });
     await saveMachineControlSetting();
 
     expect(cb.checked).toBe(true);
