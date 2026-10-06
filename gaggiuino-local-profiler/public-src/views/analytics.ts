@@ -3,7 +3,7 @@ import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName } from '../constants.js';
-import { esc, html, joinHtml, scoreClass, chartColors, themeColor, onThemeChange } from '../utils.js';
+import { esc, html, joinHtml, scoreClass, scoreColor, chartColors, themeColor, onThemeChange } from '../utils.js';
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
@@ -145,6 +145,7 @@ export function initAnalytics() {
   }
   buildSummaryKpis();
   buildTrendChart();
+  buildRecipeSummary();
   buildCalendar();
   buildPersonalBests();
   buildBeanStats();
@@ -572,6 +573,56 @@ export function setTrendWindow(n: number): void {
   document.getElementById('trendBtn90')!.classList.toggle('active', n === 90);
   document.getElementById('trendBtnAll')!.classList.toggle('active', n === 0);
   buildTrendChart();
+  buildRecipeSummary();
+}
+
+// Resolved point colour on the shared score scale: scoreColor() names the
+// theme token (--ok / --warn / --err) and themeColor() resolves it to a value
+// Chart.js can paint. Fallbacks match the tokens' light-theme hexes.
+function _trendPointColor(sc: number): string {
+  const token = scoreColor(sc);
+  const name = token.startsWith('var(') ? token.slice(4, -1) : '';
+  const fallback = sc >= 90 ? '#5cb98a' : sc >= 70 ? '#d9a441' : '#e05252';
+  return themeColor(name, fallback);
+}
+
+// Y-axis floor for the score trend: 5 below the lowest shown score, rounded
+// down to a multiple of 5, never below 0 (empty window stays at 0).
+export function _trendAxisMin(scores: number[]): number {
+  if (scores.length === 0) return 0;
+  return Math.max(0, Math.floor((Math.min(...scores) - 5) / 5) * 5);
+}
+
+// Point popover for the score trend: the shot's recipe (score, brew time,
+// dose -> yield with ratio, grind, profile) plus a shortcut to the shot.
+function _openTrendShotDetail(shot: ShotRow, anchor: HTMLElement | null): void {
+  const locale = localeFor(S.currentLang);
+  const sc = window.calcShotScore ? window.calcShotScore(shot) : null;
+  const dose = shot.annotation?.dose;
+  const weight = shot.weight;
+  const yieldG = typeof weight === 'number' && weight > 0 ? weight / 10 : null;
+  const grind = shot.annotation?.grindSetting;
+  const profile = shot.profile?.name || shot.profileName || '';
+  const row = (lbl: string, val: Html): Html =>
+    html`<div class="bests-row"><span class="bests-lbl">${esc(lbl)}</span><span class="bests-val">${val}</span></div>`;
+  const scHtml = sc !== null ? html`<span class="${esc(scoreClass(sc))}">${esc(sc)}</span>` : esc('—');
+  const recipeVal = dose != null && yieldG !== null
+    ? html`${esc(Number(dose).toFixed(1))} g → ${esc(yieldG.toFixed(1))} g${Number(dose) > 0 ? html` · 1:${esc((yieldG / Number(dose)).toFixed(1))}` : esc('')}`
+    : esc('—');
+  const durSecs = typeof shot.duration === 'number' && shot.duration > 0 ? Math.round(shot.duration / 10) : null;
+  openDetailSheet({
+    title: new Date(shot.timestamp * 1000).toLocaleString(locale, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    sub: shot.annotation?.coffee || profile,
+    body: html`<div class="detail-rows">
+      ${row(t('sort_score'), scHtml)}
+      ${row(t('analytics_recipe_time'), esc(durSecs !== null ? `${durSecs} s` : '—'))}
+      ${row(t('recipe_dose_yield'), recipeVal)}
+      ${row(t('ann_grind_setting'), esc(grind != null && grind !== '' ? String(grind) : '—'))}
+      ${row(t('meta_profile'), esc(profile || '—'))}
+      <div class="bests-row"><span class="bests-lbl"></span><span class="bests-val"><button type="button" class="bests-link" data-action="goto-shot" data-id="${esc(shot.id)}">→</button></span></div>
+    </div>`,
+    anchor,
+  });
 }
 
 export function buildTrendChart() {
@@ -593,23 +644,26 @@ export function buildTrendChart() {
     return;
   }
 
-  const locale   = localeFor(S.currentLang);
-  const labels   = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
+  const locale    = localeFor(S.currentLang);
+  const labels    = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
   const scoreData = src.map(s => window.calcShotScore!(s) ?? 0);
-  const maData    = scoreData.map((_, i) => {
-    const sl = scoreData.slice(Math.max(0, i - 4), i + 1);
-    return Math.round(sl.reduce((a, b) => a + b, 0) / sl.length);
-  });
+  const avg       = Math.round(scoreData.reduce((a, b) => a + b, 0) / scoreData.length);
+  const pointColors = scoreData.map(_trendPointColor);
+  const pointRadii  = scoreData.map((sc, i) => (i === scoreData.length - 1 ? 6 : 4) + (sc >= 100 ? 1 : 0));
 
   chartRegistry.set('trendChart', new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [
-        { label: 'Score', data: scoreData, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.12)',
-          pointRadius: 4, pointHoverRadius: 6, fill: true, tension: 0.3, order: 2 },
-        { label: 'Ø 5-Shot', data: maData, borderColor: 'rgba(255,255,255,.35)',
-          pointRadius: 0, fill: false, tension: 0.5, borderWidth: 2, order: 1 }
+        { label: 'Score', data: scoreData, borderColor: themeColor('--gray-600', '#52525b'),
+          pointBackgroundColor: pointColors,
+          pointBorderColor: scoreData.map(sc => sc >= 100 ? '#f3e1c0' : _trendPointColor(sc)),
+          pointBorderWidth: scoreData.map(sc => sc >= 100 ? 2 : 1),
+          pointRadius: pointRadii, pointHoverRadius: 7, fill: false, tension: 0.3, order: 2 },
+        { label: t('analytics_trend_avg', avg), data: scoreData.map(() => avg),
+          borderColor: themeColor('--gray-500', '#a1a1aa'), borderDash: [4, 4],
+          pointRadius: 0, fill: false, borderWidth: 2, order: 1 }
       ]
     },
     options: {
@@ -617,18 +671,80 @@ export function buildTrendChart() {
       onClick: (_: unknown, elements: { index: number }[]) => {
         const first = elements[0];
         const shot = first ? src[first.index] : undefined;
-        if (shot && window.goToShot) window.goToShot(shot.id);
+        if (shot) _openTrendShotDetail(shot, ctx);
       },
       plugins: {
         legend: { labels: { color: C.tick, font: { size: 11 } } },
-        tooltip: { callbacks: { footer: () => '↗ Shot anzeigen' } },
       },
       scales: {
         x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, maxRotation: 45 }, grid: { color: themeColor('--gray-700', '#2b2f33') } },
-        y: { min: 0, max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
+        y: { min: _trendAxisMin(scoreData), max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }
   } satisfies ChartConfiguration<'line'>));
+}
+
+// ── Your recipe on average ────────────────────────────────────────────────
+export interface RecipeSummary {
+  dose: number | null;
+  yield: number | null;
+  ratio: number | null;
+  time: number | null;
+  grindMin: number | null;
+  grindMax: number | null;
+}
+
+// Pure averages over the shots the trend window shows (#1467). Yield is the
+// list row's weight in tenths of a gram (the /10 the rest of analytics
+// applies); grind goes through _parseGrindNum so string and number settings
+// mix. Any field is null when no shot carries it.
+export function computeRecipeSummary(shots: ShotRow[]): RecipeSummary {
+  const doses: number[] = [], yields: number[] = [], times: number[] = [];
+  let grindMin: number | null = null, grindMax: number | null = null;
+  for (const s of shots) {
+    const dose = s.annotation?.dose;
+    if (typeof dose === 'number' && dose > 0) doses.push(dose);
+    const weight = s.weight;
+    if (typeof weight === 'number' && weight > 0) yields.push(weight / 10);
+    const dur = s.duration;
+    if (typeof dur === 'number' && dur > 0) times.push(dur / 10);
+    const g = _parseGrindNum(s.annotation?.grindSetting);
+    if (g !== null) {
+      grindMin = grindMin === null ? g : Math.min(grindMin, g);
+      grindMax = grindMax === null ? g : Math.max(grindMax, g);
+    }
+  }
+  const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const dose = doses.length ? Math.round(mean(doses) * 10) / 10 : null;
+  const yieldG = yields.length ? Math.round(mean(yields) * 10) / 10 : null;
+  const ratio = dose !== null && dose > 0 && yieldG !== null ? Math.round((yieldG / dose) * 10) / 10 : null;
+  const time = times.length ? Math.round(mean(times)) : null;
+  return { dose, yield: yieldG, ratio, time, grindMin, grindMax };
+}
+
+export function buildRecipeSummary() {
+  const el = document.getElementById('recipeRows');
+  if (!el) return;
+  const all = _shots().filter(s => window.calcShotScore ? window.calcShotScore(s) !== null : false);
+  const src = S.trendWindow > 0 ? all.slice(-S.trendWindow) : all;
+  const r = computeRecipeSummary(src);
+
+  const rows: Html[] = [];
+  if (r.dose !== null && r.yield !== null) {
+    const ratioPart = r.ratio !== null ? ` · 1:${r.ratio.toFixed(1)}` : '';
+    rows.push(html`<div class="bests-row"><span class="bests-lbl">${tHtml('analytics_recipe_recipe')}</span><span class="bests-val">${esc(r.dose.toFixed(1))} g → ${esc(r.yield.toFixed(1))} g${esc(ratioPart)}</span></div>`);
+  }
+  if (r.time !== null) {
+    rows.push(html`<div class="bests-row"><span class="bests-lbl">${tHtml('analytics_recipe_time')}</span><span class="bests-val">${esc(r.time)} s</span></div>`);
+  }
+  if (r.grindMin !== null) {
+    const label = r.grindMin === r.grindMax ? String(r.grindMin) : `${r.grindMin}–${r.grindMax}`;
+    rows.push(html`<div class="bests-row"><span class="bests-lbl">${tHtml('analytics_recipe_grind')}</span><span class="bests-val">${esc(label)}</span></div>`);
+  }
+
+  const card = document.getElementById('recipeCard');
+  if (card) card.style.display = rows.length ? '' : 'none';
+  el.innerHTML = rows.length ? html`<div class="bests-list">${joinHtml(rows)}</div>` : html``;
 }
 
 export function buildCalendar() {
