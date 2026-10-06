@@ -133,12 +133,6 @@ let _hlNode: string | null = null; // node highlighted from the legend, or null
 // so a late-arriving chunk never calls echarts.init() on a stale container.
 let _echartsPromise: Promise<typeof import('echarts')> | null = null;
 let _renderReqToken = 0;
-// #1374: the exact small wheel the open transition grew from. The close only
-// runs the reverse transition while that same element is still in the sheet,
-// so a sheet re-render (which replaces the node) falls back to a direct close
-// instead of naming a detached element.
-let _wheelGrowFromEl: HTMLElement | null = null;
-
 // #1350: a short, calm entry animation — skipped entirely when the user has
 // asked for reduced motion.
 function wheelMotionOk(): boolean {
@@ -312,7 +306,6 @@ export function disposeFlavorWheel(): void {
   _rootId = null;
   _breadcrumbEl = null;
   _hlNode = null;
-  _wheelGrowFromEl = null;
 }
 
 // ── Modal wiring ─────────────────────────────────────────────────────────
@@ -341,30 +334,40 @@ function renderLegend(flavors: unknown, lang: FlavorLang): Html {
   return joinHtml(rows);
 }
 
-// ── Shared-element growth (#1374) ─────────────────────────────────────────
+// ── Open / close fade (#1482) ─────────────────────────────────────────────
 
-interface WheelViewTransition {
-  updateCallbackDone?: Promise<void>;
-  finished?: Promise<void>;
+// The wheel opens and closes without a view transition — the same decision as
+// the bean sheet (#1452/#1455). A view transition replaces the whole page with
+// snapshots for its duration, and the named `flavor-wheel` group stretched a
+// snapshot of the small sheet wheel to full screen while the real wheel was
+// still empty, so on a phone it still read as a full refresh. Instead the
+// overlay fades in on open and out on close (see the `fw-modal-*` keyframes in
+// style.css); only the close's final `display: none` waits for the 140ms fade.
+let _closeTimer: ReturnType<typeof setTimeout> | null = null;
+let _closingModal: HTMLElement | null = null;
+
+function onWheelCloseEnd(e: Event): void {
+  if (!_closingModal || e.target !== _closingModal) return;
+  finishWheelClose();
 }
 
-// The wheel grows out of the small wheel only when View Transitions are
-// available, the user has not asked for reduced motion, and there is a small
-// wheel to grow from. Otherwise it opens and closes directly.
-export function shouldGrowWheelFrom(hasViewTransition: boolean, motionOk: boolean, fromSmallWheel: boolean): boolean {
-  return hasViewTransition && motionOk && fromSmallWheel;
+// Drops the closing class/listeners a previous close left behind, so a
+// re-open during the fade cancels it cleanly instead of racing it.
+function cancelWheelClose(modal: HTMLElement): void {
+  if (_closingModal !== modal) return;
+  if (_closeTimer !== null) { clearTimeout(_closeTimer); _closeTimer = null; }
+  modal.removeEventListener('animationend', onWheelCloseEnd);
+  modal.removeEventListener('transitionend', onWheelCloseEnd);
+  modal.classList.remove('is-closing');
+  _closingModal = null;
 }
 
-function startWheelViewTransition(cb: () => void): WheelViewTransition | null {
-  if (typeof document === 'undefined') return null;
-  const doc = document as unknown as { startViewTransition?: (cb: () => void) => WheelViewTransition };
-  return typeof doc.startViewTransition === 'function' ? doc.startViewTransition(cb) : null;
-}
-
-function setWheelTransitionName(el: HTMLElement | null, on: boolean): void {
-  if (!el) return;
-  if (on) el.style.setProperty('view-transition-name', 'flavor-wheel');
-  else el.style.removeProperty('view-transition-name');
+function finishWheelClose(): void {
+  const modal = _closingModal;
+  if (!modal) return;
+  cancelWheelClose(modal);
+  modal.style.display = 'none';
+  disposeFlavorWheel();
 }
 
 export async function openFlavorWheel(beanId: unknown): Promise<void> {
@@ -379,6 +382,9 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   // context. The click delegation (document.body) and the backdrop handler
   // follow the element.
   if (document.body && modal.parentElement !== document.body) document.body.appendChild(modal);
+  // A previous close may still be fading the overlay out; take it over so the
+  // reopen does not race the pending `display: none`.
+  cancelWheelClose(modal);
 
   (document.getElementById('flavorWheelTitle') as HTMLElement).textContent = bean.name as string;
   // #1350: the bean's photo now sits in the wheel's centre (tapping it zooms
@@ -414,37 +420,10 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_loading')}</p>`;
   if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
 
-  const canvasWrap = modal.querySelector<HTMLElement>('.fw-canvas-wrap');
-  const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
-  const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
-  const grow = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!smallWheel && !!canvasWrap);
-  // Remember the exact node the growth snapshots so the close can tell a
-  // re-rendered sheet (new node) from the original.
-  _wheelGrowFromEl = grow ? smallWheel : null;
-
-  const showModal = (): void => {
-    setWheelTransitionName(smallWheel, false);
-    setWheelTransitionName(canvasWrap, true);
-    modal.style.display = 'flex';
-  };
-
-  if (grow) {
-    // Grow out of the small wheel: the old snapshot is the sheet's wheel, the
-    // new one the full-screen modal.
-    setWheelTransitionName(canvasWrap, false); // a previous close may have left the name on the modal
-    setWheelTransitionName(smallWheel, true);
-    const transition = startWheelViewTransition(showModal);
-    if (transition) {
-      // Render only after the DOM update has been snapshotted, so the echarts
-      // chunk download never blocks the growth.
-      if (transition.updateCallbackDone) await transition.updateCallbackDone;
-      else showModal();
-    } else {
-      showModal();
-    }
-  } else {
-    showModal();
-  }
+  // Show the overlay synchronously — the fade-in is pure CSS (see the
+  // `fw-modal-in`/`fw-panel-in` keyframes), so there is no view transition to
+  // wait on and the modal is visible on this tick.
+  modal.style.display = 'flex';
 
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
     container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_unavailable')}</p>`;
@@ -455,37 +434,20 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
 export function closeFlavorWheel(): void {
   const modal = document.getElementById('flavorWheelModal');
   if (!modal) { disposeFlavorWheel(); return; }
-  const canvasWrap = modal.querySelector<HTMLElement>('.fw-canvas-wrap');
-  const smallWheel = document.querySelector<HTMLElement>('#beanSheet .lib-aroma-wheel');
-  const hasViewTransition = typeof (document as unknown as { startViewTransition?: unknown }).startViewTransition === 'function';
-  // Only run the reverse transition from the very element the open
-  // snapshotted; if the sheet was re-rendered that node is gone, so fall back
-  // to a direct close instead of naming a detached/different element.
-  const fromEl = _wheelGrowFromEl;
-  _wheelGrowFromEl = null;
-  const shrink = shouldGrowWheelFrom(hasViewTransition, wheelMotionOk(), !!canvasWrap && smallWheel !== null && smallWheel === fromEl);
-
-  const hideModal = (): void => {
-    setWheelTransitionName(canvasWrap, false);
-    setWheelTransitionName(smallWheel, true);
-    modal.style.display = 'none';
-  };
-
-  if (shrink) {
-    setWheelTransitionName(canvasWrap, true);
-    const transition = startWheelViewTransition(() => { hideModal(); disposeFlavorWheel(); });
-    if (transition) {
-      const clearNames = (): void => { setWheelTransitionName(canvasWrap, false); setWheelTransitionName(smallWheel, false); };
-      const done = transition.finished ?? transition.updateCallbackDone;
-      if (done) void done.then(clearNames, clearNames);
-      else clearNames();
-    } else {
-      hideModal();
-      disposeFlavorWheel();
-    }
-  } else {
-    setWheelTransitionName(canvasWrap, false);
+  cancelWheelClose(modal);
+  // No motion permission: hide at once instead of waiting out a fade the user
+  // will never see.
+  if (!wheelMotionOk()) {
     modal.style.display = 'none';
     disposeFlavorWheel();
+    return;
   }
+  _closingModal = modal;
+  modal.addEventListener('animationend', onWheelCloseEnd);
+  modal.addEventListener('transitionend', onWheelCloseEnd);
+  // `is-closing` switches the overlay to the 140ms fade-out (style.css). Hide
+  // and tear down the chart once it finishes; the timeout is a fallback in case
+  // the animation event never fires.
+  modal.classList.add('is-closing');
+  _closeTimer = setTimeout(finishWheelClose, 140 + 60);
 }
