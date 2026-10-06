@@ -1,7 +1,8 @@
 // Shared detail popover (#1467): one overlay for small title/sub/body details,
-// first used by the coffee-year day cells and reused by later statistics
-// slices. On phones it is a bottom sheet; from 900px up, when an anchor is
-// given, it becomes a popover floating next to that anchor.
+// first used by the coffee-year day cells and reused by the score-trend point
+// popover (and later statistics slices). On phones it is a bottom sheet; from
+// 900px up, when an anchor is given, it becomes a popover floating next to
+// that anchor.
 
 import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';
@@ -68,6 +69,10 @@ function _positionPop(sheet: HTMLElement, anchor: HTMLElement): void {
   sheet.style.top = `${Math.round(top)}px`;
 }
 
+// Opens the overlay, replacing its content in place on a second call. `anchor`
+// is the element the desktop popover floats next to — a coffee-year day cell,
+// or the trend chart's canvas for a shot point — and is ignored on phone
+// widths, where the overlay is always a bottom sheet.
 export function openDetailSheet(opts: DetailSheetOptions): void {
   const host = _host();
   if (!host) return;
