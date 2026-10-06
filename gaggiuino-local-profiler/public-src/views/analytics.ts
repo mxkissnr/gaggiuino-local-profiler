@@ -897,6 +897,11 @@ export function buildTrendChart() {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        // The mean line and the band have no points to hit, so the default
+        // nearest/intersect test would almost never fire; hit by index across
+        // the day's datasets instead (elements[0] may be a band dataset, but
+        // its index is still the day).
+        interaction: { mode: 'index', intersect: false },
         onClick: (_: unknown, elements: { index: number; element?: { x?: number; y?: number } }[]) => {
           const first = elements[0];
           if (!first) return;
@@ -1141,20 +1146,25 @@ const CAL_PHONE_WEEKS = 22;
 // Weekday column + the gap after it + the 21 gaps between the 22 week columns.
 const CAL_PHONE_GUTTER = 26 + 3 + (CAL_PHONE_WEEKS - 1) * 3;
 
-function _sizeCalendarCells(): void {
-  const el = document.getElementById('shotCalendar');
-  if (!el) return;
+function _sizeCalendarCells(el: HTMLElement): void {
   if (window.innerWidth >= 900) el.style.removeProperty('--cal-cell');
   else el.style.setProperty('--cal-cell', `${Math.max(6, Math.floor((el.clientWidth - CAL_PHONE_GUTTER) / CAL_PHONE_WEEKS))}px`);
-  // Newest week sits at the right edge; keep it visible across resizes too.
-  el.scrollLeft = el.scrollWidth;
+}
+
+// A mobile browser's URL bar showing or hiding fires `resize` while the viewer
+// is mid-scroll, so re-measure the cells but leave the horizontal position
+// alone — snapping back to the newest week there would yank the grid out from
+// under them. Only the initial render pins to the newest week.
+function _onCalendarResize(): void {
+  const el = document.getElementById('shotCalendar');
+  if (el) _sizeCalendarCells(el);
 }
 
 let _calResizeBound = false;
 function _bindCalendarResize(): void {
   if (_calResizeBound) return;
   _calResizeBound = true;
-  window.addEventListener('resize', _sizeCalendarCells);
+  window.addEventListener('resize', _onCalendarResize);
 }
 
 export function _renderCalendar() {
@@ -1253,9 +1263,11 @@ export function _renderCalendar() {
   }
 
   el.innerHTML = html`<div class="cal-months">${joinHtml(monthItems)}</div><div class="cal-grid">${joinHtml(cells)}</div>`;
-  // Size the phone cells to the wrapper and pin it to the newest week.
+  // Size the phone cells to the wrapper, then pin to the newest week. Only this
+  // initial render scrolls; resize keeps whatever position the viewer has.
   _bindCalendarResize();
-  _sizeCalendarCells();
+  _sizeCalendarCells(el);
+  el.scrollLeft = el.scrollWidth;
 
   const streaksEl = document.getElementById('calStreaks');
   if (streaksEl) {
