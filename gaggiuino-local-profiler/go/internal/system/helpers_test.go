@@ -63,6 +63,16 @@ type fakeAdapter struct {
 	profileBodies map[string]json.RawMessage
 	profileErrs   map[string]error
 
+	// #1454: GetSettings("system") is how the live poll reads a Gaggiuino's
+	// firmware-set machine name, so this is a real (opt-in) implementation
+	// rather than the notImplemented panic every other proxy method uses.
+	// getSettingsBody defaults to an empty object when unset.
+	getSettingsBody  json.RawMessage
+	getSettingsErr   error
+	getSettingsFn    func(context.Context, *machines.Machine, string) (json.RawMessage, error)
+	getSettingsCalls int
+	getSettingsCat   string
+
 	// Opt-in stubs for the profile methods the sync sweep calls — nil means
 	// "this test never expects a call", same notImplemented-panics
 	// convention as every other unset field here (profile_sync_test.go).
@@ -142,8 +152,35 @@ func (f *fakeAdapter) SelectProfile(context.Context, *machines.Machine, string) 
 	return f.notImplemented("SelectProfile")
 }
 func (f *fakeAdapter) Capabilities() machines.Capabilities { return machines.Capabilities{} }
-func (f *fakeAdapter) GetSettings(context.Context, *machines.Machine, string) (json.RawMessage, error) {
-	return nil, f.notImplemented("GetSettings")
+func (f *fakeAdapter) GetSettings(ctx context.Context, m *machines.Machine, category string) (json.RawMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getSettingsCalls++
+	f.getSettingsCat = category
+	if f.getSettingsFn != nil {
+		return f.getSettingsFn(ctx, m, category)
+	}
+	if f.getSettingsErr != nil {
+		return nil, f.getSettingsErr
+	}
+	if f.getSettingsBody == nil {
+		return json.RawMessage("{}"), nil
+	}
+	return f.getSettingsBody, nil
+}
+
+// setSettings configures what GetSettings returns for every category (#1454).
+func (f *fakeAdapter) setSettings(body json.RawMessage, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getSettingsBody, f.getSettingsErr = body, err
+}
+
+// settingsCalls reports how many times GetSettings was called (#1454).
+func (f *fakeAdapter) settingsCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.getSettingsCalls
 }
 func (f *fakeAdapter) UpdateSettings(context.Context, *machines.Machine, string, json.RawMessage) (json.RawMessage, error) {
 	return nil, f.notImplemented("UpdateSettings")
