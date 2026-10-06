@@ -20,12 +20,13 @@ import (
 
 // LiveTransport is the WS-vs-MQTT dispatch seam (#608) — *mqtt.Transport
 // satisfies it. Each method's second return is true when MQTT is the active
-// transport for this machine (only ever the default machine, and only when the
-// Settings toggle is on MQTT with a broker configured): the poller then uses
-// the returned value (possibly nil, if the MQTT cache is stale/empty) instead
-// of the adapter's WS session. An interface (not a direct internal/mqtt
-// import) keeps this central package decoupled from the transport
-// implementation, the same pattern AdapterProvider already follows here.
+// transport for this machine (only ever a default Gaggiuino machine, #1447,
+// and only when the Settings toggle is on MQTT with a broker configured): the
+// poller then uses the returned value (possibly nil, if the MQTT cache is
+// stale/empty) instead of the adapter's WS session. An interface (not a
+// direct internal/mqtt import) keeps this central package decoupled from the
+// transport implementation, the same pattern AdapterProvider already
+// follows here.
 type LiveTransport interface {
 	SensorSnapshot(isDefaultMachine bool) (*proto.SensorStateSnapshotDto, bool)
 	SystemState(isDefaultMachine bool) (*proto.SystemStateDto, bool)
@@ -624,19 +625,23 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	// up now instead of waiting for the next scheduled pull.
 	p.maybeCatchUpAfterRecovery(prevReachable)
 
-	// #608: MQTT for the default machine when the Settings toggle selects it, the
-	// adapter's WS session otherwise. When MQTT is the active transport its getter
-	// is used even if it returns nil (a stale/empty MQTT cache), never falling
-	// through to open a WS session.
+	// #608/#1447: MQTT for a Gaggiuino default machine when the Settings toggle
+	// selects it, the adapter's WS session otherwise. The Gaggiuino firmware's
+	// MQTT topics only ever describe a Gaggiuino, so any other machine type
+	// (e.g. a GaggiMate default) reads live data from its own adapter instead
+	// of being handed the Gaggiuino snapshot. When MQTT is the active transport
+	// its getter is used even if it returns nil (a stale/empty MQTT cache),
+	// never falling through to open a WS session.
+	mqttEligible := machine.IsDefault && machine.Type == "gaggiuino"
 	var sensorSnap *proto.SensorStateSnapshotDto
 	var sysState *proto.SystemStateDto
 	if p.liveTransport != nil {
-		if snap, mqttActive := p.liveTransport.SensorSnapshot(machine.IsDefault); mqttActive {
+		if snap, mqttActive := p.liveTransport.SensorSnapshot(mqttEligible); mqttActive {
 			sensorSnap = snap
 		} else {
 			sensorSnap, _ = adapter.GetLiveSensorSnapshot(ctx, machine)
 		}
-		if sys, mqttActive := p.liveTransport.SystemState(machine.IsDefault); mqttActive {
+		if sys, mqttActive := p.liveTransport.SystemState(mqttEligible); mqttActive {
 			sysState = sys
 		} else {
 			sysState, _ = adapter.GetLiveSystemState(ctx, machine)

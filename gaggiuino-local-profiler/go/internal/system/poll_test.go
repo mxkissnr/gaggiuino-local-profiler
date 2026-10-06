@@ -424,3 +424,94 @@ func TestStopLivePolling_ForcesUnreachableFalse(t *testing.T) {
 		t.Fatalf("MachineReachable = %v, want false after stopLivePolling", ld.MachineReachable)
 	}
 }
+
+// fakeLiveTransport is the #1447 regression seam: it records the
+// isDefaultMachine argument each getter receives and echoes that argument back
+// as the "MQTT is active" bool, so a poller that asks for MQTT on a
+// non-Gaggiuino default is caught overriding that machine's own live data.
+type fakeLiveTransport struct {
+	mu      sync.Mutex
+	snapArg []bool
+	sysArg  []bool
+}
+
+func (f *fakeLiveTransport) SensorSnapshot(isDefaultMachine bool) (*proto.SensorStateSnapshotDto, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.snapArg = append(f.snapArg, isDefaultMachine)
+	return &proto.SensorStateSnapshotDto{Temperature: 61.5, BrewActive: false}, isDefaultMachine
+}
+
+func (f *fakeLiveTransport) SystemState(isDefaultMachine bool) (*proto.SystemStateDto, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sysArg = append(f.sysArg, isDefaultMachine)
+	return nil, isDefaultMachine
+}
+
+func (f *fakeLiveTransport) args() (snap, sys []bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]bool(nil), f.snapArg...), append([]bool(nil), f.sysArg...)
+}
+
+// TestPollViaGaggiuinoStatus_MQTTOnlyForGaggiuinoDefault is the #1447
+// regression test: the MQTT live-data transport must only be consulted for a
+// default Gaggiuino. A GaggiMate default reads its own adapter's live data
+// (temperature 68.4, brewing) instead of the Gaggiuino MQTT snapshot (61.5,
+// not brewing), while a Gaggiuino default still uses that snapshot.
+func TestPollViaGaggiuinoStatus_MQTTOnlyForGaggiuinoDefault(t *testing.T) {
+	cases := []struct {
+		name        string
+		machineType string
+		wantMQTTArg bool
+		wantLive    bool
+		wantTemp    float64
+	}{
+		{
+			name:        "gaggimate default reads its own adapter",
+			machineType: "gaggimate",
+			wantMQTTArg: false,
+			wantLive:    true,
+			wantTemp:    68.4,
+		},
+		{
+			name:        "gaggiuino default uses the MQTT snapshot",
+			machineType: "gaggiuino",
+			wantMQTTArg: true,
+			wantLive:    false,
+			wantTemp:    61.5,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeAdapter{}
+			fake.setStatus(okStatus(t, `{}`, 68.4, 94, 9, 0, true, "x", 1), nil)
+			p, sqlDB := newTestPoller(t, fake)
+
+			registry := machines.NewRegistry(sqlDB)
+			if _, err := registry.UpdateMachine(1, machines.MachineInput{Type: &tc.machineType}, nil); err != nil {
+				t.Fatalf("UpdateMachine(type=%s): %v", tc.machineType, err)
+			}
+			lt := &fakeLiveTransport{}
+			p.SetLiveTransport(lt)
+
+			p.pollViaGaggiuinoStatus(context.Background())
+
+			snapArgs, sysArgs := lt.args()
+			if len(snapArgs) != 1 || snapArgs[0] != tc.wantMQTTArg {
+				t.Fatalf("SensorSnapshot called with %v, want [%v]", snapArgs, tc.wantMQTTArg)
+			}
+			if len(sysArgs) != 1 || sysArgs[0] != tc.wantMQTTArg {
+				t.Fatalf("SystemState called with %v, want [%v]", sysArgs, tc.wantMQTTArg)
+			}
+			ld := p.LiveData()
+			if ld.IsLive != tc.wantLive {
+				t.Errorf("IsLive = %v, want %v", ld.IsLive, tc.wantLive)
+			}
+			if ld.Temperature == nil || *ld.Temperature != tc.wantTemp {
+				t.Errorf("Temperature = %v, want %v", ld.Temperature, tc.wantTemp)
+			}
+		})
+	}
+}
