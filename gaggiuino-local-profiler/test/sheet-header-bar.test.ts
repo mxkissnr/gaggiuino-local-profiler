@@ -366,4 +366,17 @@ describe('bean form sheet header bar save (#1489)', () => {
     save!.dispatch('click');
     expect(doc.activeElement).toBe(name);
   });
+
+  it('keeps the create-mode save choices reachable', () => {
+    setupHome();
+    library.openBeanForm();
+
+    const section = doc.body.querySelector('#beanFormSheet')?.querySelector('.lib-form-sheet') ?? null;
+    expect(section).not.toBeNull();
+    // Creating: the action row stays visible (not the edit-mode .is-editing
+    // state), so both "save without" and "save and add a bag" remain reachable.
+    expect(section!.classList.contains('is-editing')).toBe(false);
+    expect(doc.getElementById('saveBeanNoBagBtn')!.style.display).not.toBe('none');
+    expect(doc.getElementById('saveBeanAddBagBtn')!.style.display).not.toBe('none');
+  });
 });

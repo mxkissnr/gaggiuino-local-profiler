@@ -107,13 +107,15 @@ function _beanFormSheetHost(): HTMLElement | null {
   head.appendChild(title);
   const headActions = document.createElement('div');
   headActions.className = 'lib-sheet-bar-actions';
-  // #1489: the bar's Save runs the same submit as the form's own save button.
+  // #1489: the bar's Save follows the form's mode — editing saves the bean,
+  // creating saves without a bag (the "save and add a bag" choice stays in the
+  // still-visible create action row).
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'lib-sheet-save';
   save.setAttribute('aria-label', t('lib_save'));
   save.textContent = t('lib_save');
-  save.addEventListener('click', () => { void saveBean(); });
+  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanNoBag()); });
   headActions.appendChild(save);
   head.appendChild(headActions);
   section.appendChild(head);
@@ -221,6 +223,9 @@ function _showBeanFormSheet(): void {
   _rememberFormHome();
   const isEdit = S.beanEditId != null;
   if (_formSheetTitle) _formSheetTitle.textContent = t(isEdit ? 'lib_form_sheet_edit' : 'lib_form_sheet_new');
+  // #1489: hide the form's own action row only when editing; creating keeps it
+  // so both "save without / with a bag" choices stay reachable.
+  _formSheetSection?.classList?.toggle('is-editing', isEdit);
   _hideFormConfirm();
   const form = document.getElementById('beanAddForm');
   if (form) {
