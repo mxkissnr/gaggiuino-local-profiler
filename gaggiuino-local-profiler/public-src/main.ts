@@ -78,7 +78,7 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
 import { initAnalytics, buildCalendar, buildTrendChart, buildBeanShelf, buildProfileChart, _renderCalendar,
-         getAnalyticsFilter, setAnalyticsFilter,
+         getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold,
          openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail, setDialinProgressionBean,
          openFactDetail, shuffleFacts } from './views/analytics.js';
 
@@ -898,6 +898,10 @@ document.addEventListener('DOMContentLoaded', () => {
     syncAnalyticsRangeChips(days);
     setAnalyticsFilter({ days });
   }));
+  // #1467: the "More insights" fold starts closed, remembers the viewer's
+  // choice and only builds its charts once opened (Chart.js cannot measure a
+  // hidden canvas).
+  initAnalyticsMoreFold();
   document.getElementById('dialinCount')!.addEventListener('change', e => {
     localStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
     void renderDialin();

@@ -264,9 +264,11 @@ function _rebuildMore(): void {
   buildDialinProgression();
 }
 
-// Restore the remembered fold state once, then run its builders on every open
-// and keep the section counter in the viewer's language.
-function _wireMoreFold(): void {
+// Restore the remembered fold state, wire its toggle and keep the grey section
+// counter in the viewer's language. main.ts calls this with the rest of the
+// analytics toolbar wiring; initAnalytics() calls it again (it is idempotent)
+// so the counter follows a language switch.
+export function initAnalyticsMoreFold(): void {
   const fold = _moreFold();
   if (!fold) return;
   if (!_moreWired) {
@@ -274,7 +276,9 @@ function _wireMoreFold(): void {
     try { fold.open = localStorage.getItem(ANALYTICS_MORE_KEY) === '1'; } catch { /* private mode */ }
     fold.addEventListener('toggle', () => {
       _saveMoreOpen(fold.open);
-      _rebuildMore();
+      // Only build while the analytics view is on screen: a programmatic open
+      // at startup must not measure hidden canvases.
+      if (fold.open && S.currentMode === 'analytics') _rebuildMore();
     });
   }
   _updateMoreCount();
@@ -289,7 +293,7 @@ export function initAnalytics() {
   if (!S.allShotsLoaded) {
     window.onAllShotMetaLoaded = () => { window.onAllShotMetaLoaded = null; initAnalytics(); };
   }
-  _wireMoreFold();
+  initAnalyticsMoreFold();
   rebuildAnalyticsPage();
   buildCalendar();
   buildFacts();
