@@ -614,8 +614,9 @@ func (p *Poller) stopLivePolling() {
 // adapter's latest status (#1498). GaggiMate reports m == 0 (standby) while
 // still reachable, so live polling keeps running in standby; this flag is what
 // tells buildPreheatResponse the machine is off and restarts the preheat clock
-// when it wakes. Entering standby mirrors stopLivePolling's bookkeeping
-// (switch-off time, cleared notify flag); leaving it mirrors startLivePolling's
+// when it wakes. Entering standby mirrors stopLivePolling's switch-off
+// bookkeeping (switch-off time, closed preheat run, cleared stability flag and
+// temp history, cleared notify flag); leaving it mirrors startLivePolling's
 // fresh-session path unless the boiler is still warm.
 func (p *Poller) applyStandbyTransition(now int64, standby bool) {
 	snap := p.runtime.Get()
@@ -624,7 +625,14 @@ func (p *Poller) applyStandbyTransition(now int64, standby bool) {
 	}
 	p.runtime.SetStandby(standby)
 	if standby {
+		// Mirror stopLivePolling's switch-off bookkeeping: end the running
+		// preheat, drop a stale stability flag and the temp window, so a later
+		// wake-up cannot report stabilityReady from the pre-standby session and
+		// cold standby readings never land in the open run's samples.
 		p.runtime.SetSwitchOffAt(&now)
+		p.closePreheatRun(now)
+		p.runtime.SetStabilityReady(false)
+		p.runtime.ClearTempHistory()
 		p.state.mu.Lock()
 		p.state.preheatNotifySent = false
 		p.state.mu.Unlock()
@@ -795,7 +803,9 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	snap := p.runtime.Get()
 	if derived.Temperature > 0 && !result.IsBrewing {
 		p.runtime.PushTempHistory(derived.Temperature)
-		p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
+		if !snap.Standby {
+			p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
+		}
 		if !snap.Standby && snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
 			derived.Temperature >= derived.TargetTemperature-2 && p.runtime.IsTempStable() {
 			preheatMs := int64(loadPreheatMinutes()) * 60_000

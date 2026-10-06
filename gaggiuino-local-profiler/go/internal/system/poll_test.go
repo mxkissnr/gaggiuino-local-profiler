@@ -515,3 +515,32 @@ func TestPollViaGaggiuinoStatus_MQTTOnlyForGaggiuinoDefault(t *testing.T) {
 		})
 	}
 }
+
+// TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling pins #1498's sampling
+// guard: while the runtime is in standby the poll tick records no preheat
+// samples, even if a run is somehow still open, so the history never absorbs
+// the cold standby period.
+func TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	// Deliberately open a run and flag standby without the transition's close,
+	// so the sampling gate is what this test exercises (not the closed run).
+	onAt := time.Now().UnixMilli() - 60_000
+	p.openPreheatRun(onAt)
+	p.runtime.SetStandby(true)
+
+	st := okStatus(t, `{"waterLevel":80,"upTime":1234}`, 35.0, 0, 0, 0, false, "", 0)
+	st.Standby = true
+	fake.setStatus(st, nil)
+
+	p.pollViaGaggiuinoStatus(context.Background())
+
+	runs := p.PreheatHistory()
+	if len(runs) == 0 {
+		t.Fatal("expected the pre-opened run to still be present")
+	}
+	if n := len(runs[0].Samples); n != 0 {
+		t.Errorf("preheat run has %d samples, want 0 while in standby", n)
+	}
+}

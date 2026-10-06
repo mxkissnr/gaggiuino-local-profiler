@@ -199,3 +199,47 @@ func TestApplyStandbyTransition_LeaveResetsClock(t *testing.T) {
 		t.Errorf("Elapsed = %d, want ~0 (countdown restarted)", status.Elapsed)
 	}
 }
+
+// TestApplyStandbyTransition_EnterResetsPreheatState pins the standby-entry
+// bookkeeping (#1498): entering standby must mirror the switch-off path — close
+// the open preheat run, clear the stability flag and the temp history — so a
+// wake-up cannot report stabilityReady from a stale pre-standby session and the
+// history is not polluted with cold standby samples.
+func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	onAt := time.Now().UnixMilli() - 5*60_000
+	p.runtime.SetSwitchOnAt(&onAt)
+	p.openPreheatRun(onAt)
+	p.runtime.SetStabilityReady(true)
+	for i := 0; i < tempStableMin; i++ {
+		p.runtime.PushTempHistory(92.0)
+	}
+	if !p.runtime.IsTempStable() {
+		t.Fatal("precondition: temp history should read as stable")
+	}
+
+	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+
+	snap := p.runtime.Get()
+	if !snap.Standby {
+		t.Error("Standby = false, want true after entering standby")
+	}
+	if snap.StabilityReady {
+		t.Error("StabilityReady = true, want false (stale stability must clear on standby)")
+	}
+	if snap.SwitchOffAt == nil {
+		t.Error("SwitchOffAt = nil, want set on entering standby")
+	}
+	if p.runtime.IsTempStable() {
+		t.Error("temp history should be cleared on entering standby")
+	}
+	runs := p.PreheatHistory()
+	if len(runs) == 0 {
+		t.Fatal("expected the open preheat run to be closed and recorded")
+	}
+	if runs[0].SwitchOffAt == nil {
+		t.Error("newest run is still open, want it closed on entering standby")
+	}
+}
