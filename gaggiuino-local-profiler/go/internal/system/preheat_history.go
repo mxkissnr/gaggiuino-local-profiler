@@ -209,6 +209,22 @@ func (p *Poller) closePreheatRun(now int64) {
 	p.preheatHist.finalizeOpenRunLocked(now)
 }
 
+// discardEmptyPreheatRun drops the open run without finalising it when it has
+// no samples yet. A run opened by startLivePolling while the machine was
+// already in standby is ended by the very next standby poll; without this it
+// would leave an empty one-second entry in the history. A run that already has
+// samples is left for closePreheatRun to finalise as usual (which entering
+// standby does right after this). Returns true when an empty run was dropped.
+func (p *Poller) discardEmptyPreheatRun() bool {
+	p.preheatHist.mu.Lock()
+	defer p.preheatHist.mu.Unlock()
+	if run := p.preheatHist.open; run != nil && len(run.Samples) == 0 {
+		p.preheatHist.open = nil
+		return true
+	}
+	return false
+}
+
 // rememberLastReadyBy captures the ready-by pair just before
 // checkReadyByPreheat clears it, for the run that turn-on is about to start.
 func (p *Poller) rememberLastReadyBy(readyByTargetAt, plannedSwitchOnAt *int64) {
