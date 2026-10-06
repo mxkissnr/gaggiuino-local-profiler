@@ -170,8 +170,8 @@ class FakeElement implements ClassHost {
     return { left: 0, top: 0, width: this.width, height: this.height };
   }
 
-  setPointerCapture(): void {}
-  releasePointerCapture(): void {}
+  setPointerCapture(_pointerId: number): void {}
+  releasePointerCapture(_pointerId: number): void {}
 
   remove(): void {
     const parent = this.parent;
@@ -712,7 +712,7 @@ describe('openStickerEditor overlay', () => {
   it('captures every pointer that goes down', async () => {
     const { overlay } = await openReady();
     const viewport = node(overlay, '.sticker-viewport');
-    const capture = vi.spyOn(viewport, 'setPointerCapture');
+    const capture = vi.spyOn(FakeElement.prototype, 'setPointerCapture');
 
     viewport.dispatch('pointerdown', { pointerId: 1, clientX: 40, clientY: 40, isPrimary: true });
     viewport.dispatch('pointerdown', { pointerId: 2, clientX: 100, clientY: 40, isPrimary: false });
