@@ -248,7 +248,7 @@ class FakeDocument {
 interface LibraryModule {
   openBeanForm: (bean?: unknown) => void;
   closeBeanForm: () => void;
-  requestCloseBeanForm: () => void;
+  requestCloseBeanForm: () => boolean;
   discardBeanForm: () => void;
   saveBeanAddBag: () => Promise<void>;
   openNewBagForm: (id: number) => void;
@@ -369,7 +369,8 @@ describe('bean form sheet (#1349)', () => {
     expect(confirm?.getAttribute('hidden')).toBe('');
 
     form.dispatch('input');
-    library.requestCloseBeanForm();
+    // Declined: only the confirm bar shows, so a swipe must spring back.
+    expect(library.requestCloseBeanForm()).toBe(false);
 
     expect(host?.classList.contains('open')).toBe(true);
     expect(confirm?.getAttribute('hidden')).toBeNull();
@@ -386,7 +387,7 @@ describe('bean form sheet (#1349)', () => {
     library.openBeanForm();
     const confirm = find('lib-form-confirm');
 
-    library.requestCloseBeanForm();
+    expect(library.requestCloseBeanForm()).toBe(true);
 
     expect(confirm?.getAttribute('hidden')).toBe('');
     expect(form.parentNode).toBe(home);

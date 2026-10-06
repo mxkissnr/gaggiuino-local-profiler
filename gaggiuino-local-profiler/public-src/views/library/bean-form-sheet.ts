@@ -2,7 +2,7 @@ import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { html, toIsoDateInput } from '../../utils.js';
 import { CLOSE_ICON_SVG } from '../../icons.js';
-import { attachSheetSwipe } from '../../components/sheet-swipe.js';
+import { attachSheetSwipe, animateSheetOut, settleSheetOut, startSheetEnter } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
 import type { BeanRow } from './bags.js';
 import { _beanList, _state, _field, _el } from './bean-shared.js';
@@ -29,6 +29,8 @@ const library = libraryView;
 // back, so every input value, id and listener survives untouched.
 let _formSheetHost: HTMLElement | null = null;
 let _formSheetBody: HTMLElement | null = null;
+let _formSheetBackdrop: HTMLElement | null = null;
+let _formSheetSection: HTMLElement | null = null;
 let _formSheetTitle: HTMLElement | null = null;
 let _formSheetConfirm: HTMLElement | null = null;
 let _formSheetKeyHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -139,11 +141,14 @@ function _beanFormSheetHost(): HTMLElement | null {
   host.appendChild(section);
   document.body.appendChild(host);
 
-  attachSheetSwipe(section, grab, requestCloseBeanForm);
-  attachSheetSwipe(section, head, requestCloseBeanForm);
+  // #1488: one sheet-level listener covers the grab pill, the head and the
+  // form content (while it is scrolled to the top).
+  attachSheetSwipe(section, backdrop, requestCloseBeanForm);
 
   _formSheetHost = host;
   _formSheetBody = body;
+  _formSheetBackdrop = backdrop;
+  _formSheetSection = section;
   _formSheetTitle = title;
   _formSheetConfirm = confirm;
   return host;
@@ -219,12 +224,16 @@ function _showBeanFormSheet(): void {
   }
   host.classList?.add('open');
   document.body?.classList?.add('lib-sheet-open');
+  startSheetEnter(_formSheetSection, _formSheetBackdrop);
   _formReturnBeanId = S.beanEditId;
   _wireFormSheetKeys();
   _field('beanFormName').focus();
 }
 
 export function openBeanForm(bean?: BeanRow | null): void {
+  // Finish a still-sliding close before painting, so its timer cannot wipe the
+  // sheet we are about to open.
+  settleSheetOut();
   _bindBeanFormDirty();
   // #1349: the form opens in its own sheet. When the detail sheet is up, hand
   // over to the form without bouncing focus back to the shelf tile first.
@@ -324,16 +333,26 @@ export function closeBeanForm(): void {
   }
 }
 
-// Dirty-aware close: a form with unsaved edits asks before discarding.
-export function requestCloseBeanForm(): void {
-  if (_beanFormDirty) { _showFormConfirm(); return; }
-  closeBeanForm();
+// Slides the form sheet out from wherever it is, then runs the sync close.
+function _animateFormSheetOut(done: () => void): void {
+  const section = _formSheetSection;
+  if (!section) { done(); return; }
+  animateSheetOut(section, _formSheetBackdrop, done);
+}
+
+// Dirty-aware close: a form with unsaved edits asks before discarding. A real
+// close (X, backdrop, Esc, swipe, discard) slides the sheet out first. Returns
+// false when it only showed the confirm bar, so a swipe can spring back.
+export function requestCloseBeanForm(): boolean {
+  if (_beanFormDirty) { _showFormConfirm(); return false; }
+  _animateFormSheetOut(closeBeanForm);
+  return true;
 }
 
 // Cancel / confirm-bar discard: an explicit "throw my edits away", no prompt.
 export function discardBeanForm(): void {
   _beanFormDirty = false;
-  closeBeanForm();
+  _animateFormSheetOut(closeBeanForm);
 }
 
 export function editBean(id: number): void {

@@ -300,7 +300,7 @@ export function filterShotsByBean(id: number): void {
 
 // Section symbols moved to ./library/* — re-exported so existing importers
 // of views/library.js (main.ts et al.) keep working.
-export { openBeanSheet, closeBeanSheet, beanSheetRestoredScroll, toggleBeanActive } from './library/bean-sheet.js';
+export { openBeanSheet, closeBeanSheet, requestCloseBeanSheet, beanSheetRestoredScroll, toggleBeanActive } from './library/bean-sheet.js';
 export { openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean } from './library/bean-form-sheet.js';
 export { renderBeanCard, safeHttpUrl, openNewBagForm, closeNewBagForm, deleteBag, saveNewBag, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, toggleBeanQR } from './library/bean-card.js';
 export { stageNewBeanImage, uploadBeanImage, updateStickerButton, cutOutBeanSticker } from './library/bean-sticker.js';
