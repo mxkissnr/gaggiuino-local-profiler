@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import postcss, { type AtRule, type Rule } from 'postcss';
+import postcss, { type AtRule, type Node, type Rule } from 'postcss';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CSS_PATH = join(here, '..', 'public-src', 'style.css');
@@ -23,7 +23,7 @@ function disablesRootCrossfade(rule: Rule): boolean {
 }
 
 function nestedInMedia(rule: Rule): boolean {
-  let node = rule.parent;
+  let node: Node | undefined = rule.parent;
   while (node) {
     if (node.type === 'atrule' && (node as AtRule).name.toLowerCase() === 'media') return true;
     node = node.parent;
