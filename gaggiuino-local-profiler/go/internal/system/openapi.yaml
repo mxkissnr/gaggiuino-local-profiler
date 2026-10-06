@@ -625,7 +625,7 @@ components:
       description: >
         GET /api/live/data and the SSE live-snapshot payload (one shared Go
         builder, so every key below is always present — null where noted).
-      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable]
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable, machineControl]
       properties:
         isLive:      { type: boolean }
         profileName: { type: string }
@@ -683,6 +683,10 @@ components:
         waterLevel: { type: integer, nullable: true, description: "#902 idle stats: current water level" }
         machineWarnings: { type: array, items: { type: string }, description: "#1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino" }
         machineUpdateAvailable: { type: boolean, description: "#1409: GaggiMate reports a firmware update; always false for Gaggiuino" }
+        machineControl:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/MachineControlState'
 
     # ── Backup ────────────────────────────────────────────────────────────
 
@@ -1036,6 +1040,30 @@ components:
             b: { type: string }
         hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
         enabled: { type: boolean, description: "Defaults to true when omitted" }
+
+    MachineControlSettings:
+      type: object
+      required: [enabled]
+      description: >
+        GET/POST /api/machine/control/settings body and response — the opt-in
+        machine-control toggle (off by default; deliberately not part of
+        backup/restore, #1324).
+      properties:
+        enabled: { type: boolean, description: "Whether opt-in machine control (flush, brew confirmation) is enabled" }
+
+    MachineControlState:
+      type: object
+      required: [machineId, canFlush, flushing, brewConfirm]
+      description: >
+        GET /api/live/data's machineControl and the SSE live-snapshot's
+        equivalent — the opt-in machine-control snapshot for the default
+        machine (#1324). Null when the machine has no machine control, the
+        opt-in setting is off, or the machine is unreachable.
+      properties:
+        machineId:   { type: integer, description: Owning machine id }
+        canFlush:    { type: boolean, description: "Whether a flush may be started (connected GaggiMate, idle in brew mode)" }
+        flushing:    { type: boolean, description: "Whether a flush is currently running" }
+        brewConfirm: { type: array, nullable: true, items: { type: string }, description: "Warning keys of a pending brew confirmation, in order; null when none is pending" }
 
     # ── MQTT ───────────────────────────────────────────────────────────────
 
@@ -2950,6 +2978,95 @@ paths:
         "200": { description: "{ sensorSnap: SensorStateSnapshotDto|null, sysState: SystemStateDto|null } — null until the machine's first push arrives" }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
+
+  # A response description that contains a comma must be quoted inside a flow
+  # mapping, or openapi-typescript reads only the text before the comma (#1324).
+
+  /api/machine/flush/start:
+    post:
+      tags: [MachineControl]
+      summary: Start a flush on a GaggiMate (req:flush:start over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+, only while idle in brew mode
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: "machine is not idle in brew mode, or no connected GaggiMate on firmware v1.9.0+" }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/flush/stop:
+    post:
+      tags: [MachineControl]
+      summary: End a hold-to-flush on a GaggiMate (req:flush:stop over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/brew-confirm/confirm:
+    post:
+      tags: [MachineControl]
+      summary: Accept a pending brew confirmation and start the brew (req:process:activate with ignoreWarnings over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: "no brew confirmation is pending, or no connected GaggiMate on firmware v1.9.0+" }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/brew-confirm/cancel:
+    post:
+      tags: [MachineControl]
+      summary: Decline a pending brew confirmation for every UI (req:brew:confirm:cancel over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/control/settings:
+    get:
+      tags: [MachineControl]
+      summary: Read the opt-in machine-control setting (off by default; deliberately not part of backup/restore)
+      responses:
+        "200":
+          description: "{ enabled }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineControlSettings' }
+    post:
+      tags: [MachineControl]
+      summary: Set the opt-in machine-control setting (off by default; deliberately not part of backup/restore)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineControlSettings' }
+      responses:
+        "200":
+          description: "{ enabled }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineControlSettings' }
+        "400": { description: enabled is missing or not a boolean }
 
   /api/mcp/settings:
     get:

@@ -7,13 +7,14 @@ import { t, tHtml } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
-import type { Bean, ShotAnnotation } from '../api/types.js';
+import type { Bean, MachineControlState, ShotAnnotation } from '../api/types.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, html } from '../utils.js';
 import type { ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
+import { machineWarningLabel, renderMachineControl } from '../components/machine-control.js';
 import { localeFor } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
@@ -47,6 +48,7 @@ interface LiveMessage {
   isSteaming?: boolean;
   isFlushing?: boolean;
   isDescaling?: boolean;
+  machineControl?: MachineControlState | null;
   steamDatapoints?: LiveModeDatapoints | null;
   flushDatapoints?: LiveModeDatapoints | null;
   descaleDatapoints?: LiveModeDatapoints | null;
@@ -679,15 +681,6 @@ export function handlePreheatUpdateEvent(payload: PreheatData): void {
   updatePreheatWidget(payload);
 }
 
-// #1409: a warning key from the machine maps to a machine_warn_<key> label;
-// a key we don't know yet falls back to the raw key so a newer firmware's
-// warning still shows something instead of a blank/undefined label.
-function machineWarningLabel(k: string): string {
-  const key = `machine_warn_${k}`;
-  const s = t(key);
-  return s === key ? k : s;
-}
-
 export function handleLiveData(msg: LiveMessage): void {
   const dp: LiveDatapoints = msg.datapoints || {};
   const times   = dp.timeInShot  || [];
@@ -733,9 +726,14 @@ export function handleLiveData(msg: LiveMessage): void {
     const idleUpdateEl = document.getElementById('liveIdleUpdateHint');
     if (idleWarnEl)   idleWarnEl.style.display   = 'none';
     if (idleUpdateEl) idleUpdateEl.style.display = 'none';
+    // #1324: machine control is unavailable while unreachable -- hide the flush
+    // button and close the brew-confirmation dialog (the machine answered it,
+    // or the answer is moot now).
+    renderMachineControl(null);
     return;
   }
   idleEl.classList.remove('unreachable');
+  renderMachineControl(msg.machineControl);
   // #811: "machine_ready" means REACHABLE, but it reads as "ready to brew" —
   // and while preheating it sat directly under a widget counting down "heating
   // ... 20 min", flatly contradicting it. The animated icon made that obvious

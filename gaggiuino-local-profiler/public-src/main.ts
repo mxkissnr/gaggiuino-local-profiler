@@ -154,6 +154,9 @@ import { loadMqttSettings, renderMqttSettingsCard, setMqttTransport, saveMqttSet
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
 import { loadMcpSettingsCard, renderMcpSettingsCard, saveMcpSettings } from './components/mcp-settings.js';
 
+import { loadMachineControlSetting, saveMachineControlSetting, toggleFlush,
+         confirmBrewFromDialog, cancelBrewFromDialog } from './components/machine-control.js';
+
 import { loadShotDefaultsSettingsCard, saveShotDefaultsSettings } from './components/shot-defaults-settings.js';
 
 import { renderWhatsNewCard } from './components/whats-new.js';
@@ -919,6 +922,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mcpSettingsSaveBtn')?.addEventListener('click', () => { void saveMcpSettings(); });
   // #1288: write/developer tools only apply while the server is on, so their disabled state follows the master toggle.
   document.getElementById('mcpEnabled')?.addEventListener('change', () => renderMcpSettingsCard());
+  // #1324: opt-in machine control saves immediately on toggle (there is no Save button).
+  document.getElementById('machineControlEnabled')?.addEventListener('change', () => { void saveMachineControlSetting(); });
   document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', () => { void saveShotDefaultsSettings(); });
   document.getElementById('closeScanModalBtn')!.addEventListener('click', closeScanModal);
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
@@ -1047,6 +1052,10 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'setup-wizard-get-started':    setupWizardGetStarted(); break;
       case 'setup-wizard-skip-demo':      void setupWizardSkipToDemo(); break;
       case 'close-easter-egg':            closeEasterEggPanel(); break;
+      // #1324: opt-in GaggiMate machine control.
+      case 'machine-flush-toggle':        void toggleFlush(); break;
+      case 'brew-confirm-start':          void confirmBrewFromDialog(); break;
+      case 'brew-confirm-cancel':         void cancelBrewFromDialog(); break;
     }
   });
 
@@ -1121,6 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
     void loadMqttSettings();
     void loadNotifySettingsCard();
     void loadMcpSettingsCard();
+    void loadMachineControlSetting();
     void loadDrinkMenu();
     void loadMilkTypes();
     // Awaited (unlike the two loads above): loadData() below can render the

@@ -1141,6 +1141,9 @@
                  both driven by views/live.js's handleLiveData(). -->
             <p id="liveIdleWarnings" class="live-idle-warn" style="display:none"></p>
             <p id="liveIdleUpdateHint" class="live-idle-hint" data-i18n="machine_update_available" style="display:none">Firmware-Update auf der Maschine verfügbar</p>
+            <!-- #1324: opt-in GaggiMate machine control -- shown only while a
+                 flush may be started or is running (components/machine-control.js). -->
+            <button id="liveFlushBtn" type="button" class="lib-save-btn" data-action="machine-flush-toggle" style="display:none"></button>
 
             <!-- Pre-shot setup: bean/dose/grinder/grind/basket/puckscreen/recipe
                  chosen here get written onto the next completed shot's
@@ -1454,6 +1457,21 @@
                 <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
+        <!-- GaggiMate machine control (#1324) — opt-in, off by default, and
+             deliberately not part of backup/restore. GaggiMate firmware v1.9.0+
+             only; the Live view's flush button and the brew-confirmation dialog
+             only appear while this is on. Saving is immediate (change event),
+             there is no Save button. -->
+        <div class="settings-card" id="machineControlSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
+            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
+            <div class="orders-broadcast-list">
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="machineControlEnabled">
+                    <label for="machineControlEnabled" data-i18n="settings_machine_control_enabled">Maschinensteuerung erlauben</label>
+                </div>
+            </div>
+        </div>
         <!-- Shot logging auto-prefill defaults (#654) — optional, per-install
              default values for a brand-new shot's annotation panel. Never
              overwrites an already-annotated shot's data (see
@@ -1702,6 +1720,21 @@
         <div class="machine-form-actions">
             <button id="backupModalConfirmBtn" type="button" class="backup-btn"></button>
             <button id="backupModalCancelBtn" type="button" class="backup-btn" data-i18n="backup_modal_cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Brew-confirmation dialog (#1324) ── opt-in machine control: the machine
+     paused a brew because it raised warnings, and one client must confirm it.
+     Shown/hidden by components/machine-control.js. -->
+<div id="brewConfirmModal" class="guided-maint-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="brewConfirmTitle">
+    <div class="guided-maint-modal">
+        <h3 class="maint-section-title" id="brewConfirmTitle" data-i18n="brew_confirm_title">Bezug trotzdem starten?</h3>
+        <p class="settings-card-desc" data-i18n="brew_confirm_desc">Die Maschine meldet diese Warnungen:</p>
+        <ul id="brewConfirmWarnings"></ul>
+        <div class="lib-form-actions">
+            <button class="lib-btn-sm" data-action="brew-confirm-cancel" data-i18n="brew_confirm_cancel">Zurück</button>
+            <button class="lib-save-btn" data-action="brew-confirm-start" data-i18n="brew_confirm_start">Trotzdem starten</button>
         </div>
     </div>
 </div>

@@ -69,11 +69,12 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 	raw, _ := json.Marshal(evt)
 
 	// m==1 (BREW mode) means "brew screen selected", not "pump running".
-	// Actual brewing requires process.a==1 AND process.s in ("brew","infusion").
+	// Actual brewing requires process.a==1 AND process.s in ("brew","infusion")
+	// AND process.u!=1: a utility process (u==1) is a flush, not a brew.
 	// Steaming: process.a==1 AND m==2. Source: ha-integration sensor.py _get_status.
 	var isBrewing, isSteaming bool
 	if process, ok := evt["process"].(map[string]any); ok {
-		if looseFloat(process["a"]) == 1 {
+		if looseFloat(process["a"]) == 1 && looseFloat(process["u"]) != 1 {
 			stage, _ := process["s"].(string)
 			isBrewing = stage == "brew" || stage == "infusion"
 			isSteaming = looseFloat(evt["m"]) == 2
@@ -217,12 +218,13 @@ func (a *GaggiMateAdapter) SelectProfile(ctx context.Context, m *Machine, id str
 
 func (a *GaggiMateAdapter) Capabilities() Capabilities {
 	return Capabilities{
-		ProfileEdit:   true,
-		BrewStart:     false, // GaggiMate has no start/stop API at all
-		Preheat:       nil,   // not modeled yet — unknown until verified against hardware
-		Volumetric:    nil,   // determined per-shot from slog systemInfo.volumetricCapable, not a static capability
-		History:       true,
-		SettingsProxy: false,
+		ProfileEdit:    true,
+		BrewStart:      false, // GaggiMate has no start/stop API at all
+		Preheat:        nil,   // not modeled yet — unknown until verified against hardware
+		Volumetric:     nil,   // determined per-shot from slog systemInfo.volumetricCapable, not a static capability
+		History:        true,
+		SettingsProxy:  false,
+		MachineControl: true,
 	}
 }
 

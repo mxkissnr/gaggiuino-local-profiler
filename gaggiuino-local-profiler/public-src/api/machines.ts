@@ -1,6 +1,6 @@
 import { apiFetch } from './fetch.js';
 import type {
-  FirmwareProgress, FirmwareVersion, Machine, MachineProfile, MachineProfileList,
+  FirmwareProgress, FirmwareVersion, Machine, MachineControlSettings, MachineProfile, MachineProfileList,
   MachineSaveInput, MachineSystemSettings,
 } from './types.js';
 
@@ -171,4 +171,39 @@ export function saveMachineProfile(id: string | number | null, body: unknown): P
 /** DELETE /api/machine/profile/{id}?machineId=... — delete a profile; raw Response so the caller distinguishes the failure. */
 export function deleteMachineProfile(id: string | number, machineId: string | number): Promise<Response> {
   return apiFetch(`api/machine/profile/${id}?machineId=${machineId}`, { method: 'DELETE' });
+}
+
+// ── Machine control (#1324) ──────────────────────────────────────────────
+
+/**
+ * GET /api/machine/control/settings — the opt-in machine-control toggle
+ * (flush, brew confirmation). Null on a non-ok response.
+ */
+export async function getMachineControlSettings(): Promise<MachineControlSettings | null> {
+  return _jsonOrNull<MachineControlSettings>(await apiFetch('api/machine/control/settings'));
+}
+
+/** POST /api/machine/control/settings — set the opt-in toggle; raw Response so the caller reads the error body. */
+export function saveMachineControlSettings(enabled: boolean): Promise<Response> {
+  return apiFetch('api/machine/control/settings', _json('POST', { enabled }));
+}
+
+/** POST /api/machine/flush/start — start a flush on the machine; raw Response so the caller reads the error body. */
+export function startFlush(machineId: number): Promise<Response> {
+  return apiFetch('api/machine/flush/start', _json('POST', { machineId }));
+}
+
+/** POST /api/machine/flush/stop — end a hold-to-flush; raw Response so the caller reads the error body. */
+export function stopFlush(machineId: number): Promise<Response> {
+  return apiFetch('api/machine/flush/stop', _json('POST', { machineId }));
+}
+
+/** POST /api/machine/brew-confirm/confirm — accept the pending brew confirmation; raw Response. */
+export function confirmBrew(machineId: number): Promise<Response> {
+  return apiFetch('api/machine/brew-confirm/confirm', _json('POST', { machineId }));
+}
+
+/** POST /api/machine/brew-confirm/cancel — decline the pending brew confirmation for every UI; raw Response. */
+export function cancelBrewConfirm(machineId: number): Promise<Response> {
+  return apiFetch('api/machine/brew-confirm/cancel', _json('POST', { machineId }));
 }

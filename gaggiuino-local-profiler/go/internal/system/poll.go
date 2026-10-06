@@ -112,6 +112,10 @@ type LiveData struct {
 	// always a JSON array (empty for Gaggiuino, which reports neither).
 	MachineWarnings        []string `json:"machineWarnings"`
 	MachineUpdateAvailable bool     `json:"machineUpdateAvailable"`
+	// #1324: opt-in machine-control snapshot for the default machine, null
+	// when machine control is unsupported, its setting is off, or the machine
+	// is unreachable.
+	MachineControl *machines.ControlState `json:"machineControl"`
 }
 
 // pollGlobalState holds package-level polling state (as opposed to the
@@ -176,6 +180,11 @@ type machinePollState struct {
 	lastError    *string // last poll/sync error, redacted
 	lastSuccess  *int64
 	version      *string // cached firmware version, nil = not sniffed yet
+	// control is the #1324 opt-in machine-control snapshot for this machine,
+	// refreshed on every successful status poll and cleared on a failed poll
+	// or when live polling stops. nil when the machine has no machine control,
+	// the opt-in setting is off, or it is unreachable.
+	control *machines.ControlState
 }
 
 // machine returns id's poll state, creating it on demand. Caller holds
@@ -498,10 +507,11 @@ func (p *Poller) startLivePolling() {
 // to stop — nothing else can ever flip this back to false on its own once a
 // runtime never reaches startLivePolling.
 func (p *Poller) stopLivePolling() {
-	if id, ok := p.defaultMachineID(); ok {
+	defaultID, hasDefault := p.defaultMachineID()
+	if hasDefault {
 		reachable := false
 		p.state.mu.Lock()
-		p.state.machine(id).reachable = &reachable
+		p.state.machine(defaultID).reachable = &reachable
 		p.state.mu.Unlock()
 	}
 
@@ -517,6 +527,10 @@ func (p *Poller) stopLivePolling() {
 		p.state.steamAccum = nil
 		p.state.flushAccum = nil
 		p.state.descaleAccum = nil
+		// #1324: neither can it report a machine-control snapshot.
+		if hasDefault {
+			p.state.machine(defaultID).control = nil
+		}
 		p.state.mu.Unlock()
 		now := time.Now().UnixMilli()
 		p.runtime.SetSwitchOffAt(&now)
@@ -600,14 +614,23 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		ms.wasReachable = &reachable
 		msg := redactURLs(err.Error())
 		ms.lastError = &msg
+		// #1324: an unreachable machine has no machine-control snapshot.
+		ms.control = nil
 		p.state.mu.Unlock()
 		log.Printf("system: live poll error: %v", err)
 		p.emitLiveSnapshot()
 		return
 	}
 
+	// #1324: refresh the opt-in machine-control snapshot. ControlStateFor
+	// reads only the registry cache and one KV row (no network), so it runs
+	// outside p.state.mu; a nil result (unsupported adapter, setting off or no
+	// connected controller) simply stores null.
+	ctrl, _ := machines.ControlStateFor(p.registry, adapter, machine)
+
 	p.state.mu.Lock()
 	ms := p.state.machine(machine.ID)
+	ms.control = ctrl
 	prevReachable := ms.wasReachable
 	now := time.Now().UnixMilli()
 	markReachableLocked(ms, now)
@@ -1024,8 +1047,17 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 		descaleDP = copyModeDatapoints(&p.state.descaleAccum.datapoints)
 	}
 	var machineReachable *bool
+	// #1324: copy the control snapshot (including its slice) under the lock,
+	// same copy-under-lock-then-hand-out-lock-free reasoning as copyDatapoints
+	// above — the JSON for this LiveData may be marshalled after this returns.
+	var machineControl *machines.ControlState
 	if ms := p.state.machines[defaultID]; ms != nil {
 		machineReachable = ms.reachable
+		if ms.control != nil {
+			ctrl := *ms.control
+			ctrl.BrewConfirm = append([]string(nil), ms.control.BrewConfirm...)
+			machineControl = &ctrl
+		}
 	}
 	return LiveData{
 		IsLive:           isLive,
@@ -1052,6 +1084,8 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 
 		MachineWarnings:        warnings,
 		MachineUpdateAvailable: updateAvailable,
+
+		MachineControl: machineControl,
 	}
 }
 
