@@ -10,6 +10,7 @@ import { _equipmentName } from './shots/index.js';
 import { summaryLine } from './analytics-summary.js';
 import { TARGET_ICON_SVG, WARNING_ICON_SVG } from '../icons.js';
 import { openDetailSheet } from '../components/detail-sheet.js';
+import type { DetailAnchorPoint } from '../components/detail-sheet.js';
 import type { LibraryRow, MachineRecord, ShotMeta } from '../state/index.js';
 import type { ChartConfiguration, TooltipItem } from 'chart.js';
 
@@ -595,7 +596,7 @@ export function _trendAxisMin(scores: number[]): number {
 
 // Point popover for the score trend: the shot's recipe (score, brew time,
 // dose -> yield with ratio, grind, profile) plus a shortcut to the shot.
-function _openTrendShotDetail(shot: ShotRow, anchor: HTMLElement | null): void {
+function _openTrendShotDetail(shot: ShotRow, anchor: HTMLElement | DetailAnchorPoint | null): void {
   const locale = localeFor(S.currentLang);
   const sc = window.calcShotScore ? window.calcShotScore(shot) : null;
   const dose = shot.annotation?.dose;
@@ -605,20 +606,23 @@ function _openTrendShotDetail(shot: ShotRow, anchor: HTMLElement | null): void {
   const profile = shot.profile?.name || shot.profileName || '';
   const row = (lbl: string, val: Html): Html =>
     html`<div class="bests-row"><span class="bests-lbl">${esc(lbl)}</span><span class="bests-val">${val}</span></div>`;
-  const scHtml = sc !== null ? html`<span class="${esc(scoreClass(sc))}">${esc(sc)}</span>` : esc('—');
+  const scHtml = sc !== null ? html`<span class="${esc(scoreClass(sc))}">${esc(sc)}</span>` : esc('');
   const recipeVal = dose != null && yieldG !== null
     ? html`${esc(Number(dose).toFixed(1))} g → ${esc(yieldG.toFixed(1))} g${Number(dose) > 0 ? html` · 1:${esc((yieldG / Number(dose)).toFixed(1))}` : esc('')}`
-    : esc('—');
+    : esc('');
   const durSecs = typeof shot.duration === 'number' && shot.duration > 0 ? Math.round(shot.duration / 10) : null;
+  // Screenshot review (#1467): only show rows that carry a value — a missing
+  // field is omitted, not rendered as a "—" placeholder — while the open-shot
+  // shortcut stays.
   openDetailSheet({
     title: new Date(shot.timestamp * 1000).toLocaleString(locale, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
     sub: shot.annotation?.coffee || profile,
     body: html`<div class="detail-rows">
-      ${row(t('sort_score'), scHtml)}
-      ${row(t('analytics_recipe_time'), esc(durSecs !== null ? `${durSecs} s` : '—'))}
-      ${row(t('recipe_dose_yield'), recipeVal)}
-      ${row(t('ann_grind_setting'), esc(grind != null && grind !== '' ? String(grind) : '—'))}
-      ${row(t('meta_profile'), esc(profile || '—'))}
+      ${sc !== null ? row(t('sort_score'), scHtml) : esc('')}
+      ${durSecs !== null ? row(t('analytics_recipe_time'), esc(`${durSecs} s`)) : esc('')}
+      ${dose != null && yieldG !== null ? row(t('recipe_dose_yield'), recipeVal) : esc('')}
+      ${grind != null && grind !== '' ? row(t('ann_grind_setting'), esc(String(grind))) : esc('')}
+      ${profile ? row(t('meta_profile'), esc(profile)) : esc('')}
       <div class="bests-row"><span class="bests-lbl"></span><span class="bests-val"><button type="button" class="bests-link" data-action="goto-shot" data-id="${esc(shot.id)}">→</button></span></div>
     </div>`,
     anchor,
@@ -660,21 +664,32 @@ export function buildTrendChart() {
           pointBackgroundColor: pointColors,
           pointBorderColor: scoreData.map(sc => sc >= 100 ? '#f3e1c0' : _trendPointColor(sc)),
           pointBorderWidth: scoreData.map(sc => sc >= 100 ? 2 : 1),
-          pointRadius: pointRadii, pointHoverRadius: 7, fill: false, tension: 0.3, order: 2 },
+          pointRadius: pointRadii, pointHoverRadius: 7, pointStyle: 'circle',
+          fill: false, tension: 0.3, cubicInterpolationMode: 'monotone', order: 2 },
         { label: t('analytics_trend_avg', avg), data: scoreData.map(() => avg),
           borderColor: themeColor('--gray-500', '#a1a1aa'), borderDash: [4, 4],
-          pointRadius: 0, fill: false, borderWidth: 2, order: 1 }
+          pointRadius: 0, pointStyle: 'line', fill: false, borderWidth: 2, order: 1 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      onClick: (_: unknown, elements: { index: number }[]) => {
+      onClick: (_: unknown, elements: { index: number; element?: { x?: number; y?: number } }[]) => {
         const first = elements[0];
         const shot = first ? src[first.index] : undefined;
-        if (shot) _openTrendShotDetail(shot, ctx);
+        if (!shot) return;
+        // Anchor the popover at the clicked point (canvas-local x/y plus the
+        // canvas offset), not at the whole canvas, which on desktop would park
+        // the popover beside the full-width chart.
+        const el = first?.element;
+        if (el && typeof el.x === 'number' && typeof el.y === 'number') {
+          const rect = ctx.getBoundingClientRect();
+          _openTrendShotDetail(shot, { x: rect.left + el.x, y: rect.top + el.y });
+        } else {
+          _openTrendShotDetail(shot, ctx);
+        }
       },
       plugins: {
-        legend: { labels: { color: C.tick, font: { size: 11 } } },
+        legend: { labels: { color: C.tick, font: { size: 11 }, usePointStyle: true } },
       },
       scales: {
         x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, maxRotation: 45 }, grid: { color: themeColor('--gray-700', '#2b2f33') } },

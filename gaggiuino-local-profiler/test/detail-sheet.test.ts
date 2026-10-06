@@ -26,7 +26,7 @@ function makeClassList(): FakeClassList {
 interface FakeHost {
   innerHTML: string;
   classList: FakeClassList;
-  querySelector: () => null;
+  querySelector: (sel?: string) => unknown;
   style: Record<string, string>;
 }
 
@@ -123,5 +123,20 @@ describe('detail sheet (#1467)', () => {
     installDom(phone, null, false);
     openDetailSheet({ title: 'Day', body: html``, anchor });
     expect(phone.innerHTML).not.toContain('detail-pop');
+  });
+
+  it('treats a viewport point anchor as a zero-size rect at that point', () => {
+    const sheet = {
+      offsetWidth: 200,
+      offsetHeight: 100,
+      style: {} as Record<string, string>,
+      querySelector: () => null,
+    };
+    host.querySelector = (sel?: string) => (sel === '.lib-sheet' ? sheet : null);
+    installDom(host, null, true);
+    openDetailSheet({ title: 'Point', body: html``, anchor: { x: 300, y: 200 } });
+    expect(host.innerHTML).toContain('detail-pop');
+    expect(sheet.style.left).toBe('312px'); // right edge (300) + 12
+    expect(sheet.style.top).toBe('150px');  // 200 - height/2
   });
 });
