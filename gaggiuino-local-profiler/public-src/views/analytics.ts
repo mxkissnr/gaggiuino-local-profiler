@@ -103,6 +103,25 @@ function _pageShots(): ShotRow[] {
   return filterAnalyticsShots(_shots(), _pageFilter, Date.now(), _profileNameOf);
 }
 
+// A sparse render replaces a chart's canvas with an empty note. That was fine
+// when builders ran once, but rebuildAnalyticsPage() re-runs them on every
+// toolbar change and the canvas is never recreated (#1467). Remember each
+// canvas's wrapper and restore the canvas before the next draw.
+const _chartWraps = new Map<string, HTMLElement>();
+
+function _chartCanvas(id: string): HTMLCanvasElement | null {
+  const canvas = document.getElementById(id) as HTMLCanvasElement | null;
+  if (canvas) {
+    const parent = canvas.parentElement;
+    if (parent) _chartWraps.set(id, parent);
+    return canvas;
+  }
+  const wrap = _chartWraps.get(id);
+  if (!wrap || !document.contains(wrap)) { _chartWraps.delete(id); return null; }
+  wrap.innerHTML = html`<canvas id="${esc(id)}"></canvas>`;
+  return document.getElementById(id) as HTMLCanvasElement | null;
+}
+
 // Equipment groupings share one aggregation/rendering pair (a grinder name,
 // or a basket/puck-screen id resolved to a name at render time).
 type EquipKey = string | number;
@@ -514,7 +533,7 @@ export function buildDistribution() {
 }
 
 function _buildDoseDist() {
-  const ctx = document.getElementById('doseDistChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('doseDistChart');
   if (!ctx) return;
   chartRegistry.dispose('doseDistChart');
   const doses = _pageShots().map(s => s.annotation?.dose).filter((d): d is number => d != null && d > 5 && d < 50);
@@ -542,7 +561,7 @@ function _buildDoseDist() {
 }
 
 function _buildRatioDist() {
-  const ctx = document.getElementById('ratioDistChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('ratioDistChart');
   if (!ctx) return;
   chartRegistry.dispose('ratioDistChart');
   const ratios = _pageShots()
@@ -573,7 +592,7 @@ function _buildRatioDist() {
 
 // ── Time of Day ───────────────────────────────────────────────────────────
 export function buildTimeOfDay() {
-  const ctx = document.getElementById('timeOfDayChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('timeOfDayChart');
   if (!ctx) return;
   chartRegistry.dispose('timeOfDayChart');
   const hours: { count: number; scores: number[] }[] = Array.from({ length: 24 }, () => ({ count: 0, scores: [] }));
@@ -676,7 +695,7 @@ export function buildTrendChart() {
     return window.calcShotScore(s) !== null;
   });
 
-  const ctx = document.getElementById('trendChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('trendChart');
   if (!ctx) return;
   chartRegistry.dispose('trendChart');
 
@@ -1772,7 +1791,7 @@ export function buildProfileChart() {
     .sort((a, b) => b.avgScore - a.avgScore);
 
   const wrap = document.getElementById('profileChartWrap')!;
-  const ctx  = document.getElementById('profileChart') as HTMLCanvasElement | null;
+  const ctx  = _chartCanvas('profileChart');
   if (!ctx) return;
   chartRegistry.dispose('profileBarChart');
 
@@ -2331,7 +2350,7 @@ function _renderDialinProgressionChart(beanName: string | null): void {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
-  const ctx = document.getElementById('dialinProgressionChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('dialinProgressionChart');
   if (!ctx) return;
   chartRegistry.dispose('dialinProgressionChart');
 
