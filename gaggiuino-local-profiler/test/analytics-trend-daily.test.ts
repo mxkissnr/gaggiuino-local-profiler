@@ -46,14 +46,16 @@ describe('trendDailyBand (#1490)', () => {
 
   it('nulls the window on days with no shot in it', () => {
     // A shot on the 1st and the next on the 10th: the seven-day window slides
-    // off the first shot on the 8th, so the 8th, 9th and 10th are all gaps.
+    // off the first shot on the 8th, so the 8th and 9th are gaps; the 10th
+    // holds its own shot again.
     const band = trendDailyBand([shot(ts(2024, 3, 1), 70), shot(ts(2024, 3, 10), 90)], scoreOf);
     expect(band.keys.length).toBe(10);
     expect(band.mean[6]).toBe(70);   // 7 Mar: window 1–7 Mar still holds the shot
     expect(band.mean[7]).toBeNull(); // 8 Mar: window 2–8 Mar holds none
-    expect(band.mean[9]).toBeNull();
+    expect(band.mean[8]).toBeNull(); // 9 Mar: window 3–9 Mar holds none
+    expect(band.mean[9]).toBe(90);   // 10 Mar: the window holds the day's own shot
     expect(band.min[7]).toBeNull();
-    expect(band.max[9]).toBeNull();
+    expect(band.max[8]).toBeNull();
   });
 
   it('walks every calendar day across a month boundary with local day keys', () => {
