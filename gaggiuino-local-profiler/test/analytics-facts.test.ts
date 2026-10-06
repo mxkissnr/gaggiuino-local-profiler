@@ -354,7 +354,10 @@ describe('computeFacts date formatting (#1467)', () => {
     const facts = computeFacts([...oddSet(y, 6, 17), ...pad100(at(y, 6, 18, 10, 0))], scoreOf, 'de-DE');
     const expected = new Date(at(y, 6, 17, 21, 21) * 1000)
       .toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
-    expect(byId(facts, 'odd_hour')?.vars.date).toBe(`${expected}, 21:21`);
+    const date = byId(facts, 'odd_hour')?.vars.date;
+    expect(date).toBe(`${expected}, 21:21`);
+    expect(date).not.toMatch(/^\d{4}-\d{2}-\d{2}/);
+    expect(date).toContain('Juni');
   });
 
   it('adds the year only when the shot is not from this year', () => {
