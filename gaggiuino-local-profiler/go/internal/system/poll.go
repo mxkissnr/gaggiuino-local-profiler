@@ -23,9 +23,10 @@ import (
 // transport for this machine (only ever a default Gaggiuino machine, #1447,
 // and only when the Settings toggle is on MQTT with a broker configured): the
 // poller then uses the returned value (possibly nil, if the MQTT cache is
-// stale/empty) instead of the adapter's WS session. An interface (not a direct internal/mqtt
-// import) keeps this central package decoupled from the transport
-// implementation, the same pattern AdapterProvider already follows here.
+// stale/empty) instead of the adapter's WS session. An interface (not a
+// direct internal/mqtt import) keeps this central package decoupled from the
+// transport implementation, the same pattern AdapterProvider already
+// follows here.
 type LiveTransport interface {
 	SensorSnapshot(isDefaultMachine bool) (*proto.SensorStateSnapshotDto, bool)
 	SystemState(isDefaultMachine bool) (*proto.SystemStateDto, bool)
