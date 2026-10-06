@@ -325,3 +325,17 @@ export function attachSheetSwipe(sheet: HTMLElement, backdrop: HTMLElement | nul
   sheet.addEventListener('touchend', () => onTouchEnd(false));
   sheet.addEventListener('touchcancel', () => onTouchEnd(true));
 }
+
+// #1489: the sheet's header bar sticks to the top; a hairline appears under it
+// only once the content has scrolled. The bar lives inside the scroll
+// container, so mirror the container's scrollTop onto it.
+export function attachSheetScrollState(sheet: HTMLElement | null): void {
+  if (!sheet || typeof sheet.addEventListener !== 'function') return;
+  const bar = typeof sheet.querySelector === 'function'
+    ? sheet.querySelector<HTMLElement>('.lib-sheet-bar')
+    : null;
+  if (!bar || typeof bar.classList?.toggle !== 'function') return;
+  const update = (): void => { bar.classList?.toggle('is-scrolled', sheet.scrollTop > 0); };
+  sheet.addEventListener('scroll', update, { passive: true });
+  update();
+}
