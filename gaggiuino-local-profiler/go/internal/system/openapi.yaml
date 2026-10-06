@@ -2951,6 +2951,36 @@ paths:
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
+  /api/machine/flush/start:
+    post:
+      tags: [MachineControl]
+      summary: Start a flush on a GaggiMate (req:flush:start over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+, only while idle in brew mode
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: machine is not idle in brew mode, or no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
+  /api/machine/flush/stop:
+    post:
+      tags: [MachineControl]
+      summary: End a hold-to-flush on a GaggiMate (req:flush:stop over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: Machine unreachable, timed out, or rejected the command }
+
   /api/mcp/settings:
     get:
       tags: [Mcp]
