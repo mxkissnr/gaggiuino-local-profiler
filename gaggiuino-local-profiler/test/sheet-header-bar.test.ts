@@ -291,6 +291,28 @@ describe('detail sheet header bar (#1489)', () => {
     expect(bar).not.toContain('detail-sheet-sub');
     expect(inner.indexOf('detail-sheet-sub')).toBeGreaterThan(title);
   });
+
+  it('uses the same bar inside the desktop popover', async () => {
+    const doc = new Doc();
+    g.document = doc;
+    g.window = { matchMedia: () => ({ matches: false }), innerWidth: 1200, innerHeight: 800 };
+    vi.resetModules();
+    const { openDetailSheet } = await import('../public-src/components/detail-sheet.js');
+    const { html } = await import('../public-src/utils.js');
+
+    const host = doc.createElement();
+    host.id = 'detailSheet';
+    doc.body.appendChild(host);
+
+    openDetailSheet({ title: 'Day', body: html``, anchor: { x: 300, y: 200 } });
+
+    const inner = host.innerHTML;
+    expect(inner).toContain('detail-pop');
+    expect(inner).toContain('class="lib-sheet-bar"');
+    expect(inner).toContain('class="lib-sheet-close"');
+    expect(inner).toContain('id="detailSheetTitle"');
+    expect(inner).not.toContain('lib-sheet-iconbtn');
+  });
 });
 
 describe('bean form sheet header bar save (#1489)', () => {
