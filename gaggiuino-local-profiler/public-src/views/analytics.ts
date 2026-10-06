@@ -733,6 +733,83 @@ export function _trendAxisMin(scores: number[]): number {
   return Math.max(0, Math.floor((Math.min(...scores) - 5) / 5) * 5);
 }
 
+// The trend switches from one point per shot to one point per calendar day for
+// the 90-day and whole-history periods; 7 and 30 days keep the per-shot line
+// (#1490).
+export function isLongTrendPeriod(days: number): boolean {
+  return days === 90 || days === 0;
+}
+
+export interface TrendDailyBand {
+  keys: string[];          // local calendar day keys, one per day, first → last shot
+  mean: (number | null)[]; // 7-day rolling mean score, null when the window has no shot
+  min: (number | null)[];  // lowest score in the same 7-day window
+  max: (number | null)[];  // highest score in the same 7-day window
+}
+
+// One entry per calendar day from the first to the last scored shot (#1490),
+// each carrying the seven-day window ending on that day (the day itself plus
+// the six before). A day whose window has no shot is null on all three series
+// so the caller can span the gap. Local day keys throughout, so a late-evening
+// shot stays on its own day and consecutive days differ by one across DST.
+export function trendDailyBand(
+  shots: readonly ShotRow[],
+  scoreOf: (s: ShotRow) => number | null,
+): TrendDailyBand {
+  const byDay = new Map<string, number[]>();
+  let first: number | null = null;
+  let last: number | null = null;
+  for (const s of shots) {
+    const sc = scoreOf(s);
+    if (sc === null) continue;
+    const n = _dayKeyNum(_dayKeyOf(s.timestamp));
+    if (first === null || n < first) first = n;
+    if (last === null || n > last) last = n;
+    const key = _keyFromNum(n);
+    const arr = byDay.get(key);
+    if (arr) arr.push(sc); else byDay.set(key, [sc]);
+  }
+
+  const keys: string[] = [];
+  const mean: (number | null)[] = [];
+  const min: (number | null)[] = [];
+  const max: (number | null)[] = [];
+  if (first === null || last === null) return { keys, mean, min, max };
+
+  for (let n = first; n <= last; n++) {
+    keys.push(_keyFromNum(n));
+    const win: number[] = [];
+    for (let w = n - 6; w <= n; w++) {
+      const arr = byDay.get(_keyFromNum(w));
+      if (arr) win.push(...arr);
+    }
+    if (win.length === 0) { mean.push(null); min.push(null); max.push(null); continue; }
+    mean.push(Math.round(win.reduce((a, b) => a + b, 0) / win.length));
+    min.push(Math.min(...win));
+    max.push(Math.max(...win));
+  }
+  return { keys, mean, min, max };
+}
+
+// Canvas can't paint `color-mix` or a CSS var, so the band fill needs the
+// resolved --ok turned into a translucent rgba string.
+function _withAlpha(color: string, alpha: number): string {
+  const hex = color.trim();
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  const cap = m?.[1];
+  if (cap) {
+    const v = parseInt(cap, 16);
+    return `rgba(${(v >> 16) & 255}, ${(v >> 8) & 255}, ${v & 255}, ${alpha})`;
+  }
+  const rgb = /^rgba?\(([^)]+)\)$/i.exec(hex);
+  const inner = rgb?.[1];
+  if (inner) {
+    const [r = '0', g = '0', b = '0'] = inner.split(',');
+    return `rgba(${r.trim()}, ${g.trim()}, ${b.trim()}, ${alpha})`;
+  }
+  return hex;
+}
+
 // Point popover for the score trend: the shot's recipe (score, brew time,
 // dose -> yield with ratio, grind, profile) plus a shortcut to the shot.
 function _openTrendShotDetail(shot: ShotRow, anchor: HTMLElement | DetailAnchorPoint | null): void {
@@ -781,15 +858,89 @@ export function buildTrendChart() {
   if (!ctx) return;
   chartRegistry.dispose('trendChart');
 
+  // #1490: 90 days and "All" draw one point per calendar day with a 7-day
+  // band; the heading carries the "7-day average" counter only for those.
+  const longView = isLongTrendPeriod(_pageFilter.days);
+  const counterEl = document.getElementById('trendCounter');
+  if (counterEl) counterEl.textContent = longView ? t('analytics_trend_weekly') : '';
+
   if (src.length < 2) {
     ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_trend')}</p>`;
     return;
   }
 
   const locale    = localeFor(S.currentLang);
-  const labels    = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
   const scoreData = src.map(s => window.calcShotScore!(s) ?? 0);
   const avg       = Math.round(scoreData.reduce((a, b) => a + b, 0) / scoreData.length);
+  const avgLine   = { label: t('analytics_trend_avg', avg), data: scoreData.map(() => avg),
+    borderColor: themeColor('--gray-500', '#a1a1aa'), borderDash: [4, 4],
+    pointRadius: 0, pointStyle: 'line' as const, fill: false, borderWidth: 2, order: 1 };
+
+  if (longView) {
+    const band = trendDailyBand(src, s => window.calcShotScore!(s));
+    const ok = themeColor('--ok', '#5cb98a');
+    // Anchor the popover at the tapped point (canvas-local x/y plus the canvas
+    // offset) rather than the whole canvas.
+    chartRegistry.set('trendChart', new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: band.keys,
+        datasets: [
+          // The band is two invisible lines; the lower one fills to the upper.
+          { label: '', data: band.max, borderWidth: 0, pointRadius: 0, backgroundColor: 'transparent', fill: false, spanGaps: true, order: 3 },
+          { label: '', data: band.min, borderWidth: 0, pointRadius: 0, backgroundColor: _withAlpha(ok, 0.16), fill: '-1', spanGaps: true, order: 3 },
+          { label: t('analytics_trend_weekly'), data: band.mean, borderColor: ok, borderWidth: 2,
+            pointRadius: 0, pointHoverRadius: 4, pointStyle: 'circle' as const, fill: false, spanGaps: true,
+            tension: 0.3, cubicInterpolationMode: 'monotone' as const, order: 2 },
+          { ...avgLine, data: band.mean.map(() => avg) },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        onClick: (_: unknown, elements: { index: number; element?: { x?: number; y?: number } }[]) => {
+          const first = elements[0];
+          if (!first) return;
+          const dayKey = band.keys[first.index];
+          if (!dayKey) return;
+          const el = first.element;
+          if (el && typeof el.x === 'number' && typeof el.y === 'number') {
+            const rect = ctx.getBoundingClientRect();
+            openCalendarDayDetail(dayKey, { x: rect.left + el.x, y: rect.top + el.y });
+          } else {
+            openCalendarDayDetail(dayKey, ctx);
+          }
+        },
+        plugins: {
+          legend: { labels: { color: C.tick, font: { size: 11 }, usePointStyle: true, filter: (item) => item.text !== '' } },
+          tooltip: {
+            filter: (item) => (item.dataset.label ?? '') !== '',
+            callbacks: { title: (items) => {
+              const i = items[0]?.dataIndex;
+              const dayKey = i != null ? band.keys[i] : undefined;
+              return dayKey ? _dateFromKey(dayKey).toLocaleDateString(locale, { day: 'numeric', month: 'long' }) : '';
+            } },
+          },
+        },
+        scales: {
+          // One label per day, but only the first of each month is drawn, so the
+          // axis stays quiet however long the period is.
+          x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, autoSkip: false, maxRotation: 0,
+              callback: (_value: string | number, index: number) => {
+                const dayKey = band.keys[index];
+                if (!dayKey) return '';
+                const d = _dateFromKey(dayKey);
+                return d.getDate() === 1 ? d.toLocaleDateString(locale, { month: 'short' }) : '';
+              } },
+            grid: { color: themeColor('--gray-700', '#2b2f33') } },
+          y: { min: _trendAxisMin(scoreData), max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
+        }
+      }
+    } satisfies ChartConfiguration<'line'>));
+    return;
+  }
+
+  // 7 and 30 days keep the per-shot line from #1467.
+  const labels    = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
   const pointColors = scoreData.map(_trendPointColor);
   const pointRadii  = scoreData.map((sc, i) => (i === scoreData.length - 1 ? 6 : 4) + (sc >= 100 ? 1 : 0));
 
@@ -804,9 +955,7 @@ export function buildTrendChart() {
           pointBorderWidth: scoreData.map(sc => sc >= 100 ? 2 : 1),
           pointRadius: pointRadii, pointHoverRadius: 7, pointStyle: 'circle',
           fill: false, tension: 0.3, cubicInterpolationMode: 'monotone', order: 2 },
-        { label: t('analytics_trend_avg', avg), data: scoreData.map(() => avg),
-          borderColor: themeColor('--gray-500', '#a1a1aa'), borderDash: [4, 4],
-          pointRadius: 0, pointStyle: 'line', fill: false, borderWidth: 2, order: 1 }
+        avgLine
       ]
     },
     options: {
@@ -960,7 +1109,7 @@ function _wireStreakHover(grid: HTMLElement, figure: HTMLElement, longest: Calen
   figure.addEventListener('blur', () => paint(false));
 }
 
-export function openCalendarDayDetail(day: string, anchor: HTMLElement | null): void {
+export function openCalendarDayDetail(day: string, anchor: HTMLElement | DetailAnchorPoint | null): void {
   const shots = _shots().filter(s => _dayKeyOf(s.timestamp) === day);
   const locale = localeFor(S.currentLang);
   const scores = shots
@@ -981,6 +1130,30 @@ export function openCalendarDayDetail(day: string, anchor: HTMLElement | null): 
     body: html`<div class="detail-rows">${joinHtml(rows)}</div>`,
     anchor,
   });
+}
+
+// #1490: below 900px the last 22 weeks should fill the wrapper, so the newest
+// weeks read at a glance while the older ones stay one horizontal scroll away.
+// The grid is max-content (that is what makes the year scrollable), which rules
+// out a percentage track size — measure the wrapper and set the cell in px.
+const CAL_PHONE_WEEKS = 22;
+// Weekday column + the gap after it + the 21 gaps between the 22 week columns.
+const CAL_PHONE_GUTTER = 26 + 3 + (CAL_PHONE_WEEKS - 1) * 3;
+
+function _sizeCalendarCells(): void {
+  const el = document.getElementById('shotCalendar');
+  if (!el) return;
+  if (window.innerWidth >= 900) el.style.removeProperty('--cal-cell');
+  else el.style.setProperty('--cal-cell', `${Math.max(6, Math.floor((el.clientWidth - CAL_PHONE_GUTTER) / CAL_PHONE_WEEKS))}px`);
+  // Newest week sits at the right edge; keep it visible across resizes too.
+  el.scrollLeft = el.scrollWidth;
+}
+
+let _calResizeBound = false;
+function _bindCalendarResize(): void {
+  if (_calResizeBound) return;
+  _calResizeBound = true;
+  window.addEventListener('resize', _sizeCalendarCells);
 }
 
 export function _renderCalendar() {
@@ -1079,8 +1252,9 @@ export function _renderCalendar() {
   }
 
   el.innerHTML = html`<div class="cal-months">${joinHtml(monthItems)}</div><div class="cal-grid">${joinHtml(cells)}</div>`;
-  // Today sits at the right edge; show it without scrolling on phones.
-  el.scrollLeft = el.scrollWidth;
+  // Size the phone cells to the wrapper and pin it to the newest week.
+  _bindCalendarResize();
+  _sizeCalendarCells();
 
   const streaksEl = document.getElementById('calStreaks');
   if (streaksEl) {

@@ -1229,7 +1229,10 @@
 
             <!-- Score Trend -->
             <section class="analytics-sec analytics-trend" data-analytics-period>
-                <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
+                <div class="analytics-trend-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
+                    <span class="analytics-trend-counter" id="trendCounter"></span>
+                </div>
                 <div style="height:200px;position:relative"><canvas id="trendChart"></canvas></div>
             </section>
 
@@ -1242,7 +1245,25 @@
             <!-- Coffee year -->
             <section class="analytics-sec cal-card">
                 <h3 class="analytics-section-title" data-i18n="analytics_calendar">Kaffeejahr</h3>
-                <div id="shotCalendar" class="cal-wrapper"></div>
+                <div class="cal-year">
+                    <div id="shotCalendar" class="cal-wrapper"></div>
+                    <div id="calLegend" class="cal-legend">
+                        <span class="cal-legend-part">
+                            <span data-i18n="analytics_cal_less">weniger</span>
+                            <span class="cal-legend-swatches">
+                                <span class="cal-day cal-1 cal-legend-swatch"></span>
+                                <span class="cal-day cal-2 cal-legend-swatch"></span>
+                                <span class="cal-day cal-3 cal-legend-swatch"></span>
+                                <span class="cal-day cal-4 cal-legend-swatch"></span>
+                            </span>
+                            <span data-i18n="analytics_cal_more">mehr</span>
+                        </span>
+                        <span class="cal-legend-part">
+                            <span class="cal-day cal-4 cal-crema cal-legend-swatch"></span>
+                            <span data-i18n="analytics_cal_perfect_dot">Shot mit Score 100</span>
+                        </span>
+                    </div>
+                </div>
                 <div id="calStreaks" class="cal-streaks"></div>
             </section>
 
