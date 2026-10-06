@@ -234,6 +234,9 @@ func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
 	onAt := time.Now().UnixMilli() - 5*60_000
 	p.runtime.SetSwitchOnAt(&onAt)
 	p.openPreheatRun(onAt)
+	// A sample so this is a run worth recording: an empty one is discarded on
+	// standby entry (see TestApplyStandbyTransition_EmptyStartRunDiscarded).
+	p.recordPreheatSample(onAt+30_000, 92, 92)
 	p.runtime.SetStabilityReady(true)
 	for i := 0; i < tempStableMin; i++ {
 		p.runtime.PushTempHistory(92.0)
@@ -335,5 +338,52 @@ func TestApplyStandbyTransition_NoLivePollingNoop(t *testing.T) {
 	}
 	if got := len(p.PreheatHistory()); got != before {
 		t.Errorf("history len = %d, want unchanged %d", got, before)
+	}
+}
+
+// TestApplyStandbyTransition_EmptyStartRunDiscarded pins the #1498 follow-up:
+// when the app starts while the GaggiMate is already in standby, the session
+// startLivePolling opens is ended by the first standby poll a second later — an
+// empty run must be dropped rather than recorded as a one-second history entry.
+func TestApplyStandbyTransition_EmptyStartRunDiscarded(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	p.beginPreheatSession(time.Now().UnixMilli())
+	if len(p.PreheatHistory()) != 1 {
+		t.Fatal("precondition: the started session should have left an open run")
+	}
+
+	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+
+	if got := len(p.PreheatHistory()); got != 0 {
+		t.Fatalf("history len = %d, want 0 (the empty run dropped)", got)
+	}
+}
+
+// TestApplyStandbyTransition_RunWithSamplesFinalised pins that the discard is
+// scoped to empty runs: a session that already recorded a sample is still
+// closed and recorded when the machine enters standby.
+func TestApplyStandbyTransition_RunWithSamplesFinalised(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	onAt := time.Now().UnixMilli() - 60_000
+	p.openPreheatRun(onAt)
+	p.recordPreheatSample(onAt+30_000, 90, 93)
+
+	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+
+	runs := p.PreheatHistory()
+	if len(runs) != 1 {
+		t.Fatalf("history len = %d, want the one finalised run", len(runs))
+	}
+	if runs[0].SwitchOffAt == nil {
+		t.Error("run with samples should still be finalised on entering standby")
+	}
+	if len(runs[0].Samples) != 1 {
+		t.Errorf("samples = %d, want the 1 recorded sample kept", len(runs[0].Samples))
 	}
 }

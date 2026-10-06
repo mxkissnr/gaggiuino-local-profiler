@@ -588,3 +588,70 @@ func TestPollViaGaggiuinoStatus_StandbyKeepsTempHistoryEmpty(t *testing.T) {
 		t.Errorf("temp history len = %d, want 0 across standby ticks", n)
 	}
 }
+
+// TestPollViaGaggiuinoStatus_StandbyThenErrorKeepsNoStaleCountdown pins the
+// #1498 follow-up: once a session ends in standby, a poll error clears the
+// standby flag, but the switch-on time was dropped on the way into standby, so
+// buildPreheatResponse (and PreheatInfo) must report a fresh, full countdown
+// instead of resurrecting the ended session.
+func TestPollViaGaggiuinoStatus_StandbyThenErrorKeepsNoStaleCountdown(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	now := time.Now().UnixMilli()
+	p.runtime.SetStandby(true) // the machine was in standby
+	p.applyStandbyTransition(now, false)
+	if p.runtime.Get().SwitchOnAt == nil {
+		t.Fatal("precondition: waking should stamp a switch-on time")
+	}
+	p.applyStandbyTransition(now+12_000, true) // 12s later the machine sleeps
+
+	// Unreachable: pollViaGaggiuinoStatus's error path clears the standby flag.
+	fake.setStatus(machinesStatusZero(), errBoom)
+	p.pollViaGaggiuinoStatus(context.Background())
+
+	status := p.PreheatStatus()
+	if status.Ready {
+		t.Error("Ready = true, want false after the session ended in standby")
+	}
+	if status.Elapsed != 0 {
+		t.Errorf("Elapsed = %d, want 0", status.Elapsed)
+	}
+	wantRemaining := loadPreheatMinutes() * 60
+	if status.Remaining != wantRemaining {
+		t.Errorf("Remaining = %d, want the full %d", status.Remaining, wantRemaining)
+	}
+	if ready, mins := p.PreheatInfo(); ready || mins != loadPreheatMinutes() {
+		t.Errorf("PreheatInfo() = (%v, %d), want (false, %d)", ready, mins, loadPreheatMinutes())
+	}
+}
+
+// TestStopLivePolling_StillWarmRestartKeepsClock pins that the #1498 follow-up
+// fix is scoped to the standby path: stopLivePolling must keep the switch-on
+// time, so a still-warm restart resumes the same countdown rather than
+// resetting it to a fresh preheat.
+func TestStopLivePolling_StillWarmRestartKeepsClock(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+	t.Cleanup(p.stopLivePolling)
+
+	hot := 90.0
+	onAt := time.Now().UnixMilli() - 60_000
+	p.runtime.SetCurrentTemps(&hot, nil)
+	p.runtime.SetSwitchOnAt(&onAt)
+
+	p.startLivePolling()
+	p.stopLivePolling()
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil || *snap.SwitchOnAt != onAt {
+		t.Fatalf("SwitchOnAt = %v after stopLivePolling, want unchanged %d", snap.SwitchOnAt, onAt)
+	}
+
+	p.startLivePolling()
+	if !p.runtime.IsStillWarm(time.Now().UnixMilli()) {
+		t.Fatal("precondition: the boiler should read as still warm")
+	}
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil || *snap.SwitchOnAt != onAt {
+		t.Fatalf("SwitchOnAt = %v after a still-warm restart, want the kept %d", snap.SwitchOnAt, onAt)
+	}
+}

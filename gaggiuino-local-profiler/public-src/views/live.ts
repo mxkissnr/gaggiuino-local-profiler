@@ -523,9 +523,10 @@ export function updatePreheatWidget(d: PreheatData): void {
 
   // #1498: a GaggiMate in standby is off, so neither the "ready" badge nor a
   // warming countdown may show — the payload can still carry a stale remaining.
-  // The idle title is owned by the live-data handler (handleLiveData prefers
+  // A machine whose last live message reported it unreachable is hidden the same
+  // way. The idle title is owned by the live-data handler (handleLiveData prefers
   // machine_standby and keeps its unreachable branch first); don't write it here.
-  if (d.standby) {
+  if (d.standby || _lastLiveMsg?.machineReachable === false) {
     readyBadge.style.display  = 'none';
     warmingWrap.style.display = 'none';
   } else if (d.ready) {
@@ -748,6 +749,13 @@ export function handleLiveData(msg: LiveMessage): void {
     const idleUpdateEl = document.getElementById('liveIdleUpdateHint');
     if (idleWarnEl)   idleWarnEl.style.display   = 'none';
     if (idleUpdateEl) idleUpdateEl.style.display = 'none';
+    // #1498 follow-up: an unreachable machine shows no preheat state -- hide the
+    // ready badge and the warming widget a stale preheat payload may have left
+    // visible (the same elements updatePreheatWidget toggles).
+    const preheatBadgeEl   = document.getElementById('preheat-ready-badge');
+    const preheatWarmingEl = document.getElementById('preheat-warming-wrap');
+    if (preheatBadgeEl)   preheatBadgeEl.style.display   = 'none';
+    if (preheatWarmingEl) preheatWarmingEl.style.display = 'none';
     // #1324: machine control is unavailable while unreachable -- hide the flush
     // button and close the brew-confirmation dialog (the machine answered it,
     // or the answer is moot now).

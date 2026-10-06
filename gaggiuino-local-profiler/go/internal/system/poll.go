@@ -658,11 +658,19 @@ func (p *Poller) applyStandbyTransition(now int64, standby bool) {
 		// window, so a later wake-up cannot report stabilityReady from the
 		// pre-standby session and cold standby readings never land in the open
 		// run's samples.
+		// A session opened while the machine was already in standby has no
+		// samples yet; drop it rather than finalising an empty one-second run.
+		p.discardEmptyPreheatRun()
 		p.endPreheatSession(now)
+		// The session is over and the machine is off, so drop the switch-on time
+		// too: a later poll error clears the standby flag, and without this
+		// buildPreheatResponse would count down the ended session's stale clock.
+		p.runtime.SetSwitchOnAt(nil)
+		p.savePreheatState()
 		log.Printf("system: machine standby -- preheat clock held")
 	} else {
 		p.beginPreheatSession(now)
-		log.Printf("machine left standby -- preheat session started")
+		log.Printf("system: machine left standby -- preheat session started")
 	}
 	p.liveMu.Unlock()
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
