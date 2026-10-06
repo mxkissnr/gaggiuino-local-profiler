@@ -18,7 +18,7 @@ const en: Translations = {
     recipe_dose_yield:'Dose → Yield', recipe_ratio:'Ratio', recipe_bean:'Bean', recipe_grinder:'Grinder', recipe_grinder_grind:(g,s)=>g?`${g} · grind ${s}`:`Grind ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · grind ${s} (last ${p})`:`Grind ${s} (last ${p})`,
     process_pressure:'Pressure (avg / max)', process_flow:'Pump flow (avg)', process_temp:'Temperature (avg ±σ)',
     conn_error:'Connection error',
-    // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
+    // #812 achievements: 56 open badges. The 7 secret ones are NOT here on
     // purpose — their copy is only sent to the browser once unlocked, so it
     // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Connected', ach_first_connect_d:'Successfully connected the machine.',
@@ -48,11 +48,19 @@ const en: Translations = {
     ach_shots_100_n:'Hundred', ach_shots_100_d:'One hundred shots logged.',
     ach_shots_500_n:'Five Hundred', ach_shots_500_d:'Five hundred shots logged.',
     ach_shots_1000_n:'Thousand', ach_shots_1000_d:'One thousand shots logged.',
+    ach_shots_2500_n:'Tireless', ach_shots_2500_d:'2,500 shots.',
     ach_streak_7_n:'Streak', ach_streak_7_d:'Brewed seven days in a row.',
     ach_streak_30_n:'Long Streak', ach_streak_30_d:'Brewed thirty days in a row.',
+    ach_litres_50_n:'Bottomless Barrel', ach_litres_50_d:'50 litres of espresso pulled.',
+    ach_year_round_n:'One Year In', ach_year_round_d:'Your first shot was at least a year ago.',
     ach_marathon_n:'Marathon', ach_marathon_d:'Five shots in a single day.',
     ach_night_n:'Night Shift', ach_night_d:'A shot pulled after 11 pm.',
     ach_early_n:'Early Riser', ach_early_d:'A shot pulled before 6 am.',
+    ach_midnight_round_n:'Midnight Round', ach_midnight_round_d:'Three shots after 11 pm in one night.',
+    ach_five_hundreds_n:'Five-Pack', ach_five_hundreds_d:'Five shots in a row scoring 100.',
+    ach_litres_10_n:'By the Litre', ach_litres_10_d:'10 litres of espresso pulled.',
+    ach_comeback_n:'Comeback', ach_comeback_d:'Score 95 or more on the first shot after a break of 5 days or longer.',
+    ach_second_helping_n:'Second Helping', ach_second_helping_d:'Two shots within one minute.',
     ach_maint_30_n:'Well Kept', ach_maint_30_d:'Thirty days with no overdue maintenance.',
     ach_maint_all_n:'All Round', ach_maint_all_d:'Every maintenance type done at least once.',
     ach_backflush_10_n:'Backflusher', ach_backflush_10_d:'Ten backflushes logged.',
@@ -75,6 +83,7 @@ const en: Translations = {
     ach_card_of:(n,total)=>`Card ${n} of ${total}`,
     ach_card_basics:'Basics', ach_card_craft:'Craft', ach_card_beans:'Beans',
     ach_card_endurance:'Endurance', ach_card_care:'Care', ach_card_house:'House & Guests',
+    ach_card_moments:'Moments',
     ach_card_secret:'Secret',
     ach_tap_hint:'Tap a stamp to see what it means.',
     ach_not_yet:'Not yet stamped.',

@@ -47,7 +47,7 @@ const LANGS = { de, en, it: itLang, fr, es, nl };
 // shorter loop.
 const CARD_NAME_KEYS = [
   'ach_card_basics', 'ach_card_craft', 'ach_card_beans', 'ach_card_endurance',
-  'ach_card_care', 'ach_card_house', 'ach_card_secret',
+  'ach_card_moments', 'ach_card_care', 'ach_card_house', 'ach_card_secret',
 ];
 const CHROME_KEYS = [
   'nav_achievements', 'ach_card_of', 'ach_full', 'ach_stamped_on',
@@ -55,7 +55,7 @@ const CHROME_KEYS = [
 ];
 
 describe('achievements view — i18n completeness', () => {
-  it('every one of the 7 category names exists in all 6 languages', () => {
+  it('every one of the 8 category names exists in all 6 languages', () => {
     for (const [lang, dict] of Object.entries(LANGS)) {
       for (const key of CARD_NAME_KEYS) {
         expect(dict[key], `missing translation: ${lang}:${key}`).toBeTruthy();

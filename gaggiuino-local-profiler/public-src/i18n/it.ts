@@ -18,7 +18,7 @@ const it: Partial<Translations> = {
     recipe_dose_yield:'Dose → Resa', recipe_ratio:'Ratio', recipe_bean:'Caffè', recipe_grinder:'Mulino', recipe_grinder_grind:(g,s)=>g?`${g} · macinatura ${s}`:`Macinatura ${s}`, recipe_grind_with_baseline:(g,s,p)=>g?`${g} · macinatura ${s} (ultima ${p})`:`Macinatura ${s} (ultima ${p})`,
     process_pressure:'Pressione (med / max)', process_flow:'Flusso pompa (med)', process_temp:'Temperatura (med ±σ)',
     conn_error:'Errore di connessione',
-    // #812 achievements: 48 open badges. The 6 secret ones are NOT here on
+    // #812 achievements: 56 open badges. The 7 secret ones are NOT here on
     // purpose — their copy is only sent to the browser once unlocked, so it
     // cannot be spoiled by reading this bundle.
     ach_first_connect_n:'Collegata', ach_first_connect_d:'Macchina collegata con successo.',
@@ -48,11 +48,19 @@ const it: Partial<Translations> = {
     ach_shots_100_n:'Cento', ach_shots_100_d:'Cento estrazioni registrate.',
     ach_shots_500_n:'Cinquecento', ach_shots_500_d:'Cinquecento estrazioni registrate.',
     ach_shots_1000_n:'Mille', ach_shots_1000_d:'Mille estrazioni registrate.',
+    ach_shots_2500_n:'Instancabile', ach_shots_2500_d:'2.500 estrazioni.',
     ach_streak_7_n:'Serie', ach_streak_7_d:'Sette giorni consecutivi di estrazioni.',
     ach_streak_30_n:'Lunga serie', ach_streak_30_d:'Trenta giorni consecutivi di estrazioni.',
+    ach_litres_50_n:'Botte senza fondo', ach_litres_50_d:'50 litri di espresso estratti.',
+    ach_year_round_n:'Un anno insieme', ach_year_round_d:'La tua prima estrazione risale ad almeno un anno fa.',
     ach_marathon_n:'Maratona', ach_marathon_d:'Cinque estrazioni in un solo giorno.',
     ach_night_n:'Turno di notte', ach_night_d:'Un\'estrazione dopo le 23.',
     ach_early_n:'Mattiniero', ach_early_d:'Un\'estrazione prima delle 6.',
+    ach_midnight_round_n:'Giro di mezzanotte', ach_midnight_round_d:'Tre estrazioni dopo le 23 in una notte.',
+    ach_five_hundreds_n:'Cinque perfette', ach_five_hundreds_d:'Cinque estrazioni di fila con punteggio 100.',
+    ach_litres_10_n:'A litri', ach_litres_10_d:'10 litri di espresso estratti.',
+    ach_comeback_n:'Ritorno', ach_comeback_d:'Punteggio 95 o più sulla prima estrazione dopo una pausa di 5 giorni o più.',
+    ach_second_helping_n:'Bis', ach_second_helping_d:'Due estrazioni in un minuto.',
     ach_maint_30_n:'Ben tenuta', ach_maint_30_d:'Trenta giorni senza manutenzioni scadute.',
     ach_maint_all_n:'A tutto tondo', ach_maint_all_d:'Ogni tipo di manutenzione svolto almeno una volta.',
     ach_backflush_10_n:'Backflush', ach_backflush_10_d:'Dieci backflush registrati.',
@@ -75,6 +83,7 @@ const it: Partial<Translations> = {
     ach_card_of:(n,total)=>`Carta ${n} di ${total}`,
     ach_card_basics:'Basi', ach_card_craft:'Abilità', ach_card_beans:'Chicchi',
     ach_card_endurance:'Resistenza', ach_card_care:'Cura', ach_card_house:'Casa e ospiti',
+    ach_card_moments:'Momenti',
     ach_card_secret:'Segreto',
     ach_tap_hint:'Tocca un timbro per scoprire cosa significa.',
     ach_not_yet:'Non ancora timbrato.',
