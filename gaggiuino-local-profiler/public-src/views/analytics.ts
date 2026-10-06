@@ -64,6 +64,9 @@ function _machines(): MachineRow[] { return S.machines; }
 const ANALYTICS_PREFS_KEY = 'glp.analyticsFilter';
 const DEFAULT_ANALYTICS_FILTER: AnalyticsPageFilter = { days: 30, query: '' };
 
+// Whether the viewer left the "More insights" fold open (#1467).
+const ANALYTICS_MORE_KEY = 'glp.analyticsMore.open';
+
 function _loadAnalyticsFilter(): AnalyticsPageFilter {
   try {
     const raw = localStorage.getItem(ANALYTICS_PREFS_KEY);
@@ -220,6 +223,63 @@ interface TopojsonModule {
   feature(topology: WorldTopo, object: unknown): GeoJsonFeatureCollection;
 }
 
+// ── "More insights" fold (#1467) ───────────────────────────────────────────
+// The rarer charts live in a <details> that is closed by default. Chart.js and
+// ECharts cannot measure a hidden canvas, so their builders run only once the
+// fold is open — and on later filter changes only while it stays open. The
+// viewer's open/closed choice is remembered across visits.
+function _moreFold(): HTMLDetailsElement | null {
+  return document.getElementById('analyticsMore') as HTMLDetailsElement | null;
+}
+
+// Pure decision behind the lazy fold, exported so a test can pin "closed → no
+// build, first open → build" without a DOM.
+export function shouldBuildAnalyticsMore(foldOpen: boolean, pageEmpty: boolean): boolean {
+  return foldOpen && !pageEmpty;
+}
+
+function _saveMoreOpen(open: boolean): void {
+  try { localStorage.setItem(ANALYTICS_MORE_KEY, open ? '1' : '0'); } catch { /* private mode / quota */ }
+}
+
+let _moreWired = false;
+
+function _updateMoreCount(): void {
+  const fold = _moreFold();
+  const countEl = document.getElementById('analyticsMoreCount');
+  if (!fold || !countEl) return;
+  countEl.textContent = t('analytics_more_count', fold.querySelectorAll('.analytics-sec').length);
+}
+
+function _rebuildMore(): void {
+  if (!shouldBuildAnalyticsMore(_moreFold()?.open ?? false, _pageShots().length === 0)) return;
+  buildProfileChart();
+  buildGrinderStats();
+  buildBasketStats();
+  buildPuckScreenStats();
+  buildDistribution();
+  buildTimeOfDay();
+  buildWeekdayHourHeatmap();
+  buildMachineComparison();
+  buildDialinProgression();
+}
+
+// Restore the remembered fold state once, then run its builders on every open
+// and keep the section counter in the viewer's language.
+function _wireMoreFold(): void {
+  const fold = _moreFold();
+  if (!fold) return;
+  if (!_moreWired) {
+    _moreWired = true;
+    try { fold.open = localStorage.getItem(ANALYTICS_MORE_KEY) === '1'; } catch { /* private mode */ }
+    fold.addEventListener('toggle', () => {
+      _saveMoreOpen(fold.open);
+      _rebuildMore();
+    });
+  }
+  _updateMoreCount();
+}
+
 // ── Analytics entry point ─────────────────────────────────────────────────
 export function initAnalytics() {
   // #957: S.allShots is filled by a background page walk after the Shots tab
@@ -229,17 +289,17 @@ export function initAnalytics() {
   if (!S.allShotsLoaded) {
     window.onAllShotMetaLoaded = () => { window.onAllShotMetaLoaded = null; initAnalytics(); };
   }
+  _wireMoreFold();
   rebuildAnalyticsPage();
   buildCalendar();
   buildFacts();
-  buildMachineComparison();
 }
 
 // Re-runs every builder that honours the toolbar's period/query, and applies
 // the empty state: an all-empty filter shows one quiet line and hides those
 // sections instead of drawing empty charts. The whole-history sections
-// (coffee year, lifetime facts, machine comparison) are rebuilt separately by
-// initAnalytics().
+// (coffee year, lifetime facts) are rebuilt separately by initAnalytics(); the
+// folded charts below only run while the fold is open.
 export function rebuildAnalyticsPage(): void {
   const empty = _pageShots().length === 0;
   const emptyEl = document.getElementById('analyticsFilterEmpty');
@@ -254,14 +314,7 @@ export function rebuildAnalyticsPage(): void {
   buildRecipeSummary();
   buildBeanShelf();
   void buildWorldMap();
-  buildProfileChart();
-  buildGrinderStats();
-  buildBasketStats();
-  buildPuckScreenStats();
-  buildDistribution();
-  buildTimeOfDay();
-  buildWeekdayHourHeatmap();
-  buildDialinProgression();
+  _rebuildMore();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
