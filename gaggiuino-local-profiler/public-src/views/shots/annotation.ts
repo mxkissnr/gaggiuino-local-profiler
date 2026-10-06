@@ -387,12 +387,17 @@ export function _updateMilkFieldVisibility(): void {
   // removed) keeps the pre-#1453 behaviour: show the picker whenever milk types
   // exist, and never clear the saved milk, so opening such a shot cannot
   // autosave milkType: null.
+  // No drink selected also keeps the saved milk: the picker is hidden as before,
+  // but a shot annotated with a milk but no drink (older data, MCP annotate)
+  // must not lose its milk on the next autosave. The milk is cleared only for a
+  // known drink that does not use it.
   const unknownDrink = !!drinkId && !drink;
+  const drinkUsesMilk = Number(drink?.milkMl) > 0;
   const visible      = unknownDrink
     ? !!S.milkTypes?.length
-    : !!(S.milkTypes?.length && drinkId && Number(drink?.milkMl) > 0);
+    : !!(S.milkTypes?.length && drinkId && drinkUsesMilk);
   field.style.display = visible ? '' : 'none';
-  if (!visible && !unknownDrink) {
+  if (drink && !drinkUsesMilk) {
     const hidden = document.getElementById('annMilkType') as HTMLInputElement | null;
     if (hidden?.value) _renderMilkPills('');
   }

@@ -79,6 +79,14 @@ describe('#1453 milk field visibility follows the chosen drink', () => {
     expect(el('milkTypeField').style.display).toBe('none');
   });
 
+  it('hides the field but keeps the saved milk when no drink is selected', () => {
+    el('annDrinkType').value = '';
+    el('annMilkType').value = '1';
+    _updateMilkFieldVisibility();
+    expect(el('milkTypeField').style.display).toBe('none');
+    expect(el('annMilkType').value).toBe('1');
+  });
+
   it('hides the field and clears the milk selection when switching to a milk-free drink', () => {
     _renderDrinkPills('latte');
     _updateMilkFieldVisibility();
