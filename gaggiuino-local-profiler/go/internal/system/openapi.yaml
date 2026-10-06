@@ -2979,6 +2979,9 @@ paths:
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
+  # A response description that contains a comma must be quoted inside a flow
+  # mapping, or openapi-typescript reads only the text before the comma (#1324).
+
   /api/machine/flush/start:
     post:
       tags: [MachineControl]
