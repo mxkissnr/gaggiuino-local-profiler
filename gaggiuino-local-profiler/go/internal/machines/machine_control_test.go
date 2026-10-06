@@ -30,6 +30,9 @@ type fakeControlGaggiMate struct {
 	version  string
 	status   map[string]any
 	received []map[string]any
+	// wsConn is the most recently accepted connection, so a test can push
+	// arbitrary frames (e.g. evt:brew:confirm) or drop it to force a reconnect.
+	wsConn *websocket.Conn
 
 	conns atomic.Int64
 }
@@ -69,12 +72,53 @@ func (f *fakeControlGaggiMate) receivedType(tp string) bool {
 	return false
 }
 
+// framesOfType returns a copy of every received frame of this tp, in order.
+func (f *fakeControlGaggiMate) framesOfType(tp string) []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []map[string]any
+	for _, m := range f.received {
+		if m["tp"] == tp {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// push writes an arbitrary frame to the most recent open connection, so tests
+// can drive events the real controller sends unsolicited (evt:brew:confirm,
+// evt:brew:confirm:cancel).
+func (f *fakeControlGaggiMate) push(frame map[string]any) {
+	f.mu.Lock()
+	conn := f.wsConn
+	f.mu.Unlock()
+	if conn == nil {
+		return
+	}
+	b, _ := json.Marshal(frame)
+	_ = conn.Write(context.Background(), websocket.MessageText, b)
+}
+
+// dropConn closes the most recent connection, forcing the live client to
+// reconnect.
+func (f *fakeControlGaggiMate) dropConn() {
+	f.mu.Lock()
+	conn := f.wsConn
+	f.mu.Unlock()
+	if conn != nil {
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+	}
+}
+
 func (f *fakeControlGaggiMate) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
 	}
 	f.conns.Add(1)
+	f.mu.Lock()
+	f.wsConn = conn
+	f.mu.Unlock()
 	defer conn.CloseNow()
 	ctx := r.Context()
 
@@ -180,7 +224,7 @@ func warmControlSession(t *testing.T, lc *gaggiMateLiveClient, host, want string
 	t.Helper()
 	lc.Status(host)
 	waitUntil(t, 2*time.Second, func() bool {
-		_, v, ok := lc.controlSnapshot(host)
+		_, v, _, ok := lc.controlSnapshot(host)
 		return ok && v == want
 	})
 }
@@ -198,7 +242,7 @@ func TestGaggiMateLiveClient_RequestsOTASettingsOnConnect(t *testing.T) {
 	if !fake.receivedType("req:ota-settings") {
 		t.Fatal("the session did not send req:ota-settings on connect")
 	}
-	_, v, ok := lc.controlSnapshot(fake.URL)
+	_, v, _, ok := lc.controlSnapshot(fake.URL)
 	if !ok || v != "v1.9.0" {
 		t.Fatalf("cached version = %q, ok = %v, want %q", v, ok, "v1.9.0")
 	}
@@ -363,7 +407,7 @@ func TestMachineControlRoutes_UnavailableAndBusy(t *testing.T) {
 	}
 	waitUntil(t, 2*time.Second, func() bool {
 		h.gaggimateLive.Status(oldFirmware.URL)
-		_, _, ok := h.gaggimateLive.controlSnapshot(oldFirmware.URL)
+		_, _, _, ok := h.gaggimateLive.controlSnapshot(oldFirmware.URL)
 		return ok
 	})
 	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/flush/start",
@@ -384,7 +428,7 @@ func TestMachineControlRoutes_UnavailableAndBusy(t *testing.T) {
 	}
 	waitUntil(t, 2*time.Second, func() bool {
 		h.gaggimateLive.Status(busy.URL)
-		_, v, ok := h.gaggimateLive.controlSnapshot(busy.URL)
+		_, v, _, ok := h.gaggimateLive.controlSnapshot(busy.URL)
 		return ok && v == "v1.9.0"
 	})
 	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/flush/start",
@@ -428,4 +472,283 @@ func TestControlRequestDoesNotOpenSession(t *testing.T) {
 	if n := fake.conns.Load(); n != 0 {
 		t.Fatalf("controlRequest opened %d connections, want 0", n)
 	}
+}
+
+// brewConfirmFrame is the evt:brew:confirm frame the firmware broadcasts when a
+// brew start is blocked by error-level warnings (#1324).
+func brewConfirmFrame() map[string]any {
+	warn := []any{
+		map[string]any{"k": "water", "l": 2.0},
+		map[string]any{"k": "flush", "l": 1.0},
+	}
+	return map[string]any{"tp": "evt:brew:confirm", "warn": warn}
+}
+
+// newWarmControlAdapter spins up a fake controller, a live client, and an
+// adapter whose session is warmed to firmware v1.9.0.
+func newWarmControlAdapter(t *testing.T) (*fakeControlGaggiMate, *GaggiMateAdapter, *Machine) {
+	t.Helper()
+	allowLoopbackMachineHost(t)
+	fake := newFakeControlGaggiMate()
+	t.Cleanup(fake.Close)
+	lc := newGaggiMateLiveClient()
+	lc.idleTimeout = time.Hour
+	t.Cleanup(lc.DisconnectAll)
+	a := NewGaggiMateAdapter(lc)
+	m := testGaggiMateMachine(fake.URL)
+	warmControlSession(t, lc, fake.URL, "v1.9.0")
+	return fake, a, m
+}
+
+func TestBrewConfirm_StoredInOrder(t *testing.T) {
+	fake, a, m := newWarmControlAdapter(t)
+
+	fake.push(brewConfirmFrame())
+	waitControl(t, a, m, func(s ControlState) bool {
+		return len(s.BrewConfirm) == 2 && s.BrewConfirm[0] == "water" && s.BrewConfirm[1] == "flush"
+	})
+}
+
+func TestBrewConfirm_ClearedByCancelEvent(t *testing.T) {
+	fake, a, m := newWarmControlAdapter(t)
+
+	fake.push(brewConfirmFrame())
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm != nil })
+
+	fake.push(map[string]any{"tp": "evt:brew:confirm:cancel"})
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm == nil })
+}
+
+func TestBrewConfirm_ClearedByActiveProcess(t *testing.T) {
+	fake, a, m := newWarmControlAdapter(t)
+
+	fake.push(brewConfirmFrame())
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm != nil })
+
+	fake.setStatus(map[string]any{"tp": "evt:status", "m": 1.0, "process": map[string]any{"a": 1.0, "s": "brew"}, "sys": map[string]any{"s": "ready"}})
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm == nil })
+}
+
+func TestBrewConfirm_ClearedByLeavingBrewMode(t *testing.T) {
+	fake, a, m := newWarmControlAdapter(t)
+
+	fake.push(brewConfirmFrame())
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm != nil })
+
+	fake.setStatus(map[string]any{"tp": "evt:status", "m": 0.0, "sys": map[string]any{"s": "ready"}})
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm == nil })
+}
+
+func TestBrewConfirm_ClearedByReconnect(t *testing.T) {
+	fake, a, m := newWarmControlAdapter(t)
+
+	fake.push(brewConfirmFrame())
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm != nil })
+
+	fake.dropConn()
+	// The live client reconnects after liveReconnectDelay; a new connection
+	// resets the session's status and drops the pending confirmation.
+	waitUntil(t, 6*time.Second, func() bool {
+		s, ok := a.ControlState(m)
+		return ok && s.BrewConfirm == nil
+	})
+}
+
+func TestBrewConfirm_ExpiresByTTL(t *testing.T) {
+	oldTTL := brewConfirmTTL
+	brewConfirmTTL = 200 * time.Millisecond
+	t.Cleanup(func() { brewConfirmTTL = oldTTL })
+
+	fake, a, m := newWarmControlAdapter(t)
+
+	fake.push(brewConfirmFrame())
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm != nil })
+	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm == nil })
+}
+
+// newControlRouteFixture builds a Handlers/registry/mux around one fake
+// GaggiMate machine with a warmed live session and machine control enabled —
+// the common setup for the brew-confirm and flush-stop route tests.
+func newControlRouteFixture(t *testing.T) (*Handlers, *Registry, *http.ServeMux, *fakeControlGaggiMate, *Machine) {
+	t.Helper()
+	allowLoopbackMachineHost(t)
+	h, registry, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	fake := newFakeControlGaggiMate()
+	t.Cleanup(fake.Close)
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	warmControlSession(t, h.gaggimateLive, fake.URL, "v1.9.0")
+	if err := db.SetKVBool(sqlDB, machineControlKVKey, true); err != nil {
+		t.Fatalf("SetKVBool: %v", err)
+	}
+	return h, registry, mux, fake, machine
+}
+
+func controlPost(mux *http.ServeMux, machineID int64, path string) *httptest.ResponseRecorder {
+	body := strings.NewReader(`{"machineId":` + strconv.FormatInt(machineID, 10) + `}`)
+	return doRequest(mux, httptest.NewRequest(http.MethodPost, path, body))
+}
+
+func TestMachineControlRoutes_BrewConfirm(t *testing.T) {
+	h, registry, mux, fake, machine := newControlRouteFixture(t)
+	ga := h.gaggimate.(*GaggiMateAdapter)
+
+	// Nothing pending: 409 and GLP never sends req:process:activate.
+	rec := controlPost(mux, machine.ID, "/api/machine/brew-confirm/confirm")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("confirm with nothing pending = %d, want 409 (body %s)", rec.Code, rec.Body)
+	}
+	if fake.receivedType("req:process:activate") {
+		t.Fatal("req:process:activate was sent with no confirmation pending")
+	}
+
+	// A pending confirmation: 200 and exactly the ignoreWarnings activate frame.
+	fake.push(brewConfirmFrame())
+	waitControl(t, ga, machine, func(s ControlState) bool { return s.BrewConfirm != nil })
+
+	rec = controlPost(mux, machine.ID, "/api/machine/brew-confirm/confirm")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("confirm with a pending confirmation = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+	waitUntil(t, time.Second, func() bool { return fake.receivedType("req:process:activate") })
+	activate := fake.framesOfType("req:process:activate")
+	if len(activate) != 1 {
+		t.Fatalf("req:process:activate frames = %d, want 1", len(activate))
+	}
+	if len(activate[0]) != 2 || !looseTruthy(activate[0]["ignoreWarnings"]) {
+		t.Fatalf("activate frame = %v, want {tp, ignoreWarnings:true}", activate[0])
+	}
+	if s, ok := ga.ControlState(machine); !ok || s.BrewConfirm != nil {
+		t.Fatalf("BrewConfirm after confirm = %v (ok %v), want nil", s.BrewConfirm, ok)
+	}
+	if _, err := ControlStateFor(registry, h.gaggimate, machine); err != nil {
+		t.Fatalf("ControlStateFor after confirm: %v", err)
+	}
+
+	// Cancel is allowed with nothing pending and delivers the cancel frame.
+	rec = controlPost(mux, machine.ID, "/api/machine/brew-confirm/cancel")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cancel = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+	waitUntil(t, time.Second, func() bool { return fake.receivedType("req:brew:confirm:cancel") })
+}
+
+func TestMachineControlRoutes_FlushStopDeactivatesUtility(t *testing.T) {
+	h, _, mux, fake, machine := newControlRouteFixture(t)
+	ga := h.gaggimate.(*GaggiMateAdapter)
+
+	// A utility process (fixed-length flush) is running: Stop also deactivates.
+	fake.setStatus(map[string]any{"tp": "evt:status", "m": 1.0, "process": map[string]any{"a": 1.0, "u": 1.0}, "sys": map[string]any{"s": "ready"}})
+	waitControl(t, ga, machine, func(s ControlState) bool { return s.Flushing })
+	rec := controlPost(mux, machine.ID, "/api/machine/flush/stop")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("flush/stop (utility) = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+	waitUntil(t, time.Second, func() bool { return fake.receivedType("req:flush:stop") })
+	waitUntil(t, time.Second, func() bool { return len(fake.framesOfType("req:process:deactivate")) == 1 })
+
+	// A brew is running: Stop must never send req:process:deactivate.
+	fake.setStatus(map[string]any{"tp": "evt:status", "m": 1.0, "process": map[string]any{"a": 1.0, "s": "brew"}, "sys": map[string]any{"s": "ready"}})
+	waitControl(t, ga, machine, func(s ControlState) bool { return !s.Flushing })
+	rec = controlPost(mux, machine.ID, "/api/machine/flush/stop")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("flush/stop (brew) = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+	waitUntil(t, time.Second, func() bool { return len(fake.framesOfType("req:flush:stop")) == 2 })
+	if n := len(fake.framesOfType("req:process:deactivate")); n != 1 {
+		t.Fatalf("req:process:deactivate frames = %d, want 1 (Stop must not deactivate a brew)", n)
+	}
+}
+
+func TestMachineControlSettingsRoutes(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/control/settings", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET settings = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+	if body := decodeBody(t, rec.Body.Bytes()); body["enabled"] != false {
+		t.Fatalf("GET settings default = %v, want false", body["enabled"])
+	}
+
+	rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/control/settings",
+		strings.NewReader(`{"enabled":true}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST settings true = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+	rec = doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/control/settings", nil))
+	if body := decodeBody(t, rec.Body.Bytes()); body["enabled"] != true {
+		t.Fatalf("GET settings after enabling = %v, want true", body["enabled"])
+	}
+
+	for _, body := range []string{`{}`, `{"enabled":"yes"}`} {
+		rec = doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/control/settings",
+			strings.NewReader(body)))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("POST settings %s = %d, want 400 (body %s)", body, rec.Code, rec.Body)
+		}
+	}
+}
+
+func TestMachineControlRoutes_SettingsEnableUnlocksFlush(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+	fake := newFakeControlGaggiMate()
+	defer fake.Close()
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	warmControlSession(t, h.gaggimateLive, fake.URL, "v1.9.0")
+
+	// Machine control off: flush/start is 403.
+	if rec := controlPost(mux, machine.ID, "/api/machine/flush/start"); rec.Code != http.StatusForbidden {
+		t.Fatalf("flush/start while disabled = %d, want 403 (body %s)", rec.Code, rec.Body)
+	}
+
+	// Enable through the settings API: the same request now succeeds.
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/control/settings",
+		strings.NewReader(`{"enabled":true}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST settings = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+	if rec := controlPost(mux, machine.ID, "/api/machine/flush/start"); rec.Code != http.StatusOK {
+		t.Fatalf("flush/start after enabling = %d, want 200 (body %s)", rec.Code, rec.Body)
+	}
+}
+
+func TestGaggiMateGetStatus_FlushIsNotABrew(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newFakeControlGaggiMate()
+	defer fake.Close()
+	lc := newGaggiMateLiveClient()
+	lc.idleTimeout = time.Hour
+	t.Cleanup(lc.DisconnectAll)
+	a := NewGaggiMateAdapter(lc)
+	m := testGaggiMateMachine(fake.URL)
+	warmControlSession(t, lc, fake.URL, "v1.9.0")
+
+	// A utility process that also reports the brew stage is a flush, not a brew.
+	fake.setStatus(map[string]any{"tp": "evt:status", "m": 1.0, "process": map[string]any{"a": 1.0, "u": 1.0, "s": "brew"}, "sys": map[string]any{"s": "ready"}})
+	waitUntil(t, 2*time.Second, func() bool {
+		st, err := a.GetStatus(context.Background(), m)
+		return err == nil && !st.Brewing
+	})
+
+	// The same process without u: a real brew.
+	fake.setStatus(map[string]any{"tp": "evt:status", "m": 1.0, "process": map[string]any{"a": 1.0, "s": "brew"}, "sys": map[string]any{"s": "ready"}})
+	waitUntil(t, 2*time.Second, func() bool {
+		st, err := a.GetStatus(context.Background(), m)
+		return err == nil && st.Brewing
+	})
 }

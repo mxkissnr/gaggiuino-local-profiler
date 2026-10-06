@@ -63,6 +63,15 @@ type gaggiMateLiveSession struct {
 	connected bool
 	version   string
 
+	// brew-confirmation state (#1324): a brew start blocked by error-level
+	// warnings is announced with evt:brew:confirm, whose warn[].k keys are
+	// stored in confirm (in order). confirmPending is true while such a
+	// prompt is outstanding; confirmAt bounds it by brewConfirmTTL. All
+	// guarded by mu.
+	confirm        []string
+	confirmAt      time.Time
+	confirmPending bool
+
 	cancel    context.CancelFunc
 	idleTimer *time.Timer
 	// done is closed by run() when it returns.
@@ -184,6 +193,9 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 	s.status = nil
 	s.connected = true
 	s.version = ""
+	// A new connection also drops any outstanding brew confirmation: it
+	// belonged to the previous connection's session.
+	s.clearBrewConfirmLocked()
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -235,6 +247,40 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 				// status (absent key keeps, null clears) instead of replacing.
 				s.status = mergeGaggiMateStatus(s.status, msg)
 				s.statusAt = time.Now()
+				// A status that shows the brew running (process.a==1) or that
+				// leaves brew mode (m present and != 1) resolves any pending
+				// brew confirmation (#1324).
+				if s.confirmPending {
+					proc, _ := s.status["process"].(map[string]any)
+					if looseFloat(proc["a"]) == 1 {
+						s.clearBrewConfirmLocked()
+					} else if m, ok := s.status["m"]; ok && looseFloat(m) != 1 {
+						s.clearBrewConfirmLocked()
+					}
+				}
+				s.mu.Unlock()
+			} else if tp == "evt:brew:confirm" {
+				// A brew start was blocked by error-level warnings; the
+				// controller asks every UI to confirm or decline. Store the
+				// warning keys in order (#1324).
+				keys := []string{}
+				if warn, ok := msg["warn"].([]any); ok {
+					for _, w := range warn {
+						obj, _ := w.(map[string]any)
+						if k, ok := obj["k"].(string); ok {
+							keys = append(keys, k)
+						}
+					}
+				}
+				s.mu.Lock()
+				s.confirm = keys
+				s.confirmAt = time.Now()
+				s.confirmPending = true
+				s.mu.Unlock()
+			} else if tp == "evt:brew:confirm:cancel" {
+				// Any UI declined: the prompt is gone for everyone.
+				s.mu.Lock()
+				s.clearBrewConfirmLocked()
 				s.mu.Unlock()
 			} else if tp == "evt:history-shot-saved" {
 				// Firmware v1.9.0+ announces a new history shot here (#1409). Read
@@ -415,6 +461,30 @@ func (c *gaggiMateLiveClient) controlRequest(ctx context.Context, baseURL, reqTy
 	return c.request(ctx, baseURL, reqType, nil, gaggimateControlFrameTTL)
 }
 
+// controlSend enqueues a fire-and-forget control frame through an
+// already-existing, connected session. The frame gets no rid and no response is
+// awaited — the confirm/cancel/activate frames the firmware answers with no
+// response frame (#1324). Like controlRequest it never opens a session, so a
+// missing one is errGaggiMateNotConnected.
+func (c *gaggiMateLiveClient) controlSend(ctx context.Context, baseURL string, frame map[string]any) error {
+	s := c.peek(baseURL)
+	if s == nil || !s.isConnected() {
+		return errGaggiMateNotConnected
+	}
+	body, err := json.Marshal(frame)
+	if err != nil {
+		return err
+	}
+	select {
+	case s.outgoing <- gaggimateOutgoingFrame{data: body, expires: time.Now().Add(gaggimateControlFrameTTL)}:
+		return nil
+	case <-s.done:
+		return fmt.Errorf("live session closed before sending control frame")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // isConnected reports whether this session currently holds a live WS
 // connection.
 func (s *gaggiMateLiveSession) isConnected() bool {
@@ -423,21 +493,56 @@ func (s *gaggiMateLiveSession) isConnected() bool {
 	return s.connected
 }
 
-// controlSnapshot returns the cached evt:status and firmware version for
-// baseURL, but only when a session exists, is currently connected, and its
-// status is fresh. It never creates a session or touches the idle timer
-// (#1324) — unlike Status, which lazily opens one.
-func (c *gaggiMateLiveClient) controlSnapshot(baseURL string) (status map[string]any, version string, ok bool) {
+// brewConfirmTTL bounds how long an unanswered evt:brew:confirm prompt stays
+// live. A pending confirm older than this is treated as cleared, so a stale
+// prompt can never be confirmed into a brew (#1324). A var so tests can
+// shorten it.
+var brewConfirmTTL = 60 * time.Second
+
+// controlSnapshot returns the cached evt:status, firmware version, and any
+// pending brew-confirmation warning keys for baseURL, but only when a session
+// exists, is currently connected, and its status is fresh. The confirm slice is
+// a copy (nil when no prompt is pending). It never creates a session or touches
+// the idle timer (#1324) — unlike Status, which lazily opens one.
+func (c *gaggiMateLiveClient) controlSnapshot(baseURL string) (status map[string]any, version string, confirm []string, ok bool) {
 	s := c.peek(baseURL)
 	if s == nil {
-		return nil, "", false
+		return nil, "", nil, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.connected || s.status == nil || freshOrNilAt(s.statusAt) {
-		return nil, "", false
+		return nil, "", nil, false
 	}
-	return s.status, s.version, true
+	if s.confirmPending {
+		if time.Since(s.confirmAt) > brewConfirmTTL {
+			s.clearBrewConfirmLocked()
+		} else {
+			confirm = make([]string, len(s.confirm))
+			copy(confirm, s.confirm)
+		}
+	}
+	return s.status, s.version, confirm, true
+}
+
+// clearBrewConfirmLocked drops any pending brew confirmation. Must be called
+// with s.mu held.
+func (s *gaggiMateLiveSession) clearBrewConfirmLocked() {
+	s.confirm = nil
+	s.confirmAt = time.Time{}
+	s.confirmPending = false
+}
+
+// clearBrewConfirm drops any pending brew confirmation on baseURL's existing
+// session. A missing session is a no-op (#1324).
+func (c *gaggiMateLiveClient) clearBrewConfirm(baseURL string) {
+	s := c.peek(baseURL)
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.clearBrewConfirmLocked()
+	s.mu.Unlock()
 }
 
 // Status returns the last cached evt:status for baseURL and whether it is

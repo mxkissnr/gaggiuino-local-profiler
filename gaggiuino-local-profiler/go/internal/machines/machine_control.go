@@ -32,6 +32,9 @@ type ControlState struct {
 	MachineID int64 `json:"machineId"`
 	CanFlush  bool  `json:"canFlush"`
 	Flushing  bool  `json:"flushing"`
+	// BrewConfirm lists the warning keys of a pending brew confirmation, in
+	// order. nil means no confirmation is pending (JSON null) (#1324).
+	BrewConfirm []string `json:"brewConfirm"`
 }
 
 // MachineController is implemented by adapters that support opt-in machine
@@ -40,6 +43,8 @@ type MachineController interface {
 	ControlState(m *Machine) (ControlState, bool)
 	FlushStart(ctx context.Context, m *Machine) error
 	FlushStop(ctx context.Context, m *Machine) error
+	ConfirmBrew(ctx context.Context, m *Machine) error
+	CancelBrewConfirm(ctx context.Context, m *Machine) error
 }
 
 var _ MachineController = (*GaggiMateAdapter)(nil)
@@ -57,6 +62,9 @@ var (
 	// errFlushBusy means a flush was requested while the machine is not idle in
 	// brew mode (surfaced as 409).
 	errFlushBusy = errors.New("machine is not idle in brew mode")
+	// errNoBrewConfirmPending means a brew confirmation was requested but no
+	// evt:brew:confirm is outstanding (surfaced as 409).
+	errNoBrewConfirmPending = errors.New("no brew confirmation is pending")
 	// errGaggiMateNotConnected means no connected live session exists for the
 	// machine (surfaced as 409).
 	errGaggiMateNotConnected = errors.New("gaggimate machine is not connected")
@@ -76,6 +84,16 @@ func (r *Registry) MachineControlEnabled() bool {
 		return false
 	}
 	return v
+}
+
+// SetMachineControlEnabled stores the opt-in machine-control setting. This key
+// is deliberately NOT part of backup/restore: a restore must never silently
+// enable remote control of a machine (#1324).
+func (r *Registry) SetMachineControlEnabled(v bool) error {
+	if r == nil || r.db == nil {
+		return errors.New("registry has no database")
+	}
+	return db.SetKVBool(r.db, machineControlKVKey, v)
 }
 
 // ControlStateFor is the single gate every machine-control entry point goes
@@ -143,7 +161,7 @@ func (a *GaggiMateAdapter) ControlState(m *Machine) (ControlState, bool) {
 	if !ok {
 		return ControlState{}, false
 	}
-	status, version, ok := a.live.controlSnapshot(baseURL)
+	status, version, confirm, ok := a.live.controlSnapshot(baseURL)
 	if !ok || !gaggiMateControlFirmware(version) {
 		return ControlState{}, false
 	}
@@ -162,8 +180,9 @@ func (a *GaggiMateAdapter) ControlState(m *Machine) (ControlState, bool) {
 	}
 
 	return ControlState{
-		CanFlush: looseFloat(status["m"]) == 1 && !active && ready,
-		Flushing: active && utility,
+		CanFlush:    looseFloat(status["m"]) == 1 && !active && ready,
+		Flushing:    active && utility,
+		BrewConfirm: confirm,
 	}, true
 }
 
@@ -188,19 +207,70 @@ func (a *GaggiMateAdapter) FlushStart(ctx context.Context, m *Machine) error {
 	return nil
 }
 
-// FlushStop ends a hold-to-flush on a GaggiMate.
+// FlushStop ends a hold-to-flush on a GaggiMate. It also ends a fixed-length
+// flush: Stop behaves like GaggiMate's own web UI, which deactivates a running
+// utility process too. req:process:deactivate is sent only when a utility
+// process (u==1) is actually running, so Stop can never end a brew.
 func (a *GaggiMateAdapter) FlushStop(ctx context.Context, m *Machine) error {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
 		return err
 	}
-	_, err = a.live.controlRequest(ctx, baseURL, "req:flush:stop")
-	return err
+	if _, err = a.live.controlRequest(ctx, baseURL, "req:flush:stop"); err != nil {
+		return err
+	}
+	if state, ok := a.ControlState(m); ok && state.Flushing {
+		if err := a.live.controlSend(ctx, baseURL, map[string]any{"tp": "req:process:deactivate"}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ConfirmBrew accepts a pending brew confirmation and starts the brew. It is
+// the only code path that ever sends req:process:activate, so GLP never starts
+// a brew unprompted (#1324). Without a pending confirmation it returns
+// errNoBrewConfirmPending.
+func (a *GaggiMateAdapter) ConfirmBrew(ctx context.Context, m *Machine) error {
+	baseURL, err := BaseURLFor(ctx, m)
+	if err != nil {
+		return err
+	}
+	state, ok := a.ControlState(m)
+	if !ok {
+		return ErrMachineControlUnavailable
+	}
+	if state.BrewConfirm == nil {
+		return errNoBrewConfirmPending
+	}
+	if err := a.live.controlSend(ctx, baseURL, map[string]any{"tp": "req:process:activate", "ignoreWarnings": true}); err != nil {
+		return err
+	}
+	a.live.clearBrewConfirm(baseURL)
+	return nil
+}
+
+// CancelBrewConfirm declines a pending brew confirmation for every UI. It is
+// allowed even when nothing is pending.
+func (a *GaggiMateAdapter) CancelBrewConfirm(ctx context.Context, m *Machine) error {
+	baseURL, err := BaseURLFor(ctx, m)
+	if err != nil {
+		return err
+	}
+	if err := a.live.controlSend(ctx, baseURL, map[string]any{"tp": "req:brew:confirm:cancel"}); err != nil {
+		return err
+	}
+	a.live.clearBrewConfirm(baseURL)
+	return nil
 }
 
 func (h *Handlers) registerMachineControlRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/machine/flush/start", h.flushStart)
 	mux.HandleFunc("POST /api/machine/flush/stop", h.flushStop)
+	mux.HandleFunc("POST /api/machine/brew-confirm/confirm", h.brewConfirmConfirm)
+	mux.HandleFunc("POST /api/machine/brew-confirm/cancel", h.brewConfirmCancel)
+	mux.HandleFunc("GET /api/machine/control/settings", h.getMachineControlSettings)
+	mux.HandleFunc("POST /api/machine/control/settings", h.setMachineControlSettings)
 }
 
 func (h *Handlers) flushStart(w http.ResponseWriter, r *http.Request) {
@@ -261,6 +331,72 @@ func (h *Handlers) flushStop(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// brewConfirmAction is the shared shape behind brewConfirmConfirm and
+// brewConfirmCancel: decode, resolve, run the same ControlStateFor gate the
+// flush routes use, then run action.
+func (h *Handlers) brewConfirmAction(w http.ResponseWriter, r *http.Request, action func(context.Context, MachineController, *Machine) error) {
+	var body struct {
+		MachineID *int64 `json:"machineId"`
+	}
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	if !ok {
+		return
+	}
+	if _, err := ControlStateFor(h.registry, adapter, machine); err != nil {
+		writeControlError(w, machine, err)
+		return
+	}
+	mc, ok := adapter.(MachineController)
+	if !ok {
+		writeControlError(w, machine, ErrMachineControlUnsupported)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	if err := action(ctx, mc, machine); err != nil {
+		writeControlError(w, machine, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *Handlers) brewConfirmConfirm(w http.ResponseWriter, r *http.Request) {
+	h.brewConfirmAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
+		return mc.ConfirmBrew(ctx, m)
+	})
+}
+
+func (h *Handlers) brewConfirmCancel(w http.ResponseWriter, r *http.Request) {
+	h.brewConfirmAction(w, r, func(ctx context.Context, mc MachineController, m *Machine) error {
+		return mc.CancelBrewConfirm(ctx, m)
+	})
+}
+
+func (h *Handlers) getMachineControlSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": h.registry.MachineControlEnabled()})
+}
+
+func (h *Handlers) setMachineControlSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	if body.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "enabled is required")
+		return
+	}
+	if err := h.registry.SetMachineControlEnabled(*body.Enabled); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"enabled": *body.Enabled})
+}
+
 // writeControlError maps a machine-control error to its HTTP response, mirroring
 // the shapes the settings/control proxy already uses.
 func writeControlError(w http.ResponseWriter, m *Machine, err error) {
@@ -276,6 +412,8 @@ func writeControlError(w http.ResponseWriter, m *Machine, err error) {
 		writeError(w, http.StatusConflict, ErrMachineControlUnavailable.Error())
 	case errors.Is(err, errFlushBusy):
 		writeError(w, http.StatusConflict, errFlushBusy.Error())
+	case errors.Is(err, errNoBrewConfirmPending):
+		writeError(w, http.StatusConflict, errNoBrewConfirmPending.Error())
 	default:
 		writeError(w, http.StatusBadGateway, err.Error())
 	}
