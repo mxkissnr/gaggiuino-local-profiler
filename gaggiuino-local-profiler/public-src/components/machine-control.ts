@@ -39,10 +39,11 @@ function _flushBtn(): HTMLButtonElement | null {
 function _renderFlushBtn(): void {
   const btn = _flushBtn();
   if (!btn) return;
-  const visible = _mc !== null && (_mc.canFlush || _mc.flushing);
+  const mc = _mc;
+  const visible = mc !== null && (mc.canFlush || mc.flushing);
   btn.style.display = visible ? '' : 'none';
-  if (!visible) return;
-  btn.textContent = _mc!.flushing ? t('live_flush_stop') : t('live_flush_start');
+  if (!mc || !visible) return;
+  btn.textContent = mc.flushing ? t('live_flush_stop') : t('live_flush_start');
   btn.disabled = _inFlight;
 }
 
@@ -60,18 +61,19 @@ export function renderMachineControl(mc: MachineControlState | null | undefined)
   const warnings = _mc?.brewConfirm ?? null;
   const visible = warnings !== null;
   modal.style.display = visible ? 'flex' : 'none';
-  if (!visible) return;
+  if (!warnings) return;
   const list = document.getElementById('brewConfirmWarnings');
-  if (list) list.textContent = warnings!.map(machineWarningLabel).join(' · ');
+  if (list) list.textContent = warnings.map(machineWarningLabel).join(' · ');
 }
 
 export async function toggleFlush(): Promise<void> {
   if (!_mc || _inFlight) return;
-  const flushing = _mc.flushing;
+  const mc = _mc;
+  const flushing = mc.flushing;
   _inFlight = true;
   _renderFlushBtn();
   try {
-    const r = flushing ? await stopFlush(_mc.machineId) : await startFlush(_mc.machineId);
+    const r = flushing ? await stopFlush(mc.machineId) : await startFlush(mc.machineId);
     if (!r.ok && window.showToast) window.showToast(t('error_generic', r.status));
   } finally {
     _inFlight = false;
