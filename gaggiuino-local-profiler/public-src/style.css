@@ -1669,17 +1669,21 @@
            on real installs). */
         .lib-sheet-backdrop { position: fixed; top: var(--dev-banner-h, 0px); left: 0; right: 0; bottom: 0; z-index: 900; background: rgba(0,0,0,.55); }
         .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: calc(88dvh - var(--dev-banner-h, 0px)); overflow-y: auto; overscroll-behavior-y: contain; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
-        .lib-sheet-head { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--sp-3); align-items: start; }
+        .lib-sheet-bar { position: sticky; top: calc(-1 * var(--sp-4)); z-index: 3; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: var(--sp-4) 0 var(--sp-2); margin-top: calc(-1 * var(--sp-4)); margin-bottom: var(--sp-3); background: var(--gray-900); border-bottom: 1px solid transparent; }
+        .lib-sheet-bar.is-scrolled { border-bottom-color: var(--gray-700); }
+        .lib-sheet-bar-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-3); font-weight: 600; color: var(--gray-100); }
+        .lib-sheet-bar-actions { display: flex; align-items: center; gap: var(--sp-1); justify-self: end; }
+        .lib-sheet-save { min-height: 36px; padding: 0 var(--sp-3); border: none; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-ink); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; }
+        .lib-sheet-save:hover { filter: brightness(1.05); }
+        .lib-sheet-save:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .lib-sheet-hero { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
         /* #1374: the grab pill drags the sheet down to close it on phones. */
         .lib-sheet-grab { width: 36px; height: 4px; margin: 0 auto var(--sp-3); border-radius: 999px; background: var(--gray-600); }
         /* Shared detail popover/sheet (#1467). On phones the host keeps the
            bottom-sheet look; from 900px up an anchored open gets .detail-pop
            and floats next to the anchor instead. */
-        .detail-sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-3); }
-        .detail-sheet-titles { min-width: 0; }
-        .detail-sheet-title { margin: 0; font-size: var(--fs-3); color: var(--gray-100); }
-        .detail-sheet-sub { margin: 2px 0 0; font-size: var(--fs-1); color: var(--gray-500); }
-        .detail-sheet-close { flex-shrink: 0; }
+        .detail-sheet-body { min-width: 0; }
+        .detail-sheet-sub { margin: 0 0 var(--sp-2); font-size: var(--fs-1); color: var(--gray-500); }
         .detail-backdrop { background: transparent; }
         .lib-sheet.detail-pop { left: 0; right: auto; bottom: auto; top: var(--dev-banner-h, 0px); width: min(360px, calc(100vw - 24px)); max-height: min(70vh, 560px); border-radius: var(--radius-lg); box-shadow: 0 8px 32px rgba(0,0,0,.45); }
         .detail-pop .lib-sheet-grab { display: none; }
@@ -1691,9 +1695,9 @@
            900px, or the browser scrolls/overscrolls the sheet and fires
            pointercancel after a few pixels, so the swipe never dismisses. */
         @media (max-width: 899px) {
-            .lib-sheet-grab, .lib-sheet-head, .lib-form-sheet-head { touch-action: none; }
+            .lib-sheet-grab, .lib-sheet-bar { touch-action: none; }
         }
-        .lib-sheet-photo { width: 72px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
+        .lib-sheet-photo { width: 96px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
         .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
         .lib-sheet-photo .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; }
         .lib-sheet-initials { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--gray-500); font-size: var(--fs-3); font-weight: 600; letter-spacing: .05em; }
@@ -1701,39 +1705,29 @@
         .lib-sheet-name { margin: 0; font-size: var(--fs-4); color: var(--gray-100); }
         .lib-sheet-badges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
         .lib-sheet-stock { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); color: var(--gray-400); font-size: var(--fs-1); }
-        .lib-sheet-head-actions { display: flex; align-items: center; gap: var(--sp-1); }
-        .lib-sheet-close { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: none; border-radius: 50%; background: var(--gray-800); color: var(--gray-200); cursor: pointer; }
-        .lib-sheet-close:hover { background: var(--gray-700); }
-        /* #1374: on a phone the X is out of the way (the grab handle and the
-           backdrop close the sheet), but it stays focusable and reachable for
-           keyboard and screen readers, and shows again on focus. */
-        @media (max-width: 899px) {
-            .lib-sheet-close { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-            .lib-sheet-close:focus-visible { position: static; width: 40px; height: 40px; overflow: visible; clip-path: none; }
-        }
+        .lib-sheet-close, .lib-sheet-iconbtn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: none; border-radius: 50%; background: transparent; color: var(--gray-200); cursor: pointer; }
+        .lib-sheet-close:hover, .lib-sheet-iconbtn:hover { background: var(--raised); }
+        .lib-sheet-close:focus-visible, .lib-sheet-iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-more { position: relative; }
-        .lib-sheet-more > summary { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--gray-800); color: var(--gray-200); cursor: pointer; list-style: none; font-size: var(--fs-3); line-height: 1; }
+        .lib-sheet-more > summary { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: transparent; color: var(--gray-200); cursor: pointer; list-style: none; font-size: var(--fs-3); line-height: 1; }
         .lib-sheet-more > summary::-webkit-details-marker { display: none; }
-        .lib-sheet-more[open] > summary { background: var(--gray-700); }
+        .lib-sheet-more > summary:hover, .lib-sheet-more[open] > summary { background: var(--raised); }
+        .lib-sheet-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-menu-list { position: absolute; right: 0; top: calc(100% + var(--sp-1)); z-index: 2; min-width: 200px; max-height: min(60vh, 360px); overflow-y: auto; padding: var(--sp-1) 0; background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,.45); }
         .lib-sheet-menu-btn { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-3); border: none; background: none; color: var(--gray-200); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
         .lib-sheet-menu-btn:hover { background: var(--gray-700); }
         .lib-sheet-menu-btn.del { color: var(--err); }
         .lib-sheet-menu-sep { display: block; height: 1px; margin: var(--sp-1) 0; background: var(--gray-700); }
-        .lib-sheet-actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--sp-2); margin: var(--sp-3) 0; }
+        .lib-sheet-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0,1fr)); gap: var(--sp-2); margin: var(--sp-3) 0; }
         .lib-sheet-primary { min-height: 44px; padding: 0 var(--sp-2); border: 1px solid var(--gray-700); border-radius: var(--radius-sm); background: var(--gray-800); color: var(--gray-200); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
         .lib-sheet-primary:hover { border-color: var(--accent); color: var(--accent-ink); }
         .lib-sheet-body .lib-item-in-sheet { display: block; background: none; padding: 0; }
         /* Bean form in a sheet (#1349): the same static form, moved in. */
         .lib-form-sheet .lib-add-form { display: block; background: none; padding: 0; margin: 0; }
-        /* #1372: keep the form's title + close button in view while the sheet
-           scrolls. The sheet carries var(--sp-4) top padding and is the scroll
-           container, so the header sticks at the negative offset of that
-           padding to stay flush with the sheet's top edge. */
-        .lib-form-sheet-head { position: sticky; top: calc(-1 * var(--sp-4)); z-index: 3; background: var(--gray-900); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-4) 0 var(--sp-2); margin-top: calc(-1 * var(--sp-4)); margin-bottom: var(--sp-3); }
-        .lib-form-sheet-head-actions { display: flex; align-items: center; gap: var(--sp-1); }
         .lib-form-sheet-body { min-width: 0; }
-        .lib-form-sheet .lib-form-actions { position: sticky; bottom: 0; z-index: 2; padding: var(--sp-2) 0; background: var(--gray-900); }
+        /* #1489: the form's own action row is hidden inside the sheet; the bar's
+           Save replaces it. The markup stays for other callers. */
+        .lib-form-sheet .lib-form-actions { display: none; }
         .lib-form-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); }
         .lib-form-confirm[hidden] { display: none; }
         .lib-form-confirm-q { font-size: var(--fs-1); color: var(--gray-200); }

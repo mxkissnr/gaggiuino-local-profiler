@@ -8,7 +8,7 @@ import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';
 import type { Html } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
-import { attachSheetSwipe, animateSheetOut, isPhoneSheetWidth, settleSheetOut, startSheetEnter } from './sheet-swipe.js';
+import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, isPhoneSheetWidth, settleSheetOut, startSheetEnter } from './sheet-swipe.js';
 
 // A viewport-coordinate point (e.g. the clicked point on a chart); positioned
 // like a zero-size rect, for when there is no element to anchor the popover to.
@@ -110,14 +110,11 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
     <div class="lib-sheet-backdrop${desktop ? html` detail-backdrop` : esc('')}"></div>
     <section class="lib-sheet${desktop ? html` detail-pop` : esc('')}" role="dialog" aria-modal="true" aria-labelledby="detailSheetTitle">
       <div class="lib-sheet-grab" aria-hidden="true"></div>
-      <div class="detail-sheet-head">
-        <div class="detail-sheet-titles">
-          <h2 id="detailSheetTitle" class="detail-sheet-title">${esc(opts.title)}</h2>
-          ${opts.sub ? html`<p class="detail-sheet-sub">${esc(opts.sub)}</p>` : esc('')}
-        </div>
-        <button type="button" class="lib-sheet-close detail-sheet-close" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
+      <div class="lib-sheet-bar">
+        <button type="button" class="lib-sheet-close" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
+        <h2 id="detailSheetTitle" class="lib-sheet-bar-title">${esc(opts.title)}</h2>
       </div>
-      <div class="detail-sheet-body">${opts.body}</div>
+      <div class="detail-sheet-body">${opts.sub ? html`<p class="detail-sheet-sub">${esc(opts.sub)}</p>` : esc('')}${opts.body}</div>
     </section>`;
   host.classList?.add('open');
   if (typeof document !== 'undefined') document.body?.classList?.add('lib-sheet-open');
@@ -126,10 +123,11 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
   const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
   // #1488: one sheet-level drag covers the grab pill, the head and the content.
   if (sheet && typeof sheet.addEventListener === 'function') attachSheetSwipe(sheet, backdrop, requestCloseDetailSheet);
+  attachSheetScrollState(sheet);
   if (desktop && sheet && anchor) _positionPop(sheet, anchor);
   startSheetEnter(sheet, backdrop);
 
-  const closeBtn = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.detail-sheet-close') : null;
+  const closeBtn = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-close') : null;
   backdrop?.addEventListener?.('click', requestCloseDetailSheet);
   closeBtn?.addEventListener?.('click', requestCloseDetailSheet);
 

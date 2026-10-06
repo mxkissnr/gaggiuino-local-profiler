@@ -2,7 +2,7 @@ import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { html, toIsoDateInput } from '../../utils.js';
 import { CLOSE_ICON_SVG } from '../../icons.js';
-import { attachSheetSwipe, animateSheetOut, settleSheetOut, startSheetEnter } from '../../components/sheet-swipe.js';
+import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, settleSheetOut, startSheetEnter } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
 import type { BeanRow } from './bags.js';
 import { _beanList, _state, _field, _el } from './bean-shared.js';
@@ -93,20 +93,29 @@ function _beanFormSheetHost(): HTMLElement | null {
   section.appendChild(grab);
 
   const head = document.createElement('div');
-  head.className = 'lib-form-sheet-head';
-  const title = document.createElement('h2');
-  title.id = 'beanFormSheetTitle';
-  title.className = 'lib-sheet-name';
-  head.appendChild(title);
-  const headActions = document.createElement('div');
-  headActions.className = 'lib-form-sheet-head-actions';
+  head.className = 'lib-sheet-bar';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'lib-sheet-close';
   close.setAttribute('data-action', 'close-bean-form-sheet');
   close.setAttribute('aria-label', t('lib_sheet_close'));
   close.innerHTML = CLOSE_ICON_SVG;
-  headActions.appendChild(close);
+  head.appendChild(close);
+  const title = document.createElement('h2');
+  title.id = 'beanFormSheetTitle';
+  title.className = 'lib-sheet-bar-title';
+  head.appendChild(title);
+  const headActions = document.createElement('div');
+  headActions.className = 'lib-sheet-bar-actions';
+  // #1489: the bar's Save runs the same submit as the form's own save button.
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'lib-sheet-save';
+  save.setAttribute('data-action', 'save-bean-form-sheet');
+  save.setAttribute('aria-label', t('lib_save'));
+  save.textContent = t('lib_save');
+  save.addEventListener('click', () => { void saveBean(); });
+  headActions.appendChild(save);
   head.appendChild(headActions);
   section.appendChild(head);
 
@@ -144,6 +153,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   // #1488: one sheet-level listener covers the grab pill, the head and the
   // form content (while it is scrolled to the top).
   attachSheetSwipe(section, backdrop, requestCloseBeanForm);
+  attachSheetScrollState(section);
 
   _formSheetHost = host;
   _formSheetBody = body;

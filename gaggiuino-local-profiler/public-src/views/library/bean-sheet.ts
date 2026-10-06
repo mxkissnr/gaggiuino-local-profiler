@@ -2,9 +2,9 @@ import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
-import { SLIDERS_ICON_SVG, TARGET_ICON_SVG, SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG } from '../../icons.js';
+import { SLIDERS_ICON_SVG, TARGET_ICON_SVG, SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../../icons.js';
 import { applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../../components/flavor-mini-wheel.js';
-import { attachSheetSwipe, animateSheetOut, settleSheetOut } from '../../components/sheet-swipe.js';
+import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, settleSheetOut } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
 import { shelfStock, beanInitials } from './shelf.js';
 import { renderBeanCard, beanFreshBadge, originDisplay } from './bean-card.js';
@@ -15,7 +15,8 @@ import * as libraryView from '../library.js';
 // Circular with library.ts (it re-exports this module): the namespace may only
 // be dereferenced inside functions, never copied at module load.
 
-const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
+// Shot log: a small list (three lines with dots), the bar's icon action.
+const ICON_SHOT_LOG = `<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="6.5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="17.5" r="1"/><path d="M9 6.5h11M9 12h11M9 17.5h11"/></svg>` as Html;
 const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
 const ICON_QR = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z"/></svg>` as Html;
 
@@ -94,14 +95,29 @@ function _sheetStockHtml(b: BeanListRow): Html {
   return parts.length ? html`<div class="lib-sheet-stock">${joinHtml(parts)}</div>` : esc('');
 }
 
+// The shared header bar (#1489): close on the left, the bean name in the
+// middle, the main actions as icons on the right. "Shot log" and "Edit" live
+// here (and only here) so nothing appears twice.
+function _sheetBar(b: BeanListRow): Html {
+  return html`<div class="lib-sheet-bar">
+    <button type="button" class="lib-sheet-close" data-action="close-bean-sheet" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
+    <h2 id="beanSheetTitle" class="lib-sheet-bar-title">${esc(b.name)}</h2>
+    <div class="lib-sheet-bar-actions">
+      <button type="button" class="lib-sheet-iconbtn" data-action="filter-by-bean" data-id="${esc(b.id)}" aria-label="${tHtml('lib_sheet_shot_log')}">${ICON_SHOT_LOG}</button>
+      <button type="button" class="lib-sheet-iconbtn" data-action="edit-bean" data-id="${esc(b.id)}" aria-label="${tHtml('lib_btn_edit')}">${EDIT_ICON_SVG}</button>
+      ${_sheetMenu(b)}
+    </div>
+  </div>`;
+}
+
 // Overflow menu: every meta action the old card toolbar offered, now with
-// text labels. Archive/restore replaces the old eye toggle (#1330).
+// text labels. Archive/restore replaces the old eye toggle (#1330). Edit and
+// shot log moved to the header bar (#1489).
 function _sheetMenu(b: BeanListRow): Html {
   const disabled = b.enabled === false;
   return html`<details class="lib-sheet-more"${esc(_sheetMoreOpen ? ' open' : '')}>
     <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
     <div class="lib-sheet-menu-list">
-      <button type="button" class="lib-sheet-menu-btn" data-action="edit-bean" data-id="${esc(b.id)}">${ICON_PENCIL} ${tHtml('lib_btn_edit')}</button>
       <button type="button" class="lib-sheet-menu-btn" data-action="create-profile-from-bean" data-id="${esc(b.id)}">${SLIDERS_ICON_SVG} ${tHtml('profile_create_from_bean')}</button>
       <button type="button" class="lib-sheet-menu-btn" data-action="start-dialin-from-bean" data-id="${esc(b.id)}">${TARGET_ICON_SVG} ${tHtml('dialin_wizard_start_from_bean')}</button>
       <button type="button" class="lib-sheet-menu-btn" data-action="toggle-bean-qr" data-id="${esc(b.id)}">${ICON_QR} ${tHtml('bean_qr_label')}</button>
@@ -113,11 +129,11 @@ function _sheetMenu(b: BeanListRow): Html {
   </details>`;
 }
 
+// The primary row keeps the two bag actions; shot log moved to the bar.
 function _sheetPrimary(b: BeanListRow): Html {
   const { current } = classifyBeanBags(b);
   const activeBag = current?.bg || null;
   return html`<div class="lib-sheet-actions">
-    <button type="button" class="lib-sheet-primary" data-action="filter-by-bean" data-id="${esc(b.id)}">${tHtml('lib_sheet_shot_log')}</button>
     <button type="button" class="lib-sheet-primary" data-action="open-new-bag" data-id="${esc(b.id)}">${tHtml('lib_new_bag_title')}</button>
     ${activeBag ? html`<button type="button" class="lib-sheet-primary" data-action="open-freeze-form" data-id="${esc(b.id)}">${tHtml('bag_freeze_btn')}</button>` : esc('')}
   </div>`;
@@ -195,19 +211,16 @@ export function renderBeanSheet(enter = false): void {
   host.innerHTML = html`<div class="lib-sheet-backdrop${esc(enter ? ' lib-sheet-backdrop-enter' : '')}" data-action="close-bean-sheet"></div>
     <section class="lib-sheet${esc(enter ? ' lib-sheet-enter' : '')}" role="dialog" aria-modal="true" aria-labelledby="beanSheetTitle">
       <div class="lib-sheet-grab" aria-hidden="true"></div>
-      <div class="lib-sheet-head">
+      ${_sheetBar(bean)}
+      <div class="lib-sheet-hero">
         <div class="lib-sheet-photo">${bean.image
           ? html`<img class="lib-bean-thumb${esc(bean.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(bean.id)}" alt="">`
           : html`<span class="lib-sheet-initials" aria-hidden="true">${esc(beanInitials(bean.roaster || bean.name || ''))}</span>`}</div>
         <div class="lib-sheet-titles">
           ${origin ? html`<div class="lib-item-origin-eyebrow">${esc(origin)}</div>` : esc('')}
-          <h2 id="beanSheetTitle" class="serif-display lib-sheet-name">${esc(bean.name)}</h2>
+          <div class="serif-display lib-sheet-name">${esc(bean.name)}</div>
           <div class="lib-sheet-badges">${_sheetBadges(bean)}</div>
           ${_sheetStockHtml(bean)}
-        </div>
-        <div class="lib-sheet-head-actions">
-          ${_sheetMenu(bean)}
-          <button type="button" class="lib-sheet-close" data-action="close-bean-sheet" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
         </div>
       </div>
       ${_sheetPrimary(bean)}
@@ -235,6 +248,7 @@ export function renderBeanSheet(enter = false): void {
   const sheetEl = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
   const backdropEl = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
   if (sheetEl && typeof sheetEl.addEventListener === 'function') attachSheetSwipe(sheetEl, backdropEl, requestCloseBeanSheet);
+  attachSheetScrollState(sheetEl);
   libraryView.loadBeanThumbnails();
 }
 
