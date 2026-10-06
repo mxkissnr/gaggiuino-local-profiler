@@ -111,4 +111,23 @@ describe('Live view standby preheat (#1498)', () => {
     expect(doc.getElementById('preheat-countdown').textContent).toBe('20:00 remaining');
     expect(title.textContent).toBe('Warming up …');
   });
+
+  // #1498 follow-up: a last live message that says the machine is unreachable
+  // must hide the badge and warming widget even when a stale preheat payload
+  // still carries a countdown.
+  it('hides the badge and warming widget when the last live message is unreachable', () => {
+    handleLiveData({ machineReachable: false });
+    updatePreheatWidget({ ready: false, remaining: 1000, pct: 0.1, preheatTime: 20 });
+
+    expect(badge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('none');
+  });
+
+  it('shows the countdown once the last live message is reachable again', () => {
+    handleLiveData({ machineReachable: true });
+    updatePreheatWidget({ ready: false, remaining: 1000, pct: 0.1, preheatTime: 20 });
+
+    expect(badge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('');
+  });
 });

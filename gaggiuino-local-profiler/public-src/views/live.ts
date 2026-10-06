@@ -753,7 +753,7 @@ export function handleLiveData(msg: LiveMessage): void {
     // ready badge and the warming widget a stale preheat payload may have left
     // visible (the same elements updatePreheatWidget toggles).
     const preheatBadgeEl   = document.getElementById('preheat-ready-badge');
-    const preheatWarmingEl = document.getElementById('preheat-warming-wrap') as HTMLElement;
+    const preheatWarmingEl = document.getElementById('preheat-warming-wrap');
     if (preheatBadgeEl)   preheatBadgeEl.style.display   = 'none';
     if (preheatWarmingEl) preheatWarmingEl.style.display = 'none';
     // #1324: machine control is unavailable while unreachable -- hide the flush
