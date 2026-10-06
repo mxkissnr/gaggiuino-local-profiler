@@ -1122,13 +1122,13 @@ function _repaintWorldMapTheme() {
 }
 
 // Pure helper (unit-testable): given a list of [lon, lat] coordinates with
-// data on the map, returns a { center, zoom } that frames them instead of
-// defaulting to the whole globe. `zoom` is clamped to a sane range so a
-// single country (or a single point) doesn't zoom in absurdly far, and
-// stays within the geo.scaleLimit used by buildWorldMap (max 12).
-export function computeMapBoundingView(coords: (number[] | null | undefined)[] | null): { center: number[] | undefined; zoom: number } {
+// data on the map, returns ECharts `geo.boundingCoords` ([[west, north],
+// [east, south]]) that frames them instead of defaulting to the whole globe.
+// The box is padded, clamped to valid lon/lat and widened symmetrically to a
+// minimum span so a single origin still gets context.
+export function computeMapBoundingCoords(coords: (number[] | null | undefined)[] | null): [[number, number], [number, number]] | undefined {
   const valid = (coords || []).filter((c): c is [number, number] => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]));
-  if (!valid.length) return { center: undefined, zoom: 1 };
+  if (!valid.length) return undefined;
   let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
   for (const [lon, lat] of valid) {
     if (lon < minLon) minLon = lon;
@@ -1136,16 +1136,14 @@ export function computeMapBoundingView(coords: (number[] | null | undefined)[] |
     if (lat < minLat) minLat = lat;
     if (lat > maxLat) maxLat = lat;
   }
-  const center = [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
-  const lonSpan = maxLon - minLon;
-  const latSpan = maxLat - minLat;
-  // Latitude degrees read visually "taller" than longitude degrees on an
-  // equirectangular-ish projection, so weight them more when picking the
-  // limiting axis; floor the span so a single point still gets some padding.
-  const span = Math.max(lonSpan, latSpan * 1.8, 8);
-  const padded = span * 1.6;
-  const zoom = Math.min(6, Math.max(1, 360 / padded));
-  return { center, zoom };
+  let west = minLon - 8, east = maxLon + 8, south = minLat - 6, north = maxLat + 6;
+  // Widen symmetrically so a single origin still shows neighbouring context.
+  const MIN_LON_SPAN = 30, MIN_LAT_SPAN = 20;
+  if (east - west < MIN_LON_SPAN) { const pad = (MIN_LON_SPAN - (east - west)) / 2; west -= pad; east += pad; }
+  if (north - south < MIN_LAT_SPAN) { const pad = (MIN_LAT_SPAN - (north - south)) / 2; south -= pad; north += pad; }
+  west = Math.max(-180, west); east = Math.min(180, east);
+  south = Math.max(-85, south); north = Math.min(85, north);
+  return [[west, north], [east, south]];
 }
 
 // Pure helper (unit-testable): splits a ring's [lon, lat] coordinate array
@@ -1283,7 +1281,7 @@ function _splitGeometryAtAntimeridian(geometry: GeoJsonGeometry): GeoJsonGeometr
 
 // World-map tooltip content, factored out of buildWorldMap()'s setOption()
 // call so it can be unit-tested without echarts/DOM (same reasoning as
-// computeMapBoundingView/splitAntimeridianRing above). Bean names and regions
+// computeMapBoundingCoords/splitAntimeridianRing above). Bean names and regions
 // reach this from the Library (typed by hand) or the bean importer (scraped
 // from a roaster's website), so both branches escape everything that isn't a
 // fixed country code or a plain number before it's handed to echarts, which
@@ -1298,9 +1296,9 @@ export function worldMapTooltipFormatter(params: MapTooltipParams) {
     // already implied by the total, no need to repeat it per-bean.
     const beanList = [...stats.beans].map(beanName => {
       const share = stats.beanShots.get(beanName);
-      return Number.isInteger(share) ? esc(beanName) : `${esc(beanName)} (${share})`;
+      return Number.isInteger(share) ? esc(beanName) : `${esc(beanName)} (${Math.round(share ?? 0)})`;
     }).join(', ');
-    return `${name}: ${stats.shots} ${t('analytics_map_shots')} (${beanList})`;
+    return `${name}: ${Math.round(stats.shots)} ${t('analytics_map_shots')} (${beanList})`;
   }
   const region = params.data?._region;
   return `${esc(params.name)}${region ? ' · ' + esc(region) : ''}`;
@@ -1408,7 +1406,7 @@ function _renderMapChips(wrap: HTMLElement, countries: string[], byCode: Record<
   const host = _mapChipsHost(wrap);
   if (!host) return;
   host.innerHTML = joinHtml(countries.map(code =>
-    html`<button type="button" class="chip analytics-filter-btn" data-code="${esc(code)}">${esc(countryName(code, S.currentLang))} ${esc(byCode[code]?.shots ?? 0)}</button>`));
+    html`<button type="button" class="chip analytics-filter-btn" data-code="${esc(code)}">${esc(countryName(code, S.currentLang))} ${esc(Math.round(byCode[code]?.shots ?? 0))}</button>`));
   if (typeof host.querySelectorAll !== 'function') return;
   host.querySelectorAll<HTMLElement>('.chip').forEach(chip => {
     const code = chip.dataset.code;
@@ -1445,7 +1443,7 @@ function _openCountryDetail(code: string, anchor: HTMLElement | DetailAnchorPoin
       const sum = stats.beanScoreSum.get(beanName) ?? 0;
       const beanAvg = count ? Math.round(sum / count) : null;
       const scHtml = beanAvg !== null ? html`<span class="${esc(scoreClass(beanAvg))}">${esc(beanAvg)}</span>` : esc('—');
-      return html`<div class="bests-row"><span class="bests-lbl">${esc(beanName)}</span><span class="bests-val">${esc(share)} · ${scHtml}</span></div>`;
+      return html`<div class="bests-row"><span class="bests-lbl">${esc(beanName)}</span><span class="bests-val">${esc(Math.round(share))} · ${scHtml}</span></div>`;
     });
   const centroid = COUNTRY_CENTROIDS[code];
   const home = _mapClickData?.home;
@@ -1455,7 +1453,7 @@ function _openCountryDetail(code: string, anchor: HTMLElement | DetailAnchorPoin
   }
   openDetailSheet({
     title: countryName(code, S.currentLang),
-    sub: t('analytics_map_sub', stats.shots, avg),
+    sub: t('analytics_map_sub', Math.round(stats.shots), avg),
     body: html`<div class="detail-rows">${joinHtml(rows)}</div>`,
     anchor,
   });
@@ -1696,13 +1694,13 @@ export async function buildWorldMap() {
   }
 
   const home = _worldMapHome;
-  const boundingCoords = [
+  const mapPoints = [
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
     ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
     // #1467: include the home point so the routes to it stay fully visible.
     ...(home ? [home] : []),
   ];
-  const { center, zoom } = computeMapBoundingView(boundingCoords);
+  const boundingCoords = computeMapBoundingCoords(mapPoints);
 
   // #1467: routes ("travelling beans") — one line per origin country with
   // shots, from its centroid to the home point. Animated only when the user
@@ -1723,7 +1721,7 @@ export async function buildWorldMap() {
       formatter: worldMapTooltipFormatter,
     },
     geo: {
-      map: 'world', roam: true, scaleLimit: { min: 1, max: 12 }, center, zoom,
+      map: 'world', roam: true, scaleLimit: { min: 1, max: 12 }, boundingCoords,
       itemStyle: { areaColor: c.areaColor, borderColor: c.borderColor, borderWidth: 0.5 },
       emphasis: { itemStyle: { areaColor: c.emphasisAreaColor }, label: { show: false } },
     },
@@ -1762,7 +1760,7 @@ export async function buildWorldMap() {
     ],
   }, true);
 
-  // #1467: chips + heading counter live outside the fixed-height map wrapper.
+  // #1467: chips + heading counter live outside the map wrapper.
   _renderMapChips(wrap, countriesWithShots, byCode);
   _renderMapHeadingCount(wrap, countriesWithShots.length);
 

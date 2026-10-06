@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 let homeCountryFromLocale: (typeof import('../public-src/views/analytics.js'))['homeCountryFromLocale'];
 let featureLabelPoint: (typeof import('../public-src/views/analytics.js'))['featureLabelPoint'];
 let greatCircleKm: (typeof import('../public-src/views/analytics.js'))['greatCircleKm'];
+let computeMapBoundingCoords: (typeof import('../public-src/views/analytics.js'))['computeMapBoundingCoords'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -20,6 +21,7 @@ beforeAll(async () => {
   homeCountryFromLocale = mod.homeCountryFromLocale;
   featureLabelPoint = mod.featureLabelPoint;
   greatCircleKm = mod.greatCircleKm;
+  computeMapBoundingCoords = mod.computeMapBoundingCoords;
 });
 
 describe('homeCountryFromLocale (#1467)', () => {
@@ -75,5 +77,26 @@ describe('greatCircleKm (#1467)', () => {
     const d = greatCircleKm([13.405, 52.52], [38.7525, 9.0192]);
     expect(d).toBeGreaterThan(5250);
     expect(d).toBeLessThan(5450);
+  });
+});
+
+describe('computeMapBoundingCoords (#1467)', () => {
+  it('frames a single origin with a symmetric minimum span', () => {
+    expect(computeMapBoundingCoords([[0, 0]])).toEqual([[-15, 10], [15, -10]]);
+  });
+
+  it('frames two far-apart origins without falling back to the whole globe', () => {
+    // Central America and Ethiopia: wide in longitude, but the box stays tight
+    // in latitude (widened only to the 20 degree minimum).
+    expect(computeMapBoundingCoords([[-90, 15], [40, 9]])).toEqual([[-98, 22], [48, 2]]);
+  });
+
+  it('clamps the box to valid longitude and latitude', () => {
+    expect(computeMapBoundingCoords([[175, 0]])).toEqual([[160, 10], [180, -10]]);
+  });
+
+  it('returns undefined when there are no usable coordinates', () => {
+    expect(computeMapBoundingCoords(null)).toBeUndefined();
+    expect(computeMapBoundingCoords([[NaN, 5], null])).toBeUndefined();
   });
 });
