@@ -51,6 +51,10 @@ describe('worldMapTooltipFormatter (#1054)', () => {
           shots: 3,
           beans: new Set(['<b>Evil</b> Bean']),
           beanShots: new Map([['<b>Evil</b> Bean', 3]]),
+          scoreSum: 240,
+          scoreCount: 3,
+          beanScoreSum: new Map([['<b>Evil</b> Bean', 240]]),
+          beanScoreCount: new Map([['<b>Evil</b> Bean', 3]]),
         },
       },
     });
