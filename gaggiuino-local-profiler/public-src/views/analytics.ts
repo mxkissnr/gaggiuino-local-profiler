@@ -2115,7 +2115,7 @@ export function buildFacts(): void {
   card.style.display = '';
   const countEl = document.getElementById('analyticsFactsCount');
   if (countEl) countEl.textContent = t('analytics_facts_count', facts.length);
-  _factsOrder = Array.from({ length: facts.length }, (_, i) => i);
+  _factsOrder = _shuffledIndices(facts.length);
   _factsShown = 0;
   _renderFactsPage();
 }
