@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { summaryLine, type SummaryShot } from '../public-src/views/analytics-summary.js';
+import { summaryLine, filterAnalyticsShots, type SummaryShot } from '../public-src/views/analytics-summary.js';
 
 // Local wall-clock timestamp, so the local-date bucketing under test matches
 // what the builders see at runtime.
@@ -129,5 +129,61 @@ describe('summaryLine', () => {
     const s = line(shots, {});
     expect(s.streak).toBe(7);
     expect(s.streakNote).toBe(true);
+  });
+
+  it('honours an explicit 7-day window and suppresses the delta', () => {
+    const shots = [
+      shot({ id: 1, timestamp: ts(2024, 2, 1) }),   // older than 7 days
+      shot({ id: 2, timestamp: ts(2024, 2, 15) }),  // last 7 days
+      shot({ id: 3, timestamp: ts(2024, 2, 16) }),
+    ];
+    const s = summaryLine(shots, scoreById({ 1: 70, 2: 95, 3: 95 }), now, 7);
+    expect(s.verdict.shots).toBe(2);
+    expect(s.verdict.avgScore).toBe(95);
+    expect(s.delta).toBeNull();
+  });
+
+  it('windowDays 0 counts the whole history', () => {
+    const shots = [
+      shot({ id: 1, timestamp: ts(2024, 0, 1) }),   // far older than 30 days
+      shot({ id: 2, timestamp: ts(2024, 2, 15) }),
+    ];
+    const all = summaryLine(shots, scoreById({ 1: 100, 2: 80 }), now, 0).verdict;
+    expect(all.shots).toBe(2);
+    expect(all.avgScore).toBe(90);
+    expect(summaryLine(shots, scoreById({ 1: 100, 2: 80 }), now, 30).verdict.shots).toBe(1);
+  });
+});
+
+describe('filterAnalyticsShots', () => {
+  const now = ts(2024, 2, 20, 12) * 1000;
+  const nameOf = (s: SummaryShot): string => s.profileName ?? '';
+
+  it('keeps only shots in the period (0 = all) and drops future shots', () => {
+    const shots: SummaryShot[] = [
+      { id: 1, timestamp: ts(2024, 2, 1) },   // outside 7 days, inside 30
+      { id: 2, timestamp: ts(2024, 2, 15) },  // inside 7 days
+      { id: 3, timestamp: ts(2024, 0, 1) },   // outside 30 days
+      { id: 4, timestamp: ts(2024, 2, 21) },  // future-dated
+    ];
+    const ids = (days: 0 | 7 | 30 | 90) =>
+      filterAnalyticsShots(shots, { days, query: '' }, now, nameOf).map(s => s.id);
+    expect(ids(30)).toEqual([1, 2]);
+    expect(ids(7)).toEqual([2]);
+    expect(ids(0)).toEqual([1, 2, 3]);
+  });
+
+  it('matches the query against bean name or profile name, case-insensitively', () => {
+    const shots: SummaryShot[] = [
+      { id: 1, timestamp: ts(2024, 2, 15), annotation: { coffee: 'Ethiopia Guji' }, profileName: 'Turbo' },
+      { id: 2, timestamp: ts(2024, 2, 15), annotation: { coffee: 'Brazil' }, profileName: 'Londinium' },
+    ];
+    const ids = (query: string) =>
+      filterAnalyticsShots(shots, { days: 30, query }, now, nameOf).map(s => s.id);
+    expect(ids('guji')).toEqual([1]);
+    expect(ids('BRAZIL')).toEqual([2]);
+    expect(ids('londin')).toEqual([2]);
+    expect(ids('  ')).toEqual([1, 2]);
+    expect(ids('nomatch')).toEqual([]);
   });
 });

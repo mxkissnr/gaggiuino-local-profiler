@@ -133,7 +133,6 @@ export interface UiSlice {
   ratioDistChart: Chart | null;
   timeOfDayChart: Chart | null;
   dialinProgressionChart: Chart | null;
-  trendWindow: number;
   _calendarResizeObserver: ResizeObserver | null;
   _urlImportSource: string | null;
   _urlImportedAt: string | number | null;
@@ -237,7 +236,6 @@ export const S: AppState = {
   ratioDistChart: null,
   timeOfDayChart: null,
   dialinProgressionChart: null,
-  trendWindow: 30,
   _calendarResizeObserver: null,
   currentFilter: '',
   // Structured bean filter (shot history) — set by clicking a bean in the

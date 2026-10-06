@@ -7,7 +7,8 @@ import { esc, html, joinHtml, scoreClass, scoreColor, chartColors, themeColor, o
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
-import { summaryLine } from './analytics-summary.js';
+import { summaryLine, filterAnalyticsShots } from './analytics-summary.js';
+import type { AnalyticsPageFilter } from './analytics-summary.js';
 import { computeFacts } from './analytics-facts.js';
 import type { Fact, FactIcon } from './analytics-facts.js';
 import { WARNING_ICON_SVG } from '../icons.js';
@@ -54,6 +55,72 @@ interface MachineRow extends MachineRecord {
 function _shots(): ShotRow[] { return S.shots; }
 function _allShots(): ShotRow[] { return S.allShots; }
 function _machines(): MachineRow[] { return S.machines; }
+
+// ── Page filter: period + search (#1467) ──────────────────────────────────
+// The whole Analytics page shares one toolbar. Every period-scoped builder
+// reads _pageShots() instead of the raw S.shots, so the period and query apply
+// everywhere at once; the coffee year, the lifetime facts and the machine
+// comparison stay on the whole history on purpose.
+const ANALYTICS_PREFS_KEY = 'glp.analyticsFilter';
+const DEFAULT_ANALYTICS_FILTER: AnalyticsPageFilter = { days: 30, query: '' };
+
+function _loadAnalyticsFilter(): AnalyticsPageFilter {
+  try {
+    const raw = localStorage.getItem(ANALYTICS_PREFS_KEY);
+    if (!raw) return { ...DEFAULT_ANALYTICS_FILTER };
+    const parsed = JSON.parse(raw) as Partial<AnalyticsPageFilter>;
+    const days = parsed.days === 7 || parsed.days === 30 || parsed.days === 90 || parsed.days === 0
+      ? parsed.days : DEFAULT_ANALYTICS_FILTER.days;
+    const query = typeof parsed.query === 'string' ? parsed.query : '';
+    return { days, query };
+  } catch {
+    // Unreadable/private-mode storage falls back to the defaults.
+    return { ...DEFAULT_ANALYTICS_FILTER };
+  }
+}
+
+const _pageFilter: AnalyticsPageFilter = _loadAnalyticsFilter();
+
+function _saveAnalyticsFilter(): void {
+  try { localStorage.setItem(ANALYTICS_PREFS_KEY, JSON.stringify(_pageFilter)); } catch { /* private mode / quota */ }
+}
+
+export function getAnalyticsFilter(): AnalyticsPageFilter { return { ..._pageFilter }; }
+
+// Toolbar entry point: updates the shared filter, persists it and re-runs the
+// whole page once.
+export function setAnalyticsFilter(patch: Partial<AnalyticsPageFilter>): void {
+  if (patch.days === 7 || patch.days === 30 || patch.days === 90 || patch.days === 0) _pageFilter.days = patch.days;
+  if (typeof patch.query === 'string') _pageFilter.query = patch.query;
+  _saveAnalyticsFilter();
+  rebuildAnalyticsPage();
+}
+
+// The profile label buildProfileChart() groups by — and the search matches.
+function _profileNameOf(s: ShotRow): string { return s.profile?.name || s.profileName || 'Unbekannt'; }
+
+function _pageShots(): ShotRow[] {
+  return filterAnalyticsShots(_shots(), _pageFilter, Date.now(), _profileNameOf);
+}
+
+// A sparse render replaces a chart's canvas with an empty note. That was fine
+// when builders ran once, but rebuildAnalyticsPage() re-runs them on every
+// toolbar change and the canvas is never recreated (#1467). Remember each
+// canvas's wrapper and restore the canvas before the next draw.
+const _chartWraps = new Map<string, HTMLElement>();
+
+function _chartCanvas(id: string): HTMLCanvasElement | null {
+  const canvas = document.getElementById(id) as HTMLCanvasElement | null;
+  if (canvas) {
+    const parent = canvas.parentElement;
+    if (parent) _chartWraps.set(id, parent);
+    return canvas;
+  }
+  const wrap = _chartWraps.get(id);
+  if (!wrap || !document.contains(wrap)) { _chartWraps.delete(id); return null; }
+  wrap.innerHTML = html`<canvas id="${esc(id)}"></canvas>`;
+  return document.getElementById(id) as HTMLCanvasElement | null;
+}
 
 // Equipment groupings share one aggregation/rendering pair (a grinder name,
 // or a basket/puck-screen id resolved to a name at render time).
@@ -162,12 +229,30 @@ export function initAnalytics() {
   if (!S.allShotsLoaded) {
     window.onAllShotMetaLoaded = () => { window.onAllShotMetaLoaded = null; initAnalytics(); };
   }
+  rebuildAnalyticsPage();
+  buildCalendar();
+  buildFacts();
+  buildMachineComparison();
+}
+
+// Re-runs every builder that honours the toolbar's period/query, and applies
+// the empty state: an all-empty filter shows one quiet line and hides those
+// sections instead of drawing empty charts. The whole-history sections
+// (coffee year, lifetime facts, machine comparison) are rebuilt separately by
+// initAnalytics().
+export function rebuildAnalyticsPage(): void {
+  const empty = _pageShots().length === 0;
+  const emptyEl = document.getElementById('analyticsFilterEmpty');
+  if (emptyEl) emptyEl.style.display = empty ? '' : 'none';
+  document.querySelectorAll<HTMLElement>('[data-analytics-period]').forEach(el => {
+    el.style.display = empty ? 'none' : '';
+  });
+  if (empty) return;
+
   buildSummaryKpis();
   buildTrendChart();
   buildRecipeSummary();
-  buildCalendar();
   buildBeanShelf();
-  buildFacts();
   void buildWorldMap();
   buildProfileChart();
   buildGrinderStats();
@@ -176,7 +261,6 @@ export function initAnalytics() {
   buildDistribution();
   buildTimeOfDay();
   buildWeekdayHourHeatmap();
-  buildMachineComparison();
   buildDialinProgression();
 }
 
@@ -278,34 +362,43 @@ const _bgColor = (sc: number | null): string => sc == null ? 'rgba(63,63,70,.5)'
   : sc >= 88 ? 'rgba(34,197,94,.7)' : sc >= 75 ? 'rgba(132,204,22,.7)'
   : sc >= 60 ? 'rgba(234,179,8,.7)'  : sc >= 45 ? 'rgba(249,115,22,.7)' : 'rgba(239,68,68,.7)';
 
-// ── Summary line ──────────────────────────────────────────────────────────
+// ── Verdict header (#1467) ────────────────────────────────────────────────
+// Replaces the old one-line "Übersicht" card: a plain-language verdict on the
+// left (title + sub line) and the period's average score on the right. Reads
+// the period-filtered shots and passes the period length to summaryLine() so
+// its numbers match the toolbar.
 export function buildSummaryKpis() {
-  const el = document.getElementById('summaryKpis');
-  if (!el) return;
+  const titleEl = document.getElementById('verdictTitle');
+  const subEl = document.getElementById('verdictSub');
+  const scoreEl = document.getElementById('verdictScore');
+  if (!titleEl || !subEl || !scoreEl) return;
 
+  const days = _pageFilter.days;
   const summary = summaryLine(
-    _shots(),
+    _pageShots(),
     s => (window.calcShotScore ? window.calcShotScore(s) : null),
     Date.now(),
+    days,
   );
 
-  // The score numbers keep the shared colour scale inside their translated
-  // phrase; scoreNum() returns markup the i18n formatters interpolate verbatim.
-  const scoreNum = (n: number): Html => html`<span class="${esc(scoreClass(n))}">${esc(n)}</span>`;
-  const parts: Html[] = [];
-  const addPart = (part: Html): void => {
-    if (parts.length) parts.push(esc(' · '));
-    parts.push(part);
-  };
+  const bucket = summary.delta?.bucket;
+  titleEl.textContent = t(
+    bucket === 'well-above' || bucket === 'above' ? 'analytics_verdict_title_up'
+    : bucket === 'on-par' ? 'analytics_verdict_title_steady'
+    : bucket === 'below' || bucket === 'well-below' ? 'analytics_verdict_title_down'
+    : 'analytics_verdict_title_none',
+  );
 
-  const verdict = summary.verdict;
-  addPart(tHtml('analytics_summary_verdict', verdict.shots, verdict.avgScore !== null ? scoreNum(verdict.avgScore) : esc('—')));
-  if (summary.delta) addPart(tHtml(`analytics_summary_delta_${summary.delta.bucket}`, scoreNum(summary.delta.avg7)));
+  const period = days === 0 ? t('analytics_period_all') : t('analytics_period_days', days);
+  subEl.textContent = t('analytics_verdict_sub', summary.verdict.shots, period)
+    + (summary.delta ? ` · ${t(`analytics_summary_delta_${summary.delta.bucket}`, summary.delta.avg7)}` : '');
 
-  el.innerHTML = joinHtml(parts);
+  const avg = summary.verdict.avgScore;
+  scoreEl.className = avg !== null ? `analytics-verdict-score-num ${scoreClass(avg)}` : 'analytics-verdict-score-num';
+  scoreEl.textContent = avg !== null ? String(avg) : '—';
 
   // Trend warning: check last 5 scored shots for declining trend
-  const scored = _shots().filter(s => window.calcShotScore && window.calcShotScore(s) != null);
+  const scored = _pageShots().filter(s => window.calcShotScore && window.calcShotScore(s) != null);
   const warnEl = document.getElementById('trendWarning');
   if (warnEl) {
     const recent = scored.slice(-5);
@@ -408,7 +501,7 @@ function _renderEquipmentStats(containerId: string, entries: EquipStatEntry[], e
 
 export function buildGrinderStats() {
   const entries = _computeEquipmentStats(
-    _shots(),
+    _pageShots(),
     s => s.annotation?.grinder || null,
     key => key,
   );
@@ -417,7 +510,7 @@ export function buildGrinderStats() {
 
 export function buildBasketStats() {
   const entries = _computeEquipmentStats(
-    _shots(),
+    _pageShots(),
     s => s.annotation?.basketId,
     id => _equipmentName(_libCollection('baskets'), Number(id)),
   );
@@ -426,7 +519,7 @@ export function buildBasketStats() {
 
 export function buildPuckScreenStats() {
   const entries = _computeEquipmentStats(
-    _shots(),
+    _pageShots(),
     s => s.annotation?.puckScreenId,
     id => _equipmentName(_libCollection('puckScreens'), Number(id)),
   );
@@ -440,10 +533,10 @@ export function buildDistribution() {
 }
 
 function _buildDoseDist() {
-  const ctx = document.getElementById('doseDistChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('doseDistChart');
   if (!ctx) return;
   chartRegistry.dispose('doseDistChart');
-  const doses = _shots().map(s => s.annotation?.dose).filter((d): d is number => d != null && d > 5 && d < 50);
+  const doses = _pageShots().map(s => s.annotation?.dose).filter((d): d is number => d != null && d > 5 && d < 50);
   if (doses.length < 5) {
     ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_distribution')}</p>`;
     return;
@@ -468,10 +561,10 @@ function _buildDoseDist() {
 }
 
 function _buildRatioDist() {
-  const ctx = document.getElementById('ratioDistChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('ratioDistChart');
   if (!ctx) return;
   chartRegistry.dispose('ratioDistChart');
-  const ratios = _shots()
+  const ratios = _pageShots()
     .map(s => s.annotation?.dose && s.weight ? (s.weight / 10) / s.annotation.dose : null)
     .filter((r): r is number => r != null && r > 1 && r < 4);
   if (ratios.length < 5) {
@@ -499,11 +592,11 @@ function _buildRatioDist() {
 
 // ── Time of Day ───────────────────────────────────────────────────────────
 export function buildTimeOfDay() {
-  const ctx = document.getElementById('timeOfDayChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('timeOfDayChart');
   if (!ctx) return;
   chartRegistry.dispose('timeOfDayChart');
   const hours: { count: number; scores: number[] }[] = Array.from({ length: 24 }, () => ({ count: 0, scores: [] }));
-  for (const s of _shots()) {
+  for (const s of _pageShots()) {
     const h = new Date(s.timestamp * 1000).getHours();
     const bin = hours[h];
     if (!bin) continue;
@@ -539,15 +632,6 @@ export function buildTimeOfDay() {
       }
     }
   } satisfies ChartConfiguration<'bar'>));
-}
-
-export function setTrendWindow(n: number): void {
-  S.trendWindow = n;
-  document.getElementById('trendBtn30')!.classList.toggle('active', n === 30);
-  document.getElementById('trendBtn90')!.classList.toggle('active', n === 90);
-  document.getElementById('trendBtnAll')!.classList.toggle('active', n === 0);
-  buildTrendChart();
-  buildRecipeSummary();
 }
 
 // Resolved point colour on the shared score scale: scoreColor() names the
@@ -606,13 +690,12 @@ export function buildTrendChart() {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
-  const all = _shots().filter(s => {
+  const src = _pageShots().filter(s => {
     if (!window.calcShotScore) return false;
     return window.calcShotScore(s) !== null;
   });
-  const src = S.trendWindow > 0 ? all.slice(-S.trendWindow) : all;
 
-  const ctx = document.getElementById('trendChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('trendChart');
   if (!ctx) return;
   chartRegistry.dispose('trendChart');
 
@@ -713,8 +796,7 @@ export function computeRecipeSummary(shots: ShotRow[]): RecipeSummary {
 export function buildRecipeSummary() {
   const el = document.getElementById('recipeRows');
   if (!el) return;
-  const all = _shots().filter(s => window.calcShotScore ? window.calcShotScore(s) !== null : false);
-  const src = S.trendWindow > 0 ? all.slice(-S.trendWindow) : all;
+  const src = _pageShots().filter(s => window.calcShotScore ? window.calcShotScore(s) !== null : false);
   const r = computeRecipeSummary(src);
 
   const rows: Html[] = [];
@@ -1458,7 +1540,7 @@ export async function buildWorldMap() {
       if (!codeStats.beanShots.has(bean.name)) codeStats.beanShots.set(bean.name, 0);
     }
   }
-  for (const s of _shots()) {
+  for (const s of _pageShots()) {
     const entry = resolveMapEntry(s.annotation);
     if (!entry) continue;
     const score = window.calcShotScore ? window.calcShotScore(s) : null;
@@ -1589,7 +1671,7 @@ export async function buildWorldMap() {
       coord = [centroid[0] + (n % 2 === 0 ? jitter : -jitter), centroid[1] + (n % 3) * 0.2];
     }
     const shots = byCode[primaryCode]?.beans.has(bean.name)
-      ? _shots().filter(s => resolveMapEntry(s.annotation)?.bean === bean).length
+      ? _pageShots().filter(s => resolveMapEntry(s.annotation)?.bean === bean).length
       : 0;
     // #1467: the always-visible bean-name labels are gone (the chips below
     // the map replace them); the tooltip still names the bean. _code keys the
@@ -1692,8 +1774,8 @@ export function buildProfileChart() {
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
   const byProfile: Record<string, { scores: number[]; count: number }> = {};
-  for (const s of _shots()) {
-    const p = s.profile?.name || s.profileName || 'Unbekannt';
+  for (const s of _pageShots()) {
+    const p = _profileNameOf(s);
     let entry = byProfile[p];
     if (!entry) { entry = { scores: [], count: 0 }; byProfile[p] = entry; }
     entry.count++;
@@ -1709,7 +1791,7 @@ export function buildProfileChart() {
     .sort((a, b) => b.avgScore - a.avgScore);
 
   const wrap = document.getElementById('profileChartWrap')!;
-  const ctx  = document.getElementById('profileChart') as HTMLCanvasElement | null;
+  const ctx  = _chartCanvas('profileChart');
   if (!ctx) return;
   chartRegistry.dispose('profileBarChart');
 
@@ -1750,19 +1832,19 @@ export function buildProfileChart() {
 // ── Weekday x Hour heatmap ─────────────────────────────────────────────────
 // True 7x24 matrix of shot counts, in the same visual language as the
 // calendar heatmap above (intensity buckets of the same red). Respects
-// S.activeMachineId scoping implicitly — S.shots is already the
-// machine-filtered projection every other builder here reads.
+// S.activeMachineId scoping and the page's period/query implicitly — _pageShots()
+// is the machine-filtered projection every other builder here reads.
 export function buildWeekdayHourHeatmap() {
   const el = document.getElementById('weekdayHourHeatmap');
   if (!el) return;
 
-  if (!_shots().length) {
+  if (!_pageShots().length) {
     el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_time')}</p>`;
     return;
   }
 
   const matrix: number[][] = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
-  for (const s of _shots()) {
+  for (const s of _pageShots()) {
     const d  = new Date(s.timestamp * 1000);
     const wd = (d.getDay() + 6) % 7; // 0=Mon..6=Sun, same convention as the calendar above
     const row = matrix[wd];
@@ -1956,7 +2038,7 @@ export function buildBeanShelf(): void {
   if (!el) return;
   _watchBeanShelfColumns();
 
-  const rows = _sortBeanShelfRows(_computeBeanRanking(_shots()), _beanShelfSort);
+  const rows = _sortBeanShelfRows(_computeBeanRanking(_pageShots()), _beanShelfSort);
   const countEl = document.getElementById('beanShelfCount');
   if (countEl) countEl.textContent = rows.length ? String(rows.length) : '';
   if (!rows.length) {
@@ -1996,7 +2078,7 @@ export function expandBeanShelf(): void {
 // Detail sheet for one bean on the shelf: its numbers, its dial-in figure and
 // trend — and, when the bean exists in the library, a shortcut to its sheet.
 export function openBeanShelfDetail(name: string, anchor: HTMLElement | null): void {
-  const row = _computeBeanRanking(_shots()).find(r => r.name === name);
+  const row = _computeBeanRanking(_pageShots()).find(r => r.name === name);
   if (!row) return;
   const bean = _matchLibraryBean(row);
   const line = (lbl: string, val: Html): Html =>
@@ -2240,7 +2322,7 @@ export function buildDialinProgression() {
   if (!sel) return;
 
   const seen = new Map<string, string>();
-  for (const s of _shots()) {
+  for (const s of _pageShots()) {
     const name = s.annotation?.coffee;
     if (!name) continue;
     const key = name.toLowerCase();
@@ -2268,7 +2350,7 @@ function _renderDialinProgressionChart(beanName: string | null): void {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
-  const ctx = document.getElementById('dialinProgressionChart') as HTMLCanvasElement | null;
+  const ctx = _chartCanvas('dialinProgressionChart');
   if (!ctx) return;
   chartRegistry.dispose('dialinProgressionChart');
 
@@ -2277,7 +2359,7 @@ function _renderDialinProgressionChart(beanName: string | null): void {
     return;
   }
 
-  const shots = _shots()
+  const shots = _pageShots()
     .filter(s => (s.annotation?.coffee || '').toLowerCase() === beanName.toLowerCase())
     .sort((a, b) => a.timestamp - b.timestamp);
 

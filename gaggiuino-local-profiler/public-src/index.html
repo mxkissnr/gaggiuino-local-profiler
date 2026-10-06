@@ -1199,30 +1199,42 @@
 
     <!-- Analytics view -->
     <div id="analytics-view">
+        <!-- One toolbar filters the whole page (#1467) -->
+        <div class="analytics-toolbar" id="analyticsToolbar">
+            <input type="search" id="analyticsSearch" class="lib-shelf-search" data-i18n-placeholder="analytics_search_ph" placeholder="Bohne oder Profil filtern" aria-label="Bohne oder Profil filtern">
+            <div class="analytics-filter-row">
+                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="7" aria-pressed="false" data-i18n="analytics_range_7">7 T</button>
+                <button type="button" class="analytics-filter-btn active" data-action="analytics-range" data-days="30" aria-pressed="true" data-i18n="analytics_range_30">30 T</button>
+                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="90" aria-pressed="false" data-i18n="analytics_range_90">90 T</button>
+                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="0" aria-pressed="false" data-i18n="analytics_range_all">Alles</button>
+            </div>
+            <p id="analyticsFilterEmpty" class="empty-note analytics-filter-empty" data-i18n="analytics_filter_empty" style="display:none">Keine Shots für diesen Filter.</p>
+        </div>
         <div class="analytics-container">
 
-            <!-- Summary KPIs -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_summary">Übersicht</h3>
-                <div id="summaryKpis" class="analytics-summary"></div>
+            <!-- Verdict header (#1467) -->
+            <div class="analytics-card analytics-verdict-card" data-analytics-period>
+                <div class="analytics-verdict-head">
+                    <div class="analytics-verdict-text">
+                        <h2 class="analytics-verdict-title serif-display" id="verdictTitle"></h2>
+                        <p class="analytics-verdict-sub" id="verdictSub"></p>
+                    </div>
+                    <div class="analytics-verdict-score">
+                        <span class="analytics-verdict-score-num" id="verdictScore">—</span>
+                        <span class="analytics-verdict-score-lbl" data-i18n="analytics_verdict_avg">Ø Score</span>
+                    </div>
+                </div>
                 <div id="trendWarning" style="display:none"></div>
             </div>
 
             <!-- Score Trend -->
-            <div class="analytics-card">
-                <div class="analytics-card-head">
-                    <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
-                    <div class="analytics-filter-row">
-                        <button class="analytics-filter-btn active" id="trendBtn30" data-i18n="analytics_trend_30">30 Shots</button>
-                        <button class="analytics-filter-btn" id="trendBtn90" data-i18n="analytics_trend_90">90 Shots</button>
-                        <button class="analytics-filter-btn" id="trendBtnAll" data-i18n="analytics_trend_all">Alle</button>
-                    </div>
-                </div>
+            <div class="analytics-card" data-analytics-period>
+                <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
                 <div style="height:200px;position:relative"><canvas id="trendChart"></canvas></div>
             </div>
 
             <!-- Your recipe on average -->
-            <div class="analytics-card" id="recipeCard">
+            <div class="analytics-card" id="recipeCard" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_recipe">Dein Rezept im Schnitt</h3>
                 <div id="recipeRows"></div>
             </div>
@@ -1235,7 +1247,7 @@
             </div>
 
             <!-- Beans by score (#1467) -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <div class="analytics-card-head">
                     <h3 class="analytics-section-title" data-i18n="analytics_bean_shelf">Bohnen nach Score</h3>
                     <div class="analytics-shelf-tools">
@@ -1262,35 +1274,35 @@
             </div>
 
             <!-- Profile chart -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
                 <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
             </div>
 
             <!-- Origin world map -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_world_map">Kaffee-Weltkarte</h3>
                 <div id="worldMapWrap" class="world-map-wrap"></div>
             </div>
 
             <!-- Grinder Stats -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_grinders">Mühlen-Auswertung</h3>
                 <div id="grinderStats"></div>
             </div>
 
             <!-- Basket & Puck Screen Stats (#668) -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_baskets">Sieb-Auswertung</h3>
                 <div id="basketStats"></div>
             </div>
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_puckscreens">Puck-Screen-Auswertung</h3>
                 <div id="puckScreenStats"></div>
             </div>
 
             <!-- Dose & Ratio Distribution -->
-            <div class="analytics-two-col">
+            <div class="analytics-two-col" data-analytics-period>
                 <div class="analytics-card">
                     <h3 class="analytics-section-title" data-i18n="analytics_dose_dist">Dosis-Verteilung (g)</h3>
                     <div style="height:160px;position:relative"><canvas id="doseDistChart"></canvas></div>
@@ -1302,13 +1314,13 @@
             </div>
 
             <!-- Time of Day -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_time_of_day">Tageszeit</h3>
                 <div style="height:160px;position:relative"><canvas id="timeOfDayChart"></canvas></div>
             </div>
 
             <!-- Weekday x Hour heatmap -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <h3 class="analytics-section-title" data-i18n="analytics_heatmap">Wochentag × Uhrzeit</h3>
                 <div id="weekdayHourHeatmap"></div>
             </div>
@@ -1320,7 +1332,7 @@
             </div>
 
             <!-- Dial-in progression -->
-            <div class="analytics-card">
+            <div class="analytics-card" data-analytics-period>
                 <div class="analytics-card-head">
                     <h3 class="analytics-section-title" data-i18n="analytics_dialin_progression">Dial-In-Verlauf</h3>
                     <select id="dialinProgressionBeanSelect" class="analytics-bean-select" data-action="dialin-progression-bean-change"></select>

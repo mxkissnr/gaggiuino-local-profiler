@@ -77,7 +77,8 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          fetchPreheatData, updatePreheatWidget, fetchLiveData,
          handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
-import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanShelf, buildProfileChart, _renderCalendar,
+import { initAnalytics, buildCalendar, buildTrendChart, buildBeanShelf, buildProfileChart, _renderCalendar,
+         getAnalyticsFilter, setAnalyticsFilter,
          openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail, setDialinProgressionBean,
          openFactDetail, shuffleFacts } from './views/analytics.js';
 
@@ -363,7 +364,6 @@ Object.assign(window, {
 
   // analytics view
   initAnalytics,
-  setTrendWindow,
   buildCalendar,
   buildTrendChart,
   buildBeanShelf,
@@ -869,9 +869,35 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('profileEditorModal')!.addEventListener('change', renderProfilePreviewChart);
   document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
   document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
-  document.getElementById('trendBtn30')!.addEventListener('click', () => setTrendWindow(30));
-  document.getElementById('trendBtn90')!.addEventListener('click', () => setTrendWindow(90));
-  document.getElementById('trendBtnAll')!.addEventListener('click', () => setTrendWindow(0));
+  // ── Analytics toolbar (#1467): one period + search filter for the whole
+  // page. The chips mirror the saved state; the search debounces so a fast
+  // typist only re-runs the builders once per pause.
+  const analyticsSearch = document.getElementById('analyticsSearch') as HTMLInputElement | null;
+  const analyticsRangeChips = document.querySelectorAll<HTMLElement>('[data-action="analytics-range"]');
+  const syncAnalyticsRangeChips = (days: number): void => {
+    analyticsRangeChips.forEach(chip => {
+      const on = Number(chip.dataset.days) === days;
+      chip.classList.toggle('active', on);
+      chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  };
+  const _analyticsFilter = getAnalyticsFilter();
+  syncAnalyticsRangeChips(_analyticsFilter.days);
+  if (analyticsSearch) {
+    analyticsSearch.value = _analyticsFilter.query;
+    analyticsSearch.setAttribute('aria-label', t('analytics_search_ph'));
+    let _analyticsSearchDebounce: ReturnType<typeof setTimeout> | undefined;
+    analyticsSearch.addEventListener('input', e => {
+      const value = (e.target as HTMLInputElement).value;
+      clearTimeout(_analyticsSearchDebounce);
+      _analyticsSearchDebounce = setTimeout(() => setAnalyticsFilter({ query: value }), 150);
+    });
+  }
+  analyticsRangeChips.forEach(chip => chip.addEventListener('click', () => {
+    const days = Number(chip.dataset.days) as 0 | 7 | 30 | 90;
+    syncAnalyticsRangeChips(days);
+    setAnalyticsFilter({ days });
+  }));
   document.getElementById('dialinCount')!.addEventListener('change', e => {
     localStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
     void renderDialin();

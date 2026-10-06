@@ -11,6 +11,11 @@ The redesigned coffee library is the reference for every page of the app.
 5. **A click opens details.** A popover next to the target on desktop (900 px and wider), a bottom sheet on phones. The page itself does not grow.
 6. **Rarely used things are folded away.** Like "Empty & archive" in the library.
 
+Statistics (`gaggiuino-local-profiler/public-src/views/analytics.ts`, #1467) is
+the reference for the first two: a one-line verdict with the period's average
+score, and one sticky toolbar that filters the whole page by period, bean or
+profile.
+
 ## Rules
 
 - **Nothing twice.** Every number or fact appears once per page. Before adding one, check the verdict, the other sections and the charts.
