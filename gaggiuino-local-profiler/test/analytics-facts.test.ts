@@ -73,6 +73,21 @@ describe('computeFacts odd_hour (#1467)', () => {
     expect(odd?.vars.score).toBe('88');
   });
 
+  it('uses the day wording when the odd shot is not at night', () => {
+    const shots: FactShot[] = [
+      shot(at(2024, 3, 4, 8, 0), { duration: 300, score: 90 }),
+      shot(at(2024, 3, 4, 8, 1), { duration: 300, score: 91 }),
+      shot(at(2024, 3, 4, 8, 2), { duration: 300, score: 92 }),
+      shot(at(2024, 3, 4, 8, 3), { duration: 300, score: 93 }),
+      shot(at(2024, 3, 4, 8, 4), { duration: 300, score: 94 }),
+      shot(at(2024, 3, 4, 15, 30), { duration: 300, score: 88 }),
+    ];
+    const facts = computeFacts([...shots, ...pad100(at(2024, 3, 6, 10, 0))], scoreOf, 'en-US');
+    const odd = byId(facts, 'odd_hour');
+    expect(odd?.textKey).toBe('analytics_fact_odd_hour_day');
+    expect(odd?.night).toBeFalsy();
+  });
+
   it('does not flag a 1 h wrap-around (00:30 median vs 23:30 shot)', () => {
     const shots: FactShot[] = [
       shot(at(2024, 3, 4, 0, 30), { duration: 300, score: 90 }),
@@ -107,7 +122,7 @@ describe('computeFacts night_round (#1467)', () => {
     const night = byId(facts, 'night_round');
     expect(night).toBeDefined();
     expect(night?.night).toBe(true);
-    expect(night?.big).toBe('3');
+    expect(night?.big).toBe('3 in 120 min');
     expect(night?.rows).toHaveLength(3);
   });
 
@@ -144,7 +159,7 @@ describe('computeFacts hundred_run (#1467)', () => {
       shot(at(2024, 3, 6, 10, 5), { duration: 300, score: 100 }),
     ];
     const facts = computeFacts(shots, scoreOf, 'en-US');
-    expect(byId(facts, 'hundred_run')?.big).toBe('3');
+    expect(byId(facts, 'hundred_run')?.big).toBe('3 × 100');
   });
 
   it('needs a run of at least three', () => {
@@ -172,12 +187,19 @@ describe('computeFacts best_weekday (#1467)', () => {
     expect(bw?.textKey).toBe('analytics_fact_best_weekday');
     expect(bw?.rows).toHaveLength(3);
     expect(bw?.vars.weekday).toBe('Monday');
+    expect(bw?.big).toBe('Monday');
   });
 
   it('uses the rare variant when the best day is also the least used', () => {
     const shots = [...day(2024, 3, 4, 5, 95), ...day(2024, 3, 5, 5, 80), ...day(2024, 3, 6, 6, 70)];
     const facts = computeFacts(shots, scoreOf, 'en-US');
     expect(byId(facts, 'best_weekday')?.textKey).toBe('analytics_fact_best_weekday_rare');
+  });
+
+  it('names the weekday in the active locale', () => {
+    const shots = [...day(2024, 3, 4, 10, 95), ...day(2024, 3, 5, 5, 80), ...day(2024, 3, 6, 5, 70)];
+    const facts = computeFacts(shots, scoreOf, 'de-DE');
+    expect(byId(facts, 'best_weekday')?.big).toBe('Montag');
   });
 
   it('needs at least three qualifying weekdays', () => {
@@ -197,7 +219,7 @@ describe('computeFacts total_yield (#1467)', () => {
     const facts = computeFacts(shots, scoreOf, 'en-US');
     const ty = byId(facts, 'total_yield');
     expect(ty).toBeDefined();
-    expect(ty?.big).toBe('1.2');
+    expect(ty?.big).toBe('1.2 l');
     expect(ty?.gauge).toBeCloseTo(12, 5);
   });
 
@@ -209,6 +231,16 @@ describe('computeFacts total_yield (#1467)', () => {
     ];
     const facts = computeFacts(shots, scoreOf, 'en-US');
     expect(ids(facts)).not.toContain('total_yield');
+  });
+
+  it('uses the locale decimal separator and unit (de)', () => {
+    const shots = [
+      shot(at(2024, 3, 6, 10, 0), { duration: 300, weight: 4000, score: 100 }),
+      shot(at(2024, 3, 6, 10, 1), { duration: 300, weight: 4000, score: 100 }),
+      shot(at(2024, 3, 6, 10, 2), { duration: 300, weight: 4000, score: 100 }),
+    ];
+    const facts = computeFacts(shots, scoreOf, 'de-DE');
+    expect(byId(facts, 'total_yield')?.big).toBe('1,2 l');
   });
 });
 
@@ -225,7 +257,7 @@ describe('computeFacts total_time (#1467)', () => {
     const facts = computeFacts(shots, scoreOf, 'en-US');
     const tt = byId(facts, 'total_time');
     expect(tt).toBeDefined();
-    expect(tt?.big).toBe('100');
+    expect(tt?.big).toBe('1.7 h');
     expect(tt?.textKey).toBe('analytics_fact_total_time_movie');
   });
 
@@ -250,7 +282,7 @@ describe('computeFacts longest_break (#1467)', () => {
     const facts = computeFacts(shots, scoreOf, 'en-US');
     const lb = byId(facts, 'longest_break');
     expect(lb).toBeDefined();
-    expect(lb?.big).toBe('3');
+    expect(lb?.big).toBe('3 days');
     expect(lb?.rows[2]?.[1]).toContain('3 d');
   });
 
@@ -269,7 +301,7 @@ describe('computeFacts quick_refill (#1467)', () => {
     const facts = computeFacts(pad100(at(2024, 3, 6, 10, 0)), scoreOf, 'en-US');
     const qr = byId(facts, 'quick_refill');
     expect(qr).toBeDefined();
-    expect(qr?.big).toBe('60');
+    expect(qr?.big).toBe('60 s');
   });
 
   it('stays out when every gap is five minutes or more', () => {
@@ -282,6 +314,56 @@ describe('computeFacts quick_refill (#1467)', () => {
     expect(ids(facts)).not.toContain('quick_refill');
     expect(facts.length).toBeGreaterThanOrEqual(3);
   });
+
+  it('ignores sub-10 s gaps from duplicate imports', () => {
+    const base = at(2024, 3, 6, 10, 0);
+    const shots = [
+      shot(base, { duration: 300, score: 100 }),
+      shot(base + 5, { duration: 300, score: 100 }),
+      shot(base + 35, { duration: 300, score: 100 }),
+      shot(base + 65, { duration: 300, score: 100 }),
+    ];
+    const facts = computeFacts(shots, scoreOf, 'en-US');
+    expect(byId(facts, 'quick_refill')?.big).toBe('30 s');
+  });
+
+  it('never reports a zero-second refill', () => {
+    const base = at(2024, 3, 6, 10, 0);
+    const shots = [
+      shot(base, { duration: 300, score: 100 }),
+      shot(base, { duration: 300, score: 100 }),
+      shot(base + 40, { duration: 300, score: 100 }),
+    ];
+    const facts = computeFacts(shots, scoreOf, 'en-US');
+    expect(byId(facts, 'quick_refill')?.big).not.toBe('0 s');
+  });
+});
+
+describe('computeFacts date formatting (#1467)', () => {
+  const oddSet = (y: number, mo: number, d: number): FactShot[] => [
+    shot(at(y, mo, d, 8, 0), { duration: 300, score: 90 }),
+    shot(at(y, mo, d, 8, 1), { duration: 300, score: 91 }),
+    shot(at(y, mo, d, 8, 2), { duration: 300, score: 92 }),
+    shot(at(y, mo, d, 8, 3), { duration: 300, score: 93 }),
+    shot(at(y, mo, d, 8, 4), { duration: 300, score: 94 }),
+    shot(at(y, mo, d, 21, 21), { duration: 300, score: 88 }),
+  ];
+
+  it('renders date and time in the locale', () => {
+    const y = new Date().getFullYear();
+    const facts = computeFacts([...oddSet(y, 6, 17), ...pad100(at(y, 6, 18, 10, 0))], scoreOf, 'de-DE');
+    const expected = new Date(at(y, 6, 17, 21, 21) * 1000)
+      .toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
+    expect(byId(facts, 'odd_hour')?.vars.date).toBe(`${expected}, 21:21`);
+  });
+
+  it('adds the year only when the shot is not from this year', () => {
+    const y = new Date().getFullYear();
+    const facts = computeFacts([...oddSet(y - 1, 6, 17), ...pad100(at(y - 1, 6, 18, 10, 0))], scoreOf, 'en-US');
+    const expected = new Date(at(y - 1, 6, 17, 21, 21) * 1000)
+      .toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+    expect(byId(facts, 'odd_hour')?.vars.date).toBe(`${expected}, 21:21`);
+  });
 });
 
 describe('computeFacts longest_shot (#1467)', () => {
@@ -292,7 +374,7 @@ describe('computeFacts longest_shot (#1467)', () => {
       shot(at(2024, 3, 6, 10, 2), { duration: 300, score: 100 }),
     ];
     const facts = computeFacts(shots, scoreOf, 'en-US');
-    expect(byId(facts, 'longest_shot')?.big).toBe('70');
+    expect(byId(facts, 'longest_shot')?.big).toBe('70 s');
   });
 
   it('stays out at 60 s or less', () => {
