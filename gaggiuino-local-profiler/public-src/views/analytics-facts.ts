@@ -1,4 +1,6 @@
 import type { ShotMeta } from '../state/index.js';
+import { TRANSLATIONS } from '../constants.js';
+import type { Translations } from '../i18n.js';
 
 // "Did you know?" facts (#1467, slice 6a). Pure and DOM-free, like
 // analytics-summary.ts: computeFacts() takes the metadata-only shot rows and
@@ -83,13 +85,51 @@ function _timeStr(tsSeconds: number): string {
   return `${_pad2(d.getHours())}:${_pad2(d.getMinutes())}`;
 }
 
-function _dateStr(tsSeconds: number): string {
-  const d = new Date(tsSeconds * 1000);
-  return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`;
+// Unit words and the few templated big values come from the same i18n
+// dictionaries the renderer's t() reads, so a locale's units never drift from
+// its sentences. Selecting by the locale's language keeps computeFacts pure.
+const _FACT_DICTS = TRANSLATIONS as Record<string, Translations | undefined>;
+const _EN_DICT: Translations = _FACT_DICTS['en'] ?? {};
+
+function _langOf(locale: string): string {
+  const lang = locale.split('-')[0] ?? 'en';
+  return Object.prototype.hasOwnProperty.call(_FACT_DICTS, lang) ? lang : 'en';
 }
 
-function _dateTimeStr(tsSeconds: number): string {
-  return `${_dateStr(tsSeconds)} ${_timeStr(tsSeconds)}`;
+function _dict(lang: string): Translations {
+  return _FACT_DICTS[lang] ?? _EN_DICT;
+}
+
+function _bigText(locale: string, key: string, vars: Record<string, string | number>): string {
+  const val = _dict(_langOf(locale))[key];
+  return typeof val === 'function' ? val(vars) : typeof val === 'string' ? val : '';
+}
+
+function _unit(locale: string, key: string, n?: number): string {
+  const val = _dict(_langOf(locale))[key];
+  if (typeof val === 'function') return val(n);
+  return typeof val === 'string' ? val : '';
+}
+
+function _formatNumber(locale: string, value: number, opts?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat(locale, opts).format(value);
+}
+
+// Dates shown to the user follow the active locale ("Mi., 17. Juni, 21:21" for
+// a German UI); the year only appears once a shot is not from this year.
+function _dateOpts(d: Date, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions {
+  return d.getFullYear() === new Date().getFullYear() ? opts : { ...opts, year: 'numeric' };
+}
+
+function _dateStr(tsSeconds: number, locale: string): string {
+  const d = new Date(tsSeconds * 1000);
+  return d.toLocaleDateString(locale, _dateOpts(d, { day: 'numeric', month: 'long' }));
+}
+
+function _dateTimeStr(tsSeconds: number, locale: string): string {
+  const d = new Date(tsSeconds * 1000);
+  const date = d.toLocaleDateString(locale, _dateOpts(d, { weekday: 'short', day: 'numeric', month: 'long' }));
+  return `${date}, ${_timeStr(tsSeconds)}`;
 }
 
 function _hourSpan(loMin: number, hiMin: number): string {
@@ -127,19 +167,21 @@ export function computeFacts(
     if (bestShot && bestDist >= 240) {
       const hour = new Date(bestShot.timestamp * 1000).getHours();
       const sc = scoreOf(bestShot);
+      const night = hour >= 22 || hour < 5;
+      const dateTime = _dateTimeStr(bestShot.timestamp, locale);
       const fact: Fact = {
         id: 'odd_hour',
         icon: 'moon',
         big: _timeStr(bestShot.timestamp),
-        textKey: 'analytics_fact_odd_hour',
-        vars: { date: _dateTimeStr(bestShot.timestamp), score: _scoreStr(sc) },
+        textKey: night ? 'analytics_fact_odd_hour' : 'analytics_fact_odd_hour_day',
+        vars: { date: dateTime, score: _scoreStr(sc) },
         rows: [
-          ['analytics_fact_row_date_time', _dateTimeStr(bestShot.timestamp)],
+          ['analytics_fact_row_date_time', dateTime],
           ['analytics_fact_row_score', _scoreStr(sc)],
           ['analytics_fact_row_usually', _hourSpan(_percentile(mins, 0.1), _percentile(mins, 0.9))],
         ],
       };
-      if (hour >= 22 || hour < 5) fact.night = true;
+      if (night) fact.night = true;
       facts.push(fact);
     }
   }
@@ -163,12 +205,25 @@ export function computeFacts(
       if (group.length > bestGroup.length) { bestKey = key; bestGroup = group; }
     }
     if (bestKey && bestGroup.length >= 3) {
+      const start = bestGroup[0];
+      const end = bestGroup[bestGroup.length - 1];
+      // Minutes from the first to the last shot of the round, never below 1.
+      const spanMin = start && end
+        ? Math.max(1, Math.round((end.timestamp - start.timestamp) / 60))
+        : 1;
+      const vars: Record<string, string | number> = {
+        date: _dateStr(start ? start.timestamp : 0, locale),
+        n: bestGroup.length,
+        min: spanMin,
+        from: start ? _timeStr(start.timestamp) : '00:00',
+        to: end ? _timeStr(end.timestamp) : '00:00',
+      };
       facts.push({
         id: 'night_round',
         icon: 'cups',
-        big: String(bestGroup.length),
+        big: _bigText(locale, 'analytics_fact_big_night_round', vars),
         textKey: 'analytics_fact_night_round',
-        vars: { count: bestGroup.length, date: bestKey },
+        vars,
         rows: bestGroup.map(s => [_timeStr(s.timestamp), _scoreStr(scoreOf(s))] as [string, string]),
         night: true,
       });
@@ -186,9 +241,9 @@ export function computeFacts(
         icon: 'clock',
         big: _timeStr(first.timestamp),
         textKey: wish ? 'analytics_fact_first_hundred_wish' : 'analytics_fact_first_hundred',
-        vars: { date: _dateTimeStr(first.timestamp), score: 100 },
+        vars: { date: _dateTimeStr(first.timestamp, locale), score: 100 },
         rows: [
-          ['analytics_fact_row_date_time', _dateTimeStr(first.timestamp)],
+          ['analytics_fact_row_date_time', _dateTimeStr(first.timestamp, locale)],
           ['analytics_fact_row_score', '100'],
         ],
       });
@@ -215,13 +270,13 @@ export function computeFacts(
       facts.push({
         id: 'hundred_run',
         icon: 'bolt',
-        big: String(bestRun),
+        big: `${_formatNumber(locale, bestRun)} × 100`,
         textKey: 'analytics_fact_hundred_run',
-        vars: { len: bestRun, from: _dateStr(bestStart.timestamp), to: _dateStr(bestEnd.timestamp) },
+        vars: { n: bestRun },
         rows: [
           ['analytics_fact_row_run_length', String(bestRun)],
-          ['analytics_fact_row_first', _dateStr(bestStart.timestamp)],
-          ['analytics_fact_row_last', _dateStr(bestEnd.timestamp)],
+          ['analytics_fact_row_first', _dateStr(bestStart.timestamp, locale)],
+          ['analytics_fact_row_last', _dateStr(bestEnd.timestamp, locale)],
         ],
       });
     }
@@ -251,7 +306,7 @@ export function computeFacts(
       facts.push({
         id: 'best_weekday',
         icon: 'cal',
-        big: String(Math.round(avgOf(bestWd))),
+        big: weekdayName,
         textKey: rare ? 'analytics_fact_best_weekday_rare' : 'analytics_fact_best_weekday',
         vars: { weekday: weekdayName, avg: Math.round(avgOf(bestWd)), shots: n[bestWd] ?? 0 },
         rows: top.map(i => [`analytics_fact_wd_${i}`, `${n[i] ?? 0} · Ø ${Math.round(avgOf(i))}`] as [string, string]),
@@ -271,16 +326,18 @@ export function computeFacts(
       const litres = grams / 1000;
       const avgG = grams / nShots;
       const rem = grams % 10000;
-      const toNext = rem === 0 ? 0 : Math.ceil((10000 - rem) / avgG);
+      const nextL = (Math.floor(grams / 10000) + 1) * 10;
+      const toNext = Math.max(0, Math.ceil((nextL * 1000 - grams) / avgG));
+      const big = `${_formatNumber(locale, litres, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${_unit(locale, 'analytics_unit_litres')}`;
       facts.push({
         id: 'total_yield',
         icon: 'jug',
-        big: litres.toFixed(1),
+        big,
         textKey: 'analytics_fact_total_yield',
-        vars: { litres: litres.toFixed(1), grams: Math.round(grams), shots: nShots, avg: avgG.toFixed(1), toNext },
+        vars: { toNext, nextL },
         rows: [
           ['analytics_fact_row_total_grams', `${Math.round(grams)} g · ${nShots}`],
-          ['analytics_fact_row_avg_grams', `${avgG.toFixed(1)} g`],
+          ['analytics_fact_row_avg_grams', `${_formatNumber(locale, avgG, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g`],
           ['analytics_fact_row_to_next', String(toNext)],
         ],
         gauge: (rem / 10000) * 100,
@@ -300,12 +357,20 @@ export function computeFacts(
     }
     if (nShots > 0 && seconds >= 1800) {
       const minutes = Math.round(seconds / 60);
+      let big: string;
+      if (minutes >= 120) {
+        big = `${_formatNumber(locale, Math.round(minutes / 60))} ${_unit(locale, 'analytics_unit_hours')}`;
+      } else if (minutes >= 60) {
+        big = `${_formatNumber(locale, minutes / 60, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${_unit(locale, 'analytics_unit_hours')}`;
+      } else {
+        big = `${_formatNumber(locale, minutes)} ${_unit(locale, 'analytics_unit_minutes')}`;
+      }
       facts.push({
         id: 'total_time',
         icon: 'film',
-        big: String(minutes),
+        big,
         textKey: seconds >= 5400 ? 'analytics_fact_total_time_movie' : 'analytics_fact_total_time',
-        vars: { minutes, avg: (seconds / nShots).toFixed(1) },
+        vars: {},
         rows: [
           ['analytics_fact_row_total_minutes', String(minutes)],
           ['analytics_fact_row_avg_seconds', (seconds / nShots).toFixed(1)],
@@ -329,15 +394,18 @@ export function computeFacts(
     if (maxGap >= 2 * DAY_MS / 1000 && before && after) {
       const days = Math.floor(maxGap / 86400);
       const hours = Math.floor((maxGap % 86400) / 3600);
+      const from = _dateTimeStr(before.timestamp, locale);
+      const to = _dateTimeStr(after.timestamp, locale);
+      const score = _scoreStr(scoreOf(after));
       facts.push({
         id: 'longest_break',
         icon: 'suitcase',
-        big: String(days),
+        big: `${_formatNumber(locale, days)} ${_unit(locale, 'analytics_unit_days', days)}`,
         textKey: 'analytics_fact_longest_break',
-        vars: { days, hours, from: _dateTimeStr(before.timestamp), to: _dateTimeStr(after.timestamp) },
+        vars: { from, to, score },
         rows: [
-          ['analytics_fact_row_before', _dateTimeStr(before.timestamp)],
-          ['analytics_fact_row_after', `${_dateTimeStr(after.timestamp)} · ${_scoreStr(scoreOf(after))}`],
+          ['analytics_fact_row_before', from],
+          ['analytics_fact_row_after', `${to} · ${score}`],
           ['analytics_fact_row_gap', `${days} d ${hours} h`],
         ],
       });
@@ -353,18 +421,20 @@ export function computeFacts(
       const cur = sorted[i];
       if (!prev || !cur) continue;
       const gap = cur.timestamp - prev.timestamp;
-      if (gap < minGap) { minGap = gap; first = prev; }
+      // Sub-10 s gaps are duplicate imports of one shot, not a real refill.
+      if (gap >= 10 && gap < minGap) { minGap = gap; first = prev; }
     }
     if (first && minGap < 300) {
       const secs = Math.round(minGap);
+      const dateTime = _dateTimeStr(first.timestamp, locale);
       facts.push({
         id: 'quick_refill',
         icon: 'bolt',
-        big: String(secs),
+        big: `${_formatNumber(locale, secs)} ${_unit(locale, 'analytics_unit_seconds')}`,
         textKey: 'analytics_fact_quick_refill',
-        vars: { seconds: secs, date: _dateTimeStr(first.timestamp) },
+        vars: { date: dateTime },
         rows: [
-          ['analytics_fact_row_date_time', _dateTimeStr(first.timestamp)],
+          ['analytics_fact_row_date_time', dateTime],
           ['analytics_fact_row_gap', `${secs} s`],
         ],
       });
@@ -384,14 +454,15 @@ export function computeFacts(
     if (best && bestBrew > 60) {
       const secs = Math.round(bestBrew);
       const sc = scoreOf(best);
+      const dateTime = _dateTimeStr(best.timestamp, locale);
       facts.push({
         id: 'longest_shot',
         icon: 'snail',
-        big: String(secs),
+        big: `${_formatNumber(locale, secs)} ${_unit(locale, 'analytics_unit_seconds')}`,
         textKey: 'analytics_fact_longest_shot',
-        vars: { seconds: secs, date: _dateTimeStr(best.timestamp), score: _scoreStr(sc) },
+        vars: { date: dateTime, score: _scoreStr(sc) },
         rows: [
-          ['analytics_fact_row_date_time', _dateTimeStr(best.timestamp)],
+          ['analytics_fact_row_date_time', dateTime],
           ['analytics_fact_row_brew_time', `${secs} s`],
           ['analytics_fact_row_score', _scoreStr(sc)],
         ],

@@ -38,10 +38,14 @@ export interface FactVars {
   hours: string | number;
   len: string | number;
   litres: string;
+  min: string | number;
   minutes: string | number;
+  n: string | number;
+  nextL: string | number;
   score: string | number;
   seconds: string | number;
   to: string;
+  toNext: string | number;
   weekday: string;
 }
 
