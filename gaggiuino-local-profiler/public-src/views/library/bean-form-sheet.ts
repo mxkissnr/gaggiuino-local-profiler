@@ -2,7 +2,7 @@ import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { html, toIsoDateInput } from '../../utils.js';
 import { CLOSE_ICON_SVG } from '../../icons.js';
-import { attachSheetSwipe, animateSheetOut, settleSheetOut, startSheetEnter } from '../../components/sheet-swipe.js';
+import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, settleSheetOut, startSheetEnter } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
 import type { BeanRow } from './bags.js';
 import { _beanList, _state, _field, _el } from './bean-shared.js';
@@ -93,20 +93,30 @@ function _beanFormSheetHost(): HTMLElement | null {
   section.appendChild(grab);
 
   const head = document.createElement('div');
-  head.className = 'lib-form-sheet-head';
-  const title = document.createElement('h2');
-  title.id = 'beanFormSheetTitle';
-  title.className = 'lib-sheet-name';
-  head.appendChild(title);
-  const headActions = document.createElement('div');
-  headActions.className = 'lib-form-sheet-head-actions';
+  head.className = 'lib-sheet-bar';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'lib-sheet-close';
   close.setAttribute('data-action', 'close-bean-form-sheet');
   close.setAttribute('aria-label', t('lib_sheet_close'));
   close.innerHTML = CLOSE_ICON_SVG;
-  headActions.appendChild(close);
+  head.appendChild(close);
+  const title = document.createElement('h2');
+  title.id = 'beanFormSheetTitle';
+  title.className = 'lib-sheet-bar-title';
+  head.appendChild(title);
+  const headActions = document.createElement('div');
+  headActions.className = 'lib-sheet-bar-actions';
+  // #1489: the bar's Save follows the form's mode — editing saves the bean,
+  // creating saves without a bag (the "save and add a bag" choice stays in the
+  // still-visible create action row).
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'lib-sheet-save';
+  save.setAttribute('aria-label', t('lib_save'));
+  save.textContent = t('lib_save');
+  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanNoBag()); });
+  headActions.appendChild(save);
   head.appendChild(headActions);
   section.appendChild(head);
 
@@ -144,6 +154,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   // #1488: one sheet-level listener covers the grab pill, the head and the
   // form content (while it is scrolled to the top).
   attachSheetSwipe(section, backdrop, requestCloseBeanForm);
+  attachSheetScrollState(section);
 
   _formSheetHost = host;
   _formSheetBody = body;
@@ -212,6 +223,9 @@ function _showBeanFormSheet(): void {
   _rememberFormHome();
   const isEdit = S.beanEditId != null;
   if (_formSheetTitle) _formSheetTitle.textContent = t(isEdit ? 'lib_form_sheet_edit' : 'lib_form_sheet_new');
+  // #1489: hide the form's own action row only when editing; creating keeps it
+  // so both "save without / with a bag" choices stay reachable.
+  _formSheetSection?.classList?.toggle('is-editing', isEdit);
   _hideFormConfirm();
   const form = document.getElementById('beanAddForm');
   if (form) {
