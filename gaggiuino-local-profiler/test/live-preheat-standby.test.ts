@@ -59,19 +59,31 @@ describe('Live view standby preheat (#1498)', () => {
     title = doc.getElementById('liveIdleTitle');
   });
 
-  it('hides the ready badge and warming widget and reads "Standby"', () => {
+  // #1498 code review: updatePreheatWidget owns only the badge/warming widget;
+  // the idle title belongs to the live-data handler, so this must not write it.
+  it('hides the ready badge and warming widget without touching the idle title', () => {
+    title.textContent = 'sentinel';
     updatePreheatWidget({ standby: true, ready: false, remaining: 1200, pct: 0.1 });
 
     expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('none');
-    expect(title.textContent).toBe('Standby');
+    expect(title.textContent).toBe('sentinel');
   });
 
   it('hides them even when the payload still claims ready with time remaining', () => {
+    title.textContent = 'sentinel';
     updatePreheatWidget({ standby: true, ready: true, remaining: 600, pct: 1 });
 
     expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('none');
+    expect(title.textContent).toBe('sentinel');
+  });
+
+  it('leaves the standby title to the live-data handler', () => {
+    updatePreheatWidget({ standby: true, ready: false, remaining: 1200 });
+    expect(title.textContent).toBe('');
+
+    handleLiveData({ machineReachable: true });
     expect(title.textContent).toBe('Standby');
   });
 

@@ -10,6 +10,26 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 )
 
+// markLivePollingActive flags live polling as running without spawning the
+// ticker goroutine, so applyStandbyTransition tests stay deterministic while
+// still exercising its #1498 "live polling must be active" guard.
+func markLivePollingActive(t *testing.T, p *Poller) {
+	t.Helper()
+	p.liveMu.Lock()
+	p.liveTicker = time.NewTicker(time.Hour)
+	p.liveStop = make(chan struct{})
+	p.liveMu.Unlock()
+	t.Cleanup(func() {
+		p.liveMu.Lock()
+		if p.liveTicker != nil {
+			p.liveTicker.Stop()
+			close(p.liveStop)
+			p.liveTicker = nil
+		}
+		p.liveMu.Unlock()
+	})
+}
+
 // TestBuildPreheatResponse_ActivePreheat exercises buildPreheatResponse's
 // "machine on, mid-preheat" branch — elapsed/remaining/pct must move
 // together and stabilityReady must be present (even if false) once a
@@ -175,6 +195,7 @@ func TestBuildPreheatResponse_NoSwitchNoStandby_CountdownRuns(t *testing.T) {
 func TestApplyStandbyTransition_LeaveResetsClock(t *testing.T) {
 	fake := &fakeAdapter{}
 	p, _ := newTestPoller(t, fake)
+	markLivePollingActive(t, p)
 
 	cold := 30.0
 	old := int64(0)
@@ -208,6 +229,7 @@ func TestApplyStandbyTransition_LeaveResetsClock(t *testing.T) {
 func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
 	fake := &fakeAdapter{}
 	p := newPreheatHistoryPoller(t, fake)
+	markLivePollingActive(t, p)
 
 	onAt := time.Now().UnixMilli() - 5*60_000
 	p.runtime.SetSwitchOnAt(&onAt)
@@ -241,5 +263,77 @@ func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
 	}
 	if runs[0].SwitchOffAt == nil {
 		t.Error("newest run is still open, want it closed on entering standby")
+	}
+}
+
+// TestApplyStandbyTransition_WakeHotBoilerStartsNewSession pins the #1498
+// review fix: a hot boiler waking from a short standby must still start a new
+// preheat session. GaggiMate turns its heater off in standby, so keeping the
+// pre-standby clock would understate the warm-up; the old IsStillWarm shortcut
+// is gone and ready must read false right after waking.
+func TestApplyStandbyTransition_WakeHotBoilerStartsNewSession(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	hot := 90.0
+	old := time.Now().UnixMilli() - 30*60_000
+	offAt := time.Now().UnixMilli() - 60_000 // 1 minute of standby (< 5)
+	p.runtime.SetCurrentTemps(&hot, nil)
+	p.runtime.SetSwitchOnAt(&old)
+	p.runtime.SetSwitchOffAt(&offAt)
+	p.runtime.SetStandby(true)
+	if !p.runtime.IsStillWarm(time.Now().UnixMilli()) {
+		t.Fatal("precondition: a hot boiler after a short standby should read as still warm")
+	}
+
+	before := len(p.PreheatHistory())
+	p.applyStandbyTransition(time.Now().UnixMilli(), false)
+
+	snap := p.runtime.Get()
+	if snap.Standby {
+		t.Error("Standby = true, want false after leaving standby")
+	}
+	if snap.SwitchOnAt == nil || *snap.SwitchOnAt == old {
+		t.Fatalf("SwitchOnAt = %v, want a fresh value, not the pre-standby %d", snap.SwitchOnAt, old)
+	}
+	if time.Now().UnixMilli()-*snap.SwitchOnAt > 2000 {
+		t.Errorf("SwitchOnAt = %v, want reset to ~now even for a hot boiler", snap.SwitchOnAt)
+	}
+	runs := p.PreheatHistory()
+	if len(runs) <= before {
+		t.Fatalf("history len = %d, want a new run opened (was %d)", len(runs), before)
+	}
+	if runs[0].SwitchOffAt != nil {
+		t.Error("newest run should be open right after waking")
+	}
+	if status := p.PreheatStatus(); status.Ready {
+		t.Error("Ready = true, want false right after waking")
+	}
+}
+
+// TestApplyStandbyTransition_NoLivePollingNoop pins the #1498 review fix:
+// applyStandbyTransition must do nothing once live polling has stopped, so a
+// late status can never open a run or move the clock after stopLivePolling
+// ended the session.
+func TestApplyStandbyTransition_NoLivePollingNoop(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	old := time.Now().UnixMilli() - 30*60_000
+	p.runtime.SetSwitchOnAt(&old)
+	before := len(p.PreheatHistory())
+
+	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+
+	snap := p.runtime.Get()
+	if snap.Standby {
+		t.Error("Standby = true, want false (transition must no-op without live polling)")
+	}
+	if snap.SwitchOnAt == nil || *snap.SwitchOnAt != old {
+		t.Errorf("SwitchOnAt = %v, want unchanged %d", snap.SwitchOnAt, old)
+	}
+	if got := len(p.PreheatHistory()); got != before {
+		t.Errorf("history len = %d, want unchanged %d", got, before)
 	}
 }
