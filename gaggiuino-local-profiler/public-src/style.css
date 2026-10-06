@@ -1849,6 +1849,7 @@
            quieter firmware-update hint under them. */
         .live-idle-warn { color: var(--warn); font-size: var(--fs-1); font-weight: 600; margin-top: var(--sp-2); text-align: center; }
         .live-idle-hint { color: var(--gray-500); font-size: var(--fs-1); margin-top: var(--sp-1); text-align: center; }
+        #liveFlushBtn { margin-top: var(--sp-3); }
 
         /* ── Preheat widget ── */
         #preheat-widget { width: 100%; max-width: 320px; margin-bottom: var(--sp-6); text-align: center; }
