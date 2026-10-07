@@ -543,6 +543,11 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	// #1525: the shot row is gone, so its stored photo and thumbnail are now
+	// orphaned — remove them here rather than waiting for the startup sweep.
+	if ext := shot.imageExt(); ext != "" {
+		img.Delete(h.imageDir, id, ext, "shot-")
+	}
 	if err := h.service.AppendToBlocklist(strconv.FormatInt(id, 10)); err != nil {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
