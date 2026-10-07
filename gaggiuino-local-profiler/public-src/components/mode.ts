@@ -2,6 +2,69 @@ import { S } from '../state/index.js';
 import { updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
 
+const TOPBAR_FADE_LEFT = 'fade-left';
+const TOPBAR_FADE_RIGHT = 'fade-right';
+// #1516: 1px of slack so sub-pixel rounding/zoom never leaves the row looking
+// scrollable when it is flush at an edge (or hides a fade on a fitted row).
+const TOPBAR_FADE_TOLERANCE = 1;
+
+export interface TopbarNavFadeState {
+  fadeLeft: boolean;
+  fadeRight: boolean;
+}
+
+/**
+ * Pure: which edges of the desktop tab row have hidden tabs, from its scroll
+ * metrics. No overflow (within tolerance) → no fade on either edge.
+ */
+export function topbarNavFadeState(scrollLeft: number, scrollWidth: number, clientWidth: number): TopbarNavFadeState {
+  const maxScroll = scrollWidth - clientWidth;
+  const scrollable = maxScroll > TOPBAR_FADE_TOLERANCE;
+  return {
+    fadeLeft: scrollable && scrollLeft > TOPBAR_FADE_TOLERANCE,
+    fadeRight: scrollable && scrollLeft < maxScroll - TOPBAR_FADE_TOLERANCE,
+  };
+}
+
+function applyTopbarNavFade(el: HTMLElement): void {
+  const { fadeLeft, fadeRight } = topbarNavFadeState(el.scrollLeft, el.scrollWidth, el.clientWidth);
+  el.classList.toggle(TOPBAR_FADE_LEFT, fadeLeft);
+  el.classList.toggle(TOPBAR_FADE_RIGHT, fadeRight);
+}
+
+function topbarNavScroller(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.topbar-nav-scroll');
+}
+
+/** Re-reads the row's metrics and toggles the edge-fade modifier classes. */
+export function updateTopbarNavFade(): void {
+  const el = topbarNavScroller();
+  if (el) applyTopbarNavFade(el);
+}
+
+let topbarNavFadeBound = false;
+
+/**
+ * Binds the fade to the row's scroll event (passive) and a ResizeObserver,
+ * then applies it once. Idempotent: later calls only re-apply the classes.
+ */
+export function initTopbarNavFade(): void {
+  if (topbarNavFadeBound) { updateTopbarNavFade(); return; }
+  const el = topbarNavScroller();
+  if (!el) return;
+  topbarNavFadeBound = true;
+  el.addEventListener('scroll', () => applyTopbarNavFade(el), { passive: true });
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(() => applyTopbarNavFade(el));
+    observer.observe(el);
+    // A language switch changes label widths without resizing the row itself,
+    // so watch the tab list too — it re-measures whenever translations apply.
+    const list = el.querySelector('.topbar-nav-list');
+    if (list) observer.observe(list);
+  }
+  applyTopbarNavFade(el);
+}
+
 export function goToShot(id: number): void {
   switchMode('shots');
   if (window.selectShot) window.selectShot(id);
@@ -77,10 +140,32 @@ export function switchMode(mode: string): void {
   };
   const btnId = modeMap[mode];
   const activeBtn = btnId ? document.getElementById(btnId) : null;
-  if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  if (activeBtn) {
+    // #1516: only scroll when the tab is actually clipped, so switching to an
+    // already-visible tab does not nudge the row needlessly, then refresh the
+    // edge fade for the new scroll position.
+    const scroller = activeBtn.closest<HTMLElement>('.topbar-nav-scroll');
+    if (scroller && typeof activeBtn.getBoundingClientRect === 'function') {
+      const btnRect = activeBtn.getBoundingClientRect();
+      const rowRect = scroller.getBoundingClientRect();
+      if (btnRect.left < rowRect.left || btnRect.right > rowRect.right) {
+        activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+    }
+    updateTopbarNavFade();
+  }
 
   // #410/#461: mobile shows #shots-view full screen only while
   // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover
   // burger-drawer overlay closes when leaving Shots for Library.
   updateMobileShotSidebarVisibility();
+}
+
+// #1516: bind the edge fade once the app is live. The row's markup is in
+// index.html, and the `load` handler runs after main.ts's DOMContentLoaded
+// handler has applied translations, so the tab labels are at their final
+// widths when the first measurement happens.
+if (typeof document !== 'undefined' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  if (document.readyState === 'complete') initTopbarNavFade();
+  else window.addEventListener('load', initTopbarNavFade);
 }

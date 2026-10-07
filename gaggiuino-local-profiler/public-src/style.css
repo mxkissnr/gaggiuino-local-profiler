@@ -307,6 +307,24 @@
             -webkit-overflow-scrolling: touch;
         }
         .topbar-nav-scroll::-webkit-scrollbar { display: none; }
+        /* #1516: the hidden-scrollbar overflow above gives no hint that more
+           tabs are cut off at an edge. Fade the edge(s) that still have tabs
+           behind them — the modifier classes are toggled from JS
+           (components/mode.ts) using the row's scroll metrics, so an
+           everything-fits row (no modifier) shows no fade at all, and the
+           combined rule below fades both edges when both classes are set. */
+        .topbar-nav-scroll.fade-left {
+            -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px);
+            mask-image: linear-gradient(to right, transparent 0, #000 32px);
+        }
+        .topbar-nav-scroll.fade-right {
+            -webkit-mask-image: linear-gradient(to left, transparent 0, #000 32px);
+            mask-image: linear-gradient(to left, transparent 0, #000 32px);
+        }
+        .topbar-nav-scroll.fade-left.fade-right {
+            -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+        }
         .topbar-nav-list { display: flex; align-items: center; gap: 2px; }
 
         .topbar-nav {
