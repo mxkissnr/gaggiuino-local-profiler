@@ -74,7 +74,7 @@ All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-l
   </tr>
   <tr>
     <td><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library shelf with bean bags" width="100%"/></td>
-    <td></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="100%"/></td>
   </tr>
 </table>
 
