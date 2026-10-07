@@ -26,8 +26,8 @@ var ErrShotNotFound = errors.New("Shot not found")
 type Service struct {
 	repo *Repository
 	// imageDir is where the entity photos live. It is only needed to remove a
-	// purged shot's photo (#1525); it defaults to DefaultImageDir and can be
-	// pointed elsewhere by tests via SetImageDir.
+	// purged shot's photo (#1525); it defaults to DefaultImageDir, and tests
+	// point it elsewhere by setting the field directly.
 	imageDir string
 }
 
@@ -35,9 +35,6 @@ type Service struct {
 func NewService(repo *Repository) *Service {
 	return &Service{repo: repo, imageDir: DefaultImageDir}
 }
-
-// SetImageDir points the service's photo deletions (the trash purge) at dir.
-func (s *Service) SetImageDir(dir string) { s.imageDir = dir }
 
 // GetAll returns every non-trashed shot (no machineId filter — see
 // Repository's type doc comment).

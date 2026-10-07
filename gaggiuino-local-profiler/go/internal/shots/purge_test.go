@@ -117,7 +117,7 @@ func TestStartTrashPurge_PurgesOnStartup(t *testing.T) {
 func TestPurgeExpiredTrash_RemovesPhotoAndThumbnail(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	dir := t.TempDir()
-	h.service.SetImageDir(dir)
+	h.service.imageDir = dir
 	insertShot(t, sqlDB, 1, 1000, nil, "Espresso", map[string]any{"image": "jpg"}, nil)
 	if _, err := sqlDB.Exec(`INSERT INTO trash (shot_id, deleted_at) VALUES (?, ?)`, 1, time.Now().Add(-31*24*time.Hour).UnixMilli()); err != nil {
 		t.Fatalf("trashing shot 1: %v", err)
