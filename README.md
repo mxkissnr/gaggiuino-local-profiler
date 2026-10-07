@@ -224,6 +224,14 @@ Full numbers (timeline, per-model breakdown, cost estimate) generated live from 
 
 ---
 
+## Community
+
+- **Questions:** ask in [Q&A](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/q-a).
+- **Ideas:** one idea per discussion in [Feature Requests](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/feature-requests); upvote the ones you want most.
+- **Your setup:** show your machine, profiles and dashboards in [Show and tell](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/show-and-tell).
+- **Releases:** every release gets a discussion in [Announcements](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/announcements).
+- **Bugs:** open an [issue](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/new/choose).
+
 ## License
 
 GPL-3.0 © 2024–2026 mxkissnr — free to use, fork and modify; any derivative work must remain open source under the same license. Commercial use is not permitted.
