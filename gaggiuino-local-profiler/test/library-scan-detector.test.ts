@@ -178,4 +178,27 @@ describe('barcode scanner detector selection (#1500)', () => {
     expect(track.stop).toHaveBeenCalledOnce();
     expect(ponyfill.constructed).not.toHaveBeenCalled();
   });
+
+  it('does not start the scan loop when the modal is closed while the decoder loads', async () => {
+    g.window = {};
+    const { stream, track } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+    // Hold the eager wasm load open so the modal can be closed while
+    // _createScanDetector() is still awaiting it.
+    let resolveWasm: () => void = () => {};
+    ponyfill.prepareZXingModule.mockImplementation((options) =>
+      options?.fireImmediately ? new Promise<void>((res) => { resolveWasm = res; }) : undefined);
+
+    const pending = openScanModal();
+    await vi.waitFor(() => {
+      expect(ponyfill.prepareZXingModule).toHaveBeenCalledWith({ fireImmediately: true });
+    });
+    closeScanModal();
+    resolveWasm();
+    await pending;
+
+    expect(ponyfill.constructed).toHaveBeenCalledOnce();
+    expect(S._scanActive).toBe(false);
+    expect(track.stop).toHaveBeenCalled();
+  });
 });
