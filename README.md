@@ -232,6 +232,10 @@ Full numbers (timeline, per-model breakdown, cost estimate) generated live from 
 - **Releases:** every release gets a discussion in [Announcements](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/announcements).
 - **Bugs:** open an [issue](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/new/choose).
 
+Thanks to everyone who reports bugs, shares ideas and sends pull requests:
+
+<a href="https://github.com/mxkissnr/gaggiuino-local-profiler/graphs/contributors"><img src="https://contrib.rocks/image?repo=mxkissnr/gaggiuino-local-profiler" alt="Contributors" /></a>
+
 ## License
 
 GPL-3.0 © 2024–2026 mxkissnr — free to use, fork and modify; any derivative work must remain open source under the same license. Commercial use is not permitted.
