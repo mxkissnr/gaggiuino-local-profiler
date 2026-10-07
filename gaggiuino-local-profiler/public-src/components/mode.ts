@@ -57,10 +57,11 @@ export function initTopbarNavFade(): void {
   if (typeof ResizeObserver !== 'undefined') {
     const observer = new ResizeObserver(() => applyTopbarNavFade(el));
     observer.observe(el);
-    // A language switch changes label widths without resizing the row itself,
-    // so watch the tab list too — it re-measures whenever translations apply.
-    const list = el.querySelector('.topbar-nav-list');
-    if (list) observer.observe(list);
+    // The tab list keeps the scroller's width (its flex-shrink:0 buttons
+    // overflow it), so a label-width change from a language switch resizes no
+    // box the row owns. Observe each button instead — its width follows its
+    // text — so the fade is re-measured once translations have been applied.
+    el.querySelectorAll('.topbar-nav').forEach(btn => observer.observe(btn));
   }
   applyTopbarNavFade(el);
 }
