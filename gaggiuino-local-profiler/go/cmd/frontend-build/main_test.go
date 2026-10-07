@@ -163,6 +163,29 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 		}
 	}
 
+	// The barcode-detector ponyfill's zxing reader wasm (#1500) ships as a
+	// content-hashed asset in assets/, and a built page chunk references that
+	// hashed name (injected as __GLP_ZXING_WASM__) instead of the CDN default,
+	// which the CSP's connect-src 'self' would block.
+	zxingMatches, _ := filepath.Glob(filepath.Join(out, "assets", "zxing_reader-*.wasm"))
+	if len(zxingMatches) != 1 {
+		t.Fatalf("expected exactly one assets/zxing_reader-*.wasm, got %d", len(zxingMatches))
+	}
+	zxingName := filepath.Base(zxingMatches[0])
+	referencedZxing := false
+	for _, asset := range assets {
+		body, err := os.ReadFile(asset)
+		if err != nil {
+			t.Fatalf("read %s: %v", asset, err)
+		}
+		if strings.Contains(string(body), zxingName) {
+			referencedZxing = true
+		}
+	}
+	if !referencedZxing {
+		t.Errorf("no built chunk references the zxing reader wasm %s", zxingName)
+	}
+
 	// The raw source path must be gone from every output: a leftover .ts URL
 	// is exactly the regression that broke the cut-out in the image.
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
