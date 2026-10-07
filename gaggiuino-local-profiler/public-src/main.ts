@@ -710,6 +710,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnMaintenance')!.addEventListener('click', () => switchMode('maintenance'));
   document.getElementById('btnAchievements')!.addEventListener('click', () => switchMode('achievements'));
   document.getElementById('btnOrders')!.addEventListener('click', () => switchMode('orders'));
+  // #1514: still wired by id — Settings moved out of .topbar-nav-scroll into a
+  // fixed topbar slot but kept #btnSettings, so this listener needs no change.
   document.getElementById('btnSettings')!.addEventListener('click', () => switchMode('settings'));
 
   // ── Mobile burger drawer (#425) — additive shot-list access from any

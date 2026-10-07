@@ -141,6 +141,8 @@ export function switchMode(mode: string): void {
   };
   const btnId = modeMap[mode];
   const activeBtn = btnId ? document.getElementById(btnId) : null;
+  // #1514: #btnSettings sits in a fixed topbar slot outside the scrolling
+  // .topbar-nav-scroll row, so it never clips and needs no reveal.
   if (activeBtn) {
     // #1516: only scroll when the tab is actually clipped, so switching to an
     // already-visible tab does not nudge the row needlessly, then refresh the

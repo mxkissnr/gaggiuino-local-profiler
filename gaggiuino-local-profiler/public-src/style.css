@@ -356,6 +356,14 @@
         #maintBadge, #ordersBadge { flex-shrink: 0; }
         .topbar-sep { width: 1px; align-self: stretch; margin: var(--sp-1) var(--sp-1); background: var(--gray-700); flex-shrink: 0; }
 
+        /* #1514: Settings left the scrolling nav row for a fixed slot
+           between .topbar-nav-scroll and .topbar-machine, so the last tab
+           can never be clipped at narrow desktop widths. Keeps the
+           .topbar-nav hover/active underline; flex-shrink: 0 keeps the
+           icon intact while the nav row absorbs the remaining width.
+           Desktop-only, like the row it came from (max-width:768px below). */
+        #btnSettings { flex-shrink: 0; }
+
         /* Machine status (#424): the old rail footer's online-dot/name,
            folded next to the machine switcher rather than lost — the
            switcher itself only conveys machine identity, not reachability. */
@@ -2457,6 +2465,8 @@
                navigates via #bottom-nav instead. The burger drawer trigger
                (#425) takes its place. */
             .topbar-nav-scroll { display: none; }
+            #btnSettings { display: none; }
+            .topbar-sep { display: none; }
             .mobile-drawer-btn { display: flex; }
             /* #914: #powerBtn lives in #sidebar, which is hidden entirely on
                mobile just below -- #railPowerBtn is its topbar stand-in.

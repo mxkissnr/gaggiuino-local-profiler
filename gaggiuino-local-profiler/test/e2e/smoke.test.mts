@@ -152,6 +152,8 @@ const VIEWS: View[] = [
     },
     {
         name: 'Settings',
+        // #1514: still #btnSettings — the button left the scrolling nav row,
+        // but the id (and page.click()'s visibility check at 1400 px) is intact.
         nav: '#btnSettings',
         // renderMachinesList() (components/machines-settings.ts) renders one
         // .machine-row per machine — the default row plus the second
