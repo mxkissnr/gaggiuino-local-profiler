@@ -3,6 +3,8 @@ package shots
 import (
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -48,7 +50,7 @@ func TestPurgeExpiredTrash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PurgeExpiredTrash: %v", err)
 	}
-	if len(purged) != 1 || purged[0] != 1 {
+	if len(purged) != 1 || purged[0].ID != 1 {
 		t.Fatalf("PurgeExpiredTrash = %v, want [1]", purged)
 	}
 
@@ -107,5 +109,31 @@ func TestStartTrashPurge_PurgesOnStartup(t *testing.T) {
 
 	if got := countRows(t, sqlDB, `SELECT COUNT(*) FROM shots WHERE id = 1`); got != 0 {
 		t.Fatalf("shot 1 still present after startup purge (count=%d)", got)
+	}
+}
+
+// TestPurgeExpiredTrash_RemovesPhotoAndThumbnail (#1525): a purged trashed
+// shot's photo and thumbnail are deleted from the image dir.
+func TestPurgeExpiredTrash_RemovesPhotoAndThumbnail(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	dir := t.TempDir()
+	h.service.imageDir = dir
+	insertShot(t, sqlDB, 1, 1000, nil, "Espresso", map[string]any{"image": "jpg"}, nil)
+	if _, err := sqlDB.Exec(`INSERT INTO trash (shot_id, deleted_at) VALUES (?, ?)`, 1, time.Now().Add(-31*24*time.Hour).UnixMilli()); err != nil {
+		t.Fatalf("trashing shot 1: %v", err)
+	}
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte{0x01}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := h.service.PurgeExpiredTrash(); err != nil {
+		t.Fatalf("PurgeExpiredTrash: %v", err)
+	}
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s should have been removed (err=%v)", name, err)
+		}
 	}
 }

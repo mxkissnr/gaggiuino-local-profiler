@@ -233,7 +233,16 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	est, err := h.backupSizeEstimate(sec)
+	// #1525: only bundle image files an entry still refers to. A lookup
+	// failure falls back to bundling every image (a superset) rather than
+	// risk dropping a referenced photo.
+	referenced, err := referencedImageNames(h.deps.LibRepo, h.deps.ShotsRepo)
+	if err != nil {
+		log.Printf("backup: building referenced image set: %v (bundling all images)", err)
+		referenced = nil
+	}
+
+	est, err := h.backupSizeEstimate(sec, referenced)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -256,7 +265,7 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sec == nil || sec.has("shots") {
-		streamImagesIntoZip(zw)
+		streamImagesIntoZip(zw, referenced)
 	}
 
 	if err := zw.Close(); err != nil {
@@ -270,11 +279,12 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 // section scope. It is stat-only: it counts shot rows and sums the on-disk
 // size of the image files streamImagesIntoZip would bundle, without opening
 // a single image or hydrating a single shot. The image filter mirrors
-// streamImagesIntoZip exactly (skip directories and *.thumb.* files). A
+// streamImagesIntoZip exactly (skip directories and *.thumb.* files, and —
+// per referenced — skip app-named files no entry refers to). A
 // missing/unreadable image directory is treated as "no images" rather than
 // an error; only a DB failure counting shots propagates (still pre-header,
 // so a clean 500).
-func (h *Handlers) backupSizeEstimate(sec sections) (int64, error) {
+func (h *Handlers) backupSizeEstimate(sec sections, referenced map[string]struct{}) (int64, error) {
 	inScope := sec == nil || sec.has("shots")
 	est := int64(backupEnvelopeEstimateBytes)
 	if !inScope {
@@ -295,6 +305,9 @@ func (h *Handlers) backupSizeEstimate(sec sections) (int64, error) {
 		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
 			continue
 		}
+		if !imageBundled(entry.Name(), referenced) {
+			continue
+		}
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -304,18 +317,25 @@ func (h *Handlers) backupSizeEstimate(sec sections) (int64, error) {
 	return est, nil
 }
 
-// streamImagesIntoZip copies every file in imageDir into zw as an
-// images/<name> entry, one io.Copy at a time — a file is never read into a
-// slice. Best-effort per file: one unreadable file must not abort the
-// archive.
-func streamImagesIntoZip(zw *zip.Writer) {
+// streamImagesIntoZip copies the image files in imageDir into zw as
+// images/<name> entries, one io.Copy at a time — a file is never read into a
+// slice. referenced limits the bundle to files an entry still refers to (plus
+// foreign names that match no app pattern); a nil set bundles everything.
+// Best-effort per file: one unreadable file must not abort the archive. The
+// count of skipped app-named orphans is logged once.
+func streamImagesIntoZip(zw *zip.Writer, referenced map[string]struct{}) {
 	entries, err := os.ReadDir(imageDir)
 	if err != nil {
 		return
 	}
+	skipped := 0
 	for _, entry := range entries {
 		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
 			continue // thumbnails are regenerated on restore, not bundled
+		}
+		if !imageBundled(entry.Name(), referenced) {
+			skipped++
+			continue
 		}
 		f, err := os.Open(filepath.Join(imageDir, entry.Name()))
 		if err != nil {
@@ -331,5 +351,8 @@ func streamImagesIntoZip(zw *zip.Writer) {
 			log.Printf("backup: streaming image %s into zip: %v", entry.Name(), err)
 		}
 		f.Close()
+	}
+	if skipped > 0 {
+		log.Printf("backup: skipped %d unreferenced image file(s)", skipped)
 	}
 }

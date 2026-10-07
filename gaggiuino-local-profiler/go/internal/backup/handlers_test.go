@@ -136,7 +136,8 @@ func TestPostBackup_ScopedSections(t *testing.T) {
 // TestPostBackup_SetsEstimateHeader pins both estimate constants and the
 // *.thumb.* exclusion: two shots + two real images (48 + 100 bytes) + one
 // thumbnail that must NOT be counted → 4096 envelope + 2*4096 per-shot +
-// (48 + 100) image bytes.
+// (48 + 100) image bytes. The two images are referenced by beans 1 and 2
+// (#1525: only referenced images are counted).
 func TestPostBackup_SetsEstimateHeader(t *testing.T) {
 	imgDir := useImageDir(t)
 	if err := os.WriteFile(filepath.Join(imgDir, "1.png"), fakePNG(), 0o644); err != nil {
@@ -151,6 +152,14 @@ func TestPostBackup_SetsEstimateHeader(t *testing.T) {
 
 	h, deps, _ := newTestHandlers(t)
 	mux := newMux(h)
+	if err := deps.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{
+			{"id": int64(1), "name": "One", "image": "png"},
+			{"id": int64(2), "name": "Two", "image": "png"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	seedShot(t, deps, 1)
 	seedShot(t, deps, 2)
 

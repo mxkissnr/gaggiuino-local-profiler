@@ -242,6 +242,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 			func() error { return db.SetKVBool(sqlDB, "images_optimized_v1", true) },
 			log.Printf,
 		)
+		// #1525: reclaim image files (and their thumbnails) no library entry
+		// or existing shot refers to — leftovers from deleted entries, purged
+		// shots and old renames. Runs after the migration so a photo it just
+		// generated a thumbnail for is already referenced. A failed reference
+		// lookup removes nothing.
+		backup.CleanupOrphanedImages(library.DefaultImageDir, libRepo, shotsRepo, log.Printf)
 	})
 
 	// Wire the share-card renderer's two cross-domain lookups. Closures keep

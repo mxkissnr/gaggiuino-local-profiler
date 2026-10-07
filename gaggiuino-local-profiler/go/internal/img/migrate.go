@@ -43,6 +43,25 @@ func parseImageName(name string) (id int64, ext, prefix string, ok bool) {
 	return 0, "", "", false
 }
 
+// KnownImageName reports whether name is one of the app's own full-image file
+// names — "<prefix><id>.<ext>" with a whitelisted extension, the same shape
+// parseImageName recognizes. Exported so callers (internal/backup's backup
+// image filter and its orphan sweep) can tell an app file from a foreign one:
+// a name matching none of the patterns must never be attributed to an entry,
+// bundled by the backup, or deleted by the sweep.
+func KnownImageName(name string) bool {
+	_, _, _, ok := parseImageName(name)
+	return ok
+}
+
+// FullImageName returns the full-image name a thumbnail name derives from by
+// dropping its ".thumb." infix ("basket-5.thumb.jpg" -> "basket-5.jpg"). A
+// name without the infix is returned unchanged, so callers can feed either a
+// main image or its thumbnail through the same reference check.
+func FullImageName(name string) string {
+	return strings.Replace(name, ".thumb.", ".", 1)
+}
+
 // MigrateExisting runs the one-time #961 sweep over dir: every JPEG/PNG
 // larger than MaxEdge is downscaled + stripped in place (atomic .tmp +
 // rename), and every JPEG/PNG missing a thumbnail gets one. GIF and WebP
