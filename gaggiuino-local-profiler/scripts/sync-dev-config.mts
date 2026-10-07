@@ -23,6 +23,12 @@
 //    existing value untouched (e.g. dev's `debug_logging: true`, which the
 //    app itself defaults to false). Keys the source no longer has are
 //    dropped from the target.
+//
+// Scope: only the `options`/`schema` text blocks are synced. The
+// `translations/` folder Home Assistant reads for readable option names and
+// descriptions (#1495) is not part of this text-block merge -- if the dev
+// manifest needs it, that is a dev-channel concern, handled separately from
+// this script.
 
 import { readFileSync, writeFileSync } from 'fs';
 
