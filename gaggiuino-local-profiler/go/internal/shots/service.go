@@ -7,6 +7,8 @@ import (
 	"log"
 	"sync/atomic"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file is the shot service: the DB-facing operations the HTTP handlers
@@ -23,12 +25,19 @@ var ErrShotNotFound = errors.New("Shot not found")
 // Service composes Repository with score.go's pure scoring functions.
 type Service struct {
 	repo *Repository
+	// imageDir is where the entity photos live. It is only needed to remove a
+	// purged shot's photo (#1525); it defaults to DefaultImageDir and can be
+	// pointed elsewhere by tests via SetImageDir.
+	imageDir string
 }
 
 // NewService wraps repo.
 func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{repo: repo, imageDir: DefaultImageDir}
 }
+
+// SetImageDir points the service's photo deletions (the trash purge) at dir.
+func (s *Service) SetImageDir(dir string) { s.imageDir = dir }
 
 // GetAll returns every non-trashed shot (no machineId filter — see
 // Repository's type doc comment).
@@ -216,11 +225,18 @@ func (s *Service) PermanentDelete(id int64) error {
 
 // PurgeExpiredTrash permanently deletes every shot whose trash entry is older
 // than 30 days (#1152), logging `Auto-purged N shot(s) from trash (>30 days)`
-// — only when N > 0.
+// — only when N > 0. Each purged shot's photo and thumbnail are removed from
+// imageDir as well (#1525): the repository drops the rows, and without this
+// the files would linger until the next restart's orphan sweep.
 func (s *Service) PurgeExpiredTrash() error {
 	purged, err := s.repo.PurgeExpiredTrash(time.Now())
 	if err != nil {
 		return err
+	}
+	for _, p := range purged {
+		if p.Ext != "" {
+			img.Delete(s.imageDir, p.ID, p.Ext, "shot-")
+		}
 	}
 	if len(purged) > 0 {
 		log.Printf("shots: auto-purged %d shot(s) from trash (>30 days)", len(purged))

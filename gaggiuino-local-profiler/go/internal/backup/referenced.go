@@ -141,11 +141,13 @@ func removeUnreferencedImages(dir string, referenced map[string]struct{}, logf f
 // never delete a live photo. Intended to run once at startup, after the image
 // migration, on a background goroutine.
 //
-// Delete paths checked for #1525: the four library entry handlers
-// (beans/grinders/baskets/puck screens) and POST /api/shots/{id}/delete
-// already remove their photo via img.Delete; the trash purge
-// (shots.Repository.PurgeExpiredTrash) and shots moved/purged outside those
-// handlers do not, which is what this sweep reclaims.
+// Delete paths checked for #1525, each now removes its own image: the four
+// library entry handlers (beans/grinders/baskets/puck screens), the manual
+// POST /api/shots/{id}/delete handler, and the 30-day trash purge
+// (Service.PurgeExpiredTrash -> img.Delete). This sweep is the safety net for
+// everything those paths miss — leftovers from pre-#1525 installs, files
+// orphaned by a crash between the row delete and the file delete, and old
+// renames.
 func CleanupOrphanedImages(dir string, libRepo *library.Repository, shotsRepo *shots.Repository, logf func(string, ...any)) {
 	referenced, err := referencedImageNames(libRepo, shotsRepo)
 	if err != nil {
