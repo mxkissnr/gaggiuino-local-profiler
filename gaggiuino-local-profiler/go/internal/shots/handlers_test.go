@@ -653,3 +653,27 @@ func TestPostImage_RateLimited(t *testing.T) {
 		t.Fatalf("request %d: status = %d, want 429", imageRateLimitPerMin, rec.Code)
 	}
 }
+
+// TestDeleteShot_RemovesPhotoAndThumbnail (#1525): permanently deleting a shot
+// removes its photo and thumbnail from disk as well as its rows.
+func TestDeleteShot_RemovesPhotoAndThumbnail(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	insertShot(t, sqlDB, 1, 1000, nil, "Espresso", map[string]any{"image": "jpg"}, nil)
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+		if err := os.WriteFile(filepath.Join(h.imageDir, name), []byte{0x01}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/shots/1/delete", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+		if _, err := os.Stat(filepath.Join(h.imageDir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s should have been removed (err=%v)", name, err)
+		}
+	}
+}
+
