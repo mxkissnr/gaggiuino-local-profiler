@@ -67,7 +67,7 @@ changes:
 2. The shot list and a shot detail with its curve render.
 3. The coffee library can create, edit and delete a bean on a test bean.
 4. An order can be created and completed, including the milk deduction.
-5. A backup export works.
+5. A backup export works, its size is plausible and every bundled image belongs to an entry, and it restores into a fresh instance with the same number of shots, library entries and images.
 6. The HA integration entities are current and one service call succeeds.
 7. The shot card and the order card render.
 8. The MCP server answers a shot list request.
