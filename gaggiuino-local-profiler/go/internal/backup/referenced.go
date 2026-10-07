@@ -138,6 +138,12 @@ func removeUnreferencedImages(dir string, referenced map[string]struct{}, logf f
 // set first; if that fails it removes nothing, so a transient DB error can
 // never delete a live photo. Intended to run once at startup, after the image
 // migration, on a background goroutine.
+//
+// Delete paths checked for #1525: the four library entry handlers
+// (beans/grinders/baskets/puck screens) and POST /api/shots/{id}/delete
+// already remove their photo via img.Delete; the trash purge
+// (shots.Repository.PurgeExpiredTrash) and shots moved/purged outside those
+// handlers do not, which is what this sweep reclaims.
 func CleanupOrphanedImages(dir string, libRepo *library.Repository, shotsRepo *shots.Repository, logf func(string, ...any)) {
 	referenced, err := referencedImageNames(libRepo, shotsRepo)
 	if err != nil {
