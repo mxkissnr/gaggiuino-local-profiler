@@ -318,7 +318,7 @@ export {
 } from './library/grinders.js';
 export {
   toggleUrlImport, importFromUrl, toggleImportSettings, addCustomShopifyDomain,
-  openScanModal, closeScanModal, _runScanLoop, _handleScanResult,
+  openScanModal, closeScanModal, _runScanLoop, _submitManualScan, _handleScanResult,
 } from './library/import.js';
 export {
   toggleBagCard, openBagStockEdit, closeBagStockEdit, openEditBag, closeEditBag,

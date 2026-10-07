@@ -385,6 +385,8 @@ export async function openScanModal(): Promise<void> {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
   } catch {
+    // No camera: the modal (opened above) stays open so the manual-entry form
+    // remains usable; this only reports the camera failure.
     status.textContent = t('scan_error');
     status.className = 'error';
     return;
@@ -444,6 +446,23 @@ export async function _runScanLoop(): Promise<void> {
       await _handleScanResult(raw, status);
     } catch { /* frame not ready yet */ }
   }
+}
+
+// Manual entry for the scanner: runs the same lookup a camera hit runs, so it
+// works whenever the modal is open, including when the camera or decoder is
+// unavailable. Accepts the retail code lengths the scanner handles (EAN-8 to ITF-14).
+export function _submitManualScan(): void {
+  const input  = document.getElementById('scanManualInput') as HTMLInputElement | null;
+  const status = document.getElementById('scanStatus') as HTMLElement;
+  const raw = (input?.value ?? '').trim();
+  if (!/^\d{8,14}$/.test(raw)) {
+    status.textContent = t('scan_invalid_code');
+    status.className = 'error';
+    return;
+  }
+  // Mirror a camera hit: stop the scan loop, then run the shared lookup path.
+  S._scanActive = false;
+  void _handleScanResult(raw, status);
 }
 
 export async function _handleScanResult(raw: string, status: HTMLElement): Promise<void> {
