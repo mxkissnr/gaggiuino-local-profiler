@@ -13,7 +13,7 @@ configuration:
     description: Schrijft uitgebreide diagnostische berichten naar het app-log. Laat het uit voor normaal gebruik en schakel het alleen in bij het opsporen van een probleem.
   expose_api_port:
     name: API-poort vrijgeven
-    description: Geeft directe toegang tot de app op poort 8099 buiten de zijbalk van Home Assistant. Als je dit uitschakelt, wordt directe toegang op poort 8099 geblokkeerd (browser en geïnstalleerde app) en werkt de eerste configuratie van de directe-URL-modus van de bestelkaart niet meer. De app blijft bereikbaar via de zijbalk van Home Assistant.
+    description: Geeft directe toegang tot de app op poort 8099 buiten de zijbalk van Home Assistant. Als je dit uitschakelt, wordt directe toegang op poort 8099 geblokkeerd (browser en geïnstalleerde app) en werkt de eerste configuratie van de directe-URL-modus van de bestelkaart niet meer, maar blijft de app bereikbaar via de zijbalk van Home Assistant.
   allowed_hosts:
     name: Toegestane hostnamen
     description: Extra hostnamen waarop de app reageert, gescheiden door komma's. Alleen nodig als je de app via je eigen domein achter een reverse proxy bereikt.

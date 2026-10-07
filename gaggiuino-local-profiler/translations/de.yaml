@@ -13,7 +13,7 @@ configuration:
     description: Schreibt ausführliche Diagnosemeldungen ins App-Log. Für den Normalbetrieb ausgeschaltet lassen und nur bei der Fehlersuche einschalten.
   expose_api_port:
     name: API-Port freigeben
-    description: Erlaubt den direkten Zugriff auf die App über Port 8099 außerhalb der Home-Assistant-Seitenleiste. Ausschalten blockiert den direkten Zugriff über Port 8099 (Browser und installierte App) sowie die erstmalige Einrichtung des Direkt-URL-Modus der Bestellkarte. Über die Home-Assistant-Seitenleiste bleibt die App erreichbar.
+    description: Erlaubt den direkten Zugriff auf die App über Port 8099 außerhalb der Home-Assistant-Seitenleiste. Ausschalten blockiert den direkten Zugriff über Port 8099 (Browser und installierte App) sowie die erstmalige Einrichtung des Direkt-URL-Modus der Bestellkarte, über die Home-Assistant-Seitenleiste bleibt die App aber erreichbar.
   allowed_hosts:
     name: Erlaubte Hostnamen
     description: Zusätzliche Hostnamen, auf die die App antwortet, durch Kommas getrennt. Nur nötig, wenn du die App über deine eigene Domain hinter einem Reverse-Proxy erreichst.

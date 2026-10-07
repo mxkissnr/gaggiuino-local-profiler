@@ -13,7 +13,7 @@ configuration:
     description: Escribe mensajes de diagnóstico detallados en el registro de la app. Déjalo desactivado para el uso normal y actívalo solo para diagnosticar un problema.
   expose_api_port:
     name: Exponer puerto de API
-    description: Permite el acceso directo a la app por el puerto 8099 fuera de la barra lateral de Home Assistant. Si lo desactivas, se bloquea el acceso directo por el puerto 8099 (navegador y app instalada) y la primera configuración del modo de URL directa de la tarjeta de pedido. La app sigue siendo accesible desde la barra lateral de Home Assistant.
+    description: Permite el acceso directo a la app por el puerto 8099 fuera de la barra lateral de Home Assistant. Si lo desactivas, se bloquea el acceso directo por el puerto 8099 (navegador y app instalada) y la primera configuración del modo de URL directa de la tarjeta de pedido, aunque la app sigue siendo accesible desde la barra lateral de Home Assistant.
   allowed_hosts:
     name: Nombres de host permitidos
     description: Nombres de host adicionales a los que responde la app, separados por comas. Solo son necesarios si accedes a la app con tu propio dominio a través de un proxy inverso.
