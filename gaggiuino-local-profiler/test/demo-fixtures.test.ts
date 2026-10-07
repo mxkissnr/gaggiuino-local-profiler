@@ -5,7 +5,9 @@ import {
     extForContentType,
     findLeaks,
     parseOpenApiGetPaths,
+    QUERY_VARIANTS,
 } from '../scripts/demo-fixtures.mts';
+import { GLPDemo } from '../demo/sw/sw-core.ts';
 
 // Part of #1193 (S1): the pure helpers behind scripts/demo-fixtures.mts. The
 // recorder itself boots the Go server and drives Chromium, so only the pure
@@ -133,5 +135,30 @@ describe('demo-fixtures parseOpenApiGetPaths (#1193)', () => {
             '    get:',
         ].join('\n');
         expect(parseOpenApiGetPaths(yaml)).toEqual(['/api/e']);
+    });
+});
+
+describe('demo-fixtures achievement query variants (#1497)', () => {
+    const ACHIEVEMENTS = '/api/achievements';
+    const LANGS = ['en', 'de', 'es', 'fr', 'it', 'nl'] as const;
+    const SCOPE = 'https://demo.example/gaggiuino-local-profiler/';
+
+    function variantKeys(): string[] {
+        return (QUERY_VARIANTS.get(ACHIEVEMENTS) ?? [])
+            .map(query => fixtureKey('GET', `${ACHIEVEMENTS}${query}`));
+    }
+
+    it('records exactly one key per app language', () => {
+        const keys = variantKeys();
+        expect(keys).toEqual(LANGS.map(lang => `GET /api/achievements?lang=${lang}`));
+        expect(keys).toHaveLength(LANGS.length);
+    });
+
+    it('uses the key the service worker route() computes for the SPA request', () => {
+        for (const lang of LANGS) {
+            const key = fixtureKey('GET', `${ACHIEVEMENTS}?lang=${lang}`);
+            expect(GLPDemo.route('GET', `${SCOPE}api/achievements?lang=${lang}`, SCOPE, { entries: {} }))
+                .toEqual({ kind: 'missing', key });
+        }
     });
 });
