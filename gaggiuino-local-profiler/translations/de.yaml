@@ -1,0 +1,19 @@
+configuration:
+  sync_interval:
+    name: Sync-Intervall
+    description: Wie oft die App die Maschine auf neue Shots prüft, in Minuten (1 bis 60).
+  preheat_time:
+    name: Aufwärmzeit
+    description: Wie lange es nach dem Einschalten dauert, bis die Maschine brühbereit ist, in Minuten (1 bis 120).
+  enable_orders:
+    name: Bestellungen aktivieren
+    description: Schaltet das Bestellsystem ein. Ergänzt das Barista-Backend und die Unterstützung für Kunden-Bestellkarten. Standardmäßig aus.
+  debug_logging:
+    name: Diagnose-Logging
+    description: Schreibt ausführliche Diagnosemeldungen ins App-Log. Für den Normalbetrieb ausgeschaltet lassen und nur bei der Fehlersuche einschalten.
+  expose_api_port:
+    name: API-Port freigeben
+    description: Erlaubt den direkten Zugriff auf die App über Port 8099 außerhalb der Home-Assistant-Seitenleiste. Ausschalten blockiert den direkten Zugriff über Port 8099 (Browser und installierte App) sowie die erstmalige Einrichtung des Direkt-URL-Modus der Bestellkarte. Über die Home-Assistant-Seitenleiste bleibt die App erreichbar.
+  allowed_hosts:
+    name: Erlaubte Hostnamen
+    description: Zusätzliche Hostnamen, auf die die App antwortet, durch Kommas getrennt. Nur nötig, wenn du die App über deine eigene Domain hinter einem Reverse-Proxy erreichst.

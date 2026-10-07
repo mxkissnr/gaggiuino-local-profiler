@@ -1,0 +1,19 @@
+configuration:
+  sync_interval:
+    name: Sync interval
+    description: How often the app checks the machine for new shots, in minutes (1 to 60).
+  preheat_time:
+    name: Preheat time
+    description: How long after switch-on it takes until the machine is ready to brew, in minutes (1 to 120).
+  enable_orders:
+    name: Enable orders
+    description: Turns on the order management system. Adds the barista back end and support for customer order cards. Off by default.
+  debug_logging:
+    name: Debug logging
+    description: Writes detailed diagnostic messages to the app log. Leave it off for normal use and switch it on only when diagnosing a problem.
+  expose_api_port:
+    name: Expose API port
+    description: Allows direct access to the app on port 8099 outside the Home Assistant sidebar. Turning it off blocks direct access on port 8099 (browser and installed app) and the first setup of the order card's direct-address mode. The app stays reachable through the Home Assistant sidebar.
+  allowed_hosts:
+    name: Allowed host names
+    description: Extra host names the app answers for, separated by commas. Only needed when you reach the app through your own domain behind a reverse proxy.
