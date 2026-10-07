@@ -676,4 +676,3 @@ func TestDeleteShot_RemovesPhotoAndThumbnail(t *testing.T) {
 		}
 	}
 }
-
