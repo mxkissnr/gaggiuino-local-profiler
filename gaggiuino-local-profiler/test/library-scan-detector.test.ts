@@ -74,9 +74,9 @@ let getUserMedia: Mock<GetUserMedia>;
 
 const nav = globalThis.navigator as unknown as Record<string, unknown>;
 
-function fakeStream(): { stream: Stream; track: Mock<() => void> } {
-  const track = vi.fn<() => void>();
-  return { stream: { getTracks: () => [track] }, track };
+function fakeStream(): { stream: Stream; track: { stop: Mock<() => void> } } {
+  const stop = vi.fn<() => void>();
+  return { stream: { getTracks: () => [{ stop }] }, track: { stop } };
 }
 
 function scanStatus(): FakeEl {

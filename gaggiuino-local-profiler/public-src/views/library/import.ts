@@ -363,7 +363,7 @@ async function _createScanDetector(): Promise<BarcodeDetectorLike> {
   if (typeof __GLP_ZXING_WASM__ === 'string') {
     prepareZXingModule({
       overrides: {
-        locateFile: (path, prefix) =>
+        locateFile: (path: string, prefix: string) =>
           path.endsWith('.wasm') ? new URL(__GLP_ZXING_WASM__, import.meta.url).href : prefix + path,
       },
     });
