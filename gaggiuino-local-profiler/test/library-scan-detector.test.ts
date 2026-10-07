@@ -187,7 +187,9 @@ describe('barcode scanner detector selection (#1500)', () => {
     // _createScanDetector() is still awaiting it.
     let resolveWasm: () => void = () => {};
     ponyfill.prepareZXingModule.mockImplementation((options) =>
-      options?.fireImmediately ? new Promise<void>((res) => { resolveWasm = res; }) : undefined);
+      options?.fireImmediately
+        ? new Promise<void>((res) => { resolveWasm = () => { res(undefined); }; })
+        : undefined);
 
     const pending = openScanModal();
     await vi.waitFor(() => {
