@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { generateBeanQR, parseGlpQrParams, type GlpQrBean } from '../public-src/glp-qr.js';
 
+// Deliberately unchanged by the barcode-scan decoder fallback (#1500). That
+// slice only changes detector selection in views/library/import.ts and the
+// self-hosted zxing wasm in the frontend build; it does not touch this module's
+// encode/parse functions, so these tests stay valid as-is. The new
+// detector-selection coverage lives in test/library-scan-detector.test.ts.
+
 describe('generateBeanQR', () => {
   it('encodes name, roaster, roastDate and notes as glp:// URL params', () => {
     const url = generateBeanQR({ name: 'Bombe', roaster: 'Elbgold', roastDate: '01.03.2026', notes: 'Süß' });
