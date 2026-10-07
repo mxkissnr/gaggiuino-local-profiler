@@ -37,12 +37,14 @@ func referencedImageNames(libRepo *library.Repository, shotsRepo *shots.Reposito
 		}
 	}
 
-	all, err := shotsRepo.FindAll()
+	// Streamed, not FindAll: the export path this feeds is O(1) in shot
+	// count, and hydrating every shot's datapoints here would undo that.
+	err = shotsRepo.ForEachImageRef(func(id int64, ext string) error {
+		names[img.Filename(id, ext, "shot-")] = struct{}{}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	for _, s := range all {
-		addEntityImage(names, s, "shot-")
 	}
 	return names, nil
 }

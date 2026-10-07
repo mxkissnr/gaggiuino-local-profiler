@@ -79,6 +79,37 @@ func (r *Repository) ForEachShotForBackup(batch int, fn func(Shot) error) error 
 	}
 }
 
+// ForEachImageRef streams (shot id, photo extension) for every shot that has
+// a stored photo, trashed shots included. It reads only the id and the
+// `image` field of the JSON blob via json_extract, so unlike FindAll it never
+// hydrates a shot's datapoints — #1525's referenced-image set is built on the
+// backup export's O(1)-memory path. fn is called once per shot that has a
+// non-empty image extension.
+func (r *Repository) ForEachImageRef(fn func(id int64, ext string) error) error {
+	rows, err := r.db.Query(`SELECT id, json_extract(data, '$.image') FROM shots`)
+	if err != nil {
+		return fmt.Errorf("shots: listing image refs: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id  int64
+			ext sql.NullString
+		)
+		if err := rows.Scan(&id, &ext); err != nil {
+			return fmt.Errorf("shots: scanning image ref: %w", err)
+		}
+		if !ext.Valid || ext.String == "" {
+			continue
+		}
+		if err := fn(id, ext.String); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
 // TrashMap ports the export path's trash id->deleted_at collection without
 // FindTrashed's full per-row hydration: SELECT ... FROM trash JOIN shots
 // keeps FindTrashed's "only entries whose shot row still exists" semantics
