@@ -266,6 +266,18 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 		ortNames[f.ext] = name
 	}
 
+	// The barcode-detector ponyfill resolves zxing-wasm's reader wasm, so copy
+	// it into assets/ and inject the hashed relative name as __GLP_ZXING_WASM__
+	// into the page bundle's Define below (#1500). A missing source is a hard
+	// error, like the onnxruntime pair.
+	zxingName, err := copyHashedAsset(
+		filepath.Join(nodeModulesAbs, filepath.FromSlash(zxingReaderWasm)),
+		assetsDir, "zxing_reader", ".wasm",
+	)
+	if err != nil {
+		return fmt.Errorf("copy zxing reader wasm: %w", err)
+	}
+
 	modelsDefine, err := cutoutModelsDefine()
 	if err != nil {
 		return fmt.Errorf("render cut-out model manifest: %w", err)
@@ -317,6 +329,7 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 	// name under the identifier segment.ts reads (#1354).
 	opts.Define = map[string]string{
 		"__GLP_SEGMENT_WORKER__": strconv.Quote("./" + filepath.Base(workerOut)),
+		"__GLP_ZXING_WASM__":     strconv.Quote("./" + zxingName),
 		"__GLP_CUTOUT_MODELS__":  modelsDefine,
 	}
 	// style.css's three @font-face url()s are the only imported non-JS assets;
@@ -537,6 +550,15 @@ var ortRuntimeFiles = []ortRuntimeFile{
 	{base: "ort-wasm-simd-threaded", ext: ".wasm"},
 	{base: "ort-wasm-simd-threaded", ext: ".mjs"},
 }
+
+// zxingReaderWasm is the barcode-detector ponyfill's (zxing-wasm) reader wasm,
+// relative to node_modules (#1500). The page bundle's dynamic
+// `import('barcode-detector/ponyfill')` loads it at run time; copying it into
+// assets/ and injecting the hashed name as __GLP_ZXING_WASM__ keeps it
+// same-origin instead of the jsDelivr CDN default, which the CSP's
+// connect-src 'self' blocks. Same relative-URL reasoning as the onnxruntime
+// pair above (works under HA Ingress).
+const zxingReaderWasm = "zxing-wasm/dist/reader/zxing_reader.wasm"
 
 // copyHashedAsset copies one source file into assetsDir as
 // base-<first 8 hex of sha256><ext> and returns the written file name. The name

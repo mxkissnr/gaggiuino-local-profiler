@@ -17,6 +17,7 @@
     "demo:smoke": "node scripts/demo-smoke.mts"
   },
   "dependencies": {
+    "barcode-detector": "3.2.2",
     "chart.js": "4.5.1",
     "echarts": "6.1.0",
     "onnxruntime-web": "1.30.0",
