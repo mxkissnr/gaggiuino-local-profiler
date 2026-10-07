@@ -467,10 +467,12 @@ const PARAM_PATH_SOURCES: readonly ParamPathSource[] = [
 ];
 
 // Query-string variants of a bare GET path that the SPA requests but the
-// OpenAPI path scan alone would miss. The service worker looks fixtures up by
-// exact key, so each variant needs its own recording even though OpenAPI
-// models the query as optional (#1497). Values are query strings with the
-// leading "?".
+// OpenAPI path scan alone would miss, even though OpenAPI models the query as
+// optional (#1497). The SPA already builds the query in
+// public-src/api/system.ts, and demo/sw/sw-core.ts deliberately looks fixtures
+// up by exact key, so a query-less fallback there would serve one language's
+// badges for every language; the fix therefore stays in the recorder. Values
+// are query strings with the leading "?".
 export const QUERY_VARIANTS: ReadonlyMap<string, readonly string[]> = new Map([
     ['/api/achievements', ['?lang=en', '?lang=de', '?lang=es', '?lang=fr', '?lang=it', '?lang=nl']],
 ]);
