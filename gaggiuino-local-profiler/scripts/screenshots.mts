@@ -265,10 +265,12 @@ async function main(): Promise<void> {
     // ── Library ────────────────────────────────────────────────────────
     await page.click('#btnLibrary');
     // The seeded library always contains the 'Yirgacheffe' demo bean; a real
-    // backup has arbitrary beans, so wait for the rendered bean list instead.
+    // backup has arbitrary beans, so wait for the rendered shelf instead.
+    // #1330: the shelf renders .lib-shelf-tile (grid) / .lib-shelf-row (list);
+    // it no longer emits .lib-item (that class survives only in the sheet).
     await page.waitForFunction(
         fromBackup
-            ? () => document.querySelectorAll('#beanListUI .lib-item').length > 0
+            ? () => document.querySelectorAll('#beanListUI .lib-shelf-tile, #beanListUI .lib-shelf-row').length > 0
             : () => (document.getElementById('beanListUI')?.textContent || '').includes('Yirgacheffe'),
         undefined, { timeout: 15000 },
     );
@@ -281,14 +283,32 @@ async function main(): Promise<void> {
     await shootView(page, '#library-view', path.join(outDir, 'library.png'));
 
     // ── Flavor wheel ───────────────────────────────────────────────────
-    const wheelBtn = page.locator('[data-action="open-flavor-wheel"]').first();
-    if (await wheelBtn.count()) {
+    // #1330 moved the wheel button off the shelf into the bean's detail
+    // sheet, and it only renders for a bean that has flavors. Open the first
+    // such bean's sheet, then shoot the wheel inside it. Best-effort: a
+    // backup whose beans carry no flavors simply has no wheel to capture.
+    const flavoredId = await page.evaluate(() => {
+        const tiles = [...document.querySelectorAll<HTMLElement>('#beanListUI .lib-shelf-tile, #beanListUI .lib-shelf-row')];
+        for (const tile of tiles) {
+            tile.click();
+            if (document.querySelector('#beanSheet [data-action="open-flavor-wheel"]')) return tile.dataset.id ?? null;
+            document.querySelector<HTMLElement>('#beanSheet [data-action="close-bean-sheet"]')?.click();
+        }
+        return null;
+    });
+    if (flavoredId) {
+        const wheelBtn = page.locator('#beanSheet [data-action="open-flavor-wheel"]').first();
         await wheelBtn.click();
         await page.waitForSelector('#flavorWheelModal', { state: 'visible' });
         await waitForPaint(page, '#flavorWheelCanvas'); // ECharts sunburst (incl. its entry animation)
         await page.locator('#flavorWheelModal').screenshot({ path: path.join(outDir, 'flavor-wheel.png') });
         const closeBtn = page.locator('#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]').first();
         if (await closeBtn.count()) await closeBtn.click();
+        // Close the sheet too, or its backdrop covers the nav bar and the
+        // Analytics click below never lands.
+        await page.locator('#beanSheet [data-action="close-bean-sheet"]').first().click();
+    } else {
+        console.warn('flavor-wheel: no bean with flavors found — skipping');
     }
 
     // ── Analytics ──────────────────────────────────────────────────────

@@ -280,13 +280,31 @@ const VIEWS: readonly View[] = [
     {
         name: 'library',
         nav: '#btnLibrary',
-        ready: () => document.querySelectorAll('#beanListUI .lib-item').length > 0,
+        // #1330: the shelf renders .lib-shelf-tile (grid) / .lib-shelf-row
+        // (list); it no longer emits .lib-item (that class survives only in
+        // the detail sheet).
+        ready: () => document.querySelectorAll('#beanListUI .lib-shelf-tile, #beanListUI .lib-shelf-row').length > 0,
         after: async page => {
             // Best-effort: the flavor-wheel image is only fetched when its
-            // modal opens, and a restored backup may not expose the button.
-            if (await clickInPage(page, '[data-action="open-flavor-wheel"]')) {
-                await page.waitForSelector('#flavorWheelModal', { state: 'visible', timeout: 5000 }).catch(() => {});
-                await clickInPage(page, '#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]');
+            // modal opens. #1330 moved the wheel button off the shelf into the
+            // bean's detail sheet (and only a flavored bean has one), so open
+            // the first bean whose card carries it, then its wheel.
+            const flavoredId = await page.evaluate(() => {
+                const tiles = [...document.querySelectorAll<HTMLElement>('#beanListUI .lib-shelf-tile, #beanListUI .lib-shelf-row')];
+                for (const tile of tiles) {
+                    tile.click();
+                    if (document.querySelector('#beanSheet [data-action="open-flavor-wheel"]')) return tile.dataset.id ?? null;
+                    document.querySelector<HTMLElement>('#beanSheet [data-action="close-bean-sheet"]')?.click();
+                }
+                return null;
+            });
+            if (flavoredId) {
+                await page.waitForSelector('#beanSheet [data-action="open-flavor-wheel"]', { state: 'visible', timeout: 5000 }).catch(() => {});
+                if (await clickInPage(page, '#beanSheet [data-action="open-flavor-wheel"]')) {
+                    await page.waitForSelector('#flavorWheelModal', { state: 'visible', timeout: 5000 }).catch(() => {});
+                    await clickInPage(page, '#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]');
+                }
+                await clickInPage(page, '#beanSheet [data-action="close-bean-sheet"]');
             }
         },
     },
