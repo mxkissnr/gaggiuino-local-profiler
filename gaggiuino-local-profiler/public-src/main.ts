@@ -115,7 +115,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, reset
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
          toggleImportSettings, addCustomShopifyDomain,
-         openScanModal, closeScanModal, _runScanLoop, _handleScanResult,
+         openScanModal, closeScanModal, _runScanLoop, _submitManualScan, _handleScanResult,
          renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk,
          renderBasketList, openBasketForm, closeBasketForm, editBasket, saveBasket, deleteBasket, uploadBasketImage,
          renderPuckScreenList, openPuckScreenForm, closePuckScreenForm, editPuckScreen, savePuckScreen, deletePuckScreen, uploadPuckScreenImage
@@ -476,6 +476,7 @@ Object.assign(window, {
   openScanModal,
   closeScanModal,
   _runScanLoop,
+  _submitManualScan,
   _handleScanResult,
   renderMilkList,
   openMilkForm,
@@ -1005,6 +1006,10 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'filter-by-bean':     closeBeanSheet(); filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
+      // #1500: manual barcode entry in the scan modal submits through this
+      // delegation (no inline handler under the CSP); preventDefault keeps
+      // the form from navigating the page on click or Enter.
+      case 'scan-manual-submit': e.preventDefault(); _submitManualScan(); break;
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        void deleteBean(numId()); break;
       case 'toggle-bean-active': void toggleBeanActive(numId()); break;

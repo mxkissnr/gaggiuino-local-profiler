@@ -1746,6 +1746,13 @@
         <div class="scan-overlay"><div class="scan-frame"></div></div>
     </div>
     <div id="scanStatus"></div>
+    <form id="scanManualForm" class="scan-manual" autocomplete="off" novalidate>
+        <label for="scanManualInput" data-i18n="scan_manual_label">Oder Barcode eingeben</label>
+        <div class="scan-manual-row">
+            <input id="scanManualInput" class="lib-input scan-manual-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+            <button type="submit" class="lib-btn-sm scan-manual-submit" data-action="scan-manual-submit" data-i18n="scan_manual_submit">Suchen</button>
+        </div>
+    </form>
     <p style="color:var(--gray-600);font-size:.7rem;text-align:center;margin:0">
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
