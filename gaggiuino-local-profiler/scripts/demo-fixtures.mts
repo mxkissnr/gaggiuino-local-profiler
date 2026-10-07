@@ -222,6 +222,20 @@ function recordedGet(pathname: string): RecordedEntry | null {
     return null;
 }
 
+// Every recorded response for a bare GET path across its query variants. The
+// paged `/api/shots?limit=...&cursor=...` walk records one entry per page, and
+// each page carries a disjoint slice of the shot ids, so expandIds() needs them
+// all rather than just the first match.
+function recordedGetAll(pathname: string): RecordedEntry[] {
+    const entries: RecordedEntry[] = [];
+    for (const [key, entry] of recorded) {
+        if (!key.startsWith(`GET ${pathname}`)) continue;
+        const rest = key.slice(`GET ${pathname}`.length);
+        if (rest === '' || rest.startsWith('?')) entries.push(entry);
+    }
+    return entries;
+}
+
 // ── Phase A: SPA-driven ──────────────────────────────────────────────────
 
 interface PageProfile {
@@ -461,6 +475,37 @@ function idsIn(value: unknown): FixtureId[] {
         : [];
 }
 
+/**
+ * Shot ids in one recorded list body, newest first. A `/api/shots` page is
+ * `{ shots: [...] }` already ordered newest-first, while the `/shots.json`
+ * dump is a bare array ordered timestamp-ASC, so the dump is reversed to keep
+ * the caller's newest-first invariant.
+ */
+export function shotIdsInListBody(body: unknown): FixtureId[] {
+    if (Array.isArray(body)) return idsIn(body).reverse();
+    return idsIn(asRecord(body)?.['shots']);
+}
+
+/**
+ * Merges the shot ids from several recorded list bodies into one newest-first
+ * list, dropping duplicates so a shot spread across pages (or present in both
+ * the paged list and the dump) is expanded once. The first occurrence wins, so
+ * the newest page's ordering is preserved.
+ */
+export function mergeShotIds(bodies: readonly unknown[]): FixtureId[] {
+    const ids: FixtureId[] = [];
+    const seen = new Set<string>();
+    for (const body of bodies) {
+        for (const id of shotIdsInListBody(body)) {
+            const key = `${typeof id}:${id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            ids.push(id);
+        }
+    }
+    return ids;
+}
+
 const ID_SOURCES: Record<IdKind, IdSource> = {
     shots:      { listPath: '/api/shots',            pick: body => idsIn(asRecord(body)?.['shots']) },
     shotDump:   { listPath: '/shots.json',           pick: body => idsIn(body) },
@@ -507,10 +552,26 @@ function idsFromEntry(entry: RecordedEntry | null, pick: (body: unknown) => Fixt
     }
 }
 
+function parsedBody(entry: RecordedEntry | null): unknown {
+    if (!entry) return null;
+    try {
+        return JSON.parse(entry.body.toString('utf8')) as unknown;
+    } catch {
+        return null;
+    }
+}
+
 function expandIds(kind: IdKind): FixtureId[] {
     if (kind === 'shots') {
-        const primary = idsFromEntry(recordedGet(ID_SOURCES.shots.listPath), ID_SOURCES.shots.pick);
-        return primary.length ? primary : idsFromEntry(recordedGet(ID_SOURCES.shotDump.listPath), ID_SOURCES.shotDump.pick);
+        // Phase A records at most the first list page, so union every recorded
+        // page (the phase B walk below fills the older ones in) with the
+        // `/shots.json` dump when the instance served one — otherwise
+        // `/api/shots/{id}` is only expanded for the newest shots and older
+        // shots the other views link to get no fixture (#1511).
+        const bodies = recordedGetAll(ID_SOURCES.shots.listPath).map(entry => parsedBody(entry));
+        const dump = recordedGet(ID_SOURCES.shotDump.listPath);
+        if (dump) bodies.push(parsedBody(dump));
+        return mergeShotIds(bodies);
     }
     const source = ID_SOURCES[kind];
     return idsFromEntry(recordedGet(source.listPath), source.pick);
@@ -537,7 +598,39 @@ async function tryFetch(baseUrl: string, apiToken: string, urlPath: string): Pro
     }
 }
 
+// Page size for the shot-list walk below. Mirrors public-src/views/shots/
+// index.ts's SHOTS_PAGE_LIMIT, so a page the demo later scrolls to is keyed
+// exactly as the SPA would request it (same limit, same cursor chain).
+const SHOTS_PAGE_LIMIT = 60;
+
+// Phase A only ever loads the first `GET /api/shots` page, so the expansion
+// source for `/api/shots/{id}` would otherwise miss every older shot the
+// dial-in, analytics, achievements and comparison views link to (#1511). Walk
+// the rest of the keyset-paginated list here, recording each page through the
+// same recordResponse() path as the other fetches so the ids and the fixtures
+// both exist. The already-recorded first page is reused, not refetched.
+async function recordAllShotListPages(baseUrl: string, apiToken: string): Promise<void> {
+    let cursor: string | null = null;
+    for (;;) {
+        const query = new URLSearchParams({ limit: String(SHOTS_PAGE_LIMIT) });
+        if (cursor) query.set('cursor', cursor);
+        const concrete = `${ID_SOURCES.shots.listPath}?${query.toString()}`;
+        let entry = recorded.get(fixtureKey('GET', concrete));
+        if (!entry) {
+            const fetched = await tryFetch(baseUrl, apiToken, concrete);
+            if (!fetched) return;
+            recordResponse('GET', baseUrl + concrete, fetched.status, fetched.contentType, fetched.body);
+            entry = recorded.get(fixtureKey('GET', concrete));
+        }
+        const page = asRecord(parsedBody(entry ?? null));
+        const next = page?.['nextCursor'];
+        cursor = page?.['hasMore'] === true && typeof next === 'string' ? next : null;
+        if (!cursor) return;
+    }
+}
+
 async function recordPhaseB(baseUrl: string, apiToken: string, getPaths: readonly string[]): Promise<void> {
+    await recordAllShotListPages(baseUrl, apiToken);
     for (const template of getPaths) {
         if (OPENAPI_GET_SKIP.has(template)) continue;
         const hasParam = /\{[^}]+\}/.test(template);
