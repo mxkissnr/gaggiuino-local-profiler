@@ -43,6 +43,10 @@ export const BARCODE_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 
 
 export const GEAR_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/></svg>`;
 
+// #1514: the desktop topbar's fixed Settings button inlines these same paths
+// at the larger .rail-icon size (index.html), since static HTML cannot import
+// this module — so this .sm-sized constant and its existing callers stay as they are.
+
 export const WARNING_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4"/><path d="M12 17v.01"/></svg>`;
 
 // Exhaustive sweep follow-up (coordinator mandate, #417): sort-by-rating

@@ -326,6 +326,8 @@ const VIEWS: readonly View[] = [
     },
     {
         name: 'settings',
+        // #1514: still by id — the button left .topbar-nav-scroll but kept
+        // #btnSettings, and clickInPage() clicks it regardless of visibility.
         nav: '#btnSettings',
         ready: () => document.querySelectorAll('#machinesList .machine-row').length >= 1,
     },

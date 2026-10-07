@@ -373,6 +373,8 @@ async function main(): Promise<void> {
         await shootView(page, '#orders-view', path.join(outDir, 'orders.png'));
     }
 
+    // #1514: Settings left .topbar-nav-scroll for a fixed slot, but the
+    // click target is still its unchanged id.
     await page.click('#btnSettings');
     // seed() adds a second machine; a real backup may hold just one.
     await page.waitForFunction(
