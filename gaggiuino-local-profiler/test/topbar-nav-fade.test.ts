@@ -35,8 +35,17 @@ describe('topbarNavFadeClasses() (#1516)', () => {
 });
 
 // Minimal stand-in for the row element: classList.toggle(name, force) with a
-// Set to record which edge classes are on.
-function fakeRow(scrollLeft: number, scrollWidth: number, clientWidth: number): HTMLElement & { classes: Set<string> } {
+// Set to record which edge classes are on. A local interface (not HTMLElement)
+// keeps scrollLeft/scrollWidth/clientWidth assignable between assertions.
+interface FakeRow {
+    scrollLeft: number;
+    scrollWidth: number;
+    clientWidth: number;
+    classes: Set<string>;
+    classList: { toggle(name: string, force?: boolean): boolean };
+}
+
+function fakeRow(scrollLeft: number, scrollWidth: number, clientWidth: number): FakeRow {
     const classes = new Set<string>();
     return {
         scrollLeft,
@@ -50,27 +59,27 @@ function fakeRow(scrollLeft: number, scrollWidth: number, clientWidth: number): 
                 return classes.has(name);
             },
         },
-    } as unknown as HTMLElement & { classes: Set<string> };
+    };
 }
 
 describe('updateTopbarNavFade() (#1516)', () => {
     it('sets fade-right at the start and clears it once everything fits', () => {
         const row = fakeRow(0, 1000, 400);
-        updateTopbarNavFade(row);
+        updateTopbarNavFade(row as unknown as HTMLElement);
         expect([...row.classes]).toEqual(['fade-right']);
 
         row.scrollWidth = 400;
-        updateTopbarNavFade(row);
+        updateTopbarNavFade(row as unknown as HTMLElement);
         expect([...row.classes]).toEqual([]);
     });
 
     it('sets both edges mid-scroll and only fade-left at the end', () => {
         const row = fakeRow(300, 1000, 400);
-        updateTopbarNavFade(row);
+        updateTopbarNavFade(row as unknown as HTMLElement);
         expect([...row.classes].sort()).toEqual(['fade-left', 'fade-right']);
 
         row.scrollLeft = 600;
-        updateTopbarNavFade(row);
+        updateTopbarNavFade(row as unknown as HTMLElement);
         expect([...row.classes]).toEqual(['fade-left']);
     });
 
