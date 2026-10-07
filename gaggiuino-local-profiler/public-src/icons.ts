@@ -41,7 +41,7 @@ export const MILK_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 2
 
 export const BARCODE_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg>`;
 
-export const GEAR_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/></svg>`;
+export const GEAR_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M11.05 5.27L10.54 1.6A10.5 10.5 0 0 1 13.46 1.6L12.95 5.27A6.8 6.8 0 0 1 16.09 6.57L18.32 3.61A10.5 10.5 0 0 1 20.39 5.68L17.43 7.91A6.8 6.8 0 0 1 18.73 11.05L22.4 10.54A10.5 10.5 0 0 1 22.4 13.46L18.73 12.95A6.8 6.8 0 0 1 17.43 16.09L20.39 18.32A10.5 10.5 0 0 1 18.32 20.39L16.09 17.43A6.8 6.8 0 0 1 12.95 18.73L13.46 22.4A10.5 10.5 0 0 1 10.54 22.4L11.05 18.73A6.8 6.8 0 0 1 7.91 17.43L5.68 20.39A10.5 10.5 0 0 1 3.61 18.32L6.57 16.09A6.8 6.8 0 0 1 5.27 12.95L1.6 13.46A10.5 10.5 0 0 1 1.6 10.54L5.27 11.05A6.8 6.8 0 0 1 6.57 7.91L3.61 5.68A10.5 10.5 0 0 1 5.68 3.61L7.91 6.57A6.8 6.8 0 0 1 11.05 5.27Z"/></svg>`;
 
 // #1514: the desktop topbar's fixed Settings button inlines these same paths
 // at the larger .rail-icon size (index.html), since static HTML cannot import
