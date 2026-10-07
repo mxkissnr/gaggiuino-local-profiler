@@ -102,3 +102,8 @@ describe('barcode scan manual entry (#1500)', () => {
     expect(api.scanBarcode).not.toHaveBeenCalled();
   });
 });
+
+// test/glp-qr.test.ts is deliberately unchanged by this slice. The plan names it
+// only to require it stays green: manual entry adds a form that feeds the existing
+// _handleScanResult(), and does not touch public-src/glp-qr.ts or parseGlpQrParams,
+// so the generateBeanQR/parseGlpQrParams tests there remain valid as-is.
