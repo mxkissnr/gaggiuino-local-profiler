@@ -335,6 +335,13 @@ jobs:
             rm -f "$PROFILE_DST"
           fi
 
+          # #1495: Supervisor also reads the option names/help texts from the
+          # add-on's own translations/ folder, so mirror it like the profile.
+          rm -rf dev-app/gaggiuino_local_profiler_dev/translations
+          if [ -d main-repo/gaggiuino-local-profiler/translations ]; then
+            cp -r main-repo/gaggiuino-local-profiler/translations dev-app/gaggiuino_local_profiler_dev/
+          fi
+
           # #805: same class of bug as #789/#803 above, one layer up -- this
           # workflow bumped `version` and copied apparmor.txt but never
           # touched `options`/`schema`, so an option added to the app's own
