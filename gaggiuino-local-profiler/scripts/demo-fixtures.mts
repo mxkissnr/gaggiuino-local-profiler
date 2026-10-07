@@ -304,7 +304,10 @@ const VIEWS: readonly View[] = [
                     await page.waitForSelector('#flavorWheelModal', { state: 'visible', timeout: 5000 }).catch(() => {});
                     await clickInPage(page, '#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]');
                 }
-                await clickInPage(page, '#beanSheet [data-action="close-bean-sheet"]');
+                await clickInPage(page, '#beanSheet .lib-sheet-close');
+                // The close slides the sheet out before removing it; wait it out
+                // so the next view's nav click is not blocked. Best-effort.
+                await page.waitForSelector('#beanSheet .lib-sheet', { state: 'hidden', timeout: 2000 }).catch(() => {});
             }
         },
     },

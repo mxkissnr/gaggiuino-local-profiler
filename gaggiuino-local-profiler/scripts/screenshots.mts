@@ -305,8 +305,14 @@ async function main(): Promise<void> {
         const closeBtn = page.locator('#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]').first();
         if (await closeBtn.count()) await closeBtn.click();
         // Close the sheet too, or its backdrop covers the nav bar and the
-        // Analytics click below never lands.
-        await page.locator('#beanSheet [data-action="close-bean-sheet"]').first().click();
+        // Analytics click below never lands. Target the close button: the
+        // backdrop shares data-action="close-bean-sheet" but the sheet sits
+        // over its centre, so a first-match click never receives the event.
+        await page.locator('#beanSheet .lib-sheet-close').click();
+        // The close slides the sheet out (~220ms) before removing it; wait for
+        // it to go so the backdrop cannot swallow the next nav click.
+        // Best-effort like the rest of this step.
+        await page.waitForSelector('#beanSheet .lib-sheet', { state: 'hidden', timeout: 2000 }).catch(() => {});
     } else {
         console.warn('flavor-wheel: no bean with flavors found — skipping');
     }
