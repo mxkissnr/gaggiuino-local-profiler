@@ -307,6 +307,20 @@
             -webkit-overflow-scrolling: touch;
         }
         .topbar-nav-scroll::-webkit-scrollbar { display: none; }
+        /* #1516: fade the edge where more tabs are hidden, so a clipped tab
+           reads as scrollable instead of truncated. 32 px, transparent at the
+           hidden edge; both classes together fade both edges. No class, no
+           fade — a row whose tabs all fit stays clean. Applied by
+           topbar-nav-fade.js from the row's scroll metrics. */
+        .topbar-nav-scroll.fade-left {
+            mask-image: linear-gradient(to right, transparent 0, #000 32px);
+        }
+        .topbar-nav-scroll.fade-right {
+            mask-image: linear-gradient(to left, transparent 0, #000 32px);
+        }
+        .topbar-nav-scroll.fade-left.fade-right {
+            mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+        }
         .topbar-nav-list { display: flex; align-items: center; gap: 2px; }
 
         .topbar-nav {

@@ -53,6 +53,7 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
+import { initTopbarNavFade } from './components/topbar-nav-fade.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
@@ -1131,6 +1132,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
+  // #1516: after the labels are localized (their width decides the row's
+  // scrollWidth). initTopbarNavFade re-syncs on scroll, resize and further
+  // translation-driven label changes.
+  initTopbarNavFade();
 
   void initToken().then(async () => {
     // #735: opened once at app bootstrap, not per view-switch -- SSE-driven
