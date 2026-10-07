@@ -1,6 +1,7 @@
 import { S } from '../state/index.js';
 import { updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
+import { updateTopbarNavFade, isFullyVisibleIn } from './topbar-nav-fade.js';
 
 export function goToShot(id: number): void {
   switchMode('shots');
@@ -77,10 +78,14 @@ export function switchMode(mode: string): void {
   };
   const btnId = modeMap[mode];
   const activeBtn = btnId ? document.getElementById(btnId) : null;
-  // #1514: #btnSettings now sits in a fixed topbar slot outside the
-  // horizontally scrolling .topbar-nav-scroll, so it is always fully visible
-  // and never needs revealing — only the in-row tabs can overflow and scroll.
-  if (activeBtn && mode !== 'settings') activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  // #1514: #btnSettings sits in a fixed topbar slot outside the horizontally
+  // scrolling .topbar-nav-scroll, so it has no scroller to reveal it in — only
+  // an in-row tab that is not already fully visible needs scrolling into view.
+  const scroller = activeBtn?.closest<HTMLElement>('.topbar-nav-scroll') ?? null;
+  if (activeBtn && scroller && !isFullyVisibleIn(activeBtn, scroller)) {
+    activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  updateTopbarNavFade(scroller);
 
   // #410/#461: mobile shows #shots-view full screen only while
   // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover
