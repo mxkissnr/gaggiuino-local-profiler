@@ -1,0 +1,19 @@
+configuration:
+  sync_interval:
+    name: Intervallo di sincronizzazione
+    description: Ogni quanto l'app controlla se la macchina ha nuovi shot, in minuti (1 a 60).
+  preheat_time:
+    name: Tempo di preriscaldamento
+    description: Quanto tempo passa dall'accensione prima che la macchina sia pronta a preparare il caffè, in minuti (1 a 120).
+  enable_orders:
+    name: Attiva ordini
+    description: Attiva il sistema di gestione degli ordini. Aggiunge il pannello barista e il supporto per le carte ordine dei clienti. Disattivato per impostazione predefinita.
+  debug_logging:
+    name: Log di debug
+    description: Scrive messaggi diagnostici dettagliati nel log dell'app. Lascialo disattivato per l'uso normale e attivalo solo per diagnosticare un problema.
+  expose_api_port:
+    name: Esponi la porta API
+    description: Consente l'accesso diretto all'app sulla porta 8099 al di fuori della barra laterale di Home Assistant. Se lo disattivi, si bloccano l'accesso diretto sulla porta 8099 (browser e app installata) e la prima configurazione della modalità URL diretto della carta ordine, ma l'app resta raggiungibile dalla barra laterale di Home Assistant.
+  allowed_hosts:
+    name: Nomi host consentiti
+    description: Nomi host aggiuntivi a cui risponde l'app, separati da virgole. Necessari solo se raggiungi l'app tramite il tuo dominio dietro un proxy inverso.

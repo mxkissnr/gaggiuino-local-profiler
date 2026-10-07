@@ -484,6 +484,17 @@ const PARAM_PATH_SOURCES: readonly ParamPathSource[] = [
     { match: /^\/api\/machine\/profile\/\{id\}$/, kind: 'profiles' },
 ];
 
+// Query-string variants of a bare GET path that the SPA requests but the
+// OpenAPI path scan alone would miss, even though OpenAPI models the query as
+// optional (#1497). The SPA already builds the query in
+// public-src/api/system.ts, and demo/sw/sw-core.ts deliberately looks fixtures
+// up by exact key, so a query-less fallback there would serve one language's
+// badges for every language; the fix therefore stays in the recorder. Values
+// are query strings with the leading "?".
+export const QUERY_VARIANTS: ReadonlyMap<string, readonly string[]> = new Map([
+    ['/api/achievements', ['?lang=en', '?lang=de', '?lang=es', '?lang=fr', '?lang=it', '?lang=nl']],
+]);
+
 function idsFromEntry(entry: RecordedEntry | null, pick: (body: unknown) => FixtureId[]): FixtureId[] {
     if (!entry) return [];
     try {
@@ -527,7 +538,8 @@ async function recordPhaseB(baseUrl: string, apiToken: string, getPaths: readonl
     for (const template of getPaths) {
         if (OPENAPI_GET_SKIP.has(template)) continue;
         const hasParam = /\{[^}]+\}/.test(template);
-        const concretes = hasParam ? expandParamPaths(template) : [template];
+        const variants = (QUERY_VARIANTS.get(template) ?? []).map(query => `${template}${query}`);
+        const concretes = hasParam ? expandParamPaths(template) : [template, ...variants];
         for (const concrete of concretes) {
             if (recorded.has(fixtureKey('GET', concrete))) continue;
             const entry = await tryFetch(baseUrl, apiToken, concrete);
@@ -567,6 +579,15 @@ function missingGetPaths(getPaths: readonly string[]): string[] {
         if (!found) missing.push(template);
     }
     return missing;
+}
+
+// Manifest keys the demo cannot work without. They come from the query
+// variants above rather than the OpenAPI scan, so a dropped or failed fetch is
+// caught here instead of shipping a page that stays empty (#1497).
+const REQUIRED_FIXTURE_KEYS: readonly string[] = ['GET /api/achievements?lang=en'];
+
+function missingRequiredKeys(): string[] {
+    return REQUIRED_FIXTURE_KEYS.filter(key => !recorded.has(key));
 }
 
 function collectLeaks(apiToken: string): string[] {
@@ -682,6 +703,11 @@ async function main(): Promise<void> {
         const leaks = collectLeaks(apiToken);
         if (leaks.length) {
             throw new Error(`refusing to write fixtures — possible personal data leaked:\n${leaks.join('\n')}`);
+        }
+
+        const missingKeys = missingRequiredKeys();
+        if (missingKeys.length) {
+            throw new Error(`refusing to write fixtures — required responses were not recorded:\n${missingKeys.join('\n')}`);
         }
 
         const { count, totalBytes } = writeFixtures(outDir);
