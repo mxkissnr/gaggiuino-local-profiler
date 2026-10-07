@@ -139,6 +139,8 @@ const VIEWS: readonly View[] = [
     { desktop: '#btnDialin', mobile: '#bnDialin', container: '#dialin-view' },
     { desktop: '#btnLive', mobile: '#bnLive', container: '#live-view' },
     { desktop: '#btnOrders', mobile: '#bnOrders', container: '#orders-view' },
+    // #1514: Settings left the desktop scroll row but keeps #btnSettings;
+    // mobile keeps using #bnSettings, so both selectors stay as they are.
     { desktop: '#btnSettings', mobile: '#bnSettings', container: '#settings-view' },
 ];
 

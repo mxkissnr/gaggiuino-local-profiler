@@ -77,7 +77,10 @@ export function switchMode(mode: string): void {
   };
   const btnId = modeMap[mode];
   const activeBtn = btnId ? document.getElementById(btnId) : null;
-  if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  // #1514: #btnSettings now sits in a fixed topbar slot outside the
+  // horizontally scrolling .topbar-nav-scroll, so it is always fully visible
+  // and never needs revealing — only the in-row tabs can overflow and scroll.
+  if (activeBtn && mode !== 'settings') activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 
   // #410/#461: mobile shows #shots-view full screen only while
   // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover
