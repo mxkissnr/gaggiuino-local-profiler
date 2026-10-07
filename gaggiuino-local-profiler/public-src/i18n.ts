@@ -141,12 +141,19 @@ export function applyTranslations(): void {
     const key = el.dataset.i18nTitle;
     if (key) el.title = t(key);
   });
+  // #1514: same treatment for aria-label. An icon-only button (the fixed
+  // Settings gear) has no text node for the data-i18n scan to localize, so
+  // its only accessible name would otherwise stay hard-coded German.
+  document.querySelectorAll<HTMLElement>('[data-i18n-aria-label]').forEach(el => {
+    const key = el.dataset.i18nAriaLabel;
+    if (key) el.setAttribute('aria-label', t(key));
+  });
   document.querySelectorAll<HTMLElement>('[data-i18n-html]').forEach(el => {
     const key = el.dataset.i18nHtml;
     if (key) el.innerHTML = tHtml(key);
   });
-  // The easter-egg close button's only label is its aria-label (its text node
-  // is the × glyph), so the scans above can't reach it — set it by id (#1499).
+  // The easter-egg close button's aria-label is set by id (#1499); it
+  // predates data-i18n-aria-label and its text node is the × glyph.
   const easterEggCloseBtn = document.getElementById('easterEggPanelCloseBtn');
   if (easterEggCloseBtn) easterEggCloseBtn.setAttribute('aria-label', t('easter_egg_close'));
   // Keep <html lang> in sync so browsers don't treat an English UI as German

@@ -40,8 +40,9 @@ describe('desktop topbar: Settings is a fixed gear outside the scrolling nav row
         expect(settingsBtn).not.toContain('rail-label');
     });
 
-    it('carries a translated title and a non-empty accessible name', () => {
+    it('derives both the title and the accessible name from i18n, not fixed text', () => {
         expect(settingsBtn).toMatch(/data-i18n-title="nav_settings"/);
+        expect(settingsBtn).toMatch(/data-i18n-aria-label="nav_settings"/);
         expect(settingsBtn).toMatch(/aria-label="[^"]+"/);
     });
 });
