@@ -72,9 +72,12 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 	// Actual brewing requires process.a==1 AND process.s in ("brew","infusion")
 	// AND process.u!=1: a utility process (u==1) is a flush, not a brew.
 	// Steaming: process.a==1 AND m==2. Source: ha-integration sensor.py _get_status.
-	var isBrewing, isSteaming bool
+	var isBrewing, isSteaming, isFlushing bool
 	if process, ok := evt["process"].(map[string]any); ok {
-		if looseFloat(process["a"]) == 1 && looseFloat(process["u"]) != 1 {
+		if looseFloat(process["a"]) == 1 && looseFloat(process["u"]) == 1 {
+			// A running utility process (u == 1) is a flush, not a brew (#1541).
+			isFlushing = true
+		} else if looseFloat(process["a"]) == 1 {
 			stage, _ := process["s"].(string)
 			isBrewing = stage == "brew" || stage == "infusion"
 			isSteaming = looseFloat(evt["m"]) == 2
@@ -103,6 +106,7 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 		Pressure:          looseFloat(evt["pr"]),
 		Weight:            weight,
 		Brewing:           isBrewing,
+		Flushing:          isFlushing,
 		Standby:           standby,
 		SteamOn:           &steamOn,
 		ProfileID:         nil,

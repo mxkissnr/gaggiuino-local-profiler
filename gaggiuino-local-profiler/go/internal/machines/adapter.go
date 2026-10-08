@@ -27,6 +27,7 @@ type Status struct {
 	Weight            *float64        `json:"weight"`
 	Brewing           bool            `json:"brewing"`
 	Standby           bool            `json:"standby"`
+	Flushing          bool            `json:"flushing"` // GaggiMate utility process (a==1 && u==1), #1541
 	SteamOn           *bool           `json:"steamOn"`
 	ProfileID         *int            `json:"profileId"`
 	ProfileName       *string         `json:"profileName"`
