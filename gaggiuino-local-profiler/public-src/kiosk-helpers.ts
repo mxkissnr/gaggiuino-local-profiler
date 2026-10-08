@@ -22,3 +22,19 @@ export function etaText(order: Order, eta: QueueEta | null, now: number): string
 export function isEinkMode(search: string): boolean {
   return new URLSearchParams(search).get('eink') === '1';
 }
+
+// Variant chips are single choice: the server stores one variant per order (a
+// `variant` string, max 50 chars), so tapping an unselected chip selects it on
+// its own and tapping the selected chip clears the selection. The array shape
+// keeps at most one entry, leaving the kiosk's store and renderer unchanged.
+export function toggleVariantSelection(selected: readonly string[], variant: string): string[] {
+  return selected.includes(variant) ? [] : [variant];
+}
+
+// The order body's variant field: the single chosen variant, or nothing when
+// the guest picked none. The kiosk used to send `variants: [...]`, but the
+// server only reads this `variant` string, so every order arrived variant-less.
+export function variantOrderField(selected: readonly string[]): { variant?: string } {
+  const chosen = selected[0];
+  return chosen === undefined ? {} : { variant: chosen };
+}

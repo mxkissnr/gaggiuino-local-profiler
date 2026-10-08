@@ -11,7 +11,7 @@ import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme } from './theme.js';
 import { esc, html, joinHtml } from './utils.js';
 import type { Html } from './utils.js';
 import { initToken } from './api/transport.js';
-import { etaText, isEinkMode } from './kiosk-helpers.js';
+import { etaText, isEinkMode, toggleVariantSelection, variantOrderField } from './kiosk-helpers.js';
 
 // The ordering kiosk (#1267): a second, tablet-facing page that shares the
 // app's design system, languages and theme. It is a typed port of the older
@@ -152,9 +152,7 @@ function renderVariants(): void {
 
 function toggleVariant(variant: string): void {
   if (!variant) return;
-  const idx = state.selectedVariants.indexOf(variant);
-  if (idx === -1) state.selectedVariants.push(variant);
-  else state.selectedVariants.splice(idx, 1);
+  state.selectedVariants = toggleVariantSelection(state.selectedVariants, variant);
   renderVariants();
 }
 
@@ -199,7 +197,7 @@ async function submitOrder(): Promise<void> {
       item: drink.name,
       customer: state.guestName,
       note: byId<HTMLInputElement>('noteInput').value.trim(),
-      ...(state.selectedVariants.length > 0 ? { variants: [...state.selectedVariants] } : {}),
+      ...variantOrderField(state.selectedVariants),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
