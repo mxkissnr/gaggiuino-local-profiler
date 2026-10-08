@@ -118,8 +118,14 @@ function _counterText(count: string): string {
   return count ? `${count} · ${period}` : period;
 }
 
-// #1496: with more than one machine the verdict names the scope it covers,
-// following the topbar switcher. Single-machine installs see no change.
+// #1496 scope note: no second machine filter and no new machine state. The
+// topbar switcher (public-src/components/machines-settings.ts and
+// public-src/main.ts) already scopes S.shots and re-runs initAnalytics(), so
+// per "nothing twice" (docs/DESIGN.md) this change only makes the active
+// selection and the period visible. Those modules are deliberately left
+// untouched. The counter test reuses the DOM harness of
+// test/analytics-bean-shelf.test.ts, and the changelog fragment follows the
+// format in changelog.d/README.md — neither reference file needed edits.
 function _machineScopeSuffix(): string {
   const machines = _machines() || [];
   if (machines.length < 2) return '';
