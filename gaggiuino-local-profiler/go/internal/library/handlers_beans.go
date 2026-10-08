@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
 // This file implements the bean endpoints.
@@ -67,6 +68,32 @@ func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
+// isUntouchedPlaceholder reports whether bag is the placeholder the bean form
+// creates from a bean's roast date (#1540): no stock, batch number, price or
+// frozen portions, and no annotated dose recorded against the bean. Such a bag
+// isn't a real bag yet, so the first bag the user adds should fill it in place
+// instead of stacking a second, empty one behind it.
+func isUntouchedPlaceholder(beanID int64, bag Entity, doseRows []shots.AnnotatedDose) bool {
+	if v, ok := bag["stock_g"]; ok && v != nil {
+		return false
+	}
+	if trimMax(bag["batchNumber"], 50) != "" {
+		return false
+	}
+	if v, ok := bag["price_eur"]; ok && v != nil {
+		return false
+	}
+	if fps, _ := bag["frozenPortions"].([]any); len(fps) > 0 {
+		return false
+	}
+	for _, row := range doseRows {
+		if row.BeanID != nil && *row.BeanID == beanID {
+			return false
+		}
+	}
+	return true
+}
+
 // newBag handles POST /api/library/bean/:id/new-bag.
 func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
@@ -107,19 +134,45 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 			return &apiError{http.StatusBadRequest, "invalid price_eur"}
 		}
 		bags := bagsOf(bean)
-		// New bag always joins the back of the queue (highest sortOrder + 1) —
-		// it does NOT become current just by existing; SimulateBagQueue only
-		// promotes it once every bag ahead of it in the queue is exhausted.
-		var nextSort int64
-		for _, raw := range bags {
-			if bg, ok := raw.(Entity); ok {
-				nextSort = maxInt64(nextSort, effectiveSortOrder(bg)+1)
+		var bagID int64
+		var bag Entity
+		// #1540: the bean form creates a single placeholder bag from the bean's
+		// roast date and no stock; "Save and add bag" must fill that bag in
+		// rather than append an empty one behind it, which otherwise leaves a
+		// phantom Past bag and drops the bean's age badge (the bean-level
+		// roastDate syncs from the new, dateless current bag).
+		if len(bags) == 1 {
+			if ph, ok := bags[0].(Entity); ok && isUntouchedPlaceholder(id, ph, doseRows) {
+				if phID, ok := idOf(ph, "id"); ok {
+					bagID = phID
+					if roastDate == "" {
+						roastDate = trimMax(ph["roastDate"], 10)
+					}
+					// Keep the placeholder's id/openedAt/sortOrder — only the
+					// fields the user entered change.
+					ph["roastDate"] = roastDate
+					ph["stock_g"] = stockG
+					ph["batchNumber"] = batchNumber
+					ph["price_eur"] = priceEur
+					bag = ph
+				}
 			}
 		}
-		bagID := newID()
-		bag := Entity{"id": bagID, "roastDate": roastDate, "stock_g": stockG, "openedAt": newID(), "batchNumber": batchNumber, "price_eur": priceEur, "sortOrder": nextSort}
-		bean["bags"] = append(bags, bag)
-		// Sync bean-level fields only when this new bag is the one
+		if bag == nil {
+			// New bag always joins the back of the queue (highest sortOrder + 1) —
+			// it does NOT become current just by existing; SimulateBagQueue only
+			// promotes it once every bag ahead of it in the queue is exhausted.
+			var nextSort int64
+			for _, raw := range bags {
+				if bg, ok := raw.(Entity); ok {
+					nextSort = maxInt64(nextSort, effectiveSortOrder(bg)+1)
+				}
+			}
+			bagID = newID()
+			bag = Entity{"id": bagID, "roastDate": roastDate, "stock_g": stockG, "openedAt": newID(), "batchNumber": batchNumber, "price_eur": priceEur, "sortOrder": nextSort}
+			bean["bags"] = append(bags, bag)
+		}
+		// Sync bean-level fields only when this bag is the one
 		// SimulateBagQueue actually considers current (i.e. every other bag
 		// was already exhausted, so this one is drawn from immediately) — not
 		// unconditionally, which would overwrite the bean's displayed roast
