@@ -115,7 +115,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, reset
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
          toggleImportSettings, addCustomShopifyDomain,
-         openScanModal, closeScanModal, _runScanLoop, _submitManualScan, _handleScanResult,
+         openScanModal, closeScanModal, _runScanLoop, _submitManualScan, _handleScanPhoto, _handleScanResult,
          renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk,
          renderBasketList, openBasketForm, closeBasketForm, editBasket, saveBasket, deleteBasket, uploadBasketImage,
          renderPuckScreenList, openPuckScreenForm, closePuckScreenForm, editPuckScreen, savePuckScreen, deletePuckScreen, uploadPuckScreenImage
@@ -477,6 +477,7 @@ Object.assign(window, {
   closeScanModal,
   _runScanLoop,
   _submitManualScan,
+  _handleScanPhoto,
   _handleScanResult,
   renderMilkList,
   openMilkForm,
@@ -961,6 +962,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('machineControlEnabled')?.addEventListener('change', () => { void saveMachineControlSetting(); });
   document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', () => { void saveShotDefaultsSettings(); });
   document.getElementById('closeScanModalBtn')!.addEventListener('click', closeScanModal);
+  // #1536: a picked photo is read with the same decoder as the live loop, so it
+  // works when the camera is unavailable (e.g. plain http). Clearing the value
+  // afterwards lets the same picture be chosen again.
+  const scanPhotoInput = document.getElementById('scanPhotoInput') as HTMLInputElement | null;
+  if (scanPhotoInput) {
+    const input = scanPhotoInput;
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (file) void _handleScanPhoto(file);
+    });
+  }
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
   document.getElementById('flavorWheelModal')?.addEventListener('click', e => {
@@ -1010,6 +1023,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // delegation (no inline handler under the CSP); preventDefault keeps
       // the form from navigating the page on click or Enter.
       case 'scan-manual-submit': e.preventDefault(); _submitManualScan(); break;
+      // #1536: the photo fallback opens the phone's camera app (a `capture`
+      // file input), which needs no secure context, so it also works over http.
+      case 'scan-take-photo': (document.getElementById('scanPhotoInput') as HTMLInputElement | null)?.click(); break;
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        void deleteBean(numId()); break;
       case 'toggle-bean-active': void toggleBeanActive(numId()); break;

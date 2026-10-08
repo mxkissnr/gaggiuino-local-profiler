@@ -565,7 +565,7 @@ const de: Partial<Translations> = {
     scan_not_found:'Kein Eintrag gefunden — Felder manuell ausfüllen',
     scan_found:(name)=>`Gefunden: ${name}`,
     scan_error:'Scan-Fehler — bitte erneut versuchen',
-    scan_glp_imported:'GLP-QR importiert', scan_manual_label:'Oder Barcode eingeben', scan_manual_submit:'Suchen', scan_invalid_code:'Gib die 8 bis 14 Ziffern des Barcodes ein.', bean_qr_label:'QR-Code für diese Bohne', bean_qr_error:'QR-Code konnte nicht erstellt werden (zu viele Daten?)', bean_qr_loading:'QR-Code wird erstellt…',
+    scan_glp_imported:'GLP-QR importiert', scan_manual_label:'Oder Barcode eingeben', scan_manual_submit:'Suchen', scan_invalid_code:'Gib die 8 bis 14 Ziffern des Barcodes ein.', scan_needs_https:'Die Kamera braucht eine HTTPS-Verbindung zu Home Assistant. Nimm ein Foto des Barcodes auf oder gib ihn unten ein.', scan_camera_denied:'Kamerazugriff verweigert. Erlaube ihn für diese App oder diesen Browser, oder nimm ein Foto des Barcodes auf oder gib ihn unten ein.', scan_photo_no_code:'Kein Barcode im Foto gefunden. Näher und scharf erneut versuchen oder unten eingeben.', scan_take_photo:'Foto aufnehmen', scan_text_hint:'Tipp: Ins Feld tippen und „Text scannen“ wählen, um die Ziffern mit der Kamera der Tastatur einzulesen.', bean_qr_label:'QR-Code für diese Bohne', bean_qr_error:'QR-Code konnte nicht erstellt werden (zu viele Daten?)', bean_qr_loading:'QR-Code wird erstellt…',
     nav_orders:'Bestellungen',
     orders_queue:'Warteschlange', orders_inprogress:'In Zubereitung', orders_history:'Verlauf',
     orders_empty:'Keine offenen Bestellungen',

@@ -38,11 +38,12 @@ interface ScanState {
 interface ScanModule {
   openScanModal: () => Promise<void>;
   closeScanModal: () => void;
+  _handleScanPhoto: (file: File) => Promise<void>;
 }
 
 const { S } = (await import('../public-src/state/index.js')) as unknown as { S: ScanState };
 const { t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string };
-const { openScanModal, closeScanModal } =
+const { openScanModal, closeScanModal, _handleScanPhoto } =
   (await import('../public-src/views/library/import.js')) as unknown as ScanModule;
 
 const SCAN_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'];
@@ -58,12 +59,14 @@ interface FakeEl {
   id: string;
   textContent: string;
   className: string;
+  value: string;
   srcObject: unknown;
+  hidden: boolean;
   classList: FakeClassList;
 }
 
 function makeEl(id: string): FakeEl {
-  return { id, textContent: '', className: '', srcObject: null, classList: new FakeClassList() };
+  return { id, textContent: '', className: '', value: '', srcObject: null, hidden: false, classList: new FakeClassList() };
 }
 
 type Stream = { getTracks: () => { stop: () => void }[] };
@@ -90,6 +93,7 @@ beforeEach(() => {
     scanModal: makeEl('scanModal'),
     scanVideo: makeEl('scanVideo'),
     scanStatus: makeEl('scanStatus'),
+    scanTextHint: makeEl('scanTextHint'),
   };
   g.document = { getElementById: (id: string) => elements[id] ?? null };
 
@@ -109,6 +113,8 @@ beforeEach(() => {
 afterEach(() => {
   delete g.window;
   delete g.BarcodeDetector;
+  delete g.createImageBitmap;
+  delete g.isSecureContext;
 });
 
 describe('barcode scanner detector selection (#1500)', () => {
@@ -118,6 +124,7 @@ describe('barcode scanner detector selection (#1500)', () => {
       nativeOptions.push(options);
       return { detect: () => Promise.resolve([]) };
     }
+    g.isSecureContext = true;
     g.BarcodeDetector = NativeDetector;
     g.window = g;
     const { stream } = fakeStream();
@@ -133,7 +140,7 @@ describe('barcode scanner detector selection (#1500)', () => {
   });
 
   it('falls back to the dynamically imported ponyfill when there is no native detector', async () => {
-    g.window = {};
+    g.window = { isSecureContext: true };
     const { stream } = fakeStream();
     getUserMedia.mockResolvedValue(stream);
 
@@ -147,7 +154,7 @@ describe('barcode scanner detector selection (#1500)', () => {
   });
 
   it('shows scan_not_supported and releases the camera when the wasm fails to load', async () => {
-    g.window = {};
+    g.window = { isSecureContext: true };
     const { stream, track } = fakeStream();
     getUserMedia.mockResolvedValue(stream);
     ponyfill.prepareZXingModule.mockImplementation((options) =>
@@ -163,7 +170,7 @@ describe('barcode scanner detector selection (#1500)', () => {
   });
 
   it('does not start the scan loop when the modal is closed while the camera is starting', async () => {
-    g.window = {};
+    g.window = { isSecureContext: true };
     const { stream, track } = fakeStream();
     let resolveStream: (s: Stream) => void = () => {};
     getUserMedia.mockImplementation(() => new Promise<Stream>((res) => { resolveStream = res; }));
@@ -180,7 +187,7 @@ describe('barcode scanner detector selection (#1500)', () => {
   });
 
   it('does not start the scan loop when the modal is closed while the decoder loads', async () => {
-    g.window = {};
+    g.window = { isSecureContext: true };
     const { stream, track } = fakeStream();
     getUserMedia.mockResolvedValue(stream);
     // Hold the eager wasm load open so the modal can be closed while
@@ -202,5 +209,94 @@ describe('barcode scanner detector selection (#1500)', () => {
     expect(ponyfill.constructed).toHaveBeenCalledOnce();
     expect(S._scanActive).toBe(false);
     expect(track.stop).toHaveBeenCalled();
+  });
+});
+
+describe('barcode scanner failure messages (#1536)', () => {
+  it('shows scan_needs_https and never asks for the camera in a non-secure context', async () => {
+    g.window = { isSecureContext: false };
+
+    await openScanModal();
+
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(scanStatus().textContent).toBe(t('scan_needs_https'));
+    expect(scanStatus().className).toBe('error');
+    expect(elements.scanTextHint?.hidden).toBe(false);
+  });
+
+  it('shows scan_needs_https when navigator.mediaDevices is unavailable', async () => {
+    g.window = { isSecureContext: true };
+    nav.mediaDevices = undefined;
+
+    await openScanModal();
+
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(scanStatus().textContent).toBe(t('scan_needs_https'));
+    nav.mediaDevices = { getUserMedia };
+  });
+
+  it('shows scan_camera_denied for a denied camera permission', async () => {
+    g.window = { isSecureContext: true };
+    const denied = new Error('permission denied');
+    denied.name = 'NotAllowedError';
+    getUserMedia.mockRejectedValue(denied);
+
+    await openScanModal();
+
+    expect(scanStatus().textContent).toBe(t('scan_camera_denied'));
+    expect(scanStatus().className).toBe('error');
+    expect(elements.scanTextHint?.hidden).toBe(false);
+  });
+
+  it('keeps the generic scan_error for any other camera failure', async () => {
+    g.window = { isSecureContext: true };
+    const missing = new Error('no camera');
+    missing.name = 'NotFoundError';
+    getUserMedia.mockRejectedValue(missing);
+
+    await openScanModal();
+
+    expect(scanStatus().textContent).toBe(t('scan_error'));
+    expect(scanStatus().className).toBe('error');
+  });
+});
+
+describe('barcode scan from a photo (#1536)', () => {
+  it('reads a code from the photo and runs the shared result path', async () => {
+    g.window = {};
+    g.createImageBitmap = vi.fn().mockResolvedValue({});
+    ponyfill.detect.mockResolvedValue([{ rawValue: 'glp://coffee?name=PhotoRoast' }]);
+    elements.beanFormName = makeEl('beanFormName');
+
+    await _handleScanPhoto({} as unknown as File);
+
+    expect(g.createImageBitmap).toHaveBeenCalledOnce();
+    expect(ponyfill.detect).toHaveBeenCalledOnce();
+    expect(elements.beanFormName?.value).toBe('PhotoRoast');
+    expect(scanStatus().textContent).toBe(t('scan_glp_imported'));
+    expect(S._scanActive).toBe(false);
+  });
+
+  it('shows scan_photo_no_code when the photo contains no barcode', async () => {
+    g.window = {};
+    g.createImageBitmap = vi.fn().mockResolvedValue({});
+    ponyfill.detect.mockResolvedValue([]);
+
+    await _handleScanPhoto({} as unknown as File);
+
+    expect(scanStatus().textContent).toBe(t('scan_photo_no_code'));
+    expect(scanStatus().className).toBe('error');
+  });
+
+  it('shows scan_not_supported when the decoder is unavailable', async () => {
+    g.window = {};
+    g.createImageBitmap = vi.fn().mockResolvedValue({});
+    ponyfill.prepareZXingModule.mockImplementation((options) =>
+      options?.fireImmediately ? Promise.reject(new Error('wasm failed')) : undefined);
+
+    await _handleScanPhoto({} as unknown as File);
+
+    expect(scanStatus().textContent).toBe(t('scan_not_supported'));
+    expect(g.createImageBitmap).not.toHaveBeenCalled();
   });
 });

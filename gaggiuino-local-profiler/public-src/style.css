@@ -1843,6 +1843,12 @@
         .scan-manual-row { display:flex; gap: var(--sp-2); }
         .scan-manual-input { flex:1 1 auto; text-align:center; }
         .scan-manual-submit { flex:0 0 auto; white-space:nowrap; }
+        /* No stream attached: hide the <video> so Android's WebView does not
+           show its play-button poster in the empty viewport (#1536). */
+        #scanViewport video.scan-video-off { visibility:hidden; }
+        .scan-hint { color:var(--gray-500); font-size: var(--fs-1); text-align:center; max-width:420px; }
+        .scan-hint[hidden] { display:none; }
+        .scan-photo-btn { white-space:nowrap; }
 
         /* ── Backup export/restore modal ── */
         #backupModal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.85); align-items:center; justify-content:center; padding: var(--sp-5); overflow-y:auto; }
