@@ -230,6 +230,7 @@ const de: Partial<Translations> = {
     analytics_verdict_title_up:'Läuft rund.', analytics_verdict_title_steady:'Stabil.', analytics_verdict_title_down:'Gerade etwas holprig.', analytics_verdict_title_none:'Deine Statistik.',
     analytics_verdict_sub:(n,period)=>`${n} Shots in ${period}`,
     analytics_period_days:(n)=>`den letzten ${n} Tagen`, analytics_period_all:'der gesamten Zeit',
+    analytics_counter_days:(n)=>`${n} Tage`, analytics_counter_all:'gesamter Zeitraum', analytics_counter_beans:(n)=> n===1 ? '1 Bohne' : `${n} Bohnen`,
     analytics_filter_empty:'Keine Shots für diesen Filter.',
     analytics_trend_avg:(avg)=>`Dein Schnitt Ø ${avg}`,
     analytics_trend_weekly:'Wochenmittel',

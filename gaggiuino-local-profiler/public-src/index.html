@@ -1240,7 +1240,10 @@
 
             <!-- Your recipe on average -->
             <section class="analytics-sec analytics-recipe" id="recipeCard" data-analytics-period>
-                <h3 class="analytics-section-title" data-i18n="analytics_recipe">Dein Rezept im Schnitt</h3>
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_recipe">Dein Rezept im Schnitt</h3>
+                    <span id="recipeCount" class="analytics-shelf-count"></span>
+                </div>
                 <div id="recipeRows"></div>
             </section>
 
@@ -1298,7 +1301,10 @@
 
             <!-- Origin world map -->
             <section class="analytics-sec analytics-map" data-analytics-period>
-                <h3 class="analytics-section-title" data-i18n="analytics_world_map">Kaffee-Weltkarte</h3>
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_world_map">Kaffee-Weltkarte</h3>
+                    <span id="worldMapCount" class="analytics-shelf-count"></span>
+                </div>
                 <div id="worldMapWrap" class="world-map-wrap"></div>
             </section>
 

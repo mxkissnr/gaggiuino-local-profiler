@@ -230,6 +230,7 @@ const en: Translations = {
     analytics_verdict_title_up:'On a roll.', analytics_verdict_title_steady:'Steady.', analytics_verdict_title_down:'A bit bumpy right now.', analytics_verdict_title_none:'Your statistics.',
     analytics_verdict_sub:(n,period)=>`${n} shots in ${period}`,
     analytics_period_days:(n)=>`the last ${n} days`, analytics_period_all:'all time',
+    analytics_counter_days:(n)=>`${n} days`, analytics_counter_all:'all time', analytics_counter_beans:(n)=> n===1 ? '1 bean' : `${n} beans`,
     analytics_filter_empty:'No shots for this filter.',
     analytics_trend_avg:(avg)=>`Your average Ø ${avg}`,
     analytics_trend_weekly:'7-day average',

@@ -230,6 +230,7 @@ const nl: Partial<Translations> = {
     analytics_verdict_title_up:'Loopt lekker.', analytics_verdict_title_steady:'Stabiel.', analytics_verdict_title_down:'Even wat hobbelig nu.', analytics_verdict_title_none:'Jouw statistieken.',
     analytics_verdict_sub:(n,period)=>`${n} shots in ${period}`,
     analytics_period_days:(n)=>`de laatste ${n} dagen`, analytics_period_all:'alle tijd',
+    analytics_counter_days:(n)=>`${n} dagen`, analytics_counter_all:'alle tijd', analytics_counter_beans:(n)=> n===1 ? '1 boon' : `${n} bonen`,
     analytics_filter_empty:'Geen shots voor dit filter.',
     analytics_trend_avg:(avg)=>`Jouw gemiddelde Ø ${avg}`,
     analytics_trend_weekly:'7-daags gemiddelde',

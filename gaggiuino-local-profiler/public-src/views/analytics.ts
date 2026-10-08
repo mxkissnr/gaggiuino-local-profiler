@@ -106,6 +106,30 @@ function _pageShots(): ShotRow[] {
   return filterAnalyticsShots(_shots(), _pageFilter, Date.now(), _profileNameOf);
 }
 
+// #1496: short period label for the grey section counters, e.g. "30 days" /
+// "all time" (the toolbar already spells out "the last 30 days").
+function _counterPeriod(): string {
+  return _pageFilter.days === 0 ? t('analytics_counter_all') : t('analytics_counter_days', _pageFilter.days);
+}
+
+// "<count text> · <period>", or just the period when there is no count text.
+function _counterText(count: string): string {
+  const period = _counterPeriod();
+  return count ? `${count} · ${period}` : period;
+}
+
+// #1496: with more than one machine the verdict names the scope it covers,
+// following the topbar switcher. Single-machine installs see no change.
+function _machineScopeSuffix(): string {
+  const machines = _machines() || [];
+  if (machines.length < 2) return '';
+  const id = S.activeMachineId;
+  if (id == null || id === 'all') return ` · ${t('machine_switcher_all')}`;
+  const machine = machines.find(m => m.id === id);
+  const name = machine?.name;
+  return ` · ${typeof name === 'string' ? name : `#${id}`}`;
+}
+
 // A sparse render replaces a chart's canvas with an empty note. That was fine
 // when builders ran once, but rebuildAnalyticsPage() re-runs them on every
 // toolbar change and the canvas is never recreated (#1467). Remember each
@@ -473,7 +497,8 @@ export function buildSummaryKpis() {
 
   const period = days === 0 ? t('analytics_period_all') : t('analytics_period_days', days);
   subEl.textContent = t('analytics_verdict_sub', summary.verdict.shots, period)
-    + (summary.delta ? ` · ${t(`analytics_summary_delta_${summary.delta.bucket}`, summary.delta.avg7)}` : '');
+    + (summary.delta ? ` · ${t(`analytics_summary_delta_${summary.delta.bucket}`, summary.delta.avg7)}` : '')
+    + _machineScopeSuffix();
 
   const avg = summary.verdict.avgScore;
   scoreEl.className = avg !== null ? `analytics-verdict-score-num ${scoreClass(avg)}` : 'analytics-verdict-score-num';
@@ -862,7 +887,7 @@ export function buildTrendChart() {
   // band; the heading carries the "7-day average" counter only for those.
   const longView = isLongTrendPeriod(_pageFilter.days);
   const counterEl = document.getElementById('trendCounter');
-  if (counterEl) counterEl.textContent = longView ? t('analytics_trend_weekly') : '';
+  if (counterEl) counterEl.textContent = longView ? _counterText(t('analytics_trend_weekly')) : _counterPeriod();
 
   if (src.length < 2) {
     ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_trend')}</p>`;
@@ -1051,6 +1076,8 @@ export function buildRecipeSummary() {
 
   const card = document.getElementById('recipeCard');
   if (card) card.style.display = rows.length ? '' : 'none';
+  const countEl = document.getElementById('recipeCount');
+  if (countEl) countEl.textContent = _counterPeriod();
   el.innerHTML = rows.length ? html`<div class="bests-list">${joinHtml(rows)}</div>` : html``;
 }
 
@@ -1753,6 +1780,9 @@ export async function buildWorldMap() {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
 
+  const counterEl = document.getElementById('worldMapCount');
+  if (counterEl) counterEl.textContent = _counterPeriod();
+
   // #1024: register once ever, not once per buildWorldMap() call (mirrors
   // the _worldMapRegistered guard below for echarts.registerMap) -- the
   // listener itself is a no-op via _repaintWorldMapTheme()'s _echartsInstance
@@ -2309,7 +2339,7 @@ export function buildBeanShelf(): void {
 
   const rows = _sortBeanShelfRows(_computeBeanRanking(_pageShots()), _beanShelfSort);
   const countEl = document.getElementById('beanShelfCount');
-  if (countEl) countEl.textContent = rows.length ? String(rows.length) : '';
+  if (countEl) countEl.textContent = rows.length ? _counterText(t('analytics_counter_beans', rows.length)) : '';
   if (!rows.length) {
     el.innerHTML = html`<p class="empty-note">${tHtml('analytics_no_beans')}</p>`;
     return;
