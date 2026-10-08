@@ -26,4 +26,4 @@ Closes #
 - [ ] **substantial** — AI generated significant portions; human reviewed and revised
 - [ ] **generated** — code is AI-generated end-to-end; human reviewed and takes responsibility
 
-Tools / models used: <!-- e.g. "Claude Code (Sonnet 5)", "GitHub Copilot", "none" -->
+Tools / models used: <!-- e.g. "Claude Code (Sonnet 5.5)", "GitHub Copilot", "none" -->

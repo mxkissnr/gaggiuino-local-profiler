@@ -32,7 +32,7 @@ Be transparent about AI tool use so reviewers know what they are reviewing.
   trailer, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>` or
   `Co-Authored-By: Copilot <198982749+Copilot@users.noreply.github.com>`. Claude Code also
   adds a `Claude-Session:` trailer. For this repo the Claude trailer names the specific model,
-  e.g. `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` (see [CLAUDE.md](CLAUDE.md)).
+  e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` (see [CLAUDE.md](CLAUDE.md)).
 - **Per PR (summary, required):** the "AI assistance disclosure" section of the PR template —
   one of `none` / `assisted` / `substantial` / `generated`, plus the tool and model names.
 
