@@ -48,7 +48,7 @@ export function placeOrder(body: {
   item: string;
   customer: string;
   note?: string;
-  variants?: string[];
+  variant?: string;
 }): Promise<Response> {
   return apiFetch('api/orders', {
     method: 'POST',
