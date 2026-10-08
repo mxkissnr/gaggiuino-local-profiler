@@ -1286,7 +1286,7 @@ export function _renderCalendar() {
     else { const run = monthRuns[monthRuns.length - 1]; if (run) run.span++; }
   }
   const drawnCols = new Set(_monthLabelsToDraw(monthRuns).map(m => m.col));
-  const monthItems = monthRuns.map(m => html`<span class="cal-month" style="grid-column: span ${esc(m.span)}">${drawnCols.has(m.col) ? esc(m.label) : ''}</span>`);
+  const monthItems = monthRuns.map(m => html`<span class="cal-month" style="grid-column: span ${esc(m.span)}">${drawnCols.has(m.col) ? esc(m.label) : esc('')}</span>`);
 
   // First grid column: Monday/Wednesday/Friday labels; the rest empty.
   const cells: Html[] = [];
