@@ -230,6 +230,7 @@ const it: Partial<Translations> = {
     analytics_verdict_title_up:'Tutto liscio.', analytics_verdict_title_steady:'Stabile.', analytics_verdict_title_down:'Un po’ in salita ultimamente.', analytics_verdict_title_none:'Le tue statistiche.',
     analytics_verdict_sub:(n,period)=>`${n} shot in ${period}`,
     analytics_period_days:(n)=>`gli ultimi ${n} giorni`, analytics_period_all:'tutto il periodo',
+    analytics_counter_days:(n)=>`${n} giorni`, analytics_counter_all:'tutto il periodo', analytics_counter_beans:(n)=> n===1 ? '1 caffè' : `${n} caffè`,
     analytics_filter_empty:'Nessuno shot per questo filtro.',
     analytics_trend_avg:(avg)=>`La tua media Ø ${avg}`,
     analytics_trend_weekly:'Media di 7 giorni',
