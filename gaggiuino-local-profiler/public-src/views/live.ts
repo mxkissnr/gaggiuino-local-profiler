@@ -505,7 +505,9 @@ export function syncMachineIcon(msg: LiveMessage | null): void {
   const el = machineIconEl();
   if (!el) return;
   const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
-  setMachineIconMode(el, mode, heatFraction);
+  // #1541: the icon's little display mirrors the live temperature instead of
+  // the old hardcoded "18.0°".
+  setMachineIconMode(el, mode, heatFraction, _lastLiveMsg?.temperature);
 }
 
 export function updatePreheatWidget(d: PreheatData): void {
@@ -544,6 +546,15 @@ export function updatePreheatWidget(d: PreheatData): void {
   } else {
     readyBadge.style.display  = 'none';
     warmingWrap.style.display = 'none';
+  }
+
+  // #1541: a preheat update can arrive while the idle panel is shown (e.g. the
+  // machine just finished warming), so refresh the status badge from the same
+  // phase instead of waiting for the next live message. The idle title stays
+  // owned by handleLiveData above.
+  const idleEl = document.getElementById('live-idle');
+  if (idleEl && idleEl.style.display !== 'none' && _lastLiveMsg?.machineReachable !== false) {
+    setLiveBadge(idlePhase());
   }
 }
 
@@ -652,6 +663,10 @@ export function setLiveBadge(state: string, detail = ''): void {
     flushing:    t('live_flushing'),
     // #983: descale mirrors steam/flush's own badge treatment.
     descaling:   t('live_descaling'),
+    // #1541: the idle badge mirrors the idle title's standby/warming states
+    // (no new translations -- the same keys the title already uses).
+    standby:     t('machine_standby'),
+    warming:     t('preheat_warming'),
     error:       detail || t('live_error_status'),
     idle:        t('live_ready_status'),
     unreachable: detail || t('live_unreachable_status')
@@ -699,6 +714,15 @@ export function handleLiveSnapshotEvent(payload: LiveMessage): void {
 
 export function handlePreheatUpdateEvent(payload: PreheatData): void {
   updatePreheatWidget(payload);
+}
+
+// #1541: one derivation of the machine's idle phase, shared by the idle title
+// and the status badge so the two can never disagree. Standby wins (a GaggiMate
+// in standby is off), then a preheat still counting down, else ready.
+function idlePhase(): 'standby' | 'warming' | 'ready' {
+  if (_lastPreheat?.standby) return 'standby';
+  if (_lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0) return 'warming';
+  return 'ready';
 }
 
 export function handleLiveData(msg: LiveMessage): void {
@@ -772,11 +796,11 @@ export function handleLiveData(msg: LiveMessage): void {
   // idea.
   // machineReachable == null means "never polled yet" (startup) — show
   // connecting rather than "Maschine bereit" which implies confirmed reachability.
-  const standby      = !!_lastPreheat?.standby;
-  const stillWarming = _lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0;
-  const neverPolled  = msg.machineReachable == null;
+  // #1541: title and idle badge share idlePhase() so they cannot disagree.
+  const phase       = idlePhase();
+  const neverPolled = msg.machineReachable == null;
   // #1498: a standby GaggiMate is off — say so instead of "warming"/"ready".
-  if (idleTitleEl) idleTitleEl.textContent = standby ? t('machine_standby') : neverPolled ? t('live_connecting') : stillWarming ? t('preheat_warming') : t('machine_ready');
+  if (idleTitleEl) idleTitleEl.textContent = phase === 'standby' ? t('machine_standby') : neverPolled ? t('live_connecting') : phase === 'warming' ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
   // #902: idle stats row -- always kept current (not gated behind the true-
@@ -848,7 +872,9 @@ export function handleLiveData(msg: LiveMessage): void {
   }
 
   if (!msg.isLive && times.length === 0) {
-    setLiveBadge('ready');
+    // #1541: the badge follows the same standby/warming/ready phase as the
+    // idle title above instead of always saying "Ready".
+    setLiveBadge(phase);
     metaEl.textContent = '–';
     contentEl.style.display = 'none';
     idleEl.style.display    = 'flex';
