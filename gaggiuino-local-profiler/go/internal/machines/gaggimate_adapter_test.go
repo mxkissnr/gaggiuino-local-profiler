@@ -79,12 +79,12 @@ func TestGaggiMateAdapter_GetStatus_FlushMapping(t *testing.T) {
 	}{
 		{
 			"utility process is a flush",
-			map[string]any{"tp": "evt:status", "m": 1.0, "process": map[string]any{"a": 1.0, "u": 1.0, "s": "brew"}},
+			map[string]any{"tp": "evt:status", "ct": 92.5, "m": 1.0, "process": map[string]any{"a": 1.0, "u": 1.0, "s": "brew"}},
 			true, false,
 		},
 		{
 			"non-utility process is a brew",
-			map[string]any{"tp": "evt:status", "m": 1.0, "process": map[string]any{"a": 1.0, "u": 0.0, "s": "brew"}},
+			map[string]any{"tp": "evt:status", "ct": 92.5, "m": 1.0, "process": map[string]any{"a": 1.0, "u": 0.0, "s": "brew"}},
 			false, true,
 		},
 	}
