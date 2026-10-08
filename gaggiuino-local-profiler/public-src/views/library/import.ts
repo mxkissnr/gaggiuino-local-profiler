@@ -496,8 +496,6 @@ export function _submitManualScan(): void {
 // the live loop uses reads the code from the picture.
 export async function _handleScanPhoto(file: File): Promise<void> {
   const status = document.getElementById('scanStatus') as HTMLElement;
-  // A photo hit replaces a live scan hit exactly like manual entry does.
-  S._scanActive = false;
   status.textContent = t('scan_searching');
   status.className = '';
   let detector: BarcodeDetectorLike;
@@ -519,6 +517,8 @@ export async function _handleScanPhoto(file: File): Promise<void> {
       status.className = 'error';
       return;
     }
+    // A photo hit replaces a live scan hit exactly like manual entry does.
+    S._scanActive = false;
     await _handleScanResult(firstCode.rawValue, status);
   } catch (e) {
     console.error('Barcode scan from photo failed:', e);
