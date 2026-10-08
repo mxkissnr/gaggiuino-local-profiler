@@ -2,7 +2,7 @@
 // builder, no DOM dependency, so it's tested directly.
 import { describe, it, expect } from 'vitest';
 import { machineIconSvg, machineIconMiniSvg, machineIconAnimatedSvg,
-         MACHINE_ICON_MODES, resolveMachineIconState } from '../public-src/machine-icon.js';
+         MACHINE_ICON_MODES, resolveMachineIconState, setMachineIconMode } from '../public-src/machine-icon.js';
 import { THEME_PRESETS, resolveTheme } from '../public-src/shared/theme-presets.js';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -213,5 +213,51 @@ describe('resolveMachineIconState() unknown reachability (#1385)', () => {
 
     it('isLive without reachability still resolves brewing (positive evidence)', () => {
         expect(resolveMachineIconState({ isLive: true }, null)).toEqual({ mode: 'brewing', heatFraction: 1 });
+    });
+});
+
+// #1541: the animated icon's little display used to hardcode "18.0°", which
+// read as a live number. setMachineIconMode now mirrors the machine's live
+// temperature there (the .m-disp-temp text, inside .d-heat — the group shown
+// while the machine is heating), and blanks it when off or unknown.
+describe('setMachineIconMode() display temperature (#1541)', () => {
+    function makeRoot() {
+        const dispText = { textContent: '18.0°' };
+        const svg = {
+            style: { setProperty() {} },
+            querySelector: (sel: string) => (sel === '.m-disp-temp' ? dispText : null),
+        };
+        const classes = new Set<string>();
+        const rootEl = {
+            classList: {
+                add: (...c: string[]) => { c.forEach(x => classes.add(x)); },
+                remove: (...c: string[]) => { c.forEach(x => classes.delete(x)); },
+            },
+            querySelector: (sel: string) => (sel === '.m-svg' ? svg : null),
+        };
+        return { rootEl, dispText };
+    }
+
+    it('writes the current temperature into the display text', () => {
+        const { rootEl, dispText } = makeRoot();
+        setMachineIconMode(rootEl as unknown as Element, 'heating', 0, 76.04);
+        expect(dispText.textContent).toBe('76.0°');
+    });
+
+    it('blanks the display text when no temperature is given', () => {
+        const { rootEl, dispText } = makeRoot();
+        setMachineIconMode(rootEl as unknown as Element, 'heating', 0);
+        expect(dispText.textContent).toBe('');
+    });
+
+    it('blanks the display text in off mode even with a temperature', () => {
+        const { rootEl, dispText } = makeRoot();
+        setMachineIconMode(rootEl as unknown as Element, 'off', 0, 76.04);
+        expect(dispText.textContent).toBe('');
+    });
+
+    it('renders no hardcoded 18.0° in either machine template', () => {
+        expect(machineIconAnimatedSvg(null, 'gaggiuino')).not.toContain('18.0°');
+        expect(machineIconAnimatedSvg(null, 'gaggimate')).not.toContain('18.0°');
     });
 });
