@@ -46,14 +46,7 @@ describe('_monthLabelsToDraw (#1543)', () => {
     expect(kept.map(m => m.label)).toEqual(['Jan', 'Feb', 'Mär']);
   });
 
-  it('drops a label that starts too soon after the previous one', () => {
-    // "MärApr": March's visible run is a single column, so April's short name
-    // would draw over it.
-    const kept = monthLabelsToDraw([{ col: 0, label: 'Mär' }, { col: 1, label: 'Apr' }]);
-    expect(kept.map(m => m.label)).toEqual(['Mär']);
-  });
-
-  it('measures the gap from the last drawn label, not the skipped one', () => {
+  it('measures the gap from the last drawn label, not a skipped one', () => {
     // Apr is dropped; Mai at column 3 is still only two columns after Apr but
     // exactly three after the last drawn label (Mär), so it is kept.
     const kept = monthLabelsToDraw([
@@ -62,7 +55,23 @@ describe('_monthLabelsToDraw (#1543)', () => {
     expect(kept.map(m => m.label)).toEqual(['Mär', 'Mai']);
   });
 
-  it('keeps the first month when it is the only one', () => {
+  it('always keeps the last visible month, dropping the label that collides', () => {
+    // "MärApr": March's visible run is a single column, so April's short name
+    // would draw over it — the last month keeps its label, March gives way.
+    const kept = monthLabelsToDraw([{ col: 0, label: 'Mär' }, { col: 1, label: 'Apr' }]);
+    expect(kept.map(m => m.label)).toEqual(['Apr']);
+  });
+
+  it('drops a middle label when the last month starts right after it', () => {
+    // Nov (column 10) collides with the last month, Dez (column 11), so Nov
+    // gives way; Jan (column 0) is far enough from Dez to stay.
+    const kept = monthLabelsToDraw([
+      { col: 0, label: 'Jan' }, { col: 10, label: 'Nov' }, { col: 11, label: 'Dez' },
+    ]);
+    expect(kept.map(m => m.label)).toEqual(['Jan', 'Dez']);
+  });
+
+  it('keeps the only month when it is also the first', () => {
     const kept = monthLabelsToDraw([{ col: 0, label: 'Dez' }]);
     expect(kept.map(m => m.label)).toEqual(['Dez']);
   });

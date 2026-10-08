@@ -1203,16 +1203,26 @@ export const _MONTH_LABEL_MIN_COLUMNS = 3;
 
 export interface MonthLabelStart { col: number; label: string }
 
-// Pick the month labels to draw from the first-week column of each month. The
-// first month always keeps its label; a later one is dropped when it would
-// start fewer than _MONTH_LABEL_MIN_COLUMNS columns after the last kept label.
-// A dropped month still occupies its columns, so the next label keeps its own
-// column and the month runs stay aligned with the day grid below.
+// Pick the month labels to draw from the first-week column of each month. A
+// label is dropped when it would start fewer than _MONTH_LABEL_MIN_COLUMNS
+// columns after the last kept label, but the last visible month always keeps
+// its label: when it collides with the label before it, that earlier label
+// gives way instead. A dropped month still occupies its columns, so the next
+// label keeps its own column and the month runs stay aligned with the grid.
 export function _monthLabelsToDraw(starts: MonthLabelStart[]): MonthLabelStart[] {
   const kept: MonthLabelStart[] = [];
   for (const start of starts) {
     const prev = kept[kept.length - 1];
     if (!prev || start.col - prev.col >= _MONTH_LABEL_MIN_COLUMNS) kept.push(start);
+  }
+  const last = starts[starts.length - 1];
+  if (last && kept[kept.length - 1] !== last) {
+    let prev = kept[kept.length - 1];
+    while (prev && last.col - prev.col < _MONTH_LABEL_MIN_COLUMNS) {
+      kept.pop();
+      prev = kept[kept.length - 1];
+    }
+    kept.push(last);
   }
   return kept;
 }
