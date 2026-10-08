@@ -58,15 +58,19 @@ beforeAll(async () => {
     addEventListener: () => {},
     removeEventListener: () => {},
   };
+  // `document` must NOT exist while the module graph loads: views/library/bags.ts
+  // (imported via views/library/shelf.ts) registers a top-level pointerdown
+  // listener behind a `typeof document !== 'undefined'` guard, so a partial
+  // fake would be called before the tests set the elements they need.
+  ({ buildBeanShelf, buildTrendChart, buildRecipeSummary, buildSummaryKpis, buildWorldMap, setAnalyticsFilter } =
+    await import('../public-src/views/analytics.js'));
+  ({ S } = await import('../public-src/state/index.js'));
   g.document = {
     getElementById: (id: string): FakeEl | null => els[id] ?? null,
     querySelectorAll: (): FakeEl[] => [],
     contains: (): boolean => false,
     createElement: (): FakeEl => fakeEl(),
   };
-  ({ buildBeanShelf, buildTrendChart, buildRecipeSummary, buildSummaryKpis, buildWorldMap, setAnalyticsFilter } =
-    await import('../public-src/views/analytics.js'));
-  ({ S } = await import('../public-src/state/index.js'));
 });
 
 beforeEach(() => {
