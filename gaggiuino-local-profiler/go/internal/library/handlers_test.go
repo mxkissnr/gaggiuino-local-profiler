@@ -443,8 +443,10 @@ func TestBean_NewBagJoinsBackOfQueue_DoesNotBecomeCurrent(t *testing.T) {
 func TestBean_NewBagBecomesCurrentWhenNoOtherBagHasStock(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
+	// batchNumber: "B0" marks this as a real (already-used) bag rather than the
+	// #1540 placeholder that "Save and add bag" would otherwise fill in place;
 	// stock_g: 0 -> the initial bag has nothing left, so it's not "current".
-	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 0, "roastDate": "2026-08-01"})
+	id, _ := createTestBean(t, mux, map[string]any{"stock_g": 0, "roastDate": "2026-08-01", "batchNumber": "B0"})
 	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
 		mustMarshal(t, map[string]any{"roastDate": "2026-08-15", "stock_g": 250}))
 	if rec.Code != http.StatusOK {
@@ -461,6 +463,122 @@ func TestBean_NewBagBecomesCurrentWhenNoOtherBagHasStock(t *testing.T) {
 	}
 	if bean["stock_g"] != float64(250) {
 		t.Fatalf("bean stock_g = %v, want 250 (the new bag is now current)", bean["stock_g"])
+	}
+}
+
+// TestBean_NewBagReplacesUntouchedPlaceholder pins #1540: a bean created with
+// only a roast date gets a single placeholder bag from the bean form. The
+// first real bag the user adds ("Save and add bag") must fill that placeholder
+// in place — one bag, carrying the roast date entered for the bean plus the
+// requested stock/batch — instead of appending a second, empty bag that
+// orphaned the age badge.
+func TestBean_NewBagReplacesUntouchedPlaceholder(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, created := createTestBean(t, mux, map[string]any{"roastDate": "2026-09-30"})
+	if bags, _ := created["bags"].([]any); len(bags) != 1 {
+		t.Fatalf("fresh bean bags = %d, want 1 placeholder", len(bags))
+	}
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+		mustMarshal(t, map[string]any{"stock_g": 250, "batchNumber": "B1"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bean := decodeBody(t, rec.Body.Bytes())
+	bags, _ := bean["bags"].([]any)
+	if len(bags) != 1 {
+		t.Fatalf("bags after new-bag = %d, want 1 (placeholder filled in place)", len(bags))
+	}
+	bag, _ := bags[0].(map[string]any)
+	if bag["roastDate"] != "2026-09-30" {
+		t.Fatalf("bag roastDate = %v, want 2026-09-30 (the placeholder's, since the request had none)", bag["roastDate"])
+	}
+	if bag["stock_g"] != float64(250) {
+		t.Fatalf("bag stock_g = %v, want 250", bag["stock_g"])
+	}
+	if bag["batchNumber"] != "B1" {
+		t.Fatalf("bag batchNumber = %v, want B1", bag["batchNumber"])
+	}
+	if bean["roastDate"] != "2026-09-30" {
+		t.Fatalf("bean roastDate = %v, want 2026-09-30 (synced from the now-current bag)", bean["roastDate"])
+	}
+}
+
+// TestBean_NewBagPlaceholderTakesRequestRoastDate is the companion to the test
+// above: when the "Save and add bag" request carries its own roast date, that
+// date wins over the placeholder's.
+func TestBean_NewBagPlaceholderTakesRequestRoastDate(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"roastDate": "2026-09-30"})
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+		mustMarshal(t, map[string]any{"roastDate": "2026-10-01", "stock_g": 250}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bean := decodeBody(t, rec.Body.Bytes())
+	bags, _ := bean["bags"].([]any)
+	if len(bags) != 1 {
+		t.Fatalf("bags after new-bag = %d, want 1", len(bags))
+	}
+	bag, _ := bags[0].(map[string]any)
+	if bag["roastDate"] != "2026-10-01" {
+		t.Fatalf("bag roastDate = %v, want 2026-10-01 (from the request)", bag["roastDate"])
+	}
+	if bean["roastDate"] != "2026-10-01" {
+		t.Fatalf("bean roastDate = %v, want 2026-10-01", bean["roastDate"])
+	}
+}
+
+// TestBean_NewBagAppendsWhenSingleBagHasStock guards the unchanged append path:
+// a single bag that already tracks stock is a real bag, so a new bag stacks
+// behind it rather than replacing it.
+func TestBean_NewBagAppendsWhenSingleBagHasStock(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	id, created := createTestBean(t, mux, map[string]any{"stock_g": 250, "roastDate": "2026-09-30"})
+	if bags, _ := created["bags"].([]any); len(bags) != 1 {
+		t.Fatalf("fresh bean bags = %d, want 1", len(bags))
+	}
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+		mustMarshal(t, map[string]any{"stock_g": 250}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bags, _ := decodeBody(t, rec.Body.Bytes())["bags"].([]any)
+	if len(bags) != 2 {
+		t.Fatalf("bags after new-bag = %d, want 2 (a stock-tracked bag is not a placeholder)", len(bags))
+	}
+}
+
+// TestBean_NewBagAppendsWhenPlaceholderHasRecordedDose guards the other half
+// of the placeholder check: a bag with no stock of its own is still a real bag
+// once a dose has been logged against the bean, so a new bag appends.
+func TestBean_NewBagAppendsWhenPlaceholderHasRecordedDose(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	id, _ := createTestBean(t, mux, map[string]any{"roastDate": "2026-09-30"})
+	if _, err := sqlDB.Exec(
+		`INSERT INTO shots (id,timestamp,duration,profile_name,data,machine_id) VALUES (11,1700000000,30,'Default','{}',1)`); err != nil {
+		t.Fatalf("insert shot: %v", err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO annotations (shot_id,data) VALUES (11,?)`,
+		`{"coffee":"Test Bean","beanId":`+itoa(id)+`,"dose":18}`); err != nil {
+		t.Fatalf("insert annotation: %v", err)
+	}
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/library/bean/"+itoa(id)+"/new-bag",
+		mustMarshal(t, map[string]any{"stock_g": 250}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new-bag status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	bags, _ := decodeBody(t, rec.Body.Bytes())["bags"].([]any)
+	if len(bags) != 2 {
+		t.Fatalf("bags after new-bag = %d, want 2 (a bag a dose was logged against is not a placeholder)", len(bags))
 	}
 }
 
