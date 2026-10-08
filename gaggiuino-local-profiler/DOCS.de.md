@@ -481,7 +481,7 @@ Im Bibliothek-Tab auf **⬛ Scan** neben „Bohne hinzufügen" tippen, um den Ka
 - **GLP-QR-Code** — QR-Code einer anderen GLP-Installation scannen für einen Direktimport von Name, Rösterei, Röstdatum und Notizen.
 - Jede Bohne in der Bibliothek hat einen **QR-Button** der einen teilbaren QR-Code mit Name, Rösterei, Röstdatum und Notizen erzeugt (Notizen werden gekürzt, damit der Code zuverlässig scanbar bleibt).
 
-Erfordert einen Chromium-basierten Browser (nutzt die native BarcodeDetector Web API). Firefox und Safari werden nicht unterstützt.
+Funktioniert in jedem aktuellen Browser und in den Home Assistant Companion Apps: GLP nutzt den nativen `BarcodeDetector`, wo er vorhanden ist, und liefert sonst einen eigenen Decoder aus. **Benötigt HTTPS** — die Kamera ist nur in einem sicheren Kontext verfügbar, daher kann eine reine `http://`-Adresse (zum Beispiel die interne URL der Companion App `http://<ip>:8123` im Heimnetz) sie nicht öffnen. Nutze eine HTTPS-Adresse, oder **Foto aufnehmen** (öffnet die Kamera-App des Handys und liest den Barcode aus dem Bild — funktioniert ohne HTTPS), oder gib den Barcode in das Feld unter der Kamera ein.
 
 ### UI-Sprache
 
