@@ -966,11 +966,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // works when the camera is unavailable (e.g. plain http). Clearing the value
   // afterwards lets the same picture be chosen again.
   const scanPhotoInput = document.getElementById('scanPhotoInput') as HTMLInputElement | null;
-  scanPhotoInput?.addEventListener('change', () => {
-    const file = scanPhotoInput.files?.[0];
-    scanPhotoInput.value = '';
-    if (file) void _handleScanPhoto(file);
-  });
+  if (scanPhotoInput) {
+    const input = scanPhotoInput;
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (file) void _handleScanPhoto(file);
+    });
+  }
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
   document.getElementById('flavorWheelModal')?.addEventListener('click', e => {

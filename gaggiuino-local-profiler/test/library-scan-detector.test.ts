@@ -226,7 +226,7 @@ describe('barcode scanner failure messages (#1536)', () => {
 
   it('shows scan_needs_https when navigator.mediaDevices is unavailable', async () => {
     g.window = { isSecureContext: true };
-    delete nav.mediaDevices;
+    nav.mediaDevices = undefined;
 
     await openScanModal();
 
