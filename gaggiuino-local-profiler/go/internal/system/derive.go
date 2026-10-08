@@ -70,6 +70,7 @@ type RawStatus struct {
 	WaterLevel        *int
 	UpTime            int
 	Brewing           bool
+	FlushActive       bool
 	Temperature       float64
 	TargetTemperature float64
 	Pressure          float64
@@ -146,7 +147,9 @@ func deriveMachineState(in DeriveInput) DeriveResult {
 			opMode = &name
 		}
 	}
-	isFlushing := opMode != nil && (*opMode == "FLUSH" || *opMode == "FLUSH_AUTO")
+	// #1541: a GaggiMate flush reaches us as the adapter's Flushing (a running
+	// utility process), not as a sysState operation mode.
+	isFlushing := in.Status.FlushActive || (opMode != nil && (*opMode == "FLUSH" || *opMode == "FLUSH_AUTO"))
 	// #983: descale operation mode, same opMode-only derivation as isFlushing.
 	isDescaling := opMode != nil && *opMode == "DESCALE"
 

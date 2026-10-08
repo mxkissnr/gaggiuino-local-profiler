@@ -206,7 +206,7 @@ function gaggiuinoPanelAndDisplay(): { panel: string; disp: string } {
     const disp = `
       <g class="m-disp">
         <g class="d-heat">
-          <text x="40" y="53.4" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">18.0°</text>
+          <text class="m-disp-temp" x="40" y="53.4" text-anchor="middle" font-size="10" font-weight="600" fill="#fff"></text>
           <rect x="23" y="56.4" width="34" height="2.4" rx="1.2" fill="${MINI_ORG}" opacity=".26"/>
           <rect x="23" y="56.4" width="8.5" height="2.4" rx="1.2" fill="${MINI_ORG}"/>
         </g>
@@ -262,7 +262,7 @@ function gaggimatePanelAndDisplay(): { panel: string; disp: string } {
     const disp = `
       <g class="m-disp">
         <g class="d-heat">
-          <text x="${cx}" y="${r(cy + 2.6)}" text-anchor="middle" font-size="7.4" font-weight="600" fill="#fff">18.0°</text>
+          <text class="m-disp-temp" x="${cx}" y="${r(cy + 2.6)}" text-anchor="middle" font-size="7.4" font-weight="600" fill="#fff"></text>
           <path d="M${r(cx - 7)} ${r(cy + 6.6)} h14" stroke="${MINI_ORG}" stroke-width="1.8" stroke-linecap="round" opacity=".28"/>
           <path d="M${r(cx - 7)} ${r(cy + 6.6)} h3.5" stroke="${MINI_ORG}" stroke-width="1.8" stroke-linecap="round"/>
         </g>
@@ -496,7 +496,13 @@ export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuin
 // clip reads (style.css); the other modes have a fixed heat level — 0 when
 // off, 1 once hot/brewing/steaming (heating up is the only state where the
 // body fills gradually rather than snapping to full/empty).
-export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatFraction = 0): void {
+//
+// #1541: `temperature` mirrors the machine's live reading on the icon's little
+// display (.m-disp-temp, inside .d-heat) — the template used to hardcode
+// "18.0°" there, which read as a live number. Off, or no reading, blanks it.
+export function setMachineIconMode(
+    rootEl: Element, mode: MachineIconMode, heatFraction = 0, temperature?: number | null,
+): void {
     const classes = MACHINE_ICON_MODES[mode];
     if (!classes) throw new Error(`machine-icon: unknown mode "${mode}"`);
     // Only touch the classes this function owns. Assigning className wholesale
@@ -510,6 +516,8 @@ export function setMachineIconMode(rootEl: Element, mode: MachineIconMode, heatF
     if (!svg) return;
     const heat = mode === 'off' ? 0 : mode === 'heating' ? Math.max(0, Math.min(1, heatFraction)) : 1;
     svg.style.setProperty('--heat', String(heat));
+    const tempEl = svg.querySelector<SVGTextElement>('.m-disp-temp');
+    if (tempEl) tempEl.textContent = temperature != null && mode !== 'off' ? `${temperature.toFixed(1)}°` : '';
 }
 
 // Maps what the backend actually reports onto one of MACHINE_ICON_MODES.

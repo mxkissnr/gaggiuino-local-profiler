@@ -1035,6 +1035,7 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 		WaterLevel:        waterLevel,
 		UpTime:            upTime,
 		Brewing:           s.Brewing,
+		FlushActive:       s.Flushing,
 		Temperature:       s.Temperature,
 		TargetTemperature: s.TargetTemperature,
 		Pressure:          s.Pressure,

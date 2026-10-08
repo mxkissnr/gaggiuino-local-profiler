@@ -1908,6 +1908,10 @@
         #live-status-badge.steaming,
         #live-status-badge.flushing,
         #live-status-badge.descaling   { color: var(--accent-ink); }
+        /* #1541: the idle badge mirrors the idle title's standby/warming
+           states instead of always reading as "Ready". */
+        #live-status-badge.standby     { color: var(--gray-500); }
+        #live-status-badge.warming     { color: var(--accent-ink); }
 
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;

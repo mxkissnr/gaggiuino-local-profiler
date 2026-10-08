@@ -130,4 +130,40 @@ describe('Live view standby preheat (#1498)', () => {
     expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('');
   });
+
+  // #1541: the status badge next to "Live Shot" must follow the same
+  // standby/warming/ready phase as the idle title instead of always saying
+  // Ready, and a preheat update arriving while the idle panel is shown must
+  // refresh it without waiting for the next live message.
+  describe('status badge follows the idle phase (#1541)', () => {
+    it('shows the standby label for a standby payload', () => {
+      updatePreheatWidget({ standby: true, ready: false, remaining: 600, pct: 0.1 });
+      handleLiveData({ machineReachable: true });
+
+      expect(doc.getElementById('live-status-text').textContent).toBe('Standby');
+    });
+
+    it('shows the warming label while the preheat is still counting down', () => {
+      updatePreheatWidget({ standby: false, ready: false, remaining: 600, pct: 0.1 });
+      handleLiveData({ machineReachable: true });
+
+      expect(doc.getElementById('live-status-text').textContent).toBe('Warming up …');
+    });
+
+    it('shows the ready label once the preheat is done', () => {
+      updatePreheatWidget({ standby: false, ready: true, remaining: 0, pct: 1 });
+      handleLiveData({ machineReachable: true });
+
+      expect(doc.getElementById('live-status-text').textContent).toBe('Ready');
+    });
+
+    it('flips the badge to ready when a later preheat update finishes warming', () => {
+      updatePreheatWidget({ standby: false, ready: false, remaining: 600, pct: 0.1 });
+      handleLiveData({ machineReachable: true });
+      expect(doc.getElementById('live-status-text').textContent).toBe('Warming up …');
+
+      updatePreheatWidget({ standby: false, ready: true, remaining: 0, pct: 1 });
+      expect(doc.getElementById('live-status-text').textContent).toBe('Ready');
+    });
+  });
 });

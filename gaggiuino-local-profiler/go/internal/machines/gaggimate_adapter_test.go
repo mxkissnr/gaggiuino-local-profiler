@@ -64,6 +64,51 @@ func TestGaggiMateAdapter_GetStatus_StandbyMapping(t *testing.T) {
 	}
 }
 
+// TestGaggiMateAdapter_GetStatus_FlushMapping pins #1541: a running utility
+// process (process.a == 1 && process.u == 1) is a flush, not a brew; the
+// adapter must surface it on Status.Flushing so the derived live state can
+// report flushing.
+func TestGaggiMateAdapter_GetStatus_FlushMapping(t *testing.T) {
+	allowLoopbackMachineHost(t)
+
+	cases := []struct {
+		name      string
+		status    map[string]any
+		wantFlush bool
+		wantBrew  bool
+	}{
+		{
+			"utility process is a flush",
+			map[string]any{"tp": "evt:status", "ct": 92.5, "m": 1.0, "process": map[string]any{"a": 1.0, "u": 1.0, "s": "brew"}},
+			true, false,
+		},
+		{
+			"non-utility process is a brew",
+			map[string]any{"tp": "evt:status", "ct": 92.5, "m": 1.0, "process": map[string]any{"a": 1.0, "u": 0.0, "s": "brew"}},
+			false, true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeGaggiMateMachine()
+			fake.setStatus(tc.status)
+			defer fake.Close()
+			a := newTestGaggiMateAdapter(t)
+
+			status, err := a.GetStatus(context.Background(), testGaggiMateMachine(fake.URL))
+			if err != nil {
+				t.Fatalf("GetStatus: %v", err)
+			}
+			if status.Flushing != tc.wantFlush {
+				t.Errorf("Flushing = %v, want %v (status: %+v)", status.Flushing, tc.wantFlush, status)
+			}
+			if status.Brewing != tc.wantBrew {
+				t.Errorf("Brewing = %v, want %v (status: %+v)", status.Brewing, tc.wantBrew, status)
+			}
+		})
+	}
+}
+
 func TestGaggiMateAdapter_ProfileListLoadSelect(t *testing.T) {
 	allowLoopbackMachineHost(t)
 	fake := newFakeGaggiMateMachine()
