@@ -11,7 +11,7 @@ import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme } from './theme.js';
 import { esc, html, joinHtml } from './utils.js';
 import type { Html } from './utils.js';
 import { initToken } from './api/transport.js';
-import { etaText, isEinkMode } from './kiosk-helpers.js';
+import { etaText, isEinkMode, toggleVariantSelection, variantOrderField } from './kiosk-helpers.js';
 
 // The ordering kiosk (#1267): a second, tablet-facing page that shares the
 // app's design system, languages and theme. It is a typed port of the older
@@ -38,7 +38,7 @@ interface KioskState {
   resetTimer: ReturnType<typeof setTimeout> | null;
 }
 
-export const state: KioskState = {
+const state: KioskState = {
   guestName: '',
   selectedDrink: null,
   selectedVariants: [],
@@ -123,7 +123,7 @@ function renderMenu(): void {
   renderSelection();
 }
 
-export function selectDrink(id: string): void {
+function selectDrink(id: string): void {
   state.selectedDrink = state.menu.find(item => item.id === id) ?? null;
   state.selectedVariants = [];
   renderSelection();
@@ -150,12 +150,9 @@ function renderVariants(): void {
   });
 }
 
-// The variant chips are single choice: the server stores one variant per order
-// (a `variant` string, not a list). `selectedVariants` stays an array of at
-// most one entry so the rendering code above is unchanged.
-export function toggleVariant(variant: string): void {
+function toggleVariant(variant: string): void {
   if (!variant) return;
-  state.selectedVariants = state.selectedVariants.includes(variant) ? [] : [variant];
+  state.selectedVariants = toggleVariantSelection(state.selectedVariants, variant);
   renderVariants();
 }
 
@@ -188,7 +185,7 @@ function changeName(): void {
 
 // ── Placing an order ────────────────────────────────────────────────────
 
-export async function submitOrder(): Promise<void> {
+async function submitOrder(): Promise<void> {
   const drink = state.selectedDrink;
   if (!drink) return;
   const placeBtn = byId<HTMLButtonElement>('placeOrder');
@@ -196,12 +193,11 @@ export async function submitOrder(): Promise<void> {
   placeBtn.disabled = true;
   errorEl.textContent = '';
   try {
-    const chosenVariant = state.selectedVariants[0];
     const res = await placeOrder({
       item: drink.name,
       customer: state.guestName,
       note: byId<HTMLInputElement>('noteInput').value.trim(),
-      ...(chosenVariant !== undefined ? { variant: chosenVariant } : {}),
+      ...variantOrderField(state.selectedVariants),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
