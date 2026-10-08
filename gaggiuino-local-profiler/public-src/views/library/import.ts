@@ -378,16 +378,37 @@ export async function openScanModal(): Promise<void> {
   const modal  = document.getElementById('scanModal') as HTMLElement;
   const video  = document.getElementById('scanVideo') as HTMLVideoElement;
   const status = document.getElementById('scanStatus') as HTMLElement;
+  const hint   = document.getElementById('scanTextHint');
   status.textContent = t('scan_searching');
   status.className = '';
+  if (hint) hint.hidden = true;
+  video.classList.add('scan-video-off');
   modal.classList.add('open');
+  // navigator.mediaDevices only exists in a secure context, so a plain http://
+  // origin (e.g. the Companion app's internal URL) can never open the camera:
+  // say so up front rather than failing with the generic scan error (#1536).
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    status.textContent = t('scan_needs_https');
+    status.className = 'error';
+    if (hint) hint.hidden = false;
+    return;
+  }
   let stream: MediaStream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-  } catch {
+  } catch (e) {
     // No camera: the modal (opened above) stays open so the manual-entry form
-    // remains usable; this only reports the camera failure.
-    status.textContent = t('scan_error');
+    // remains usable; this only reports the camera failure. Log the error and
+    // name a denied/blocked permission specifically instead of the generic
+    // scan error (#1536).
+    console.error('Barcode scan camera failed:', e);
+    const name = (e as { name?: string }).name;
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      status.textContent = t('scan_camera_denied');
+      if (hint) hint.hidden = false;
+    } else {
+      status.textContent = t('scan_error');
+    }
     status.className = 'error';
     return;
   }
@@ -399,6 +420,7 @@ export async function openScanModal(): Promise<void> {
   }
   timerRegistry.set('_scanStream', stream);
   video.srcObject = stream;
+  video.classList.remove('scan-video-off');
   let detector: BarcodeDetectorLike;
   try {
     detector = await _createScanDetector();
@@ -408,6 +430,7 @@ export async function openScanModal(): Promise<void> {
     console.error('Barcode scan decoder unavailable:', e);
     timerRegistry.dispose('_scanStream');
     video.srcObject = null;
+    video.classList.add('scan-video-off');
     status.textContent = t('scan_not_supported');
     status.className = 'error';
     return;
@@ -427,7 +450,9 @@ export function closeScanModal(): void {
   S._scanActive = false;
   timerRegistry.dispose('_scanStream');
   (document.getElementById('scanModal') as HTMLElement).classList.remove('open');
-  (document.getElementById('scanVideo') as HTMLVideoElement).srcObject = null;
+  const video = document.getElementById('scanVideo') as HTMLVideoElement;
+  video.srcObject = null;
+  video.classList.add('scan-video-off');
 }
 
 export async function _runScanLoop(): Promise<void> {
@@ -463,6 +488,43 @@ export function _submitManualScan(): void {
   // Mirror a camera hit: stop the scan loop, then run the shared lookup path.
   S._scanActive = false;
   void _handleScanResult(raw, status);
+}
+
+// Photo fallback for the scanner (#1536): the live camera needs a secure
+// context, but a still photo can be read from any origin. The phone's camera
+// app (opened via a `capture` file input) needs no HTTPS, and the same decoder
+// the live loop uses reads the code from the picture.
+export async function _handleScanPhoto(file: File): Promise<void> {
+  const status = document.getElementById('scanStatus') as HTMLElement;
+  // A photo hit replaces a live scan hit exactly like manual entry does.
+  S._scanActive = false;
+  status.textContent = t('scan_searching');
+  status.className = '';
+  let detector: BarcodeDetectorLike;
+  try {
+    detector = await _createScanDetector();
+  } catch (e) {
+    console.error('Barcode scan decoder unavailable:', e);
+    status.textContent = t('scan_not_supported');
+    status.className = 'error';
+    return;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const codes = await detector.detect(bitmap);
+    if (typeof bitmap.close === 'function') bitmap.close();
+    const [firstCode] = codes;
+    if (!firstCode) {
+      status.textContent = t('scan_photo_no_code');
+      status.className = 'error';
+      return;
+    }
+    await _handleScanResult(firstCode.rawValue, status);
+  } catch (e) {
+    console.error('Barcode scan from photo failed:', e);
+    status.textContent = t('scan_error');
+    status.className = 'error';
+  }
 }
 
 export async function _handleScanResult(raw: string, status: HTMLElement): Promise<void> {

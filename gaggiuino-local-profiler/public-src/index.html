@@ -1748,10 +1748,11 @@
 <div id="scanModal">
     <h3 data-i18n="scan_title">Barcode / QR scannen</h3>
     <div id="scanViewport">
-        <video id="scanVideo" autoplay muted playsinline></video>
+        <video id="scanVideo" class="scan-video-off" autoplay muted playsinline></video>
         <div class="scan-overlay"><div class="scan-frame"></div></div>
     </div>
     <div id="scanStatus"></div>
+    <div id="scanTextHint" class="scan-hint" data-i18n="scan_text_hint" hidden></div>
     <form id="scanManualForm" class="scan-manual" autocomplete="off" novalidate>
         <label for="scanManualInput" data-i18n="scan_manual_label">Oder Barcode eingeben</label>
         <div class="scan-manual-row">
@@ -1759,6 +1760,8 @@
             <button type="submit" class="lib-btn-sm scan-manual-submit" data-action="scan-manual-submit" data-i18n="scan_manual_submit">Suchen</button>
         </div>
     </form>
+    <button type="button" class="lib-btn-sm scan-photo-btn" data-action="scan-take-photo" data-i18n="scan_take_photo">Foto aufnehmen</button>
+    <input id="scanPhotoInput" type="file" accept="image/*" capture="environment" hidden>
     <p style="color:var(--gray-600);font-size:.7rem;text-align:center;margin:0">
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
