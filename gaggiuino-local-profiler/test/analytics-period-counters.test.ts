@@ -154,29 +154,29 @@ describe('analytics verdict machine scope (#1496)', () => {
     S.machines = [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Beta' }];
     S.activeMachineId = 'all';
     buildSummaryKpis();
-    expect(els.verdictSub.textContent).toContain('All machines');
+    expect(els.verdictSub!.textContent).toContain('All machines');
   });
 
   it('names the active machine when one is selected', () => {
     S.machines = [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Beta' }];
     S.activeMachineId = 2;
     buildSummaryKpis();
-    expect(els.verdictSub.textContent).toContain('· Beta');
-    expect(els.verdictSub.textContent).not.toContain('Alpha');
+    expect(els.verdictSub!.textContent).toContain('· Beta');
+    expect(els.verdictSub!.textContent).not.toContain('Alpha');
   });
 
   it('falls back to "#<id>" when the active machine has no name', () => {
     S.machines = [{ id: 1, name: 'Alpha' }, { id: 2 }];
     S.activeMachineId = 2;
     buildSummaryKpis();
-    expect(els.verdictSub.textContent).toContain('· #2');
+    expect(els.verdictSub!.textContent).toContain('· #2');
   });
 
   it('adds no machine part with a single machine', () => {
     S.machines = [{ id: 1, name: 'Alpha' }];
     S.activeMachineId = 1;
     buildSummaryKpis();
-    expect(els.verdictSub.textContent).not.toContain('Alpha');
-    expect(els.verdictSub.textContent).not.toContain('All machines');
+    expect(els.verdictSub!.textContent).not.toContain('Alpha');
+    expect(els.verdictSub!.textContent).not.toContain('All machines');
   });
 });
