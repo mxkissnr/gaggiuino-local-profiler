@@ -731,7 +731,7 @@ export function buildTimeOfDay() {
         tooltip: { callbacks: { label: (c: TooltipItem<'bar'>) => {
           const h = hours[c.dataIndex];
           const sc = h ? avgSc(h) : null;
-          return `${c.parsed.y} Shot${c.parsed.y !== 1 ? 's' : ''}${sc !== null ? ' · Ø ' + sc : ''}`;
+          return `${c.parsed.y} ${t('analytics_unit_shots', c.parsed.y)}${sc !== null ? ' · Ø ' + sc : ''}`;
         }}}
       },
       scales: {
@@ -1114,11 +1114,11 @@ export function _renderStreaks(stats: CalendarStats, locale: string): Html {
       ${_cups(longest ? longest.len : 0)}
     </div>
     <div class="cal-fig cal-fig-busiest">
-      <span class="cal-fig-num">${esc(stats.busiest ? stats.busiest.count : 0)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots'))}</span></span>
+      <span class="cal-fig-num">${esc(stats.busiest ? stats.busiest.count : 0)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots', stats.busiest ? stats.busiest.count : 0))}</span></span>
       <span class="cal-fig-lbl">${esc(busiestLbl)}</span>
     </div>
     <div class="cal-fig cal-fig-perfect">
-      <span class="cal-fig-num">${esc(stats.perfect)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots'))}</span></span>
+      <span class="cal-fig-num">${esc(stats.perfect)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots', stats.perfect))}</span></span>
       <span class="cal-fig-lbl">${esc(t('analytics_perfect', stats.perfectShare))}</span>
     </div>`;
 }
@@ -1150,7 +1150,7 @@ export function openCalendarDayDetail(day: string, anchor: HTMLElement | DetailA
     .map(s => (window.calcShotScore ? window.calcShotScore(s) : null))
     .filter((sc): sc is number => sc !== null);
   const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-  const sub = `${shots.length} ${t('analytics_unit_shots')}${avg !== null ? ` · Ø ${avg}` : ''}`;
+  const sub = `${shots.length} ${t('analytics_unit_shots', shots.length)}${avg !== null ? ` · Ø ${avg}` : ''}`;
   const rows = shots.map(s => {
     const time = new Date(s.timestamp * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const name = s.annotation?.coffee || s.profile?.name || s.profileName || '';
@@ -1193,6 +1193,28 @@ function _bindCalendarResize(): void {
   if (_calResizeBound) return;
   _calResizeBound = true;
   window.addEventListener('resize', _onCalendarResize);
+}
+
+// A month label is drawn at the first week column of its month. Short locale
+// names ("Mär", "Apr") are wider than one column, so two labels whose months
+// start in adjacent columns would draw over each other ("MärApr"). A label is
+// kept only when it starts at least this many columns after the previous one.
+export const _MONTH_LABEL_MIN_COLUMNS = 3;
+
+export interface MonthLabelStart { col: number; label: string }
+
+// Pick the month labels to draw from the first-week column of each month. The
+// first month always keeps its label; a later one is dropped when it would
+// start fewer than _MONTH_LABEL_MIN_COLUMNS columns after the last kept label.
+// A dropped month still occupies its columns, so the next label keeps its own
+// column and the month runs stay aligned with the day grid below.
+export function _monthLabelsToDraw(starts: MonthLabelStart[]): MonthLabelStart[] {
+  const kept: MonthLabelStart[] = [];
+  for (const start of starts) {
+    const prev = kept[kept.length - 1];
+    if (!prev || start.col - prev.col >= _MONTH_LABEL_MIN_COLUMNS) kept.push(start);
+  }
+  return kept;
 }
 
 export function _renderCalendar() {
@@ -1252,17 +1274,19 @@ export function _renderCalendar() {
     weeks.push(week);
   }
 
-  // Month labels above the first week of each month.
-  const monthRuns: { span: number; label: string }[] = [];
+  // Month labels above the first week of each month. Overlapping short names
+  // are suppressed (their columns stay reserved by the span).
+  const monthRuns: { col: number; span: number; label: string }[] = [];
   let lastMonth = -1;
-  for (const week of weeks) {
-    const monday = week[0];
+  for (let w = 0; w < weeks.length; w++) {
+    const monday = weeks[w]?.[0];
     if (!monday) continue;
     const label = monday.date.toLocaleDateString(locale, { month: 'short' });
-    if (monday.date.getMonth() !== lastMonth) { monthRuns.push({ span: 1, label }); lastMonth = monday.date.getMonth(); }
+    if (monday.date.getMonth() !== lastMonth) { monthRuns.push({ col: w, span: 1, label }); lastMonth = monday.date.getMonth(); }
     else { const run = monthRuns[monthRuns.length - 1]; if (run) run.span++; }
   }
-  const monthItems = monthRuns.map(m => html`<span class="cal-month" style="grid-column: span ${esc(m.span)}">${esc(m.label)}</span>`);
+  const drawnCols = new Set(_monthLabelsToDraw(monthRuns).map(m => m.col));
+  const monthItems = monthRuns.map(m => html`<span class="cal-month" style="grid-column: span ${esc(m.span)}">${drawnCols.has(m.col) ? esc(m.label) : ''}</span>`);
 
   // First grid column: Monday/Wednesday/Friday labels; the rest empty.
   const cells: Html[] = [];
@@ -1282,7 +1306,7 @@ export function _renderCalendar() {
       if (day.count > 0) {
         classes.push('cal-day-link');
         const dateStr = day.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-        const aria = `${dateStr} · ${day.count} ${t('analytics_unit_shots')}${day.avg !== null ? ` · Ø ${day.avg}` : ''}`;
+        const aria = `${dateStr} · ${day.count} ${t('analytics_unit_shots', day.count)}${day.avg !== null ? ` · Ø ${day.avg}` : ''}`;
         cells.push(html`<button type="button" class="${esc(classes.join(' '))}" data-action="analytics-day" data-day="${esc(day.key)}" aria-label="${esc(aria)}"></button>`);
       } else {
         cells.push(html`<span class="${esc(classes.join(' '))}" aria-hidden="true"></span>`);
@@ -2118,7 +2142,7 @@ export function buildProfileChart() {
         legend: { display: false },
         tooltip: { callbacks: { afterLabel: (c: { dataIndex: number }) => {
           const e = entries[c.dataIndex];
-          return `${e ? e.count : 0} Shots`;
+          return `${e ? e.count : 0} ${t('analytics_unit_shots', e ? e.count : 0)}`;
         } } }
       },
       scales: {
@@ -2172,7 +2196,7 @@ export function buildWeekdayHourHeatmap() {
     const cells: Html[] = [];
     for (let h = 0; h < 24; h++) {
       const c = matrix[wd]?.[h] ?? 0;
-      const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} Shot${c === 1 ? '' : 's'}`;
+      const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} ${t('analytics_unit_shots', c)}`;
       cells.push(html`<div class="wh-cell wh-l${esc(level(c))}" title="${esc(title)}"></div>`);
     }
     dayRows.push(html`<div class="wh-row"><div class="wh-label">${esc(weekdayLabels[wd])}</div>${joinHtml(cells)}</div>`);
@@ -2329,7 +2353,7 @@ function _beanShelfTile(row: BeanRankRow, rank: number): Html {
     <span class="analytics-shelf-bag">${shelfBagImage(_shelfImageBean(row, bean))}</span>
     <span class="analytics-shelf-name serif-display">${esc(row.name)}</span>
     <span class="analytics-shelf-row2">${score}${crema}</span>
-    <span class="analytics-shelf-shots">${esc(row.shots)} ${tHtml('bean_stat_shots')}</span>
+    <span class="analytics-shelf-shots">${esc(row.shots)} ${esc(t('analytics_unit_shots', row.shots))}</span>
   </button>`;
 }
 
