@@ -1712,7 +1712,7 @@
         .lib-sheet-bar.is-scrolled { border-bottom-color: var(--gray-700); }
         .lib-sheet-bar-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-3); font-weight: 600; color: var(--gray-100); }
         .lib-sheet-bar-actions { display: flex; align-items: center; gap: var(--sp-1); justify-self: end; }
-        .lib-sheet-save { min-height: 36px; padding: 0 var(--sp-3); border: none; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-ink); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; }
+        .lib-sheet-save { min-height: 36px; padding: 0 var(--sp-3); border: none; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-text); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; }
         .lib-sheet-save:hover { filter: brightness(1.05); }
         .lib-sheet-save:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-hero { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
