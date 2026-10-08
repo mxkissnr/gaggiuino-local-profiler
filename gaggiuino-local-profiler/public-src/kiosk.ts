@@ -38,7 +38,7 @@ interface KioskState {
   resetTimer: ReturnType<typeof setTimeout> | null;
 }
 
-const state: KioskState = {
+export const state: KioskState = {
   guestName: '',
   selectedDrink: null,
   selectedVariants: [],
@@ -123,7 +123,7 @@ function renderMenu(): void {
   renderSelection();
 }
 
-function selectDrink(id: string): void {
+export function selectDrink(id: string): void {
   state.selectedDrink = state.menu.find(item => item.id === id) ?? null;
   state.selectedVariants = [];
   renderSelection();
@@ -150,11 +150,12 @@ function renderVariants(): void {
   });
 }
 
-function toggleVariant(variant: string): void {
+// The variant chips are single choice: the server stores one variant per order
+// (a `variant` string, not a list). `selectedVariants` stays an array of at
+// most one entry so the rendering code above is unchanged.
+export function toggleVariant(variant: string): void {
   if (!variant) return;
-  const idx = state.selectedVariants.indexOf(variant);
-  if (idx === -1) state.selectedVariants.push(variant);
-  else state.selectedVariants.splice(idx, 1);
+  state.selectedVariants = state.selectedVariants.includes(variant) ? [] : [variant];
   renderVariants();
 }
 
@@ -187,7 +188,7 @@ function changeName(): void {
 
 // ── Placing an order ────────────────────────────────────────────────────
 
-async function submitOrder(): Promise<void> {
+export async function submitOrder(): Promise<void> {
   const drink = state.selectedDrink;
   if (!drink) return;
   const placeBtn = byId<HTMLButtonElement>('placeOrder');
@@ -195,11 +196,12 @@ async function submitOrder(): Promise<void> {
   placeBtn.disabled = true;
   errorEl.textContent = '';
   try {
+    const chosenVariant = state.selectedVariants[0];
     const res = await placeOrder({
       item: drink.name,
       customer: state.guestName,
       note: byId<HTMLInputElement>('noteInput').value.trim(),
-      ...(state.selectedVariants.length > 0 ? { variants: [...state.selectedVariants] } : {}),
+      ...(chosenVariant !== undefined ? { variant: chosenVariant } : {}),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
