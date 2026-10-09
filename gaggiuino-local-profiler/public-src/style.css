@@ -1345,7 +1345,10 @@
         .lib-aroma-svg.has-hl .lib-aroma-seg { opacity: .35; }
         .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px rgba(255,255,255,.65)); }
         .lib-aroma-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); flex: 1 1 120px; }
-        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--chip-color); cursor: pointer; }
+        /* #1543: the note's own colour as text was unreadable for dark notes
+           (e.g. Molasses) on the dark theme -- keep it as the border/background
+           tint only and use the theme's primary text colour for readability. */
+        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--gray-100); cursor: pointer; }
         @media (prefers-reduced-motion: no-preference) {
             .lib-aroma-seg.is-pulse { animation: aroma-pulse 500ms ease-out; }
             @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
@@ -1556,6 +1559,8 @@
         .lib-url-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
         .lib-url-btn:hover { border-color:var(--gray-500); color:var(--gray-200); }
         .lib-item-source { font-size: var(--fs-1); color:var(--gray-600); margin-top: var(--sp-1); overflow-wrap: break-word; word-break: break-word; }
+        /* #1543: the shop link inherited the browser's default link blue. */
+        .lib-item-source a { color: var(--accent-ink); }
         .lib-variant-picker { margin-top: var(--sp-2); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
         .lib-variant-picker-label { font-size: var(--fs-1); color:var(--gray-300); margin-bottom: var(--sp-2); }
         .lib-variant-picker-option { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-200); padding: var(--sp-1) 0; cursor:pointer; }
