@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -443,3 +444,96 @@ func TestTriggerFirmwareUpdate_VersionsFetchFailureStillSucceedsWithEmptyVersion
 		t.Fatalf("unexpected firmware update result: %s", rec.Body.String())
 	}
 }
+
+// recordingFirmwareAdapter reports SettingsProxy and records that a live
+// settings read happened. firmwareVersion fetches its two categories
+// concurrently, so the counter is atomic (the suite runs with -race).
+type recordingFirmwareAdapter struct {
+	fakePanicAdapter
+	getSettingsCalls atomic.Int32
+}
+
+func (a *recordingFirmwareAdapter) Capabilities() Capabilities {
+	return Capabilities{SettingsProxy: true}
+}
+
+func (a *recordingFirmwareAdapter) GetSettings(context.Context, *Machine, string) (json.RawMessage, error) {
+	a.getSettingsCalls.Add(1)
+	return json.RawMessage(`{"coreVersion":"aaa1111","releaseChannel":0}`), nil
+}
+
+// TestFirmwareVersion_KnownOfflineSkipsSettingsFetches is the #1572 regression
+// test for GET /api/machine/firmware/version: once the poller reports the
+// machine unreachable, the handler must answer with its existing
+// unknown-version 200 without calling GetSettings at all (the stub fails the
+// test on any call).
+func TestFirmwareVersion_KnownOfflineSkipsSettingsFetches(t *testing.T) {
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+	h.gaggiuino = failOnCallAdapter{t: t}
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	h.SetKnownUnreachable(func(id int64) bool { return id == machine.ID })
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/firmware/version?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s, want 200 (unknown version, no live fetch)", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["installed"] != nil || body["latest"] != nil {
+		t.Errorf("installed/latest = %v/%v, want nil/nil", body["installed"], body["latest"])
+	}
+	if body["updateAvailable"] != false {
+		t.Errorf("updateAvailable = %v, want false", body["updateAvailable"])
+	}
+}
+
+// TestFirmwareVersion_ReachableOrUnknownStillFetchesSettings is the converse: a
+// nil hook, or a hook reporting the machine online, must keep the live
+// GetSettings path -- exercised here against a recording adapter whose settings
+// reads succeed.
+func TestFirmwareVersion_ReachableOrUnknownStillFetchesSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		hook func(*Handlers, int64)
+	}{
+		{"nil hook", func(h *Handlers, _ int64) { h.SetKnownUnreachable(nil) }},
+		{"reports online", func(h *Handlers, _ int64) { h.SetKnownUnreachable(func(int64) bool { return false }) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry, _ := newTestRegistry(t)
+			adapter := &recordingFirmwareAdapter{}
+			h := &Handlers{registry: registry, gaggiuino: adapter, firmware: NewFirmwareChecker()}
+			mux := newMux(h)
+
+			machine, err := registry.CreateMachine(MachineInput{
+				Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr("http://192.0.2.1"),
+			})
+			if err != nil {
+				t.Fatalf("CreateMachine: %v", err)
+			}
+			tc.hook(h, machine.ID)
+
+			// The latest-release lookup is best-effort; keep it hermetic.
+			stubReleasesAPINoMatch(t)
+
+			rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/firmware/version?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+			}
+			if adapter.getSettingsCalls.Load() == 0 {
+				t.Fatalf("GetSettings was not called; want the live path preserved")
+			}
+			body := decodeBody(t, rec.Body.Bytes())
+			if body["installed"] != "aaa1111" {
+				t.Errorf("installed = %v, want %q from the live settings fetch", body["installed"], "aaa1111")
+			}
+		})
+	}
+}
+

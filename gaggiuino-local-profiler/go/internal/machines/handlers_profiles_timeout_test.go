@@ -295,3 +295,141 @@ func TestUpdateMachineProfile_UnresponsiveGaggiMateFallsBackWithinTimeout(t *tes
 		t.Errorf("syncStatus = %v, want a not-synced status (push failed, edit kept locally)", updated["syncStatus"])
 	}
 }
+
+// failOnCallAdapter is a machines.Adapter whose live methods fail the test if
+// they are ever called. It is the fixture for the #1572 fast-path tests: once
+// the poller reports the machine unreachable, both the profiles and the
+// firmware-version handlers must answer from local state without touching the
+// adapter. Capabilities() is deliberately exempt from failing — the handlers
+// consult it to gate the route before the offline check runs.
+type failOnCallAdapter struct {
+	fakePanicAdapter
+	t *testing.T
+}
+
+var _ Adapter = failOnCallAdapter{}
+
+func (a failOnCallAdapter) Capabilities() Capabilities {
+	return Capabilities{ProfileEdit: true, SettingsProxy: true}
+}
+
+func (a failOnCallAdapter) fail(name string) {
+	a.t.Fatalf("adapter %s called for a machine the poller already knows is offline (#1572)", name)
+}
+
+func (a failOnCallAdapter) GetStatus(context.Context, *Machine) (Status, error) {
+	a.fail("GetStatus")
+	return Status{}, nil
+}
+func (a failOnCallAdapter) ListProfiles(context.Context, *Machine) ([]ProfileSummary, error) {
+	a.fail("ListProfiles")
+	return nil, nil
+}
+func (a failOnCallAdapter) GetSettings(context.Context, *Machine, string) (json.RawMessage, error) {
+	a.fail("GetSettings")
+	return nil, nil
+}
+
+// recordingProfilesAdapter records that the live reads were reached; it returns
+// one remote profile so the live path's response is distinguishable from the
+// offline cache fallback (stale false vs true).
+type recordingProfilesAdapter struct {
+	fakeBlockingAdapter
+	statusCalled bool
+	listCalled   bool
+}
+
+func (a *recordingProfilesAdapter) GetStatus(context.Context, *Machine) (Status, error) {
+	a.statusCalled = true
+	return Status{}, nil
+}
+func (a *recordingProfilesAdapter) ListProfiles(context.Context, *Machine) ([]ProfileSummary, error) {
+	a.listCalled = true
+	return []ProfileSummary{{ID: "remote-1", Name: "Cached Profile"}}, nil
+}
+
+// TestListMachineProfiles_KnownOfflineAnswersFromCacheWithoutAdapter is the
+// #1572 regression test: once the poller reports the machine unreachable,
+// GET /api/machine/profiles must answer from the local cache immediately --
+// same shape as the existing post-failure fallback (cached rows, stale: true,
+// no current profile) -- and never call the adapter.
+func TestListMachineProfiles_KnownOfflineAnswersFromCacheWithoutAdapter(t *testing.T) {
+	registry, sqlDB := newTestRegistry(t)
+	profilesRepo := NewProfilesRepository(sqlDB)
+	h := &Handlers{registry: registry, gaggimate: failOnCallAdapter{t: t}, profilesRepo: profilesRepo}
+	mux := newMux(h)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := profilesRepo.UpsertSynced(machine.ID, "remote-1", "Cached Profile", json.RawMessage(`{"label":"Cached Profile"}`), false); err != nil {
+		t.Fatalf("seeding cached profile: %v", err)
+	}
+	h.SetKnownUnreachable(func(id int64) bool { return id == machine.ID })
+
+	start := time.Now()
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profiles?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if elapsed := time.Since(start); elapsed > profileLiveFetchTimeout {
+		t.Fatalf("listMachineProfiles took %v for a known-offline machine; want an immediate cache answer, well under %v", elapsed, profileLiveFetchTimeout)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["stale"] != true {
+		t.Errorf("stale = %v, want true (served from the local cache)", body["stale"])
+	}
+	if body["current"] != nil || body["currentId"] != nil {
+		t.Errorf("current/currentId = %v/%v, want nil/nil (machine known offline)", body["current"], body["currentId"])
+	}
+	optionsRaw, _ := body["optionsRaw"].([]any)
+	if len(optionsRaw) != 1 {
+		t.Fatalf("expected 1 cached profile, got %d: %+v", len(optionsRaw), body)
+	}
+}
+
+// TestListMachineProfiles_ReachableOrUnknownStillGoesLive is the converse of
+// the test above: a nil hook, or a hook that reports the machine online, must
+// leave the live path untouched -- the adapter is called and the response
+// reflects the live list (stale false), not the local-cache fallback.
+func TestListMachineProfiles_ReachableOrUnknownStillGoesLive(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		hook func(*Handlers, int64)
+	}{
+		{"nil hook", func(h *Handlers, _ int64) { h.SetKnownUnreachable(nil) }},
+		{"reports online", func(h *Handlers, _ int64) { h.SetKnownUnreachable(func(int64) bool { return false }) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry, sqlDB := newTestRegistry(t)
+			profilesRepo := NewProfilesRepository(sqlDB)
+			adapter := &recordingProfilesAdapter{}
+			h := &Handlers{registry: registry, gaggimate: adapter, profilesRepo: profilesRepo}
+			mux := newMux(h)
+
+			machine, err := registry.CreateMachine(MachineInput{
+				Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+			})
+			if err != nil {
+				t.Fatalf("CreateMachine: %v", err)
+			}
+			tc.hook(h, machine.ID)
+
+			rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profiles?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+			}
+			if !adapter.statusCalled || !adapter.listCalled {
+				t.Fatalf("adapter calls: status=%v list=%v, want both true (live path preserved)", adapter.statusCalled, adapter.listCalled)
+			}
+			body := decodeBody(t, rec.Body.Bytes())
+			if body["stale"] != false {
+				t.Errorf("stale = %v, want false (live path)", body["stale"])
+			}
+		})
+	}
+}
+
