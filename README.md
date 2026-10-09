@@ -230,6 +230,7 @@ Full numbers (timeline, per-model breakdown, cost estimate) generated live from 
 - **Ideas:** one idea per discussion in [Feature Requests](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/feature-requests); upvote the ones you want most.
 - **Releases:** every release gets a discussion in [Announcements](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/announcements).
 - **Bugs:** open an [issue](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/new/choose).
+- **Roadmap:** what comes next, and where help is welcome, is on the [roadmap board](https://github.com/users/mxkissnr/projects/2/views/2).
 
 Thanks to everyone who reports bugs, shares ideas and sends pull requests:
 
