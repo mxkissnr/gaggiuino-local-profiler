@@ -66,7 +66,7 @@ async function loadLive() {
   vi.resetModules();
   const transport = await import('../public-src/api/transport.js');
   const live = await import('../public-src/live-sync.js');
-  return { live, CLIENT_ID: transport.CLIENT_ID as string };
+  return { live, CLIENT_ID: transport.CLIENT_ID };
 }
 
 let doc: FakeDoc;
@@ -457,7 +457,7 @@ describe('library handler keeps an open bean-sheet form (#1539)', () => {
     await vi.advanceTimersByTimeAsync(400);
 
     expect(mocks.getLibrary).toHaveBeenCalled();
-    expect(made.elements.newBagForm1!.style.display).toBe('');
-    expect(made.elements.newBagStock1!.value).toBe('250');
+    expect(made.elements.newBagForm1.style.display).toBe('');
+    expect(made.elements.newBagStock1.value).toBe('250');
   });
 });
