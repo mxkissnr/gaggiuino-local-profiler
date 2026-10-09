@@ -75,7 +75,8 @@ export function mulberry32(seed: number): () => number {
 }
 
 function cloneJson<T>(value: T): T {
-    return JSON.parse(JSON.stringify(value) as string) as T;
+    const json = JSON.stringify(value);
+    return JSON.parse(json) as T;
 }
 
 function jitterDatapoints(datapoints: Record<string, unknown>, rng: () => number): void {
