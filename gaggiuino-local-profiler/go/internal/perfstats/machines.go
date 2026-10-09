@@ -29,20 +29,20 @@ const (
 // into one aggregate "unknown" entry. Per-host state is bounded — a fixed ring
 // of 15 one-minute buckets and at most maxTrackedHosts host keys.
 type MachineCounter struct {
-	start       time.Time
-	firstSample time.Time
+	start time.Time
 
 	mu    sync.Mutex
 	hosts map[string]*hostTraffic
 }
 
-// hostTraffic is one host's rolling window plus the host's current brew flag.
-// Requests are classified as idle or brewing at write time using the flag in
-// effect when they arrive, so a later brew start does not reclassify earlier
-// traffic. WebSocket messages are not split.
+// hostTraffic is one host's rolling window. firstSample is the first time the
+// host was counted, so its rate is divided by its own age rather than the
+// counter's. Each bucket records the requests seen in its minute and whether a
+// shot was running at any point in that minute; a request is classified by its
+// minute's flag, so all traffic in a brewing minute counts as brewing.
 type hostTraffic struct {
-	brewing bool
-	buckets [machineWindowMinutes]minuteBucket
+	firstSample time.Time
+	buckets     [machineWindowMinutes]minuteBucket
 }
 
 // minuteBucket is one minute of one host's traffic. minute is the Unix minute
@@ -50,8 +50,8 @@ type hostTraffic struct {
 // longer matches the current minute is reset in place before it is reused.
 type minuteBucket struct {
 	minute     int64
-	reqIdle    int64
-	reqBrewing int64
+	requests   int64
+	brewing    bool
 	wsMessages int64
 	errors     int64
 }
@@ -77,14 +77,8 @@ func (c *MachineCounter) CountRequest(host string, failed bool) {
 func (c *MachineCounter) countRequestAt(host string, failed bool, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.markFirstSample(now)
-	h := c.hostLocked(host)
-	b := bucketFor(h, now)
-	if h.brewing {
-		b.reqBrewing++
-	} else {
-		b.reqIdle++
-	}
+	b := bucketFor(c.hostLocked(host, now), now)
+	b.requests++
 	if failed {
 		b.errors++
 	}
@@ -101,34 +95,35 @@ func (c *MachineCounter) CountWSMessage(host string) {
 func (c *MachineCounter) countWSMessageAt(host string, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.markFirstSample(now)
-	bucketFor(c.hostLocked(host), now).wsMessages++
+	bucketFor(c.hostLocked(host, now), now).wsMessages++
 }
 
-// markFirstSample remembers the earliest counted traffic so the rate divisor
-// never spans time before the counter saw any data. It must be called with
-// c.mu held.
-func (c *MachineCounter) markFirstSample(now time.Time) {
-	if c.firstSample.IsZero() || now.Before(c.firstSample) {
-		c.firstSample = now
-	}
-}
-
-// SetBrewing records whether host is currently taking a shot, so subsequent
-// HTTP requests split into the brewing bucket instead of the idle one.
+// SetBrewing marks host's current minute as brewing, so Snapshot reports that
+// minute's requests under requests_per_min_brewing. It never creates a host
+// entry: an untracked host is ignored. A false value is a no-op, because a
+// minute counts as brewing when a shot was active at any point in it.
 func (c *MachineCounter) SetBrewing(host string, brewing bool) {
 	if c == nil {
 		return
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.hostLocked(host).brewing = brewing
+	c.setBrewingAt(host, brewing, time.Now())
 }
 
-// hostLocked returns host's traffic, creating it when new. It must be called
-// with c.mu held. A new host past the cap is folded into otherHost so the map
-// can never exceed maxTrackedHosts keys.
-func (c *MachineCounter) hostLocked(host string) *hostTraffic {
+func (c *MachineCounter) setBrewingAt(host string, brewing bool, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	h, ok := c.hosts[host]
+	if !ok || !brewing {
+		return
+	}
+	bucketFor(h, now).brewing = true
+}
+
+// hostLocked returns host's traffic, creating it when new with firstSample set
+// to now, the host's own age origin. It must be called with c.mu held. A new
+// host past the cap is folded into otherHost so the map can never exceed
+// maxTrackedHosts keys.
+func (c *MachineCounter) hostLocked(host string, now time.Time) *hostTraffic {
 	if h, ok := c.hosts[host]; ok {
 		return h
 	}
@@ -138,7 +133,7 @@ func (c *MachineCounter) hostLocked(host string) *hostTraffic {
 			return h
 		}
 	}
-	h := &hostTraffic{}
+	h := &hostTraffic{firstSample: now}
 	c.hosts[host] = h
 	return h
 }
@@ -166,47 +161,51 @@ type MachineTrafficSnapshot struct {
 	ErrorsLast15Min       int64   `json:"errors_last_15min" jsonschema:"failed or 5xx machine requests in the last 15 minutes"`
 }
 
-// hostSums is one host's window totals, read under the lock before resolving.
-type hostSums struct {
-	idle    int64
-	brewing int64
-	ws      int64
-	errors  int64
+// hostSpan is one host's window totals, read under the lock and turned into
+// rates after unlocking. The minutes of the host's own age are split by whether
+// the minute was brewing.
+type hostSpan struct {
+	idleRequests    int64
+	idleMinutes     float64
+	brewingRequests int64
+	brewingMinutes  float64
+	ws              int64
+	errors          int64
+	spanMinutes     float64
+}
+
+// rate divides count by minutes, reporting 0 when the host had no minutes of
+// that kind — so a machine that never brewed never reports a brewing rate.
+func (s hostSpan) rate(count int64, minutes float64) float64 {
+	if minutes <= 0 {
+		return 0
+	}
+	return float64(count) / minutes
 }
 
 // Snapshot resolves each tracked host to a machine id and returns one entry per
 // machine that saw traffic in the window, sorted by machine id with the
 // aggregate unknown entry last. Hosts that do not resolve are combined into
 // that single unknown entry. resolve may be nil, in which case every host
-// counts as unknown.
+// counts as unknown. The per-host sums are read under the lock and turned into
+// rates after unlocking.
 func (c *MachineCounter) Snapshot(now time.Time, resolve func(host string) (machineID int64, ok bool)) []MachineTrafficSnapshot {
 	if c == nil {
 		return []MachineTrafficSnapshot{}
 	}
 	c.mu.Lock()
-	sums := make(map[string]hostSums, len(c.hosts))
+	spans := make(map[string]hostSpan, len(c.hosts))
 	for host, h := range c.hosts {
-		var s hostSums
-		for i := range h.buckets {
-			b := h.buckets[i]
-			if now.Unix()/60-b.minute >= int64(machineWindowMinutes) {
-				continue
-			}
-			s.idle += b.reqIdle
-			s.brewing += b.reqBrewing
-			s.ws += b.wsMessages
-			s.errors += b.errors
-		}
-		if s != (hostSums{}) {
-			sums[host] = s
-		}
+		spans[host] = hostSpanLocked(h, c.start, now)
 	}
 	c.mu.Unlock()
 
-	minutes := c.rateMinutes(now)
 	byMachine := map[int64]*MachineTrafficSnapshot{}
 	var unknown *MachineTrafficSnapshot
-	for host, s := range sums {
+	for host, s := range spans {
+		if s.idleRequests == 0 && s.brewingRequests == 0 && s.ws == 0 && s.errors == 0 {
+			continue
+		}
 		var dest *MachineTrafficSnapshot
 		id, ok := int64(0), false
 		if resolve != nil {
@@ -224,9 +223,9 @@ func (c *MachineCounter) Snapshot(now time.Time, resolve func(host string) (mach
 			}
 			dest = unknown
 		}
-		dest.RequestsPerMinIdle += float64(s.idle) / minutes
-		dest.RequestsPerMinBrewing += float64(s.brewing) / minutes
-		dest.WSMessagesPerMin += float64(s.ws) / minutes
+		dest.RequestsPerMinIdle += s.rate(s.idleRequests, s.idleMinutes)
+		dest.RequestsPerMinBrewing += s.rate(s.brewingRequests, s.brewingMinutes)
+		dest.WSMessagesPerMin += s.rate(s.ws, s.spanMinutes)
 		dest.ErrorsLast15Min += s.errors
 	}
 
@@ -241,26 +240,57 @@ func (c *MachineCounter) Snapshot(now time.Time, resolve func(host string) (mach
 	return out
 }
 
-// rateMinutes is the divisor that turns a window count into a per-minute rate:
-// the length of the window the buckets actually span, at least 1 so a young
-// counter never divides by zero or reports a spike.
-//
-// The buckets hold the current minute plus the previous machineWindowMinutes-1
-// full minutes, so the span grows from 14 minutes at the top of a minute to 15
-// as the current minute fills. Dividing by a flat 15 would read up to about 7%
-// low. A counter that has existed for less than that, or whose first sample is
-// newer, spans only the shorter time.
-func (c *MachineCounter) rateMinutes(now time.Time) float64 {
-	window := float64(machineWindowMinutes-1) + now.Sub(now.Truncate(time.Minute)).Minutes()
-	from := c.firstSample
+// hostSpanLocked sums h's buckets that fall inside the rolling window, splitting
+// the time they span into brewing and idle minutes from the host's own first
+// sample. It must be called with c.mu held. fallback is the counter's start,
+// used only for a host with no recorded first sample.
+func hostSpanLocked(h *hostTraffic, fallback, now time.Time) hostSpan {
+	var s hostSpan
+	from := h.firstSample
 	if from.IsZero() {
-		from = c.start
+		from = fallback
 	}
-	if age := now.Sub(from).Minutes(); age < window {
-		window = age
+	if from.After(now) {
+		from = now
 	}
-	if window < 1 {
-		window = 1
+
+	lastMinute := now.Unix() / 60
+	firstMinute := from.Unix() / 60
+	if oldest := lastMinute - int64(machineWindowMinutes-1); firstMinute < oldest {
+		firstMinute = oldest
 	}
-	return window
+
+	for m := firstMinute; m <= lastMinute; m++ {
+		lo := time.Unix(m*60, 0)
+		if lo.Before(from) {
+			lo = from
+		}
+		hi := time.Unix((m+1)*60, 0)
+		if hi.After(now) {
+			hi = now
+		}
+		if !hi.After(lo) {
+			continue
+		}
+		minutes := hi.Sub(lo).Minutes()
+
+		b := &h.buckets[m%int64(machineWindowMinutes)]
+		brewing := b.minute == m && b.brewing
+		if brewing {
+			s.brewingMinutes += minutes
+		} else {
+			s.idleMinutes += minutes
+		}
+		if b.minute == m {
+			if brewing {
+				s.brewingRequests += b.requests
+			} else {
+				s.idleRequests += b.requests
+			}
+			s.ws += b.wsMessages
+			s.errors += b.errors
+		}
+		s.spanMinutes += minutes
+	}
+	return s
 }

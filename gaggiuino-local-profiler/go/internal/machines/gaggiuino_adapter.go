@@ -46,11 +46,7 @@ func (a *GaggiuinoAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 
 	weight := looseFloat(obj["weight"])
 	steamOn := looseTruthy(obj["steamSwitchState"])
-	// Flag the host as brewing so the machine-traffic counter files its
-	// subsequent requests in the brewing bucket; without this every Gaggiuino
-	// request was counted as idle (#1568 review).
 	brewing := looseTruthy(obj["brewSwitchState"])
-	setMachineBrewing(hostFromBaseURL(baseURL), brewing)
 	return Status{
 		Reachable:         true,
 		Temperature:       looseFloat(obj["temperature"]),

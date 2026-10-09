@@ -56,9 +56,12 @@ func countMachineWSMessage(host string) {
 	machineTraffic.Load().CountWSMessage(host)
 }
 
-// setMachineBrewing records whether host is currently taking a shot, splitting
-// that host's subsequent requests into the brewing bucket.
-func setMachineBrewing(host string, brewing bool) {
+// SetMachineBrewing records whether host is currently taking a shot, so the
+// machine-traffic counter files that minute's requests in the brewing bucket.
+// The poller calls it once per poll tick with the host normalized by
+// NormalizeMachineHost, the same key the counting round tripper records, so
+// every adapter and fallback path is covered by one call.
+func SetMachineBrewing(host string, brewing bool) {
 	machineTraffic.Load().SetBrewing(host, brewing)
 }
 
@@ -74,14 +77,18 @@ func hostFromBaseURL(baseURL string) string {
 }
 
 // countingRoundTripper wraps a machine transport and records every round trip
-// against the machine-traffic counter, keyed by the request's host.
+// against the machine-traffic counter, keyed by the request's host. A WebSocket
+// handshake carries an Upgrade header and is skipped: it is not an HTTP request
+// to the machine, and its messages are counted separately.
 type countingRoundTripper struct {
 	base http.RoundTripper
 }
 
 func (t countingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.base.RoundTrip(req)
-	countMachineRequest(req.URL.Host, err != nil || (resp != nil && resp.StatusCode >= 500))
+	if !strings.EqualFold(req.Header.Get("Upgrade"), "websocket") {
+		countMachineRequest(req.URL.Host, err != nil || (resp != nil && resp.StatusCode >= 500))
+	}
 	return resp, err
 }
 

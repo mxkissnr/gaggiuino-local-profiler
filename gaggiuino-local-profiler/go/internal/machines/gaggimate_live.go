@@ -203,10 +203,6 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 		s.mu.Lock()
 		s.connected = false
 		s.mu.Unlock()
-		// A session that has ended is no longer taking a shot: clear the
-		// host's brewing flag so its later traffic is not miscounted as
-		// brewing.
-		setMachineBrewing(host, false)
 	}()
 
 	// Ask for the firmware version right away; firmware v1.9.0 answers with
@@ -265,12 +261,7 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 						s.clearBrewConfirmLocked()
 					}
 				}
-				// A status carrying the brew process (process.a==1, stage
-				// brew/infusion) marks this host as taking a shot, so the
-				// traffic counter splits its requests into the brewing bucket.
-				brewing, _, _ := gaggiMateProcessState(s.status)
 				s.mu.Unlock()
-				setMachineBrewing(host, brewing)
 			} else if tp == "evt:brew:confirm" {
 				// A brew start was blocked by error-level warnings; the
 				// controller asks every UI to confirm or decline. Store the

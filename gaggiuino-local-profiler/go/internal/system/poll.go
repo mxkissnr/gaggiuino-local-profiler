@@ -759,6 +759,11 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	// longer needs its own throttling wrapper.
 	debugLogf("poll: GET status from %s (%s)", machine.Host, machine.Type)
 	status, err := adapter.GetStatus(ctx, machine)
+	// The machine-traffic brewing flag is set here, once per poll tick, for every
+	// adapter and fallback path: the host is normalized exactly as the counting
+	// round tripper keys it, and a failed poll reports not brewing.
+	brewingHost, _ := machines.NormalizeMachineHost(machine.Host)
+	machines.SetMachineBrewing(brewingHost, err == nil && status.Brewing)
 	if err != nil {
 		p.state.mu.Lock()
 		ms := p.state.machine(machine.ID)

@@ -251,34 +251,6 @@ func TestGaggiuinoAdapter_Firmware(t *testing.T) {
 	}
 }
 
-// TestGaggiuinoAdapter_GetStatusSetsBrewingFlag is the #1568 review fix for the
-// Gaggiuino side: GetStatus must flag the host as brewing when the machine
-// reports brewSwitchState, so its subsequent counted requests split into the
-// brewing bucket instead of all being filed as idle.
-func TestGaggiuinoAdapter_GetStatusSetsBrewingFlag(t *testing.T) {
-	allowLoopbackMachineHost(t)
-	counter := perfstats.NewMachineCounter()
-	SetMachineTrafficCounter(counter)
-	t.Cleanup(func() { SetMachineTrafficCounter(nil) })
-
-	fake := newFakeGaggiuinoMachine() // /api/system/status reports brewSwitchState:true
-	defer fake.Close()
-	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
-
-	host := hostFromBaseURL(fake.URL)
-	if _, err := a.GetStatus(context.Background(), testMachine(fake.URL)); err != nil {
-		t.Fatalf("GetStatus: %v", err)
-	}
-	// The status request itself was counted while the flag was still false, so it
-	// is idle; the next counted request must be brewing.
-	countMachineRequest(host, false)
-
-	snap := counter.Snapshot(time.Now(), func(h string) (int64, bool) { return 1, h == host })
-	if len(snap) != 1 || snap[0].MachineID != 1 || snap[0].RequestsPerMinBrewing <= 0 {
-		t.Fatalf("expected a counted request in the brewing bucket after GetStatus, got %+v", snap)
-	}
-}
-
 // TestWSReadCountsMachineTraffic is the #1568 review fix for the short-lived
 // Gaggiuino WebSocket client: every message read in ws.go must increment the
 // machine-traffic WS counter, the same way the two live clients do.

@@ -35,7 +35,8 @@ func TestMachineCounterKeepsHostsSeparate(t *testing.T) {
 	c.countRequestAt("alpha", false, counterStart)
 	c.countRequestAt("beta", false, counterStart)
 
-	out := c.Snapshot(counterStart, resolveMap(map[string]int64{"alpha": 1, "beta": 2}))
+	now := counterStart.Add(time.Minute)
+	out := c.Snapshot(now, resolveMap(map[string]int64{"alpha": 1, "beta": 2}))
 	a := findMachine(t, out, 1)
 	b := findMachine(t, out, 2)
 	if got := a.RequestsPerMinIdle; got != 2 {
@@ -46,23 +47,74 @@ func TestMachineCounterKeepsHostsSeparate(t *testing.T) {
 	}
 }
 
-// Requests must split on the brew flag in effect when they arrive.
-func TestMachineCounterSplitsIdleAndBrewing(t *testing.T) {
+// Requests are split by whether their minute was brewing, not by the flag in
+// effect when each one arrived.
+func TestMachineCounterSplitsBrewingMinutes(t *testing.T) {
 	c := newMachineCounterAt(counterStart)
 	for i := 0; i < 3; i++ {
 		c.countRequestAt("alpha", false, counterStart)
 	}
-	c.SetBrewing("alpha", true)
+	shotMinute := counterStart.Add(time.Minute)
+	c.setBrewingAt("alpha", true, shotMinute)
 	for i := 0; i < 6; i++ {
-		c.countRequestAt("alpha", false, counterStart)
+		c.countRequestAt("alpha", false, shotMinute)
 	}
 
-	m := findMachine(t, c.Snapshot(counterStart, resolveMap(map[string]int64{"alpha": 1})), 1)
+	m := findMachine(t, c.Snapshot(counterStart.Add(2*time.Minute), resolveMap(map[string]int64{"alpha": 1})), 1)
 	if m.RequestsPerMinIdle != 3 {
 		t.Errorf("idle rate = %v, want 3", m.RequestsPerMinIdle)
 	}
 	if m.RequestsPerMinBrewing != 6 {
 		t.Errorf("brewing rate = %v, want 6", m.RequestsPerMinBrewing)
+	}
+}
+
+// A 30 s shot at 2 req/s sits inside an otherwise idle window: the brewing rate
+// is the requests in the brewing minute divided by the time actually spent in
+// it, so a half-minute shot reports 60 requests / 0.5 min = 120 req/min.
+func TestMachineCounterBrewingRateIsPerBrewingMinute(t *testing.T) {
+	c := newMachineCounterAt(counterStart)
+	const host = "alpha"
+	c.countRequestAt(host, false, counterStart) // idle prelude
+
+	shotStart := counterStart.Add(time.Minute)
+	c.setBrewingAt(host, true, shotStart)
+	for i := 0; i < 60; i++ { // 30 s at 2 req/s
+		c.countRequestAt(host, false, shotStart.Add(time.Duration(i)*500*time.Millisecond))
+	}
+
+	m := findMachine(t, c.Snapshot(shotStart.Add(30*time.Second), resolveMap(map[string]int64{host: 1})), 1)
+	if m.RequestsPerMinBrewing < 115 || m.RequestsPerMinBrewing > 125 {
+		t.Fatalf("brewing rate = %v, want about 120", m.RequestsPerMinBrewing)
+	}
+}
+
+// Each host's rate is divided by its own age, so a host first seen two minutes
+// ago with 20 requests reports about 10 req/min even though the counter itself
+// is much older.
+func TestMachineCounterRateUsesPerHostSpan(t *testing.T) {
+	c := newMachineCounterAt(counterStart.Add(-10 * time.Minute))
+	const host = "alpha"
+	for i := 0; i < 20; i++ {
+		c.countRequestAt(host, false, counterStart.Add(time.Duration(i)*6*time.Second))
+	}
+
+	m := findMachine(t, c.Snapshot(counterStart.Add(2*time.Minute), resolveMap(map[string]int64{host: 1})), 1)
+	if m.RequestsPerMinIdle < 9.5 || m.RequestsPerMinIdle > 10.5 {
+		t.Fatalf("idle rate = %v, want about 10 over the host's own 2-minute age", m.RequestsPerMinIdle)
+	}
+}
+
+// SetBrewing only updates a host that already has traffic: an unknown host must
+// not allocate a slot, and must never fall into the shared "other" bucket.
+func TestMachineCounterSetBrewingIgnoresUntrackedHost(t *testing.T) {
+	c := newMachineCounterAt(counterStart)
+	c.SetBrewing("ghost", true)
+	if got := len(c.hosts); got != 0 {
+		t.Fatalf("SetBrewing created %d host entries, want 0", got)
+	}
+	if got := c.Snapshot(counterStart.Add(time.Minute), nil); len(got) != 0 {
+		t.Fatalf("snapshot = %+v, want no entries", got)
 	}
 }
 
@@ -74,7 +126,7 @@ func TestMachineCounterCountsWebSocketAndErrors(t *testing.T) {
 	c.countWSMessageAt("alpha", counterStart)
 	c.countRequestAt("alpha", true, counterStart)
 
-	m := findMachine(t, c.Snapshot(counterStart, resolveMap(map[string]int64{"alpha": 1})), 1)
+	m := findMachine(t, c.Snapshot(counterStart.Add(time.Minute), resolveMap(map[string]int64{"alpha": 1})), 1)
 	if m.WSMessagesPerMin != 2 {
 		t.Errorf("ws rate = %v, want 2", m.WSMessagesPerMin)
 	}
@@ -89,7 +141,7 @@ func TestMachineCounterWindowExpires(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		c.countRequestAt("alpha", false, counterStart)
 	}
-	if got := len(c.Snapshot(counterStart, resolveMap(map[string]int64{"alpha": 1}))); got != 1 {
+	if got := len(c.Snapshot(counterStart.Add(time.Minute), resolveMap(map[string]int64{"alpha": 1}))); got != 1 {
 		t.Fatalf("fresh traffic = %d entries, want 1", got)
 	}
 	later := counterStart.Add(16 * time.Minute)
@@ -105,7 +157,7 @@ func TestMachineCounterNeverReturnsHost(t *testing.T) {
 	c.countRequestAt("192.168.1.50", false, counterStart)
 	c.countWSMessageAt("machine.local:8080", counterStart)
 
-	out := c.Snapshot(counterStart, resolveMap(map[string]int64{"192.168.1.50": 7}))
+	out := c.Snapshot(counterStart.Add(time.Minute), resolveMap(map[string]int64{"192.168.1.50": 7}))
 	blob, err := json.Marshal(out)
 	if err != nil {
 		t.Fatalf("marshal snapshot: %v", err)
@@ -129,7 +181,8 @@ func TestMachineCounterAggregatesUnknownHosts(t *testing.T) {
 	c.countRequestAt("beta", false, counterStart)
 	c.countRequestAt("beta", false, counterStart)
 
-	out := c.Snapshot(counterStart, resolveMap(map[string]int64{"alpha": 1}))
+	now := counterStart.Add(time.Minute)
+	out := c.Snapshot(now, resolveMap(map[string]int64{"alpha": 1}))
 	if len(out) != 2 {
 		t.Fatalf("entries = %+v, want one machine plus unknown", out)
 	}
@@ -141,7 +194,7 @@ func TestMachineCounterAggregatesUnknownHosts(t *testing.T) {
 		t.Errorf("unknown idle rate = %v, want 2", unknown.RequestsPerMinIdle)
 	}
 	// A nil resolver treats every host as unknown.
-	if got := len(c.Snapshot(counterStart, nil)); got != 1 {
+	if got := len(c.Snapshot(now, nil)); got != 1 {
 		t.Errorf("nil resolver entries = %d, want 1", got)
 	}
 }

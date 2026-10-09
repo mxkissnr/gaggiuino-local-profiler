@@ -13,7 +13,6 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 )
 
 // streamingGaggiMate is a fake GaggiMate controller that keeps pushing
@@ -384,61 +383,6 @@ func TestGaggiMateLiveClient_ShotSavedEventFiresHook(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	if n := fired.Load(); n != 1 {
 		t.Fatalf("shot-saved hook fired %d times, want exactly 1 (a status frame must not fire it)", n)
-	}
-}
-
-// TestGaggiMateLiveClient_ClearsBrewingFlagOnSessionEnd is the #1568 review
-// fix for the stuck brewing flag: while a live session reports a running brew
-// the host's requests are filed as brewing, but once the session ends (ctx
-// cancel or read error) the flag must be cleared so later traffic is idle.
-func TestGaggiMateLiveClient_ClearsBrewingFlagOnSessionEnd(t *testing.T) {
-	allowLoopbackMachineHost(t)
-	counter := perfstats.NewMachineCounter()
-	SetMachineTrafficCounter(counter)
-	t.Cleanup(func() { SetMachineTrafficCounter(nil) })
-
-	fake := newStreamingGaggiMate()
-	fake.setPartial(true) // fast frames carry process.a==1 / stage brew
-	defer fake.Close()
-
-	c := newGaggiMateLiveClient()
-	c.idleTimeout = time.Hour
-	t.Cleanup(c.DisconnectAll)
-	base := fake.URL
-	host := hostFromBaseURL(base)
-
-	// Open the persistent session (Status lazily creates it) so the fake starts
-	// pushing partial evt:status frames, including process.a==1 / stage brew.
-	c.Status(base)
-
-	brewing := func(at time.Time) float64 {
-		for _, snap := range counter.Snapshot(at, func(h string) (int64, bool) { return 1, h == host }) {
-			if snap.MachineID == 1 {
-				return snap.RequestsPerMinBrewing
-			}
-		}
-		return 0
-	}
-
-	// Retry a counted request until one lands in the brewing bucket — proof the
-	// live session has pushed a brewing status and set the flag.
-	waitUntil(t, 2*time.Second, func() bool {
-		countMachineRequest(host, false)
-		return brewing(time.Now()) > 0
-	})
-
-	// Compare at one fixed instant so the rate divisor is identical on both
-	// sides — then equality is a count comparison.
-	at := time.Now()
-	before := brewing(at)
-
-	c.DisconnectAndWait(base)
-
-	// After the session ended the flag must be clear: this request is idle and
-	// the brewing rate does not move. Without the fix it accrues as brewing.
-	countMachineRequest(host, false)
-	if after := brewing(at); after != before {
-		t.Fatalf("brewing traffic kept accruing after the live session ended: before=%v after=%v", before, after)
 	}
 }
 
