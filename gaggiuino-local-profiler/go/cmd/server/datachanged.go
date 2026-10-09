@@ -7,6 +7,7 @@ import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 // on first use instead.
 var dataKinds = []string{
 	"library",
+	"library-image",
 	"shot",
 	"shots",
 	"orders",
@@ -34,6 +35,13 @@ func buildDataRoutes() map[string]sse.Route {
 	add := func(pattern string, route sse.Route) { routes[pattern] = route }
 
 	routeLibrary := sse.Route{Kinds: []string{"library"}}
+	// library-image: an image write addresses one entity's photo. It carries the
+	// client's cache key (bean:<id>, grinder:<id>, ...) as the event id, and also
+	// reports the library change so the derived stock/wear views refresh.
+	routeLibraryImageBean := sse.Route{Kinds: []string{"library-image", "library"}, WithID: true, IDPrefix: "bean:"}
+	routeLibraryImageGrinder := sse.Route{Kinds: []string{"library-image", "library"}, WithID: true, IDPrefix: "grinder:"}
+	routeLibraryImageBasket := sse.Route{Kinds: []string{"library-image", "library"}, WithID: true, IDPrefix: "basket:"}
+	routeLibraryImagePuckScreen := sse.Route{Kinds: []string{"library-image", "library"}, WithID: true, IDPrefix: "puckscreen:"}
 	routeShot := sse.Route{Kinds: []string{"shot"}, WithID: true}
 	routeOrders := sse.Route{Kinds: []string{"orders"}}
 	routeMaintenance := sse.Route{Kinds: []string{"maintenance"}}
@@ -57,22 +65,22 @@ func buildDataRoutes() map[string]sse.Route {
 	add("POST /api/library/bean/{id}/delete", routeLibrary)
 	add("POST /api/library/bean/{id}/toggle-active", routeLibrary)
 	add("POST /api/library/bean/{id}/known-grind", routeLibrary)
-	add("POST /api/library/bean/{id}/image", routeLibrary)
+	add("POST /api/library/bean/{id}/image", routeLibraryImageBean)
 	add("POST /api/library/grinder", routeLibrary)
 	add("PUT /api/library/grinder/{id}", routeLibrary)
 	add("POST /api/library/grinder/{id}/reset-burrs", routeLibrary)
 	add("PUT /api/library/grinder/{id}/zero-point", routeLibrary)
 	add("DELETE /api/library/grinder/{id}/zero-point/{since}", routeLibrary)
 	add("POST /api/library/grinder/{id}/delete", sse.Route{Kinds: []string{"library", "maintenance"}})
-	add("POST /api/library/grinder/{id}/image", routeLibrary)
+	add("POST /api/library/grinder/{id}/image", routeLibraryImageGrinder)
 	add("POST /api/library/basket", routeLibrary)
 	add("PUT /api/library/basket/{id}", routeLibrary)
 	add("DELETE /api/library/basket/{id}", routeLibrary)
-	add("POST /api/library/basket/{id}/image", routeLibrary)
+	add("POST /api/library/basket/{id}/image", routeLibraryImageBasket)
 	add("POST /api/library/puckscreen", routeLibrary)
 	add("PUT /api/library/puckscreen/{id}", routeLibrary)
 	add("DELETE /api/library/puckscreen/{id}", routeLibrary)
-	add("POST /api/library/puckscreen/{id}/image", routeLibrary)
+	add("POST /api/library/puckscreen/{id}/image", routeLibraryImagePuckScreen)
 	add("POST /api/library/milk", routeLibrary)
 	add("PUT /api/library/milk/{id}", routeLibrary)
 	add("DELETE /api/library/milk/{id}", routeLibrary)

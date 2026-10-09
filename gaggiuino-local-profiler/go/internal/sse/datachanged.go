@@ -25,24 +25,29 @@ const KindAll = "all"
 const ClientIDHeader = "X-GLP-Client"
 
 // DataChanged is the payload of one EventDataChanged push. Kind is always set;
-// Rev is present for a single-kind bump; ID only for a route that addresses one
+// Rev is present for a single-kind bump; Revs (on a kind:"all" event) carries
+// every kind's revision after the bump; ID only for a route that addresses one
 // entity; Src only when the writing client sent a valid ClientIDHeader. Epoch
 // is always set: it names the revision space this event belongs to, so a client
 // that sees a different epoch knows the server reset its revisions and must
 // drop the ones it has seen (slice 3).
 type DataChanged struct {
-	Kind  string `json:"kind"`
-	Rev   int64  `json:"rev,omitempty"`
-	ID    string `json:"id,omitempty"`
-	Src   string `json:"src,omitempty"`
-	Epoch string `json:"epoch"`
+	Kind  string           `json:"kind"`
+	Rev   int64            `json:"rev,omitempty"`
+	Revs  map[string]int64 `json:"revs,omitempty"`
+	ID    string           `json:"id,omitempty"`
+	Src   string           `json:"src,omitempty"`
+	Epoch string           `json:"epoch"`
 }
 
 // Route classifies one write route: the kinds it changes, in table order, and
 // whether its {id} path value addresses a single entity of those kinds.
+// IDPrefix, when set, is prepended to the path id so the client sees the cache
+// key it knows the entity by (e.g. "bean:" -> "bean:7").
 type Route struct {
-	Kinds  []string
-	WithID bool
+	Kinds    []string
+	WithID   bool
+	IDPrefix string
 }
 
 // DataChanges publishes data-changed events and tracks a revision per kind. One
@@ -88,7 +93,11 @@ func (c *DataChanges) Publish(kind, id, src string) {
 		for k := range c.revs {
 			c.revs[k]++
 		}
-		c.hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{Kind: KindAll, Src: src, Epoch: c.Epoch}})
+		revs := make(map[string]int64, len(c.revs))
+		for k, rev := range c.revs {
+			revs[k] = rev
+		}
+		c.hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{Kind: KindAll, Src: src, Epoch: c.Epoch, Revs: revs}})
 		return
 	}
 
@@ -188,7 +197,7 @@ func (c *DataChanges) Middleware(routes map[string]Route) func(http.Handler) htt
 
 			id := ""
 			if route.WithID {
-				id = r.PathValue("id")
+				id = route.IDPrefix + r.PathValue("id")
 			}
 			src := ""
 			if v := r.Header.Get(ClientIDHeader); clientIDRe.MatchString(v) {
