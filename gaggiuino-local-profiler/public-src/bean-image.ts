@@ -5,7 +5,8 @@ import { shotImageUrl } from './api/shots.js';
 // can't be used directly — fetch as a blob and hand back an object URL
 // instead. Cached per entity for the page lifetime; photos can be
 // re-uploaded/removed, so invalidate*Image() clears a stale cache entry.
-// 'bean:<id>' | 'grinder:<id>' | 'shot:<id>' -> Promise<string|null>
+// 'bean:<id>' | 'grinder:<id>' | 'basket:<id>' | 'puckscreen:<id>' |
+// 'shot:<id>' | 'shotthumb:<id>' -> Promise<string|null>
 const _cache = new Map<string, Promise<string | null>>();
 
 function _load(key: string, url: string): Promise<string | null> {
@@ -22,6 +23,15 @@ function _load(key: string, url: string): Promise<string | null> {
   return p;
 }
 
+// Drops one cache entry and revokes the object URL it produced, so the browser
+// releases the blob. A load still in flight revokes once it settles.
+function _evict(key: string): void {
+  const p = _cache.get(key);
+  if (p === undefined) return;
+  _cache.delete(key);
+  void p.then(url => { if (url) URL.revokeObjectURL(url); }).catch(() => {});
+}
+
 export function loadBeanImageBlobUrl(beanId: unknown): Promise<string | null> {
   return _load(`bean:${beanId as string}`, `api/library/bean/${beanId as string}/image`);
 }
@@ -31,11 +41,11 @@ export function loadGrinderImageBlobUrl(grinderId: unknown): Promise<string | nu
 }
 
 export function invalidateGrinderImage(grinderId: unknown): void {
-  _cache.delete(`grinder:${grinderId as string}`);
+  _evict(`grinder:${grinderId as string}`);
 }
 
 export function invalidateBeanImage(beanId: unknown): void {
-  _cache.delete(`bean:${beanId as string}`);
+  _evict(`bean:${beanId as string}`);
 }
 
 // #635: basket/puck screen photos — same pattern as bean/grinder images.
@@ -44,7 +54,7 @@ export function loadBasketImageBlobUrl(basketId: unknown): Promise<string | null
 }
 
 export function invalidateBasketImage(basketId: unknown): void {
-  _cache.delete(`basket:${basketId as string}`);
+  _evict(`basket:${basketId as string}`);
 }
 
 export function loadPuckScreenImageBlobUrl(puckScreenId: unknown): Promise<string | null> {
@@ -52,7 +62,7 @@ export function loadPuckScreenImageBlobUrl(puckScreenId: unknown): Promise<strin
 }
 
 export function invalidatePuckScreenImage(puckScreenId: unknown): void {
-  _cache.delete(`puckscreen:${puckScreenId as string}`);
+  _evict(`puckscreen:${puckScreenId as string}`);
 }
 
 export function loadShotImageBlobUrl(shotId: number): Promise<string | null> {
@@ -67,19 +77,21 @@ export function loadShotThumbBlobUrl(shotId: number): Promise<string | null> {
 }
 
 export function invalidateShotImage(shotId: number): void {
-  _cache.delete(`shot:${shotId}`);
   // #1351/#1539: the thumbnail is cached under its own key, so a replaced shot
   // photo must drop both entries.
-  _cache.delete(`shotthumb:${shotId}`);
+  _evict(`shot:${shotId}`);
+  _evict(`shotthumb:${shotId}`);
 }
 
-// #1539: a remote library change (or a whole-database one) can touch any bean,
-// grinder, basket or puck-screen photo, with no per-entity id available, so drop
-// every library cache entry at once. Shot photos are addressed per id and are
-// invalidated separately, so they are deliberately left alone here.
-export function invalidateLibraryImages(): void {
-  const libraryKeys = ['bean:', 'grinder:', 'basket:', 'puckscreen:'];
-  for (const key of [..._cache.keys()]) {
-    if (libraryKeys.some((prefix) => key.startsWith(prefix))) _cache.delete(key);
-  }
+// #1539: the server addresses a changed photo by the cache key it was loaded
+// under (bean:<id>, grinder:<id>, basket:<id>, puckscreen:<id>), so a
+// library-image event drops exactly those entries.
+export function invalidateImageKeys(keys: readonly string[]): void {
+  for (const key of keys) _evict(key);
+}
+
+// A whole-database change can touch any cached photo (library and shot), so
+// drop every entry.
+export function invalidateAllImages(): void {
+  for (const key of [..._cache.keys()]) _evict(key);
 }

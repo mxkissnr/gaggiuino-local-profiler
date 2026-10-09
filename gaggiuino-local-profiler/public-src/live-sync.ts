@@ -19,11 +19,15 @@ import { CLIENT_ID } from './api/transport.js';
 // The kinds this client can register a handler for. The server tracks more
 // (shot, shots, settings, profiles); an unregistered kind's revision is still
 // recorded, but no handler runs for it.
-export type DataKind = 'library' | 'orders' | 'maintenance' | 'ui-prefs';
+export type DataKind = 'library' | 'orders' | 'maintenance' | 'ui-prefs' | 'library-image';
 
-const REGISTERED_KINDS: readonly DataKind[] = ['library', 'orders', 'maintenance', 'ui-prefs'];
+const REGISTERED_KINDS: readonly DataKind[] = ['library', 'orders', 'maintenance', 'ui-prefs', 'library-image'];
 const ALL_KIND = 'all';
 const DEBOUNCE_MS = 300;
+// A run that threw backs off before retrying; a run a canRun() guard deferred
+// polls on this interval until it is allowed through.
+const RETRY_MS = 5000;
+const CANRUN_RETRY_MS = 2000;
 
 export interface DataChangedPayload {
   kind: string;
@@ -31,6 +35,8 @@ export interface DataChangedPayload {
   epoch?: string;
   id?: string;
   src?: string;
+  /** Present on a kind:"all" event: every kind's revision after the bump. */
+  revs?: Record<string, number>;
 }
 
 export interface LiveSyncHandler {
@@ -77,13 +83,30 @@ function _focusBlocked(): boolean {
   return el.isContentEditable === true;
 }
 
-function _schedule(kind: DataKind): void {
+function _schedule(kind: DataKind, delay = DEBOUNCE_MS): void {
   const existing = _timers.get(kind);
   if (existing !== undefined) clearTimeout(existing);
   _timers.set(kind, setTimeout(() => {
     _timers.delete(kind);
     void _drain(kind);
-  }, DEBOUNCE_MS));
+  }, delay));
+}
+
+// Records a revision with the never-lower rule: a stale (lower) value from an
+// out-of-order event must not undo a higher watermark.
+function _recordSeen(kind: string, rev: number): void {
+  const seen = _lastSeen.get(kind);
+  if (seen !== undefined && rev <= seen) return;
+  _lastSeen.set(kind, rev);
+}
+
+// Puts back the ids a failed run had consumed, merged with anything dirtied
+// while it ran (null means "everything" and wins).
+function _mergeDirty(kind: DataKind, ids: string[] | null): void {
+  const current = _dirty.get(kind);
+  if (current === null || ids === null) { _dirty.set(kind, null); return; }
+  if (current === undefined) { _dirty.set(kind, new Set(ids)); return; }
+  for (const id of ids) current.add(id);
 }
 
 function _markDirty(kind: DataKind, id: string | null): void {
@@ -108,23 +131,34 @@ function _syncEpoch(epoch: string): void {
 
 // Single-flight per kind: concurrent drains collapse into one run, and if the
 // kind is dirtied again while that run is in flight exactly one rerun follows.
+// The dirty mark is cleared only for a run that succeeds; a run that throws has
+// its ids merged back and is retried once after a backoff, so a transient
+// failure can never drop the refresh.
 async function _drain(kind: DataKind): Promise<void> {
   if (!_dirty.has(kind)) return;
   if (_running.has(kind)) return;
   const handler = _handlers[kind];
   if (!handler) { _dirty.delete(kind); return; }
   if (_isHidden() || _focusBlocked()) return;
-  if (handler.canRun && !handler.canRun()) return;
+  if (handler.canRun && !handler.canRun()) { _schedule(kind, CANRUN_RETRY_MS); return; }
   const current = _dirty.get(kind);
   const ids = current === null || current === undefined ? null : [...current];
   _dirty.delete(kind);
   _running.add(kind);
+  let failed = false;
   try {
     await handler.run(ids);
+  } catch {
+    failed = true;
   } finally {
     _running.delete(kind);
+    // "Dirtied meanwhile -> rerun" only after a success; a failure backs off.
+    if (!failed && _dirty.has(kind)) void _drain(kind);
   }
-  if (_dirty.has(kind)) void _drain(kind);
+  if (failed) {
+    _mergeDirty(kind, ids);
+    _schedule(kind, RETRY_MS);
+  }
 }
 
 function _onVisibilityChange(): void {
@@ -176,19 +210,36 @@ export function handleDataChanged(data: unknown): void {
   if (typeof p.epoch === 'string' && p.epoch) _syncEpoch(p.epoch);
 
   const rev = typeof p.rev === 'number' ? p.rev : null;
-  if (p.src === CLIENT_ID) {
-    // Our own write: remember its revision so the echo cannot re-trigger us.
-    if (rev !== null) _lastSeen.set(kind, rev);
+  const own = p.src === CLIENT_ID;
+
+  if (kind === ALL_KIND) {
+    // The all event carries every kind's post-bump revision (step 4); record
+    // them, and refetch every registered kind unless this is our own echo.
+    if (p.revs && typeof p.revs === 'object') {
+      for (const [k, r] of Object.entries(p.revs)) {
+        if (typeof r === 'number') _recordSeen(k, r);
+      }
+    }
+    if (!own) for (const k of _activeKinds()) _markDirty(k, null);
     return;
   }
+
+  if (own) {
+    // Our own write: remember its revision so the echo cannot re-trigger us. A
+    // gap (rev > seen + 1) means a remote change landed before the echo, so
+    // catch up rather than hiding it behind the higher watermark.
+    if (rev !== null) {
+      const seen = _lastSeen.get(kind);
+      if (seen !== undefined && rev > seen + 1 && _isRegistered(kind)) _markDirty(kind, null);
+      _recordSeen(kind, rev);
+    }
+    return;
+  }
+
   if (rev !== null) {
     const seen = _lastSeen.get(kind);
     if (seen !== undefined && rev <= seen) return;
-    _lastSeen.set(kind, rev);
-  }
-  if (kind === ALL_KIND) {
-    for (const k of _activeKinds()) _markDirty(k, null);
-    return;
+    _recordSeen(kind, rev);
   }
   if (!_isRegistered(kind)) return;
   _markDirty(kind, typeof p.id === 'string' ? p.id : null);
@@ -207,7 +258,7 @@ export function noteServerRevs(epoch?: string | null, revs?: Record<string, numb
       if (typeof rev !== 'number') continue;
       const seen = _lastSeen.get(kind);
       if (seen !== undefined && rev <= seen) continue;
-      _lastSeen.set(kind, rev);
+      _recordSeen(kind, rev);
       if (!first && _isRegistered(kind)) _markDirty(kind, null);
     }
   }
