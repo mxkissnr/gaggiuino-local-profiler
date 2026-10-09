@@ -18,6 +18,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -101,7 +102,7 @@ func TestDeveloperToolsHiddenWithoutOptIn(t *testing.T) {
 	session := connect(t, ts.URL+Path)
 	names := toolNames(t, session)
 	listed := "," + strings.Join(names, ",") + ","
-	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset", "get_diagnostics", "get_preheat_history"} {
+	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset", "get_diagnostics", "get_preheat_history", "get_perf_stats"} {
 		if strings.Contains(listed, ","+name+",") {
 			t.Fatalf("%s is listed without the developer-tools opt-in: %v", name, names)
 		}
@@ -146,7 +147,7 @@ func TestDeveloperToolsKeepWriteTools(t *testing.T) {
 	// than trail; the invariant is that adding the developer tool leaves every
 	// read and write tool registered.
 	names := toolNames(t, session)
-	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_diagnostics,get_library,get_machine_status,get_maintenance_status,get_preheat_history,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
+	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_diagnostics,get_library,get_machine_status,get_maintenance_status,get_perf_stats,get_preheat_history,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
 	if got := strings.Join(names, ","); got != want {
 		t.Fatalf("tool list = %v, want %v", names, want)
 	}
@@ -958,5 +959,125 @@ func TestGetPreheatHistoryUnavailable(t *testing.T) {
 	}
 	if msg := errorText(t, res); !strings.Contains(msg, "preheat history is not available") {
 		t.Fatalf("nil-source error = %q, want it to say the history is not available", msg)
+	}
+}
+
+// newPerfServer wires the request-timing recorder through the developer MCP
+// server exactly as cmd/server does: the mux is wrapped with the recorder's
+// middleware, so a test's own HTTP requests land in the same snapshot the
+// get_perf_stats tool reads.
+func newPerfServer(t *testing.T, rec *perfstats.Recorder) *httptest.Server {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "glp.db")
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("db.Open: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	shotsRepo := shots.NewRepository(sqlDB)
+	libRepo := library.NewRepository(sqlDB)
+	maintRepo := maintenance.NewRepository(sqlDB, libRepo)
+	registry := machines.NewRegistry(sqlDB)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/shots/{id}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.Handle(Path, NewHandler(Deps{
+		Shots:       shots.NewService(shotsRepo),
+		ShotsRepo:   shotsRepo,
+		Library:     libRepo,
+		Maintenance: maintRepo,
+		Registry:    registry,
+		Poller:      fakePoller{},
+		Recorder:    rec,
+		DBPath:      dbPath,
+		Version:     "test",
+		Settings:    settingsSource(true, false, true),
+	}))
+	ts := httptest.NewServer(rec.Middleware(mux))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestGetPerfStatsListedWithOptIn(t *testing.T) {
+	ts := newPerfServer(t, perfstats.New())
+	session := connect(t, ts.URL+Path)
+	tool := listToolsByName(t, session)["get_perf_stats"]
+	if tool == nil {
+		t.Fatalf("get_perf_stats is missing from tools/list with the opt-in")
+	}
+	a := tool.Annotations
+	if a == nil || !a.ReadOnlyHint || !a.IdempotentHint {
+		t.Fatalf("get_perf_stats should be read-only and idempotent")
+	}
+	if a.OpenWorldHint == nil || *a.OpenWorldHint {
+		t.Fatalf("get_perf_stats should be closed-world")
+	}
+	if tool.OutputSchema == nil {
+		t.Fatalf("get_perf_stats has no output schema")
+	}
+	in := asMap(t, tool.InputSchema)
+	if props, _ := in["properties"].(map[string]any); len(props) != 0 {
+		t.Fatalf("get_perf_stats should take no input, got %v", props)
+	}
+}
+
+func TestGetPerfStatsReturnsRecordedRoutes(t *testing.T) {
+	rec := perfstats.New()
+	ts := newPerfServer(t, rec)
+	for i := 0; i < 4; i++ {
+		resp, err := http.Get(ts.URL + "/api/shots/42")
+		if err != nil {
+			t.Fatalf("GET /api/shots/42: %v", err)
+		}
+		resp.Body.Close()
+	}
+
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_perf_stats", map[string]any{}))
+
+	var shotsRoute map[string]any
+	for _, raw := range objects(out, "routes") {
+		r, _ := raw.(map[string]any)
+		if r["route"] == "GET /api/shots/{id}" {
+			shotsRoute = r
+		}
+	}
+	if shotsRoute == nil {
+		t.Fatalf("recorded route missing from %v", objects(out, "routes"))
+	}
+	if got := numberField(t, shotsRoute, "count"); got != 4 {
+		t.Fatalf("route count = %v, want 4", got)
+	}
+	if got := numberField(t, shotsRoute, "recent_count"); got != 4 {
+		t.Fatalf("route recent_count = %v, want 4", got)
+	}
+
+	proc := object(out, "process")
+	if _, ok := proc["uptime_s"].(float64); !ok {
+		t.Fatalf("process.uptime_s missing: %v", proc)
+	}
+	if got := numberField(t, proc, "goroutines"); got < 1 {
+		t.Fatalf("process.goroutines = %v, want at least 1", got)
+	}
+
+	database := object(out, "database")
+	if _, ok := database["size_bytes"].(float64); !ok {
+		t.Fatalf("database.size_bytes missing: %v", database)
+	}
+	if got := numberField(t, database, "shot_count"); got != 0 {
+		t.Fatalf("database.shot_count = %v, want 0 for an empty database", got)
+	}
+}
+
+func TestGetPerfStatsUnavailable(t *testing.T) {
+	ts, _ := newDeveloperServer(t, true, false) // Recorder left nil.
+	session := connect(t, ts.URL+Path)
+	res := call(t, session, "get_perf_stats", map[string]any{})
+	if !res.IsError {
+		t.Fatalf("expected isError when the recorder is nil")
+	}
+	if msg := errorText(t, res); !strings.Contains(msg, "performance stats are not available") {
+		t.Fatalf("nil-recorder error = %q, want it to say stats are unavailable", msg)
 	}
 }
