@@ -11,6 +11,8 @@ interface Window {
   calcShotScore?: (shot: unknown) => number | null;
   flushAutoSave?: () => void;
   switchMode?: (mode: string) => void;
+  closeBeanSheet?: () => void;
+  closeFlavorWheel?: () => void;
   connectLiveStream?: () => void;
   disconnectLiveStream?: () => void;
   updateFlapCounter?: (count: number) => void;

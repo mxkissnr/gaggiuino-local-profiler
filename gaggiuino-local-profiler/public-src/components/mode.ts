@@ -13,6 +13,13 @@ export function goToShot(id: number): void {
 }
 
 export function switchMode(mode: string): void {
+  // #1543: a top-level tab switch must not leave an open bean detail sheet or
+  // large flavour wheel from the old view hanging over the new one. Both
+  // existing close helpers no-op when nothing is open (reached via window, the
+  // same way this module already calls the library view's renderers, so the
+  // mode -> library import stays off the module graph and its cycles).
+  window.closeBeanSheet?.();
+  window.closeFlavorWheel?.();
   // #430: flush any pending debounced annotation save before leaving Shots —
   // the annotation panel (and its auto-save) only exists there, so this is
   // the mode-switch equivalent of the blur/visibilitychange flushes wired in
