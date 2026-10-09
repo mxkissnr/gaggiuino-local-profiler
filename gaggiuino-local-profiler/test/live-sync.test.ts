@@ -17,6 +17,13 @@ g.localStorage = {
 };
 g.navigator ??= { language: 'en-US' };
 
+// A constructible stand-in for the browser's URL: bean-image needs
+// URL.createObjectURL (absent in Node), while vitest's own internals still need
+// `new URL(...)` to keep working during a test that stubs it.
+class URLStub extends URL {
+  static createObjectURL = vi.fn(() => 'blob:x');
+}
+
 // The bean/grinder API is mocked so the "library handler preserves an open
 // sheet form" test can drive the real library render path without the network;
 // the other exports stay real (sticker-cutout/library-sheet test pattern).
@@ -298,7 +305,7 @@ describe('bean-image invalidation (#1539)', () => {
       () => Promise.resolve(imageResponse()),
     );
     vi.stubGlobal('fetch', fetchMock);
-    g.URL = { createObjectURL: vi.fn(() => 'blob:x') };
+    vi.stubGlobal('URL', URLStub);
 
     await beanImage.loadBeanImageBlobUrl(1);
     await beanImage.loadShotImageBlobUrl(2);
@@ -327,7 +334,7 @@ describe('bean-image invalidation (#1539)', () => {
       () => Promise.resolve(imageResponse()),
     );
     vi.stubGlobal('fetch', fetchMock);
-    g.URL = { createObjectURL: vi.fn(() => 'blob:x') };
+    vi.stubGlobal('URL', URLStub);
 
     await beanImage.loadShotImageBlobUrl(2);
     await beanImage.loadShotThumbBlobUrl(2);
