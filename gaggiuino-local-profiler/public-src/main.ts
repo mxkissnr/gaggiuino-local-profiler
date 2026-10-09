@@ -40,6 +40,8 @@ import { initToken, apiFetch } from './api/transport.js';
 import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
+import { initLiveSync, handleDataChanged } from './live-sync.js';
+import { invalidateLibraryImages } from './bean-image.js';
 import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
@@ -177,6 +179,20 @@ declare global {
 // Gaggiuino one for GaggiMate machines — checked at 3 call sites below.
 function _isActiveMachineGaggiMate() {
   return (S.machines || []).find(m => m.id === S.activeMachineId)?.type === 'gaggimate';
+}
+
+// #1375/#1539: apply the shared UI choices once they have been loaded from the
+// server (boot) or a live ui-prefs change has arrived. `includeMachine` is
+// false on the live path: each device keeps its own machine selection until
+// reload, so a remote machine.active change must not yank this device's view
+// (decided by the maintainer).
+function applyServerUiPrefs(includeMachine = true): void {
+  resetShelfPrefs();
+  if (!includeMachine) return;
+  const activeId = getUiPref<number | 'all'>('machine.active');
+  if (activeId === undefined) return;
+  const resolved = resolveActiveMachineId(activeId);
+  if (resolved !== S.activeMachineId) setActiveMachine(resolved);
 }
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -1179,6 +1195,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // reuse live.js's own handlers).
     onEvent(EVENTS.LIVE_SNAPSHOT, handleTopbarLiveSnapshotEvent);
     onEvent(EVENTS.PREHEAT_UPDATE, handleTopbarPreheatUpdateEvent);
+    // #1539 slice 3: react to the server's data-changed pushes. Registered
+    // before the stream opens so no early event is missed.
+    onEvent(EVENTS.DATA_CHANGED, handleDataChanged);
+    initLiveSync({
+      library: {
+        run: async () => { invalidateLibraryImages(); await loadLibrary(); },
+      },
+      orders: {
+        run: async () => {
+          void loadDrinkMenu();
+          if (S.currentMode === 'orders') await loadOrdersView();
+        },
+      },
+      maintenance: {
+        run: async () => { if (S.currentMode === 'maintenance') await loadMaintenanceView(); },
+        // The maintenance cards hold typing forms (the "add custom task"
+        // details and the threshold inputs); a deferred refetch must not tear
+        // the open form down or wipe text typed into it.
+        canRun: () => document.querySelector('details.maint-custom-add[open]') === null,
+      },
+      'ui-prefs': {
+        run: async () => { await loadUiPrefsFromServer(); applyServerUiPrefs(false); },
+      },
+    });
     connectEvents(() => {});
 
     // #390 — loadMachines() calls the token-gated /api/machines; it used to
@@ -1199,11 +1239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // (#1323) whichever of the two requests finishes first.
     void loadUiPrefsFromServer().then(changed => {
       if (!changed) return;
-      resetShelfPrefs();
-      const activeId = getUiPref<number | 'all'>('machine.active');
-      if (activeId === undefined) return;
-      const resolved = resolveActiveMachineId(activeId);
-      if (resolved !== S.activeMachineId) setActiveMachine(resolved);
+      applyServerUiPrefs();
     });
     void loadMqttSettings();
     void loadNotifySettingsCard();
