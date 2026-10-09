@@ -302,6 +302,51 @@ func TestGetStatus_PublicFieldsAndNoSensitiveLeak(t *testing.T) {
 	}
 }
 
+// TestGetStatus_DataRevisionsEmptyByDefault pins the #1539 slice-2 contract's
+// default half: GET /api/status always carries dataEpoch and dataRevs — an
+// empty string and an empty object, never null or absent — before cmd/server
+// wires SetDataRevs.
+func TestGetStatus_DataRevisionsEmptyByDefault(t *testing.T) {
+	_, mux, _ := newFullTestHandlers(t)
+	rec := doGet(mux, "/api/status")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeMap(t, rec.Body.Bytes())
+	if body["dataEpoch"] != "" {
+		t.Errorf("dataEpoch = %v, want empty string", body["dataEpoch"])
+	}
+	revs, ok := body["dataRevs"].(map[string]any)
+	if !ok {
+		t.Fatalf("dataRevs = %v, want an object", body["dataRevs"])
+	}
+	if len(revs) != 0 {
+		t.Errorf("dataRevs = %v, want an empty object", revs)
+	}
+}
+
+// TestGetStatus_DataRevisionsReflectHook proves the other half: once
+// SetDataRevs is wired, the response reports the hook's epoch and per-kind
+// revisions.
+func TestGetStatus_DataRevisionsReflectHook(t *testing.T) {
+	h, mux, _ := newFullTestHandlers(t)
+	h.SetDataRevs(func() (string, map[string]int64) {
+		return "epoch-1", map[string]int64{"library": 3, "shot": 1}
+	})
+	rec := doGet(mux, "/api/status")
+	body := decodeMap(t, rec.Body.Bytes())
+	if body["dataEpoch"] != "epoch-1" {
+		t.Errorf("dataEpoch = %v, want epoch-1", body["dataEpoch"])
+	}
+	revs, ok := body["dataRevs"].(map[string]any)
+	if !ok {
+		t.Fatalf("dataRevs = %v, want an object", body["dataRevs"])
+	}
+	if revs["library"] != float64(3) || revs["shot"] != float64(1) {
+		t.Errorf("dataRevs = %v, want library:3 shot:1", revs)
+	}
+}
+
 // TestGetStatus_AuthenticatedIncludesSensitiveFields proves H1's other
 // half: a caller presenting a valid X-GLP-Token (independent of Ingress —
 // see getStatus's own doc comment) gets machineUrl/machineHostname/

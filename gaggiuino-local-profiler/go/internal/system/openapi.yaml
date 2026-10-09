@@ -551,6 +551,11 @@ components:
         machineOnSince:      { type: integer, nullable: true, description: Unix ms the default machine last switched on }
         legacyMachineOptionsPending: { type: boolean, description: "True while the default machine still has an unconfirmed legacy machine_host/switch_entity add-on option (#662)" }
         installId:           { type: string, description: "Stable per-database identity (#751) — changes only when glp.db is freshly (re)created" }
+        dataEpoch:           { type: string, description: "Server data-revision epoch (#1539); changes when the process restarts and resets dataRevs, telling a client to drop the revisions it has seen" }
+        dataRevs:
+          type: object
+          description: "Per-kind write revisions (#1539); a client refetches a kind whose revision advanced since it last polled"
+          additionalProperties: { type: integer }
         machines:
           type: array
           description: All configured machines (#317). The fields above always describe the default machine, unchanged, for backward compatibility.
@@ -3261,7 +3266,9 @@ paths:
       summary: Server-Sent Events stream multiplexing every push event type over one connection (#735/#736)
       description: >
         text/event-stream. Event types: `sync-progress`, `sync-complete`,
-        `live-snapshot` (LiveData), `preheat-update` (PreheatStatus). A newly
+        `live-snapshot` (LiveData), `preheat-update` (PreheatStatus),
+        `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write
+        bumped a data kind's revision). A newly
         connected client is primed with the current in-flight sync-progress
         (if any), plus one live-snapshot and one preheat-update, so it isn't
         waiting for the next natural trigger. A `:ping` comment line is sent

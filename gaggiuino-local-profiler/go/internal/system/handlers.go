@@ -34,10 +34,24 @@ type Handlers struct {
 	vc     *versionChecker
 	token  string
 	rl     *ratelimit.KeyedLimiter
+
+	// dataRevs, when set, returns the SSE data-change tracker's epoch and a
+	// snapshot of its per-kind revisions for GET /api/status (#1539 slice 2).
+	// A func field rather than a direct *sse.DataChanges so internal/system
+	// does not import internal/sse; nil leaves the status fields empty.
+	dataRevs func() (string, map[string]int64)
 }
 
 func NewHandlers(poller *Poller, demo *DemoService, token string) *Handlers {
 	return &Handlers{poller: poller, demo: demo, vc: newVersionChecker(), token: token, rl: ratelimit.NewKeyed()}
+}
+
+// SetDataRevs wires the SSE data-change tracker's revision snapshot into
+// GET /api/status, so a reconnecting client can compare the server's per-kind
+// revisions with the ones it last saw and refetch only what it missed. Nil (the
+// default) leaves dataEpoch empty and dataRevs an empty object.
+func (h *Handlers) SetDataRevs(fn func() (string, map[string]int64)) {
+	h.dataRevs = fn
 }
 
 // RegisterRoutes registers every route this package owns onto mux.
@@ -351,6 +365,20 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	// both use the same authentication decision.
 	authenticated := auth.IsTokenValid(h.token, r.Header.Get("X-GLP-Token"))
 
+	// #1539 slice 2: the SSE tracker's epoch and per-kind revisions, so a client
+	// that reconnects (or falls back to polling) can compare them with the ones
+	// it last saw and refetch only the kinds that changed. Both stay empty until
+	// cmd/server wires SetDataRevs, and a nil hook reports an empty object rather
+	// than null.
+	dataEpoch := ""
+	dataRevs := map[string]int64{}
+	if h.dataRevs != nil {
+		dataEpoch, dataRevs = h.dataRevs()
+		if dataRevs == nil {
+			dataRevs = map[string]int64{}
+		}
+	}
+
 	resp := map[string]any{
 		"shotCount":                   shotCount,
 		"lastSync":                    nullableStr(syncInfo.LastSync),
@@ -367,6 +395,8 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 		"machineOnSince":              snap.SwitchOnAt,
 		"legacyMachineOptionsPending": hasUnconfirmedLegacyMachineOptions(),
 		"installId":                   installID,
+		"dataEpoch":                   dataEpoch,
+		"dataRevs":                    dataRevs,
 		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
 	}
 	if devBuild := os.Getenv("GLP_DEV_BUILD"); devBuild != "" {
