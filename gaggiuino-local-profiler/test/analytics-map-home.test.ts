@@ -122,7 +122,8 @@ describe('originsNeedingMarkers (#1543)', () => {
   it('frames the added origin inside the initial view', () => {
     // The home point (Berlin) plus a bean in Ethiopia; India is the origin the
     // frame would otherwise be missing on screen.
-    const added = originsNeedingMarkers(['ET'], ['ET', 'IN']).map(code => ({ IN: [78.96, 20.59] } as Record<string, [number, number]>)[code]);
+    const centroids: Record<string, [number, number]> = { IN: [78.96, 20.59] };
+    const added = originsNeedingMarkers(['ET'], ['ET', 'IN']).map(code => centroids[code]);
     const box = computeMapBoundingCoords([[40.49, 9.15], ...added, [13.405, 52.52]]);
     expect(box).toBeDefined();
     const [[west, north], [east, south]] = box!;
