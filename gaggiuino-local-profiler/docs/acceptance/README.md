@@ -73,6 +73,10 @@ changes:
 8. The MCP server answers a shot list request.
 9. GaggiMate: connect, live status during a simulated brew, and a shot
    imported with its curve.
+10. Performance vs. previous release. Method: run the perf-compare workflow with
+    the previous release tag as base and the release candidate as head. Result:
+    pass when no row is marked `review`; otherwise each marked row is listed with
+    a reason. Evidence: link to the workflow run.
 
 ## GaggiMate simulator
 

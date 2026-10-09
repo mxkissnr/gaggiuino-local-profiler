@@ -15,7 +15,10 @@
     "release:check": "node scripts/release-check.mts",
     "changelog:collect": "node scripts/changelog-collect.mts",
     "demo:fixtures": "node scripts/demo-fixtures.mts",
-    "demo:smoke": "node scripts/demo-smoke.mts"
+    "demo:smoke": "node scripts/demo-smoke.mts",
+    "perf:dataset": "node scripts/perf-dataset.mts",
+    "perf:measure": "node scripts/perf-measure.mts",
+    "perf:compare": "node scripts/perf-compare.mts"
   },
   "dependencies": {
     "barcode-detector": "3.2.2",
