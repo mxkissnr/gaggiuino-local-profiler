@@ -22,6 +22,7 @@ g.navigator ??= { language: 'en-US' };
 // `new URL(...)` to keep working during a test that stubs it.
 class URLStub extends URL {
   static createObjectURL = vi.fn(() => 'blob:x');
+  static revokeObjectURL = vi.fn();
 }
 
 // The bean/grinder API is mocked so the "library handler preserves an open
@@ -266,6 +267,123 @@ describe('live-sync revisions and epochs', () => {
   });
 });
 
+describe('live-sync review fixes (#1539)', () => {
+  it('keeps a failed run dirty and retries it after the backoff', async () => {
+    const { live } = await loadLive();
+    const run = vi.fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValue(undefined);
+    live.initLiveSync({ library: { run } });
+
+    live.handleDataChanged({ kind: 'library', rev: 1, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    // The retry is a 5 s backoff, not an immediate rerun.
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks the kind dirty when an own echo skipped a revision', async () => {
+    const { live, CLIENT_ID } = await loadLive();
+    const run = vi.fn();
+    live.initLiveSync({ library: { run } });
+
+    live.handleDataChanged({ kind: 'library', rev: 1, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    run.mockClear();
+
+    // Our own write is rev 3 but rev 2 was never seen: a remote change slipped
+    // in, so the echo must not hide it.
+    live.handleDataChanged({ kind: 'library', rev: 3, epoch: 'e1', src: CLIENT_ID });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('never lowers lastSeen on a stale own echo', async () => {
+    const { live, CLIENT_ID } = await loadLive();
+    const run = vi.fn();
+    live.initLiveSync({ library: { run } });
+
+    live.handleDataChanged({ kind: 'library', rev: 5, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    run.mockClear();
+
+    // A stale own echo (4) must not lower the 5 watermark, so a later remote 5
+    // is still recognised as already seen.
+    live.handleDataChanged({ kind: 'library', rev: 4, epoch: 'e1', src: CLIENT_ID });
+    live.handleDataChanged({ kind: 'library', rev: 5, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('records the revs of an all event so a later status poll is quiet', async () => {
+    const { live } = await loadLive();
+    const library = vi.fn();
+    const orders = vi.fn();
+    live.initLiveSync({ library: { run: library }, orders: { run: orders } });
+
+    live.noteServerRevs('e1', { library: 1, orders: 1 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(library).not.toHaveBeenCalled();
+
+    live.handleDataChanged({ kind: 'all', epoch: 'e1', revs: { library: 7, orders: 4 } });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(library).toHaveBeenCalledTimes(1);
+    expect(orders).toHaveBeenCalledTimes(1);
+
+    live.noteServerRevs('e1', { library: 7, orders: 4 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(library).toHaveBeenCalledTimes(1);
+    expect(orders).toHaveBeenCalledTimes(1);
+  });
+
+  it('records but does not refetch on an own all echo', async () => {
+    const { live, CLIENT_ID } = await loadLive();
+    const library = vi.fn();
+    live.initLiveSync({ library: { run: library } });
+
+    live.noteServerRevs('e1', { library: 2 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(library).not.toHaveBeenCalled();
+
+    live.handleDataChanged({ kind: 'all', epoch: 'e1', revs: { library: 9 }, src: CLIENT_ID });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(library).not.toHaveBeenCalled();
+
+    // The echo's revs were recorded, so the status poll at the same revs is quiet.
+    live.noteServerRevs('e1', { library: 9 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(library).not.toHaveBeenCalled();
+  });
+
+  it('retries a canRun-deferred kind by timer and runs it once allowed', async () => {
+    const { live } = await loadLive();
+    const run = vi.fn();
+    let allowed = false;
+    live.initLiveSync({ library: { run, canRun: () => allowed } });
+
+    live.handleDataChanged({ kind: 'library', rev: 1, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).not.toHaveBeenCalled();
+
+    // Still blocked: the 2 s poll fires but stays deferred.
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(run).not.toHaveBeenCalled();
+
+    allowed = true;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    // Once it ran it is not rescheduled.
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('client identity header (#1539)', () => {
   it('sends X-GLP-Client on a write but not on a read', async () => {
     vi.resetModules();
@@ -294,7 +412,7 @@ describe('bean-image invalidation (#1539)', () => {
     return { ok: true, blob: () => Promise.resolve(new Blob(['x'])) } as unknown as Response;
   }
 
-  it('invalidateLibraryImages drops only the library keys', async () => {
+  it('invalidateImageKeys drops exactly the given keys and revokes their URLs', async () => {
     vi.resetModules();
     const { S } = (await import('../public-src/state/index.js')) as unknown as {
       S: { glpToken: string };
@@ -306,21 +424,51 @@ describe('bean-image invalidation (#1539)', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('URL', URLStub);
+    URLStub.revokeObjectURL.mockClear();
 
     await beanImage.loadBeanImageBlobUrl(1);
-    await beanImage.loadShotImageBlobUrl(2);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-
-    // Both are cached, so repeated loads add no requests.
-    await beanImage.loadBeanImageBlobUrl(1);
-    await beanImage.loadShotImageBlobUrl(2);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-
-    beanImage.invalidateLibraryImages();
-    await beanImage.loadBeanImageBlobUrl(1); // library key dropped -> refetch
-    await beanImage.loadShotImageBlobUrl(2); // shot key kept -> no request
+    await beanImage.loadBeanImageBlobUrl(2);
+    await beanImage.loadShotImageBlobUrl(3);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[2]?.[0]).toBe('api/library/bean/1/image');
+
+    beanImage.invalidateImageKeys(['bean:1', 'shot:3']);
+    await Promise.resolve();
+
+    // Only the named entries were dropped, each revoking its object URL.
+    expect(URLStub.revokeObjectURL).toHaveBeenCalledTimes(2);
+    await beanImage.loadBeanImageBlobUrl(1); // dropped -> refetch
+    await beanImage.loadBeanImageBlobUrl(2); // kept -> no request
+    await beanImage.loadShotImageBlobUrl(3); // dropped -> refetch
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock.mock.calls[3]?.[0]).toBe('api/library/bean/1/image');
+    expect(fetchMock.mock.calls[4]?.[0]).toBe('api/shots/3/image');
+  });
+
+  it('invalidateAllImages drops library and shot entries and revokes their URLs', async () => {
+    vi.resetModules();
+    const { S } = (await import('../public-src/state/index.js')) as unknown as {
+      S: { glpToken: string };
+    };
+    S.glpToken = '';
+    const beanImage = await import('../public-src/bean-image.js');
+    const fetchMock = vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(
+      () => Promise.resolve(imageResponse()),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('URL', URLStub);
+    URLStub.revokeObjectURL.mockClear();
+
+    await beanImage.loadBeanImageBlobUrl(1);
+    await beanImage.loadShotImageBlobUrl(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    beanImage.invalidateAllImages();
+    await Promise.resolve();
+    expect(URLStub.revokeObjectURL).toHaveBeenCalledTimes(2);
+
+    await beanImage.loadBeanImageBlobUrl(1); // dropped -> refetch
+    await beanImage.loadShotImageBlobUrl(2); // dropped -> refetch
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('invalidateShotImage drops the shot and its thumbnail', async () => {
@@ -344,7 +492,10 @@ describe('bean-image invalidation (#1539)', () => {
     await beanImage.loadShotThumbBlobUrl(2);
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
+    URLStub.revokeObjectURL.mockClear();
     beanImage.invalidateShotImage(2);
+    await Promise.resolve();
+    expect(URLStub.revokeObjectURL).toHaveBeenCalledTimes(2);
     await beanImage.loadShotImageBlobUrl(2);
     await beanImage.loadShotThumbBlobUrl(2);
     expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -353,13 +504,45 @@ describe('bean-image invalidation (#1539)', () => {
 });
 
 describe('boot wiring (#1539)', () => {
-  it('applies live ui-prefs without the machine selection', () => {
+  it('applies live ui-prefs only on a change and keeps the shelf query', () => {
     const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
-    // The live ui-prefs handler reloads the server prefs and applies them with
-    // the machine selection excluded, so each device keeps its own choice.
-    expect(src).toMatch(/'ui-prefs':\s*\{[\s\S]*?applyServerUiPrefs\(false\)/);
-    expect(src).toMatch(/function applyServerUiPrefs\(includeMachine = true\)/);
+    // The live ui-prefs handler reloads the server prefs, applies them only when
+    // the merge reported a change, excludes the machine selection (each device
+    // keeps its own) and keeps the session's shelf search.
+    expect(src).toMatch(/'ui-prefs':\s*\{[\s\S]*?const changed = await loadUiPrefsFromServer\(\);\s*\n\s*if \(changed\) applyServerUiPrefs\(false, true\)/);
+    expect(src).toMatch(/function applyServerUiPrefs\(includeMachine = true, keepShelfQuery = false\)/);
+    expect(src).toMatch(/resetShelfPrefs\(keepShelfQuery\)/);
     expect(src).toMatch(/if \(!includeMachine\) return;/);
+
+    const libSrc = readFileSync(new URL('../public-src/views/library.ts', import.meta.url), 'utf8');
+    expect(libSrc).toMatch(/export function resetShelfPrefs\(keepQuery = false\): void/);
+    expect(libSrc).toMatch(/keepQuery \? \(_shelfPrefsLazy\?\.query \?\? ''\) : ''/);
+  });
+
+  it('does not touch the photo cache on a library change but drops keys on library-image', () => {
+    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    // A plain library change is usually a shot-derived stock change, which does
+    // not touch the photos, so the handler only reloads the library...
+    expect(src).toMatch(/library:\s*\{[\s\S]*?run: async \(\) => \{ await loadLibrary\(\); \}/);
+    // ...while library-image drops exactly the cache keys the server sent.
+    expect(src).toMatch(/'library-image':\s*\{[\s\S]*?invalidateImageKeys\(ids \?\? \[\]\)/);
+    // A whole-database change drops every photo before the refetches.
+    expect(src).toMatch(/kind === 'all'\) invalidateAllImages\(\)/);
+    // The handler no longer wipes the whole library cache.
+    expect(src).not.toContain('invalidateLibraryImages');
+  });
+
+  it('gates the maintenance refetch on any open card or editor', () => {
+    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/canRun: \(\) => _maintenanceCanRefetch\(\)/);
+    expect(src).toMatch(/querySelector\('\.maint-card\.expanded'\)/);
+    expect(src).toMatch(/querySelector\('details\[open\]'\)/);
+    expect(src).toMatch(/getElementById\('maintLogForm'\)/);
+  });
+
+  it('awaits both order fetches inside one run', () => {
+    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/await Promise\.all\(\[loadDrinkMenu\(\), S\.currentMode === 'orders' \? loadOrdersView\(\) : undefined\]\)/);
   });
 
   it('registers the data-changed handler before opening the SSE stream', () => {
@@ -429,7 +612,6 @@ describe('library handler keeps an open bean-sheet form (#1539)', () => {
       S: { shots: unknown[]; currentLang: string; coffeeLibrary: unknown };
     };
     const live = await import('../public-src/live-sync.js');
-    const { invalidateLibraryImages } = await import('../public-src/bean-image.js');
     const library = (await import('../public-src/views/library.js')) as unknown as {
       openBeanSheet: (id: number) => void;
       loadLibrary: () => Promise<void>;
@@ -458,7 +640,7 @@ describe('library handler keeps an open bean-sheet form (#1539)', () => {
     made.elements.newBagStock1 = el({ id: 'newBagStock1', value: '' });
 
     live.initLiveSync({
-      library: { run: async () => { invalidateLibraryImages(); await library.loadLibrary(); } },
+      library: { run: async () => { await library.loadLibrary(); } },
     });
     live.handleDataChanged({ kind: 'library', rev: 1, epoch: 'e1' });
     await vi.advanceTimersByTimeAsync(400);
