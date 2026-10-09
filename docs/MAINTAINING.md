@@ -54,8 +54,10 @@ branch; the next build picks up the merge.
 1. Cut `release/vX.Y.0` from `dev`.
 2. Run the acceptance pass on it and record it under
    [`docs/acceptance/`](../gaggiuino-local-profiler/docs/acceptance/).
-3. Merge the release PR to `main` with `--merge`, not squash.
-4. Merge `main` back into `dev` afterwards.
+3. Minor releases only: run `npm run coverage:ratchet` on the release branch and commit the raised
+   thresholds in `vitest.config.ts`. Go coverage is shown in the CI job summary.
+4. Merge the release PR to `main` with `--merge`, not squash.
+5. Merge `main` back into `dev` afterwards.
 
 `npm run release:check` (from `gaggiuino-local-profiler/`) verifies the version, changelog and
 acceptance files.
