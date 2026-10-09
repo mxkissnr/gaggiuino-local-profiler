@@ -81,9 +81,10 @@ func (c *DataChanges) Publish(kind, id, src string) {
 	}
 
 	c.revs[kind]++
-	c.hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{
-		Kind: kind, Rev: c.revs[kind], ID: id, Src: src,
-	}})
+	c.hub.Publish(Event{
+		Type: EventDataChanged,
+		Data: DataChanged{Kind: kind, Rev: c.revs[kind], ID: id, Src: src},
+	})
 }
 
 // Revs returns a copy of the current per-kind revisions.
