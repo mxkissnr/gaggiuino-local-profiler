@@ -21,7 +21,7 @@ interface MqttDiscovery {
   host?: string;
   port?: number;
   username?: string;
-  password?: string;
+  hasPassword?: boolean;
 }
 
 let _selectedTransport: MqttSettings['transport'] = 'websocket';
@@ -50,11 +50,14 @@ export async function loadMqttSettings(): Promise<void> {
     (document.getElementById('mqttPort') as HTMLInputElement).value      = String(settings.port || (_discovery.available ? _discovery.port : '') || 1883);
     (document.getElementById('mqttUsername') as HTMLInputElement).value  = settings.username || (_discovery.available ? _discovery.username : '') || '';
     _hasStoredPassword = !!settings.hasPassword;
-    // Only auto-discovery may pre-fill this; a stored password is never sent
-    // to the client, so the field stays blank and the placeholder says so.
+    // #1431: neither the stored password nor the Supervisor-discovered one is
+    // ever sent to the client, so the field is never pre-filled; the placeholder
+    // tells the user a discovered password will be reused if they leave it blank.
     const pwEl = document.getElementById('mqttPassword') as HTMLInputElement;
-    pwEl.value = _hasStoredPassword ? '' : ((_discovery.available ? _discovery.password : '') || '');
-    pwEl.placeholder = _hasStoredPassword ? t('settings_mqtt_password_stored') : '';
+    pwEl.value = '';
+    pwEl.placeholder = _hasStoredPassword
+      ? t('settings_mqtt_password_stored')
+      : (_discovery.available && _discovery.hasPassword ? t('settings_mqtt_password_discovered') : '');
     const removeRow = document.getElementById('mqttPasswordRemoveRow');
     if (removeRow) removeRow.style.display = _hasStoredPassword ? '' : 'none';
     const removeCb = document.getElementById('mqttPasswordRemove') as HTMLInputElement | null;
@@ -100,10 +103,19 @@ export async function saveMqttSettings(): Promise<void> {
     // #1062: explicit removal, independent of whatever's left in the field.
     payload.clearPassword = true;
   } else {
-    // #1050: an empty field while a password is stored means "unchanged" —
-    // omitting the key tells the backend to keep it. Sending "" would wipe it.
     const pw = (document.getElementById('mqttPassword') as HTMLInputElement).value;
-    if (pw !== '' || !_hasStoredPassword) payload.password = pw;
+    if (pw !== '') {
+      payload.password = pw;
+    } else if (_hasStoredPassword) {
+      // #1050: an empty field while a password is stored means "unchanged" —
+      // omitting the key tells the backend to keep it. Sending "" would wipe it.
+    } else if (_discovery.available && _discovery.hasPassword) {
+      // #1431: the discovered password is never sent to the client, so the
+      // opt-in flag is the only way to reuse it.
+      payload.useDiscoveredPassword = true;
+    } else {
+      payload.password = '';
+    }
   }
   if (payload.transport === 'mqtt' && !payload.host) {
     if (resultEl) resultEl.textContent = t('settings_mqtt_host_required');

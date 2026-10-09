@@ -10,9 +10,9 @@ g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
-  renderBeanList: () => void;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
 }
-const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { renderBeanCard } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 // Roast dates below are built with todayIsoDate() (local YYYY-MM-DD, not
 // Date#toISOString()'s UTC date): roastAgeDays() reparses the stored date in
 // local time, so a UTC date string rolls a day early/late outside UTC.
@@ -65,8 +65,8 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
           id: 1,
           roastDate: todayIsoDate(now - 10 * DAY),
           stock_g: 250,
-          consumedG: 0,
-          remainingG: 250,
+          consumedG: 100,
+          remainingG: 150,
           current: true,
           frozenPortions: [
             { id: 1, frozenAt: now - 5 * DAY, portionCount: 4, remainingCount: 4, portionWeight_g: 18 },
@@ -76,7 +76,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
       grinders: [],
     };
 
-    renderBeanList();
+    beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     const html = beanListUI.innerHTML;
     expect(html).toContain('lib-frozen-badge');
@@ -92,14 +92,14 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
     const now = Date.now();
     S.coffeeLibrary = {
       beans: [{
-        id: 1,
+        id: 2,
         name: 'Test Bean',
         bags: [{
           id: 1,
           roastDate: todayIsoDate(now - 20 * DAY),
           stock_g: 250,
-          consumedG: 0,
-          remainingG: 250,
+          consumedG: 100,
+          remainingG: 150,
           current: true,
           frozenPortions: [
             { id: 2, frozenAt: now - 15 * DAY, thawedAt: now - 2 * DAY, portionCount: 2, remainingCount: 0, portionWeight_g: 18 },
@@ -109,7 +109,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
       grinders: [],
     };
 
-    renderBeanList();
+    beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     const html = beanListUI.innerHTML;
     expect(html).toContain('lib-frozen-badge thawed');

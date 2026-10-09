@@ -1,4 +1,5 @@
 import type { Chart } from 'chart.js';
+import type { RecordedPhaseTransition } from './constants.js';
 
 // ── HTML escaping (XSS prevention) ───────────────────────────────────────
 // Branded marker for a string known to be safe to interpolate into markup
@@ -328,6 +329,8 @@ export interface ShotDatapoints {
   weightFlow?: number[];
   temperature?: number[];
   targetTemperature?: number[];
+  phaseTransitions?: RecordedPhaseTransition[] | null;
+  finalExitReason?: number | null;
 }
 
 export type XYSeries = { x: number; y: number }[];
@@ -403,6 +406,11 @@ export function isoToGerman(iso: string | null | undefined): string {
   if (!m) return iso;
   const [, yy = '', mm = '', dd = ''] = m;
   return `${dd}.${mm}.${yy}`;
+}
+
+/** Locale-aware short date for a Unix-ms timestamp (#1351 coffee-history tiles). */
+export function formatDayLabel(ms: number, locale: string): string {
+  return new Date(ms).toLocaleDateString(locale);
 }
 
 export function germanToIso(s: string | null | undefined): string | null {

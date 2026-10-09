@@ -231,6 +231,20 @@ if [[ -n "$DOCKER_IMAGE" ]]; then
 		a_code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/$asset")
 		[[ "$a_code" == "200" ]] && ok "GET /$asset -> 200 (real Vite bundle)" || bad "GET /$asset: $a_code"
 	done
+
+	# The cut-out models are no longer baked into the image: internal/webapp
+	# downloads them on first use into GLP_MODELS_DIR (/data/cutout-models).
+	# The manifest route still answers a HEAD for the pinned file with no
+	# network needed, and rejects an unknown version. Read the version from the
+	# Go manifest so this stays in step with cutoutmodels.Version.
+	models_version=$(sed -n 's/^const Version = "\(.*\)"/\1/p' "$GO_DIR/internal/cutoutmodels/cutoutmodels.go")
+	model_head=$(curl -s -o /dev/null -w '%{http_code}' -I "$BASE_A/models/$models_version/isnet-general-use-int8.onnx")
+	[[ "$model_head" == "200" ]] && ok "HEAD /models/$models_version/isnet-general-use-int8.onnx -> 200" || bad "HEAD /models/$models_version/isnet-general-use-int8.onnx: $model_head"
+	model_missing=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_A/models/bogus/x.onnx")
+	[[ "$model_missing" == "404" ]] && ok "GET /models/bogus/x.onnx -> 404" || bad "GET /models/bogus/x.onnx: $model_missing"
+	# The root response's CSP must allow WebAssembly compilation for the lazy
+	# onnxruntime-web runtime.
+	grep -q "'wasm-unsafe-eval'" <<<"$root_headers" && ok "CSP allows WebAssembly compilation ('wasm-unsafe-eval')" || bad "CSP missing 'wasm-unsafe-eval'"
 fi
 
 step "domain: system (demo seed) + shots"

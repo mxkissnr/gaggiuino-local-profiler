@@ -10,6 +10,11 @@
             /* #397: fixed-width digits everywhere — metrics, scores,
                durations, timestamps never jitter/reflow as values change. */
             font-variant-numeric: tabular-nums;
+            /* #1458: Android WebViews (Home Assistant companion app,
+               Chrome) paint a blue box over every tapped element.
+               kiosk.css already opts out; this is the app-wide
+               equivalent, inherited by every element. */
+            -webkit-tap-highlight-color: transparent;
             display: flex;
             height: 100vh;
             overflow: hidden;
@@ -108,7 +113,7 @@
         }
         /* Inset accent bar: the border sits a couple px in from the sidebar
            edge (via .shot-wrapper's margin above) rather than flush with it. */
-        .shot-wrapper.active .shot        { border-left-color: transparent; border-image: linear-gradient(180deg, var(--accent-from), var(--accent-to)) 1; }
+        .shot-wrapper.active .shot        { border-left-color: var(--accent); }
         .shot-wrapper.compare-active .shot{ border-left-color: #3498db; }
 
         .shot-row  { display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-width: 0; }
@@ -302,6 +307,20 @@
             -webkit-overflow-scrolling: touch;
         }
         .topbar-nav-scroll::-webkit-scrollbar { display: none; }
+        /* #1516: fade the edge where more tabs are hidden, so a clipped tab
+           reads as scrollable instead of truncated. 32 px, transparent at the
+           hidden edge; both classes together fade both edges. No class, no
+           fade — a row whose tabs all fit stays clean. Applied by
+           topbar-nav-fade.js from the row's scroll metrics. */
+        .topbar-nav-scroll.fade-left {
+            mask-image: linear-gradient(to right, transparent 0, #000 32px);
+        }
+        .topbar-nav-scroll.fade-right {
+            mask-image: linear-gradient(to left, transparent 0, #000 32px);
+        }
+        .topbar-nav-scroll.fade-left.fade-right {
+            mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+        }
         .topbar-nav-list { display: flex; align-items: center; gap: 2px; }
 
         .topbar-nav {
@@ -332,6 +351,14 @@
         .rail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #maintBadge, #ordersBadge { flex-shrink: 0; }
         .topbar-sep { width: 1px; align-self: stretch; margin: var(--sp-1) var(--sp-1); background: var(--gray-700); flex-shrink: 0; }
+
+        /* #1514: Settings left the scrolling nav row for a fixed slot
+           between .topbar-nav-scroll and .topbar-machine, so the last tab
+           can never be clipped at narrow desktop widths. Keeps the
+           .topbar-nav hover/active underline; flex-shrink: 0 keeps the
+           icon intact while the nav row absorbs the remaining width.
+           Desktop-only, like the row it came from (max-width:768px below). */
+        #btnSettings { flex-shrink: 0; }
 
         /* Machine status (#424): the old rail footer's online-dot/name,
            folded next to the machine switcher rather than lost — the
@@ -412,6 +439,12 @@
             background: var(--gray-900); border-radius:var(--radius);
             padding: var(--sp-4); margin: 0 0 var(--sp-4); color: var(--gray-400); font-size: var(--fs-2); text-align: center;
         }
+        /* #1449: "set as default" offer under the banner text. */
+        #liveMachineUnavailableBanner button {
+            display: inline-block; margin-top: var(--sp-3);
+            background: none; border: none; color: var(--accent);
+            cursor: pointer; font-size: var(--fs-2);
+        }
         .shot-machine-badge {
             display: inline-block; font-size: var(--fs-1); color: var(--gray-500); background: var(--gray-800);
             border-radius:var(--radius); padding: 1px var(--sp-2); margin-left: var(--sp-2); vertical-align: middle;
@@ -445,21 +478,69 @@
             min-width: 0;
             overflow-x: hidden;
             overflow-y: auto;
-            padding: var(--sp-5);
+            /* #1467: the scroll container carries this top padding; the sticky
+               toolbar reuses it to cover that strip while scrolling. */
+            --analytics-pad: var(--sp-5);
+            padding: var(--analytics-pad);
             gap: var(--sp-5);
         }
-        .analytics-container { display: flex; flex-direction: column; gap: var(--sp-5); width: 100%; }
-        .analytics-card {
-            background: var(--gray-900);
-            border-radius:var(--radius);
-            padding: var(--sp-5);
-            min-width: 0;
-        }
+        /* #1467: one column of boxless sections; the desktop media query below
+           lays the few visible sections out in two columns. */
+        .analytics-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); width: 100%; }
+        .analytics-sec { min-width: 0; }
+        /* The verdict is the page's one emphasised block, so it keeps a surface. */
+        .analytics-verdict-card { background: var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); }
         .analytics-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-4); }
-        .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: var(--fs-1); color: var(--gray-500); pointer-events: none; }
-        .analytics-section-title { margin: 0 0 var(--sp-4) 0; font-size: var(--fs-3); font-weight: 600; color: var(--gray-200); }
+        .world-map-wrap { position: relative; aspect-ratio: 16 / 9; min-height: 200px; max-height: 420px; width: 100%; }
+        .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: var(--fs-1); color: var(--gray-500); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 16px); }
+        @media (hover: none) { .world-map-hint { display: none; } }
+        .map-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
+        /* #1467: headings use the library shelf heading look — small, semibold,
+           accent — with the grey counters sitting next to them. */
+        .analytics-section-title { margin: 0 0 var(--sp-3) 0; font-size: var(--fs-1); font-weight: 600; color: var(--accent); }
         .analytics-card-head .analytics-section-title { margin-bottom: 0; }
+        /* #1490: the trend heading carries a grey section counter for the long
+           periods ("7-day average"), nothing for 7/30 days. */
+        .analytics-trend-head { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+        .analytics-trend-head .analytics-section-title { margin-bottom: 0; }
+        .analytics-trend-counter { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); }
         .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--sp-5); }
+
+        /* "More insights" fold (#1467): the rarer charts stay folded away, like
+           the library's Empty & archive. Only the first open builds their charts. */
+        .analytics-more { min-width: 0; }
+        .analytics-more-summary { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; margin: 0; cursor: pointer; list-style: none; font-size: var(--fs-1); font-weight: 600; color: var(--accent); }
+        .analytics-more-summary::-webkit-details-marker { display: none; }
+        .analytics-more-summary::before { content: '\25B8'; transition: transform .2s ease; }
+        .analytics-more[open] > .analytics-more-summary::before { transform: rotate(90deg); }
+        .analytics-more-body { display: flex; flex-direction: column; gap: var(--sp-6); margin-top: var(--sp-4); }
+
+        /* Use the width: from 900px up the visible sections form two balanced
+           columns, the origin map beside the trend and the recipe (#1467). */
+        @media (min-width: 900px) {
+            .analytics-container {
+                grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+                grid-template-areas:
+                    "verdict verdict"
+                    "trend map"
+                    "recipe map"
+                    "year year"
+                    "shelf shelf"
+                    "facts facts"
+                    "more more";
+                column-gap: var(--sp-6);
+                align-items: start;
+            }
+            .analytics-verdict-card { grid-area: verdict; }
+            .analytics-trend { grid-area: trend; }
+            .analytics-recipe { grid-area: recipe; }
+            .cal-card { grid-area: year; }
+            .analytics-shelf-sec { grid-area: shelf; }
+            .analytics-facts-sec { grid-area: facts; }
+            .analytics-map { grid-area: map; }
+            .analytics-more { grid-area: more; }
+        }
+
         .analytics-filter-row { display: flex; gap: var(--sp-2); }
         .analytics-filter-btn {
             background: transparent; border: 1px solid var(--gray-700); color: var(--gray-500);
@@ -469,18 +550,79 @@
         .analytics-filter-btn:hover { color: var(--gray-200); border-color: var(--gray-600); }
         .analytics-filter-btn.active { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
 
-        /* Calendar heatmap */
-        .cal-wrapper { overflow-x: hidden; padding-bottom: var(--sp-1); }
-        .cal-grid { display: flex; }
-        .cal-week { display: flex; flex-direction: column; }
-        .cal-day { border-radius: 2px; cursor: default; flex-shrink: 0; }
-        .cal-day-link { cursor: pointer; }
-        .cal-day-link:hover { filter: brightness(1.35); outline: 1px solid rgba(255,255,255,.3); }
+        /* Analytics toolbar (#1467): one sticky filter row for the whole page.
+           The page background keeps the cards scrolling underneath it. */
+        .analytics-toolbar {
+            position: sticky; top: calc(-1 * var(--analytics-pad)); z-index: 5;
+            display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+            padding: calc(var(--sp-2) + var(--analytics-pad)) 0 var(--sp-2);
+            margin-top: calc(-1 * var(--analytics-pad));
+            background: var(--gray-950);
+        }
+        .analytics-toolbar .lib-shelf-search { flex: 1 1 220px; min-width: 0; }
+        .analytics-filter-empty { flex: 1 1 100%; margin: 0; }
+
+        /* Verdict header (#1467): one-sentence verdict on the left, the
+           period's average score on the right. */
+        .analytics-verdict-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); }
+        .analytics-verdict-text { min-width: 0; }
+        .analytics-verdict-title { margin: 0; font-size: var(--fs-5); font-weight: 600; color: var(--gray-100); line-height: 1.2; }
+        .analytics-verdict-sub { margin: var(--sp-1) 0 0; font-size: var(--fs-1); color: var(--gray-500); }
+        .analytics-verdict-score { display: flex; flex-direction: column; align-items: flex-end; flex: 0 0 auto; }
+        .analytics-verdict-score-num { font-size: var(--fs-6); font-weight: 700; line-height: 1; }
+        .analytics-verdict-score-lbl { margin-top: var(--sp-1); font-size: var(--fs-1); color: var(--gray-500); }
+
+        /* Coffee year: one column per week, Monday at the top (#1467). Real CSS
+           grid instead of measuring the wrapper, so the fixed cell size keeps
+           the whole year scrollable on phones. */
+        .cal-wrapper { --cal-cell: 12px; overflow-x: auto; padding-bottom: var(--sp-1); }
+        .cal-grid { display: grid; grid-auto-flow: column; grid-template-columns: 26px; grid-template-rows: repeat(7, var(--cal-cell)); grid-auto-columns: var(--cal-cell); gap: 3px; width: max-content; margin-right: var(--sp-3); }
+        .cal-weekday { font-size: .6rem; line-height: var(--cal-cell); color: var(--gray-600); text-align: right; padding-right: 2px; }
+        .cal-months { display: grid; grid-auto-flow: column; grid-auto-columns: var(--cal-cell); gap: 3px; padding-left: calc(26px + 3px); padding-right: var(--sp-3); margin-bottom: 3px; width: max-content; }
+        .cal-month { font-size: .65rem; color: var(--gray-600); white-space: nowrap; overflow: visible; }
+        .cal-day { border: none; padding: 0; border-radius: 2px; background: var(--gray-800); cursor: default; }
+        button.cal-day { cursor: pointer; font: inherit; }
+        .cal-day-link:hover { filter: brightness(1.35); }
         .cal-0 { background: var(--gray-800); }
-        .cal-1 { background: rgba(239,68,68,.35); }
-        .cal-2 { background: rgba(239,68,68,.6); }
-        .cal-3 { background: rgba(239,68,68,.85); }
-        .cal-future { background: transparent; border: none; }
+        .cal-1 { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+        .cal-2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+        .cal-3 { background: color-mix(in srgb, var(--accent) 85%, transparent); }
+        .cal-4 { background: color-mix(in srgb, var(--accent) 100%, transparent); }
+        .cal-future { background: transparent; }
+        .cal-today { outline: 1px solid var(--gray-300); outline-offset: 1px; }
+        /* A day that held at least one 100-point shot gets a cream dot. */
+        .cal-crema { position: relative; }
+        .cal-crema::after { content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #f3e1c0; }
+        .cal-day.in-run { outline: 1px solid var(--accent); outline-offset: 1px; }
+        .cal-day.cal-dim { opacity: .3; }
+        @media (prefers-reduced-motion: no-preference) {
+            .cal-day { transition: transform .12s ease; }
+            .cal-day:hover { transform: scale(1.3); }
+        }
+
+        /* Streak figures under the coffee-year grid (#1467). */
+        .cal-streaks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin-top: var(--sp-4); }
+        .cal-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .cal-fig-num { display: flex; align-items: baseline; gap: 3px; font-size: var(--fs-4); font-weight: 700; color: var(--gray-100); }
+        .cal-fig-unit { font-size: var(--fs-1); font-weight: 500; color: var(--gray-500); }
+        .cal-fig-lbl { font-size: var(--fs-1); color: var(--gray-500); }
+        .cal-cups { display: flex; gap: 2px; margin-top: 3px; }
+        .cal-cup { width: 12px; height: 12px; color: var(--gray-700); }
+        .cal-cup.filled { color: var(--accent); }
+        .cal-fig-longest:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+        /* #1490: grid and legend form one column, so the legend stays directly
+           under the grid on phones and under the left column on desktop. */
+        .cal-year { min-width: 0; }
+        .cal-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-top: var(--sp-2); font-size: var(--fs-1); color: var(--gray-500); }
+        .cal-legend-part { display: inline-flex; align-items: center; gap: var(--sp-1); }
+        .cal-legend-swatches { display: inline-flex; align-items: center; gap: 3px; }
+        .cal-legend-swatch { display: inline-block; width: 12px; height: 12px; }
+        @media (min-width: 900px) {
+            .cal-wrapper { --cal-cell: 15px; }
+            .cal-card { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--sp-5); align-items: start; }
+            .cal-card > .analytics-section-title { grid-column: 1 / -1; }
+            .cal-streaks { margin-top: 0; }
+        }
 
         /* Weekday x Hour heatmap (#394) */
         .wh-heatmap { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; }
@@ -489,10 +631,10 @@
         .wh-hourlabel { width: 15px; flex-shrink: 0; font-size: var(--fs-1); color: var(--gray-600); text-align: center; }
         .wh-cell { width: 15px; height: 15px; border-radius: 2px; flex-shrink: 0; }
         .wh-l0 { background: var(--gray-800); }
-        .wh-l1 { background: rgba(239,68,68,.25); }
-        .wh-l2 { background: rgba(239,68,68,.5); }
-        .wh-l3 { background: rgba(239,68,68,.75); }
-        .wh-l4 { background: rgba(239,68,68,1); }
+        .wh-l1 { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+        .wh-l2 { background: color-mix(in srgb, var(--accent) 50%, transparent); }
+        .wh-l3 { background: color-mix(in srgb, var(--accent) 75%, transparent); }
+        .wh-l4 { background: color-mix(in srgb, var(--accent) 100%, transparent); }
 
         /* Sortable data tables (bean ranking / machine comparison, #394) */
         .analytics-table-wrap { overflow-x: auto; }
@@ -502,28 +644,21 @@
             white-space: nowrap; cursor: pointer; user-select: none;
         }
         table.analytics-table th:hover { color: var(--gray-300); }
-        table.analytics-table th .sort-arrow { color: var(--accent-ink); margin-left: var(--sp-1); }
         table.analytics-table td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--gray-800); color: var(--gray-400); }
         table.analytics-table tr:last-child td { border-bottom: none; }
         table.analytics-table td:first-child { color: var(--gray-200); font-weight: 600; }
-        .trend-up   { color: var(--ok); }
-        .trend-down { color: var(--err); }
-        .trend-flat { color: var(--gray-600); }
 
         .analytics-bean-select {
             background: var(--gray-800); border: 1px solid var(--gray-700); border-radius:var(--radius);
             color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); max-width: 60%;
         }
 
-        /* KPI tiles */
-        .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--sp-3); }
-        .kpi-tile { background: var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); text-align: center; }
-        .kpi-val  { font-size: var(--fs-4); font-weight: 700; color: var(--gray-100); line-height: 1.2; }
-        .kpi-lbl  { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-1); }
+        /* Summary line (#1331): one line on desktop, wraps on narrow screens */
+        .analytics-summary { font-size: var(--fs-2); color: var(--gray-200); line-height: 1.6; }
         .trend-warning { margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius:var(--radius); font-size: var(--fs-1); background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
-        .bean-stat-dialin { font-size: var(--fs-1); color: var(--gray-500); margin-top: var(--sp-1); display: flex; align-items: center; gap: var(--sp-1); }
 
-        /* Personal Bests */
+        /* Detail rows shared by the popovers/sheets (coffee-year day, trend
+           point, origin country, bean shelf). */
         .bests-list  { display: flex; flex-direction: column; gap: var(--sp-2); }
         .bests-row   { display: flex; justify-content: space-between; align-items: center; padding: var(--sp-2) 0; border-bottom: 1px solid var(--gray-800); gap: var(--sp-3); }
         .bests-row:last-child { border-bottom: none; }
@@ -532,13 +667,6 @@
         .bests-count { font-size: var(--fs-1); color: var(--gray-500); font-weight: 400; }
         .bests-link  { background: transparent; border: 1px solid var(--gray-700); color: var(--gray-400); border-radius:var(--radius); padding: 2px var(--sp-2); cursor: pointer; font-size: var(--fs-1); margin-left: var(--sp-2); transition: all .15s; }
         .bests-link:hover { color: var(--gray-200); border-color: var(--gray-500); }
-
-        @media (max-width: 900px) {
-            .kpi-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-        @media (max-width: 560px) {
-            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-        }
 
         /* Bean cards */
         .bean-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: var(--sp-3); }
@@ -552,9 +680,63 @@
         .bean-stat-val { font-size: var(--fs-2); font-weight: 600; color: var(--gray-200); }
         .bean-stat-lbl { font-size: var(--fs-1); color: var(--gray-600); }
 
+        /* Beans by score shelf (#1467): one tile per bean. */
+        .analytics-shelf-tools { display: flex; align-items: center; gap: var(--sp-3); }
+        .analytics-shelf-count { font-size: var(--fs-1); color: var(--gray-500); font-weight: 600; }
+        .analytics-shelf { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+        .analytics-shelf + .analytics-shelf { margin-top: var(--sp-3); }
+        .analytics-shelf-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); min-width: 44px; min-height: 44px; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
+        .analytics-shelf-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .analytics-shelf-rank { font-size: var(--fs-1); font-weight: 700; color: var(--gray-500); font-variant-numeric: tabular-nums; }
+        .analytics-shelf-rank.top { color: var(--accent); }
+        .analytics-shelf-bag { position: relative; display: block; width: 100%; }
+        .analytics-shelf-name { max-width: 100%; font-size: var(--fs-1); font-weight: 600; color: var(--gray-200); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .analytics-shelf-row2 { display: flex; align-items: center; gap: var(--sp-1); }
+        .analytics-shelf-score { font-size: var(--fs-3); font-weight: 700; }
+        .analytics-shelf-crema { width: 6px; height: 6px; border-radius: 50%; background: #f3e1c0; flex-shrink: 0; }
+        .analytics-shelf-shots { font-size: var(--fs-1); color: var(--gray-500); white-space: nowrap; }
+        .analytics-shelf-more { margin-top: var(--sp-3); padding: 0; border: none; background: none; color: var(--accent-ink); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
+        .analytics-shelf-more:hover { text-decoration: underline; }
+        @media (min-width: 900px) {
+            .analytics-shelf { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+        }
+
+        /* "Did you know?" facts (#1467): flat surface cards without a border,
+           one accent line icon, one big serif value and one warm sentence. */
+        .analytics-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+        .analytics-fact { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-height: 132px; padding: var(--sp-4); border: none; border-radius: var(--radius); background: var(--gray-800); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+        .analytics-fact:hover { background: var(--raised); }
+        .analytics-fact:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .analytics-fact-icon { display: inline-flex; color: var(--accent); }
+        .analytics-fact-icon svg { width: 24px; height: 24px; }
+        .analytics-fact-big { font-size: var(--fs-5); font-weight: 700; color: var(--gray-100); line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .analytics-fact-text { font-size: var(--fs-1); color: var(--gray-400); line-height: 1.45; }
+        .analytics-fact-gauge { display: block; width: 100%; margin-top: auto; height: 4px; border-radius: 2px; background: var(--gray-700); overflow: hidden; }
+        .analytics-fact-gauge-fill { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+        .analytics-fact.night { background: linear-gradient(160deg, #10182b, var(--gray-800) 70%); }
+        [data-theme="light"] .analytics-fact.night { background: linear-gradient(160deg, #dfe6f5, var(--gray-800) 70%); }
+        .analytics-fact-star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #cdd7ef; pointer-events: none; }
+        @media (min-width: 900px) {
+            .analytics-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+            .analytics-fact { animation: factDeal .32s ease both; }
+            .analytics-fact:nth-child(2) { animation-delay: .05s; }
+            .analytics-fact:nth-child(3) { animation-delay: .1s; }
+            .analytics-fact:nth-child(4) { animation-delay: .15s; }
+            .analytics-fact-icon { transition: transform .18s ease; }
+            .analytics-fact:hover .analytics-fact-icon { transform: rotate(-8deg); }
+            .analytics-fact-star { animation: factTwinkle 2.4s ease-in-out infinite; }
+            .analytics-fact-star:nth-child(2) { animation-delay: .6s; }
+            .analytics-fact-star:nth-child(3) { animation-delay: 1.2s; }
+            .analytics-fact-star:nth-child(4) { animation-delay: 1.8s; }
+        }
+        @keyframes factDeal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        @keyframes factTwinkle { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
+
         @media (max-width: 768px) {
             .analytics-two-col { grid-template-columns: 1fr; }
-            #analytics-view { padding: var(--sp-4); }
+            #analytics-view { --analytics-pad: var(--sp-4); }
             #library-view { padding: var(--sp-4); }
         }
 
@@ -599,7 +781,6 @@
         .machine-row-type { font-size: var(--fs-1); color:var(--gray-500); background:var(--gray-900); border-radius:var(--radius); padding: 2px var(--sp-2); }
         .machine-row-shot-count { font-size: var(--fs-1); color:var(--gray-500); }
         .machine-row-badge { font-size: var(--fs-1); color:var(--err); background:rgba(239,68,68,.15); border-radius:var(--radius); padding: 2px var(--sp-2); }
-        .machine-row-badge-experimental { font-size: var(--fs-1); color:#f59e0b; background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.35); border-radius:var(--radius); padding: 2px var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         /* #1046: firmware status badge, moved here from #machineFormCard
            (#1044) so update-available is visible on the row without opening
            Edit. .machine-row-firmware-panel is a plain flex sibling of the
@@ -1043,7 +1224,7 @@
         .lib-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--gray-500); font-size: var(--fs-1); font-weight: 500; padding: var(--sp-2) var(--sp-3); cursor: pointer; transition: color .15s; }
         .lib-tab { position: relative; }
         .lib-tab.active { color: var(--accent-ink); border-bottom-color: transparent; }
-        .lib-tab.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background:linear-gradient(90deg, var(--accent-from), var(--accent-to)); border-radius:1px; }
+        .lib-tab.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background: var(--accent); border-radius:1px; }
         .lib-body { flex: 1; overflow-y: auto; padding: var(--sp-4) var(--sp-5); }
         .lib-section { display: none; }
         .lib-section.active { display: block; }
@@ -1052,39 +1233,12 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
-        /* Bean card header: name + meta-actions toolbar on one row, anchored
-           at the top of the card instead of the old .lib-item-actions,
-           which sat as a flex sibling of .lib-item-info and vertically
-           centered on the WHOLE card — floating in empty space next to
-           whatever content happened to be tallest (usually the bag list). */
-        .lib-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
-        .lib-item-header .lib-item-name { min-width: 0; flex: 1; }
-        .lib-item-toolbar { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
-        .lib-toolbar-sep { width: 1px; align-self: stretch; margin: 2px var(--sp-1); background: rgba(255,255,255,.08); }
-        @media (max-width: 640px) {
-          .lib-item-header { flex-wrap: wrap; }
-          .lib-item-toolbar { width: 100%; justify-content: flex-end; }
-        }
-        /* Bag-level quick actions (new bag / freeze), grouped with the
-           inventory display right above them instead of mixed into the
-           bean's own meta-actions toolbar — they act on the packaging,
-           not the bean record. */
-        .lib-bag-toolbar { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
-        /* Material 3 button hierarchy: "Neue Packung" is the primary action
-           on this row (filled tonal — accent-tinted fill, no border),
-           "Einfrieren" is secondary (outlined — border only, transparent
-           fill). Keyed off data-action so no new classes/markup are needed. */
-        .lib-bag-toolbar-btn { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 4px var(--sp-3); font-size: var(--fs-1); font-weight: 600; transition: background .15s, border-color .15s; }
-        .lib-bag-toolbar-btn[data-action="open-new-bag"] { background: color-mix(in srgb, var(--accent) 16%, var(--gray-800)); color: var(--accent-ink); border: 1px solid transparent; }
-        .lib-bag-toolbar-btn[data-action="open-new-bag"]:hover { background: color-mix(in srgb, var(--accent) 26%, var(--gray-800)); }
-        .lib-bag-toolbar-btn[data-action="open-freeze-form"] { background: transparent; border: 1px solid var(--gray-600); color: var(--gray-300); }
-        .lib-bag-toolbar-btn[data-action="open-freeze-form"]:hover { background: rgba(255,255,255,.06); border-color: var(--gray-500); }
         /* Machine-profile list (library-profile-editor.js renderProfileList):
            name + optional utility badge on one row — badge sits outside the
            name's own ellipsis-truncation so it never gets clipped away. */
         .lib-item-name-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
         .lib-item-name-row .lib-item-name { min-width: 0; }
-        .lib-utility-badge { flex-shrink: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--gray-400); background: var(--gray-700); border-radius: 999px; padding: 1px var(--sp-2); }
+        .lib-utility-badge { flex-shrink: 0; font-size: var(--fs-1); font-weight: 600; color: var(--gray-400); background: var(--gray-700); border-radius: var(--radius-sm); padding: 1px var(--sp-2); }
         .lib-item-utility .lib-item-name { opacity: .75; }
         /* #404: eyebrow above the bean name — small, muted, uppercase,
            same visual weight class as the recipe/process-card labels. */
@@ -1132,30 +1286,27 @@
         .lib-stock-bar { display: inline-block; width: 42px; height: 5px; border-radius: 3px; background: var(--gray-700); overflow: hidden; vertical-align: middle; margin-left: var(--sp-2); }
         .lib-stock-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
         .lib-stock-bar-fill.low { background: var(--err); }
-        .lib-inv-reorder { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: var(--err); border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; }
+        .lib-inv-reorder { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: var(--err); border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; text-decoration: none; }
         .lib-inv-total { color: var(--gray-700); font-size: var(--fs-1); }
-        .lib-decaf-badge { display: inline-block; background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3); color: #22c55e; border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 700; vertical-align: middle; margin-left: var(--sp-1); }
-        .lib-fresh-badge { display: inline-block; border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 700; vertical-align: middle; margin-left: var(--sp-1); border: 1px solid; }
-        .lib-fresh-badge.fresh-degassing { color: #a1a1aa; border-color: rgba(161,161,170,.35); background: rgba(161,161,170,.1); }
-        .lib-fresh-badge.fresh-almost    { color: #eab308; border-color: rgba(234,179,8,.35);  background: rgba(234,179,8,.1); }
-        .lib-fresh-badge.fresh-peak      { color: #22c55e; border-color: rgba(34,197,94,.35);  background: rgba(34,197,94,.1); }
-        .lib-fresh-badge.fresh-fading    { color: #f97316; border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.1); }
-        .lib-fresh-badge.fresh-old       { color: #ef4444; border-color: rgba(239,68,68,.35);  background: rgba(239,68,68,.1); }
-        .lib-roast-badge { display: inline-block; background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.3); color: #60a5fa; border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 700; vertical-align: middle; margin-left: var(--sp-1); }
-        .lib-disabled-badge { display: inline-block; background: rgba(161,161,170,.12); border: 1px solid rgba(161,161,170,.35); color: #a1a1aa; border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 700; vertical-align: middle; margin-left: var(--sp-1); }
+        .lib-decaf-badge { display: inline-block; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
+        .lib-fresh-badge { display: inline-block; border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
+        .lib-fresh-badge.fresh-degassing { color: var(--gray-500); background: var(--gray-700); }
+        .lib-fresh-badge.fresh-almost    { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+        .lib-fresh-badge.fresh-peak      { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+        .lib-fresh-badge.fresh-fading    { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+        .lib-fresh-badge.fresh-old       { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
+        .lib-roast-badge { display: inline-block; background: var(--gray-700); color: var(--gray-300); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
+        .lib-disabled-badge { display: inline-block; background: var(--gray-700); color: var(--gray-500); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
         .lib-item-disabled { opacity: .55; }
-        /* Bean name → click filters the sidebar shot list to this bean (#beanfilter) */
-        .lib-bean-name-link { cursor: pointer; }
-        .lib-bean-name-link:hover { text-decoration: underline; text-decoration-color: var(--accent); }
         /* Frozen portion badges (#freeze) — same pill language as .lib-fresh-badge,
            blue-ish to read distinctly as "on ice" rather than a freshness state. */
         .lib-frozen-row { margin-top: var(--sp-1); display: flex; flex-wrap: wrap; gap: var(--sp-1); }
         .lib-frozen-badge {
             display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1);
             background: rgba(56,189,248,.1); border: 1px solid rgba(56,189,248,.3); color: #38bdf8;
-            border-radius: var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600;
+            border-radius: var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600;
         }
-        .lib-frozen-badge.thawed { background: rgba(161,161,170,.1); border-color: rgba(161,161,170,.3); color: #a1a1aa; }
+        .lib-frozen-badge.thawed { background: var(--gray-700); border-color: transparent; color: var(--gray-500); }
         .lib-frozen-thaw-btn {
             background: none; border: none; color: inherit; cursor: pointer;
             font-size: var(--fs-1); font-weight: 700; text-decoration: underline; padding: 0;
@@ -1167,8 +1318,12 @@
         .lib-frozen-edit-btn:hover { opacity: 1; }
         /* Flavor chips (form input + static display) */
         .lib-form-field-wide { grid-column: 1 / -1; }
-        .lib-form-hint { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; }
+        .lib-form-hint { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; margin-bottom: var(--sp-2); }
         .flavor-chips-wrap { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); }
+        /* #1543: the origin picker's chip list draws an empty bordered bar when
+           the bean has no origins yet; hide it until it holds chips (the
+           flavour chip list always contains its input, so it is unaffected). */
+        #beanFormOriginChips:empty { display: none; }
         .flavor-chips-wrap input { background: transparent; border: none; outline: none; color: var(--gray-200); font-size: var(--fs-1); flex: 1; min-width: 110px; padding: var(--sp-1) 0; }
         .flavor-chip { display: inline-flex; align-items: center; gap: var(--sp-1); background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.3); color: #c084fc; border-radius:var(--radius); padding: 2px var(--sp-2); font-size: var(--fs-1); font-weight: 600; overflow-wrap: break-word; max-width: 100%; }
         .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: var(--fs-1); padding: 0; opacity: .7; }
@@ -1181,7 +1336,27 @@
         .origin-chip { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.3); color: #7dd3fc; }
         .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .lib-flavor-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-1); }
+        /* #1350: "Aromas" block in the bean detail sheet — the inline mini
+           wheel next to highlight chips coloured from each flavour's segment. */
+        .lib-sheet-aromas { margin-top: var(--sp-2); }
+        .lib-sheet-aromas-title { font-size: var(--fs-1); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: var(--sp-2); }
+        .lib-sheet-aromas-body { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+        .lib-aroma-wheel { flex: 0 0 auto; width: min(168px, 45vw); padding: 0; background: none; border: none; line-height: 0; cursor: pointer; }
+        .lib-aroma-svg { display: block; width: 100%; height: auto; }
+        .lib-aroma-seg { stroke: var(--gray-700); stroke-width: .6; }
+        /* #1372: lit segments carry the same white outline as the large wheel. */
+        .lib-aroma-seg.is-lit { stroke: #fff; stroke-width: 1.6; }
+        .lib-aroma-svg.has-hl .lib-aroma-seg { opacity: .35; }
+        .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px rgba(255,255,255,.65)); }
+        .lib-aroma-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); flex: 1 1 120px; }
+        /* #1543: the note's own colour as text was unreadable for dark notes
+           (e.g. Molasses) on the dark theme -- keep it as the border/background
+           tint only and use the theme's primary text colour for readability. */
+        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--gray-100); cursor: pointer; }
+        @media (prefers-reduced-motion: no-preference) {
+            .lib-aroma-seg.is-pulse { animation: aroma-pulse 500ms ease-out; }
+            @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
+        }
         .lib-bean-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: var(--sp-3); background: var(--gray-800); cursor: pointer; }
         .lib-grinder-thumb, .lib-basket-thumb, .lib-puckscreen-thumb { width: 40px; height: 40px; border-radius:var(--radius); object-fit: cover; flex-shrink: 0; margin-right: var(--sp-3); background: var(--gray-800); cursor: pointer; }
         .lib-rating-row { display: flex; align-items: center; gap: 1px; margin-top: var(--sp-1); }
@@ -1215,20 +1390,19 @@
         /* ── Bag history cards (Material Design) ──────────────────────────── */
         .lib-bag-history { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
         .lib-bag-history-single { margin-top: var(--sp-2); }
-        /* Material 3 "elevated card": resting shadow instead of a flat
-           border, deepens slightly on expand — gives the collapsed/expanded
-           states a tactile sense of depth instead of just a color swap. */
-        .lib-bag-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-1); box-shadow: 0 1px 2px rgba(0,0,0,.28); transition: box-shadow .2s ease, background .2s ease, border-color .2s ease; }
-        .lib-bag-card.expanded { box-shadow: 0 3px 10px rgba(0,0,0,.32); }
+        /* Flat surface step instead of elevation: the card sits one level
+           above the .lib-item it lives in (--raised over --gray-800), so
+           the collapsed/expanded states read from the surface, not a shadow. */
+        .lib-bag-card { background: var(--raised); border: none; border-radius: var(--radius); padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-1); transition: background .2s ease, border-color .2s ease; }
         /* was rgba(var(--accent-rgb,...)) — --accent-rgb was never defined
            anywhere, so this always silently fell back to indigo (99,102,241)
            regardless of theme/accent color. color-mix() reads the real
            --accent custom property directly, no parallel RGB token needed. */
-        .lib-bag-card.active { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 7%, var(--gray-800)); }
+        .lib-bag-card.active { background: color-mix(in srgb, var(--accent) 7%, var(--raised)); }
         /* Dragged card (bagDragPointerDown, library.js) — pure visual
            feedback, the actual reorder happens by swapping DOM position on
            pointermove, no transform/translate involved. */
-        .lib-bag-card.dragging { opacity: .5; border-style: dashed; box-shadow: none; }
+        .lib-bag-card.dragging { opacity: .5; border: 1px dashed var(--gray-600); }
         /* Collapsed by default (space-saving, especially on mobile) — header
            row stays visible and clickable, body toggles via inline
            display:none/'' (toggleBagCard). Header needs a real touch
@@ -1253,7 +1427,7 @@
            color (--accent for current, --ok for upcoming/"has stock",
            neutral gray for past) instead of the old bordered-outline look
            with hand-picked hex greens that ignored the active theme. */
-        .lib-bag-active-badge, .lib-bag-upcoming-badge, .lib-bag-past-badge { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 2px var(--sp-2); letter-spacing: .03em; text-transform: uppercase; border: none; }
+        .lib-bag-active-badge, .lib-bag-upcoming-badge, .lib-bag-past-badge { font-size: var(--fs-1); font-weight: 600; border-radius: var(--radius-sm); padding: 2px var(--sp-2); border: none; }
         .lib-bag-active-badge { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
         .lib-bag-upcoming-badge { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
         .lib-bag-past-badge { background: var(--gray-700); color: var(--gray-500); }
@@ -1268,7 +1442,7 @@
         .lib-bag-del:hover { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
         .lib-bag-card-details { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-1); }
         .lib-bag-detail { display: flex; flex-direction: column; gap: 1px; }
-        .lib-bag-detail-label { font-size: 10px; color: var(--gray-600); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+        .lib-bag-detail-label { font-size: var(--fs-1); color: var(--gray-600); font-weight: 600; }
         .lib-bag-detail-val { color: var(--gray-300); font-weight: 500; }
         .lib-bag-empty-note { display: inline-flex; color: var(--gray-500); font-size: var(--fs-1); margin-top: var(--sp-1); }
         /* Material 3 "expansion panel" trigger for the Vergangene section —
@@ -1290,7 +1464,7 @@
         /* ── Bean form bag section divider ────────────────────────────────── */
         .lib-bag-section-divider { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-4) 0 var(--sp-2); }
         .lib-bag-section-divider::before, .lib-bag-section-divider::after { content: ''; flex: 1; height: 1px; background: var(--gray-800); }
-        .lib-bag-section-label { font-size: var(--fs-1); font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+        .lib-bag-section-label { font-size: var(--fs-1); font-weight: 600; color: var(--accent); white-space: nowrap; }
         /* ── Bag dialog overlay ────────────────────────────────────────────── */
         .bag-dialog-modal { max-width: 380px; width: 100%; }
         .bag-dialog-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); align-items: start; }
@@ -1366,8 +1540,16 @@
         }
         .autocomplete-item:hover, .autocomplete-item.active { background: var(--gray-800); color: var(--gray-200); }
         .lib-form-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
-        .lib-save-btn { background: linear-gradient(135deg, var(--accent-from), var(--accent-to)); border: none; border-radius:var(--radius); color: var(--accent-text); font-size: var(--fs-1); font-weight: 600; padding: var(--sp-2) var(--sp-4); cursor: pointer; transition: filter .15s; }
+        .lib-save-btn { background: var(--accent); border: none; border-radius:var(--radius); color: var(--accent-text); font-size: var(--fs-1); font-weight: 600; padding: var(--sp-2) var(--sp-4); cursor: pointer; transition: filter .15s; }
         .lib-save-btn:hover { filter: brightness(1.1); }
+        @media (prefers-reduced-motion: no-preference) {
+            .lib-save-btn { transition: filter .15s, transform 80ms; }
+            .lib-save-btn:active { transform: scale(.97); }
+            .maint-banner-btn,
+            .maint-custom-form button[data-action="add-custom-maint-task"] { transition: transform 80ms; }
+            .maint-banner-btn:active,
+            .maint-custom-form button[data-action="add-custom-maint-task"]:active { transform: scale(.97); }
+        }
         .lib-add-trigger { background: none; border: 1px dashed var(--gray-700); border-radius:var(--radius); color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2); width: 100%; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-add-trigger:hover { border-color: var(--gray-500); color: var(--gray-200); }
         .lib-empty { color: var(--gray-600); font-size: var(--fs-1); text-align: center; padding: var(--sp-5) 0; }
@@ -1381,6 +1563,8 @@
         .lib-url-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
         .lib-url-btn:hover { border-color:var(--gray-500); color:var(--gray-200); }
         .lib-item-source { font-size: var(--fs-1); color:var(--gray-600); margin-top: var(--sp-1); overflow-wrap: break-word; word-break: break-word; }
+        /* #1543: the shop link inherited the browser's default link blue. */
+        .lib-item-source a { color: var(--accent-ink); }
         .lib-variant-picker { margin-top: var(--sp-2); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
         .lib-variant-picker-label { font-size: var(--fs-1); color:var(--gray-300); margin-bottom: var(--sp-2); }
         .lib-variant-picker-option { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-200); padding: var(--sp-1) 0; cursor:pointer; }
@@ -1413,9 +1597,9 @@
         .lib-milk-name { flex:1; font-size: var(--fs-2); color:var(--gray-200); font-weight:600; }
         .lib-milk-stock-bar-wrap { height:5px; background:var(--gray-800); border-radius:3px; overflow:hidden; }
         .lib-milk-stock-bar { height:100%; border-radius:3px; transition:width .3s; }
-        .lib-milk-stock-bar.ok   { background:#22c55e; }
-        .lib-milk-stock-bar.low  { background:#f59e0b; }
-        .lib-milk-stock-bar.empty{ background:#ef4444; }
+        .lib-milk-stock-bar.ok   { background:var(--ok); }
+        .lib-milk-stock-bar.low  { background:var(--warn); }
+        .lib-milk-stock-bar.empty{ background:var(--err); }
         .lib-milk-meta { display:flex; gap: var(--sp-3); font-size: var(--fs-1); color:var(--gray-500); }
         .lib-milk-meta b { color:var(--gray-300); }
         .lib-milk-restock-row { display:flex; gap: var(--sp-2); align-items:center; }
@@ -1423,15 +1607,229 @@
         .lib-milk-restock-input:focus { border-color:var(--gray-600); }
         .lib-milk-del { background:none; border:none; color:var(--gray-700); cursor:pointer; font-size: var(--fs-2); padding: 2px var(--sp-1); transition:color .15s; }
         .lib-milk-del:hover { color:var(--err); }
+        /* ── Bean shelf (#1329, one shelf #1330) ───────────────────────────────────────
+           One shelf of stock; the beans being drunk stand first. The toolbar
+           switches the items between a photo grid and a compact list, and the
+           spent or archived beans sit in a collapsed Empty & archive. */
+        .lib-shelf-section { margin-top: var(--sp-4); }
+        .lib-shelf-heading { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); font-weight:600; color: var(--accent); margin: 0 0 var(--sp-2); }
+        .lib-shelf-count { color: var(--gray-500); font-weight:600; }
+        .lib-shelf { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--sp-3); }
+        .lib-shelf-tile { display:grid; grid-row: span 6; grid-template-rows: subgrid; row-gap: var(--sp-1); align-content:start; min-width:44px; min-height:44px; padding:0; border:none; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; border-radius: var(--radius-sm); }
+        .lib-shelf-tile:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+        @supports not (grid-template-rows: subgrid) {
+            .lib-shelf-tile { display:flex; flex-direction:column; align-items:stretch; gap: var(--sp-1); }
+        }
+        .lib-shelf-bag { position:relative; display:block; }
+        .lib-shelf-bag::after { content:''; display:block; height:3px; margin-top:2px; border-radius:2px; background: var(--gray-700); }
+        /* Icicles hang from the shelf board (the bag's ::after), so they
+           start at the bag's bottom edge and stay clear of the photo. */
+        .lib-shelf-bag.has-icicles { margin-bottom: 30px; }
+        .lib-shelf-icicles { position:absolute; left:4%; width:92%; top:100%; height:34px; pointer-events:none; z-index:2; }
+        .lib-shelf-icicle-drop { opacity:0; }
+        /* The open word is announced but not drawn (the badge left the
+           photo); same off-screen technique as .lib-sheet-close. */
+        .lib-shelf-open-label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path: inset(50%); white-space:nowrap; }
+        .lib-shelf-img, .lib-shelf-ph { position:relative; z-index:1; display:block; aspect-ratio:3/4; width:100%; object-fit:cover; border-radius: var(--radius-sm); background: var(--gray-800); }
+        .lib-shelf-img.is-sticker, .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; filter: drop-shadow(0 0 1px var(--gray-100)) drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+        .lib-shelf-ph { display:flex; align-items:center; justify-content:center; background: var(--raised); color: var(--gray-500); font-size: var(--fs-3); font-weight:600; letter-spacing:.05em; }
+        .lib-shelf-name { font-size: var(--fs-1); color: var(--gray-200); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .lib-shelf-roaster { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        /* Bag stack: up to two card-coloured copies peek out behind the photo. */
+        .lib-shelf-stack { position:absolute; inset:0; z-index:0; pointer-events:none; }
+        .lib-shelf-stack-layer { position:absolute; inset:0; border-radius: var(--radius-sm); background: var(--gray-800); border:1px solid var(--gray-700); }
+        .lib-shelf-stack-layer:nth-child(1) { transform: translate(4px,-4px); }
+        .lib-shelf-stack-layer:nth-child(2) { transform: translate(8px,-8px); }
+        .lib-shelf-sealed-badge { position:absolute; top: var(--sp-1); right: var(--sp-1); z-index:2; font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
+        .lib-shelf-open-badge { display:inline-block; font-size: var(--fs-1); font-weight:600; color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
+        /* Thin stock bar, same look as the full card's .lib-stock-bar-md. */
+        .lib-shelf-bar { display:block; height:6px; border-radius:999px; background: var(--gray-700); overflow:hidden; }
+        .lib-shelf-bar-fill { display:block; height:100%; border-radius:999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
+        .lib-shelf-bar-fill.low { background: var(--err); }
+        .lib-shelf-stock-line { font-size: var(--fs-1); color: var(--gray-400); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .lib-shelf-sealed { margin-left: var(--sp-1); color: var(--gray-500); }
+        .lib-shelf-frozen-line { display:inline-flex; align-items:center; gap:2px; font-size: var(--fs-1); color: var(--ice); }
+        .lib-shelf-frozen-line .rail-icon { width:12px; height:12px; }
+        .lib-shelf-archived-tag { position:absolute; bottom: var(--sp-1); left: var(--sp-1); font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
+        .lib-shelf-tile.muted { filter: saturate(.25); opacity:.6; }
+        .lib-shelf-tile.muted:hover, .lib-shelf-tile.muted:focus-visible { filter: saturate(.6); opacity:.85; }
+        /* List view: one compact row per bean, same tap-to-expand contract. */
+        .lib-shelf-list { display:flex; flex-direction:column; }
+        .lib-shelf-row { display:flex; align-items:center; gap: var(--sp-2); min-height:44px; width:100%; padding: var(--sp-1) 0; border:none; border-bottom:1px solid var(--gray-800); background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+        .lib-shelf-row:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+        .lib-shelf-row-imgwrap { flex:0 0 36px; width:36px; }
+        .lib-shelf-row-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+        .lib-shelf-row-titlerow { display:flex; align-items:center; gap: var(--sp-1); min-width:0; }
+        .lib-shelf-row-name { min-width:0; font-size: var(--fs-1); color: var(--gray-200); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .lib-shelf-row-sub { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .lib-shelf-row-meta { flex:0 0 auto; display:flex; align-items:center; gap: var(--sp-2); color: var(--gray-500); }
+        .lib-shelf-row.muted { filter: saturate(.25); opacity:.6; }
+        .lib-shelf-row.muted:hover, .lib-shelf-row.muted:focus-visible { filter: saturate(.6); opacity:.85; }
+        .lib-shelf-archive { margin-top: var(--sp-4); }
+        .lib-shelf-archive-summary { cursor:pointer; list-style:none; }
+        .lib-shelf-archive-summary::-webkit-details-marker { display:none; }
+        .lib-shelf-archive-summary::before { content:'\25B8'; transition: transform .2s ease; }
+        .lib-shelf-archive[open] > .lib-shelf-archive-summary::before { transform: rotate(90deg); }
+        /* Touch of love: the bag lifts and tilts as if picked off the shelf. */
+        @media (prefers-reduced-motion: no-preference) {
+            .lib-shelf-tile .lib-shelf-bag { transition: transform 180ms ease; }
+            .lib-shelf-tile:hover .lib-shelf-bag, .lib-shelf-tile:focus-visible .lib-shelf-bag { transform: translateY(-4px) rotate(-1.5deg); }
+            .lib-shelf-tile .is-sticker { transition: transform 150ms ease; }
+            .lib-shelf-tile:hover .is-sticker, .lib-shelf-tile:focus-visible .is-sticker { transform: translateY(-2px) rotate(-1deg); }
+        }
+        /* Shelf toolbar (#1329 part 2): search, filter chips and sort. */
+        .lib-shelf-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+        .lib-shelf-search { flex:1 1 100%; min-width:0; box-sizing:border-box; min-height:44px; padding: var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-sm); color: var(--gray-200); font-size: var(--fs-2); }
+        .lib-shelf-search:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+        .lib-shelf-search-row { display:flex; align-items:center; gap: var(--sp-2); flex:1 1 100%; min-width:0; }
+        .lib-shelf-search-row .lib-shelf-search { flex:1 1 auto; }
+        .lib-shelf-views { display:flex; flex:0 0 auto; }
+        .lib-shelf-view-btn { position:relative; min-height:32px; padding: 0 var(--sp-2); border:1px solid var(--gray-700); background:none; color: var(--gray-400); font-size: var(--fs-1); font-weight:600; cursor:pointer; transition: border-color .15s, color .15s, background .15s; }
+        .lib-shelf-view-btn + .lib-shelf-view-btn { margin-left:-1px; }
+        .lib-shelf-view-btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+        .lib-shelf-view-btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+        .lib-shelf-view-btn:hover { border-color: var(--gray-500); color: var(--gray-200); }
+        .lib-shelf-view-btn[aria-pressed="true"] { z-index:1; background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent-ink); }
+        .lib-shelf-chips { display:flex; flex-wrap:wrap; gap: var(--sp-1); }
+        .lib-shelf-chip { min-height:32px; padding: 0 var(--sp-3); border:1px solid var(--gray-700); border-radius: var(--radius-sm); background:none; color: var(--gray-400); font-size: var(--fs-1); font-weight:600; cursor:pointer; transition: border-color .15s, color .15s, background .15s; }
+        .lib-shelf-chip:hover { border-color: var(--gray-500); color: var(--gray-200); }
+        .lib-shelf-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent-ink); }
+        .lib-shelf-sort { min-height:44px; padding: 0 var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-sm); color: var(--gray-200); font-size: var(--fs-1); }
+        .lib-shelf-sort:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+        .lib-shelf-no-match { color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-3) 0; }
+        .lib-shelf-full-note { color: var(--gray-500); font-size: var(--fs-1); margin-bottom: var(--sp-2); }
+        @media (min-width: 640px) {
+            .lib-shelf { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+            .lib-shelf-search { flex:1 1 auto; }
+            .lib-shelf-sort { margin-left:auto; }
+        }
+        /* ── Bean detail sheet (#1330 part 2) ── */
+        body.lib-sheet-open { overflow: hidden; }
+        .lib-sheet-host { display: none; }
+        .lib-sheet-host.open { display: block; }
+        /* #1372: fixed overlays start below the dev-build banner (--dev-banner-h
+           is set on :root by components/dev-banner.ts; it stays unset, so 0px,
+           on real installs). */
+        .lib-sheet-backdrop { position: fixed; top: var(--dev-banner-h, 0px); left: 0; right: 0; bottom: 0; z-index: 900; background: rgba(0,0,0,.55); }
+        .lib-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; max-height: calc(88dvh - var(--dev-banner-h, 0px)); overflow-y: auto; overscroll-behavior-y: contain; background: var(--gray-900); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: var(--sp-4) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 32px rgba(0,0,0,.45); }
+        /* #1489: the sheet scrolls with --sp-4 top padding and a sticky child is
+           offset from the content box, so the bar cancels the padding (negative
+           top offset, matching top padding, negative top margin) to reach the
+           sheet's top edge. The grab pill sits in that padding and its z-index
+           keeps it above the bar's background. */
+        .lib-sheet-bar { position: sticky; top: calc(-1 * var(--sp-4)); z-index: 3; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: var(--sp-4) 0 var(--sp-2); margin-top: calc(-1 * var(--sp-4)); margin-bottom: var(--sp-3); background: var(--gray-900); border-bottom: 1px solid transparent; }
+        .lib-sheet-bar.is-scrolled { border-bottom-color: var(--gray-700); }
+        .lib-sheet-bar-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-3); font-weight: 600; color: var(--gray-100); }
+        .lib-sheet-bar-actions { display: flex; align-items: center; gap: var(--sp-1); justify-self: end; }
+        .lib-sheet-save { min-height: 36px; padding: 0 var(--sp-3); border: none; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-text); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; }
+        .lib-sheet-save:hover { filter: brightness(1.05); }
+        .lib-sheet-save:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .lib-sheet-hero { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
+        /* #1374: the grab pill drags the sheet down to close it on phones. It
+           sits in the sticky bar's top padding, so it needs its own z-index to
+           stay painted above the bar's background. */
+        .lib-sheet-grab { position: relative; z-index: 4; width: 36px; height: 4px; margin: 0 auto var(--sp-3); border-radius: 999px; background: var(--gray-600); }
+        /* Shared detail popover/sheet (#1467). On phones the host keeps the
+           bottom-sheet look; from 900px up an anchored open gets .detail-pop
+           and floats next to the anchor instead. */
+        .detail-sheet-body { min-width: 0; }
+        .detail-sheet-sub { margin: 0 0 var(--sp-2); font-size: var(--fs-1); color: var(--gray-500); }
+        .detail-backdrop { background: transparent; }
+        .lib-sheet.detail-pop { left: 0; right: auto; bottom: auto; top: var(--dev-banner-h, 0px); width: min(360px, calc(100vw - 24px)); max-height: min(70vh, 560px); border-radius: var(--radius-lg); box-shadow: 0 8px 32px rgba(0,0,0,.45); }
+        .detail-pop .lib-sheet-grab { display: none; }
+        @keyframes detail-pop-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+        @media (prefers-reduced-motion: no-preference) {
+            .detail-pop { animation: detail-pop-in 140ms ease-out; }
+        }
+        /* #1374: the drag surfaces must opt out of native touch panning below
+           900px, or the browser scrolls/overscrolls the sheet and fires
+           pointercancel after a few pixels, so the swipe never dismisses. */
+        @media (max-width: 899px) {
+            .lib-sheet-grab, .lib-sheet-bar { touch-action: none; }
+        }
+        .lib-sheet-photo { width: 96px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
+        .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .lib-sheet-photo .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; }
+        .lib-sheet-initials { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--gray-500); font-size: var(--fs-3); font-weight: 600; letter-spacing: .05em; }
+        .lib-sheet-titles { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .lib-sheet-name { margin: 0; font-size: var(--fs-4); color: var(--gray-100); }
+        .lib-sheet-badges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
+        .lib-sheet-stock { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); color: var(--gray-400); font-size: var(--fs-1); }
+        .lib-sheet-close, .lib-sheet-iconbtn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: none; border-radius: 50%; background: transparent; color: var(--gray-200); cursor: pointer; }
+        .lib-sheet-close:hover, .lib-sheet-iconbtn:hover { background: var(--raised); }
+        .lib-sheet-close:focus-visible, .lib-sheet-iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .lib-sheet-more { position: relative; }
+        .lib-sheet-more > summary { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: transparent; color: var(--gray-200); cursor: pointer; list-style: none; font-size: var(--fs-3); line-height: 1; }
+        .lib-sheet-more > summary::-webkit-details-marker { display: none; }
+        .lib-sheet-more > summary:hover, .lib-sheet-more[open] > summary { background: var(--raised); }
+        .lib-sheet-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .lib-sheet-menu-list { position: absolute; right: 0; top: calc(100% + var(--sp-1)); z-index: 2; min-width: 200px; max-height: min(60vh, 360px); overflow-y: auto; padding: var(--sp-1) 0; background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+        .lib-sheet-menu-btn { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-3); border: none; background: none; color: var(--gray-200); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
+        .lib-sheet-menu-btn:hover { background: var(--gray-700); }
+        .lib-sheet-menu-btn.del { color: var(--err); }
+        .lib-sheet-menu-sep { display: block; height: 1px; margin: var(--sp-1) 0; background: var(--gray-700); }
+        .lib-sheet-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0,1fr)); gap: var(--sp-2); margin: var(--sp-3) 0; }
+        .lib-sheet-primary { min-height: 44px; padding: 0 var(--sp-2); border: 1px solid var(--gray-700); border-radius: var(--radius-sm); background: var(--gray-800); color: var(--gray-200); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
+        .lib-sheet-primary:hover { border-color: var(--accent); color: var(--accent-ink); }
+        .lib-sheet-body .lib-item-in-sheet { display: block; background: none; padding: 0; }
+        /* Bean form in a sheet (#1349): the same static form, moved in. */
+        .lib-form-sheet .lib-add-form { display: block; background: none; padding: 0; margin: 0; }
+        .lib-form-sheet-body { min-width: 0; }
+        /* #1489: when editing, the single form Save is redundant with the bar's,
+           so hide the row. Creating keeps it visible: the two "save without /
+           with a bag" choices must stay reachable. The markup stays for other
+           callers. */
+        .lib-form-sheet.is-editing .lib-form-actions { display: none; }
+        .lib-form-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); }
+        .lib-form-confirm[hidden] { display: none; }
+        .lib-form-confirm-q { font-size: var(--fs-1); color: var(--gray-200); }
+        .lib-form-confirm-actions { display: flex; gap: var(--sp-2); }
+        @keyframes lib-shelf-drop { 0% { transform: translateY(-14px) scale(1.05); } 60% { transform: translateY(0) scale(.97); } 100% { transform: translateY(0) scale(1); } }
+        @keyframes lib-icicle-fall { 0%, 86% { opacity:0; transform: translateY(0); } 90% { opacity:.9; } 100% { opacity:0; transform: translateY(26px); } }
+        @keyframes lib-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes lib-sheet-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes lib-sheet-fold { to { transform: scaleY(.2) rotate(-8deg); opacity: .4; } }
+        @media (prefers-reduced-motion: no-preference) {
+            .lib-sheet.lib-sheet-enter { animation: lib-sheet-in 280ms cubic-bezier(.2,0,0,1); }
+            .lib-sheet-photo.fold { animation: lib-sheet-fold 350ms ease forwards; }
+            .lib-shelf-drop { animation: lib-shelf-drop 450ms cubic-bezier(.34,1.56,.64,1); }
+            .lib-shelf-icicle-drop { animation: lib-icicle-fall 4.5s ease-in infinite; }
+        }
+        /* #1488: on phones the dim layer fades in with the sheet's slide-up;
+           the desktop panel keeps its own motion. */
+        @media (max-width: 899px) and (prefers-reduced-motion: no-preference) {
+            .lib-sheet-backdrop.lib-sheet-backdrop-enter { animation: lib-sheet-backdrop-in 280ms cubic-bezier(.2,0,0,1); }
+        }
+        @media (min-width: 900px) {
+            .lib-sheet { left: auto; right: 0; top: var(--dev-banner-h, 0px); bottom: 0; width: min(440px, 100%); max-height: none; border-radius: 0; padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px)); }
+            .lib-sheet-grab { display: none; }
+            @keyframes lib-sheet-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        }
+        /* #1372: desktop has spare width — widen the sheet, lay the bean form
+           out in three columns and place the wheel beside the aromas so the
+           form needs little or no scrolling. */
+        @media (min-width: 1200px) {
+            .lib-sheet { width: min(720px, 50vw); }
+            .lib-form-sheet .lib-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            /* The base odd-last-child rule spans a lone last field across the
+               whole row (right for the 2-column grid); in the 3-column form a
+               lone field stays in its own column. Explicit full-width fields
+               (.lib-form-field-wide) keep spanning. */
+            .lib-form-sheet .lib-form-grid .lib-form-field:not(.lib-form-field-wide):last-child:nth-child(odd) { grid-column: auto; }
+            .lib-sheet-aromas-body { flex-wrap: nowrap; }
+            .lib-sheet-aromas-body .lib-aroma-wheel { width: 200px; }
+        }
+        .lib-form-hint-staged { color: var(--ok); }
+
         .orders-milk-section { margin-top: var(--sp-4); }
         .orders-milk-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: 0 0 var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .orders-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-1); }
         .orders-milk-emoji { font-size: var(--fs-3); }
         .orders-milk-name { flex:1; color:var(--gray-200); }
-        .orders-milk-badge { font-size: var(--fs-1); font-weight:700; padding: 2px var(--sp-2); border-radius:var(--radius); }
-        .orders-milk-badge.ok    { background:rgba(34,197,94,.15); color:#22c55e; }
-        .orders-milk-badge.low   { background:rgba(245,158,11,.15); color:#f59e0b; }
-        .orders-milk-badge.empty { background:rgba(239,68,68,.15); color:#ef4444; }
+        .orders-milk-badge { font-size: var(--fs-1); font-weight:600; padding: 2px var(--sp-2); border-radius:var(--radius-sm); }
+        .orders-milk-badge.ok    { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
+        .orders-milk-badge.low   { background:color-mix(in srgb, var(--warn) 14%, transparent); color:var(--warn); }
+        .orders-milk-badge.empty { background:color-mix(in srgb, var(--err) 14%, transparent); color:var(--err); }
         .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding-left: 2px; font-size: var(--fs-1); color:var(--gray-500); }
         .orders-menu-milk-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:60px; }
         .orders-menu-milk-input:focus { border-color:var(--gray-600); }
@@ -1449,6 +1847,17 @@
         #scanStatus.error { color:var(--err); }
         .scan-close-btn { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-400); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-5); cursor:pointer; }
         .scan-close-btn:hover { background:var(--gray-700); color:var(--gray-200); }
+        .scan-manual { display:flex; flex-direction:column; gap: var(--sp-2); width:100%; max-width:420px; }
+        .scan-manual label { color:var(--gray-400); font-size: var(--fs-1); text-align:center; }
+        .scan-manual-row { display:flex; gap: var(--sp-2); }
+        .scan-manual-input { flex:1 1 auto; text-align:center; }
+        .scan-manual-submit { flex:0 0 auto; white-space:nowrap; }
+        /* No stream attached: hide the <video> so Android's WebView does not
+           show its play-button poster in the empty viewport (#1536). */
+        #scanViewport video.scan-video-off { visibility:hidden; }
+        .scan-hint { color:var(--gray-500); font-size: var(--fs-1); text-align:center; max-width:420px; }
+        .scan-hint[hidden] { display:none; }
+        .scan-photo-btn { white-space:nowrap; }
 
         /* ── Backup export/restore modal ── */
         #backupModal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.85); align-items:center; justify-content:center; padding: var(--sp-5); overflow-y:auto; }
@@ -1508,6 +1917,10 @@
         #live-status-badge.steaming,
         #live-status-badge.flushing,
         #live-status-badge.descaling   { color: var(--accent-ink); }
+        /* #1541: the idle badge mirrors the idle title's standby/warming
+           states instead of always reading as "Ready". */
+        #live-status-badge.standby     { color: var(--gray-500); }
+        #live-status-badge.warming     { color: var(--accent-ink); }
 
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
@@ -1634,6 +2047,11 @@
         .idle-stat-val { font-size: var(--fs-3); font-weight: 600; color: var(--gray-300); }
         #liveIdleTargetTemp { color: var(--gray-600); }
         .idle-stat-label { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-1); }
+        /* #1409: the machine's own warnings (below the stats row) and the
+           quieter firmware-update hint under them. */
+        .live-idle-warn { color: var(--warn); font-size: var(--fs-1); font-weight: 600; margin-top: var(--sp-2); text-align: center; }
+        .live-idle-hint { color: var(--gray-500); font-size: var(--fs-1); margin-top: var(--sp-1); text-align: center; }
+        #liveFlushBtn { margin-top: var(--sp-3); }
 
         /* ── Preheat widget ── */
         #preheat-widget { width: 100%; max-width: 320px; margin-bottom: var(--sp-6); text-align: center; }
@@ -1655,7 +2073,7 @@
         }
         #preheat-bar-fill {
             height: 100%; width: 0%;
-            background: linear-gradient(90deg, var(--accent), var(--err));
+            background: var(--accent);
             border-radius: 3px; transition: width .8s ease;
         }
         #preheat-countdown { font-size: var(--fs-1); color: var(--gray-500); }
@@ -1801,10 +2219,10 @@
             font-size: var(--fs-2); margin-top: var(--sp-4);
         }
         .grind-advice .grind-icon { font-size: var(--fs-3); flex-shrink: 0; }
-        .grind-ok      { border-color: #22c55e; color: #86efac; }
+        .grind-ok      { border-color: var(--ok); color: var(--ok); }
         .grind-finer   { border-color: #3498db; color: #93c5fd; }
         .grind-coarser { border-color: #f39c12; color: #fcd34d; }
-        .grind-warning { border-color: #ef4444; color: #fca5a5; }
+        .grind-warning { border-color: var(--err); color: var(--err); }
         .grind-comparative { margin-top: var(--sp-2); font-size: var(--fs-1); opacity: .9; flex-wrap: wrap; cursor: default; }
         .comp-toggle { background: none; border: none; color: inherit; font-size: var(--fs-1); cursor: pointer; padding: 0 var(--sp-2) 0 0; opacity: .7; flex-shrink: 0; display: inline-block; transition: transform .15s, opacity .15s; }
         .comp-toggle:hover { opacity: 1; }
@@ -2067,6 +2485,8 @@
                navigates via #bottom-nav instead. The burger drawer trigger
                (#425) takes its place. */
             .topbar-nav-scroll { display: none; }
+            #btnSettings { display: none; }
+            .topbar-sep { display: none; }
             .mobile-drawer-btn { display: flex; }
             /* #914: #powerBtn lives in #sidebar, which is hidden entirely on
                mobile just below -- #railPowerBtn is its topbar stand-in.
@@ -2280,6 +2700,7 @@
         @media (max-width: 480px) {
             .live-stats { grid-template-columns: repeat(2, 1fr); }
             .sprofiler-header h1 { font-size: var(--fs-3); }
+            #analytics-view { --analytics-pad: var(--sp-3); }
             #analytics-view, #library-view, #maintenance-view,
             #dialin-view, #settings-view, #orders-view, #achievements-view { padding: var(--sp-3); }
 
@@ -2345,8 +2766,7 @@
         /* ── Material Design maintenance cards ── */
         .maint-grid-compact { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(260px,100%),1fr)); gap: var(--sp-3); }
         /* Card shell */
-        .maint-card { display:flex; background:var(--gray-900); border-radius:12px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.35); transition:box-shadow .2s; }
-        .maint-card:hover { box-shadow:0 4px 14px rgba(0,0,0,.5); }
+        .maint-card { display:flex; background:var(--gray-800); border-radius:var(--radius); overflow:hidden; }
         /* Left status indicator strip */
         .maint-card-indicator { width:4px; flex-shrink:0; background:var(--gray-700); }
         .maint-card.status-due  .maint-card-indicator { background:var(--err); }
@@ -2359,7 +2779,7 @@
         .maint-card-icon { display:inline-flex; width:16px; height:16px; flex-shrink:0; color:var(--accent-ink); }
         .maint-card-icon svg { width:16px; height:16px; }
         .maint-card-title { flex:1; font-size:var(--fs-2); font-weight:600; color:var(--gray-100); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .maint-card-chip { padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; flex-shrink:0; }
+        .maint-card-chip { padding:2px 8px; border-radius:var(--radius-sm); font-size:var(--fs-1); font-weight:600; flex-shrink:0; }
         .maint-card-chip.due    { background:rgba(220,38,38,.18);  color:var(--err); }
         .maint-card-chip.soon   { background:rgba(217,119,6,.18);  color:var(--accent); }
         .maint-card-chip.ok     { background:rgba(22,163,74,.18);  color:var(--ok); }
@@ -2430,7 +2850,7 @@
         .maint-disabled-row .icon svg { width:14px; height:14px; }
         .maint-disabled-row span:nth-child(2) { flex:1; }
         /* Guided maintenance walkthrough */
-        .guided-maint-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding: var(--sp-4); }
+        .guided-maint-overlay { position:fixed; top: var(--dev-banner-h, 0px); left:0; right:0; bottom:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding: var(--sp-4); }
         .guided-maint-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:440px; width:100%; max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-3); }
         .guided-maint-step { display:flex; align-items:flex-start; gap: var(--sp-3); padding: var(--sp-2) var(--sp-2); border-bottom:1px solid var(--gray-800); cursor:pointer; font-size: var(--fs-2); color:var(--gray-300); }
         .guided-maint-step:last-child { border-bottom:none; }
@@ -2446,7 +2866,7 @@
            remaining space, but a flex column sized by `height:auto` (content)
            never has positive free space to grow into — the canvas would
            collapse to 0px before echarts even has a size to init() against. */
-        .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, 92dvh); max-height:92dvh; overflow-y:hidden; }
+        .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); max-height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); overflow-y:hidden; }
 
         /* Machine profile editor modal (#307) — same fixed-height/flex-child
            pattern as .flavor-wheel-modal above, but wider (dense 2-column
@@ -2550,15 +2970,55 @@
         .fw-close-x { margin-left: auto; background:none; border:none; color:var(--gray-400); font-size: var(--fs-3); line-height:1; padding: var(--sp-2); cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:var(--gray-200); }
         .fw-bean-image { width:44px; height:44px; border-radius:var(--radius); object-fit:cover; flex-shrink:0; }
-        .fw-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-1); font-size: var(--fs-1); flex-shrink:0; }
+        .fw-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-1); font-size: var(--fs-1); flex-shrink:0; min-height: calc(var(--fs-1) * 1.6); }
         .fw-crumb { background:none; border:none; color:var(--gray-400); cursor:pointer; padding: 2px var(--sp-1); border-radius:var(--radius); font-size:inherit; font-weight:600; }
         .fw-crumb:last-child { color:var(--gray-200); }
         .fw-crumb:hover, .fw-crumb:focus-visible { background:var(--gray-800); color:var(--gray-200); }
         .fw-crumb-sep { color:var(--gray-600); }
-        /* flex:1 + min-height:0 lets the chart shrink to whatever space is left
-           after the fixed-size header/breadcrumb/credit, instead of forcing
-           the modal to overflow and scroll on short viewports. */
-        .fw-canvas { width:100%; flex:1 1 auto; min-height:0; cursor:pointer; position:relative; }
+    /* #1350: wheel left, legend + unmatched right from 900 px; one column
+    below. The wheel column keeps the flex growth (header/breadcrumb/credit
+    stay fixed-size) so the canvas always has a positive size for echarts to
+    init() against, instead of the modal having to scroll. */
+    .fw-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap: var(--sp-2); }
+    .fw-main { display:flex; flex-direction:column; min-height:0; flex:1 1 auto; }
+    .fw-canvas-wrap { position:relative; flex:1 1 auto; min-height:0; container-type: size; }
+    .fw-canvas { width:100%; height:100%; cursor:pointer; position:relative; }
+    .fw-side { flex:0 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-2); }
+    /* Bean photo in the wheel centre; tapping it zooms back to the overview. */
+    .fw-center-photo { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:20cqmin; height:20cqmin; padding:0; border:2px solid var(--gray-600); border-radius:50%; overflow:hidden; background:var(--gray-800); cursor:pointer; pointer-events:auto; }
+    .fw-center-photo img { display:block; width:100%; height:100%; object-fit:cover; }
+    .fw-legend { display:flex; flex-direction:column; gap:2px; overflow-y:auto; min-height:0; }
+    .fw-legend-row { display:flex; align-items:center; gap: var(--sp-2); width:100%; padding: var(--sp-1) var(--sp-2); background:none; border:none; border-radius:var(--radius); color:var(--gray-300); font:inherit; font-size:var(--fs-1); text-align:left; cursor:pointer; }
+    .fw-legend-row:hover, .fw-legend-row:focus-visible { background:var(--gray-800); color:var(--gray-100); }
+    .fw-legend-dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+    .fw-legend-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    @media (min-width: 900px) {
+        .flavor-wheel-modal { max-width: min(960px, 96vw); }
+        .fw-body { display:grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); grid-template-rows: minmax(0, 1fr); gap: var(--sp-4); }
+    }
+    /* #1374/#1482: on a phone the wheel takes the whole screen (minus the
+       dev-build banner). It opens and closes without a view transition now
+       (see the fade below) — a view transition snapshotted the whole page and
+       stretched a snapshot of the small sheet wheel to full screen, which read
+       as a full refresh. */
+    @media (max-width: 899px) {
+        #flavorWheelModal { padding: 0; }
+        .flavor-wheel-modal { width:100%; max-width:none; height: calc(100dvh - var(--dev-banner-h, 0px)); max-height:none; border-radius:0; }
+    }
+    /* #1482 (follow-up to #1452/#1455): the wheel opens and closes without a
+       view transition — the full-screen overlay simply fades in on open (the
+       panel rises slightly) and fades out on close before it is hidden. The
+       animations run only when the user has not asked for reduced motion; with
+       `reduce` the close hides the overlay at once (see closeFlavorWheel). */
+    @media (prefers-reduced-motion: no-preference) {
+        #flavorWheelModal { animation: fw-modal-in 180ms cubic-bezier(.2,0,0,1); }
+        #flavorWheelModal .flavor-wheel-modal { animation: fw-panel-in 180ms cubic-bezier(.2,0,0,1); }
+        #flavorWheelModal.is-closing { animation: fw-modal-out 140ms cubic-bezier(.2,0,0,1) forwards; }
+        #flavorWheelModal.is-closing .flavor-wheel-modal { animation: none; }
+    }
+    @keyframes fw-modal-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fw-panel-in { from { transform: translateY(12px); } to { transform: translateY(0); } }
+    @keyframes fw-modal-out { from { opacity: 1; } to { opacity: 0; } }
 
         /* Photo picker button (replaces native <input type=file>, #286) */
         .photo-picker-row { display:flex; align-items:center; gap: var(--sp-2); flex-wrap:wrap; }
@@ -2568,14 +3028,66 @@
         .crop-editor-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:1100; padding: var(--sp-4); }
         .crop-editor-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:360px; width:100%; display:flex; flex-direction:column; align-items:center; gap: var(--sp-4); }
         .crop-editor-title { font-size: var(--fs-2); font-weight:600; color:var(--gray-200); margin: 0; }
-        .crop-editor-canvas { touch-action:none; cursor:grab; background:var(--gray-950); max-width:100%; }
+        .crop-editor-canvas { touch-action:none; cursor:grab; background:var(--gray-950); max-width:100%; height:auto; }
         .crop-editor-canvas:active { cursor:grabbing; }
         .crop-editor-canvas-circle { border-radius:50%; }
         .crop-editor-canvas-square { border-radius:var(--radius); }
+        /* Bean-photo preview (#1346): 3:4 with a crimped top edge like a coffee
+           bag. Preview-guide only — the exported JPEG keeps the flat frame. */
+        .crop-editor-canvas-portrait {
+            border-radius: var(--radius-sm) var(--radius-sm) var(--radius) var(--radius);
+            clip-path: polygon(
+                0 4%, 6% 0, 12% 4%, 18% 0, 24% 4%, 30% 0, 36% 4%, 42% 0,
+                48% 4%, 54% 0, 60% 4%, 66% 0, 72% 4%, 78% 0, 84% 4%, 90% 0,
+                96% 4%, 100% 0, 100% 100%, 0 100%
+            );
+        }
         .crop-editor-zoom-row { display:flex; align-items:center; gap: var(--sp-2); width:100%; }
         .crop-editor-zoom-icon { color:var(--gray-500); font-size: var(--fs-2); user-select:none; }
         .crop-editor-zoom-slider { flex:1; accent-color:var(--accent); }
         .crop-editor-actions { display:flex; justify-content:flex-end; gap: var(--sp-2); width:100%; }
+
+        /* Sticker editor overlay (#1336) */
+        .sticker-viewport { position:relative; overflow:hidden; border-radius:var(--radius); max-width:100%; touch-action:none; line-height:0; width: fit-content; margin-inline: auto; }
+        .sticker-canvas { max-width:100%; border-radius:var(--radius); background:var(--gray-950); transform-origin:0 0; }
+        .sticker-overlay .crop-editor-modal { max-width:440px; }
+        .sticker-overlay .lib-btn-sm, .sticker-overlay .lib-save-btn { min-height:44px; }
+        .sticker-mode { display:flex; width:100%; border:1px solid var(--gray-700); border-radius:var(--radius); padding:3px; gap:3px; }
+        .sticker-mode-btn { flex:1 1 50%; min-height:44px; border:1px solid transparent; border-radius: calc(var(--radius) - 3px); background:transparent; color:var(--gray-300); font-size: var(--fs-1); font-weight:600; cursor:pointer; }
+        .sticker-mode-add[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); color: var(--accent-ink); }
+        .sticker-mode-remove[aria-pressed="true"] { background: color-mix(in srgb, var(--err) 22%, transparent); border-color: var(--err); color: var(--err); }
+        .sticker-mode-btn:disabled { opacity:.5; cursor:default; }
+        .sticker-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap: var(--sp-2); width:100%; }
+        .sticker-tools .lib-btn-sm { min-width:44px; }
+        .sticker-fit[hidden] { display:none; }
+        .sticker-size { display:flex; align-items:center; gap: var(--sp-2); flex:1 1 160px; color:var(--gray-300); font-size: var(--fs-1); }
+        .sticker-size .sticker-brush-size { flex:1; min-height:44px; accent-color:var(--accent); }
+        .sticker-working { color:var(--gray-500); font-size: var(--fs-1); margin:0; text-align:center; }
+        .sticker-working.sticker-failed { color:var(--err); }
+        .sticker-hint { color: var(--gray-300); font-size: var(--fs-1); margin:0; text-align:center; }
+        .sticker-hint-zoom { display:block; color: var(--gray-500); }
+        .sticker-tap-marker { position:absolute; width:24px; height:24px; border-radius:50%; border:2px solid var(--accent); border-top-color: transparent; transform: translate(-50%,-50%); pointer-events:none; }
+        .sticker-brush-preview { position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); border-radius:50%; border:2px solid var(--gray-100); pointer-events:none; }
+        .sticker-progress { height:6px; width:100%; border-radius:999px; background:var(--gray-800); overflow:hidden; }
+        .sticker-progress-fill { height:100%; width:0; border-radius:999px; background:var(--accent); }
+        .sticker-overlay.sticker-busy { cursor:progress; }
+        /* Phones: the sheet fills the screen and the viewport takes the slack. */
+        @media (max-width: 600px) {
+            .sticker-overlay { padding:0; }
+            .sticker-overlay .crop-editor-modal { max-width:none; height:100%; border-radius:0; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) calc(var(--sp-3) + env(safe-area-inset-bottom)); }
+            .sticker-viewport { flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; width:100%; }
+            .sticker-canvas { max-width:100%; max-height:100%; }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+            .sticker-peel { animation: sticker-peel 450ms ease-in forwards; transform-origin:85% 15%; }
+            .sticker-progress-fill { transition: width .25s ease; }
+            .sticker-tap-marker { animation: sticker-tap-spin 700ms linear infinite; }
+            @keyframes sticker-tap-spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+            @keyframes sticker-peel {
+                0%   { transform: translateY(0) rotate(0deg); box-shadow:0 0 0 rgba(0,0,0,0); }
+                100% { transform: translateY(-6px) rotate(-2deg); box-shadow:0 12px 24px rgba(0,0,0,.45); }
+            }
+        }
 
         /* Fullscreen image lightbox (#287) */
         .lightbox-overlay { position:fixed; inset:0; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; z-index:1200; padding: var(--sp-4); cursor:zoom-out; }
@@ -2604,7 +3116,7 @@
         .maint-log-form-actions { display:flex; gap: var(--sp-2); }
         .maint-log-cancel-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-500); border-radius:var(--radius); padding: var(--sp-2) var(--sp-4); cursor:pointer; font-size: var(--fs-1); }
         .maint-log-cancel-btn:hover { color:var(--gray-300); }
-        .maint-log-manual-badge { font-size: var(--fs-1); font-weight:700; background:rgba(132,204,22,.12); border:1px solid rgba(132,204,22,.3); color:#84cc16; border-radius:var(--radius); padding: 1px var(--sp-1); vertical-align:middle; margin-left: var(--sp-1); }
+        .maint-log-manual-badge { font-size: var(--fs-1); font-weight:600; background:var(--gray-700); color:var(--gray-300); border-radius:var(--radius-sm); padding: 1px var(--sp-1); vertical-align:middle; margin-left: var(--sp-1); }
 
         /* Maintenance log table (#393) */
         .maint-log-tablewrap { border-radius:var(--radius); overflow-x:auto; background:var(--gray-900); }
@@ -2770,7 +3282,7 @@
             height: 100%;
             width: 0%;
             border-radius: 2px;
-            background: linear-gradient(90deg, var(--accent-from), var(--accent-to));
+            background: var(--accent);
             transition: width .2s ease;
         }
 
@@ -2967,7 +3479,8 @@
             position: relative; z-index: 1;
             background: var(--gray-950); border: 1px solid var(--gray-700); border-radius: var(--radius-lg, var(--radius));
             padding: var(--sp-6) var(--sp-5) var(--sp-5);
-            max-width: 320px; width: 100%;
+            max-width: min(720px, 100%); width: 100%;
+            max-height: min(92vh, 760px); overflow-y: auto;
             display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
             text-align: center;
         }
@@ -2987,6 +3500,77 @@
         .easter-egg-panel-stats dt { color: var(--gray-500); text-align: right; }
         .easter-egg-panel-stats dd { margin: 0; color: var(--gray-300); text-align: left; font-variant-numeric: tabular-nums; }
         .easter-egg-panel-thanks { margin: 0; font-size: var(--fs-1); color: var(--gray-400); }
+
+        /* ══ Coffee history (#1351): the spiral of shots around the machine
+           icon and the shelf of bean bags, inside the hidden panel. ═══ */
+        .coffee-history {
+            --coffee-tile: 34px;
+            --coffee-crema-hi: #cf935a;
+            --coffee-crema-lo: #6f4423;
+            width: 100%;
+            display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+        }
+        .coffee-history-stage {
+            position: relative;
+            width: 100%; max-width: min(640px, 100%);
+            aspect-ratio: 1 / 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        /* Keep the icon's own position:relative — its clip-paths rely on it (#848). */
+        .coffee-history-stage .easter-egg-panel-icon { height: 120px; z-index: 0; }
+        .coffee-history-tile {
+            position: absolute; left: 50%; top: 50%;
+            width: var(--coffee-tile); height: var(--coffee-tile);
+            transform: translate(-50%, -50%);
+            padding: 0; border-radius: 50%; overflow: hidden;
+            border: 2px solid var(--gray-600);
+            background: radial-gradient(circle at 38% 34%, var(--coffee-crema-hi), var(--coffee-crema-lo));
+            cursor: pointer;
+        }
+        .coffee-history-tile-photo { background: var(--gray-800); }
+        .coffee-history-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+        .coffee-history-tile:focus-visible { outline: 2px solid var(--gray-100); outline-offset: 2px; }
+        .coffee-history-caption {
+            margin: 0; min-height: 1.2em;
+            font-size: var(--fs-1); color: var(--gray-400);
+            font-variant-numeric: tabular-nums;
+        }
+        .coffee-history-shelf {
+            display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end;
+            gap: 8px; width: 100%; max-width: 640px; min-height: 36px;
+            padding: 6px 8px;
+            border: 1px solid var(--gray-700); border-bottom-width: 3px;
+            border-radius: var(--radius); background: var(--gray-900);
+        }
+        .coffee-history-bag {
+            position: relative; width: 30px; height: 44px;
+            border-radius: 3px 3px 2px 2px;
+            background: linear-gradient(180deg, var(--gray-600), var(--gray-700));
+            overflow: hidden;
+        }
+        .coffee-history-bag-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .coffee-history-counters {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-3);
+            font-size: var(--fs-1); color: var(--gray-300);
+            font-variant-numeric: tabular-nums;
+        }
+        @media (max-width: 600px) {
+            .coffee-history { --coffee-tile: 26px; }
+            .coffee-history-stage .easter-egg-panel-icon { height: 92px; }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+            .coffee-history-tile { opacity: 0; animation: coffee-tile-pop .32s ease-out both; }
+            .coffee-history-bag { opacity: 0; animation: coffee-bag-drop .5s cubic-bezier(.2, 1.3, .5, 1) both; }
+            @keyframes coffee-tile-pop {
+                from { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
+                to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            }
+            @keyframes coffee-bag-drop {
+                0%   { opacity: 0; transform: translateY(-16px); }
+                60%  { opacity: 1; transform: translateY(2px); }
+                100% { opacity: 1; transform: translateY(0); }
+            }
+        }
 
         /* ══ Achievements view: the stamp card (#812) ═══════════════════════
            A printed cardboard card, not an app panel — per PLAN.md section 5

@@ -68,10 +68,24 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 	}
 
 	// Vite's "public dir" convention is preserved: these ship unbundled.
-	for _, name := range []string{"manifest.json", "sw.js", "icon.png", "countries-110m.json"} {
+	for _, name := range []string{"manifest.json", "icon.png", "countries-110m.json"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
-			t.Errorf("public/%s was not copied into the output: %v", name, err)
+			t.Errorf("public asset %s was not copied into the output: %v", name, err)
 		}
+	}
+
+	// The app-shell service worker is built from public-src/sw.ts (#1270)
+	// into an unhashed sw.js at the output root, as a classic script: it must
+	// carry the shell cache name and no import/export statement.
+	swJS, err := os.ReadFile(filepath.Join(out, "sw.js"))
+	if err != nil {
+		t.Fatalf("read sw.js: %v", err)
+	}
+	if !strings.Contains(string(swJS), "glp-shell-v1") {
+		t.Error("sw.js does not contain the shell cache name glp-shell-v1")
+	}
+	if regexp.MustCompile(`\b(import|export)\b`).Match(swJS) {
+		t.Errorf("sw.js must be a classic script, but matches import/export:\n%s", headOf(string(swJS)))
 	}
 
 	// CSS extracted from main.ts's own `import './style.css'`.
@@ -98,6 +112,97 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(out, rel)); err != nil {
 			t.Errorf("kiosk.html references %s, which was not written: %v", m[1], err)
 		}
+	}
+
+	// The sticker cut-out worker (#1354) is emitted as its own hashed asset,
+	// and a page bundle references that exact file: esbuild does not rewrite
+	// the new Worker(new URL('./segment.worker.ts', import.meta.url)) pattern
+	// Vite understands, so the build injects the hashed name at build time.
+	workerFiles, _ := filepath.Glob(filepath.Join(out, "assets", "segment.worker-*.js"))
+	if len(workerFiles) != 1 {
+		t.Fatalf("expected exactly one assets/segment.worker-*.js, got %d", len(workerFiles))
+	}
+	workerName := filepath.Base(workerFiles[0])
+	assets, _ := filepath.Glob(filepath.Join(out, "assets", "*.js"))
+	referenced := false
+	for _, asset := range assets {
+		if asset == workerFiles[0] {
+			continue
+		}
+		body, err := os.ReadFile(asset)
+		if err != nil {
+			t.Fatalf("read %s: %v", asset, err)
+		}
+		if strings.Contains(string(body), workerName) {
+			referenced = true
+		}
+	}
+	if !referenced {
+		t.Errorf("no built chunk references the worker file %s", workerName)
+	}
+
+	// The onnxruntime-web runtime (#1404) ships as two content-hashed assets in
+	// assets/, and the worker bundle references both hashed names plus the pinned
+	// model manifest's IS-Net size. segment-core sizes a download from that
+	// manifest instead of the strippable Content-Length.
+	ortNames := make([]string, 0, 2)
+	for _, ext := range []string{"wasm", "mjs"} {
+		matches, _ := filepath.Glob(filepath.Join(out, "assets", "ort-wasm-simd-threaded-*."+ext))
+		if len(matches) != 1 {
+			t.Fatalf("expected exactly one assets/ort-wasm-simd-threaded-*.%s, got %d", ext, len(matches))
+		}
+		ortNames = append(ortNames, filepath.Base(matches[0]))
+	}
+	workerBody, err := os.ReadFile(workerFiles[0])
+	if err != nil {
+		t.Fatalf("read worker bundle: %v", err)
+	}
+	for _, want := range append(ortNames, "46360717") {
+		if !strings.Contains(string(workerBody), want) {
+			t.Errorf("worker bundle does not contain %q", want)
+		}
+	}
+
+	// The barcode-detector ponyfill's zxing reader wasm (#1500) ships as a
+	// content-hashed asset in assets/, and a built page chunk references that
+	// hashed name (injected as __GLP_ZXING_WASM__) instead of the CDN default,
+	// which the CSP's connect-src 'self' would block.
+	zxingMatches, _ := filepath.Glob(filepath.Join(out, "assets", "zxing_reader-*.wasm"))
+	if len(zxingMatches) != 1 {
+		t.Fatalf("expected exactly one assets/zxing_reader-*.wasm, got %d", len(zxingMatches))
+	}
+	zxingName := filepath.Base(zxingMatches[0])
+	referencedZxing := false
+	for _, asset := range assets {
+		body, err := os.ReadFile(asset)
+		if err != nil {
+			t.Fatalf("read %s: %v", asset, err)
+		}
+		if strings.Contains(string(body), zxingName) {
+			referencedZxing = true
+		}
+	}
+	if !referencedZxing {
+		t.Errorf("no built chunk references the zxing reader wasm %s", zxingName)
+	}
+
+	// The raw source path must be gone from every output: a leftover .ts URL
+	// is exactly the regression that broke the cut-out in the image.
+	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(body), "segment.worker.ts") {
+			rel, _ := filepath.Rel(out, path)
+			t.Errorf("%s still contains the unbundled worker source path segment.worker.ts", rel)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("walk output: %v", err)
 	}
 }
 

@@ -3,7 +3,9 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -422,5 +424,346 @@ func TestStopLivePolling_ForcesUnreachableFalse(t *testing.T) {
 	ld := p.LiveData()
 	if ld.MachineReachable == nil || *ld.MachineReachable {
 		t.Fatalf("MachineReachable = %v, want false after stopLivePolling", ld.MachineReachable)
+	}
+}
+
+// fakeLiveTransport is the #1447 regression seam: it records the
+// isDefaultMachine argument each getter receives and echoes that argument back
+// as the "MQTT is active" bool, so a poller that asks for MQTT on a
+// non-Gaggiuino default is caught overriding that machine's own live data.
+type fakeLiveTransport struct {
+	mu      sync.Mutex
+	snapArg []bool
+	sysArg  []bool
+}
+
+func (f *fakeLiveTransport) SensorSnapshot(isDefaultMachine bool) (*proto.SensorStateSnapshotDto, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.snapArg = append(f.snapArg, isDefaultMachine)
+	return &proto.SensorStateSnapshotDto{Temperature: 61.5, BrewActive: false}, isDefaultMachine
+}
+
+func (f *fakeLiveTransport) SystemState(isDefaultMachine bool) (*proto.SystemStateDto, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sysArg = append(f.sysArg, isDefaultMachine)
+	return nil, isDefaultMachine
+}
+
+func (f *fakeLiveTransport) args() (snap, sys []bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]bool(nil), f.snapArg...), append([]bool(nil), f.sysArg...)
+}
+
+// TestPollViaGaggiuinoStatus_MQTTOnlyForGaggiuinoDefault is the #1447
+// regression test: the MQTT live-data transport must only be consulted for a
+// default Gaggiuino. A GaggiMate default reads its own adapter's live data
+// (temperature 68.4, brewing) instead of the Gaggiuino MQTT snapshot (61.5,
+// not brewing), while a Gaggiuino default still uses that snapshot.
+func TestPollViaGaggiuinoStatus_MQTTOnlyForGaggiuinoDefault(t *testing.T) {
+	cases := []struct {
+		name        string
+		machineType string
+		wantMQTTArg bool
+		wantLive    bool
+		wantTemp    float64
+	}{
+		{
+			name:        "gaggimate default reads its own adapter",
+			machineType: "gaggimate",
+			wantMQTTArg: false,
+			wantLive:    true,
+			wantTemp:    68.4,
+		},
+		{
+			name:        "gaggiuino default uses the MQTT snapshot",
+			machineType: "gaggiuino",
+			wantMQTTArg: true,
+			wantLive:    false,
+			wantTemp:    61.5,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeAdapter{}
+			fake.setStatus(okStatus(t, `{}`, 68.4, 94, 9, 0, true, "x", 1), nil)
+			p, sqlDB := newTestPoller(t, fake)
+
+			registry := machines.NewRegistry(sqlDB)
+			if _, err := registry.UpdateMachine(1, machines.MachineInput{Type: &tc.machineType}, nil); err != nil {
+				t.Fatalf("UpdateMachine(type=%s): %v", tc.machineType, err)
+			}
+			lt := &fakeLiveTransport{}
+			p.SetLiveTransport(lt)
+
+			p.pollViaGaggiuinoStatus(context.Background())
+
+			snapArgs, sysArgs := lt.args()
+			if len(snapArgs) != 1 || snapArgs[0] != tc.wantMQTTArg {
+				t.Fatalf("SensorSnapshot called with %v, want [%v]", snapArgs, tc.wantMQTTArg)
+			}
+			if len(sysArgs) != 1 || sysArgs[0] != tc.wantMQTTArg {
+				t.Fatalf("SystemState called with %v, want [%v]", sysArgs, tc.wantMQTTArg)
+			}
+			ld := p.LiveData()
+			if ld.IsLive != tc.wantLive {
+				t.Errorf("IsLive = %v, want %v", ld.IsLive, tc.wantLive)
+			}
+			if ld.Temperature == nil || *ld.Temperature != tc.wantTemp {
+				t.Errorf("Temperature = %v, want %v", ld.Temperature, tc.wantTemp)
+			}
+		})
+	}
+}
+
+// TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling pins #1498's sampling
+// guard: while the runtime is in standby the poll tick records no preheat
+// samples, even if a run is somehow still open, so the history never absorbs
+// the cold standby period.
+func TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	// Deliberately open a run and flag standby without the transition's close,
+	// so the sampling gate is what this test exercises (not the closed run).
+	onAt := time.Now().UnixMilli() - 60_000
+	p.openPreheatRun(onAt)
+	p.runtime.SetStandby(true)
+
+	st := okStatus(t, `{"waterLevel":80,"upTime":1234}`, 35.0, 0, 0, 0, false, "", 0)
+	st.Standby = true
+	fake.setStatus(st, nil)
+
+	p.pollViaGaggiuinoStatus(context.Background())
+
+	runs := p.PreheatHistory()
+	if len(runs) == 0 {
+		t.Fatal("expected the pre-opened run to still be present")
+	}
+	if n := len(runs[0].Samples); n != 0 {
+		t.Errorf("preheat run has %d samples, want 0 while in standby", n)
+	}
+}
+
+// TestPollViaGaggiuinoStatus_ErrorClearsStandby pins #1498's review fix: an
+// unreachable machine is not in standby, so a poll error clears the runtime
+// flag and /api/preheat then reports standby false.
+func TestPollViaGaggiuinoStatus_ErrorClearsStandby(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	p.runtime.SetStandby(true)
+	fake.setStatus(machinesStatusZero(), errBoom)
+
+	p.pollViaGaggiuinoStatus(context.Background())
+
+	if p.runtime.Get().Standby {
+		t.Error("Standby = true, want false after a poll error")
+	}
+	if p.PreheatStatus().Standby {
+		t.Error("PreheatStatus().Standby = true, want false after a poll error")
+	}
+}
+
+// TestPollViaGaggiuinoStatus_StandbyKeepsTempHistoryEmpty pins #1498's review
+// fix: standby readings never enter the temp history, so the poll tick cannot
+// accumulate cold standby samples towards a false stability.
+func TestPollViaGaggiuinoStatus_StandbyKeepsTempHistoryEmpty(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+
+	p.runtime.SetStandby(true)
+	st := okStatus(t, `{"waterLevel":80,"upTime":1234}`, 30.0, 90.0, 0, 0, false, "", 0)
+	st.Standby = true
+	fake.setStatus(st, nil)
+
+	for i := 0; i < tempStableMin; i++ {
+		p.pollViaGaggiuinoStatus(context.Background())
+	}
+
+	p.runtime.mu.Lock()
+	n := len(p.runtime.tempHistory)
+	p.runtime.mu.Unlock()
+	if n != 0 {
+		t.Errorf("temp history len = %d, want 0 across standby ticks", n)
+	}
+}
+
+// TestPollViaGaggiuinoStatus_StandbyThenErrorKeepsNoStaleCountdown pins the
+// #1498 follow-up: once a session ends in standby, a poll error clears the
+// standby flag, but the switch-on time was dropped on the way into standby, so
+// buildPreheatResponse (and PreheatInfo) must report a fresh, full countdown
+// instead of resurrecting the ended session.
+func TestPollViaGaggiuinoStatus_StandbyThenErrorKeepsNoStaleCountdown(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	now := time.Now().UnixMilli()
+	p.runtime.SetStandby(true) // the machine was in standby
+	p.applyStandbyTransition(now, false)
+	if p.runtime.Get().SwitchOnAt == nil {
+		t.Fatal("precondition: waking should stamp a switch-on time")
+	}
+	p.applyStandbyTransition(now+12_000, true) // 12s later the machine sleeps
+
+	// Unreachable: pollViaGaggiuinoStatus's error path clears the standby flag.
+	fake.setStatus(machinesStatusZero(), errBoom)
+	p.pollViaGaggiuinoStatus(context.Background())
+
+	status := p.PreheatStatus()
+	if status.Ready {
+		t.Error("Ready = true, want false after the session ended in standby")
+	}
+	if status.Elapsed != 0 {
+		t.Errorf("Elapsed = %d, want 0", status.Elapsed)
+	}
+	wantRemaining := loadPreheatMinutes() * 60
+	if status.Remaining != wantRemaining {
+		t.Errorf("Remaining = %d, want the full %d", status.Remaining, wantRemaining)
+	}
+	if ready, mins := p.PreheatInfo(); ready || mins != loadPreheatMinutes() {
+		t.Errorf("PreheatInfo() = (%v, %d), want (false, %d)", ready, mins, loadPreheatMinutes())
+	}
+}
+
+// TestStopLivePolling_StillWarmRestartKeepsClock pins that the #1498 follow-up
+// fix is scoped to the standby path: stopLivePolling must keep the switch-on
+// time, so a still-warm restart resumes the same countdown rather than
+// resetting it to a fresh preheat.
+func TestStopLivePolling_StillWarmRestartKeepsClock(t *testing.T) {
+	fake := &fakeAdapter{}
+	p := newPreheatHistoryPoller(t, fake)
+	t.Cleanup(p.stopLivePolling)
+
+	hot := 90.0
+	onAt := time.Now().UnixMilli() - 60_000
+	p.runtime.SetCurrentTemps(&hot, nil)
+	p.runtime.SetSwitchOnAt(&onAt)
+
+	p.startLivePolling()
+	p.stopLivePolling()
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil || *snap.SwitchOnAt != onAt {
+		t.Fatalf("SwitchOnAt = %v after stopLivePolling, want unchanged %d", snap.SwitchOnAt, onAt)
+	}
+
+	p.startLivePolling()
+	if !p.runtime.IsStillWarm(time.Now().UnixMilli()) {
+		t.Fatal("precondition: the boiler should read as still warm")
+	}
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil || *snap.SwitchOnAt != onAt {
+		t.Fatalf("SwitchOnAt = %v after a still-warm restart, want the kept %d", snap.SwitchOnAt, onAt)
+	}
+}
+
+// TestHandleDefaultMachineChange_StartsSessionWhenNewDefaultOn covers #1543:
+// switching the default to an already-on machine while live polling runs must
+// start a fresh preheat session (switch-on time present, countdown running)
+// instead of leaving the countdown stuck at the full window forever.
+func TestHandleDefaultMachineChange_StartsSessionWhenNewDefaultOn(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	// Machine B becomes the default while it is already switched on.
+	registry := machines.NewRegistry(sqlDB)
+	name, typ, host := "Machine B", "gaggiuino", "machine-b.invalid"
+	b, err := registry.CreateMachine(machines.MachineInput{Name: &name, Type: &typ, Host: &host})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if _, err := registry.SetDefaultMachine(b.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+
+	// The stuck state the issue describes: on, but no switch-on time.
+	p.runtime.SetMachineOn(true)
+	p.runtime.SetSwitchOnAt(nil)
+
+	p.HandleDefaultMachineChange()
+
+	snap := p.runtime.Get()
+	if snap.SwitchOnAt == nil {
+		t.Fatal("SwitchOnAt = nil after a default switch to an on machine, want a fresh session")
+	}
+	status := p.PreheatStatus()
+	if status.StabilityReady == nil {
+		t.Error("StabilityReady = nil, want present (a session is active)")
+	}
+	if status.Remaining <= 0 {
+		t.Errorf("Remaining = %d, want a running countdown", status.Remaining)
+	}
+}
+
+// TestHandleDefaultMachineChange_OffDefaultStartsSessionOnSwitchOn is the
+// #1551 regression test: live polling and the on/standby flags of the previous
+// default (a GaggiMate in standby, no switch entity) must not carry over to a
+// new default whose HA switch is off. Polling stops, and the later switch-on
+// is a real off->on transition that starts a fresh preheat session instead of
+// leaving the countdown at the full window.
+func TestHandleDefaultMachineChange_OffDefaultStartsSessionOnSwitchOn(t *testing.T) {
+	var switchState atomic.Value
+	switchState.Store("off")
+	haClient := fakeHA(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/states/switch.machine" {
+			_ = json.NewEncoder(w).Encode(map[string]string{"state": switchState.Load().(string)})
+			return
+		}
+		t.Errorf("unexpected HA call: %s %s", r.Method, r.URL.Path)
+	})
+	fake := &fakeAdapter{}
+	p := newTestPollerWithHA(t, fake, newTestDB(t), haClient, "switch.machine")
+	var c syncCounter
+	p.syncFn = c.fn
+	markLivePollingActive(t, p)
+
+	// The previous default's leftovers: polling running, on, in standby, an
+	// old switch-on time.
+	onAt := time.Now().UnixMilli() - 60_000
+	p.runtime.SetMachineOn(true)
+	p.runtime.SetStandby(true)
+	p.runtime.SetSwitchOnAt(&onAt)
+
+	p.HandleDefaultMachineChange()
+
+	if p.livePollActive() {
+		t.Fatal("live polling still active after a default switch to a machine whose switch is off")
+	}
+	if snap := p.runtime.Get(); snap.SwitchOnAt != nil || snap.MachineOn || snap.Standby {
+		t.Fatalf("runtime after the switch = on %v, standby %v, switch-on %v; want all cleared", snap.MachineOn, snap.Standby, snap.SwitchOnAt)
+	}
+
+	switchState.Store("on")
+	if err := p.checkAndApplyMachinePower(context.Background()); err != nil {
+		t.Fatalf("checkAndApplyMachinePower: %v", err)
+	}
+	if !p.livePollActive() {
+		t.Fatal("live polling not started after switching the new default on")
+	}
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil || *snap.SwitchOnAt == onAt {
+		t.Fatalf("SwitchOnAt = %v after switch-on, want a fresh session", snap.SwitchOnAt)
+	}
+	if status := p.PreheatStatus(); status.Remaining <= 0 {
+		t.Errorf("Remaining = %d, want a running countdown", status.Remaining)
+	}
+}
+
+// TestHandleDefaultMachineChange_StartsPollingWithoutLivePolling pins that a
+// default change also works when live polling was off before: a new default
+// without a switch entity gets live polling and a fresh session right away.
+func TestHandleDefaultMachineChange_StartsPollingWithoutLivePolling(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+	t.Cleanup(p.stopLivePolling)
+
+	p.HandleDefaultMachineChange()
+
+	if !p.livePollActive() {
+		t.Fatal("live polling not started for a new default without a switch entity")
+	}
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil {
+		t.Fatal("SwitchOnAt = nil, want a fresh session")
 	}
 }

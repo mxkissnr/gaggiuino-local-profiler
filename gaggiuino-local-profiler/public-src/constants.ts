@@ -66,6 +66,17 @@ export const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
   YE: [48.52, 15.55],  ZM: [27.85, -13.13], ZW: [29.15, -19.02],
 };
 
+// ── Home countries (ISO alpha-2 → topojson numeric id) ────────────────────
+// The country the user brews in, resolved from the browser locale (#1467):
+// routes on the world map run from each origin to this home point. Kept
+// separate from COFFEE_COUNTRIES (that list is origins only) and small on
+// purpose — an unknown home simply means the map draws no routes.
+export const HOME_COUNTRY_NUM: Record<string, string> = {
+  DE: '276', AT: '040', CH: '756', NL: '528', BE: '056', FR: '250', IT: '380',
+  ES: '724', GB: '826', US: '840', CA: '124', AU: '036', PL: '616', SE: '752',
+  DK: '208', NO: '578', FI: '246', IE: '372', PT: '620', CZ: '203',
+};
+
 export const VARIETY_SUGGESTIONS: string[] = ['Bourbon', 'Geisha',
   'Typica', 'Caturra', 'Catuai', 'SL28', 'SL34', 'Pacamara', 'Maragogype'];
 
@@ -139,6 +150,43 @@ export function buildGmPhaseRanges(phases: GmPhaseInput[] | null | undefined): G
     t += dur;
   });
   return ranges;
+}
+
+// A phase transition recorded in a shot log. `t` is deciseconds, the same unit
+// as timeInShot; `reason` is a PHASE_EXIT_REASON_* code from GaggiMate's
+// shot_log_format.h (see exitReasonKey).
+export interface RecordedPhaseTransition {
+  t: number;
+  phase: number;
+  name?: string;
+  reason?: number;
+}
+
+// Recorded transitions -> {name, phaseType, t0, t1} ranges in seconds, so a
+// shot's phases are shaded from the log's own timings. profileRanges (when
+// present) supplies each phase's type by index.
+export function buildRecordedGmPhaseRanges(
+  transitions: RecordedPhaseTransition[] | null | undefined,
+  endSec: number,
+  profileRanges?: GmPhaseRange[] | null,
+): GmPhaseRange[] {
+  const list = transitions || [];
+  return list.map((tr, i) => {
+    const t0 = tr.t / 10;
+    const next = list[i + 1];
+    const t1 = next ? next.t / 10 : Math.max(endSec, t0);
+    return {
+      name: tr.name || `Phase ${tr.phase + 1}`,
+      phaseType: profileRanges?.[tr.phase]?.phaseType ?? 'brew',
+      t0,
+      t1,
+    };
+  });
+}
+
+// PHASE_EXIT_REASON_* code (1..7) -> i18n key, else null.
+export function exitReasonKey(code: unknown): string | null {
+  return typeof code === 'number' && Number.isInteger(code) && code >= 1 && code <= 7 ? `exit_reason_${code}` : null;
 }
 
 // ── Phase background plugin ───────────────────────────────────────────────

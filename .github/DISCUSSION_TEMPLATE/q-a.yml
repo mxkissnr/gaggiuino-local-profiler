@@ -1,0 +1,37 @@
+body:
+  - type: markdown
+    attributes:
+      value: "Search first, your question may already be answered. For bugs, open an issue instead."
+
+  - type: input
+    id: version
+    attributes:
+      label: GLP version
+    validations:
+      required: true
+
+  - type: dropdown
+    id: machine
+    attributes:
+      label: Machine firmware
+      options:
+        - Gaggiuino
+        - GaggiMate
+        - Both
+        - Not set up yet
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What did you try?
+    validations:
+      required: false

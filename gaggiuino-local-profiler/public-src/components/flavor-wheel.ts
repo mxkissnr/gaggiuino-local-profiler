@@ -1,6 +1,6 @@
 import { FLAVOR_WHEEL } from '../flavor-data.js';
 import type { FlavorNode } from '../flavor-data.js';
-import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, findAutoZoomTarget } from '../flavor-match.js';
+import { matchFlavors, markLit, colorForNode, parentIdOf, nodeById, pathToNode, muteHex } from '../flavor-match.js';
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { esc, html, joinHtml } from '../utils.js';
@@ -30,6 +30,7 @@ interface SunburstEntry {
     textBorderWidth: number;
     fontSize: number;
     fontWeight: string;
+    formatter?: () => string;
   };
 }
 
@@ -59,14 +60,70 @@ function resolveModalBgHex(container: Element | null | undefined): string {
   return rgbStringToHex(bg, '#18181b');
 }
 
-// Alpha-blends `hex` toward `bgHex` by `amount` (0 = unchanged, 1 = fully bg).
-function muteHex(hex: string, bgHex: string, amount: number): string {
-  const c = (h: string): RegExpExecArray | null => /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h || '');
-  const ch1 = _rgbChannels(c(hex));
-  const ch2 = _rgbChannels(c(bgHex));
-  if (!ch1 || !ch2) return hex;
-  const mix = (a: string, b: string): string => Math.round(parseInt(a, 16) * (1 - amount) + parseInt(b, 16) * amount).toString(16).padStart(2, '0');
-  return `#${mix(ch1[0], ch2[0])}${mix(ch1[1], ch2[1])}${mix(ch1[2], ch2[2])}`;
+// Width ECharts gives the depth-1 ring's labels (see the `levels` block in
+// renderFlavorWheel) and the font those labels start at.
+const WHEEL_LABEL_WIDTH = 64;
+const WHEEL_LABEL_FONT = 12;
+const WHEEL_LABEL_MIN_FONT = 8;
+
+export interface WheelLabelLayout {
+  text: string;
+  fontSize: number;
+}
+
+// Splits a wheel label into the tokens a line may break between: words, and a
+// trailing '/' kept glued to the word before it so it ends a line instead of
+// starting one. Nothing else is a break point — a word is never split.
+export function wrapWheelLabelTokens(label: string): string[] {
+  const tokens: string[] = [];
+  for (const chunk of label.split(/\s+/)) {
+    if (!chunk) continue;
+    if (chunk.includes('/')) {
+      const parts = chunk.split('/');
+      parts.forEach((part, i) => {
+        const token = i < parts.length - 1 ? `${part}/` : part;
+        if (token) tokens.push(token);
+      });
+    } else {
+      tokens.push(chunk);
+    }
+  }
+  return tokens;
+}
+
+// Rough advance width of a bold sans glyph as a fraction of the font size —
+// enough to decide a wrap without a canvas/DOM, so the helper stays pure. A
+// little generous (real bold sans averages below 0.6 em) so a line we accept
+// stays under ECharts' `width` and never gets re-broken mid-word.
+function estimateWheelLabelWidth(text: string, fontSize: number): number {
+  return text.length * fontSize * 0.62;
+}
+
+// ECharts' `overflow:'break'` wraps at any character once a line passes the
+// level's width, which split the middle-ring label "Säuerlich / Fermentiert"
+// into "Fermentier"/"t". Wrap at spaces or the flavour slash ourselves, and
+// shrink the font when a single word is still too wide at the minimum size,
+// so a word is never broken mid-word.
+export function wrapWheelLabel(
+  label: string,
+  maxWidth: number,
+  fontSize: number,
+  measure: (text: string, size: number) => number = estimateWheelLabelWidth,
+): WheelLabelLayout {
+  const tokens = wrapWheelLabelTokens(label);
+  if (!tokens.length) return { text: label, fontSize };
+  const longest = tokens.reduce((a, b) => (measure(a, fontSize) >= measure(b, fontSize) ? a : b));
+  let size = fontSize;
+  while (size > WHEEL_LABEL_MIN_FONT && measure(longest, size) > maxWidth) size -= 1;
+  const lines: string[] = [];
+  let line = '';
+  for (const token of tokens) {
+    const candidate = line ? `${line} ${token}` : token;
+    if (line && measure(candidate, size) > maxWidth) { lines.push(line); line = token; }
+    else line = candidate;
+  }
+  if (line) lines.push(line);
+  return { text: lines.join('\n'), fontSize: size };
 }
 
 function toSunburstData(node: FlavorNode, depth: number, lang: FlavorLang, bgHex: string): SunburstEntry {
@@ -78,21 +135,27 @@ function toSunburstData(node: FlavorNode, depth: number, lang: FlavorLang, bgHex
   // muted toward the modal background so the handful of segments that
   // actually matter for this bean stand out, instead of competing for
   // attention with ~100 unrelated ones.
-  const fillColor = lit ? realColor : muteHex(realColor, bgHex, 0.35);
-  // Only lit nodes get a label at all — depth 2/3 use ECharts' native
-  // `rotate:'radial'` (see the `levels` config below) so each label sits
-  // directly on/against its own wedge along its spoke, matching the real
-  // SCA/WCR poster's outer rings; since only a handful of nodes are ever
-  // lit at once there's no density problem the way there was when every
-  // segment was labeled.
-  const labelCfg = {
-    show: lit,
+  // flavor-match's muteHex takes the colour's weight (1 = full colour), so
+  // 0.65 blends 35 % toward the background — the same calm as before.
+  const fillColor = lit ? realColor : muteHex(realColor, bgHex, 0.65);
+  // #1350: the 9 top categories always carry their label so the overview is
+  // readable on its own; the outer two rings only label the bean's own
+  // flavours (depth 2/3 use ECharts' native `rotate:'radial'`, see `levels`).
+  const labelCfg: SunburstEntry['label'] = {
+    show: depth === 1 || lit,
     color: '#fff',
     textBorderColor: 'rgba(0,0,0,.65)',
     textBorderWidth: 2,
     fontSize: (depth === 1 ? 11 : depth === 3 ? 9 : 10) + 1,
     fontWeight: 'bold',
   };
+  // #1543: only the depth-1 ring wraps onto several lines (the outer rings
+  // truncate radially); wrap it ourselves so ECharts cannot break a word.
+  if (depth === 1) {
+    const layout = wrapWheelLabel(label, WHEEL_LABEL_WIDTH, WHEEL_LABEL_FONT);
+    labelCfg.fontSize = layout.fontSize;
+    labelCfg.formatter = () => layout.text;
+  }
   const itemStyle: SunburstEntry['itemStyle'] = { color: fillColor, borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 3 : 1 };
   if (lit) { itemStyle.shadowBlur = 12; itemStyle.shadowColor = realColor; }
   const entry: SunburstEntry = {
@@ -122,12 +185,19 @@ interface FlavorChart {
   dispatchAction(action: Record<string, unknown>): void;
   off(event: string): void;
   on(event: string, handler: (params: FlavorChartClickParams) => void): void;
+  resize(): void;
 }
 
 let _chart: FlavorChart | null = null;
+// #1381: the canvas wrap can change size after init (the breadcrumb line
+// appears below it, the window resizes, the phone rotates, the mobile grow
+// transition ends) and echarts does not follow on its own, which left the
+// CSS-centred centre photo off the wheel. Watch the container and resize.
+let _resizeObserver: ResizeObserver | null = null;
 let _rootId: string | null = null; // currently zoomed-to node id, or null for the full overview
 let _lang: FlavorLang = 'en';
 let _breadcrumbEl: HTMLElement | null = null;
+let _hlNode: string | null = null; // node highlighted from the legend, or null
 
 // #797: echarts (~370 kB gzip) only ships once a wheel is actually opened.
 // _echartsPromise caches the in-flight import so re-opening while it's
@@ -137,6 +207,12 @@ let _breadcrumbEl: HTMLElement | null = null;
 // so a late-arriving chunk never calls echarts.init() on a stale container.
 let _echartsPromise: Promise<typeof import('echarts')> | null = null;
 let _renderReqToken = 0;
+// #1350: a short, calm entry animation — skipped entirely when the user has
+// asked for reduced motion.
+function wheelMotionOk(): boolean {
+  return typeof window === 'undefined' || typeof window.matchMedia !== 'function'
+    || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 function renderBreadcrumb(): void {
   if (!_breadcrumbEl) return;
@@ -164,6 +240,25 @@ export function zoomFlavorWheelTo(id: string | null | undefined): void {
   zoomTo(id || null);
 }
 
+// Legend rows call this (and re-tapping the active row clears it): highlight
+// the matching wedge, or downplay everything when `nodeId` is null.
+export function highlightFlavorWheelNode(nodeId: string | null | undefined): void {
+  if (!_chart) return;
+  const next = nodeId && _hlNode !== nodeId ? nodeId : null;
+  _hlNode = next;
+  _chart.dispatchAction({ type: 'downplay', seriesIndex: 0 });
+  if (!next) return;
+  const node = nodeById(next);
+  if (!node) return;
+  // ECharts' generic highlight action targets a data item by name; the label
+  // is what the sunburst entry carries (see toSunburstData).
+  _chart.dispatchAction({ type: 'highlight', seriesIndex: 0, name: node[_lang] || node.en });
+}
+
+function disconnectResizeObserver(): void {
+  if (_resizeObserver) { _resizeObserver.disconnect(); _resizeObserver = null; }
+}
+
 export async function renderFlavorWheel(container: HTMLElement, flavors: unknown, lang: FlavorLang, breadcrumbEl: HTMLElement | null): Promise<boolean> {
   const { matched } = matchFlavors(flavors);
   FLAVOR_WHEEL.forEach(cat => markLit(cat, matched));
@@ -172,6 +267,8 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
 
   _lang = lang;
   _breadcrumbEl = breadcrumbEl || null;
+  _hlNode = null;
+  disconnectResizeObserver();
   if (_chart) { _chart.dispose(); _chart = null; }
 
   const token = ++_renderReqToken;
@@ -190,27 +287,38 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
 
   container.innerHTML = html``; // clear the loading message before echarts takes over this node
   _chart = echarts.init(container) as unknown as FlavorChart;
+  // #1381: the breadcrumb is filled after this render and the wrap changes
+  // size with the window/phone, so keep the canvas in step with its container
+  // (the chart itself never resizes on its own).
+  if (typeof ResizeObserver !== 'undefined') {
+    _resizeObserver = new ResizeObserver(() => _chart?.resize());
+    _resizeObserver.observe(container);
+  }
   _chart.setOption({
     backgroundColor: 'transparent',
+    animation: wheelMotionOk(),
+    animationDuration: 400,
+    animationEasing: 'cubicOut',
     tooltip: { formatter: (params: { name?: string }) => (params.name === WHEEL_ROOT_ID ? '' : esc(params.name)) },
     series: [{
-      type: 'sunburst', name: WHEEL_ROOT_ID, radius: ['14%', '92%'], center: ['50%', '50%'],
+      type: 'sunburst', name: WHEEL_ROOT_ID, radius: ['22%', '92%'], center: ['50%', '50%'],
       data, sort: null,
       // Zoom is driven entirely by our own click handler below (so the
       // breadcrumb always matches what's on screen, including zoom-out).
       nodeClick: false,
       emphasis: { focus: 'ancestor' },
       itemStyle: { borderColor: '#111113', borderWidth: 1.5 },
-      // Only lit nodes ever render a label (see toSunburstData), so there's
-      // no high-density label field to protect against here — hideOverlap
-      // still guards the rare case where two lit neighbors' labels collide.
+      // The top categories always carry a label and the outer rings only the
+      // bean's flavours (see toSunburstData), so there's no high-density
+      // field to protect against — hideOverlap still guards the rare case
+      // where two neighbouring labels collide.
       label: { hideOverlap: true },
       levels: [
         // depth 0 is echarts' own synthetic wrapper node (created internally
         // from `series.name` + our 9-category array) — it has no data of its
         // own, so it gets no itemStyle/label from toSunburstData and falls
         // back to echarts' theme defaults (a visible blue fill + its raw
-        // name as a label). Invisible by default (tiny sliver at 0-14%
+        // name as a label). Invisible by default (tiny sliver at 0-22%
         // radius) but once zoomed in it's redistributed into a big, very
         // visible ring unless explicitly zeroed out here — same for the
         // emphasis state, since clicking triggers focus:'ancestor' up to it.
@@ -222,12 +330,15 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
         // names (e.g. "Nussig / Kakao") unreadable. `overflow:'break'` with
         // a fixed `width` wraps those long names onto a second line instead
         // of clipping or squeezing them.
-        { r0: '14%', r: '38%', label: { rotate: 0, overflow: 'break', width: 64 } },
+        { r0: '22%', r: '38%', label: { rotate: 0, overflow: 'break', width: WHEEL_LABEL_WIDTH } },
         // Radial (spoke-pointing) labels on the outer two rings, matching
         // the real SCA/WCR wheel's signature look — you tilt the wheel to
-        // read the far side, same as the paper original.
-        { r0: '38%', r: '68%', label: { rotate: 'radial' } },
-        { r0: '68%', r: '92%', label: { rotate: 'radial' } },
+        // read the far side, same as the paper original. `minAngle` keeps a
+        // label out of a wedge too thin to hold it, and `truncate` (rather
+        // than depth 1's `break`) stops a long descriptor from spilling past
+        // its own wedge and reading as glued onto the next one.
+        { r0: '38%', r: '68%', label: { rotate: 'radial', minAngle: 8, overflow: 'truncate', ellipsis: '…' } },
+        { r0: '68%', r: '92%', label: { rotate: 'radial', minAngle: 8, overflow: 'truncate', ellipsis: '…' } },
       ],
     }],
   });
@@ -249,15 +360,14 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
     // children drills into it. This mirrors the sunburst's native
     // click-to-zoom, but tracked ourselves so the breadcrumb never drifts
     // out of sync. Childless leaves (e.g. a single flavor like "Cherry")
-    // are a no-op — zooming a sunburst into an empty leaf has nothing to
-    // draw (see findAutoZoomTarget for the same constraint on auto-zoom).
+    // are a no-op — zooming a sunburst into an empty leaf has nothing to draw.
     if (clickedId === _rootId) { zoomTo(parentIdOf(clickedId)); return; }
     if (nodeById(clickedId)?.children?.length) zoomTo(clickedId);
   });
 
-  const autoZoomId = findAutoZoomTarget(FLAVOR_WHEEL);
-  _rootId = autoZoomId;
-  if (autoZoomId) _chart.dispatchAction({ type: 'sunburstRootToNode', targetNode: autoZoomId });
+  // #1350: always open on the full overview. Auto-zooming into the single top
+  // category a bean's flavours happened to share hid every other category.
+  _rootId = null;
   renderBreadcrumb();
 
   return true;
@@ -265,27 +375,135 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
 
 export function disposeFlavorWheel(): void {
   ++_renderReqToken; // invalidate a still-pending renderFlavorWheel() chunk load, if any
+  unwireWheelKeys();
+  disconnectResizeObserver();
   if (_chart) { _chart.dispose(); _chart = null; }
   _rootId = null;
   _breadcrumbEl = null;
+  _hlNode = null;
 }
 
 // ── Modal wiring ─────────────────────────────────────────────────────────
+
+// One legend row per matched flavour: its label and ancestor path in the
+// current language, a dot in the segment colour, and a button that highlights
+// that wedge (re-tapping the active row clears it).
+function renderLegend(flavors: unknown, lang: FlavorLang): Html {
+  const list = (Array.isArray(flavors) ? flavors : []) as string[];
+  const rows: Html[] = [];
+  const seen = new Set<string>();
+  for (const raw of list) {
+    const { matched } = matchFlavors([raw]);
+    const id = matched.size ? [...matched][0] : null;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const labels = pathToNode(id).map(pid => {
+      const node = nodeById(pid);
+      return node ? (node[lang] || node.en) : pid;
+    });
+    const leaf = labels[labels.length - 1] ?? '';
+    const ancestors = labels.slice(0, -1);
+    const text = ancestors.length ? `${leaf} · ${ancestors.join(' › ')}` : leaf;
+    rows.push(html`<button type="button" class="fw-legend-row" data-action="highlight-flavor-wheel" data-node-id="${esc(id)}"><span class="fw-legend-dot" style="background:${esc(colorForNode(id))}"></span><span class="fw-legend-text">${esc(text)}</span></button>`);
+  }
+  return joinHtml(rows);
+}
+
+// ── Open / close fade (#1482) ─────────────────────────────────────────────
+
+// The wheel opens and closes without a view transition — the same decision as
+// the bean sheet (#1452/#1455). A view transition replaces the whole page with
+// snapshots for its duration, and the named `flavor-wheel` group stretched a
+// snapshot of the small sheet wheel to full screen while the real wheel was
+// still empty, so on a phone it still read as a full refresh. Instead the
+// overlay fades in on open and out on close (see the `fw-modal-*` keyframes in
+// style.css); only the close's final `display: none` waits for the 140ms fade.
+let _closeTimer: ReturnType<typeof setTimeout> | null = null;
+let _closingModal: HTMLElement | null = null;
+
+function onWheelCloseEnd(e: Event): void {
+  if (!_closingModal || e.target !== _closingModal) return;
+  finishWheelClose();
+}
+
+// Drops the closing class/listeners a previous close left behind, so a
+// re-open during the fade cancels it cleanly instead of racing it.
+function cancelWheelClose(modal: HTMLElement): void {
+  if (_closingModal !== modal) return;
+  if (_closeTimer !== null) { clearTimeout(_closeTimer); _closeTimer = null; }
+  modal.removeEventListener('animationend', onWheelCloseEnd);
+  modal.removeEventListener('transitionend', onWheelCloseEnd);
+  modal.classList.remove('is-closing');
+  _closingModal = null;
+}
+
+function finishWheelClose(): void {
+  const modal = _closingModal;
+  if (!modal) return;
+  cancelWheelClose(modal);
+  modal.style.display = 'none';
+  disposeFlavorWheel();
+}
+
+// ── Escape to close (#1543) ───────────────────────────────────────────────
+// The overlay ignores Escape by default. While it is open, Escape closes it —
+// and only it: the bean sheet's own Escape handler is shielded whenever this
+// modal is visible (see `_overlayShieldsSheets` in bean-sheet.ts), so the
+// sheet underneath stays put.
+let _wheelKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+function onWheelKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopPropagation();
+  closeFlavorWheel();
+}
+
+function wireWheelKeys(): void {
+  if (_wheelKeyHandler || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  _wheelKeyHandler = onWheelKeydown;
+  document.addEventListener('keydown', _wheelKeyHandler);
+}
+
+function unwireWheelKeys(): void {
+  const handler = _wheelKeyHandler;
+  _wheelKeyHandler = null;
+  if (!handler || typeof document === 'undefined' || typeof document.removeEventListener !== 'function') return;
+  document.removeEventListener('keydown', handler);
+}
 
 export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const bean = S.coffeeLibrary?.beans?.find(b => b.id === beanId);
   if (!bean) return;
   const modal = document.getElementById('flavorWheelModal');
   if (!modal) return;
+  // #1374: on a narrow phone #main is position:fixed (max-width:768px) and so
+  // becomes a stacking context, which trapped the overlay's own z-index inside
+  // it; the body-level bean sheet (z-index 901) therefore always painted above
+  // the wheel. One move to <body> puts the wheel back into the page's stacking
+  // context. The click delegation (document.body) and the backdrop handler
+  // follow the element.
+  if (document.body && modal.parentElement !== document.body) document.body.appendChild(modal);
+  // A previous close may still be fading the overlay out; take it over so the
+  // reopen does not race the pending `display: none`.
+  cancelWheelClose(modal);
 
   (document.getElementById('flavorWheelTitle') as HTMLElement).textContent = bean.name as string;
+  // #1350: the bean's photo now sits in the wheel's centre (tapping it zooms
+  // back to the overview), so the small header image stays hidden.
   const imgEl = document.getElementById('flavorWheelImage') as HTMLImageElement | null;
-  if (imgEl) {
-    imgEl.style.display = 'none';
-    if (bean.image) {
-      void loadBeanImageBlobUrl(bean.id).then(url => { if (url) { imgEl.src = url; imgEl.style.display = ''; } });
-    }
+  if (imgEl) imgEl.style.display = 'none';
+  const centerBtn = document.getElementById('flavorWheelCenter');
+  const centerImg = document.getElementById('flavorWheelCenterImg') as HTMLImageElement | null;
+  if (centerBtn) {
+    centerBtn.style.display = 'none';
+    centerBtn.setAttribute('aria-label', t('flavor_wheel_center_hint'));
   }
+  if (centerBtn && centerImg && bean.image) {
+    void loadBeanImageBlobUrl(bean.id).then(url => { if (url) { centerImg.src = url; centerBtn.style.display = ''; } });
+  }
+
+  const lang: FlavorLang = (['de', 'en', 'it', 'fr', 'es', 'nl'] as FlavorLang[]).includes(S.currentLang as FlavorLang) ? S.currentLang as FlavorLang : 'en';
 
   const { unmatched } = matchFlavors(bean.flavors);
   const unmatchedWrap = document.getElementById('flavorWheelUnmatched') as HTMLElement;
@@ -294,14 +512,22 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
        <div class="fw-unmatched-chips">${joinHtml(unmatched.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>`
     : html``;
 
-  modal.style.display = 'flex';
+  const legendEl = document.getElementById('flavorWheelLegend');
+  if (legendEl) legendEl.innerHTML = renderLegend(bean.flavors, lang);
+
   const container = document.getElementById('flavorWheelCanvas') as HTMLElement;
   const breadcrumbEl = document.getElementById('flavorWheelBreadcrumb');
-  const lang: FlavorLang = (['de', 'en', 'it', 'fr', 'es', 'nl'] as FlavorLang[]).includes(S.currentLang as FlavorLang) ? S.currentLang as FlavorLang : 'en';
   // echarts is a dynamic import now (#797) — show a loading state while its
   // chunk downloads instead of leaving the canvas blank.
   container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_loading')}</p>`;
   if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
+
+  // Show the overlay synchronously — the fade-in is pure CSS (see the
+  // `fw-modal-in`/`fw-panel-in` keyframes), so there is no view transition to
+  // wait on and the modal is visible on this tick.
+  modal.style.display = 'flex';
+  wireWheelKeys();
+
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
     container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_unavailable')}</p>`;
     if (breadcrumbEl) breadcrumbEl.innerHTML = html``;
@@ -309,7 +535,23 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
 }
 
 export function closeFlavorWheel(): void {
+  unwireWheelKeys();
   const modal = document.getElementById('flavorWheelModal');
-  if (modal) modal.style.display = 'none';
-  disposeFlavorWheel();
+  if (!modal) { disposeFlavorWheel(); return; }
+  cancelWheelClose(modal);
+  // No motion permission: hide at once instead of waiting out a fade the user
+  // will never see.
+  if (!wheelMotionOk()) {
+    modal.style.display = 'none';
+    disposeFlavorWheel();
+    return;
+  }
+  _closingModal = modal;
+  modal.addEventListener('animationend', onWheelCloseEnd);
+  modal.addEventListener('transitionend', onWheelCloseEnd);
+  // `is-closing` switches the overlay to the 140ms fade-out (style.css). Hide
+  // and tear down the chart once it finishes; the timeout is a fallback in case
+  // the animation event never fires.
+  modal.classList.add('is-closing');
+  _closeTimer = setTimeout(finishWheelClose, 140 + 60);
 }

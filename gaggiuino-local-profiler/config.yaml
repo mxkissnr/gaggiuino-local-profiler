@@ -1,5 +1,5 @@
 name: "GLP — Gaggiuino Local Profiler"
-version: "3.3.0"
+version: "3.4.0"
 slug: "gaggiuino_local_profiler"
 description: "Local shot profiler for the Gaggiuino espresso machine — shot archive, coffee library with flavor wheel, analytics and optional order management, all local, no cloud."
 url: "https://github.com/mxkissnr/gaggiuino-local-profiler"
@@ -54,7 +54,7 @@ options:
   debug_logging: false
   # #1288: MCP is configured in-app via GET/POST /api/mcp/settings, so it has
   # no add-on options here. The dev-channel manifest is synced from this file
-  # by scripts/sync-dev-config.mjs.
+  # by scripts/sync-dev-config.mts.
   # #803: default true (open) so no existing install's behaviour changes on
   # upgrade -- see go/internal/system/options.go's isApiPortExposed and
   # go/internal/system/handlers.go's GET /api/token. Turning this off
@@ -69,9 +69,20 @@ options:
   # to obtain a token (an already-configured Order Card that already has
   # glp_token in its YAML is unaffected). See DOCS.md's "Trust model" section.
   expose_api_port: true
+  # #1430: comma-separated extra host names -- beyond IP addresses, localhost,
+  # single-label names and .local names -- the app will answer for. Only needed
+  # when the app is reached through a reverse proxy under your own domain.
+  allowed_hosts: ""
 schema:
   sync_interval: int(1,60)
   preheat_time: int(1,120)?
   enable_orders: bool?
   debug_logging: bool?
   expose_api_port: bool?
+  allowed_hosts: str?
+
+# Home Assistant backups skip the downloaded cut-out models: they are ~60 MB of
+# regenerable data the app re-downloads on first use, so a backup should not
+# carry them.
+backup_exclude:
+  - "*/cutout-models"

@@ -1,6 +1,7 @@
 import { S } from '../state/index.js';
 import { updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
+import { updateTopbarNavFade, isFullyVisibleIn } from './topbar-nav-fade.js';
 
 export function goToShot(id: number): void {
   switchMode('shots');
@@ -12,6 +13,13 @@ export function goToShot(id: number): void {
 }
 
 export function switchMode(mode: string): void {
+  // #1543: a top-level tab switch must not leave an open bean detail sheet or
+  // large flavour wheel from the old view hanging over the new one. Both
+  // existing close helpers no-op when nothing is open (reached via window, the
+  // same way this module already calls the library view's renderers, so the
+  // mode -> library import stays off the module graph and its cycles).
+  window.closeBeanSheet?.();
+  window.closeFlavorWheel?.();
   // #430: flush any pending debounced annotation save before leaving Shots —
   // the annotation panel (and its auto-save) only exists there, so this is
   // the mode-switch equivalent of the blur/visibilitychange flushes wired in
@@ -77,7 +85,14 @@ export function switchMode(mode: string): void {
   };
   const btnId = modeMap[mode];
   const activeBtn = btnId ? document.getElementById(btnId) : null;
-  if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  // #1514: #btnSettings sits in a fixed topbar slot outside the horizontally
+  // scrolling .topbar-nav-scroll, so it has no scroller to reveal it in — only
+  // an in-row tab that is not already fully visible needs scrolling into view.
+  const scroller = activeBtn?.closest<HTMLElement>('.topbar-nav-scroll') ?? null;
+  if (activeBtn && scroller && !isFullyVisibleIn(activeBtn, scroller)) {
+    activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  updateTopbarNavFade(scroller);
 
   // #410/#461: mobile shows #shots-view full screen only while
   // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover

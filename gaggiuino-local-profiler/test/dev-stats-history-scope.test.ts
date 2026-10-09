@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { historyScope } from '../scripts/dev-stats.mjs';
+import { historyScope } from '../scripts/dev-stats.mts';
 
 // #527: dev-stats used to measure the checked-out HEAD, so a run from a
 // main-based worktree published lower numbers than a run from dev (precedent:

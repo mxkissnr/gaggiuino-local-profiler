@@ -282,6 +282,14 @@ jobs:
           # manifest repository needs a PAT with `contents: write` on it.
           token: ${{ secrets.DEV_ADDON_REPO_TOKEN }}
 
+      # #1270: sync-dev-config is TypeScript run on Node's built-in type
+      # stripping; pin Node 24 like the other workflows instead of relying
+      # on the runner image's default Node.
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
       # Bumps config.yaml's version to the tag just built, and prepends a
       # CHANGELOG.md entry listing the commits that landed since the previous
       # dev build -- so testing GLP DEV doesn't require cross-referencing
@@ -307,7 +315,9 @@ jobs:
           MARKER="dev-app/.last-dev-build-sha"
           PROFILE_SRC="main-repo/gaggiuino-local-profiler/apparmor.txt"
           PROFILE_DST="dev-app/gaggiuino_local_profiler_dev/apparmor.txt"
-          SYNC_SCRIPT="main-repo/gaggiuino-local-profiler/scripts/sync-dev-config.mjs"
+          SYNC_SCRIPT="main-repo/gaggiuino-local-profiler/scripts/sync-dev-config.mts"
+          # #1270 transition: a checkout from before the TypeScript port.
+          [ -f "$SYNC_SCRIPT" ] || SYNC_SCRIPT="main-repo/gaggiuino-local-profiler/scripts/sync-dev-config.mjs"
 
           # #789: Supervisor reads an add-on's AppArmor profile from the
           # add-on's own directory, NOT from the image -- so the profile has
@@ -325,11 +335,18 @@ jobs:
             rm -f "$PROFILE_DST"
           fi
 
+          # #1495: Supervisor also reads the option names/help texts from the
+          # add-on's own translations/ folder, so mirror it like the profile.
+          rm -rf dev-app/gaggiuino_local_profiler_dev/translations
+          if [ -d main-repo/gaggiuino-local-profiler/translations ]; then
+            cp -r main-repo/gaggiuino-local-profiler/translations dev-app/gaggiuino_local_profiler_dev/
+          fi
+
           # #805: same class of bug as #789/#803 above, one layer up -- this
           # workflow bumped `version` and copied apparmor.txt but never
           # touched `options`/`schema`, so an option added to the app's own
           # config.yaml (e.g. #804's expose_api_port) had no way to ever
-          # reach the dev add-on's Configuration tab. sync-dev-config.mjs
+          # reach the dev add-on's Configuration tab. sync-dev-config.mts
           # does the merge (source schema wholesale, source-default options
           # added, dev's existing option values preserved -- e.g.
           # debug_logging: true) while leaving every other field (name,

@@ -72,7 +72,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: gaggiuino-local-profiler/package-lock.json
 
-      # The E2E harness (scripts/e2e-harness.mjs) builds and boots the real
+      # The E2E harness (scripts/e2e-harness.mts) builds and boots the real
       # glp-server Go binary as the backend under test — the Node backend it
       # used to require() in-process is gone (3.0.0, #1028).
       - name: Set up Go

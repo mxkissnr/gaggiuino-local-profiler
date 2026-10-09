@@ -226,6 +226,36 @@ func TestAnnotateShotErrors(t *testing.T) {
 	}
 }
 
+func TestAnnotateShotRunsStockHook(t *testing.T) {
+	ts, sqlDB, _, _, _ := newWriteServer(t, true)
+	insertShot(t, sqlDB, 23, 1000, nil, map[string]any{"rating": float64(2)})
+	var (
+		calls int
+		prev  map[string]any
+		next  map[string]any
+	)
+	shots.SetAnnotationStockHook(func(p, n map[string]any) error {
+		calls++
+		prev, next = p, n
+		return nil
+	})
+	t.Cleanup(func() { shots.SetAnnotationStockHook(nil) })
+	session := connect(t, ts.URL+Path)
+	res := call(t, session, "annotate_shot", map[string]any{"id": 23, "rating": 5})
+	if res.IsError {
+		t.Fatalf("annotate_shot failed: %s", errorText(t, res))
+	}
+	if calls != 1 {
+		t.Fatalf("stock hook calls = %d, want 1", calls)
+	}
+	if prev["rating"] != float64(2) {
+		t.Errorf("hook prev rating = %v, want 2", prev["rating"])
+	}
+	if next["rating"] != float64(5) {
+		t.Errorf("hook next rating = %v, want 5", next["rating"])
+	}
+}
+
 func TestSetKnownGrindUpsert(t *testing.T) {
 	ts, _, libRepo, _, _ := newWriteServer(t, true)
 	lib, err := libRepo.GetLibrary()

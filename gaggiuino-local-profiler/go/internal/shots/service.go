@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file is the shot service: the DB-facing operations the HTTP handlers
@@ -22,11 +25,15 @@ var ErrShotNotFound = errors.New("Shot not found")
 // Service composes Repository with score.go's pure scoring functions.
 type Service struct {
 	repo *Repository
+	// imageDir is where the entity photos live. It is only needed to remove a
+	// purged shot's photo (#1525); it defaults to DefaultImageDir, and tests
+	// point it elsewhere by setting the field directly.
+	imageDir string
 }
 
 // NewService wraps repo.
 func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{repo: repo, imageDir: DefaultImageDir}
 }
 
 // GetAll returns every non-trashed shot (no machineId filter — see
@@ -135,14 +142,38 @@ func (e *AnnotationValidationError) Error() string {
 // value (see orders' CompleteOrder, which owns orderedBy).
 var serverOwnedAnnotationKeys = map[string]bool{"orderedBy": true}
 
+// annotationStockHook books the library side effects of a PatchAnnotation
+// (milk stock, frozen-portion counts, #1411). It is installed by cmd/server
+// because this package cannot import internal/library. It only runs for
+// PatchAnnotation: never for UpdateAnnotation (orders' orderedBy) or
+// SaveAnnotation (restore and sync).
+var annotationStockHook atomic.Pointer[func(prev, next map[string]any) error]
+
+// SetAnnotationStockHook installs the process-wide annotation stock hook.
+// Passing nil removes it, restoring the no-bookkeeping behaviour tests and
+// tools rely on.
+func SetAnnotationStockHook(fn func(prev, next map[string]any) error) {
+	if fn == nil {
+		annotationStockHook.Store(nil)
+		return
+	}
+	annotationStockHook.Store(&fn)
+}
+
 // PatchAnnotation merges patch into the shot's stored annotation (#1273):
 // every remaining top-level key of patch overwrites the stored value, a key
 // present as JSON null or "" clears the field, and keys absent from patch
 // are kept. Server-owned keys are ignored. The merged result is validated
 // before it is written; an invalid merge returns *AnnotationValidationError
 // and leaves the stored annotation untouched. Returns the saved annotation.
+// The installed annotation stock hook (see SetAnnotationStockHook) runs once
+// the merge is saved, in the same locked save.
 func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[string]any, error) {
-	return s.repo.UpdateAnnotation(shotID, func(ann map[string]any) error {
+	var after func(prev, next map[string]any) error
+	if h := annotationStockHook.Load(); h != nil {
+		after = *h
+	}
+	return s.repo.updateAnnotation(shotID, func(ann map[string]any) error {
 		for k, v := range patch {
 			if serverOwnedAnnotationKeys[k] {
 				continue
@@ -153,7 +184,7 @@ func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[strin
 			return &AnnotationValidationError{Issues: issues}
 		}
 		return nil
-	})
+	}, after)
 }
 
 // SetImage sets the shot's image extension and returns the updated shot.
@@ -191,11 +222,18 @@ func (s *Service) PermanentDelete(id int64) error {
 
 // PurgeExpiredTrash permanently deletes every shot whose trash entry is older
 // than 30 days (#1152), logging `Auto-purged N shot(s) from trash (>30 days)`
-// — only when N > 0.
+// — only when N > 0. Each purged shot's photo and thumbnail are removed from
+// imageDir as well (#1525): the repository drops the rows, and without this
+// the files would linger until the next restart's orphan sweep.
 func (s *Service) PurgeExpiredTrash() error {
 	purged, err := s.repo.PurgeExpiredTrash(time.Now())
 	if err != nil {
 		return err
+	}
+	for _, p := range purged {
+		if p.Ext != "" {
+			img.Delete(s.imageDir, p.ID, p.Ext, "shot-")
+		}
 	}
 	if len(purged) > 0 {
 		log.Printf("shots: auto-purged %d shot(s) from trash (>30 days)", len(purged))

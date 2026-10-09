@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"sync"
 	"time"
@@ -593,6 +594,16 @@ var annotationMu sync.Mutex
 // the lock is held and the lock is not re-entrant, so it must not call back
 // into an annotation writer.
 func (r *Repository) UpdateAnnotation(shotID int64, fn func(ann map[string]any) error) (map[string]any, error) {
+	return r.updateAnnotation(shotID, fn, nil)
+}
+
+// updateAnnotation is the locked read-modify-write behind UpdateAnnotation
+// and PatchAnnotation. When after is non-nil it runs once the merged
+// annotation is saved, still under annotationMu, so the annotation and
+// after's side effects land together or not at all (#1411). Lock order is
+// annotationMu first, then internal/library's writeMu; nothing may take them
+// in the reverse order.
+func (r *Repository) updateAnnotation(shotID int64, fn func(ann map[string]any) error, after func(prev, next map[string]any) error) (map[string]any, error) {
 	annotationMu.Lock()
 	defer annotationMu.Unlock()
 
@@ -600,11 +611,20 @@ func (r *Repository) UpdateAnnotation(shotID int64, fn func(ann map[string]any) 
 	if err != nil {
 		return nil, err
 	}
+	prev := maps.Clone(ann)
 	if err := fn(ann); err != nil {
 		return nil, err
 	}
 	if err := r.saveAnnotation(shotID, ann); err != nil {
 		return nil, err
+	}
+	if after != nil {
+		if err := after(prev, ann); err != nil {
+			if rerr := r.saveAnnotation(shotID, prev); rerr != nil {
+				return nil, fmt.Errorf("%w (restoring annotation for shot %d: %v)", err, shotID, rerr)
+			}
+			return nil, fmt.Errorf("%w", err)
+		}
 	}
 	return ann, nil
 }
@@ -783,6 +803,14 @@ func (r *Repository) MoveMisfiledShot(nativeID, timestamp, toMachineID int64) (m
 // tests share one source of truth.
 const trashTTL = 30 * 24 * time.Hour
 
+// PurgedShot is one shot permanently removed by PurgeExpiredTrash: its id and
+// the `image` extension its JSON blob stored ("" when it had no photo), so the
+// caller can remove the photo file alongside the row (#1525).
+type PurgedShot struct {
+	ID  int64
+	Ext string
+}
+
 // PurgeExpiredTrash permanently drops every trash entry older than trashTTL,
 // together with its shot row and annotation, in one transaction (#1152).
 // deleted_at is in milliseconds (MoveToTrash stamps time.Now().UnixMilli), so
@@ -790,28 +818,43 @@ const trashTTL = 30 * 24 * time.Hour
 //
 // Each purged id is deliberately blocklisted (#1159) so the next sync does not
 // resume below it and re-import the shot from the machine. Image files are not
-// deleted. shot_score_cache is likewise cleared (DeleteByID does this, and a
-// purge would otherwise leave orphaned cache rows behind).
-func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
+// deleted here — the caller (internal/shots' Service.PurgeExpiredTrash) uses
+// the returned extension to delete each photo and its thumbnail, since this
+// package has no image directory. shot_score_cache is likewise cleared
+// (DeleteByID does this, and a purge would otherwise leave orphaned cache rows
+// behind).
+func (r *Repository) PurgeExpiredTrash(now time.Time) ([]PurgedShot, error) {
 	cutoff := now.UnixMilli() - trashTTL.Milliseconds()
-	rows, err := r.db.Query(`SELECT shot_id FROM trash WHERE deleted_at < ?`, cutoff)
+	// LEFT JOIN so a trash entry whose shot row already vanished is still
+	// purged (and blocklisted) exactly as before; its image extension is then
+	// simply absent.
+	rows, err := r.db.Query(
+		`SELECT t.shot_id, json_extract(s.data, '$.image') FROM trash t LEFT JOIN shots s ON s.id = t.shot_id WHERE t.deleted_at < ?`,
+		cutoff,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
 	}
-	var ids []int64
+	var purged []PurgedShot
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var (
+			p   PurgedShot
+			ext sql.NullString
+		)
+		if err := rows.Scan(&p.ID, &ext); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("shots: scanning expired trash id: %w", err)
+			return nil, fmt.Errorf("shots: scanning expired trash row: %w", err)
 		}
-		ids = append(ids, id)
+		if ext.Valid {
+			p.Ext = ext.String
+		}
+		purged = append(purged, p)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
 	}
-	if len(ids) == 0 {
+	if len(purged) == 0 {
 		return nil, nil
 	}
 
@@ -819,7 +862,7 @@ func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
 	if err != nil {
 		return nil, fmt.Errorf("shots: starting trash purge tx: %w", err)
 	}
-	for _, id := range ids {
+	for _, p := range purged {
 		// Same order as DeleteByID.
 		for _, stmt := range []string{
 			`DELETE FROM annotations WHERE shot_id = ?`,
@@ -827,23 +870,23 @@ func (r *Repository) PurgeExpiredTrash(now time.Time) ([]int64, error) {
 			`DELETE FROM shots WHERE id = ?`,
 			`DELETE FROM shot_score_cache WHERE shot_id = ?`,
 		} {
-			if _, err := tx.Exec(stmt, id); err != nil {
+			if _, err := tx.Exec(stmt, p.ID); err != nil {
 				tx.Rollback()
-				return nil, fmt.Errorf("shots: purging shot %d (%s): %w", id, stmt, err)
+				return nil, fmt.Errorf("shots: purging shot %d (%s): %w", p.ID, stmt, err)
 			}
 		}
 		// Blocklist the id so a later sync does not resume below it and
 		// re-import the shot (same statement as AppendToBlocklist;
 		// blocklist.value is UNIQUE).
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, strconv.FormatInt(id, 10)); err != nil {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, strconv.FormatInt(p.ID, 10)); err != nil {
 			tx.Rollback()
-			return nil, fmt.Errorf("shots: blocklisting purged shot %d: %w", id, err)
+			return nil, fmt.Errorf("shots: blocklisting purged shot %d: %w", p.ID, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("shots: committing trash purge: %w", err)
 	}
-	return ids, nil
+	return purged, nil
 }
 
 // GetBlocklist returns the blocklist entries.

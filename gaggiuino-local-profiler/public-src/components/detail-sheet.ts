@@ -1,0 +1,162 @@
+// Shared detail popover (#1467): one overlay for small title/sub/body details,
+// first used by the coffee-year day cells and reused by the score-trend point
+// popover, the origin-map country click-through, the bean shelf and the
+// "Did you know?" fact cards. On phones it is a bottom sheet; from 900px up,
+// when an anchor is given, it becomes a popover floating next to that anchor.
+
+import { tHtml } from '../i18n.js';
+import { esc, html } from '../utils.js';
+import type { Html } from '../utils.js';
+import { CLOSE_ICON_SVG } from '../icons.js';
+import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, isPhoneSheetWidth, settleSheetOut, startSheetEnter } from './sheet-swipe.js';
+
+// A viewport-coordinate point (e.g. the clicked point on a chart); positioned
+// like a zero-size rect, for when there is no element to anchor the popover to.
+export interface DetailAnchorPoint {
+  x: number;
+  y: number;
+}
+
+export interface DetailSheetOptions {
+  title: string;
+  sub?: string;
+  body: Html;
+  anchor?: HTMLElement | DetailAnchorPoint | null;
+}
+
+let _returnFocus: HTMLElement | null = null;
+let _keyWired = false;
+
+function _host(): HTMLElement | null {
+  return typeof document !== 'undefined' ? document.getElementById('detailSheet') : null;
+}
+
+function _isDesktop(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && !isPhoneSheetWidth();
+}
+
+function _onKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  requestCloseDetailSheet();
+}
+
+function _wireKeys(): void {
+  if (_keyWired || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  document.addEventListener('keydown', _onKeydown);
+  _keyWired = true;
+}
+
+function _unwireKeys(): void {
+  const wired = _keyWired;
+  _keyWired = false;
+  if (!wired || typeof document === 'undefined' || typeof document.removeEventListener !== 'function') return;
+  document.removeEventListener('keydown', _onKeydown);
+}
+
+function _isPointAnchor(anchor: HTMLElement | DetailAnchorPoint): anchor is DetailAnchorPoint {
+  const a = anchor as DetailAnchorPoint;
+  return typeof a.x === 'number' && typeof a.y === 'number'
+    && typeof (anchor as HTMLElement).getBoundingClientRect !== 'function';
+}
+
+// Place the popover next to its anchor: right of it when it fits, else left,
+// vertically centred and clamped 12px inside the viewport. A point anchor is
+// treated as a zero-size rect at those viewport coordinates.
+function _positionPop(sheet: HTMLElement, anchor: HTMLElement | DetailAnchorPoint): void {
+  const point = _isPointAnchor(anchor);
+  if (!point && typeof anchor.getBoundingClientRect !== 'function') return;
+  const r = point
+    ? { left: anchor.x, right: anchor.x, top: anchor.y, height: 0 }
+    : anchor.getBoundingClientRect();
+  const vw = window.innerWidth || 0;
+  const vh = window.innerHeight || 0;
+  const w = sheet.offsetWidth || 360;
+  const h = sheet.offsetHeight || 300;
+  let left = r.right + 12;
+  if (left + w > vw - 12) left = r.left - w - 12;
+  if (left < 12) left = 12;
+  if (left + w > vw - 12) left = Math.max(12, vw - 12 - w);
+  let top = r.top + r.height / 2 - h / 2;
+  if (top < 12) top = 12;
+  if (top + h > vh - 12) top = Math.max(12, vh - 12 - h);
+  sheet.style.left = `${Math.round(left)}px`;
+  sheet.style.top = `${Math.round(top)}px`;
+}
+
+// Opens the overlay, replacing its content in place on a second call. `anchor`
+// is what the desktop popover floats next to — a coffee-year day cell, or the
+// clicked viewport point for a trend chart shot — and is ignored on phone
+// widths, where the overlay is always a bottom sheet.
+export function openDetailSheet(opts: DetailSheetOptions): void {
+  // A previous close may still be sliding; finish it before painting the new
+  // sheet so its timer cannot empty the host we are about to fill.
+  settleSheetOut();
+  const host = _host();
+  if (!host) return;
+
+  // Only the first open captures the return target; a second open replaces the
+  // content in place, so restoring must still land on the original element.
+  if (!host.classList?.contains?.('open')) {
+    _returnFocus = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
+  }
+
+  const anchor = opts.anchor ?? null;
+  const desktop = _isDesktop() && anchor !== null;
+
+  host.innerHTML = html`
+    <div class="lib-sheet-backdrop${desktop ? html` detail-backdrop` : esc('')}"></div>
+    <section class="lib-sheet${desktop ? html` detail-pop` : esc('')}" role="dialog" aria-modal="true" aria-labelledby="detailSheetTitle">
+      <div class="lib-sheet-grab" aria-hidden="true"></div>
+      <div class="lib-sheet-bar">
+        <button type="button" class="lib-sheet-close" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
+        <h2 id="detailSheetTitle" class="lib-sheet-bar-title">${esc(opts.title)}</h2>
+      </div>
+      <div class="detail-sheet-body">${opts.sub ? html`<p class="detail-sheet-sub">${esc(opts.sub)}</p>` : esc('')}${opts.body}</div>
+    </section>`;
+  host.classList?.add('open');
+  if (typeof document !== 'undefined') document.body?.classList?.add('lib-sheet-open');
+
+  const sheet = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
+  const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
+  // #1488: one sheet-level drag covers the grab pill, the head and the content.
+  if (sheet && typeof sheet.addEventListener === 'function') attachSheetSwipe(sheet, backdrop, requestCloseDetailSheet);
+  attachSheetScrollState(sheet);
+  if (desktop && sheet && anchor) _positionPop(sheet, anchor);
+  startSheetEnter(sheet, backdrop);
+
+  const closeBtn = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-close') : null;
+  backdrop?.addEventListener?.('click', requestCloseDetailSheet);
+  closeBtn?.addEventListener?.('click', requestCloseDetailSheet);
+
+  _wireKeys();
+  closeBtn?.focus?.();
+}
+
+// Every user close (X, backdrop tap, Esc, swipe) slides the sheet out first;
+// the sync close stays for internal callers (view switch, content replacement).
+export function requestCloseDetailSheet(): void {
+  const host = _host();
+  const sheet = host && typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
+  if (!host || !sheet) { closeDetailSheet(); return; }
+  const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
+  animateSheetOut(sheet, backdrop, closeDetailSheet);
+}
+
+export function closeDetailSheet(): void {
+  _unwireKeys();
+  const host = _host();
+  if (host) {
+    host.innerHTML = html``;
+    host.classList?.remove('open');
+  }
+  if (typeof document !== 'undefined') document.body?.classList?.remove('lib-sheet-open');
+  const back = _returnFocus;
+  _returnFocus = null;
+  if (back && typeof back.focus === 'function'
+    && typeof document !== 'undefined' && typeof document.contains === 'function' && document.contains(back)) {
+    back.focus();
+  }
+}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,5 +165,133 @@ func TestGetMachineProfile_UnreachableMachineFallsBackWithinTimeout(t *testing.T
 	}
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+}
+
+// fakeBlockingWriteAdapter is fakeBlockingAdapter plus the profile write
+// methods: they block exactly like the live reads do (until ctx is done, then
+// return ctx.Err()), simulating a GaggiMate that accepts the WebSocket dial but
+// then silently stops answering. ProfileEdit is reported so the write routes
+// pass requireProfileEditSupport and actually reach the adapter. It is a
+// separate type so the read tests keep fakeBlockingAdapter's "not implemented"
+// panic if a write method is ever reached from them.
+type fakeBlockingWriteAdapter struct{ fakeBlockingAdapter }
+
+var _ Adapter = fakeBlockingWriteAdapter{}
+
+func (fakeBlockingWriteAdapter) Capabilities() Capabilities {
+	return Capabilities{ProfileEdit: true}
+}
+
+func (fakeBlockingWriteAdapter) CreateProfile(ctx context.Context, m *Machine, in ProfileInput) (ProfileSummary, error) {
+	<-ctx.Done()
+	return ProfileSummary{}, ctx.Err()
+}
+func (fakeBlockingWriteAdapter) UpdateProfile(ctx context.Context, m *Machine, in ProfileInput) (ProfileSummary, error) {
+	<-ctx.Done()
+	return ProfileSummary{}, ctx.Err()
+}
+func (fakeBlockingWriteAdapter) DeleteProfile(ctx context.Context, m *Machine, id string) ([]ProfileSummary, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// shrinkProfileLiveWriteTimeout replaces the bounded write timeout with a short
+// one for the duration of a test, so the write-fallback cases run in
+// milliseconds instead of the production 10s. Restored via t.Cleanup.
+func shrinkProfileLiveWriteTimeout(t *testing.T, d time.Duration) {
+	t.Helper()
+	orig := profileLiveWriteTimeout
+	profileLiveWriteTimeout = d
+	t.Cleanup(func() { profileLiveWriteTimeout = orig })
+}
+
+// TestCreateMachineProfile_UnresponsiveGaggiMateFallsBackWithinTimeout is the
+// write-side twin of the "profiles disappear after reload" regression:
+// CreateProfile used to run on the bare, unbounded r.Context(), so a GaggiMate
+// that silently drops packets after the WS dial blocked the handler (and held
+// the per-machine profile lock) until the client gave up. It must now fall back
+// to a local pending_create row within profileLiveWriteTimeout.
+func TestCreateMachineProfile_UnresponsiveGaggiMateFallsBackWithinTimeout(t *testing.T) {
+	shrinkProfileLiveWriteTimeout(t, 200*time.Millisecond)
+
+	registry, sqlDB := newTestRegistry(t)
+	profilesRepo := NewProfilesRepository(sqlDB)
+	h := &Handlers{registry: registry, gaggimate: fakeBlockingWriteAdapter{}, profilesRepo: profilesRepo}
+	mux := newMux(h)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	body := `{"label":"Blocked Profile","phases":[{"type":"PRESSURE"}],"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
+	start := time.Now()
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/profile", strings.NewReader(body)))
+	elapsed := time.Since(start)
+
+	if elapsed > profileLiveWriteTimeout+3*time.Second {
+		t.Fatalf("createMachineProfile took %v against an unresponsive GaggiMate; want well under %v (the bounded write timeout)", elapsed, profileLiveWriteTimeout)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+	created := decodeBody(t, rec.Body.Bytes())
+	if created["syncStatus"] != ProfileSyncPendingCreate {
+		t.Errorf("syncStatus = %v, want %q", created["syncStatus"], ProfileSyncPendingCreate)
+	}
+	id, _ := created["id"].(string)
+	if !strings.HasPrefix(id, "local:") {
+		t.Fatalf("id = %q, want a local: placeholder (never synced to the machine)", id)
+	}
+	row, err := profilesRepo.Get(machine.ID, id)
+	if err != nil {
+		t.Fatalf("profilesRepo.Get(%q): %v", id, err)
+	}
+	if row == nil {
+		t.Fatalf("no local row stored for %q", id)
+	}
+	if row.LastSyncError == nil || *row.LastSyncError == "" {
+		t.Errorf("expected a sync error recorded on the local row after the failed push, got %+v", row)
+	}
+}
+
+// TestUpdateMachineProfile_UnresponsiveGaggiMateFallsBackWithinTimeout is the
+// update-side twin: a PUT to a GaggiMate that never answers must also return
+// within the bound with the local edit kept (200), not hang the handler.
+func TestUpdateMachineProfile_UnresponsiveGaggiMateFallsBackWithinTimeout(t *testing.T) {
+	shrinkProfileLiveWriteTimeout(t, 200*time.Millisecond)
+
+	registry, sqlDB := newTestRegistry(t)
+	profilesRepo := NewProfilesRepository(sqlDB)
+	h := &Handlers{registry: registry, gaggimate: fakeBlockingWriteAdapter{}, profilesRepo: profilesRepo}
+	mux := newMux(h)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := profilesRepo.UpsertSynced(machine.ID, "remote-1", "Cached Profile", json.RawMessage(`{"label":"Cached Profile","phases":[{"type":"PRESSURE"}]}`), false); err != nil {
+		t.Fatalf("seeding synced profile: %v", err)
+	}
+
+	body := `{"label":"Renamed","phases":[{"type":"PRESSURE"}],"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
+	start := time.Now()
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPut, "/api/machine/profile/remote-1", strings.NewReader(body)))
+	elapsed := time.Since(start)
+
+	if elapsed > profileLiveWriteTimeout+3*time.Second {
+		t.Fatalf("updateMachineProfile took %v against an unresponsive GaggiMate; want well under %v", elapsed, profileLiveWriteTimeout)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+	updated := decodeBody(t, rec.Body.Bytes())
+	if updated["syncStatus"] == ProfileSyncSynced {
+		t.Errorf("syncStatus = %v, want a not-synced status (push failed, edit kept locally)", updated["syncStatus"])
 	}
 }

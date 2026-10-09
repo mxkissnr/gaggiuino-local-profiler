@@ -5,7 +5,7 @@ import { t, tHtml }                                           from '../../i18n.j
 import { isApiPortBlocked }                                   from '../../api/transport.js';
 import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard } from '../../api/shots.js';
 import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
-import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges } from '../../constants.js';
+import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges, buildRecordedGmPhaseRanges, exitReasonKey } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
@@ -678,6 +678,20 @@ export async function updateView(): Promise<void> {
     ? `${t('phase_preinfusion')} ${formatTimeLabel(phases.preinfusion)} · ${t('phase_extraction')} ${formatTimeLabel(phases.extraction)}`
     : '';
 
+  // #1409: a v1.9.0+ GaggiMate shot records its own phase transitions, so the
+  // chart is shaded from the log's timings (and names) instead of the
+  // pressure-derived preinfusion/extraction split. Gaggiuino shots and older
+  // GaggiMate shots carry none and keep the detectPhases path.
+  const recordedTransitions = !shotB ? rawA.phaseTransitions : null;
+  const endSecA = dA.rawTimes.at(-1) ?? 0;
+  const recordedRanges = buildRecordedGmPhaseRanges(recordedTransitions, endSecA);
+  if (recordedRanges.length) {
+    phasesSub.textContent = recordedRanges.map(p => p.name).join(' · ');
+  }
+
+  const stopKey = !shotB ? exitReasonKey(rawA.finalExitReason) : null;
+  _el('stopReasonSub').textContent = stopKey ? t('shot_end_reason', t(stopKey)) : '';
+
   // Channeling
   const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
   _el('channelingWarning').style.display = channeling ? '' : 'none';
@@ -896,7 +910,11 @@ export async function updateView(): Promise<void> {
     }
   };
   chartRegistry.dispose('chart');
-  _buildShotChart(phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction } : {});
+  _buildShotChart(
+    recordedRanges.length ? { gaggimatePhases: recordedRanges }
+      : phases ? { preinfusion: phases.preinfusion, extraction: phases.extraction }
+      : {},
+  );
 
   // GaggiMate: upgrade sub-line + chart once named phases land. Not awaited;
   // must stay after _buildShotChart exists (a cache hit can resolve before
@@ -906,8 +924,13 @@ export async function updateView(): Promise<void> {
   if (shotMachine?.type === 'gaggimate' && shotA.machineId) {
     void _loadGmPhases(shotA, token).then(gmPhases => {
       if (!gmPhases || token !== _updateViewToken) return;
-      phasesSub.textContent = gmPhases.map(p => p.name).join(' · ');
-      _buildShotChart!({ gaggimatePhases: gmPhases });
+      // #1409: when the log recorded its own transitions they win; the profile
+      // lookup only supplies each phase's type (preinfusion/brew tint) by index.
+      const ranges = recordedRanges.length
+        ? buildRecordedGmPhaseRanges(recordedTransitions, endSecA, gmPhases)
+        : gmPhases;
+      phasesSub.textContent = ranges.map(p => p.name).join(' · ');
+      _buildShotChart!({ gaggimatePhases: ranges });
     });
   }
 }

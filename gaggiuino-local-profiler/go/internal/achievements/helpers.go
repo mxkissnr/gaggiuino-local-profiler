@@ -147,6 +147,28 @@ func finalWeightG(shot shots.Shot) float64 {
 	return mx
 }
 
+// totalYieldG sums every shot's final weight, in grams.
+func totalYieldG(c *Context) float64 {
+	var sum float64
+	for _, s := range c.Shots {
+		sum += finalWeightG(s)
+	}
+	return sum
+}
+
+// shotsSortedByTimestamp returns the context's shots ordered by their
+// timestamp field (Unix seconds, ascending). Shots without a numeric
+// timestamp keep their relative order and sort first.
+func shotsSortedByTimestamp(c *Context) []shots.Shot {
+	out := append([]shots.Shot(nil), c.Shots...)
+	sort.SliceStable(out, func(i, j int) bool {
+		ti, _ := asInt64(out[i]["timestamp"])
+		tj, _ := asInt64(out[j]["timestamp"])
+		return ti < tj
+	})
+	return out
+}
+
 // shotRatio returns yield / dose, or nil.
 func shotRatio(shot shots.Shot) *float64 {
 	ann, _ := shot["annotation"].(map[string]any)

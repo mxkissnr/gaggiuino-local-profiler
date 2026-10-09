@@ -24,6 +24,32 @@ declare global {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- formatter signatures are per-key; t() forwards the caller's args verbatim
 export type TranslationValue = string | ((...args: any[]) => string);
 
+// The interpolation object the "Did you know?" fact sentences receive (#1467).
+// Every field is required so the formatter parameters are typed instead of
+// `any`, which keeps the lint rules (no-unsafe-member-access,
+// restrict-template-expressions) happy. A caller only fills the fields its own
+// sentence reads.
+export interface FactVars {
+  avg: string | number;
+  count: string | number;
+  date: string;
+  days: string | number;
+  from: string;
+  hours: string | number;
+  len: string | number;
+  litres: string;
+  min: string | number;
+  minutes: string | number;
+  n: string | number;
+  nextL: string | number;
+  score: string | number;
+  seconds: string | number;
+  shots: string | number;
+  to: string;
+  toNext: string | number;
+  weekday: string;
+}
+
 // Canonical dictionary shape, anchored to the en locale (t()'s fallback
 // source). Indexable by string so dynamic keys (data-i18n attributes) work.
 export interface Translations {
@@ -115,8 +141,22 @@ export function applyTranslations(): void {
     const key = el.dataset.i18nTitle;
     if (key) el.title = t(key);
   });
+  // #1514: same treatment for aria-label. An icon-only button (the fixed
+  // Settings gear) has no text node for the data-i18n scan to localize, so
+  // its only accessible name would otherwise stay hard-coded German.
+  document.querySelectorAll<HTMLElement>('[data-i18n-aria-label]').forEach(el => {
+    const key = el.dataset.i18nAriaLabel;
+    if (key) el.setAttribute('aria-label', t(key));
+  });
   document.querySelectorAll<HTMLElement>('[data-i18n-html]').forEach(el => {
     const key = el.dataset.i18nHtml;
     if (key) el.innerHTML = tHtml(key);
   });
+  // The easter-egg close button's aria-label is set by id (#1499); it
+  // predates data-i18n-aria-label and its text node is the × glyph.
+  const easterEggCloseBtn = document.getElementById('easterEggPanelCloseBtn');
+  if (easterEggCloseBtn) easterEggCloseBtn.setAttribute('aria-label', t('easter_egg_close'));
+  // Keep <html lang> in sync so browsers don't treat an English UI as German
+  // and offer/auto-apply page translation (#1499); kiosk.ts does the same.
+  document.documentElement.lang = S.currentLang;
 }

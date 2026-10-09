@@ -12,11 +12,9 @@ package main
 // cannot see an undocumented route to compare it.
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -55,20 +53,11 @@ func TestOpenAPIRoutesMatchMux(t *testing.T) {
 	onMux = func(m *http.ServeMux) { mux = m }
 	t.Cleanup(func() { onMux = nil })
 
-	dir := t.TempDir()
-	ctx, cancel := context.WithCancel(context.Background())
-	_, sqlDB, err := buildApp(ctx, appConfig{
-		dbPath:          filepath.Join(dir, "glp.db"),
-		tokenPath:       filepath.Join(dir, "api_token.txt"),
+	newTestApp(t, appConfig{
 		port:            "0",
 		rateLimitWindow: time.Minute,
 		rateLimitMax:    1_000_000,
 	})
-	if err != nil {
-		cancel()
-		t.Fatalf("buildApp: %v", err)
-	}
-	t.Cleanup(func() { cancel(); sqlDB.Close() })
 	if mux == nil {
 		t.Fatal("buildApp never called onMux; the test hook moved or was removed")
 	}

@@ -190,3 +190,49 @@ func TestRestoreShots_CommitsAllSideData(t *testing.T) {
 		t.Fatalf("library row: %v", err)
 	}
 }
+
+// TestRestoreShots_SkipsAnnotationForMissingShot covers #1526: a backup
+// whose annotations name a shot it does not bundle (a rating left behind for
+// a shot deleted before the export) must not abort the restore with a
+// FOREIGN KEY failure — the orphan annotation is skipped while the rest of
+// the backup restores. A trash entry for the same missing shot is skipped
+// too (trash.shot_id has no FK, but the restore still filters to restored
+// ids).
+func TestRestoreShots_SkipsAnnotationForMissingShot(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	dur := int64(300)
+	insertShot(t, sqlDB, 7, 1, &dur, "old", nil, nil) // wiped by the restore
+
+	err := repo.RestoreShots(RestoreInput{
+		Shots: func(yield func(Shot) error) error {
+			return yield(Shot{"id": float64(10), "timestamp": float64(10000), "profileName": "P"})
+		},
+		Annotations: map[string]map[string]any{
+			"10":       {"coffee": "Bean X"},
+			"20000007": {"coffee": "Ghost"}, // no such shot -> skipped
+		},
+		Trash: map[string]int64{"10": 777, "20000007": 888}, // 20000007 -> skipped
+	})
+	if err != nil {
+		t.Fatalf("RestoreShots: %v", err)
+	}
+
+	s10, _ := repo.FindByID(10)
+	if s10 == nil {
+		t.Fatal("shot 10 not restored")
+	}
+	if ann, _ := s10["annotation"].(map[string]any); ann["coffee"] != "Bean X" {
+		t.Errorf("annotation for the restored shot not applied: %+v", s10["annotation"])
+	}
+	var orphan int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM annotations WHERE shot_id = 20000007`).Scan(&orphan); err != nil {
+		t.Fatalf("counting orphan annotation: %v", err)
+	}
+	if orphan != 0 {
+		t.Errorf("orphan annotation 20000007 was written")
+	}
+	tm, _ := repo.TrashMap()
+	if len(tm) != 1 || tm["10"] != 777 {
+		t.Errorf("trash = %+v; want {10:777} (20000007 filtered out)", tm)
+	}
+}

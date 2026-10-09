@@ -162,4 +162,33 @@ describe('handleLiveData() steam/flush live-content branches (#902)', () => {
     expect(doc.getElementById('liveIdlePressure').textContent).toBe('–');
     expect(doc.getElementById('liveIdleWaterLevel').textContent).toBe('–');
   });
+
+  // #1409: machine warnings + firmware-update hint in the idle panel.
+  it('shows translated machine warning labels and the firmware-update hint', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false,
+      machineWarnings: ['water', 'scaleBattery', 'futureKey'], machineUpdateAvailable: true,
+    });
+
+    expect(doc.getElementById('liveIdleWarnings').textContent).toBe('Water tank low · Scale battery low · futureKey');
+    expect(doc.getElementById('liveIdleWarnings').style.display).toBe('');
+    expect(doc.getElementById('liveIdleUpdateHint').style.display).toBe('');
+  });
+
+  it('hides the warning line and update hint when the machine reports neither', () => {
+    handleLiveData({
+      machineReachable: true, isLive: false, machineWarnings: [], machineUpdateAvailable: false,
+    });
+
+    expect(doc.getElementById('liveIdleWarnings').textContent).toBe('');
+    expect(doc.getElementById('liveIdleWarnings').style.display).toBe('none');
+    expect(doc.getElementById('liveIdleUpdateHint').style.display).toBe('none');
+  });
+
+  it('hides the warning line and update hint when the machine is unreachable', () => {
+    handleLiveData({ machineReachable: false });
+
+    expect(doc.getElementById('liveIdleWarnings').style.display).toBe('none');
+    expect(doc.getElementById('liveIdleUpdateHint').style.display).toBe('none');
+  });
 });

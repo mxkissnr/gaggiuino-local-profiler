@@ -137,13 +137,13 @@
                     <span class="rail-label" data-i18n="nav_orders">Bestellungen</span>
                     <span id="ordersBadge" class="maint-badge" style="display:none"></span>
                 </button>
-                <div class="topbar-sep"></div>
-                <button class="topbar-nav" id="btnSettings" data-i18n-title="nav_settings" title="Einstellungen">
-                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg></span>
-                    <span class="rail-label" data-i18n="nav_settings">Einstellungen</span>
-                </button>
             </div>
         </nav>
+
+        <div class="topbar-sep"></div>
+        <button class="topbar-nav" id="btnSettings" data-i18n-title="nav_settings" title="Einstellungen" aria-label="Einstellungen" data-i18n-aria-label="nav_settings">
+            <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M11.05 5.27L10.54 1.6A10.5 10.5 0 0 1 13.46 1.6L12.95 5.27A6.8 6.8 0 0 1 16.09 6.57L18.32 3.61A10.5 10.5 0 0 1 20.39 5.68L17.43 7.91A6.8 6.8 0 0 1 18.73 11.05L22.4 10.54A10.5 10.5 0 0 1 22.4 13.46L18.73 12.95A6.8 6.8 0 0 1 17.43 16.09L20.39 18.32A10.5 10.5 0 0 1 18.32 20.39L16.09 17.43A6.8 6.8 0 0 1 12.95 18.73L13.46 22.4A10.5 10.5 0 0 1 10.54 22.4L11.05 18.73A6.8 6.8 0 0 1 7.91 17.43L5.68 20.39A10.5 10.5 0 0 1 3.61 18.32L6.57 16.09A6.8 6.8 0 0 1 5.27 12.95L1.6 13.46A10.5 10.5 0 0 1 1.6 10.54L5.27 11.05A6.8 6.8 0 0 1 6.57 7.91L3.61 5.68A10.5 10.5 0 0 1 5.68 3.61L7.91 6.57A6.8 6.8 0 0 1 11.05 5.27Z"/></svg></span>
+        </button>
 
         <div class="topbar-machine">
             <button type="button" id="topbarMachineIcon" class="topbar-machine-icon" data-i18n-title="topbar_machine_icon_title" title="Maschinen-Status" aria-label="Maschinen-Status"></button>
@@ -164,8 +164,12 @@
         <div class="easter-egg-panel-backdrop" data-action="close-easter-egg"></div>
         <div class="easter-egg-panel-card">
             <button type="button" class="easter-egg-panel-close" id="easterEggPanelCloseBtn" data-action="close-easter-egg" aria-label="Schließen">&times;</button>
-            <div class="easter-egg-panel-icon" id="easterEggPanelIcon"></div>
             <h3 id="easterEggPanelTitle" data-i18n="easter_egg_title">Gefunden.</h3>
+            <!-- #1351: the machine icon lives in the centre of the coffee-history
+                 stage, so it is the spiral's hub rather than a second icon. -->
+            <div class="coffee-history" id="easterEggHistory">
+                <div class="easter-egg-panel-icon" id="easterEggPanelIcon"></div>
+            </div>
             <dl class="easter-egg-panel-stats" id="easterEggPanelStats"></dl>
             <p class="easter-egg-panel-thanks" data-i18n="easter_egg_thanks">Danke an alle, die dieses kleine Projekt nutzen.</p>
         </div>
@@ -219,7 +223,7 @@
                 <div class="sph-actions" style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
                     <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
                     <button class="export-btn" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
-                    <button class="export-btn" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
+                    <button class="export-btn" id="exportProfileBtn" data-i18n="btn_export_profile" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
                     <div class="card-fmt-wrap" id="cardFmtWrap">
                       <button class="export-btn" id="shareCardBtn" data-i18n="share_card" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
                       <div class="card-fmt-menu" id="cardFmtMenu">
@@ -268,6 +272,7 @@
                     <span class="recipe-card-label" data-i18n="meta_duration">Dauer</span>
                     <span class="recipe-card-value" id="duration">-</span>
                     <span class="recipe-card-sub" id="phasesSub"></span>
+                    <span class="recipe-card-sub" id="stopReasonSub"></span>
                 </div>
                 <div class="recipe-card">
                     <span class="recipe-card-label" data-i18n="recipe_bean">Bohne</span>
@@ -655,6 +660,8 @@
                                 <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="lib-open-btn" id="beanFormStickerBtn" data-i18n="sticker_title" style="display:none">Als Sticker freistellen</button>
+                                    <span class="lib-form-hint lib-form-hint-staged" id="beanFormImageStaged" data-i18n="bean_image_staged" style="display:none">Foto wird beim Speichern hinzugefügt</span>
                                 </div>
                                 <span class="lib-form-hint" data-i18n="bean_image_hint">Falls der automatische Import fehlschlägt</span>
                             </div>
@@ -667,6 +674,8 @@
                                 </label>
                             </div>
                         </div>
+                        <!-- Kept for callers that host the bean form inline. Inside the library sheet
+                             (.lib-form-sheet) this row is hidden and the sheet header bar's Save is used instead. -->
                         <div class="lib-form-actions">
                             <button class="lib-btn-sm" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
                             <button class="lib-save-btn" id="saveBeanBtn" data-i18n="lib_save" style="display:none">Speichern</button>
@@ -678,7 +687,7 @@
                         <button class="lib-add-trigger" id="beanAddTrigger" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
                         <button class="lib-scan-trigger" id="openScanModalBtn" data-i18n-html="lib_scan_barcode"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg> Scan</button>
                         <button class="lib-scan-trigger" id="toggleUrlImportBtn" data-i18n-html="lib_url_import"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.5 12.5 5a3.5 3.5 0 0 1 5 5L16 11.5"/><path d="M13 17.5 11.5 19a3.5 3.5 0 0 1-5-5L8 12.5"/></svg> URL</button>
-                        <button class="lib-scan-trigger" id="toggleImportSettingsBtn" data-i18n-html="lib_import_settings_btn"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/></svg> Quellen</button>
+                        <button class="lib-scan-trigger" id="toggleImportSettingsBtn" data-i18n-html="lib_import_settings_btn"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M11.05 5.27L10.54 1.6A10.5 10.5 0 0 1 13.46 1.6L12.95 5.27A6.8 6.8 0 0 1 16.09 6.57L18.32 3.61A10.5 10.5 0 0 1 20.39 5.68L17.43 7.91A6.8 6.8 0 0 1 18.73 11.05L22.4 10.54A10.5 10.5 0 0 1 22.4 13.46L18.73 12.95A6.8 6.8 0 0 1 17.43 16.09L20.39 18.32A10.5 10.5 0 0 1 18.32 20.39L16.09 17.43A6.8 6.8 0 0 1 12.95 18.73L13.46 22.4A10.5 10.5 0 0 1 10.54 22.4L11.05 18.73A6.8 6.8 0 0 1 7.91 17.43L5.68 20.39A10.5 10.5 0 0 1 3.61 18.32L6.57 16.09A6.8 6.8 0 0 1 5.27 12.95L1.6 13.46A10.5 10.5 0 0 1 1.6 10.54L5.27 11.05A6.8 6.8 0 0 1 6.57 7.91L3.61 5.68A10.5 10.5 0 0 1 5.68 3.61L7.91 6.57A6.8 6.8 0 0 1 11.05 5.27Z"/></svg> Quellen</button>
                     </div>
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
                         <input class="lib-url-input" id="urlImportInput" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
@@ -965,7 +974,7 @@
         <div class="guided-maint-modal profile-editor-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="profile_editor_title" style="margin:0">Profil-Editor</h3>
-                <button type="button" class="fw-close-x" id="closeProfileFormBtn" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" id="closeProfileFormBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div class="pe-scroll">
                 <div class="lib-form-grid">
@@ -1019,11 +1028,21 @@
             <div class="fw-header">
                 <img id="flavorWheelImage" class="fw-bean-image" style="display:none">
                 <h3 class="maint-section-title" id="flavorWheelTitle" style="margin:0"></h3>
-                <button type="button" class="fw-close-x" data-action="close-flavor-wheel" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="close-flavor-wheel" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
-            <div id="flavorWheelBreadcrumb" class="fw-breadcrumb"></div>
-            <div id="flavorWheelCanvas" class="fw-canvas"></div>
-            <div id="flavorWheelUnmatched"></div>
+            <div class="fw-body">
+                <div class="fw-main">
+                    <div id="flavorWheelBreadcrumb" class="fw-breadcrumb"></div>
+                    <div class="fw-canvas-wrap">
+                        <div id="flavorWheelCanvas" class="fw-canvas"></div>
+                        <button type="button" id="flavorWheelCenter" class="fw-center-photo" data-action="zoom-flavor-wheel" data-zoom-id="" aria-label="Back to the overview" style="display:none"><img id="flavorWheelCenterImg" alt=""></button>
+                    </div>
+                </div>
+                <div class="fw-side">
+                    <div id="flavorWheelLegend" class="fw-legend"></div>
+                    <div id="flavorWheelUnmatched"></div>
+                </div>
+            </div>
             <div class="fw-credit" data-i18n="flavor_wheel_credit">Aromen-Hierarchie abgeleitet vom SCA/WCR Coffee Taster's Flavor Wheel (2016)</div>
         </div>
     </div>
@@ -1041,6 +1060,7 @@
 
         <div id="liveMachineUnavailableBanner" style="display:none">
             <p data-i18n="live_machine_unavailable">Live-Ansicht ist für diese Maschine noch nicht verfügbar.</p>
+            <button type="button" class="machine-set-default-btn" data-action="live-set-default-machine" data-i18n="settings_machine_set_default">Als Standard setzen</button>
         </div>
 
         <div id="live-content">
@@ -1120,6 +1140,13 @@
                     <div class="idle-stat-label" data-i18n="live_idle_water_label">Wasserstand</div>
                 </div>
             </div>
+            <!-- #1409: the machine's own warnings and a firmware-update hint,
+                 both driven by views/live.js's handleLiveData(). -->
+            <p id="liveIdleWarnings" class="live-idle-warn" style="display:none"></p>
+            <p id="liveIdleUpdateHint" class="live-idle-hint" data-i18n="machine_update_available" style="display:none">Firmware-Update auf der Maschine verfügbar</p>
+            <!-- #1324: opt-in GaggiMate machine control -- shown only while a
+                 flush may be started or is running (components/machine-control.js). -->
+            <button id="liveFlushBtn" type="button" class="lib-save-btn" data-action="machine-flush-toggle" style="display:none"></button>
 
             <!-- Pre-shot setup: bean/dose/grinder/grind/basket/puckscreen/recipe
                  chosen here get written onto the next completed shot's
@@ -1174,118 +1201,185 @@
 
     <!-- Analytics view -->
     <div id="analytics-view">
+        <!-- One toolbar filters the whole page (#1467) -->
+        <div class="analytics-toolbar" id="analyticsToolbar">
+            <input type="search" id="analyticsSearch" class="lib-shelf-search" data-i18n-placeholder="analytics_search_ph" placeholder="Bohne oder Profil filtern" aria-label="Bohne oder Profil filtern">
+            <div class="analytics-filter-row">
+                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="7" aria-pressed="false" data-i18n="analytics_range_7">7 T</button>
+                <button type="button" class="analytics-filter-btn active" data-action="analytics-range" data-days="30" aria-pressed="true" data-i18n="analytics_range_30">30 T</button>
+                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="90" aria-pressed="false" data-i18n="analytics_range_90">90 T</button>
+                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="0" aria-pressed="false" data-i18n="analytics_range_all">Alles</button>
+            </div>
+            <p id="analyticsFilterEmpty" class="empty-note analytics-filter-empty" data-i18n="analytics_filter_empty" style="display:none">Keine Shots für diesen Filter.</p>
+        </div>
         <div class="analytics-container">
 
-            <!-- Summary KPIs -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_summary">Übersicht</h3>
-                <div id="summaryKpis" class="kpi-grid"></div>
-                <div id="trendWarning" style="display:none"></div>
-            </div>
-
-            <!-- Score Trend -->
-            <div class="analytics-card">
-                <div class="analytics-card-head">
-                    <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
-                    <div class="analytics-filter-row">
-                        <button class="analytics-filter-btn active" id="trendBtn30" data-i18n="analytics_trend_30">30 Shots</button>
-                        <button class="analytics-filter-btn" id="trendBtn90" data-i18n="analytics_trend_90">90 Shots</button>
-                        <button class="analytics-filter-btn" id="trendBtnAll" data-i18n="analytics_trend_all">Alle</button>
+            <!-- Verdict header (#1467): the page's one emphasised block. -->
+            <section class="analytics-sec analytics-verdict-card" data-analytics-period>
+                <div class="analytics-verdict-head">
+                    <div class="analytics-verdict-text">
+                        <h2 class="analytics-verdict-title serif-display" id="verdictTitle"></h2>
+                        <p class="analytics-verdict-sub" id="verdictSub"></p>
+                    </div>
+                    <div class="analytics-verdict-score">
+                        <span class="analytics-verdict-score-num" id="verdictScore">—</span>
+                        <span class="analytics-verdict-score-lbl" data-i18n="analytics_verdict_avg">Ø Score</span>
                     </div>
                 </div>
+                <div id="trendWarning" style="display:none"></div>
+            </section>
+
+            <!-- Score Trend -->
+            <section class="analytics-sec analytics-trend" data-analytics-period>
+                <div class="analytics-trend-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_trend">Score-Trend</h3>
+                    <span class="analytics-trend-counter" id="trendCounter"></span>
+                </div>
                 <div style="height:200px;position:relative"><canvas id="trendChart"></canvas></div>
-            </div>
+            </section>
 
-            <!-- Shot Calendar -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_calendar">Shot-Kalender</h3>
-                <div id="shotCalendar" class="cal-wrapper"></div>
-            </div>
-
-            <!-- Personal Bests -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_personal_bests">Persönliche Bestleistungen</h3>
-                <div id="personalBests"></div>
-            </div>
-
-            <!-- Bean stats + Profile chart -->
-            <div class="analytics-two-col">
-                <div class="analytics-card">
-                    <h3 class="analytics-section-title" data-i18n="analytics_beans">Bohnen-Auswertung</h3>
-                    <div id="beanStats"></div>
+            <!-- Your recipe on average -->
+            <section class="analytics-sec analytics-recipe" id="recipeCard" data-analytics-period>
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_recipe">Dein Rezept im Schnitt</h3>
+                    <span id="recipeCount" class="analytics-shelf-count"></span>
                 </div>
-                <div class="analytics-card">
-                    <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
-                    <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
+                <div id="recipeRows"></div>
+            </section>
+
+            <!-- Coffee year -->
+            <section class="analytics-sec cal-card">
+                <h3 class="analytics-section-title" data-i18n="analytics_calendar">Kaffeejahr</h3>
+                <div class="cal-year">
+                    <div id="shotCalendar" class="cal-wrapper"></div>
+                    <div id="calLegend" class="cal-legend">
+                        <span class="cal-legend-part">
+                            <span data-i18n="analytics_cal_less">weniger</span>
+                            <span class="cal-legend-swatches">
+                                <span class="cal-day cal-1 cal-legend-swatch"></span>
+                                <span class="cal-day cal-2 cal-legend-swatch"></span>
+                                <span class="cal-day cal-3 cal-legend-swatch"></span>
+                                <span class="cal-day cal-4 cal-legend-swatch"></span>
+                            </span>
+                            <span data-i18n="analytics_cal_more">mehr</span>
+                        </span>
+                        <span class="cal-legend-part">
+                            <span class="cal-day cal-4 cal-crema cal-legend-swatch"></span>
+                            <span data-i18n="analytics_cal_perfect_dot">Shot mit Score 100</span>
+                        </span>
+                    </div>
                 </div>
-            </div>
+                <div id="calStreaks" class="cal-streaks"></div>
+            </section>
+
+            <!-- Beans by score (#1467) -->
+            <section class="analytics-sec analytics-shelf-sec" data-analytics-period>
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_bean_shelf">Bohnen nach Score</h3>
+                    <div class="analytics-shelf-tools">
+                        <span id="beanShelfCount" class="analytics-shelf-count"></span>
+                        <div class="analytics-filter-row">
+                            <button type="button" class="analytics-filter-btn active" data-action="set-bean-shelf-sort" data-sort="score" aria-pressed="true" data-i18n="analytics_shelf_sort_score">Score</button>
+                            <button type="button" class="analytics-filter-btn" data-action="set-bean-shelf-sort" data-sort="shots" aria-pressed="false" data-i18n="analytics_shelf_sort_shots">Shots</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="beanShelf" class="analytics-shelf-wrap"></div>
+            </section>
+
+            <!-- Did you know? (#1467) -->
+            <section class="analytics-sec analytics-facts-sec" id="analyticsFactsCard">
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="analytics_facts">Wusstest du?</h3>
+                    <div class="analytics-shelf-tools">
+                        <span id="analyticsFactsCount" class="analytics-shelf-count"></span>
+                        <button type="button" class="analytics-filter-btn" data-action="analytics-facts-shuffle" data-i18n="analytics_facts_shuffle">Neu mischen</button>
+                    </div>
+                </div>
+                <div id="analyticsFacts" class="analytics-facts" aria-live="polite"></div>
+            </section>
 
             <!-- Origin world map -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_world_map">Kaffee-Weltkarte</h3>
-                <div id="worldMapWrap" style="height:380px;position:relative"></div>
-            </div>
-
-            <!-- Grinder Stats -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_grinders">Mühlen-Auswertung</h3>
-                <div id="grinderStats"></div>
-            </div>
-
-            <!-- Basket & Puck Screen Stats (#668) -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_baskets">Sieb-Auswertung</h3>
-                <div id="basketStats"></div>
-            </div>
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_puckscreens">Puck-Screen-Auswertung</h3>
-                <div id="puckScreenStats"></div>
-            </div>
-
-            <!-- Dose & Ratio Distribution -->
-            <div class="analytics-two-col">
-                <div class="analytics-card">
-                    <h3 class="analytics-section-title" data-i18n="analytics_dose_dist">Dosis-Verteilung (g)</h3>
-                    <div style="height:160px;position:relative"><canvas id="doseDistChart"></canvas></div>
-                </div>
-                <div class="analytics-card">
-                    <h3 class="analytics-section-title" data-i18n="analytics_ratio_dist">Brew-Ratio-Verteilung</h3>
-                    <div style="height:160px;position:relative"><canvas id="ratioDistChart"></canvas></div>
-                </div>
-            </div>
-
-            <!-- Time of Day -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_time_of_day">Tageszeit</h3>
-                <div style="height:160px;position:relative"><canvas id="timeOfDayChart"></canvas></div>
-            </div>
-
-            <!-- Weekday x Hour heatmap -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_heatmap">Wochentag × Uhrzeit</h3>
-                <div id="weekdayHourHeatmap"></div>
-            </div>
-
-            <!-- Bean ranking -->
-            <div class="analytics-card">
-                <h3 class="analytics-section-title" data-i18n="analytics_bean_ranking">Bohnen-Rangliste</h3>
-                <div id="beanRanking"></div>
-            </div>
-
-            <!-- Machine comparison (>=2 machines only) -->
-            <div class="analytics-card" id="machineComparisonCard" style="display:none">
-                <h3 class="analytics-section-title" data-i18n="analytics_machine_comparison">Maschinenvergleich</h3>
-                <div id="machineComparison"></div>
-            </div>
-
-            <!-- Dial-in progression -->
-            <div class="analytics-card">
+            <section class="analytics-sec analytics-map" data-analytics-period>
                 <div class="analytics-card-head">
-                    <h3 class="analytics-section-title" data-i18n="analytics_dialin_progression">Dial-In-Verlauf</h3>
-                    <select id="dialinProgressionBeanSelect" class="analytics-bean-select" data-action="dialin-progression-bean-change"></select>
+                    <h3 class="analytics-section-title" data-i18n="analytics_world_map">Kaffee-Weltkarte</h3>
+                    <span id="worldMapCount" class="analytics-shelf-count"></span>
                 </div>
-                <div style="height:220px;position:relative"><canvas id="dialinProgressionChart"></canvas></div>
-            </div>
+                <div id="worldMapWrap" class="world-map-wrap"></div>
+            </section>
+
+            <!-- Rarely used charts, folded away (#1467). Closed by default and
+                 remembered per viewer; its charts are only built once opened. -->
+            <details class="analytics-more" id="analyticsMore">
+                <summary class="analytics-more-summary">
+                    <span data-i18n="analytics_more">Mehr Auswertungen</span>
+                    <span class="analytics-shelf-count" id="analyticsMoreCount"></span>
+                </summary>
+                <div class="analytics-more-body">
+
+                    <!-- Profile chart -->
+                    <section class="analytics-sec" data-analytics-period>
+                        <h3 class="analytics-section-title" data-i18n="analytics_profiles">Profil-Performance</h3>
+                        <div id="profileChartWrap" style="height:220px;position:relative"><canvas id="profileChart"></canvas></div>
+                    </section>
+
+                    <!-- Grinder Stats -->
+                    <section class="analytics-sec" data-analytics-period>
+                        <h3 class="analytics-section-title" data-i18n="analytics_grinders">Mühlen-Auswertung</h3>
+                        <div id="grinderStats"></div>
+                    </section>
+
+                    <!-- Basket & Puck Screen Stats (#668) -->
+                    <section class="analytics-sec" data-analytics-period>
+                        <h3 class="analytics-section-title" data-i18n="analytics_baskets">Sieb-Auswertung</h3>
+                        <div id="basketStats"></div>
+                    </section>
+                    <section class="analytics-sec" data-analytics-period>
+                        <h3 class="analytics-section-title" data-i18n="analytics_puckscreens">Puck-Screen-Auswertung</h3>
+                        <div id="puckScreenStats"></div>
+                    </section>
+
+                    <!-- Dose & Ratio Distribution -->
+                    <div class="analytics-two-col" data-analytics-period>
+                        <section class="analytics-sec">
+                            <h3 class="analytics-section-title" data-i18n="analytics_dose_dist">Dosis-Verteilung (g)</h3>
+                            <div style="height:160px;position:relative"><canvas id="doseDistChart"></canvas></div>
+                        </section>
+                        <section class="analytics-sec">
+                            <h3 class="analytics-section-title" data-i18n="analytics_ratio_dist">Brew-Ratio-Verteilung</h3>
+                            <div style="height:160px;position:relative"><canvas id="ratioDistChart"></canvas></div>
+                        </section>
+                    </div>
+
+                    <!-- Time of Day -->
+                    <section class="analytics-sec" data-analytics-period>
+                        <h3 class="analytics-section-title" data-i18n="analytics_time_of_day">Tageszeit</h3>
+                        <div style="height:160px;position:relative"><canvas id="timeOfDayChart"></canvas></div>
+                    </section>
+
+                    <!-- Weekday x Hour heatmap -->
+                    <section class="analytics-sec" data-analytics-period>
+                        <h3 class="analytics-section-title" data-i18n="analytics_heatmap">Wochentag × Uhrzeit</h3>
+                        <div id="weekdayHourHeatmap"></div>
+                    </section>
+
+                    <!-- Machine comparison (>=2 machines only) -->
+                    <section class="analytics-sec" id="machineComparisonCard" style="display:none">
+                        <h3 class="analytics-section-title" data-i18n="analytics_machine_comparison">Maschinenvergleich</h3>
+                        <div id="machineComparison"></div>
+                    </section>
+
+                    <!-- Dial-in progression -->
+                    <section class="analytics-sec" data-analytics-period>
+                        <div class="analytics-card-head">
+                            <h3 class="analytics-section-title" data-i18n="analytics_dialin_progression">Dial-In-Verlauf</h3>
+                            <select id="dialinProgressionBeanSelect" class="analytics-bean-select" data-action="dialin-progression-bean-change"></select>
+                        </div>
+                        <div style="height:220px;position:relative"><canvas id="dialinProgressionChart"></canvas></div>
+                    </section>
+
+                </div>
+            </details>
 
         </div>
     </div><!-- #analytics-view -->
@@ -1311,7 +1405,7 @@
         <div class="guided-maint-modal dialin-wizard-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="dialin_wizard_title" style="margin:0">Geführtes Einwählen</h3>
-                <button type="button" class="fw-close-x" data-action="dialin-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div id="dwBody" class="dw-body"></div>
         </div>
@@ -1322,7 +1416,7 @@
         <div class="guided-maint-modal dialin-wizard-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="profile_dialin_title" style="margin:0">Profil-Dial-In</h3>
-                <button type="button" class="fw-close-x" data-action="profile-dialin-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="profile-dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div id="pdwBody" class="dw-body"></div>
         </div>
@@ -1333,7 +1427,7 @@
         <div class="guided-maint-modal dialin-wizard-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="setup_wizard_title" style="margin:0">Willkommen bei GLP</h3>
-                <button type="button" class="fw-close-x" data-action="setup-wizard-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="setup-wizard-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div id="swBody" class="dw-body"></div>
         </div>
@@ -1432,6 +1526,21 @@
                 <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
+        <!-- GaggiMate machine control (#1324) — opt-in, off by default, and
+             deliberately not part of backup/restore. GaggiMate firmware v1.9.0+
+             only; the Live view's flush button and the brew-confirmation dialog
+             only appear while this is on. Saving is immediate (change event),
+             there is no Save button. -->
+        <div class="settings-card" id="machineControlSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
+            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
+            <div class="orders-broadcast-list">
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="machineControlEnabled">
+                    <label for="machineControlEnabled" data-i18n="settings_machine_control_enabled">Maschinensteuerung erlauben</label>
+                </div>
+            </div>
+        </div>
         <!-- Shot logging auto-prefill defaults (#654) — optional, per-install
              default values for a brand-new shot's annotation panel. Never
              overwrites an already-annotated shot's data (see
@@ -1512,7 +1621,7 @@
             <label class="machine-form-label" data-i18n="settings_machine_type">Typ</label>
             <select id="machineFormType" class="machine-form-input">
                 <option value="gaggiuino">Gaggiuino</option>
-                <option value="gaggimate" data-i18n="settings_machine_type_gaggimate">GaggiMate (experimental)</option>
+                <option value="gaggimate" data-i18n="settings_machine_type_gaggimate">GaggiMate</option>
             </select>
             <label class="machine-form-label" data-i18n="settings_machine_host">Host</label>
             <input type="text" id="machineFormHost" class="machine-form-input" placeholder="gaggiuino.local">
@@ -1587,7 +1696,7 @@
                 <code id="apiTokenValue" class="api-token-value"></code>
                 <button id="apiTokenCopyBtn" type="button" class="backup-btn" data-i18n="settings_api_token_copy">Kopieren</button>
             </div>
-            <p class="settings-card-desc" id="apiTokenPortClosedNotice" data-i18n="settings_api_token_port_closed" style="display:none">Diese Sitzung hat keinen Token, weil expose_api_port deaktiviert ist und die Anfrage nicht über HA Ingress kam. Öffne die App über das Home-Assistant-Ingress-Panel, um einen Token zu erhalten, oder aktiviere expose_api_port wieder in der Add-on-Konfiguration.</p>
+            <p class="settings-card-desc" id="apiTokenPortClosedNotice" data-i18n="settings_api_token_port_closed" style="display:none">Diese Sitzung hat keinen Token, weil expose_api_port deaktiviert ist und die Anfrage nicht über HA Ingress kam. Öffne die App über das Home-Assistant-Ingress-Panel, um einen Token zu erhalten, oder aktiviere expose_api_port wieder in der App-Konfiguration.</p>
         </div>
         <!-- #722: dev-channel-only diagnostic, hidden by default. Shown only
              when /api/status reports devBuild (see components/status.js) --
@@ -1623,14 +1732,14 @@
     <div class="guided-maint-modal profile-editor-modal">
         <div class="fw-header">
             <h3 class="maint-section-title" id="gmEditorTitle" style="margin:0">GaggiMate Profil</h3>
-            <button type="button" class="fw-close-x" data-action="gm-editor-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <button type="button" class="fw-close-x" data-action="gm-editor-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </div>
         <div class="pe-scroll" id="gmEditorBody">
             <!-- rendered by gaggimate-profile-editor.js -->
         </div>
         <div class="lib-form-actions">
-            <button class="lib-btn-sm" data-action="gm-editor-close">Abbrechen</button>
-            <button class="lib-save-btn" data-action="gm-editor-save">Auf Maschine speichern</button>
+            <button class="lib-btn-sm" data-action="gm-editor-close" data-i18n="lib_cancel">Abbrechen</button>
+            <button class="lib-save-btn" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
         </div>
     </div>
 </div>
@@ -1639,10 +1748,20 @@
 <div id="scanModal">
     <h3 data-i18n="scan_title">Barcode / QR scannen</h3>
     <div id="scanViewport">
-        <video id="scanVideo" autoplay muted playsinline></video>
+        <video id="scanVideo" class="scan-video-off" autoplay muted playsinline></video>
         <div class="scan-overlay"><div class="scan-frame"></div></div>
     </div>
     <div id="scanStatus"></div>
+    <div id="scanTextHint" class="scan-hint" data-i18n="scan_text_hint" hidden></div>
+    <form id="scanManualForm" class="scan-manual" autocomplete="off" novalidate>
+        <label for="scanManualInput" data-i18n="scan_manual_label">Oder Barcode eingeben</label>
+        <div class="scan-manual-row">
+            <input id="scanManualInput" class="lib-input scan-manual-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+            <button type="submit" class="lib-btn-sm scan-manual-submit" data-action="scan-manual-submit" data-i18n="scan_manual_submit">Suchen</button>
+        </div>
+    </form>
+    <button type="button" class="lib-btn-sm scan-photo-btn" data-action="scan-take-photo" data-i18n="scan_take_photo">Foto aufnehmen</button>
+    <input id="scanPhotoInput" type="file" accept="image/*" capture="environment" hidden>
     <p style="color:var(--gray-600);font-size:.7rem;text-align:center;margin:0">
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
@@ -1683,6 +1802,24 @@
         </div>
     </div>
 </div>
+
+<!-- ── Brew-confirmation dialog (#1324) ── opt-in machine control: the machine
+     paused a brew because it raised warnings, and one client must confirm it.
+     Shown/hidden by components/machine-control.js. -->
+<div id="brewConfirmModal" class="guided-maint-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="brewConfirmTitle">
+    <div class="guided-maint-modal">
+        <h3 class="maint-section-title" id="brewConfirmTitle" data-i18n="brew_confirm_title">Bezug trotzdem starten?</h3>
+        <p class="settings-card-desc" data-i18n="brew_confirm_desc">Die Maschine meldet diese Warnungen:</p>
+        <ul id="brewConfirmWarnings"></ul>
+        <div class="lib-form-actions">
+            <button class="lib-btn-sm" data-action="brew-confirm-cancel" data-i18n="brew_confirm_cancel">Zurück</button>
+            <button class="lib-save-btn" data-action="brew-confirm-start" data-i18n="brew_confirm_start">Trotzdem starten</button>
+        </div>
+    </div>
+</div>
+
+<!-- Shared detail popover/sheet (#1467); filled by components/detail-sheet.ts -->
+<div id="detailSheet" class="lib-sheet-host"></div>
 
 <script type="module" src="./main.ts"></script>
 </body>

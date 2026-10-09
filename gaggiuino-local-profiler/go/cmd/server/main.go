@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -37,6 +38,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/backup"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/debug"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
@@ -54,6 +56,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/webapp"
 )
 
@@ -73,6 +76,11 @@ const shutdownTimeout = 8 * time.Second
 // field is an env-var read in production (configFromEnv) and an explicit
 // value in tests (cmd/server's smoke test).
 type appConfig struct {
+	// allowedHosts are extra exact Host names the app will answer for, beyond
+	// the always-allowed IP literals, localhost, single-label names and
+	// .local names — from options.json's allowed_hosts plus
+	// GLP_ALLOWED_HOSTS. #1430.
+	allowedHosts    []string
 	dbPath          string
 	tokenPath       string
 	port            string
@@ -91,7 +99,27 @@ func configFromEnv() appConfig {
 		port:            getEnv("GLP_PORT", defaultPort),
 		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond))) * time.Millisecond,
 		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax))),
+		allowedHosts:    auth.ParseAllowedHosts(readAllowedHostsOption() + " " + os.Getenv("GLP_ALLOWED_HOSTS")),
 	}
+}
+
+// readAllowedHostsOption reads options.json's allowed_hosts string (the
+// Supervisor-written add-on option, see config.yaml). A missing file,
+// unparseable JSON or an absent key all yield "" — the same
+// fail-open-to-empty behaviour the other option readers rely on, so an
+// install with no extra hosts behaves exactly as before #1430.
+func readAllowedHostsOption() string {
+	data, err := os.ReadFile(config.OptionsFile)
+	if err != nil {
+		return ""
+	}
+	var opts struct {
+		AllowedHosts string `json:"allowed_hosts"`
+	}
+	if err := json.Unmarshal(data, &opts); err != nil {
+		return ""
+	}
+	return opts.AllowedHosts
 }
 
 func main() {
@@ -214,6 +242,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 			func() error { return db.SetKVBool(sqlDB, "images_optimized_v1", true) },
 			log.Printf,
 		)
+		// #1525: reclaim image files (and their thumbnails) no library entry
+		// or existing shot refers to — leftovers from deleted entries, purged
+		// shots and old renames. Runs after the migration so a photo it just
+		// generated a thumbnail for is already referenced. A failed reference
+		// lookup removes nothing.
+		backup.CleanupOrphanedImages(library.DefaultImageDir, libRepo, shotsRepo, log.Printf)
 	})
 
 	// Wire the share-card renderer's two cross-domain lookups. Closures keep
@@ -277,6 +311,13 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	haClient := ha.NewClientFromEnv()
 	ordersRepo := orders.NewRepository(sqlDB)
+	// #1411: annotating a shot books milk stock and frozen-portion counts on
+	// the server inside the same locked save; injected here because
+	// internal/shots cannot import internal/library or internal/orders, like
+	// SetBeanSource.
+	shots.SetAnnotationStockHook(func(prev, next map[string]any) error {
+		return library.ApplyAnnotationStock(libRepo, ordersRepo.GetMenu, prev, next)
+	})
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
 	ordersHandlers.RegisterRoutes(mux)
 
@@ -290,6 +331,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// background — cancelling it would only matter for a future
 	// clean-shutdown path.
 	poller := system.NewPoller(registry, machinesHandlers, hub, haClient)
+	// #1409: a GaggiMate firmware v1.9.0+ evt:history-shot-saved frame syncs the
+	// default machine's shot history right away instead of waiting for the
+	// post-brew timer. The hook hand-offs to SafeGo inside SyncAfterShotSaved.
+	machinesHandlers.SetOnShotSaved(poller.SyncAfterShotSaved)
+	// #1543: a default-machine switch while the new default is already on
+	// would otherwise leave the preheat countdown stuck at the full window;
+	// reset the poller's preheat session for the new default.
+	machinesHandlers.SetOnDefaultChanged(poller.HandleDefaultMachineChange)
 	// POST /api/sync's manual shot-history pull loop persists through
 	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)
@@ -324,6 +373,11 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	demoService := system.NewDemoService(sqlDB, shotsRepo, libRepo)
 	systemHandlers := system.NewHandlers(poller, demoService, token)
 	systemHandlers.RegisterRoutes(mux)
+
+	// #1375: per-install UI choices (view/filter/sort) that follow the user
+	// across devices, kept in the kv table under 'ui_prefs'.
+	uiprefsHandlers := uiprefs.NewHandlers(uiprefs.NewRepository(sqlDB))
+	uiprefsHandlers.RegisterRoutes(mux)
 
 	// Prime a newly-connected client with the current preheat/live snapshot
 	// before subscribing it to future pushes — see the Prime field's doc
@@ -456,6 +510,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// as those: GET falls through auth.RequireToken's static-asset bypass,
 	// exactly as the static frontend always has. See internal/webapp/doc.go.
 	webapp.NewHandlers().RegisterRoutes(mux)
+	// The on-device cut-out models, served same-origin for the browser to fetch
+	// before it has a token. GLP_MODELS_DIR is the download-on-first-use cache
+	// dir: the first GET for a model downloads it from the pinned glp-models
+	// release into that dir. It is unset outside the image, which disables the
+	// route (every request 404s).
+	webapp.NewModelHandlers(getEnv("GLP_MODELS_DIR", "")).RegisterRoutes(mux)
 
 	if onMux != nil {
 		onMux(mux)
@@ -463,12 +523,17 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	limiter := ratelimit.New(rateLimitWindow, rateLimitMax)
 
-	// The middleware order: security headers, then the app-level rate limiter
-	// (deliberately ahead of auth so it also caps unauthenticated
-	// login/token-probing traffic), then token auth. Read from the innermost
-	// handler outward, this chain applies auth first, rate-limit second,
-	// security headers last, which is the correct nesting to make requests
-	// experience them in that order.
+	// The middleware order: security headers, then the known-host check, then
+	// the app-level rate limiter (deliberately ahead of auth so it also caps
+	// unauthenticated login/token-probing traffic), then token auth. Read from
+	// the innermost handler outward, this chain applies auth first, rate-limit
+	// second, the known-host check third and security headers last, which is
+	// the correct nesting to make requests experience them in that order.
+	//
+	// auth.RequireKnownHost sits ahead of the rate limiter on purpose: a
+	// request for an unknown Host is refused with 421 before it costs a
+	// rate-limit slot or reaches any handler, including the public
+	// GET /api/token.
 	//
 	// There is no global body-parser step to slot in here: net/http reads a
 	// request body lazily per-handler, not through a chained global
@@ -476,8 +541,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// own request body size per-route — internal/debug's importDB, for one,
 	// wraps its body in http.MaxBytesReader at the 500 MB ceiling.
 	handler := auth.SecurityHeaders(
-		limiter.Middleware(
-			auth.RequireToken(token)(mux),
+		auth.RequireKnownHost(cfg.allowedHosts)(
+			limiter.Middleware(
+				auth.RequireToken(token)(mux),
+			),
 		),
 	)
 

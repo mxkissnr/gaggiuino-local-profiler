@@ -1,0 +1,169 @@
+// #1498: a GaggiMate in standby is off, so the Live view must not count down
+// to "ready" with a cold boiler. Covers the widget/DOM wiring in views/live.js
+// and the shared icon-state translation it drives.
+import { describe, it, expect, beforeEach } from 'vitest';
+
+// vitest's node environment has no browser globals; stub them through a loose
+// view of globalThis (the same bridge the sibling live tests use).
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+
+const { S } = await import('../public-src/state/index.js');
+const { updatePreheatWidget, handleLiveData } = await import('../public-src/views/live.js');
+
+const state = S as unknown as Record<string, unknown>;
+
+function makeElement() {
+  const cls = new Set<string>();
+  return {
+    className: '', textContent: '', style: {} as Record<string, string>,
+    firstChild: null as unknown,
+    classList: {
+      add: (...c: string[]) => c.forEach(x => cls.add(x)),
+      remove: (...c: string[]) => c.forEach(x => cls.delete(x)),
+      contains: (c: string) => cls.has(c),
+    },
+    querySelector: () => null,
+    set innerHTML(_v: string) { this.firstChild = {}; },
+    has: (c: string) => cls.has(c),
+  };
+}
+
+type FakeElement = ReturnType<typeof makeElement>;
+
+function makeFakeDocument() {
+  const registry = new Map<string, FakeElement>();
+  return {
+    getElementById: (id: string): FakeElement => {
+      if (!registry.has(id)) registry.set(id, makeElement());
+      return registry.get(id)!;
+    },
+  };
+}
+
+describe('Live view standby preheat (#1498)', () => {
+  let doc: ReturnType<typeof makeFakeDocument>;
+  let badge: FakeElement;
+  let wrap: FakeElement;
+  let title: FakeElement;
+
+  beforeEach(() => {
+    doc = makeFakeDocument();
+    g.document = doc;
+    state.currentLang = 'en';
+    state.machines = [{ id: 1, isDefault: true }];
+    state.activeMachineId = 1;
+    badge = doc.getElementById('preheat-ready-badge');
+    wrap = doc.getElementById('preheat-warming-wrap');
+    title = doc.getElementById('liveIdleTitle');
+  });
+
+  // #1498 code review: updatePreheatWidget owns only the badge/warming widget;
+  // the idle title belongs to the live-data handler, so this must not write it.
+  it('hides the ready badge and warming widget without touching the idle title', () => {
+    title.textContent = 'sentinel';
+    updatePreheatWidget({ standby: true, ready: false, remaining: 1200, pct: 0.1 });
+
+    expect(badge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('none');
+    expect(title.textContent).toBe('sentinel');
+  });
+
+  it('hides them even when the payload still claims ready with time remaining', () => {
+    title.textContent = 'sentinel';
+    updatePreheatWidget({ standby: true, ready: true, remaining: 600, pct: 1 });
+
+    expect(badge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('none');
+    expect(title.textContent).toBe('sentinel');
+  });
+
+  it('leaves the standby title to the live-data handler', () => {
+    updatePreheatWidget({ standby: true, ready: false, remaining: 1200 });
+    expect(title.textContent).toBe('');
+
+    handleLiveData({ machineReachable: true });
+    expect(title.textContent).toBe('Standby');
+  });
+
+  it('keeps the machine icon off (no accent, no heating) in standby', () => {
+    const host = doc.getElementById('liveMachineIcon');
+    updatePreheatWidget({ standby: true, ready: false, remaining: 1200 });
+
+    expect(host.has('is-on')).toBe(false);
+    expect(host.has('is-heating')).toBe(false);
+  });
+
+  it('the idle title stays "Standby" across a following live tick', () => {
+    updatePreheatWidget({ standby: true, ready: false, remaining: 1200 });
+    handleLiveData({ machineReachable: true });
+
+    expect(title.textContent).toBe('Standby');
+  });
+
+  it('standby: false keeps today\'s warming countdown and title', () => {
+    updatePreheatWidget({ standby: false, ready: false, remaining: 1200, pct: 0.1 });
+    handleLiveData({ machineReachable: true });
+
+    expect(badge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('');
+    expect(doc.getElementById('preheat-countdown').textContent).toBe('20:00 remaining');
+    expect(title.textContent).toBe('Warming up …');
+  });
+
+  // #1498 follow-up: a last live message that says the machine is unreachable
+  // must hide the badge and warming widget even when a stale preheat payload
+  // still carries a countdown.
+  it('hides the badge and warming widget when the last live message is unreachable', () => {
+    handleLiveData({ machineReachable: false });
+    updatePreheatWidget({ ready: false, remaining: 1000, pct: 0.1, preheatTime: 20 });
+
+    expect(badge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('none');
+  });
+
+  it('shows the countdown once the last live message is reachable again', () => {
+    handleLiveData({ machineReachable: true });
+    updatePreheatWidget({ ready: false, remaining: 1000, pct: 0.1, preheatTime: 20 });
+
+    expect(badge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('');
+  });
+
+  // #1541: the status badge next to "Live Shot" must follow the same
+  // standby/warming/ready phase as the idle title instead of always saying
+  // Ready, and a preheat update arriving while the idle panel is shown must
+  // refresh it without waiting for the next live message.
+  describe('status badge follows the idle phase (#1541)', () => {
+    it('shows the standby label for a standby payload', () => {
+      updatePreheatWidget({ standby: true, ready: false, remaining: 600, pct: 0.1 });
+      handleLiveData({ machineReachable: true });
+
+      expect(doc.getElementById('live-status-text').textContent).toBe('Standby');
+    });
+
+    it('shows the warming label while the preheat is still counting down', () => {
+      updatePreheatWidget({ standby: false, ready: false, remaining: 600, pct: 0.1 });
+      handleLiveData({ machineReachable: true });
+
+      expect(doc.getElementById('live-status-text').textContent).toBe('Warming up …');
+    });
+
+    it('shows the ready label once the preheat is done', () => {
+      updatePreheatWidget({ standby: false, ready: true, remaining: 0, pct: 1 });
+      handleLiveData({ machineReachable: true });
+
+      expect(doc.getElementById('live-status-text').textContent).toBe('Ready');
+    });
+
+    it('flips the badge to ready when a later preheat update finishes warming', () => {
+      updatePreheatWidget({ standby: false, ready: false, remaining: 600, pct: 0.1 });
+      handleLiveData({ machineReachable: true });
+      expect(doc.getElementById('live-status-text').textContent).toBe('Warming up …');
+
+      updatePreheatWidget({ standby: false, ready: true, remaining: 0, pct: 1 });
+      expect(doc.getElementById('live-status-text').textContent).toBe('Ready');
+    });
+  });
+});

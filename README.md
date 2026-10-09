@@ -18,17 +18,69 @@
   Syncs shots automatically, visualizes extraction profiles and provides a real-time live view — all from Home Assistant.
 </p>
 
+<p align="center">
+  <img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="100%"/>
+</p>
+
+<p align="center">
+  <strong>Try the demo in your browser: <a href="https://mxkissnr.github.io/gaggiuino-local-profiler/">https://mxkissnr.github.io/gaggiuino-local-profiler/</a>, with sample data. Nothing is saved.</strong>
+</p>
+
 ---
 
-> **AI-built project.** Almost all code, tests and documentation are written by AI models — mainly Claude (Anthropic), with DeepSeek in the automated agent pipeline — plus community contributions. A human maintainer sets the scope, reviews every change, tests on real hardware (Gaggia Classic + Gaggiuino) and makes all release decisions. Keep that in mind before installing this on your machine.
+> [!IMPORTANT]
+> **Heads-up — this requires a machine running [Gaggiuino](https://gaggiuino.github.io/) or [GaggiMate](https://github.com/jniebuhr/gaggimate) firmware.** GLP does not work with stock espresso machines. Both are hardware mods (custom controller, pressure/temperature sensors) — Gaggiuino and GaggiMate are both fully supported (see the multi-machine bullet below). These mods aren't limited to one machine brand: **the "type" GLP asks for when you add a machine selects the firmware adapter it talks to, not the physical machine.** Any single-boiler machine with a Gaggiuino or GaggiMate board installed — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically from GLP's side. If your machine doesn't run either firmware yet, start there first.
 
-> **armv7 (32-bit ARM) is supported** alongside amd64 and aarch64. The armv7 image is not regularly tested on real hardware.
-
-> **Heads-up — this requires a machine running [Gaggiuino](https://gaggiuino.github.io/) or [GaggiMate](https://github.com/jniebuhr/gaggimate) firmware.** GLP does not work with stock espresso machines. Both are hardware mods (custom controller, pressure/temperature sensors) — Gaggiuino and GaggiMate are both fully supported (see the Multi-Machine row below). These mods aren't limited to one machine brand: **the "type" GLP asks for when you add a machine selects the firmware adapter it talks to, not the physical machine.** Any single-boiler machine with a Gaggiuino or GaggiMate board installed — Gaggia Classic, Rancilio Silvia, Lelit, and others — works identically from GLP's side. If your machine doesn't run either firmware yet, start there first.
+> [!NOTE]
+> **AI-built project.** Almost all code, tests and documentation are written by AI models — mainly Claude (Anthropic), with DeepSeek in the automated agent pipeline — plus community contributions. A human maintainer sets the scope, reviews every change, tests on real hardware (Gaggia Classic + Gaggiuino) and makes all release decisions. Keep that in mind before installing this on your machine. **armv7 (32-bit ARM) is supported** alongside amd64 and aarch64, though the armv7 image is not regularly tested on real hardware.
 
 ## Why GLP?
 
 You love your Gaggiuino or GaggiMate machine, but your shot data disappears into the void? GLP brings live extraction charts, a searchable coffee library and full analytics straight into Home Assistant — completely local, no cloud, no account. From *"what was that bean from last week again?"* to a real shot archive with automatic scoring, compare view and flavor wheel: everything runs on your HA server, and your data stays yours.
+
+---
+
+## Features
+
+- **Multi-machine** - run Gaggiuino and GaggiMate machines side by side from one app instance, each with its own shots, live view and maintenance, while shared equipment such as the grinder stays global.
+- **Shot archive & live view** - every shot is stored with pressure, flow, weight and temperature curves, and the Live tab streams the current brew, preheat state and machine status straight from the controller.
+- **Shot score & dial-in help** - an automatic 0-100 score with a plain-language verdict, grind recommendations, and a guided dial-in wizard that tunes grind against a 25-32 s extraction target.
+- **Compare mode & ghost curve** - overlay any two shots by hand, or let the shot detail auto-compare against the previous shot on the same profile with delta chips and a dashed ghost curve.
+- **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
+- **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
+- **Sticker cut-out** - cut a bean photo out as a sticker right in the app, on your own device (the models download once on first use).
+- **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
+- **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.
+- **Maintenance tracking** - descaling, backflush, group-head and gasket tasks tracked per machine, with grinder cleaning and burr-wear tracking alongside.
+- **Orders & kiosk mode** - take drink orders from a tablet kiosk page with variants and notes, and watch the barista queue update on its own.
+- **Exports & sharing** - export shots as `.shot` or CSV, or turn any shot into a shareable card.
+- **AI assistants via MCP** - optionally expose a built-in Model Context Protocol server so AI assistants can read your shots, beans, maintenance and analytics, with separate opt-ins for write and developer tools.
+- **Six languages & themes** - the full UI ships in DE, EN, IT, FR, ES and NL, with light/dark/auto themes and eight accent colour schemes. Your view, filter and sort choices are synced across devices.
+
+All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki/Features).
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library shelf with bean bags" width="100%"/></td>
+    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/bean-sheet.png" alt="Bean detail sheet with stock, bags and flavor wheel" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison and dial-in progression in the More insights fold" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
+  </tr>
+</table>
+
+More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in, Live, Orders, Settings). Regenerated on demand via `node scripts/screenshots.mts`.
+
+---
 
 ## The GLP Ecosystem
 
@@ -43,7 +95,7 @@ Both components are optional — the integration adds HA sensors plus the bundle
 
 ---
 
-## Quick Install
+## Installation
 
 <p>
   <a href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fmxkissnr%2Fgaggiuino-local-profiler">
@@ -53,98 +105,7 @@ Both components are optional — the integration adds HA sensors plus the bundle
 
 Click the button above to add this repository directly to your Home Assistant — no copy-pasting needed.
 
----
-
-## Screenshots
-
-**Try the demo in your browser: <https://mxkissnr.github.io/gaggiuino-local-profiler/> — sample data, nothing is saved.**
-
-<table>
-  <tr>
-    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="100%"/></td>
-    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="100%"/></td>
-  </tr>
-  <tr>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="100%"/></td>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison, bean ranking and dial-in progression" width="100%"/></td>
-  </tr>
-  <tr>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library with bean cards" width="100%"/></td>
-  </tr>
-</table>
-
-More in [`docs/screenshots/`](gaggiuino-local-profiler/docs/screenshots/) (Dial-in, Live, Orders, Settings). Regenerated on demand via `node scripts/screenshots.mjs`.
-
----
-
-## Features
-
-| | Feature | Description |
-|---|---|---|
-| 🔀 | **Multi-Machine** | Manage more than one espresso machine from a single app instance — Gaggiuino (full support) or [GaggiMate](https://github.com/jniebuhr/gaggimate) (sync + live status, full profile editing (Standard + Pro/Extended, create/edit/delete, saved straight to the machine) with a phase-accurate preview chart matching GaggiMate's own; water level with optional ALBA sensor; BLE-scale vs. estimated weight distinction in shot chart). Shot sync now runs for every registered machine, not just the default one; live view stays default-machine-only for now. Maintenance (descaling/backflush/group head/gaskets) is tracked per machine; shared equipment (water filter, grinder) stays global. Existing single-machine installs upgrade automatically, no manual steps. Gaggiuino machines show installed/available firmware right on their row in the machines list, with a one-click update trigger and progress bar; a stable/test/debug release-channel selector stays in the edit form. |
-| 📈 | **Shot Archive** | All shots with pressure, flow, weight and temperature curves |
-| 🔴 | **Live Mode** | Real-time display directly from the controller (`/api/system/status`); the Live tab, preheat/ready badge and the sidebar's shot counter push updates instantly over a live connection, falling back automatically to polling if one can't be established. While idle, the Live tab shows current temperature/target, pressure and water level instead of a bare "Ready to brew"; steam and flush mode get the same live treatment (timer, readouts, badge, animated machine icon) as brewing. Stale readings are cleared automatically if the machine drops off the network. |
-| 🎛️ | **Live Shot Setup** | Choose the next shot's bean, dose, grinder, grind setting, basket, puck screen and recipe on the Live view before you pull; the sticky per-machine selection is written onto the shot automatically once it finishes syncing — finished brews only (steam/flush sessions are ignored), and only while the shot is still unannotated. |
-| 📡 | **MQTT Live-Data Transport** | Alternative to the WebSocket connection for live sensor/system data — subscribes to the Gaggiuino's own MQTT-published topics instead, toggled in Settings ("Live connection: WebSocket / MQTT"). Broker connection is auto-discovered via the HA Supervisor's MQTT service when available, with manual entry as a fallback, plus a one-click "Apply to machine" that points the machine's own MQTT client at the same broker. Feeds the exact same live-state cache the WebSocket transport does — `glp-integration` needs zero changes either way. Applies to the default machine only. |
-| 🔄 | **Auto-Sync** | New shots load automatically when `gaggiuino_latest_shot_id` rises; a backfill's progress now updates live with a reliable completion/failure notification, also falling back to polling automatically |
-| ⇄ | **Compare Mode** | Overlay two shots side by side |
-| 👻 | **Ghost Curve & Delta Chips** | When an earlier shot exists with the same profile on the same machine, the shot detail auto-compares: a score delta chip on the verdict header, signed delta chips on pressure/flow/temp, and the previous shot's curves overlaid on the chart as a dashed ghost — independent of the explicit Compare Mode above |
-| 🏆 | **Shot Score** | Automatic 0–100 score (pressure, stability, duration, ratio, channeling), shown as a verdict-header score ring with a plain-language dial-in headline atop the shot detail; temperature/ratio target the bean's own brew recommendation from the Library when set, flagged with a target-icon badge on the header when it applies |
-| 🏅 | **Achievements** | A browsable stamp card of 54 badges across 7 categories, unlocked automatically as you brew (event-driven, with a retroactive pass over existing shot history on first load); locked secret badges show only a "?" until earned, and a fully-unlocked category gets a dated "Full" overprint — no level, rank or point score |
-| 📊 | **Analytics** | Score trend, shot calendar heatmap, bean stats, grinder/basket/puck screen stats, profile performance, interactive coffee world map (zoom/pan, per-bean origin points), a weekday × hour heatmap, a sortable bean ranking table (shots/score/last grind/trend), a machine comparison table (score/duration/temperature stability, once ≥2 machines are registered) and a per-bean dial-in progression chart |
-| 📊 | **P·Q Diagram** | Pressure vs. flow chart — reveals extraction signature |
-| ⚗️ | **EY Calculation** | Extraction Yield % when TDS and dose are entered |
-| ☕ | **Grind Recommendation** | Automatic advice based on shot duration and channeling |
-| 🎯 | **Guided Dial-In Wizard** ⚠ *experimental* | Step-by-step "set grind → pull shot → evaluate → next grind" loop, opened from the Dial-in tab or a bean card; binary-search grind suggestions against a 25–32 s extraction-time target, explicit shot-match confirmation (never silent), and a "save as known grind" once dialed in — usable but still evolving, suggestions are a starting point, not a guarantee |
-| 📅 | **Roast Date & Freshness** | Days since roast as colored badge (green: 7–21 days optimal) |
-| ☕ | **Coffee Library** | Persistent bean and grinder database with autocomplete; roast date auto-fills; variety, processing, roast type, growing region, altitude, importer, harvest, price, producer, certification and a manual brew recommendation (temperature/ratio/time) — all shown only when set; bean cards show an origin eyebrow line, outline-style flavor tags and a proportional stock-remaining bar |
-| 🧺 | **Baskets & Puck Screens** | Two Library entity types alongside beans/grinders/recipes/milks — baskets (wall type, shape) and puck screens (thickness), each with list/edit/delete and a directly-uploaded photo; either can be linked to a shot from the annotation panel next to the bean picker, and shows up on the shot's recipe card, in CSV export and in `.shot` export |
-| 🧊 | **Frozen Portion Tracking** | Freeze a dated, weighed portion of a bag for later without touching its stock — the freshness clock pauses for time spent frozen; thaw one portion at a time from a multi-portion batch, or correct a portion's count/weight/date after the fact; a shot's annotation panel lets you explicitly record which frozen portion (if any) its dose came from, shown as a ❄ badge in the shot list, with the library's remaining count deducted automatically |
-| 🎛 | **Machine Profile Editor** (bean suggestion ⚠ *experimental*) | Visual editor for Gaggiuino and GaggiMate machine profiles in a "Profiles" tab — name, recipe, and a full phase editor (type, target curve, restriction, stop conditions) with a live preview chart; "Create profile" on a bean card pre-fills a profile suggestion derived from that bean's decaf/process/roast attributes (usable but not finished — a starting point, not a guarantee, review before sending); a "Duplicate" button on any profile opens a copy in the editor (id cleared, name suffixed "(Copy)") to save as a new profile instead of overwriting the source; sends directly to the machine over its WebSocket API |
-| 🧪 | **Profile Dial-In Wizard** | Sibling to the Guided Dial-In wizard, but tunes a machine profile's phases against real trial shots instead of grind — pick how each shot tasted (balanced/sour/bitter/watery/channeling), get one concrete phase adjustment per round grounded in extraction science, sent straight back to the machine before the next round |
-| 🎡 | **Flavor Wheel** | Interactive aroma sunburst per bean, built from structured tasting-note tags — see [Acknowledgements](#acknowledgements) for the SCA/WCR data credit |
-| ⭐ | **Bean Rating** | Star rating per bean, computed automatically as the average of that bean's shot ratings — no manual field |
-| 🖼️ | **Bean, Grinder & Shot Photos** | Bean photo imported once from the shop on URL import; grinder photo uploaded directly from your device — plus grinder burr type and purchase date; each shot can also have its own photo (e.g. the cup/crema), shown as a small round thumbnail in the sidebar plus a larger hero photo panel above the shot detail chart (desktop and mobile); click any bean, grinder or shot photo to open it fullscreen in a shared lightbox |
-| 📝 | **Annotations & Rating** | Coffee, grinder, grind setting, dose, roast date, TDS, notes, **drink type** (from menu); 1–5 stars; auto-saves 1 s after last keystroke, with an inline "Speichert…" → "Gespeichert" status and forced flush on blur/tab-switch/shot-switch so no edit is ever lost |
-| 🎚️ | **Grind Setting Baseline** | The shot detail's Bean & Grinder recipe card shows the grind setting alongside the grinder; a bean's newest shot additionally shows a "Last grind" baseline chip with the last recorded grind setting for that bean, so baseline and correction read together next to the grind advice; sidebar shot cards' meta line includes the grind setting too |
-| 🔍 | **Shot Search** | Filter sidebar by profile, coffee, grinder; each shot is a rich card (thumbnail, score, coffee + dose, star rating, grinder, time), grouped under day-separator headers ("Today" / "Yesterday" / date) |
-| ☕ | **Bean Filter (Shot History)** | Click a bean in the Library to narrow the shot sidebar to that bean's shots, ANDed with the free-text search, with a clearable indicator |
-| ⛶ | **Fullscreen Chart** | Expand chart to fullscreen with auto landscape rotation on mobile |
-| 💾 | **.shot Export** | Export in Decent Espresso format (Visualizer.coffee compatible) |
-| 📤 | **CSV Export** | All shots with annotations as CSV |
-| 🖼️ | **Share Card** | Export any shot as a 1080×1080 PNG card — score, pressure curve, metadata and GLP branding. Share button uses the native Web Share API on mobile or downloads the PNG on desktop. |
-| 🔌 | **Smart Plug** | Optional: power machine on/off via HA switch entity, from the sidebar on desktop or the topbar power toggle on mobile |
-| ☕ | **Preheat Timer** | Progress bar + countdown after machine switches on; configurable warmup time; smart reset (ignores brief off/on cycles while still warm) |
-| 🌐 | **Multi-Language UI** | DE / EN / IT / FR / ES / NL — auto-detected from browser, persisted per session |
-| 🎨 | **Accent Color Themes** | 6 color schemes: Amber (default), Ocean, Aurora, Ember, Forest, Crema — persisted in localStorage; Crema also warms the neutral gray scale and pairs with a bundled serif (Fraunces) for bean names in the Library and on the share card |
-| 🧹 | **Maintenance Dashboard** | Summary tiles (due/soon/OK + log entries this year), a "next up" banner naming the most-overdue task with an inline done-button, a per-view machine filter (independent of the topbar switcher), compact task tiles with threshold/guided-flow controls behind a details expand, custom user-defined tasks (add/rename/delete) with an enable/disable toggle for any task, and a filterable maintenance log table |
-| 🔧 | **Grinder Maintenance** | Per-grinder cleaning schedule with configurable shot or day threshold; cards shown alongside machine maintenance tasks |
-| 🔩 | **Grinder Burr Wear** | Shots and grams ground since the last burr swap, tracked separately from calendar-based cleaning maintenance since burrs dull by throughput, not time; one-click reset when burrs are replaced |
-| 🎯 | **Grinder Zero-Point History** | Logging a grinder's current zero point (e.g. after cleaning) records a new value instead of editing past shots; grind-setting suggestions and comparisons built from shot history re-normalize each historical value to what it would read on the grinder today, so a re-zero no longer skews them |
-| 📷 | **Barcode / QR Scanner** | Scan coffee bag barcodes (EAN/UPC) via camera — name and roaster looked up on Open Food Facts; GLP QR schema for full bean import between installations; each bean card generates a shareable QR code |
-| 🔗 | **Roaster URL Import** | Paste a product URL from kaffeebraun.com, hoppenworth-ploch.de or elbgold.com (each toggleable in settings) — name, roaster, photo, aromas, origin country, variety, roast type, processing, growing region, altitude/importer/harvest/price (where the shop provides them) and decaf flag are imported automatically; any other shop falls back to a generic Shopify / JSON-LD / webpage-metadata parser, and custom Shopify domains can be added; the generic Shopify parser also does a bounded, SSRF-checked HTML fallback fetch to fill in process/variety/producer/region/origin/elevation/roast-type/brew-guide fields some shop themes only render into the page HTML, never overwriting a value already found in the shop's JSON; imported beans show source, import method and import date |
-| 🌙 | **Light / Dark / Auto theme** | Built-in theme toggle (Settings) with a third Auto option that follows the browser/OS colour-scheme preference and switches live if it changes; choice persisted in localStorage; matching `glp-ha-theme.yaml` for the full HA interface |
-| 🆕 | **What's New** | Always-visible "What's New" card at the top of Settings, listing the last 8 releases newest-first with short highlight bullets — source-of-truth history stays in `CHANGELOG.md`, this is a curated in-app subset (`public-src/shared/whats-new.ts`), so you don't have to leave the app to see what changed |
-| 🎛️ | **Profile Selector** | Lovelace card shows a dropdown to switch the active brew profile via `select.gaggiuino_profiler_profile` (provided by GLP Integration v1.9.0+) |
-| 📋 | **Order Management** | Barista backend tab to manage espresso orders — queue, accept with ETA, complete or decline with reason; configurable menu (emoji + drink name); bean and milk variants offered only while actually in stock (milk is deducted automatically on order completion) and while manually enabled — a bean can be temporarily excluded from ordering without deleting it or touching its stock, with customer-facing bean descriptions (taste notes, origin, processing); companion Lovelace card for customers (bundled in the integration) |
-| 🤖 | **AI assistants (MCP)** | Optionally expose a built-in Model Context Protocol server so Claude Code, Claude Desktop and other AI assistants can read your shots, beans, maintenance and analytics — off by default, with separate opt-ins for write and developer tools; see [AI assistants (MCP server)](gaggiuino-local-profiler/DOCS.md#ai-assistants-mcp-server). |
-| 🧾 | **Kiosk Mode** | Self-contained ordering page at `kiosk.html` for a tablet that stays on a table — a guest enters a name, picks a drink plus optional variants and a note, places the order and sees the confirmation with the estimated time, then the page resets itself to the name step after 6 seconds; a queue panel lists the active orders (waiting / being prepared) with their estimated times and refreshes every 8 seconds; it follows the app's light/dark theme and languages (the app's stored choice, else the system or browser) and `?eink=1` switches to a high-contrast black/white mode without animations for e-ink tablets; requires `enable_orders: true` and no separate login |
-| 🧭 | **First-Run Onboarding & Demo Mode** | Dismissible banner when the machine isn't reachable; first-run panel with setup steps plus a "Load demo data" button that seeds a sample dataset (shots, beans, a blend, a recipe) so the app can be evaluated before connecting hardware; "End demo" removes exactly the seeded rows |
-| 🧙 | **Guided Setup Wizard** | A first-time install with zero machines configured opens a 3-step modal automatically — welcome, connect your first machine (reusing the same add-machine/test-connect form as Settings), then done; "I don't have a machine yet" jumps straight to demo data; "Later" reopens it on the next launch until it's either completed or a machine exists; "Restart setup tour" in Settings → Machines reopens it anytime |
-| 📱 | **Installable App (PWA)** | Install GLP as a standalone app when accessed directly over HTTPS (own icon, no browser chrome, offline app shell); server-side gated so it's never offered inside the HA Companion App/Ingress panel, which keeps running as a normal embedded panel |
-| 🧭 | **Desktop Topbar Navigation** | Horizontal icon+label tab row (Shots/Live/Library/Analytics/Dial-in/Maintenance/Orders/Settings) in the content topbar next to the multi-machine switcher and a small animated machine icon reflecting the active machine's live state (heating/hot/idle/brewing/steaming) on every tab, with a rainbow click easter egg — no separate brand icon, since the app is already framed by the HA Ingress panel; replaces v2.6.0's collapsible left nav rail, removed again after real HA Ingress testing showed it stacking a second left-hand menu on top of Ingress's own sidebar |
-| 📱 | **Mobile Bottom Navigation & Burger Drawer** | Bottom nav (Shots/Live/Library/Analytics + a "More" sheet, all icon-based, no emoji); the Shots tab opens the shot detail directly (last-selected shot, falling back to newest) — the shot list itself lives exclusively in the left burger drawer, an overlay reachable from any view (swipe from the left edge to open, swipe-left or backdrop-tap to close), alongside the bottom nav; verdict header, recipe zone and full chart fit above the fold; touch targets sized 44×44px |
-| 🗓️ | **Hybrid Shot-List Date Grouping** | Sidebar shot list groups recent shots (today/yesterday, up to ~14 days) by day; older shots collapse into per-month headers instead of one header per day forever — month headers are a collapsible accordion (collapsed by default, click to expand) |
-| 📱 | **Configurable Mobile Bottom Nav** | Choose which 4 destinations appear as the mobile bottom-nav's main icons from Settings (checkbox + up/down reorder, no drag-and-drop); Shots is pinned first, unpicked destinations fall into the "More" sheet automatically, max 4 enforced by disabling further checkboxes; persisted client-side only, falls back to today's default set if cleared/corrupted; mobile-only, desktop topbar unaffected |
-
----
-
-## Installation
-
 ### Step 1 — Add this repository to Home Assistant
-
-Either click the Quick Install button above, or manually:
 
 1. Go to **Settings → Apps → App Store**
 2. Click **⋮ → Repositories**
@@ -231,145 +192,9 @@ aspect_ratio: "16:9"
 
 ## Architecture
 
-The GLP ecosystem (top) and the app's internals (below), as diagrams:
+GLP is a Go app with an embedded SQLite database. It talks to the machines directly (REST, WebSocket or MQTT) and serves the dashboard through Home Assistant Ingress. The GLP Integration polls the app for Home Assistant entities and bundles the Shot Card and Order Card.
 
-```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 70}}}%%
-flowchart LR
-  subgraph MACHINES["Espresso machines"]
-    direction TB
-    GGU["Gaggiuino"]
-    GM["GaggiMate"]
-  end
-
-  subgraph CLIENTS["Clients"]
-    direction TB
-    BR["Browser<br/>via HA Ingress"]
-    AI["AI assistant<br/>MCP client"]
-  end
-
-  APP["<b>GLP App</b><br/>Go · port 8099<br/>SQLite"]
-
-  subgraph HA["Home Assistant"]
-    direction TB
-    INT["GLP Integration"]
-    SC["Shot Card"]
-    OC["Order Card"]
-    AUTO["Sensors &amp; automations"]
-  end
-
-  GGU -->|"REST · WebSocket · MQTT"| APP
-  GM -->|"WebSocket"| APP
-  BR --> APP
-  AI -.->|"/api/mcp (opt-in)"| APP
-  APP -->|"polled on :8099"| INT
-  INT -->|"entities"| AUTO
-  INT -->|"entities · API proxy"| SC
-  INT -->|"entities · API proxy"| OC
-  OC -.->|"direct with glp_url"| APP
-
-  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  classDef app fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
-  classDef ha fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-  class GGU,GM machine
-  class BR,AI client
-  class APP app
-  class INT,SC,OC,AUTO ha
-  style MACHINES fill:#f8fafc10,stroke:#94a3b8
-  style CLIENTS fill:#f8fafc10,stroke:#94a3b8
-  style HA fill:#f8fafc10,stroke:#94a3b8
-```
-
-```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 18, "rankSpacing": 45, "padding": 10}}}%%
-flowchart TB
-  subgraph L1["1 · Machines"]
-    direction LR
-    GGU["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Gaggiuino&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    GM["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GaggiMate&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;controller&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    BRK["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MQTT broker&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;optional&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-  end
-  subgraph L2["2 · Connectivity"]
-    direction LR
-    ADP["&nbsp;&nbsp;&nbsp;Machine adapters&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/machines&nbsp;&nbsp;&nbsp;"]
-    MQ["&nbsp;&nbsp;&nbsp;&nbsp;MQTT transport&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/mqtt&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    POLL["&nbsp;&nbsp;Poller &amp; shot sync&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/system&nbsp;&nbsp;&nbsp;&nbsp;"]
-  end
-  subgraph L3["3 · Domain & storage"]
-    direction LR
-    SHOTS["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Shots&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;internal/shots&nbsp;&nbsp;&nbsp;&nbsp;"]
-    LIB["&nbsp;&nbsp;&nbsp;&nbsp;Coffee library&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/library&nbsp;&nbsp;&nbsp;"]
-    BK["&nbsp;&nbsp;&nbsp;Backup &amp; restore&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/backup&nbsp;&nbsp;&nbsp;&nbsp;"]
-    MNT["&nbsp;Maintenance, badges&nbsp;&nbsp;<br/>&nbsp;internal/maintenance&nbsp;"]
-    ORD["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Orders&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/orders&nbsp;&nbsp;&nbsp;&nbsp;"]
-    IMP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Bean import&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/importer&nbsp;&nbsp;&nbsp;"]
-    DB[("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SQLite&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/db&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")]
-  end
-  subgraph L4["4 · Interfaces"]
-    direction LR
-    API["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;REST API&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd/server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    SSE["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Event stream&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/sse&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    MCP["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP server&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/mcp&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    WEB["&nbsp;&nbsp;Dashboard + kiosk&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;internal/webapp&nbsp;&nbsp;&nbsp;"]
-    HAC["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HA client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal/ha&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    NET["&nbsp;&nbsp;&nbsp;&nbsp;Outbound guard&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;internal/netguard&nbsp;&nbsp;&nbsp;"]
-  end
-  subgraph L5["5 · Consumers"]
-    direction LR
-    SPA["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dashboard&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;browser&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    AI["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AI assistant&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MCP client&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    KIO["&nbsp;&nbsp;&nbsp;&nbsp;Kiosk display&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wall tablet&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    HA["&nbsp;&nbsp;&nbsp;&nbsp;Home Assistant&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Supervisor&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    RS["&nbsp;&nbsp;&nbsp;&nbsp;Roaster shops&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;web&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-  end
-
-  GGU -->|"HTTP · WS"| ADP
-  GM -->|"WebSocket"| ADP
-  BRK -.->|"MQTT"| MQ
-  ADP --> POLL
-  MQ --> POLL
-  POLL -->|"new shots"| SHOTS
-  POLL -->|"live state"| SSE
-  SHOTS --> DB
-  LIB --> DB
-  BK --> DB
-  MNT --> DB
-  ORD --> DB
-  IMP --> DB
-  DB --> API
-  DB --> MCP
-  DB --> WEB
-  ORD -->|"notify"| HAC
-  IMP --> NET
-  API -->|"HTTP"| SPA
-  SSE -->|"push"| SPA
-  MCP -.->|"opt-in"| AI
-  WEB --> KIO
-  HAC -->|"Supervisor API"| HA
-  NET -->|"HTTPS"| RS
-  classDef machine fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-  classDef conn fill:#ffedd5,stroke:#ea580c,stroke-width:1.5px,color:#7c2d12
-  classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-  classDef store fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#0f172a
-  classDef iface fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-  classDef consumer fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-  class GGU,GM,BRK machine
-  class ADP,MQ,POLL conn
-  class SHOTS,LIB,ORD,MNT,BK,IMP domain
-  class DB store
-  class API,SSE,MCP,WEB,HAC,NET iface
-  class SPA,AI,KIO,HA,RS consumer
-  style L1 fill:#f8fafc10,stroke:#94a3b8
-  style L2 fill:#f8fafc10,stroke:#94a3b8
-  style L3 fill:#f8fafc10,stroke:#94a3b8
-  style L4 fill:#f8fafc10,stroke:#94a3b8
-  style L5 fill:#f8fafc10,stroke:#94a3b8
-```
-
-Read the app diagram top to bottom, from the machine to the people and systems using the data: the connectivity layer turns what the machines send into shots and live state, the domain layer applies the rules and keeps everything in SQLite, and the interfaces serve it to the dashboard, AI assistants, the kiosk display, Home Assistant and roaster shops.
-
-Note: the docs tab shown inside Home Assistant ([DOCS.md](gaggiuino-local-profiler/DOCS.md)) keeps an ASCII diagram, since Home Assistant cannot render Mermaid.
+Diagrams of the ecosystem and the app internals (interactive): [wiki: Architecture](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki/Architecture).
 
 ---
 
@@ -398,6 +223,17 @@ Full numbers (timeline, per-model breakdown, cost estimate) generated live from 
 </p>
 
 ---
+
+## Community
+
+- **Questions:** ask in [Q&A](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/q-a).
+- **Ideas:** one idea per discussion in [Feature Requests](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/feature-requests); upvote the ones you want most.
+- **Releases:** every release gets a discussion in [Announcements](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/announcements).
+- **Bugs:** open an [issue](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/new/choose).
+
+Thanks to everyone who reports bugs, shares ideas and sends pull requests:
+
+<a href="https://github.com/mxkissnr/gaggiuino-local-profiler/graphs/contributors"><img src="https://contrib.rocks/image?repo=mxkissnr/gaggiuino-local-profiler" alt="Contributors" /></a>
 
 ## License
 

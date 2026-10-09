@@ -435,6 +435,16 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 // validated again before it is written; a merge that fails validation is the
 // same 400 shape the body check above returns.
 //
+// The same save also books milk stock and frozen portions (#1411) when the
+// body changes drinkType, milkType or frozenPortionId: the previous choice is
+// booked back and the new one booked out, via the hook PatchAnnotation runs
+// under its lock.
+//
+// The response carries the merged annotation and the shot's recomputed score
+// (null when there is too little data to score); ok is kept for existing
+// callers. A failed score lookup leaves the saved annotation in place and must
+// not turn the response into a 500.
+//
 // The write itself has no existence check, but annotations.shot_id REFERENCES
 // shots(id) with foreign_keys=ON, so annotating an id that isn't an actual shot
 // row still fails — as a foreign-key constraint error, mapped to a generic 500
@@ -459,7 +469,8 @@ func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid shot ID")
 		return
 	}
-	if _, err := h.service.PatchAnnotation(id, body); err != nil {
+	ann, err := h.service.PatchAnnotation(id, body)
+	if err != nil {
 		var verr *AnnotationValidationError
 		if errors.As(err, &verr) {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Validation failed", "issues": verr.Issues})
@@ -468,7 +479,11 @@ func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	var score *int
+	if shot, gerr := h.service.GetByID(id); gerr == nil && shot != nil {
+		score = h.service.ComputeScore(shot)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "annotation": ann, "score": score})
 }
 
 // trash serves POST /api/shots/{id}/trash.
@@ -528,6 +543,11 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	// #1525: the shot row is gone, so its stored photo and thumbnail are now
+	// orphaned — remove them here rather than waiting for the startup sweep.
+	if ext := shot.imageExt(); ext != "" {
+		img.Delete(h.imageDir, id, ext, "shot-")
+	}
 	if err := h.service.AppendToBlocklist(strconv.FormatInt(id, 10)); err != nil {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
@@ -537,7 +557,10 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 
 // getImage serves GET /api/shots/{id}/image. An invalid id is treated exactly
 // like "no image" (404), not a 400: it short-circuits to a nil shot before
-// the 404 check, the same outcome as a valid id with no shot.
+// the 404 check, the same outcome as a valid id with no shot. The image is
+// served with a revalidation-only cache header: the URL stays the same when a
+// photo is replaced, so clients must revalidate. http.ServeFile already sets
+// Last-Modified and answers If-Modified-Since with 304.
 func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	var shot Shot
@@ -563,7 +586,7 @@ func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no image")
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, path)
 }

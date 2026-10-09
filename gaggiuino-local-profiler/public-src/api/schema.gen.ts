@@ -450,7 +450,7 @@ export interface paths {
         put?: never;
         /**
          * Save or update annotation for a shot
-         * @description Merges the posted fields into the shot's stored annotation: a key omitted from the body keeps its stored value, while a key sent as null or "" clears it. The orderedBy attribution is server-owned and cannot be changed here.
+         * @description Merges the posted fields into the shot's stored annotation: a key omitted from the body keeps its stored value, while a key sent as null or "" clears it. The orderedBy attribution is server-owned and cannot be changed here. Milk stock and frozen-portion counts follow a drinkType/milkType/frozenPortionId change in the same save: the previous choice is booked back and the new one booked out.
          */
         post: {
             parameters: {
@@ -473,7 +473,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Ok"];
+                        "application/json": components["schemas"]["AnnotateResult"];
                     };
                 };
                 /** @description Invalid shot ID */
@@ -4924,7 +4924,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Settings object (shape mirrors the machine's own GET /api/settings/* response) */
+                /** @description Settings object (shape mirrors the machine's own GET /api/settings/* response). The system category redacts mqttPassword to mqttPasswordSet (#1431). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -5531,6 +5531,353 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/machine/flush/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a flush on a GaggiMate (req:flush:start over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+, only while idle in brew mode */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        machineId?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Ok"];
+                    };
+                };
+                /** @description machine control is disabled */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description machine is not idle in brew mode, or no connected GaggiMate on firmware v1.9.0+ */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description machine type does not support machine control */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Machine unreachable, timed out, or rejected the command */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/flush/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a hold-to-flush on a GaggiMate (req:flush:stop over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+ */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        machineId?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Ok"];
+                    };
+                };
+                /** @description machine control is disabled */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description no connected GaggiMate on firmware v1.9.0+ */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description machine type does not support machine control */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Machine unreachable, timed out, or rejected the command */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/brew-confirm/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept a pending brew confirmation and start the brew (req:process:activate with ignoreWarnings over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+ */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        machineId?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Ok"];
+                    };
+                };
+                /** @description machine control is disabled */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description no brew confirmation is pending, or no connected GaggiMate on firmware v1.9.0+ */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description machine type does not support machine control */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Machine unreachable, timed out, or rejected the command */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/brew-confirm/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline a pending brew confirmation for every UI (req:brew:confirm:cancel over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+ */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        machineId?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Ok"];
+                    };
+                };
+                /** @description machine control is disabled */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description no connected GaggiMate on firmware v1.9.0+ */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description machine type does not support machine control */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Machine unreachable, timed out, or rejected the command */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/control/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the opt-in machine-control setting (off by default; deliberately not part of backup/restore) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { enabled } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineControlSettings"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Set the opt-in machine-control setting (off by default; deliberately not part of backup/restore) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MachineControlSettings"];
+                };
+            };
+            responses: {
+                /** @description { enabled } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineControlSettings"];
+                    };
+                };
+                /** @description enabled is missing or not a boolean */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mcp/settings": {
         parameters: {
             query?: never;
@@ -5615,7 +5962,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description { available: false } or { available: true, host, port, username, password } from the Supervisor's /services/mqtt */
+                /** @description { available: false } or { available: true, host, port, username, hasPassword } from the Supervisor's /services/mqtt */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -6252,6 +6599,85 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ui-prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stored UI preferences (view, filter and sort choices)
+         * @description One flat JSON object of per-install UI choices, kept in the kv store under `ui_prefs`; `{}` when nothing is stored yet.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Stored preferences object */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        /**
+         * Partial-update the stored UI preferences
+         * @description Merges the request body into the stored object; a `null` value deletes that key. The merged object is validated like the stored one.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Full stored preferences object after the merge */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Validation error (invalid key, too many keys, oversized value, or deeper nesting) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -6929,6 +7355,13 @@ export interface components {
             /** @description Score snapshot read by the live view's reference-shot selector */
             score?: number | null;
         };
+        AnnotateResult: {
+            /** @example true */
+            ok: boolean;
+            annotation: components["schemas"]["Annotation"];
+            /** @description Computed 0-100 score after the change; null when the shot has too little data to score */
+            score: number | null;
+        };
         /** @description Raw shot record from the Gaggiuino machine, enriched with annotation and trash metadata by the add-on. */
         Shot: {
             /** @description Unique shot ID */
@@ -7336,6 +7769,8 @@ export interface components {
                 lastError?: string | null;
                 /** @description Cached firmware version for this machine (#1201) */
                 firmwareVersion?: string | null;
+                /** @description Machine name set in the machine's firmware, when it reports one (#1454) */
+                firmwareName?: string | null;
                 on?: boolean | null;
                 /** @description #701 accent color, synced from Settings → Machines */
                 theme?: string | null;
@@ -7381,6 +7816,8 @@ export interface components {
         };
         PreheatStatus: {
             ready?: boolean;
+            /** @description True only when the machine itself reports a standby/sleep mode (GaggiMate m == 0); Gaggiuino never sets it */
+            standby?: boolean;
             /** @description Elapsed seconds */
             elapsed?: number;
             /** @description Remaining seconds */
@@ -7453,6 +7890,11 @@ export interface components {
             pressure: number | null;
             /** @description #902 idle stats: current water level */
             waterLevel: number | null;
+            /** @description #1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino */
+            machineWarnings: string[];
+            /** @description #1409: GaggiMate reports a firmware update; always false for Gaggiuino */
+            machineUpdateAvailable: boolean;
+            machineControl: components["schemas"]["MachineControlState"] | null;
         };
         BackupBundle: {
             /** @example true */
@@ -7657,7 +8099,7 @@ export interface components {
                 syncStatus: string;
             }[];
         };
-        /** @description GET /api/machine/settings — the machine's own settings object, passed through from its GET /api/settings/{category}. Only releaseChannel is read by the app today, so the rest stays an open object. */
+        /** @description GET /api/machine/settings — the machine's own settings object, passed through from its GET /api/settings/{category}. Only releaseChannel is read by the app today, so the rest stays an open object. For the system category the machine's own mqttPassword is redacted to mqttPasswordSet (#1431: never sent to the browser); on a write, mqttPassword is write-only and is restored from the machine's current settings when the payload omits it. */
         MachineSystemSettings: {
             releaseChannel?: number;
         } & {
@@ -7696,6 +8138,22 @@ export interface components {
             /** @description Defaults to true when omitted */
             enabled?: boolean;
         };
+        /** @description GET/POST /api/machine/control/settings body and response — the opt-in machine-control toggle (off by default; deliberately not part of backup/restore, #1324). */
+        MachineControlSettings: {
+            /** @description Whether opt-in machine control (flush, brew confirmation) is enabled */
+            enabled: boolean;
+        };
+        /** @description GET /api/live/data's machineControl and the SSE live-snapshot's equivalent — the opt-in machine-control snapshot for the default machine (#1324). Null when the machine has no machine control, the opt-in setting is off, or the machine is unreachable. */
+        MachineControlState: {
+            /** @description Owning machine id */
+            machineId: number;
+            /** @description Whether a flush may be started (connected GaggiMate, idle in brew mode) */
+            canFlush: boolean;
+            /** @description Whether a flush is currently running */
+            flushing: boolean;
+            /** @description Warning keys of a pending brew confirmation, in order; null when none is pending */
+            brewConfirm: string[] | null;
+        };
         /** @description GET/POST /api/mqtt/settings response (go/internal/mqtt's SettingsView): the redacted view, which reports hasPassword instead of the stored password and never echoes the password back (#1050). The POST request body is MqttSettingsInput instead, since it additionally carries the write-only password/clearPassword pair. */
         MqttSettings: {
             /** @enum {string} */
@@ -7718,6 +8176,8 @@ export interface components {
             password?: string;
             /** @description Write-only: wipe the stored password regardless of the password field (#1062). */
             clearPassword?: boolean;
+            /** @description Write-only: with an empty or absent password, use the password of the broker found through Supervisor discovery. */
+            useDiscoveredPassword?: boolean;
             prefix?: string;
         };
         /** @description GET/POST /api/mcp/settings response (go/internal/mcp's SettingsView): the stored MCP toggles plus developerToolsAvailable, which reports whether this build offers the developer tools at all (the GLP_DEV_BUILD channel — allowDeveloperTools can only be stored true on such a build). */

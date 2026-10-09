@@ -8,13 +8,16 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
-// sync_triggers.go implements the three automatic drivers of the default
+// sync_triggers.go implements the automatic drivers of the default
 // machine's shot-history pull (#953). Before this, sync.go only exposed
 // RunManualSync (POST /api/sync), so a new shot never landed until the barista
 // hit "Sync" by hand:
 //
 //   - scheduleSyncAfterBrew: 3s after a brew finishes, pull the shot the
 //     machine just wrote.
+//   - SyncAfterShotSaved: the GaggiMate firmware (v1.9.0+) reports a saved
+//     shot via evt:history-shot-saved; pull right away instead of waiting for
+//     the post-brew timer or the next scheduled tick.
 //   - runScheduledSync: a periodic pull every sync_interval minutes, with a
 //     short retry-backoff sequence on failure before falling back to the
 //     regular cadence.
@@ -120,6 +123,25 @@ func (p *Poller) scheduleSyncSoonAfterPowerOn() {
 		}
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: power-on sync failed: %v", err)
+		}
+	})
+}
+
+// SyncAfterShotSaved pulls the default machine's shot history right away when
+// the GaggiMate firmware (v1.9.0+) reports evt:history-shot-saved. Default
+// machine only — same scope as scheduleSyncAfterBrew. SafeGo keeps it off the
+// live read loop that fires the hook. Single-flight is handled inside
+// syncDefaultMachineShots (defaultSyncInFlight/defaultSyncRerun, #773/#1409):
+// an overlapping trigger is merged into one follow-up run rather than dropped.
+// The post-brew 3s sync stays for firmware that does not send the event.
+func (p *Poller) SyncAfterShotSaved() {
+	if p.shots == nil {
+		return
+	}
+	ctx := p.syncCtx()
+	httputil.SafeGo("system: shot-saved sync", func() {
+		if err := p.syncOnce(ctx); err != nil {
+			log.Printf("system: shot-saved sync failed: %v", err)
 		}
 	})
 }

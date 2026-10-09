@@ -5,9 +5,13 @@ import {
     extForContentType,
     findLeaks,
     parseOpenApiGetPaths,
-} from '../scripts/demo-fixtures.mjs';
+    QUERY_VARIANTS,
+    shotIdsInListBody,
+    mergeShotIds,
+} from '../scripts/demo-fixtures.mts';
+import { GLPDemo } from '../demo/sw/sw-core.ts';
 
-// Part of #1193 (S1): the pure helpers behind scripts/demo-fixtures.mjs. The
+// Part of #1193 (S1): the pure helpers behind scripts/demo-fixtures.mts. The
 // recorder itself boots the Go server and drives Chromium, so only the pure
 // functions get unit coverage here; the full run is exercised by the
 // maintainer with `npm run demo:fixtures`.
@@ -133,5 +137,56 @@ describe('demo-fixtures parseOpenApiGetPaths (#1193)', () => {
             '    get:',
         ].join('\n');
         expect(parseOpenApiGetPaths(yaml)).toEqual(['/api/e']);
+    });
+});
+
+describe('demo-fixtures achievement query variants (#1497)', () => {
+    const ACHIEVEMENTS = '/api/achievements';
+    const LANGS = ['en', 'de', 'es', 'fr', 'it', 'nl'] as const;
+    const SCOPE = 'https://demo.example/gaggiuino-local-profiler/';
+
+    function variantKeys(): string[] {
+        return (QUERY_VARIANTS.get(ACHIEVEMENTS) ?? [])
+            .map(query => fixtureKey('GET', `${ACHIEVEMENTS}${query}`));
+    }
+
+    it('records exactly one key per app language', () => {
+        const keys = variantKeys();
+        expect(keys).toEqual(LANGS.map(lang => `GET /api/achievements?lang=${lang}`));
+        expect(keys).toHaveLength(LANGS.length);
+    });
+
+    it('uses the key the service worker route() computes for the SPA request', () => {
+        for (const lang of LANGS) {
+            const key = fixtureKey('GET', `${ACHIEVEMENTS}?lang=${lang}`);
+            expect(GLPDemo.route('GET', `${SCOPE}api/achievements?lang=${lang}`, SCOPE, { entries: {} }))
+                .toEqual({ kind: 'missing', key });
+        }
+    });
+});
+
+describe('demo-fixtures shot id merge (#1511)', () => {
+    it('keeps a page newest-first and reverses the ASC dump', () => {
+        const page = { shots: [{ id: 3 }, { id: 2 }, { id: 1 }], nextCursor: null, hasMore: false };
+        const dump = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
+        expect(shotIdsInListBody(page)).toEqual([3, 2, 1]);
+        expect(shotIdsInListBody(dump)).toEqual([4, 3, 2, 1]);
+    });
+
+    it('merges several pages, dedupes the overlap and keeps the newest order', () => {
+        const page1 = { shots: [{ id: 6 }, { id: 5 }, { id: 4 }], nextCursor: 'c', hasMore: true };
+        const page2 = { shots: [{ id: 3 }, { id: 2 }, { id: 1 }], nextCursor: null, hasMore: false };
+        expect(mergeShotIds([page1, page2])).toEqual([6, 5, 4, 3, 2, 1]);
+    });
+
+    it('unions the dump without repeating ids already seen on a page', () => {
+        const page = { shots: [{ id: 3 }, { id: 2 }, { id: 1 }], nextCursor: null, hasMore: false };
+        const dump = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
+        expect(mergeShotIds([page, dump])).toEqual([3, 2, 1, 4]);
+    });
+
+    it('drops bodies and rows without usable ids', () => {
+        expect(mergeShotIds([null, { shots: [{ id: 'a' }, { nope: 1 }, { id: 1.5 }] }, [], {}]))
+            .toEqual(['a', 1.5]);
     });
 });

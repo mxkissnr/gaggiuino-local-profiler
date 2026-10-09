@@ -20,6 +20,7 @@ import { t } from '../i18n.js';
 import { esc, html, joinHtml } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, resolveMachineIconState,
          MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
+import { renderCoffeeHistory } from './coffee-history.js';
 
 function host(): HTMLElement | null {
   return document.getElementById('topbarMachineIcon');
@@ -80,7 +81,10 @@ export function handleTopbarLiveSnapshotEvent(msg: unknown): void {
 export function handleTopbarPreheatUpdateEvent(preheat: unknown): void {
   _lastPreheat = preheat;
   if (!iconShowsDefaultMachine()) return;
-  _applyState(null);
+  // #1383: resolve against the last live snapshot, not null — a preheat event
+  // carries no reachability of its own, so dropping it would re-light an icon
+  // whose machine we already know is off.
+  _applyState(_lastSnapshot);
 }
 
 function _applyState(msg: unknown): void {
@@ -98,11 +102,15 @@ function _applyState(msg: unknown): void {
 // "on, detail unknown" — the same default resolveMachineIconState() itself
 // falls back to once a machine is reachable but reports neither isLive nor
 // an active preheat.
+// #1383: only a positive reachable === true earns that colour. Unknown
+// reachability (null/undefined, which a default machine's status can report
+// when it never knew) stays 'off', matching resolveMachineIconState()'s own
+// treatment of unknown reachability.
 export function syncTopbarMachineIconFallback(reachable: unknown): void {
   if (S.sseActive && iconShowsDefaultMachine()) return;
   const el = host();
   if (!el) return;
-  setMachineIconMode(el, reachable === false ? 'off' : 'hot', 1);
+  setMachineIconMode(el, reachable === true ? 'hot' : 'off', 1);
 }
 
 // Easter egg (#837): 7 clicks within 3s triggers a short, reversible
@@ -208,9 +216,10 @@ export function handleTopbarMachineIconClick(): void {
 // the panel itself is the "off switch" (closeEasterEggPanel() stops it). No
 // new persistent state, no analytics, nothing recorded — see this module's
 // top-of-file note and #845: intentionally never mentioned in
-// CHANGELOG.md/whats-new.js, it's meant to stay a secret.
+// CHANGELOG.md/whats-new.js, DOCS or release notes, it's meant to stay a secret.
 let _panelIconFor: unknown = null;
 let _panelRainbow: RainbowHandle | null = null;
+let _coffeeHistoryStop: (() => void) | null = null;
 
 function panelHost(): HTMLElement | null {
   return document.getElementById('easterEggPanelIcon');
@@ -235,6 +244,10 @@ function renderPanelIcon(): void {
     _panelRainbow?.stop();
     _panelRainbow = animateGradientRainbow(el);
   }
+  // #1383: this panel is decorative and always shows the active machine
+  // coloured, so the resolver's 'off' -- which now also covers a null
+  // snapshot (no live message yet), even with an active preheat -- is
+  // rendered as the steady 'hot' look rather than a dark icon.
   const { mode, heatFraction } = resolveMachineIconState(null, _lastPreheat);
   setMachineIconMode(el, mode === 'off' ? 'hot' : mode, heatFraction || 1);
 }
@@ -269,6 +282,8 @@ export function openEasterEggPanel(): void {
   const el = panelHost();
   if (el && !_panelRainbow) _panelRainbow = animateGradientRainbow(el);
   renderPanelStats();
+  const historyHost = document.getElementById('easterEggHistory');
+  if (historyHost) _coffeeHistoryStop = renderCoffeeHistory(historyHost);
   panel.style.display = 'flex';
   document.getElementById('easterEggPanelCloseBtn')?.focus();
 }
@@ -279,6 +294,8 @@ export function closeEasterEggPanel(): void {
   panel.style.display = 'none';
   _panelRainbow?.stop();
   _panelRainbow = null;
+  _coffeeHistoryStop?.();
+  _coffeeHistoryStop = null;
 }
 
 // Called once from main.js's bootstrap, not at module-import time — this

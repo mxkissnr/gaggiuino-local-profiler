@@ -7,13 +7,14 @@ import { t, tHtml } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
-import type { Bean, ShotAnnotation } from '../api/types.js';
+import type { Bean, MachineControlState, ShotAnnotation } from '../api/types.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, html } from '../utils.js';
 import type { ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
+import { machineWarningLabel, renderMachineControl } from '../components/machine-control.js';
 import { localeFor } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
@@ -42,9 +43,12 @@ interface LiveMessage {
   profileName?: string;
   seq?: number;
   machineReachable?: boolean | null;
+  machineWarnings?: string[];
+  machineUpdateAvailable?: boolean;
   isSteaming?: boolean;
   isFlushing?: boolean;
   isDescaling?: boolean;
+  machineControl?: MachineControlState | null;
   steamDatapoints?: LiveModeDatapoints | null;
   flushDatapoints?: LiveModeDatapoints | null;
   descaleDatapoints?: LiveModeDatapoints | null;
@@ -62,6 +66,9 @@ interface PreheatData {
   remaining: number;
   pct?: number;
   preheatTime?: number;
+  // #1498: true only when the machine itself reports standby/sleep (GaggiMate);
+  // a standby machine is off, so it must not count down to "ready".
+  standby?: boolean;
 }
 
 // The sticky, per-machine pre-shot setup draft persisted to localStorage.
@@ -410,15 +417,24 @@ export function clearReferenceShot(): void {
 export function connectLiveStream(): void {
   const banner  = document.getElementById('liveMachineUnavailableBanner');
   const content = document.getElementById('live-content');
+  const idle    = document.getElementById('live-idle');
+  const refBar  = document.getElementById('live-ref-bar');
   if (!_isActiveMachineLiveCapable()) {
     disconnectLiveStream();
     if (banner)  banner.style.display  = '';
     if (content) content.style.display = 'none';
+    // #1449: handleLiveData() (SSE-driven) still carries the default
+    // machine's readings while a non-default machine is selected -- hide the
+    // idle panel and reference bar along with the live content so they don't
+    // keep showing another machine's numbers.
+    if (idle)    idle.style.display    = 'none';
+    if (refBar)  refBar.style.display  = 'none';
     setLiveBadge('error', t('live_machine_unavailable'));
     return;
   }
   if (banner)  banner.style.display  = 'none';
   if (content) content.style.display = '';
+  if (refBar)  refBar.style.display  = '';
   disconnectLiveStream();
   initLiveChart();
   renderLiveShotSetupPanel();
@@ -480,11 +496,18 @@ let _lastPreheat: PreheatData | null = null;
 // own ambient icon instance (components/topbar-machine-icon.js) — this stays
 // the Live view's own wiring: which element to drive and which preheat
 // snapshot to translate against.
+// #1383: a preheat event carries no reachability of its own, so remember the
+// last live message to resolve against instead of dropping what we know.
+let _lastLiveMsg: LiveMessage | null = null;
+
 export function syncMachineIcon(msg: LiveMessage | null): void {
+  if (msg) _lastLiveMsg = msg;
   const el = machineIconEl();
   if (!el) return;
   const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
-  setMachineIconMode(el, mode, heatFraction);
+  // #1541: the icon's little display mirrors the live temperature instead of
+  // the old hardcoded "18.0°".
+  setMachineIconMode(el, mode, heatFraction, _lastLiveMsg?.temperature);
 }
 
 export function updatePreheatWidget(d: PreheatData): void {
@@ -494,11 +517,21 @@ export function updatePreheatWidget(d: PreheatData): void {
   const countdown   = document.getElementById('preheat-countdown') as HTMLElement;
   if (!readyBadge) return;
   // #811: remembered so the icon can show heat progress on poll ticks that
-  // carry live data but no preheat payload.
+  // carry live data but no preheat payload. #1383: resolve against the last
+  // live message rather than null, so a machine we already know is off stays
+  // off instead of flipping to the heating state (heat 0) and showing accent.
   _lastPreheat = d;
-  syncMachineIcon(null);
+  syncMachineIcon(_lastLiveMsg);
 
-  if (d.ready) {
+  // #1498: a GaggiMate in standby is off, so neither the "ready" badge nor a
+  // warming countdown may show — the payload can still carry a stale remaining.
+  // A machine whose last live message reported it unreachable is hidden the same
+  // way. The idle title is owned by the live-data handler (handleLiveData prefers
+  // machine_standby and keeps its unreachable branch first); don't write it here.
+  if (d.standby || _lastLiveMsg?.machineReachable === false) {
+    readyBadge.style.display  = 'none';
+    warmingWrap.style.display = 'none';
+  } else if (d.ready) {
     readyBadge.style.display  = '';
     warmingWrap.style.display = 'none';
   } else if (d.remaining > 0) {
@@ -513,6 +546,15 @@ export function updatePreheatWidget(d: PreheatData): void {
   } else {
     readyBadge.style.display  = 'none';
     warmingWrap.style.display = 'none';
+  }
+
+  // #1541: a preheat update can arrive while the idle panel is shown (e.g. the
+  // machine just finished warming), so refresh the status badge from the same
+  // phase instead of waiting for the next live message. The idle title stays
+  // owned by handleLiveData above.
+  const idleEl = document.getElementById('live-idle');
+  if (idleEl && idleEl.style.display !== 'none' && _lastLiveMsg?.machineReachable !== false) {
+    setLiveBadge(idlePhase());
   }
 }
 
@@ -571,13 +613,13 @@ export async function fetchLiveData(): Promise<void> {
       S.liveLastSeq = msg.seq!;
       const machineId = S.activeMachineId;
       const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
-      setTimeout(async () => {
+      setTimeout(() => { void (async () => {
         if (window.loadData) await window.loadData();
         const newest = S.shots
           .filter(s => s.machineId === machineId && s.id > priorNewestId)
           .sort((a, b) => b.id - a.id)[0];
         if (newest) void _applyLiveSetupToShot(newest.id);
-      }, 4000);
+      })(); }, 4000);
     }
     S.liveWasLive = msg.isLive!;
 
@@ -621,6 +663,10 @@ export function setLiveBadge(state: string, detail = ''): void {
     flushing:    t('live_flushing'),
     // #983: descale mirrors steam/flush's own badge treatment.
     descaling:   t('live_descaling'),
+    // #1541: the idle badge mirrors the idle title's standby/warming states
+    // (no new translations -- the same keys the title already uses).
+    standby:     t('machine_standby'),
+    warming:     t('preheat_warming'),
     error:       detail || t('live_error_status'),
     idle:        t('live_ready_status'),
     unreachable: detail || t('live_unreachable_status')
@@ -670,7 +716,19 @@ export function handlePreheatUpdateEvent(payload: PreheatData): void {
   updatePreheatWidget(payload);
 }
 
+// #1541: one derivation of the machine's idle phase, shared by the idle title
+// and the status badge so the two can never disagree. Standby wins (a GaggiMate
+// in standby is off), then a preheat still counting down, else ready.
+function idlePhase(): 'standby' | 'warming' | 'ready' {
+  if (_lastPreheat?.standby) return 'standby';
+  if (_lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0) return 'warming';
+  return 'ready';
+}
+
 export function handleLiveData(msg: LiveMessage): void {
+  // #1449: while a non-default machine is selected, the backend still pushes
+  // the default machine's readings -- don't render them under the banner.
+  if (!_isActiveMachineLiveCapable()) return;
   const dp: LiveDatapoints = msg.datapoints || {};
   const times   = dp.timeInShot  || [];
   const lastIdx = times.length - 1;
@@ -709,9 +767,27 @@ export function handleLiveData(msg: LiveMessage): void {
     if (idleTargetTempEl) idleTargetTempEl.textContent = '';
     if (idlePressureEl)   idlePressureEl.textContent   = '–';
     if (idleWaterEl)       idleWaterEl.textContent      = '–';
+    // #1409: same stale-data reasoning -- a warning or update hint from the
+    // last reachable poll must not stay under "machine unreachable".
+    const idleWarnEl   = document.getElementById('liveIdleWarnings');
+    const idleUpdateEl = document.getElementById('liveIdleUpdateHint');
+    if (idleWarnEl)   idleWarnEl.style.display   = 'none';
+    if (idleUpdateEl) idleUpdateEl.style.display = 'none';
+    // #1498 follow-up: an unreachable machine shows no preheat state -- hide the
+    // ready badge and the warming widget a stale preheat payload may have left
+    // visible (the same elements updatePreheatWidget toggles).
+    const preheatBadgeEl   = document.getElementById('preheat-ready-badge');
+    const preheatWarmingEl = document.getElementById('preheat-warming-wrap');
+    if (preheatBadgeEl)   preheatBadgeEl.style.display   = 'none';
+    if (preheatWarmingEl) preheatWarmingEl.style.display = 'none';
+    // #1324: machine control is unavailable while unreachable -- hide the flush
+    // button and close the brew-confirmation dialog (the machine answered it,
+    // or the answer is moot now).
+    renderMachineControl(null);
     return;
   }
   idleEl.classList.remove('unreachable');
+  renderMachineControl(msg.machineControl);
   // #811: "machine_ready" means REACHABLE, but it reads as "ready to brew" —
   // and while preheating it sat directly under a widget counting down "heating
   // ... 20 min", flatly contradicting it. The animated icon made that obvious
@@ -720,9 +796,11 @@ export function handleLiveData(msg: LiveMessage): void {
   // idea.
   // machineReachable == null means "never polled yet" (startup) — show
   // connecting rather than "Maschine bereit" which implies confirmed reachability.
-  const stillWarming = _lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0;
-  const neverPolled  = msg.machineReachable == null;
-  if (idleTitleEl) idleTitleEl.textContent = neverPolled ? t('live_connecting') : stillWarming ? t('preheat_warming') : t('machine_ready');
+  // #1541: title and idle badge share idlePhase() so they cannot disagree.
+  const phase       = idlePhase();
+  const neverPolled = msg.machineReachable == null;
+  // #1498: a standby GaggiMate is off — say so instead of "warming"/"ready".
+  if (idleTitleEl) idleTitleEl.textContent = phase === 'standby' ? t('machine_standby') : neverPolled ? t('live_connecting') : phase === 'warming' ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
   // #902: idle stats row -- always kept current (not gated behind the true-
@@ -740,6 +818,20 @@ export function handleLiveData(msg: LiveMessage): void {
   {
     const waterStat = document.getElementById('liveIdleWaterStat');
     if (waterStat) waterStat.style.display = msg.waterLevel != null ? '' : 'none';
+  }
+
+  // #1409: the machine's own active warnings (already-translated keys) and a
+  // hint that its firmware has an update. Both live behind the idle panel and
+  // are hidden when the machine has nothing to report.
+  {
+    const warningsEl = document.getElementById('liveIdleWarnings');
+    const updateEl   = document.getElementById('liveIdleUpdateHint');
+    const warnings   = msg.machineWarnings || [];
+    if (warningsEl) {
+      warningsEl.textContent = warnings.map(machineWarningLabel).join(' · ');
+      warningsEl.style.display = warnings.length > 0 ? '' : 'none';
+    }
+    if (updateEl) updateEl.style.display = msg.machineUpdateAvailable ? '' : 'none';
   }
 
   // #902/#983: steam/flush/descale live sessions -- same live-content
@@ -780,7 +872,9 @@ export function handleLiveData(msg: LiveMessage): void {
   }
 
   if (!msg.isLive && times.length === 0) {
-    setLiveBadge('ready');
+    // #1541: the badge follows the same standby/warming/ready phase as the
+    // idle title above instead of always saying "Ready".
+    setLiveBadge(phase);
     metaEl.textContent = '–';
     contentEl.style.display = 'none';
     idleEl.style.display    = 'flex';

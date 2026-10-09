@@ -10,9 +10,9 @@ g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
-  renderBeanList: () => void;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
 }
-const { renderBeanList } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { renderBeanCard } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #648: bg.roastDate was rendered into the bag-history block's innerHTML
 // without esc(), unlike every sibling field there (batchNumber etc.). Not
@@ -57,13 +57,13 @@ describe('renderBeanList (#648 bag-history roastDate escaping)', () => {
           // consumedG/remainingG/current are backend-computed (SimulateBagQueue)
           // and attached to every bag on load — this bag must be "current" (not
           // lazily-rendered "past") for the escaping path below to be exercised.
-          { id: 2, roastDate: '<img src=x onerror=alert(1)>', stock_g: 250, consumedG: 0, remainingG: 250, current: true },
+          { id: 2, roastDate: '<img src=x onerror=alert(1)>', stock_g: 250, consumedG: 100, remainingG: 150, current: true },
         ],
       }],
       grinders: [],
     };
 
-    renderBeanList();
+    beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     expect(beanListUI.innerHTML).not.toContain('<img src=x onerror=alert(1)>');
     expect(beanListUI.innerHTML).toContain('&lt;img src=x onerror=alert(1)&gt;');

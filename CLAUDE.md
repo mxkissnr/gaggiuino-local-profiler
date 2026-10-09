@@ -8,6 +8,7 @@ Working rules for this repo. Follow these in every session.
 - **DOCS.md, README.md** → English (primary)
 - **DOCS.de.md** → German (supplementary, always kept in sync with DOCS.md)
 - **UI strings in index.html** → translated via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL); add new keys to **all 6 language files** when adding UI text
+- **UI design** → every visible change follows [docs/DESIGN.md](docs/DESIGN.md) (bean-library design language, "nothing twice", desktop layout of its own).
 
 ## Workflow
 
@@ -120,7 +121,7 @@ together, in one commit:
 - `gaggiuino-local-profiler/go/internal/backup/bundle.go` → `const glpVersion = "..."`
 
 `test/version-sync.test.ts` fails if any of the latter three drift from
-`config.yaml`; `scripts/release-check.mjs` check 1 does the same.
+`config.yaml`; `scripts/release-check.mts` check 1 does the same.
 (`go/internal/library/geo.go`'s `geoUserAgent` carries the version too — cosmetic, bump it along but it isn't gated.)
 
 ## Commits
@@ -129,7 +130,7 @@ Docs and code always in the same commit — never deliver CHANGELOG/DOCS/README 
 
 Every commit that ships a feature or fix needs:
 1. Code change
-2. `CHANGELOG.md` entry added under `## [Unreleased]` at the top — **keep it short: one bold lead-in sentence per bullet, optionally one short trailing clause, plus `Closes #N`.** No multi-sentence technical paragraphs, no file/function names, no "Review follow-up"/"Live-testing follow-up" sub-narratives, and no version number of its own — the entry stays under `## [Unreleased]` until the release step retitles that whole section. Home Assistant Supervisor renders this file verbatim in the app's own Update dialog (screenshot-verified 2026-08-11) — a long entry there is a real UX problem, not just a cosmetic one. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record; don't duplicate it into `CHANGELOG.md`.
+2. A changelog fragment file under `gaggiuino-local-profiler/changelog.d/` (one file per PR; format in `changelog.d/README.md`) instead of editing `CHANGELOG.md` directly, so concurrent PRs never conflict — **keep it short: one bold lead-in sentence per bullet, optionally one short trailing clause, plus `Closes #N`.** No multi-sentence technical paragraphs, no file/function names, no "Review follow-up"/"Live-testing follow-up" sub-narratives, and no version number of its own. Home Assistant Supervisor renders these entries verbatim in the app's own Update dialog (screenshot-verified 2026-08-11) — a long entry there is a real UX problem, not just a cosmetic one. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record; don't duplicate it into `CHANGELOG.md`. The release run runs `npm run changelog:collect` to fold the fragments into `## [Unreleased]` before it retitles that section.
 3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
 4. `README.md` features table update if it's a new feature
 
@@ -151,9 +152,11 @@ gh release create v<version> --title "v<version>" --notes "..."
 - **A release ends at the GitHub release.** Do NOT deploy to Home Assistant — Max installs app/HACS updates himself. This is an internal workflow note for you, not something users need to know — **never** put a "no HA deploy included" / "install the update yourself" disclaimer in the public release notes body. Release notes are for end users and describe the software, not this project's internal release process.
 - **GLP documentation lives ONLY in the GLP repos.** Never write GLP release notes into mkab-infra/CHANGELOG.md.
 - **Update the GitHub wiki every feature round** (`git clone git@github.com:mxkissnr/gaggiuino-local-profiler.wiki.git`): pages are bilingual (`Page.md` + `Page-de.md`, always both). Minimum when touched by features: Coffee-Library, Analytics, Features, Home.
-- **Keep README screenshots current** when the UI changes: `node scripts/screenshots.mjs` regenerates `docs/screenshots/*.png`.
+- **Keep README screenshots current** when the UI changes: `node scripts/screenshots.mts` regenerates `docs/screenshots/*.png`.
 - **Regenerate dev-stats at every release, not just when they look stale.** Run whatever the current dev-stats script is (see `scripts/`) and re-check DOCS.md/DOCS.de.md/README.md against the actual feature set shipped in that release — stale stats and stale feature docs are a recurring failure mode here.
-- **Every commit involving Claude/an AI agent — including release/chore commits, not just feature commits — must carry a `Co-Authored-By:` trailer naming the SPECIFIC model, not a bare "Claude".** Format: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`, e.g. `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` or `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` — whichever model actually authored that commit. `DEVELOPMENT.md`'s model-breakdown table groups commits by this exact string, so a generic "Claude" silently pollutes the stats as an unidentifiable bucket. This has been silently skipped/genericized multiple times; every dispatch prompt (release agents included) must explicitly state which model string to use.
+- **Every commit involving Claude/an AI agent — including release/chore commits, not just feature commits — must carry a `Co-Authored-By:` trailer naming the SPECIFIC model, not a bare "Claude".** Format: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`, e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` or `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` — whichever model actually authored that commit. `DEVELOPMENT.md`'s model-breakdown table groups commits by this exact string, so a generic "Claude" silently pollutes the stats as an unidentifiable bucket. This has been silently skipped/genericized multiple times; every dispatch prompt (release agents included) must explicitly state which model string to use.
+
+- **Easter eggs (hidden panels, secret gestures, secret badges) are never mentioned in CHANGELOG.md, whats-new, DOCS/README, release notes or PR titles that end up in release notes — finding them is the point.**
 
 ## Gaggiuino project boundaries
 
@@ -204,7 +207,7 @@ README.md                     ← Repo root README (English)
 - Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the app container
 - i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.ts` — each exports a default object; `public-src/constants.ts` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
-- **Go + TypeScript only**: the repository is Go + TypeScript only — the backend is Go, and everything that runs in the browser or as build/dev tooling is TypeScript. No new `.js`/`.mjs`/`.cjs` files may be added: vendored third-party files are the only exception, and today's leftovers are listed in `test/no-javascript-sources.test.ts` and get ported under #1270 (that allowlist may only shrink). The SPA under `public-src/` is `.ts`; `tsconfig.json` turns on `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; every `innerHTML` assignment must take an `Html` value, never a raw string — enforced by the local ESLint rule `html-sink`.
+- **Go + TypeScript only**: the repository is Go + TypeScript only — the backend is Go, and everything that runs in the browser or as build/dev tooling is TypeScript. No new `.js`/`.mjs`/`.cjs` files may be added: vendored `/vendor/` files are the only exception, enforced by `test/no-javascript-sources.test.ts`. Tooling Node runs directly is `.mts` and runs on Node's built-in type stripping (official Node ≥ 22.18; CI uses 24); `npm run lint` passes ESLint's `unstable_native_nodejs_ts_config` flag. Service workers are `.ts`, bundled to classic scripts and typed by `tsconfig.sw.json`. The SPA under `public-src/` is `.ts`; `tsconfig.json` turns on `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; every `innerHTML` assignment must take an `Html` value, never a raw string — enforced by the local ESLint rule `html-sink`.
 - **PR AI disclosure** — every PR fills the PR template's "AI assistance disclosure" section
   (`none`/`assisted`/`substantial`/`generated` + tool/model); every AI-assisted commit carries
   a `Co-Authored-By:` trailer. CI enforces it. See CONTRIBUTING.md.

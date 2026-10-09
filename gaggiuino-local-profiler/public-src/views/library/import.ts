@@ -10,6 +10,7 @@ import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml, toIsoDateInput } from '../../utils.js';
 import { WARNING_ICON_SVG } from '../../icons.js';
 import { parseGlpQrParams } from '../../glp-qr.js';
+import type { BarcodeFormat } from 'barcode-detector/ponyfill';
 import * as libraryView from '../library.js';
 
 // Circular with library.js (it re-exports this module): the bean-form helpers
@@ -19,6 +20,10 @@ const library = libraryView;
 // BarcodeDetector is not in TypeScript's DOM lib yet (see BarcodeDetectorLike
 // in state/index.ts); this only types the constructor GLP calls.
 declare const BarcodeDetector: new (options: { formats: string[] }) => BarcodeDetectorLike;
+
+// Injected by go/cmd/frontend-build (the image path) as the hashed same-origin
+// zxing reader wasm; undefined under the Vite dev server.
+declare const __GLP_ZXING_WASM__: string | undefined;
 
 // The generated import schema is loose (extraBrewRecipes is Record<string,
 // never>[]), so these name the response shape the URL importers actually
@@ -335,28 +340,109 @@ async function _removeCustomShopifyDomain(domain: string): Promise<void> {
 }
 
 // ── Barcode / QR scanner ──────────────────────────────────────────────────
-export async function openScanModal(): Promise<void> {
-  if (!('BarcodeDetector' in window)) {
-    alert(t('scan_not_supported'));
-    return;
+// The formats the scanner asks for: the retail codes an Open Food Facts lookup
+// needs plus the two 2D codes GLP's own QR/Data-Matrix stickers use.
+const SCAN_FORMATS: BarcodeFormat[] = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'];
+
+/**
+ * Resolve the barcode decoder: the native `BarcodeDetector` where the browser
+ * has one (Android/desktop Chrome), otherwise the `barcode-detector` ponyfill,
+ * which is only ever dynamically imported here so a browser with the native API
+ * never downloads its chunk or wasm (iOS/WebKit is the target).
+ */
+async function _createScanDetector(): Promise<BarcodeDetectorLike> {
+  if ('BarcodeDetector' in window) {
+    return new BarcodeDetector({ formats: SCAN_FORMATS });
   }
+  const { BarcodeDetector: PonyfillBarcodeDetector, prepareZXingModule } =
+    await import('barcode-detector/ponyfill');
+  // zxing-wasm resolves its reader wasm from a CDN by default, which the CSP's
+  // connect-src 'self' blocks. The image build copies the wasm into assets/ and
+  // injects its relative URL (the onnxruntime pattern in segment-core.ts); the
+  // relative URL is what keeps it working under HA ingress.
+  if (typeof __GLP_ZXING_WASM__ === 'string') {
+    prepareZXingModule({
+      overrides: {
+        locateFile: (path: string, prefix: string) =>
+          path.endsWith('.wasm') ? new URL(__GLP_ZXING_WASM__, import.meta.url).href : prefix + path,
+      },
+    });
+  }
+  // Instantiate eagerly so a wasm that fails to load rejects here and is caught
+  // below, rather than leaving the scan loop on a decoder that never runs.
+  await prepareZXingModule({ fireImmediately: true });
+  return new PonyfillBarcodeDetector({ formats: SCAN_FORMATS });
+}
+
+export async function openScanModal(): Promise<void> {
   const modal  = document.getElementById('scanModal') as HTMLElement;
   const video  = document.getElementById('scanVideo') as HTMLVideoElement;
   const status = document.getElementById('scanStatus') as HTMLElement;
+  const hint   = document.getElementById('scanTextHint');
   status.textContent = t('scan_searching');
   status.className = '';
+  if (hint) hint.hidden = true;
+  video.classList.add('scan-video-off');
   modal.classList.add('open');
+  // navigator.mediaDevices only exists in a secure context, so a plain http://
+  // origin (e.g. the Companion app's internal URL) can never open the camera:
+  // say so up front rather than failing with the generic scan error (#1536).
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    status.textContent = t('scan_needs_https');
+    status.className = 'error';
+    if (hint) hint.hidden = false;
+    return;
+  }
+  let stream: MediaStream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    timerRegistry.set('_scanStream', stream);
-    video.srcObject = stream;
-  } catch {
-    status.textContent = t('scan_error');
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  } catch (e) {
+    // No camera: the modal (opened above) stays open so the manual-entry form
+    // remains usable; this only reports the camera failure. Log the error and
+    // name a denied/blocked permission specifically instead of the generic
+    // scan error (#1536).
+    console.error('Barcode scan camera failed:', e);
+    const name = (e as { name?: string }).name;
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      status.textContent = t('scan_camera_denied');
+      if (hint) hint.hidden = false;
+    } else {
+      status.textContent = t('scan_error');
+    }
     status.className = 'error';
     return;
   }
+  // closeScanModal() while the permission prompt was up: this invocation is
+  // stale, so release the stream it just obtained and don't start a loop.
+  if (!modal.classList.contains('open')) {
+    stream.getTracks().forEach(track => track.stop());
+    return;
+  }
+  timerRegistry.set('_scanStream', stream);
+  video.srcObject = stream;
+  video.classList.remove('scan-video-off');
+  let detector: BarcodeDetectorLike;
+  try {
+    detector = await _createScanDetector();
+  } catch (e) {
+    // No native detector and the ponyfill import/wasm failed: keep the modal
+    // open so manual entry stays usable, and release the camera.
+    console.error('Barcode scan decoder unavailable:', e);
+    timerRegistry.dispose('_scanStream');
+    video.srcObject = null;
+    video.classList.add('scan-video-off');
+    status.textContent = t('scan_not_supported');
+    status.className = 'error';
+    return;
+  }
+  // closeScanModal() while the ponyfill chunk/wasm loaded cleared or replaced
+  // the registered stream: this invocation is stale, so release its stream.
+  if (timerRegistry.get('_scanStream') !== stream) {
+    stream.getTracks().forEach(track => track.stop());
+    return;
+  }
   S._scanActive   = true;
-  timerRegistry.set('_scanDetector', new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix'] }));
+  timerRegistry.set('_scanDetector', detector);
   void _runScanLoop();
 }
 
@@ -364,7 +450,9 @@ export function closeScanModal(): void {
   S._scanActive = false;
   timerRegistry.dispose('_scanStream');
   (document.getElementById('scanModal') as HTMLElement).classList.remove('open');
-  (document.getElementById('scanVideo') as HTMLVideoElement).srcObject = null;
+  const video = document.getElementById('scanVideo') as HTMLVideoElement;
+  video.srcObject = null;
+  video.classList.add('scan-video-off');
 }
 
 export async function _runScanLoop(): Promise<void> {
@@ -383,6 +471,80 @@ export async function _runScanLoop(): Promise<void> {
       await _handleScanResult(raw, status);
     } catch { /* frame not ready yet */ }
   }
+}
+
+// Manual entry for the scanner: runs the same lookup a camera hit runs, so it
+// works whenever the modal is open, including when the camera or decoder is
+// unavailable. Accepts the retail code lengths the scanner handles (EAN-8 to ITF-14).
+export function _submitManualScan(): void {
+  const input  = document.getElementById('scanManualInput') as HTMLInputElement | null;
+  const status = document.getElementById('scanStatus') as HTMLElement;
+  const raw = (input?.value ?? '').trim();
+  if (!/^\d{8,14}$/.test(raw)) {
+    status.textContent = t('scan_invalid_code');
+    status.className = 'error';
+    return;
+  }
+  // Mirror a camera hit: stop the scan loop, then run the shared lookup path.
+  S._scanActive = false;
+  void _handleScanResult(raw, status);
+}
+
+// Photo fallback for the scanner (#1536): the live camera needs a secure
+// context, but a still photo can be read from any origin. The phone's camera
+// app (opened via a `capture` file input) needs no HTTPS, and the same decoder
+// the live loop uses reads the code from the picture.
+export async function _handleScanPhoto(file: File): Promise<void> {
+  const status = document.getElementById('scanStatus') as HTMLElement;
+  status.textContent = t('scan_searching');
+  status.className = '';
+  let detector: BarcodeDetectorLike;
+  try {
+    detector = await _createScanDetector();
+  } catch (e) {
+    console.error('Barcode scan decoder unavailable:', e);
+    status.textContent = t('scan_not_supported');
+    status.className = 'error';
+    return;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const codes = await detector.detect(bitmap);
+    if (typeof bitmap.close === 'function') bitmap.close();
+    const [firstCode] = codes;
+    if (!firstCode) {
+      status.textContent = t('scan_photo_no_code');
+      status.className = 'error';
+      return;
+    }
+    // A photo hit replaces a live scan hit exactly like manual entry does.
+    S._scanActive = false;
+    await _handleScanResult(firstCode.rawValue, status);
+  } catch (e) {
+    console.error('Barcode scan from photo failed:', e);
+    status.textContent = t('scan_error');
+    status.className = 'error';
+  }
+}
+
+// A slug is either hyphen-joined lowercase words
+// ("beverages-and-beverages-preparations") or a language-prefixed Open Food
+// Facts tag ("en:coffees"). A plain lowercase note ("organic", "fairtrade")
+// is not a slug and is kept.
+function _isCategorySlug(segment: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(segment) || /^[a-z]{2}:[a-z0-9-]+$/.test(segment);
+}
+
+// Open Food Facts' categories reach Notes as machine slugs, which are not
+// human-readable and never belong in a bean's Notes. Drop only slug-shaped
+// segments and keep the human-readable labels (e.g. "Organic"); the result
+// stays empty when nothing readable is left (#1543). Exported for its test.
+export function humanReadableNotes(notes: string | undefined): string {
+  return (notes ?? '')
+    .split(',')
+    .map(segment => segment.trim())
+    .filter(segment => segment !== '' && !_isCategorySlug(segment))
+    .join(', ');
 }
 
 export async function _handleScanResult(raw: string, status: HTMLElement): Promise<void> {
@@ -424,7 +586,8 @@ export async function _handleScanResult(raw: string, status: HTMLElement): Promi
     library.openBeanForm();
     if (name)    _field('beanFormName').value    = name;
     if (roaster) _field('beanFormRoaster').value = roaster;
-    if (notes)   _field('beanFormNotes').value   = notes;
+    const humanNotes = humanReadableNotes(notes);
+    if (humanNotes) _field('beanFormNotes').value = humanNotes;
   } catch (e) {
     console.error('Barcode scan lookup failed:', e);
     status.textContent = t('scan_error');

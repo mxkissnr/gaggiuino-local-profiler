@@ -67,12 +67,47 @@ changes:
 2. The shot list and a shot detail with its curve render.
 3. The coffee library can create, edit and delete a bean on a test bean.
 4. An order can be created and completed, including the milk deduction.
-5. A backup export works.
+5. A backup export works, its size is plausible and every bundled image belongs to an entry, and it restores into a fresh instance with the same number of shots, library entries and images.
 6. The HA integration entities are current and one service call succeeds.
 7. The shot card and the order card render.
 8. The MCP server answers a shot list request.
 9. GaggiMate: connect, live status during a simulated brew, and a shot
    imported with its curve.
+
+## GaggiMate simulator
+
+The simulator is the official desktop simulator from `jniebuhr/gaggimate`
+(`sim/README.md`, PlatformIO env `display-sim`): the real display firmware with
+a simulated controller, serving the same WebUI and WebSocket API as the device.
+It is added to the dev install as a second machine of type `gaggimate`. Its
+address is environment-specific and never written into a protocol.
+
+A brew can be started headless over `ws://<sim>/ws` (verified 2026-10-02):
+
+```js
+{ tp: 'req:change-mode', mode: 1 }                    // brew mode
+{ tp: 'req:process:activate', ignoreWarnings: true }  // start the brew
+// ~30 s: evt:status with process phases, then
+// evt:shot-finished-stats + evt:history-shot-saved {id}
+{ tp: 'req:process:deactivate' }
+{ tp: 'req:change-mode', mode: 0 }                    // back to standby
+```
+
+GaggiMate core cases run against it:
+
+- The machine is reachable and its firmware version is shown.
+- Live status during the brew shows profile name, phase, pressure, flow and
+  temperature.
+- The shot is imported after `evt:history-shot-saved` and has a non-empty curve.
+- Profile list, load, save and delete work on an `ACCEPTANCE-` profile.
+
+For a new GaggiMate firmware (an `upstream-firmware` issue): rebuild the
+simulator at the tag (`git checkout vX.Y.Z`, `scripts/build_webui.sh`,
+`pio run -e display-sim`), restart it, run the core cases and post the result
+on that issue. A failing case gets its own fix issue.
+
+The protocol header names the simulator's firmware version, the tag it was
+built from.
 
 ## Public content
 
@@ -80,7 +115,7 @@ The protocol is public. It must not contain LAN addresses, hostnames, tokens
 or personal names. Screenshots show only the app, never the surrounding Home
 Assistant UI.
 
-`scripts/release-check.mjs` rejects a protocol that leaks an RFC1918 private
+`scripts/release-check.mts` rejects a protocol that leaks an RFC1918 private
 IPv4 address, a hostname ending in `.local` or `.lan`, a JWT-like string or a
 GitHub token prefix.
 

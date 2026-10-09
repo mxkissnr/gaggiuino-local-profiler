@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { join, resolve } from 'node:path';
-import { contentTypeFor, resolveRequestPath } from '../scripts/demo-smoke.mjs';
+import { contentTypeFor, resolveRequestPath } from '../scripts/demo-smoke.mts';
 
-// Part of #1193 (S4): the pure helpers behind scripts/demo-smoke.mjs. The
+// Part of #1193 (S4): the pure helpers behind scripts/demo-smoke.mts. The
 // smoke test itself serves demo-dist/ and drives Chromium, so only the two
 // helpers that decide what the server reads and how it labels it get unit
 // coverage here; the full run is exercised by the deploy workflow.

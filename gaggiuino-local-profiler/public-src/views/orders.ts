@@ -19,9 +19,9 @@ import { localeFor } from '../constants.js';
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
 // use-beans/use-milks toggle buttons and their inline notes below.
 // BEAN_ICON_SVG now lives in ../icons.js (also used by main.js's bean-age
-// hint, #419 follow-up) — MILK_ICON_SVG stays local, single-use here.
-import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
-const MILK_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>`;
+// hint, #419 follow-up); MILK_ICON_SVG moved there too once the library
+// and annotation milk pickers reused it as their no-emoji fallback (#1328).
+import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
 
 // Two orders-runtime fields that state/index.ts's OrdersSlice does not
 // declare: they are written and read only by this view, so they get a local
@@ -219,7 +219,7 @@ export function renderMilkStock(milks: MilkStock[]): void {
         : m.remaining < 300 ? html`${esc(m.remaining)} ml`
         : html`${esc(m.remaining)} ml`;
       return html`<div class="orders-milk-row">
-        <span class="orders-milk-emoji">${esc(m.emoji || '🥛')}</span>
+        <span class="orders-milk-emoji">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG}</span>
         <span class="orders-milk-name">${esc(m.name)}</span>
         ${m.demand > 0 ? html`<span style="font-size:.72rem;color:var(--gray-500)">${tHtml('lib_milk_demand', m.demand)}</span>` : html``}
         <span class="orders-milk-badge ${esc(cls)}">${label}</span>

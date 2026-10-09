@@ -1,6 +1,7 @@
 package shots
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -226,4 +227,134 @@ func isValidationError(err error, target **AnnotationValidationError) bool {
 		*target = verr
 	}
 	return ok
+}
+
+// TestPatchAnnotation_StockHookSeesPrevAndNext pins the hook's inputs: it is
+// called once with the stored annotation as prev and the merged result as next.
+func TestPatchAnnotation_StockHookSeesPrevAndNext(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	insertShot(t, sqlDB, 1, 1000, nil, "V60", nil, map[string]any{"drinkType": "latte", "milkType": float64(1)})
+	svc := NewService(repo)
+
+	var calls int
+	var gotPrev, gotNext map[string]any
+	SetAnnotationStockHook(func(prev, next map[string]any) error {
+		calls++
+		gotPrev, gotNext = prev, next
+		return nil
+	})
+	t.Cleanup(func() { SetAnnotationStockHook(nil) })
+
+	if _, err := svc.PatchAnnotation(1, map[string]any{"milkType": float64(2)}); err != nil {
+		t.Fatalf("PatchAnnotation: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("hook calls = %d, want 1", calls)
+	}
+	if gotPrev["milkType"] != float64(1) {
+		t.Fatalf("prev milkType = %v, want 1", gotPrev["milkType"])
+	}
+	if gotNext["milkType"] != float64(2) {
+		t.Fatalf("next milkType = %v, want 2", gotNext["milkType"])
+	}
+	if gotNext["drinkType"] != "latte" {
+		t.Fatalf("next drinkType = %v, want latte", gotNext["drinkType"])
+	}
+}
+
+// TestPatchAnnotation_StockHookErrorRollsBack: a failing hook must undo the
+// merged annotation so the annotation and the hook's side effects land
+// together or not at all (#1411).
+func TestPatchAnnotation_StockHookErrorRollsBack(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	insertShot(t, sqlDB, 1, 1000, nil, "V60", nil, map[string]any{"rating": float64(3)})
+	svc := NewService(repo)
+
+	errBoom := errors.New("boom")
+	SetAnnotationStockHook(func(prev, next map[string]any) error { return errBoom })
+	t.Cleanup(func() { SetAnnotationStockHook(nil) })
+
+	_, err := svc.PatchAnnotation(1, map[string]any{"rating": float64(5), "frozenPortionId": float64(100)})
+	if !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v, want errBoom", err)
+	}
+	ann, gerr := repo.GetAnnotation(1)
+	if gerr != nil {
+		t.Fatalf("GetAnnotation: %v", gerr)
+	}
+	if ann["rating"] != float64(3) {
+		t.Fatalf("rating = %v, want 3 after rollback", ann["rating"])
+	}
+	if _, ok := ann["frozenPortionId"]; ok {
+		t.Fatalf("frozenPortionId survived rollback: %#v", ann)
+	}
+}
+
+// TestPatchAnnotation_StockHookNotCalledWhenSaveFails: for a shot that does
+// not exist the annotation save fails before the hook runs.
+func TestPatchAnnotation_StockHookNotCalledWhenSaveFails(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	svc := NewService(repo)
+
+	var calls int
+	SetAnnotationStockHook(func(prev, next map[string]any) error {
+		calls++
+		return nil
+	})
+	t.Cleanup(func() { SetAnnotationStockHook(nil) })
+
+	if _, err := svc.PatchAnnotation(999, map[string]any{"coffee": "X"}); err == nil {
+		t.Fatal("expected an error for a shot that does not exist")
+	}
+	if calls != 0 {
+		t.Fatalf("hook calls = %d, want 0", calls)
+	}
+}
+
+// TestPatchAnnotation_StockHookNotCalledOnInvalidPatch: validation runs during
+// the merge, before any save and before the hook.
+func TestPatchAnnotation_StockHookNotCalledOnInvalidPatch(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	insertShot(t, sqlDB, 1, 1000, nil, "V60", nil, nil)
+	svc := NewService(repo)
+
+	var calls int
+	SetAnnotationStockHook(func(prev, next map[string]any) error {
+		calls++
+		return nil
+	})
+	t.Cleanup(func() { SetAnnotationStockHook(nil) })
+
+	_, err := svc.PatchAnnotation(1, map[string]any{"rating": float64(9)})
+	var verr *AnnotationValidationError
+	if !isValidationError(err, &verr) {
+		t.Fatalf("err = %T %v, want *AnnotationValidationError", err, err)
+	}
+	if calls != 0 {
+		t.Fatalf("hook calls = %d, want 0", calls)
+	}
+}
+
+// TestUpdateAnnotation_DoesNotRunStockHook: the hook is PatchAnnotation-only;
+// orders' orderedBy writes through UpdateAnnotation must not trigger it.
+func TestUpdateAnnotation_DoesNotRunStockHook(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	insertShot(t, sqlDB, 1, 1000, nil, "V60", nil, nil)
+
+	var calls int
+	SetAnnotationStockHook(func(prev, next map[string]any) error {
+		calls++
+		return nil
+	})
+	t.Cleanup(func() { SetAnnotationStockHook(nil) })
+
+	if _, err := repo.UpdateAnnotation(1, func(ann map[string]any) error {
+		ann["orderedBy"] = map[string]any{"customer": "Ada"}
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateAnnotation: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("hook calls = %d, want 0", calls)
+	}
 }

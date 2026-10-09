@@ -166,6 +166,19 @@ func TestDeriveMachineState_FlushState(t *testing.T) {
 	}
 }
 
+// #1541: a GaggiMate flush reaches the derived state through the adapter's
+// Flushing field (no sysState operationMode), so a bare RawStatus.FlushActive
+// must derive IsFlushing=true.
+func TestDeriveMachineState_FlushActiveWithoutSysState(t *testing.T) {
+	res := deriveMachineState(DeriveInput{Status: RawStatus{FlushActive: true}, Now: 1})
+	if !res.IsFlushing || !res.MachineStatus.IsFlushing {
+		t.Error("expected IsFlushing=true from RawStatus.FlushActive with no SysState")
+	}
+	if res.MachineStatus.OpMode != nil {
+		t.Errorf("OpMode should stay nil, got %q", *res.MachineStatus.OpMode)
+	}
+}
+
 // #983: descale live-state derivation, same opMode-only shape as flush.
 func TestDeriveMachineState_DescaleState(t *testing.T) {
 	res := deriveMachineState(DeriveInput{

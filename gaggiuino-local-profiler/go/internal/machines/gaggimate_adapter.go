@@ -69,17 +69,28 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 	raw, _ := json.Marshal(evt)
 
 	// m==1 (BREW mode) means "brew screen selected", not "pump running".
-	// Actual brewing requires process.a==1 AND process.s in ("brew","infusion").
+	// Actual brewing requires process.a==1 AND process.s in ("brew","infusion")
+	// AND process.u!=1: a utility process (u==1) is a flush, not a brew.
 	// Steaming: process.a==1 AND m==2. Source: ha-integration sensor.py _get_status.
-	var isBrewing, isSteaming bool
+	var isBrewing, isSteaming, isFlushing bool
 	if process, ok := evt["process"].(map[string]any); ok {
-		if looseFloat(process["a"]) == 1 {
+		if looseFloat(process["a"]) == 1 && looseFloat(process["u"]) == 1 {
+			// A running utility process (u == 1) is a flush, not a brew (#1541).
+			isFlushing = true
+		} else if looseFloat(process["a"]) == 1 {
 			stage, _ := process["s"].(string)
 			isBrewing = stage == "brew" || stage == "infusion"
 			isSteaming = looseFloat(evt["m"]) == 2
 		}
 	}
 	steamOn := isSteaming
+
+	// Standby: the machine's own sleep/standby mode (m == 0). Only a frame
+	// that actually carries the m key counts — a fast-only frame (ct/pr/fl)
+	// merged without the slow state keys must not flip a running machine to
+	// standby.
+	_, hasMode := evt["m"]
+	standby := hasMode && looseFloat(evt["m"]) == 0
 
 	// Weight: cw (filtered scale weight) only when bc (BLE scale connected) is true.
 	var weight *float64
@@ -95,6 +106,8 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 		Pressure:          looseFloat(evt["pr"]),
 		Weight:            weight,
 		Brewing:           isBrewing,
+		Flushing:          isFlushing,
+		Standby:           standby,
 		SteamOn:           &steamOn,
 		ProfileID:         nil,
 		ProfileName:       profileName,
@@ -217,12 +230,13 @@ func (a *GaggiMateAdapter) SelectProfile(ctx context.Context, m *Machine, id str
 
 func (a *GaggiMateAdapter) Capabilities() Capabilities {
 	return Capabilities{
-		ProfileEdit:   true,
-		BrewStart:     false, // GaggiMate has no start/stop API at all
-		Preheat:       nil,   // not modeled yet — unknown until verified against hardware
-		Volumetric:    nil,   // determined per-shot from slog systemInfo.volumetricCapable, not a static capability
-		History:       true,
-		SettingsProxy: false,
+		ProfileEdit:    true,
+		BrewStart:      false, // GaggiMate has no start/stop API at all
+		Preheat:        nil,   // not modeled yet — unknown until verified against hardware
+		Volumetric:     nil,   // determined per-shot from slog systemInfo.volumetricCapable, not a static capability
+		History:        true,
+		SettingsProxy:  false,
+		MachineControl: true,
 	}
 }
 

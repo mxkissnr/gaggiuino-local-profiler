@@ -20,12 +20,13 @@ import (
 
 // LiveTransport is the WS-vs-MQTT dispatch seam (#608) — *mqtt.Transport
 // satisfies it. Each method's second return is true when MQTT is the active
-// transport for this machine (only ever the default machine, and only when the
-// Settings toggle is on MQTT with a broker configured): the poller then uses
-// the returned value (possibly nil, if the MQTT cache is stale/empty) instead
-// of the adapter's WS session. An interface (not a direct internal/mqtt
-// import) keeps this central package decoupled from the transport
-// implementation, the same pattern AdapterProvider already follows here.
+// transport for this machine (only ever a default Gaggiuino machine, #1447,
+// and only when the Settings toggle is on MQTT with a broker configured): the
+// poller then uses the returned value (possibly nil, if the MQTT cache is
+// stale/empty) instead of the adapter's WS session. An interface (not a
+// direct internal/mqtt import) keeps this central package decoupled from the
+// transport implementation, the same pattern AdapterProvider already
+// follows here.
 type LiveTransport interface {
 	SensorSnapshot(isDefaultMachine bool) (*proto.SensorStateSnapshotDto, bool)
 	SystemState(isDefaultMachine bool) (*proto.SystemStateDto, bool)
@@ -106,6 +107,15 @@ type LiveData struct {
 	TargetTemperature *float64 `json:"targetTemperature"`
 	Pressure          *float64 `json:"pressure"`
 	WaterLevel        *int     `json:"waterLevel"`
+	// #1409: GaggiMate active warnings and firmware-update flag, carried
+	// from the merged evt:status via MachineStatus. machineWarnings is
+	// always a JSON array (empty for Gaggiuino, which reports neither).
+	MachineWarnings        []string `json:"machineWarnings"`
+	MachineUpdateAvailable bool     `json:"machineUpdateAvailable"`
+	// #1324: opt-in machine-control snapshot for the default machine, null
+	// when machine control is unsupported, its setting is off, or the machine
+	// is unreachable.
+	MachineControl *machines.ControlState `json:"machineControl"`
 }
 
 // pollGlobalState holds package-level polling state (as opposed to the
@@ -140,6 +150,11 @@ type pollGlobalState struct {
 	lastSyncTime        *string
 	lastSyncError       *string
 	defaultSyncInFlight bool
+	// defaultSyncRerun is set when a trigger arrives while a default sync is
+	// already running (#1409): the run does one more pass afterwards instead of
+	// the trigger being dropped. Read and cleared by syncDefaultMachineShots,
+	// guarded by mu like defaultSyncInFlight.
+	defaultSyncRerun bool
 	// otherSyncInFlight is the #773 per-machine single-run guard for non-default
 	// machines (syncOtherMachines, #1146), keyed by machine id — one slot per
 	// machine, so a slow backfill on one machine never blocks another's.
@@ -165,6 +180,21 @@ type machinePollState struct {
 	lastError    *string // last poll/sync error, redacted
 	lastSuccess  *int64
 	version      *string // cached firmware version, nil = not sniffed yet
+	// #1454: firmwareName is the name the machine reports in its own settings
+	// (GET /api/settings/system's "machineName"), nil when the firmware does
+	// not report one. firmwareNameFetched records that the one-off fetch
+	// finished (with a name or with none), so it is not repeated every tick;
+	// firmwareNameAttempt (unix ms) throttles the retry after a failed fetch.
+	// Both reset on an unreachable->reachable transition (markReachableLocked)
+	// so a rename while the machine was away is picked up.
+	firmwareName        *string
+	firmwareNameFetched bool
+	firmwareNameAttempt int64
+	// control is the #1324 opt-in machine-control snapshot for this machine,
+	// refreshed on every successful status poll and cleared on a failed poll
+	// or when live polling stops. nil when the machine has no machine control,
+	// the opt-in setting is off, or it is unreachable.
+	control *machines.ControlState
 }
 
 // machine returns id's poll state, creating it on demand. Caller holds
@@ -184,16 +214,69 @@ func (s *pollGlobalState) machine(id int64) *machinePollState {
 // markReachableLocked records a successful contact with one machine. An
 // unreachable->reachable transition clears the machine's cached firmware
 // version (#1197 point 3, #1201) so a version that changed while it was away
-// is re-sniffed from the next status poll or shot. Caller holds p.state.mu.
+// is re-sniffed from the next status poll or shot, and re-arms the #1454
+// firmware-name fetch so a rename made while the machine was away is picked
+// up. Caller holds p.state.mu.
 func markReachableLocked(m *machinePollState, now int64) {
 	wasDown := (m.reachable != nil && !*m.reachable) || (m.wasReachable != nil && !*m.wasReachable)
 	if wasDown {
 		m.version = nil
+		m.firmwareNameFetched = false
+		m.firmwareNameAttempt = 0
 	}
 	reachable := true
 	m.reachable = &reachable
 	m.lastError = nil
 	m.lastSuccess = &now
+}
+
+// maybeFetchFirmwareName reads a Gaggiuino's user-chosen machine name from its
+// firmware settings once per reachable stretch (#1454). The GET runs outside
+// p.state.mu because it is a network call; a failure leaves firmwareNameFetched
+// false so the next poll retries, throttled by firmwareNameRetryInterval so a
+// persistently erroring settings endpoint never costs one extra request per 1s
+// tick. A GaggiMate reports no such name, so it is skipped entirely.
+func (p *Poller) maybeFetchFirmwareName(ctx context.Context, machine *machines.Machine, adapter machines.Adapter) {
+	if machine.Type != "gaggiuino" {
+		return
+	}
+	now := time.Now().UnixMilli()
+	p.state.mu.Lock()
+	ms := p.state.machine(machine.ID)
+	if ms.firmwareNameFetched ||
+		(ms.firmwareNameAttempt != 0 && now-ms.firmwareNameAttempt < firmwareNameRetryInterval.Milliseconds()) {
+		p.state.mu.Unlock()
+		return
+	}
+	ms.firmwareNameAttempt = now
+	p.state.mu.Unlock()
+
+	fctx, cancel := context.WithTimeout(ctx, firmwareNameFetchTimeout)
+	defer cancel()
+	raw, err := adapter.GetSettings(fctx, machine, "system")
+	if err != nil {
+		debugLogf("system: firmware name fetch failed for machine %d: %v", machine.ID, err)
+		return
+	}
+	var parsed struct {
+		MachineName *string `json:"machineName"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		debugLogf("system: firmware name settings unmarshal failed for machine %d: %v", machine.ID, err)
+		return
+	}
+	var name *string
+	if parsed.MachineName != nil {
+		if trimmed := strings.TrimSpace(*parsed.MachineName); trimmed != "" {
+			name = &trimmed
+		}
+	}
+
+	p.state.mu.Lock()
+	ms = p.state.machine(machine.ID)
+	ms.firmwareNameFetched = true
+	ms.firmwareName = name
+	p.state.mu.Unlock()
 }
 
 // AdapterProvider is the subset of *machines.Handlers this package
@@ -287,6 +370,7 @@ type MachinePollStatus struct {
 	Reachable       *bool
 	LastError       *string
 	FirmwareVersion *string
+	FirmwareName    *string
 }
 
 // defaultMachineID resolves the configured default machine's id, or 0 when
@@ -325,7 +409,7 @@ func (p *Poller) MachineStatus(id int64) MachinePollStatus {
 	if ms == nil {
 		return MachinePollStatus{}
 	}
-	return MachinePollStatus{Reachable: ms.reachable, LastError: ms.lastError, FirmwareVersion: ms.version}
+	return MachinePollStatus{Reachable: ms.reachable, LastError: ms.lastError, FirmwareVersion: ms.version, FirmwareName: ms.firmwareName}
 }
 
 // Start runs this domain's startup sequence: load any persisted preheat
@@ -446,6 +530,29 @@ func (p *Poller) livePollActive() bool {
 	return p.liveTicker != nil
 }
 
+// endPreheatSession ends the current preheat session: stamps the switch-off
+// time, closes the open preheat run, clears the stability flag and the temp
+// history, then persists. Shared by stopLivePolling and applyStandbyTransition
+// so both end a session the same way.
+func (p *Poller) endPreheatSession(now int64) {
+	p.runtime.SetSwitchOffAt(&now)
+	p.closePreheatRun(now)
+	p.runtime.SetStabilityReady(false)
+	p.runtime.ClearTempHistory()
+	p.savePreheatState()
+}
+
+// beginPreheatSession starts a fresh preheat session at now: stamps the
+// switch-on time, opens a new preheat run, clears the temp history and
+// persists. Shared by startLivePolling and applyStandbyTransition's
+// leave-standby path.
+func (p *Poller) beginPreheatSession(now int64) {
+	p.runtime.SetSwitchOnAt(&now)
+	p.openPreheatRun(now)
+	p.runtime.ClearTempHistory()
+	p.savePreheatState()
+}
+
 // startLivePolling starts the 1s live-poll ticker.
 func (p *Poller) startLivePolling() {
 	p.liveMu.Lock()
@@ -456,11 +563,10 @@ func (p *Poller) startLivePolling() {
 	now := time.Now().UnixMilli()
 	snap := p.runtime.Get()
 	if snap.SwitchOnAt == nil || !p.runtime.IsStillWarm(now) {
-		p.runtime.SetSwitchOnAt(&now)
-		p.openPreheatRun(now)
-		p.savePreheatState()
+		p.beginPreheatSession(now)
+	} else {
+		p.runtime.ClearTempHistory()
 	}
-	p.runtime.ClearTempHistory()
 	log.Printf("system: live polling started")
 	ticker := time.NewTicker(pollInterval)
 	stop := make(chan struct{})
@@ -487,10 +593,11 @@ func (p *Poller) startLivePolling() {
 // to stop — nothing else can ever flip this back to false on its own once a
 // runtime never reaches startLivePolling.
 func (p *Poller) stopLivePolling() {
-	if id, ok := p.defaultMachineID(); ok {
+	defaultID, hasDefault := p.defaultMachineID()
+	if hasDefault {
 		reachable := false
 		p.state.mu.Lock()
-		p.state.machine(id).reachable = &reachable
+		p.state.machine(defaultID).reachable = &reachable
 		p.state.mu.Unlock()
 	}
 
@@ -506,19 +613,90 @@ func (p *Poller) stopLivePolling() {
 		p.state.steamAccum = nil
 		p.state.flushAccum = nil
 		p.state.descaleAccum = nil
+		// #1324: neither can it report a machine-control snapshot.
+		if hasDefault {
+			p.state.machine(defaultID).control = nil
+		}
 		p.state.mu.Unlock()
-		now := time.Now().UnixMilli()
-		p.runtime.SetSwitchOffAt(&now)
-		p.closePreheatRun(now)
-		p.runtime.SetStabilityReady(false)
-		p.runtime.ClearTempHistory()
-		p.savePreheatState()
+		// #1498: a switched-off machine is not in standby.
+		p.runtime.SetStandby(false)
+		p.endPreheatSession(time.Now().UnixMilli())
 		log.Printf("system: live polling stopped")
 	}
 	p.liveMu.Unlock()
 
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 	p.emitLiveSnapshot()
+}
+
+// applyStandbyTransition reconciles the runtime's standby flag with the
+// adapter's latest status (#1498). GaggiMate reports m == 0 (standby) while
+// still reachable, so live polling keeps running in standby; this flag is what
+// tells buildPreheatResponse the machine is off and restarts the preheat clock
+// when it wakes. Entering standby ends the session exactly like
+// stopLivePolling; leaving it always starts a fresh session — GaggiMate turns
+// its heater off in standby, so the old clock must never be kept (the temp
+// stability check marks preheat complete quickly if the boiler is still hot).
+//
+// The bookkeeping runs under liveMu and is skipped when live polling is not
+// active, so a late transition cannot open a run after stopLivePolling ended
+// the session. The SSE event is published after releasing the lock.
+func (p *Poller) applyStandbyTransition(now int64, standby bool) {
+	p.liveMu.Lock()
+	if p.liveTicker == nil {
+		p.liveMu.Unlock()
+		return
+	}
+	snap := p.runtime.Get()
+	if standby == snap.Standby {
+		p.liveMu.Unlock()
+		return
+	}
+	p.runtime.SetStandby(standby)
+	if standby {
+		// End the running preheat, drop the stale stability flag and the temp
+		// window, so a later wake-up cannot report stabilityReady from the
+		// pre-standby session and cold standby readings never land in the open
+		// run's samples.
+		// A session opened while the machine was already in standby has no
+		// samples yet; drop it rather than finalising an empty one-second run.
+		p.discardEmptyPreheatRun()
+		p.endPreheatSession(now)
+		// The session is over and the machine is off, so drop the switch-on time
+		// too: a later poll error clears the standby flag, and without this
+		// buildPreheatResponse would count down the ended session's stale clock.
+		p.runtime.SetSwitchOnAt(nil)
+		p.savePreheatState()
+		log.Printf("system: machine standby -- preheat clock held")
+	} else {
+		p.beginPreheatSession(now)
+		log.Printf("system: machine left standby -- preheat session started")
+	}
+	p.liveMu.Unlock()
+	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+}
+
+// HandleDefaultMachineChange drops the previous default's live state when the
+// configured default machine changes (#1543, #1551) and re-evaluates the new
+// default from scratch: live polling is stopped (ending the session), the
+// switch-on time and the on/standby flags are cleared, then the power check
+// runs at once. It starts live polling and a fresh preheat session when the
+// new default is on or has no switch entity, and leaves polling stopped when
+// its switch is off, so the next switch-on is a real off->on transition.
+// Carrying the old flags over left the countdown stuck at the full window:
+// polling kept running for an off machine, so its later switch-on found the
+// ticker already running and never started a session. Wired from the
+// set-default handler through machines.Handlers.SetOnDefaultChanged.
+func (p *Poller) HandleDefaultMachineChange() {
+	p.stopLivePolling()
+	p.runtime.SetSwitchOnAt(nil)
+	p.runtime.SetMachineOn(false)
+	p.runtime.SetStandby(false)
+	p.savePreheatState()
+	if err := p.checkAndApplyMachinePower(p.syncCtx()); err != nil {
+		log.Printf("system: machine power check after default change failed: %v", err)
+	}
+	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
 // pollTick is the isPollRunning mutex guard around one pollViaGaggiuinoStatus
@@ -589,14 +767,32 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		ms.wasReachable = &reachable
 		msg := redactURLs(err.Error())
 		ms.lastError = &msg
+		// #1324: an unreachable machine has no machine-control snapshot.
+		ms.control = nil
 		p.state.mu.Unlock()
+		// #1498: an unreachable machine is not in standby.
+		p.runtime.SetStandby(false)
 		log.Printf("system: live poll error: %v", err)
 		p.emitLiveSnapshot()
 		return
 	}
 
+	// #1498: reconcile the machine's own standby signal with the runtime
+	// before anything below reads it. A standby GaggiMate is still reachable,
+	// so live polling keeps running; without this the time-only preheat
+	// countdown starts from startLivePolling and reports "ready" from a cold
+	// boiler.
+	p.applyStandbyTransition(time.Now().UnixMilli(), status.Standby)
+
+	// #1324: refresh the opt-in machine-control snapshot. ControlStateFor
+	// reads only the registry cache and one KV row (no network), so it runs
+	// outside p.state.mu; a nil result (unsupported adapter, setting off or no
+	// connected controller) simply stores null.
+	ctrl, _ := machines.ControlStateFor(p.registry, adapter, machine)
+
 	p.state.mu.Lock()
 	ms := p.state.machine(machine.ID)
+	ms.control = ctrl
 	prevReachable := ms.wasReachable
 	now := time.Now().UnixMilli()
 	markReachableLocked(ms, now)
@@ -610,23 +806,33 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	}
 	p.state.mu.Unlock()
 
+	// #1454: one-off fetch of the machine's firmware-set name, gated to a
+	// Gaggiuino (a GaggiMate reports no such setting) and to once per reachable
+	// stretch. Runs after the reachability/version bookkeeping above so a
+	// markReachableLocked reset is already applied.
+	p.maybeFetchFirmwareName(ctx, machine, adapter)
+
 	// #725: unreachable->reachable recovery with an outstanding sync — catch
 	// up now instead of waiting for the next scheduled pull.
 	p.maybeCatchUpAfterRecovery(prevReachable)
 
-	// #608: MQTT for the default machine when the Settings toggle selects it, the
-	// adapter's WS session otherwise. When MQTT is the active transport its getter
-	// is used even if it returns nil (a stale/empty MQTT cache), never falling
-	// through to open a WS session.
+	// #608/#1447: MQTT for a Gaggiuino default machine when the Settings toggle
+	// selects it, the adapter's WS session otherwise. The Gaggiuino firmware's
+	// MQTT topics only ever describe a Gaggiuino, so any other machine type
+	// (e.g. a GaggiMate default) reads live data from its own adapter instead
+	// of being handed the Gaggiuino snapshot. When MQTT is the active transport
+	// its getter is used even if it returns nil (a stale/empty MQTT cache),
+	// never falling through to open a WS session.
+	mqttEligible := machine.IsDefault && machine.Type == "gaggiuino"
 	var sensorSnap *proto.SensorStateSnapshotDto
 	var sysState *proto.SystemStateDto
 	if p.liveTransport != nil {
-		if snap, mqttActive := p.liveTransport.SensorSnapshot(machine.IsDefault); mqttActive {
+		if snap, mqttActive := p.liveTransport.SensorSnapshot(mqttEligible); mqttActive {
 			sensorSnap = snap
 		} else {
 			sensorSnap, _ = adapter.GetLiveSensorSnapshot(ctx, machine)
 		}
-		if sys, mqttActive := p.liveTransport.SystemState(machine.IsDefault); mqttActive {
+		if sys, mqttActive := p.liveTransport.SystemState(mqttEligible); mqttActive {
 			sysState = sys
 		} else {
 			sysState, _ = adapter.GetLiveSystemState(ctx, machine)
@@ -649,9 +855,13 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 
 	snap := p.runtime.Get()
 	if derived.Temperature > 0 && !result.IsBrewing {
-		p.runtime.PushTempHistory(derived.Temperature)
-		p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
-		if snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
+		// #1498: standby readings are cold/idle — never let them into the temp
+		// history or the open run's samples.
+		if !snap.Standby {
+			p.runtime.PushTempHistory(derived.Temperature)
+			p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
+		}
+		if !snap.Standby && snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
 			derived.Temperature >= derived.TargetTemperature-2 && p.runtime.IsTempStable() {
 			preheatMs := int64(loadPreheatMinutes()) * 60_000
 			if now-*snap.SwitchOnAt < preheatMs {
@@ -848,6 +1058,7 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 		WaterLevel:        waterLevel,
 		UpTime:            upTime,
 		Brewing:           s.Brewing,
+		FlushActive:       s.Flushing,
 		Temperature:       s.Temperature,
 		TargetTemperature: s.TargetTemperature,
 		Pressure:          s.Pressure,
@@ -856,7 +1067,39 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 		ProfileID:         s.ProfileID,
 		ProfileName:       s.ProfileName,
 		SteamSwitchState:  steamOn,
+		Warnings:          activeMachineWarnings(m["warn"]),
+		UpdateAvailable:   m["up"] == true,
 	}
+}
+
+// activeMachineWarnings extracts the active warning keys from a GaggiMate
+// evt:status `warn` array. GaggiMate WebSocketHandler.cpp's addWarnings
+// emits one {k, l, a} entry per WarningManager warning: k is the key, l its
+// level (0 ignore / 1 warn / 2 error) and a whether it is currently active.
+// Keep only entries that are active (a == true) and at least warn-level
+// (l >= 1), preserving the firmware's order. A non-array value yields nil.
+func activeMachineWarnings(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, e := range arr {
+		entry, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		k, ok := entry["k"].(string)
+		if !ok || k == "" {
+			continue
+		}
+		a, _ := entry["a"].(bool)
+		l, _ := entry["l"].(float64)
+		if a && l >= 1 {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 func derefFloat(v *float64) float64 {
@@ -944,12 +1187,17 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 	rt := p.runtime.Get()
 	var temp, targetTemp, pressure *float64
 	var waterLevel *int
+	// #1409: never nil, so machineWarnings is always a JSON array.
+	warnings := []string{}
+	var updateAvailable bool
 	if rt.MachineStatus != nil {
 		t := rt.MachineStatus.Temperature
 		tt := rt.MachineStatus.TargetTemperature
 		pr := rt.MachineStatus.Pressure
 		temp, targetTemp, pressure = &t, &tt, &pr
 		waterLevel = rt.MachineStatus.WaterLevel // already *int, nil when HasWaterSensor=false (wl field not parsed)
+		warnings = append([]string{}, rt.MachineStatus.Warnings...)
+		updateAvailable = rt.MachineStatus.UpdateAvailable
 	}
 
 	p.state.mu.Lock()
@@ -972,8 +1220,17 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 		descaleDP = copyModeDatapoints(&p.state.descaleAccum.datapoints)
 	}
 	var machineReachable *bool
+	// #1324: copy the control snapshot (including its slice) under the lock,
+	// same copy-under-lock-then-hand-out-lock-free reasoning as copyDatapoints
+	// above — the JSON for this LiveData may be marshalled after this returns.
+	var machineControl *machines.ControlState
 	if ms := p.state.machines[defaultID]; ms != nil {
 		machineReachable = ms.reachable
+		if ms.control != nil {
+			ctrl := *ms.control
+			ctrl.BrewConfirm = append([]string(nil), ms.control.BrewConfirm...)
+			machineControl = &ctrl
+		}
 	}
 	return LiveData{
 		IsLive:           isLive,
@@ -997,6 +1254,11 @@ func (p *Poller) buildLiveDataResponse() LiveData {
 		TargetTemperature: targetTemp,
 		Pressure:          pressure,
 		WaterLevel:        waterLevel,
+
+		MachineWarnings:        warnings,
+		MachineUpdateAvailable: updateAvailable,
+
+		MachineControl: machineControl,
 	}
 }
 

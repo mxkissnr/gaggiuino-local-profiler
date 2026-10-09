@@ -44,4 +44,11 @@ describe('public-src/style.css', () => {
     ).toBe(0);
     expect(open, 'style.css ends inside an unclosed comment').toBe(false);
   });
+
+  it('disables the tap highlight in the body rule', () => {
+    const root = postcss.parse(readFileSync(CSS_PATH, 'utf-8'), { from: CSS_PATH });
+    const body = root.nodes.find((n) => n.type === 'rule' && n.selector === 'body');
+    expect(body, 'style.css has no `body { ... }` rule').toBeDefined();
+    expect(body?.toString()).toContain('-webkit-tap-highlight-color: transparent');
+  });
 });

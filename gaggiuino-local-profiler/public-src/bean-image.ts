@@ -12,7 +12,8 @@ function _load(key: string, url: string): Promise<string | null> {
   if (_cache.has(key)) return _cache.get(key)!;
   const p = (async () => {
     try {
-      const r = await apiFetch(url);
+      // no-cache: a photo a browser stored under the old 24 h lifetime must be revalidated, not served from that still-fresh entry (an unchanged photo just costs a 304).
+      const r = await apiFetch(url, { cache: 'no-cache' });
       if (!r.ok) return null;
       return URL.createObjectURL(await r.blob());
     } catch { return null; }
@@ -56,6 +57,13 @@ export function invalidatePuckScreenImage(puckScreenId: unknown): void {
 
 export function loadShotImageBlobUrl(shotId: number): Promise<string | null> {
   return _load(`shot:${shotId}`, shotImageUrl(shotId));
+}
+
+// #1351: the server serves a smaller thumbnail with ?thumb=1 (falling back to
+// the full image) — used by the coffee-history spiral so a long shot history
+// stays cheap to draw.
+export function loadShotThumbBlobUrl(shotId: number): Promise<string | null> {
+  return _load(`shotthumb:${shotId}`, `${shotImageUrl(shotId)}?thumb=1`);
 }
 
 export function invalidateShotImage(shotId: number): void {

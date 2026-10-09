@@ -59,6 +59,14 @@ type Handlers struct {
 	// import-cycle reason as onFirmwareUpdate: internal/achievements already
 	// imports internal/machines, so the wiring has to run this direction.
 	onProfileSaved func(action string)
+
+	// onDefaultChanged runs after the default machine has been reassigned
+	// (#1543). Set via SetOnDefaultChanged by cmd/server; internal/system
+	// uses it to reset the poller's preheat session for the new default — a
+	// default switch to an already-on machine otherwise leaves the preheat
+	// countdown stuck at the full window. A callback for the same
+	// import-cycle reason as onProfileSaved. A nil hook is a no-op.
+	onDefaultChanged func()
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB
@@ -108,6 +116,29 @@ func (h *Handlers) SetOnProfileSaved(fn func(action string)) {
 	h.onProfileSaved = fn
 }
 
+// SetOnDefaultChanged wires the side effect to run after the default machine
+// has actually changed (#1543). cmd/server uses it to reset the poller's
+// preheat session for the new default. internal/system imports
+// internal/machines, so this is a callback for the same import-cycle reason as
+// SetOnProfileSaved. A nil hook (never wired, e.g. in this package's own unit
+// tests) is a no-op, and the callback never changes the response — the
+// reassignment itself already succeeded.
+func (h *Handlers) SetOnDefaultChanged(fn func()) {
+	h.onDefaultChanged = fn
+}
+
+// SetOnShotSaved wires the side effect to run when the GaggiMate controller
+// reports a new shot was saved (evt:history-shot-saved, firmware v1.9.0+;
+// #1409). cmd/server uses it to pull the default machine's shot history right
+// away instead of waiting for the post-brew timer. internal/system imports
+// internal/machines, so wiring this as a callback here avoids the import cycle
+// a direct dependency would create, same reason as SetOnProfileSaved. A nil
+// hook (never wired, e.g. in this package's own unit tests) is a no-op. The
+// callback runs on the live read loop and must not block.
+func (h *Handlers) SetOnShotSaved(fn func()) {
+	h.gaggimateLive.setOnShotSaved(fn)
+}
+
 // disconnectLiveForHost tears down both persistent live sessions for a host
 // whose machine record's host changed or was deleted — the Gaggiuino WS
 // session (d_sensor_snap/d_sys_state cache) and the GaggiMate WS session
@@ -123,6 +154,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	h.registerRegistryRoutes(mux)
 	h.registerControlRoutes(mux)
 	h.registerProfileRoutes(mux)
+	h.registerMachineControlRoutes(mux)
 }
 
 // ── response helpers (see internal/httputil) ─────────────────────────────

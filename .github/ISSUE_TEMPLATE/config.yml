@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Share an idea first
+    url: https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/feature-requests
+    about: New feature ideas start as a discussion so others can comment and vote.
+  - name: Ask a question
+    url: https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/q-a
+    about: Setup or usage questions are answered in Q&A.

@@ -9,12 +9,12 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// The achievements ("stamp card") catalogue — 48 open + 6 secret badges
-// across 7 categories. The registry contract is
+// The achievements ("stamp card") catalogue — 56 open + 7 secret badges
+// across 8 categories. The registry contract is
 // id/card/stamp/check/progress/secret; every check() aggregates across ALL
 // machines rather than scoping to the default one.
 
-var cardKeys = []string{"basics", "craft", "beans", "endurance", "care", "house", "secret"}
+var cardKeys = []string{"basics", "craft", "beans", "endurance", "moments", "care", "house", "secret"}
 
 // badge is one catalogue entry. ProgressTarget == 0 means "no progress
 // bar"; Progress == nil likewise. Retired entries stay in the slice
@@ -235,13 +235,31 @@ func badges() []badge {
 		{ID: "shots_1000", Card: "endurance", Stamp: "1000", ProgressTarget: 1000,
 			Check:    func(c *Context) bool { return len(c.Shots) >= 1000 },
 			Progress: func(c *Context) int { return len(c.Shots) }},
+		{ID: "shots_2500", Card: "endurance", Stamp: "2500", ProgressTarget: 2500,
+			Check:    func(c *Context) bool { return len(c.Shots) >= 2500 },
+			Progress: func(c *Context) int { return len(c.Shots) }},
 		{ID: "streak_7", Card: "endurance", Stamp: "flame", ProgressTarget: 7,
 			Check:    func(c *Context) bool { return currentDayStreak(shotDaySet(c.Shots), c.Now) >= 7 },
 			Progress: func(c *Context) int { return min(currentDayStreak(shotDaySet(c.Shots), c.Now), 7) }},
 		{ID: "streak_30", Card: "endurance", Stamp: "30d", ProgressTarget: 30,
 			Check:    func(c *Context) bool { return currentDayStreak(shotDaySet(c.Shots), c.Now) >= 30 },
 			Progress: func(c *Context) int { return min(currentDayStreak(shotDaySet(c.Shots), c.Now), 30) }},
-		{ID: "marathon", Card: "endurance", Stamp: "5x", Check: func(c *Context) bool {
+		{ID: "litres_50", Card: "endurance", Stamp: "50l", ProgressTarget: 50,
+			Check:    func(c *Context) bool { return totalYieldG(c) >= 50_000 },
+			Progress: func(c *Context) int { return min(int(totalYieldG(c)/1000), 50) }},
+		{ID: "year_round", Card: "endurance", Stamp: "1y", Check: func(c *Context) bool {
+			for _, s := range shotsSortedByTimestamp(c) {
+				ts, ok := asInt64(s["timestamp"])
+				if !ok {
+					continue
+				}
+				return c.Now-ts*1000 >= 365*86_400_000
+			}
+			return false
+		}},
+
+		// ── moments ───────────────────────────────────────────────────
+		{ID: "marathon", Card: "moments", Stamp: "5x", Check: func(c *Context) bool {
 			perDay := map[string]int{}
 			for _, s := range c.Shots {
 				ts, ok := asInt64(s["timestamp"])
@@ -258,7 +276,7 @@ func badges() []badge {
 			}
 			return false
 		}},
-		{ID: "night", Card: "endurance", Stamp: "23", Check: func(c *Context) bool {
+		{ID: "night", Card: "moments", Stamp: "23", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
 				if ts, ok := asInt64(s["timestamp"]); ok && localParts(ts).hour >= 23 {
 					return true
@@ -266,11 +284,86 @@ func badges() []badge {
 			}
 			return false
 		}},
-		{ID: "early", Card: "endurance", Stamp: "sun", Check: func(c *Context) bool {
+		{ID: "early", Card: "moments", Stamp: "sun", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
 				if ts, ok := asInt64(s["timestamp"]); ok && localParts(ts).hour < 6 {
 					return true
 				}
+			}
+			return false
+		}},
+		{ID: "midnight_round", Card: "moments", Stamp: "moon", Check: func(c *Context) bool {
+			perNight := map[string]int{}
+			for _, s := range c.Shots {
+				ts, ok := asInt64(s["timestamp"])
+				if !ok {
+					continue
+				}
+				p := localParts(ts)
+				if p.hour >= 23 || p.hour < 3 {
+					perNight[time.Unix(ts-3*3600, 0).Format("2006-01-02")]++
+				}
+			}
+			for _, n := range perNight {
+				if n >= 3 {
+					return true
+				}
+			}
+			return false
+		}},
+		{ID: "five_hundreds", Card: "moments", Stamp: "star", Check: func(c *Context) bool {
+			byMachine := map[int64][]shots.Shot{}
+			for _, s := range c.Shots {
+				mid, _ := asInt64(s["machineId"])
+				byMachine[mid] = append(byMachine[mid], s)
+			}
+			for _, list := range byMachine {
+				streak := 0
+				for _, s := range shotsSortedByTimestamp(&Context{Shots: list}) {
+					if sc := shotScore(s); sc != nil && *sc == 100 {
+						streak++
+					} else {
+						streak = 0
+					}
+					if streak >= 5 {
+						return true
+					}
+				}
+			}
+			return false
+		}},
+		{ID: "litres_10", Card: "moments", Stamp: "10l", ProgressTarget: 10,
+			Check:    func(c *Context) bool { return totalYieldG(c) >= 10_000 },
+			Progress: func(c *Context) int { return min(int(totalYieldG(c)/1000), 10) }},
+		{ID: "comeback", Card: "moments", Stamp: "leaf", Check: func(c *Context) bool {
+			var prev int64
+			found := false
+			for _, s := range shotsSortedByTimestamp(c) {
+				ts, ok := asInt64(s["timestamp"])
+				if !ok {
+					continue
+				}
+				if found {
+					if sc := shotScore(s); sc != nil && *sc >= 95 && ts-prev >= 5*86_400 {
+						return true
+					}
+				}
+				prev, found = ts, true
+			}
+			return false
+		}},
+		{ID: "second_helping", Card: "moments", Stamp: "cup", Check: func(c *Context) bool {
+			var prev int64
+			found := false
+			for _, s := range shotsSortedByTimestamp(c) {
+				ts, ok := asInt64(s["timestamp"])
+				if !ok {
+					continue
+				}
+				if found && ts-prev >= 10 && ts-prev <= 60 {
+					return true
+				}
+				prev, found = ts, true
 			}
 			return false
 		}},
@@ -395,6 +488,9 @@ func badges() []badge {
 				}
 			}
 			return false
+		}},
+		{ID: "secret_wish", Card: "secret", Secret: true, Check: func(c *Context) bool {
+			return anyShotLocalParts(c, func(p dateParts) bool { return p.hour == 11 && p.minute == 11 })
 		}},
 	}
 }

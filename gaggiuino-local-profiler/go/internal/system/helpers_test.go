@@ -47,9 +47,10 @@ func newTestDB(t *testing.T) *sql.DB {
 // a real machine host — see internal/machines/ssrf.go/helpers_test.go's
 // own allowLoopbackMachineHost seam, which is unexported and not reachable
 // from this package). Only GetStatus/GetLiveSensorSnapshot/
-// GetLiveSystemState are ever called by poll.go; every other method is a
-// stub that would fail loudly (panic) if this package's code path ever
-// changed to call it, rather than silently returning zero values.
+// GetLiveSystemState are ever called by poll.go. Every other method is a
+// stub that fails loudly (panic) unless a test opts in through its
+// function field (the profile methods below; ListProfiles defaults to
+// the configured list), rather than silently returning zero values.
 type fakeAdapter struct {
 	mu            sync.Mutex
 	status        machines.Status
@@ -62,12 +63,23 @@ type fakeAdapter struct {
 	profileBodies map[string]json.RawMessage
 	profileErrs   map[string]error
 
-	// Opt-in stubs for the three profile-mutation methods — nil means
+	// #1454: GetSettings("system") is how the live poll reads a Gaggiuino's
+	// firmware-set machine name, so this is a real (opt-in) implementation
+	// rather than the notImplemented panic every other proxy method uses.
+	// getSettingsBody defaults to an empty object when unset.
+	getSettingsBody  json.RawMessage
+	getSettingsErr   error
+	getSettingsFn    func(context.Context, *machines.Machine, string) (json.RawMessage, error)
+	getSettingsCalls int
+	getSettingsCat   string
+
+	// Opt-in stubs for the profile methods the sync sweep calls — nil means
 	// "this test never expects a call", same notImplemented-panics
 	// convention as every other unset field here (profile_sync_test.go).
 	createProfileFn func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error)
 	updateProfileFn func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error)
 	deleteProfileFn func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error)
+	listProfilesFn  func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error)
 }
 
 var _ machines.Adapter = (*fakeAdapter)(nil)
@@ -109,8 +121,11 @@ func (f *fakeAdapter) notImplemented(name string) error {
 	panic("fakeAdapter: unexpected call to " + name)
 }
 
-func (f *fakeAdapter) ListProfiles(context.Context, *machines.Machine) ([]machines.ProfileSummary, error) {
-	return nil, f.notImplemented("ListProfiles")
+func (f *fakeAdapter) ListProfiles(ctx context.Context, m *machines.Machine) ([]machines.ProfileSummary, error) {
+	if f.listProfilesFn != nil {
+		return f.listProfilesFn(ctx, m)
+	}
+	return f.profiles, f.profilesErr
 }
 func (f *fakeAdapter) GetProfile(context.Context, *machines.Machine, string) (json.RawMessage, error) {
 	return nil, f.notImplemented("GetProfile")
@@ -137,8 +152,43 @@ func (f *fakeAdapter) SelectProfile(context.Context, *machines.Machine, string) 
 	return f.notImplemented("SelectProfile")
 }
 func (f *fakeAdapter) Capabilities() machines.Capabilities { return machines.Capabilities{} }
-func (f *fakeAdapter) GetSettings(context.Context, *machines.Machine, string) (json.RawMessage, error) {
-	return nil, f.notImplemented("GetSettings")
+func (f *fakeAdapter) GetSettings(ctx context.Context, m *machines.Machine, category string) (json.RawMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getSettingsCalls++
+	f.getSettingsCat = category
+	if f.getSettingsFn != nil {
+		return f.getSettingsFn(ctx, m, category)
+	}
+	if f.getSettingsErr != nil {
+		return nil, f.getSettingsErr
+	}
+	if f.getSettingsBody == nil {
+		return json.RawMessage("{}"), nil
+	}
+	return f.getSettingsBody, nil
+}
+
+// setSettings configures what GetSettings returns for every category (#1454).
+func (f *fakeAdapter) setSettings(body json.RawMessage, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getSettingsBody, f.getSettingsErr = body, err
+}
+
+// settingsCalls reports how many times GetSettings was called (#1454).
+func (f *fakeAdapter) settingsCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.getSettingsCalls
+}
+
+// settingsCategory reports the category of the most recent GetSettings call
+// (#1454).
+func (f *fakeAdapter) settingsCategory() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.getSettingsCat
 }
 func (f *fakeAdapter) UpdateSettings(context.Context, *machines.Machine, string, json.RawMessage) (json.RawMessage, error) {
 	return nil, f.notImplemented("UpdateSettings")

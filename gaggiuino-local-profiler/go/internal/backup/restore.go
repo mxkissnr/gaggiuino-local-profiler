@@ -19,6 +19,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 )
 
 // This file implements POST /api/restore: the largest handler, split
@@ -698,6 +699,13 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 	if s, ok := kv["shot_defaults"].(map[string]any); ok {
 		if defaults, ok := shots.SanitizeShotDefaultsForRestore(s); ok {
 			if err := d.ShotsRepo.SaveShotDefaults(defaults); err != nil {
+				return err
+			}
+		}
+	}
+	if s, ok := kv["ui_prefs"].(map[string]any); ok {
+		if prefs, issues := uiprefs.Sanitize(s); len(issues) == 0 {
+			if err := uiprefs.NewRepository(d.DB).Save(prefs); err != nil {
 				return err
 			}
 		}

@@ -72,4 +72,19 @@ describe('buildWorldMap (#648 fetch race guard)', () => {
     // token guard makes A's stale completion a no-op instead.
     expect(wrap.innerHTML).toBe('__sentinel__');
   });
+
+  // #1467: the empty-library branch now also clears the chips row / heading
+  // counter (which live outside the map wrapper). Guarded on a parent card
+  // existing, so a headless wrapper with no parent must not throw.
+  it('renders the empty state without error when the library has no origins', async () => {
+    const wrap = fakeWrap();
+    g.document = { getElementById: (id: string) => (id === 'worldMapWrap' ? wrap : null) };
+
+    S.coffeeLibrary = { beans: [], grinders: [] };
+    S.shots = [];
+
+    await buildWorldMap();
+
+    expect(wrap.innerHTML).toContain('empty-note');
+  });
 });

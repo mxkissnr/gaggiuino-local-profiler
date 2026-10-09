@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 )
 
 // This file handles the "gather the small stuff" half of backup export:
@@ -18,8 +19,8 @@ import (
 // glpVersion is stamped into the backup bundle metadata. config.yaml's
 // `version:` is canonical; this const must match it and is bumped alongside
 // it at release time (CLAUDE.md's Versioning section). Enforced by
-// test/version-sync.test.js and scripts/release-check.mjs.
-const glpVersion = "3.3.0"
+// test/version-sync.test.ts and scripts/release-check.mts.
+const glpVersion = "3.4.0"
 
 // gatherSmallSections collects every bundle section that is small
 // regardless of shot/image count: coffee_library, blocklist, trash (via
@@ -86,6 +87,10 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
+	uiPrefs, err := uiprefs.NewRepository(d.DB).Get()
+	if err != nil {
+		return nil, err
+	}
 	allAchievements, err := d.AchievementsRepo.GetAll()
 	if err != nil {
 		return nil, err
@@ -103,7 +108,7 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 		"kv": map[string]any{
 			"menu": menu, "orders_settings": ordersSettings, "notify_mapping": notifyMapping,
 			"import_settings": importSettings, "mqtt_settings": safeMqtt,
-			"shot_defaults": shotDefaults,
+			"shot_defaults": shotDefaults, "ui_prefs": uiPrefs,
 		},
 	}
 

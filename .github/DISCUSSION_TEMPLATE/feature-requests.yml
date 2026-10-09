@@ -1,0 +1,26 @@
+body:
+  - type: markdown
+    attributes:
+      value: "One idea per discussion, so others can comment and upvote. Ideas that gain traction become tracked issues."
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What would you like to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What gets in the way today?
+    validations:
+      required: false
+
+  - type: textarea
+    id: sketch
+    attributes:
+      label: Screenshots or a sketch
+      description: "Optional. Drag images in here."
+    validations:
+      required: false

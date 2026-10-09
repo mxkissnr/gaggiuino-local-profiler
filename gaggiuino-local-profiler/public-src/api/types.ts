@@ -1,4 +1,4 @@
-import type { components } from './schema.gen.js';
+import type { components, paths } from './schema.gen.js';
 import type { ShotDatapoints } from '../utils.js';
 
 // Domain types for the GLP REST API (#1110, package A3a).
@@ -18,6 +18,9 @@ export type { ShotDatapoints };
 
 /** A shot's user-supplied annotation (`shot.annotation`), per openapi.yaml's Annotation. */
 export type ShotAnnotation = components['schemas']['Annotation'];
+
+/** POST /api/shots/{id}/annotate response (#1411). */
+export type AnnotateResult = components['schemas']['AnnotateResult'];
 
 /**
  * POST /api/shots/{id}/annotate body. The generated Annotation schema types
@@ -55,6 +58,20 @@ export type HydratedShot = Omit<components['schemas']['HydratedShot'], 'datapoin
   /** Hand-written override so previousShot keeps the typed Shot, not the generated open-datapoints shape. */
   previousShot?: HydratedShot | null;
 };
+
+/**
+ * The shot-row fields the topbar's coffee-history panel reads from
+ * `S.allShots` (#1351): the metadata projection plus the joined annotation.
+ * `image` is the stored-photo signal and `score` the hydrated score, so both
+ * stay optional here — a metadata row may carry neither.
+ */
+export interface HistoryShot {
+  id: number;
+  timestamp: number;
+  score?: number | null;
+  image?: string | null;
+  annotation?: ShotAnnotation | null;
+}
 
 /**
  * GET/POST /api/shots/defaults (#654) — the per-install values pre-filled
@@ -157,6 +174,12 @@ export type FirmwareProgress = components['schemas']['FirmwareProgress'];
 /** POST/PUT /api/machines body — the fields the Settings machine form sends. */
 export type MachineSaveInput = components['schemas']['MachineSaveInput'];
 
+/** GET/POST /api/machine/control/settings — the opt-in machine-control toggle (#1324). */
+export type MachineControlSettings = components['schemas']['MachineControlSettings'];
+
+/** GET /api/live/data's machineControl snapshot for the default machine (#1324). */
+export type MachineControlState = components['schemas']['MachineControlState'];
+
 // ── MQTT (go/internal/mqtt) ──────────────────────────────────────────────
 
 /**
@@ -193,3 +216,13 @@ export type McpSettings = components['schemas']['McpSettings'];
  * true` is rejected with a 400 on a non-dev build.
  */
 export type McpSettingsInput = components['schemas']['McpSettingsInput'];
+
+// ── Shared UI preferences (go/internal/system, #1375) ────────────────────
+//
+// The /api/ui-prefs GET/PUT path and its inline `{ [key: string]: unknown }`
+// payload/response were generated with the endpoint (schema.gen.ts, part 1).
+// There is no named component schema to re-export, so this alias derives the
+// merged-map type straight from `paths`; public-src/ui-prefs.ts and
+// api/system.ts use it. schema.gen.ts is auto-generated and must not be
+// hand-edited.
+export type UiPrefs = paths['/api/ui-prefs']['get']['responses'][200]['content']['application/json'];

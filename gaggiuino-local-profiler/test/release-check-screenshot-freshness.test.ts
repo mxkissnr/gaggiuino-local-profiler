@@ -8,7 +8,7 @@ import {
     stripJsLikeComments,
     stripHtmlComments,
     stripCssComments,
-} from '../scripts/release-check.mjs';
+} from '../scripts/release-check.mts';
 
 // #537: check 3 used to compare each screenshot's commit time against the
 // single most recent commit touching public-src/ as a whole, so a
@@ -25,7 +25,7 @@ import {
 //
 // These tests use the real git binary against throwaway temp repos, not a
 // faked git — a fully mocked git layer is exactly what hid the #529
-// shell-quoting bug in dev-stats.mjs.
+// shell-quoting bug in dev-stats.mts.
 describe('release-check screenshot freshness (#537)', () => {
     const repos: string[] = [];
 

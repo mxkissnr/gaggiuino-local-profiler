@@ -26,6 +26,8 @@ declare module 'node:fs' {
     export function mkdtempSync(prefix: string): string;
     export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
     export function existsSync(path: string): boolean;
+    export function readdirSync(path: string): string[];
+    export function unlinkSync(path: string): void;
     export function cpSync(
         source: string,
         destination: string,
@@ -53,9 +55,15 @@ declare module 'node:vm' {
 
 // Node globals the tests read directly (vitest runs them on Node, where both
 // exist; only their declarations are missing from this browser-oriented lib).
-declare const process: { env: Record<string, string | undefined> };
+declare const process: {
+    env: Record<string, string | undefined>;
+    argv: string[];
+    exit(code?: number): never;
+    cwd(): string;
+};
 declare class Buffer extends Uint8Array {
-    static from(data: readonly number[]): Buffer;
+    static from(data: readonly number[] | ArrayBuffer | Uint8Array | string, encoding?: string): Buffer;
+    toString(encoding?: string): string;
 }
 
 interface ImportMeta {

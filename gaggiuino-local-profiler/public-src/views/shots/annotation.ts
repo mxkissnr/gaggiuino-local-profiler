@@ -2,9 +2,9 @@ import { S }                              from '../../state/index.js';
 import type { LibraryRow, ShotMeta } from '../../state/index.js';
 import { t, tHtml }                       from '../../i18n.js';
 import { getMenu }                        from '../../api/system.js';
-import { deductMilk, adjustFrozenPortion, listMilks } from '../../api/library.js';
+import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
-import type { ShotDefaults } from '../../api/types.js';
+import type { AnnotateResult, ShotDefaults } from '../../api/types.js';
 import { esc, germanToIso, html, joinHtml } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
@@ -12,7 +12,7 @@ import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
-import { COFFEE_ICON_SVG, CHECK_ICON_SVG } from '../../icons.js';
+import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
@@ -106,68 +106,12 @@ type BeanRow = LibraryRow & { remainingG?: number | null };
 
 let _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Deducts milk stock for a newly-assigned (or changed) drink+milk combo.
-// Gated on drinkType OR milkType actually changing vs. the previously saved
-// annotation, not just milkType changing — otherwise re-assigning the same
-// milk to a newly-picked drink (the common case, since most people always
-// use the same milk) would never fire. Shared by both the debounced
-// auto-save and the explicit Save button so neither path can silently skip
-// the deduction the other one handles.
-export function _maybeDeductMilk(shot: AnnotationShot | undefined, payload: AnnotationPayload): void {
-  const prevMilkType  = shot?.annotation?.milkType ?? null;
-  const prevDrinkType = shot?.annotation?.drinkType ?? null;
-  if (!payload.milkType || !payload.drinkType) return;
-  if (payload.milkType === prevMilkType && payload.drinkType === prevDrinkType) return;
-  const menuItem = ((S.drinkMenu || []) as DrinkRow[]).find(m => m.id === payload.drinkType);
-  const milkMl = menuItem?.milkMl;
-  if (!(milkMl && milkMl > 0)) return;
-  deductMilk(payload.milkType, milkMl).then(updated => {
-    if (!updated) return;
-    if (S.milkTypes) {
-      const mi = S.milkTypes.findIndex(m => (m.id as number) === updated.id);
-      if (mi !== -1) S.milkTypes[mi] = updated;
-    }
-  }).catch(() => {});
-}
-
-// Finds a frozen-portion entry by id across every bean/bag — portion ids are
-// globally unique (generated from frozenAt), so no beanId is needed to
-// locate one. Returns { bean, portion } or null.
-function _findFrozenPortion(portionId: number): { bean: LibraryRow; portion: LibraryRow } | null {
-  for (const bean of S.coffeeLibrary?.beans || []) {
-    for (const bag of (bean.bags as LibraryRow[] | undefined) || []) {
-      const portion = ((bag.frozenPortions as LibraryRow[] | undefined) || []).find(p => p.id === portionId);
-      if (portion) return { bean, portion };
-    }
-  }
-  return null;
-}
-
-// #502: mirrors _maybeDeductMilk's shape exactly — compares the previous vs.
-// new frozenPortionId so re-saving the same choice never double-counts, and
-// switching choices (including back to "not frozen", i.e. null) correctly
-// reverses the previous decrement. Uses the existing adjust-frozen-portion
-// endpoint (absolute remainingCount) rather than a delta endpoint, computing
-// the target value from the client's already-loaded S.coffeeLibrary state.
-function _adjustFrozenPortionRemaining(portionId: number, delta: number): void {
-  const found = _findFrozenPortion(portionId);
-  if (!found) return;
-  const { bean, portion } = found;
-  const current = Number.isFinite(portion.remainingCount) ? portion.remainingCount as number : portion.portionCount as number;
-  const remainingCount = Math.min(Math.max(current + delta, 0), portion.portionCount as number);
-  adjustFrozenPortion(bean.id as number, { portionId, remainingCount }).then(updated => {
-    if (!updated) return;
-    const idx = S.coffeeLibrary.beans.findIndex(b => b.id === bean.id);
-    if (idx !== -1) S.coffeeLibrary.beans[idx] = updated;
-  }).catch(() => {});
-}
-
-export function _maybeAdjustFrozenPortion(shot: AnnotationShot | undefined, payload: AnnotationPayload): void {
-  const prevPortionId = shot?.annotation?.frozenPortionId ?? null;
-  const newPortionId  = payload.frozenPortionId ?? null;
-  if (prevPortionId === newPortionId) return;
-  if (prevPortionId != null) _adjustFrozenPortionRemaining(prevPortionId, +1);
-  if (newPortionId != null) _adjustFrozenPortionRemaining(newPortionId, -1);
+// #1411: the server books milk stock and frozen-portion counts while it
+// saves; the library only needs a reload when a field it books from changed.
+export function _stockFieldsChanged(prev: AnnotationData | null | undefined, next: AnnotationData | null | undefined): boolean {
+  const key = (a: AnnotationData | null | undefined): string =>
+    [a?.drinkType || '', String(a?.milkType ?? ''), String(a?.frozenPortionId ?? '')].join('|');
+  return key(prev) !== key(next);
 }
 
 // Reads every annotation field's current DOM value into the API payload
@@ -242,17 +186,22 @@ async function _performAnnotationSave(): Promise<void> {
   if (!S.primaryShotId) return;
   const id   = S.primaryShotId;
   const shot = _shots().find(s => s.id === id);
+  const prev = shot?.annotation;
   const payload = _buildAnnotationPayload(shot);
   try {
     const r = await annotateShot(id, payload);
     if (r.ok) {
-      _maybeDeductMilk(shot, payload);
-      _maybeAdjustFrozenPortion(shot, payload);
+      const saved = await r.json().catch(() => null) as AnnotateResult | null;
+      const next = (saved?.annotation ?? payload) as AnnotationData;
       const idx = S.shots.findIndex(s => s.id === id);
       if (idx !== -1) {
         const entry = S.shots[idx];
-        if (entry) entry.annotation = payload;
+        if (entry) {
+          entry.annotation = next;
+          if (saved) entry.score = saved.score;
+        }
       }
+      if (_stockFieldsChanged(prev, next)) void window.loadLibrary?.();
       renderSidebar();
       updateSidebarHighlighting();
       _setAutoSaveStatus('saved');
@@ -359,7 +308,7 @@ export function _renderMilkPills(selectedId: string): void {
   if (!S.milkTypes?.length) { container.innerHTML = html``; return; }
   container.innerHTML = joinHtml((S.milkTypes as MilkRow[]).map(m =>
     html`<button type="button" class="drink-pill${esc(selectedId === String(m.id) ? ' active' : '')}"
-      data-action="select-milk" data-id="${esc(String(m.id))}">${esc(m.emoji || '🥛')} ${esc(m.name)}</button>`
+      data-action="select-milk" data-id="${esc(String(m.id))}">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG} ${esc(m.name)}</button>`
   ));
   if (hidden) hidden.value = selectedId || '';
 }
@@ -427,11 +376,31 @@ export function selectFrozenPortion(id: string | null | undefined): void {
   scheduleAutoSave();
 }
 
-function _updateMilkFieldVisibility(): void {
+export function _updateMilkFieldVisibility(): void {
   const field   = document.getElementById('milkTypeField');
   if (!field) return;
   const drinkId = (document.getElementById('annDrinkType') as HTMLSelectElement | null)?.value;
-  field.style.display = (S.milkTypes?.length && drinkId) ? '' : 'none';
+  const drink   = drinkId ? (S.drinkMenu as DrinkRow[] | undefined)?.find(d => d.id === drinkId) : undefined;
+  // #1453: the backend books milk stock only when the drink's milkMl > 0, so
+  // only offer the milk picker for a drink that actually uses milk.
+  // A drink missing from S.drinkMenu (the menu has not loaded yet, or it was
+  // removed) keeps the pre-#1453 behaviour: show the picker whenever milk types
+  // exist, and never clear the saved milk, so opening such a shot cannot
+  // autosave milkType: null.
+  // No drink selected also keeps the saved milk: the picker is hidden as before,
+  // but a shot annotated with a milk but no drink (older data, MCP annotate)
+  // must not lose its milk on the next autosave. The milk is cleared only for a
+  // known drink that does not use it.
+  const unknownDrink = !!drinkId && !drink;
+  const drinkUsesMilk = Number(drink?.milkMl) > 0;
+  const visible      = unknownDrink
+    ? !!S.milkTypes?.length
+    : !!(S.milkTypes?.length && drinkId && drinkUsesMilk);
+  field.style.display = visible ? '' : 'none';
+  if (drink && !drinkUsesMilk) {
+    const hidden = document.getElementById('annMilkType') as HTMLInputElement | null;
+    if (hidden?.value) _renderMilkPills('');
+  }
 }
 
 // Ported from PR #1120 (contributor branch origin/ppops-src/live-shot-setup)

@@ -9,7 +9,7 @@ Closes #
 ## Checklist
 
 - [ ] Issue linked above
-- [ ] `CHANGELOG.md` updated
+- [ ] Changelog fragment added in `gaggiuino-local-profiler/changelog.d/` (user-visible changes only)
 - [ ] `DOCS.md` + `DOCS.de.md` updated (if user-facing change)
 - [ ] `README.md` features table updated (if new feature)
 - [ ] Version bumped in all four spots (`config.yaml`, `package.json`, `go/internal/system/version.go`, `go/internal/backup/bundle.go`) if applicable — `config.yaml` is canonical, `test/version-sync.test.ts` enforces the match
@@ -26,4 +26,4 @@ Closes #
 - [ ] **substantial** — AI generated significant portions; human reviewed and revised
 - [ ] **generated** — code is AI-generated end-to-end; human reviewed and takes responsibility
 
-Tools / models used: <!-- e.g. "Claude Code (Sonnet 5)", "GitHub Copilot", "none" -->
+Tools / models used: <!-- e.g. "Claude Code (Sonnet 5.5)", "GitHub Copilot", "none" -->

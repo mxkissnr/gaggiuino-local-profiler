@@ -35,6 +35,7 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 }
 
 import { S } from './state/index.js';
+import { getUiPref, loadUiPrefsFromServer } from './ui-prefs.js';
 import { initToken, apiFetch } from './api/transport.js';
 import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
@@ -52,6 +53,7 @@ import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sor
 import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
+import { initTopbarNavFade } from './components/topbar-nav-fade.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
 
 import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
@@ -76,8 +78,10 @@ import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, 
          fetchPreheatData, updatePreheatWidget, fetchLiveData,
          handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
-import { initAnalytics, setTrendWindow, buildCalendar, buildTrendChart, buildBeanStats, buildProfileChart, _renderCalendar,
-         setBeanRankSort, setDialinProgressionBean } from './views/analytics.js';
+import { initAnalytics, buildCalendar, buildTrendChart, buildBeanShelf, buildProfileChart, _renderCalendar,
+         getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold,
+         openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail, setDialinProgressionBean,
+         openFactDetail, shuffleFacts } from './views/analytics.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
          renderMaintenanceDashboard, maintStatusLabel,
@@ -85,7 +89,9 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, s
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
          toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask } from './views/maintenance.js';
 import { loadAchievementsView } from './views/achievements.js';
-import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo } from './components/flavor-wheel.js';
+import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from './components/flavor-wheel.js';
+import { highlightSheetFlavor } from './components/flavor-mini-wheel.js';
+import { closeDetailSheet } from './components/detail-sheet.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
          toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
@@ -95,13 +101,13 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients, saveBaristaNotify,
          _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
-import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, renderGrinderList,
-         openBeanForm, closeBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage,
+import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, resetShelfPrefs, renderGrinderList,
+         openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openEditBag, closeEditBag, saveEditBag,
-         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags,
+         openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags, openBeanSheet, closeBeanSheet, requestCloseBeanSheet,
          toggleBagCard, reorderBags,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
@@ -109,7 +115,7 @@ import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, rende
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
          toggleImportSettings, addCustomShopifyDomain,
-         openScanModal, closeScanModal, _runScanLoop, _handleScanResult,
+         openScanModal, closeScanModal, _runScanLoop, _submitManualScan, _handleScanPhoto, _handleScanResult,
          renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk,
          renderBasketList, openBasketForm, closeBasketForm, editBasket, saveBasket, deleteBasket, uploadBasketImage,
          renderPuckScreenList, openPuckScreenForm, closePuckScreenForm, editPuckScreen, savePuckScreen, deletePuckScreen, uploadPuckScreenImage
@@ -135,7 +141,7 @@ import { startProfileDialinFromList, profileDialinClose,
 
 import { loadDemoData, endDemo } from './components/onboarding.js';
 
-import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, renderMachinesList,
+import { loadMachines, openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, switchActiveMachine, setActiveMachine, resolveActiveMachineId, setDefaultMachine, renderMachinesList,
          onThemeCustomColorAChange, onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange,
          applyActiveMachineAccentTheme, renderAccentSwatches } from './components/machines-settings.js';
 
@@ -150,6 +156,9 @@ import { loadMqttSettings, renderMqttSettingsCard, setMqttTransport, saveMqttSet
 
 import { loadNotifySettingsCard, saveNotifySettings } from './components/notify-settings.js';
 import { loadMcpSettingsCard, renderMcpSettingsCard, saveMcpSettings } from './components/mcp-settings.js';
+
+import { loadMachineControlSetting, saveMachineControlSetting, toggleFlush,
+         confirmBrewFromDialog, cancelBrewFromDialog } from './components/machine-control.js';
 
 import { loadShotDefaultsSettingsCard, saveShotDefaultsSettings } from './components/shot-defaults-settings.js';
 
@@ -356,10 +365,9 @@ Object.assign(window, {
 
   // analytics view
   initAnalytics,
-  setTrendWindow,
   buildCalendar,
   buildTrendChart,
-  buildBeanStats,
+  buildBeanShelf,
   buildProfileChart,
   _renderCalendar,
 
@@ -441,6 +449,11 @@ Object.assign(window, {
   saveBagStock,
   markBagEmpty,
   togglePastBags,
+  openBeanSheet,
+  closeBeanSheet,
+  // #1543: mode.js closes the wheel on a tab switch; exposed here like the
+  // sheet's own close so the components/ tree never imports the view graph.
+  closeFlavorWheel,
   toggleBagCard,
   reorderBags,
   openFreezeForm,
@@ -466,6 +479,8 @@ Object.assign(window, {
   openScanModal,
   closeScanModal,
   _runScanLoop,
+  _submitManualScan,
+  _handleScanPhoto,
   _handleScanResult,
   renderMilkList,
   openMilkForm,
@@ -701,6 +716,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnMaintenance')!.addEventListener('click', () => switchMode('maintenance'));
   document.getElementById('btnAchievements')!.addEventListener('click', () => switchMode('achievements'));
   document.getElementById('btnOrders')!.addEventListener('click', () => switchMode('orders'));
+  // #1514: still wired by id — Settings moved out of .topbar-nav-scroll into a
+  // fixed topbar slot but kept #btnSettings, so this listener needs no change.
   document.getElementById('btnSettings')!.addEventListener('click', () => switchMode('settings'));
 
   // ── Mobile burger drawer (#425) — additive shot-list access from any
@@ -793,7 +810,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('libTabRecipes')!.addEventListener('click', () => switchLibTab('recipes'));
   document.getElementById('libTabMilk')!.addEventListener('click', () => switchLibTab('milk'));
   document.getElementById('libTabProfiles')!.addEventListener('click', () => switchLibTab('profiles'));
-  document.getElementById('closeBeanFormBtn')!.addEventListener('click', closeBeanForm);
+  // Cancel is an explicit discard: close without the unsaved-changes prompt.
+  document.getElementById('closeBeanFormBtn')!.addEventListener('click', discardBeanForm);
   document.getElementById('saveBeanBtn')!.addEventListener('click', () => { void saveBean(); });
   document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', () => { void saveBeanNoBag(); });
   document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', () => { void saveBeanAddBag(); });
@@ -814,8 +832,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => document.getElementById('beanFormImage')!.click());
   document.getElementById('beanFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
+    // #1329 part 2: creating stages the cropped photo until the bean is saved.
     if (S.beanEditId) void uploadBeanImage(S.beanEditId, this);
+    else void stageNewBeanImage(this);
   });
+  document.getElementById('beanFormStickerBtn')!.addEventListener('click', () => { void cutOutBeanSticker(); });
   document.getElementById('addRecipeStepBtn')!.addEventListener('click', addRecipeStep);
   document.getElementById('closeRecipeFormBtn')!.addEventListener('click', closeRecipeForm);
   document.getElementById('saveRecipeBtn')!.addEventListener('click', () => { void saveRecipe(); });
@@ -856,9 +877,39 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('profileEditorModal')!.addEventListener('change', renderProfilePreviewChart);
   document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
   document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
-  document.getElementById('trendBtn30')!.addEventListener('click', () => setTrendWindow(30));
-  document.getElementById('trendBtn90')!.addEventListener('click', () => setTrendWindow(90));
-  document.getElementById('trendBtnAll')!.addEventListener('click', () => setTrendWindow(0));
+  // ── Analytics toolbar (#1467): one period + search filter for the whole
+  // page. The chips mirror the saved state; the search debounces so a fast
+  // typist only re-runs the builders once per pause.
+  const analyticsSearch = document.getElementById('analyticsSearch') as HTMLInputElement | null;
+  const analyticsRangeChips = document.querySelectorAll<HTMLElement>('[data-action="analytics-range"]');
+  const syncAnalyticsRangeChips = (days: number): void => {
+    analyticsRangeChips.forEach(chip => {
+      const on = Number(chip.dataset.days) === days;
+      chip.classList.toggle('active', on);
+      chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  };
+  const _analyticsFilter = getAnalyticsFilter();
+  syncAnalyticsRangeChips(_analyticsFilter.days);
+  if (analyticsSearch) {
+    analyticsSearch.value = _analyticsFilter.query;
+    analyticsSearch.setAttribute('aria-label', t('analytics_search_ph'));
+    let _analyticsSearchDebounce: ReturnType<typeof setTimeout> | undefined;
+    analyticsSearch.addEventListener('input', e => {
+      const value = (e.target as HTMLInputElement).value;
+      clearTimeout(_analyticsSearchDebounce);
+      _analyticsSearchDebounce = setTimeout(() => setAnalyticsFilter({ query: value }), 150);
+    });
+  }
+  analyticsRangeChips.forEach(chip => chip.addEventListener('click', () => {
+    const days = Number(chip.dataset.days) as 0 | 7 | 30 | 90;
+    syncAnalyticsRangeChips(days);
+    setAnalyticsFilter({ days });
+  }));
+  // #1467: the "More insights" fold starts closed, remembers the viewer's
+  // choice and only builds its charts once opened (Chart.js cannot measure a
+  // hidden canvas).
+  initAnalyticsMoreFold();
   document.getElementById('dialinCount')!.addEventListener('change', e => {
     localStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
     void renderDialin();
@@ -910,8 +961,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mcpSettingsSaveBtn')?.addEventListener('click', () => { void saveMcpSettings(); });
   // #1288: write/developer tools only apply while the server is on, so their disabled state follows the master toggle.
   document.getElementById('mcpEnabled')?.addEventListener('change', () => renderMcpSettingsCard());
+  // #1324: opt-in machine control saves immediately on toggle (there is no Save button).
+  document.getElementById('machineControlEnabled')?.addEventListener('change', () => { void saveMachineControlSetting(); });
   document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', () => { void saveShotDefaultsSettings(); });
   document.getElementById('closeScanModalBtn')!.addEventListener('click', closeScanModal);
+  // #1536: a picked photo is read with the same decoder as the live loop, so it
+  // works when the camera is unavailable (e.g. plain http). Clearing the value
+  // afterwards lets the same picture be chosen again.
+  const scanPhotoInput = document.getElementById('scanPhotoInput') as HTMLInputElement | null;
+  if (scanPhotoInput) {
+    const input = scanPhotoInput;
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (file) void _handleScanPhoto(file);
+    });
+  }
   // Tapping the dimmed backdrop (not the modal content itself) closes it —
   // there was no way back out of the flavor wheel on mobile without this.
   document.getElementById('flavorWheelModal')?.addEventListener('click', e => {
@@ -944,6 +1009,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'mark-bag-empty':       void markBagEmpty(Number(el.dataset.beanId), Number(el.dataset.bagId)); break;
       case 'toggle-bag-card':      toggleBagCard(Number(el.dataset.bagId)); break;
       case 'toggle-past-bags':     togglePastBags(numId()); break;
+      case 'open-bean-sheet':     openBeanSheet(numId()); break;
+      case 'close-bean-sheet':    requestCloseBeanSheet(); break;
+    case 'close-bean-form-sheet': requestCloseBeanForm(); break;
       case 'open-freeze-form':   openFreezeForm(numId()); break;
       case 'close-freeze-form':  closeFreezeForm(numId()); break;
       case 'save-freeze-form':   void saveFreezePortions(numId()); break;
@@ -951,9 +1019,16 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'open-edit-frozen-form':  openEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'close-edit-frozen-form': closeEditFrozenForm(Number(el.dataset.portionId)); break;
       case 'save-edit-frozen-form':  void saveEditFrozenForm(numId(), Number(el.dataset.portionId)); break;
-      case 'filter-by-bean':     filterShotsByBean(numId()); break;
+      case 'filter-by-bean':     closeBeanSheet(); filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
+      // #1500: manual barcode entry in the scan modal submits through this
+      // delegation (no inline handler under the CSP); preventDefault keeps
+      // the form from navigating the page on click or Enter.
+      case 'scan-manual-submit': e.preventDefault(); _submitManualScan(); break;
+      // #1536: the photo fallback opens the phone's camera app (a `capture`
+      // file input), which needs no secure context, so it also works over http.
+      case 'scan-take-photo': (document.getElementById('scanPhotoInput') as HTMLInputElement | null)?.click(); break;
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        void deleteBean(numId()); break;
       case 'toggle-bean-active': void toggleBeanActive(numId()); break;
@@ -981,6 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'delete-profile':        void deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
       case 'create-profile-from-bean':
+        closeBeanSheet();
         if (_isActiveMachineGaggiMate()) openNewGaggiMateProfile();
         else createProfileFromBean(numId());
         break;
@@ -1003,15 +1079,27 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'guided-maint-cancel': closeGuidedMaint(); break;
       case 'set-maint-scope':    setMaintScope(el.dataset.scope!); break;
       case 'toggle-maint-detail': el.closest('.maint-card')?.classList.toggle('expanded'); break;
-      case 'set-bean-rank-sort': setBeanRankSort(el.dataset.key as Parameters<typeof setBeanRankSort>[0]); break;
+      case 'set-bean-shelf-sort': setBeanShelfSort(el.dataset.sort === 'shots' ? 'shots' : 'score'); break;
+      case 'expand-bean-shelf':   expandBeanShelf(); break;
+      case 'analytics-bean':      openBeanShelfDetail(el.dataset.name!, el); break;
+      case 'analytics-fact':      openFactDetail(el.dataset.fact!, el); break;
+      case 'analytics-facts-shuffle': shuffleFacts(); break;
+      case 'open-bean-shelf-in-library':
+        closeDetailSheet();
+        switchMode('library');
+        openBeanSheet(numId());
+        break;
+      case 'analytics-day':      openCalendarDayDetail(el.dataset.day!, el); break;
       case 'open-flavor-wheel':   void openFlavorWheel(numId()); break;
       case 'close-flavor-wheel':  closeFlavorWheel(); break;
       case 'zoom-flavor-wheel':   zoomFlavorWheelTo(strId()); break;
+      case 'highlight-flavor':        highlightSheetFlavor(el.dataset.flavorNode || null, el); break;
+      case 'highlight-flavor-wheel':  highlightFlavorWheelNode(el.dataset.nodeId || null); break;
       case 'delete-maint-log':   void deleteMaintLogEntry(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
       case 'start-dialin':           openDialinWizard(); break;
-      case 'start-dialin-from-bean': startDialinFromBean(numId()); break;
+      case 'start-dialin-from-bean': closeBeanSheet(); startDialinFromBean(numId()); break;
       case 'dialin-confirm-shot':    void dialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'dialin-accept-next':     dialinAcceptNext(); break;
       case 'dialin-override':        dialinOverride(); break;
@@ -1029,6 +1117,19 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'setup-wizard-get-started':    setupWizardGetStarted(); break;
       case 'setup-wizard-skip-demo':      void setupWizardSkipToDemo(); break;
       case 'close-easter-egg':            closeEasterEggPanel(); break;
+      // #1324: opt-in GaggiMate machine control.
+      case 'machine-flush-toggle':        void toggleFlush(); break;
+      case 'brew-confirm-start':          void confirmBrewFromDialog(); break;
+      case 'brew-confirm-cancel':         void cancelBrewFromDialog(); break;
+      // #1449: the Live tab's "not available for this machine" banner offers
+      // to make the currently selected machine the default. Reuses the existing
+      // setDefaultMachine() from components/machines-settings.ts unchanged -- it
+      // already reloads the machine list, and loadMachines() ->
+      // applyActiveMachineChange() reconnects the Live tab (window.connectLiveStream()
+      // when S.currentMode === 'live'), so no new reload logic lives here.
+      case 'live-set-default-machine':
+        if (typeof S.activeMachineId === 'number') void setDefaultMachine(S.activeMachineId);
+        break;
     }
   });
 
@@ -1055,6 +1156,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
+  // #1516: after the labels are localized (their width decides the row's
+  // scrollWidth). initTopbarNavFade re-syncs on scroll, resize and further
+  // translation-driven label changes.
+  initTopbarNavFade();
 
   void initToken().then(async () => {
     // #735: opened once at app bootstrap, not per view-switch -- SSE-driven
@@ -1085,9 +1190,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // nothing to display itself against. Now runs once the token is ready,
     // same as loadData()/loadLibrary() below.
     const machinesPromise = loadMachines();
+    // #1375: the shared UI choices live on this instance's own server, so the
+    // stable and dev apps no longer overwrite each other through the shared
+    // browser origin — the localStorage copy is only a cache. Fired without
+    // blocking the first render; a change re-reads the shelf prefs and applies
+    // the shared machine selection through the same validation loadMachines()
+    // uses, so a stale id from the server cannot filter the history to nothing
+    // (#1323) whichever of the two requests finishes first.
+    void loadUiPrefsFromServer().then(changed => {
+      if (!changed) return;
+      resetShelfPrefs();
+      const activeId = getUiPref<number | 'all'>('machine.active');
+      if (activeId === undefined) return;
+      const resolved = resolveActiveMachineId(activeId);
+      if (resolved !== S.activeMachineId) setActiveMachine(resolved);
+    });
     void loadMqttSettings();
     void loadNotifySettingsCard();
     void loadMcpSettingsCard();
+    void loadMachineControlSetting();
     void loadDrinkMenu();
     void loadMilkTypes();
     // Awaited (unlike the two loads above): loadData() below can render the
@@ -1128,7 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (shouldOpenSetupWizard(S.machines)) openSetupWizard();
   });
 
-  setInterval(updateStatus, 30000);
+  setInterval(() => { void updateStatus(); }, 30000);
   updateMobileShotSidebarVisibility();
   let _lastViewportWidth = window.innerWidth;
   window.addEventListener('resize', () => {

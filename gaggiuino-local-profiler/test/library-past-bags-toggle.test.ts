@@ -10,10 +10,10 @@ g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
-  renderBeanList: () => void;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
   togglePastBags: (beanId: number) => void;
 }
-const { renderBeanList, togglePastBags } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { renderBeanCard, togglePastBags } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #1122: the bean card renders a "Past bags" chip (data-action=
 // "toggle-past-bags") but the click dispatcher in main.ts had no case for
@@ -57,21 +57,30 @@ describe('togglePastBags (#1122 bag queue)', () => {
         bags: [
           // consumedG/remainingG/current are backend-computed (SimulateBagQueue)
           // and attached to every tracked bag on load.
-          { id: 1, roastDate: '2026-01-01', stock_g: 250, consumedG: 0, remainingG: 250, current: true },
+          { id: 1, roastDate: '2026-01-01', stock_g: 250, consumedG: 100, remainingG: 150, current: true },
           { id: 2, roastDate: '2019-01-01', stock_g: 250, consumedG: 250, remainingG: 0 },
         ],
       }],
       grinders: [],
     };
 
-    renderBeanList();
+    // The card now renders inside the detail sheet; drive it directly so the
+    // toggle's re-render can be observed.
+    const beans = S.coffeeLibrary.beans;
+    const renderCard = (): void => {
+      elements.beanListUI.innerHTML = renderBeanCard(beans[0], beans);
+    };
+
+    renderCard();
     expect(elements.beanListUI.innerHTML).toContain('data-action="toggle-past-bags"');
     expect(elements.beanListUI.innerHTML).not.toContain('2019-01-01');
 
     togglePastBags(1);
+    renderCard();
     expect(elements.beanListUI.innerHTML).toContain('2019-01-01');
 
     togglePastBags(1);
+    renderCard();
     expect(elements.beanListUI.innerHTML).not.toContain('2019-01-01');
   });
 });

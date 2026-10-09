@@ -14,6 +14,8 @@ import (
 // per-machine-type dispatch.
 
 // Status is an adapter's GetStatus return shape.
+// Standby is true only when the machine itself reports a standby/sleep mode
+// (GaggiMate's evt:status m == 0); Gaggiuino never sets it.
 // TargetTemperature/Weight/SteamOn/ProfileID/ProfileName are pointers
 // because the GaggiMate adapter reports several as null (evt:status has no
 // weight field at all, no profile id, etc. — see gaggimate_adapter.go).
@@ -24,6 +26,8 @@ type Status struct {
 	Pressure          float64         `json:"pressure"`
 	Weight            *float64        `json:"weight"`
 	Brewing           bool            `json:"brewing"`
+	Standby           bool            `json:"standby"`
+	Flushing          bool            `json:"flushing"` // GaggiMate utility process (a==1 && u==1), #1541
 	SteamOn           *bool           `json:"steamOn"`
 	ProfileID         *int            `json:"profileId"`
 	ProfileName       *string         `json:"profileName"`
@@ -80,6 +84,7 @@ type Capabilities struct {
 	History              bool  `json:"history"`
 	NativeMaintenanceLog bool  `json:"nativeMaintenanceLog,omitempty"`
 	SettingsProxy        bool  `json:"settingsProxy,omitempty"`
+	MachineControl       bool  `json:"machineControl,omitempty"` // GaggiMate firmware v1.9.0+ flush/brew-confirm control, #1324
 }
 
 // Adapter is the documented per-machine-type contract, extended with the

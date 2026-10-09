@@ -298,3 +298,87 @@ func TestCheckAndApplyMachinePower_SyncsAfterPowerOn(t *testing.T) {
 		t.Fatalf("sync fired %d times, want exactly 1 (only the off->on transition)", c.count())
 	}
 }
+
+// TestSyncAfterShotSaved_FiresImmediately covers #1409's trigger: a saved-shot
+// event pulls the default machine right away (no delay), and a poller without
+// a shots repo is a safe no-op.
+func TestSyncAfterShotSaved_FiresImmediately(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	p.SetShotsRepo(shots.NewRepository(sqlDB))
+	var c syncCounter
+	p.syncFn = c.fn
+
+	p.SyncAfterShotSaved()
+	waitFor(t, 100*time.Millisecond, func() bool { return c.count() == 1 })
+
+	// A poller with no shots repo wired must not panic or sync.
+	p2, _ := newTestPoller(t, fake)
+	var c2 syncCounter
+	p2.syncFn = c2.fn
+	p2.SyncAfterShotSaved()
+	time.Sleep(30 * time.Millisecond)
+	if c2.count() != 0 {
+		t.Fatalf("SyncAfterShotSaved synced %d times without a shots repo, want 0", c2.count())
+	}
+}
+
+// TestSyncDefaultMachineShots_CoalescesOverlappingTrigger covers #1409's
+// merge rule: a trigger that lands while a default sync is running sets the
+// rerun flag and returns immediately, and the in-flight run does exactly one
+// more pass afterwards instead of dropping the trigger.
+func TestSyncDefaultMachineShots_CoalescesOverlappingTrigger(t *testing.T) {
+	sqlDB := newTestDB(t)
+	registry := machines.NewRegistry(sqlDB)
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	name, typ, host := "GaggiMate", "gaggimate", "gaggimate.test"
+	gm, err := registry.CreateMachine(machines.MachineInput{Name: &name, Type: &typ, Host: &host})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if _, err := registry.SetDefaultMachine(gm.ID); err != nil {
+		t.Fatalf("SetDefaultMachine(%d): %v", gm.ID, err)
+	}
+
+	p := NewPoller(registry, fakeAdapterProvider{adapter: &fakeAdapter{}}, newHubForTest(), newDisabledHAClient())
+	p.SetShotsRepo(shots.NewRepository(sqlDB))
+
+	withGaggiMateSyncSeams(t, 0, func(context.Context, string, int64) (map[string]any, int, error) {
+		return nil, 0, nil
+	})
+
+	var indexCalls atomic.Int32
+	release := make(chan struct{})
+	syncFetchGaggiMateIndex = func(context.Context, string) (int64, error) {
+		if indexCalls.Add(1) == 1 {
+			<-release
+		}
+		return 0, nil
+	}
+
+	ctx := context.Background()
+	go p.syncDefaultMachineShots(ctx)
+	waitFor(t, time.Second, func() bool { return indexCalls.Load() == 1 })
+
+	// A second trigger while the first run is in flight is merged, not queued as
+	// a second concurrent run, and returns at once.
+	if err := p.syncDefaultMachineShots(ctx); err != nil {
+		t.Fatalf("overlapping syncDefaultMachineShots returned %v, want nil", err)
+	}
+
+	close(release)
+	waitFor(t, time.Second, func() bool { return indexCalls.Load() == 2 })
+	time.Sleep(30 * time.Millisecond)
+	if n := indexCalls.Load(); n != 2 {
+		t.Fatalf("history index fetched %d times, want exactly 2 (one follow-up pass)", n)
+	}
+
+	p.state.mu.Lock()
+	inflight := p.state.defaultSyncInFlight
+	p.state.mu.Unlock()
+	if inflight {
+		t.Fatal("defaultSyncInFlight still true after the follow-up pass finished")
+	}
+}

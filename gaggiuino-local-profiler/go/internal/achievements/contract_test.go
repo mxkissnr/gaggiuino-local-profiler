@@ -13,10 +13,11 @@ import (
 // file pins the invariants that hold for every response regardless of DB
 // state.
 
-// TestContract_AchievementsResponseShape: { cards: [7 keys], badges: [54] },
+// TestContract_AchievementsResponseShape: { cards: [8 keys], badges: [63] },
 // every badge carries id/card/secret/unlocked, every badge's card is one of
-// the seven CARD_KEYS, and exactly 6 badges are secret (48 open + 6 secret,
-// the "stamp card" the frontend renders).
+// the eight CARD_KEYS (every non-secret card holds exactly 8), and exactly 7
+// badges are secret (56 open + 7 secret, the "stamp card" the frontend
+// renders).
 func TestContract_AchievementsResponseShape(t *testing.T) {
 	env := newTestEnv(t)
 	body := env.get(t, "en")
@@ -34,11 +35,12 @@ func TestContract_AchievementsResponseShape(t *testing.T) {
 	}
 
 	badges, _ := body["badges"].([]any)
-	if len(badges) != 54 {
-		t.Fatalf("badge count = %d, want 54 (48 open + 6 secret)", len(badges))
+	if len(badges) != 63 {
+		t.Fatalf("badge count = %d, want 63 (56 open + 7 secret)", len(badges))
 	}
 
 	seen := map[string]bool{}
+	perCard := map[string]int{}
 	secrets := 0
 	for i, raw := range badges {
 		b, _ := raw.(map[string]any)
@@ -56,6 +58,7 @@ func TestContract_AchievementsResponseShape(t *testing.T) {
 		if !cardSet[card] {
 			t.Errorf("badge %q card = %q, not one of %v", id, card, cardKeys)
 		}
+		perCard[card]++
 		if _, ok := b["unlocked"].(bool); !ok {
 			t.Errorf("badge %q unlocked = %#v, want a bool", id, b["unlocked"])
 		}
@@ -80,8 +83,16 @@ func TestContract_AchievementsResponseShape(t *testing.T) {
 			}
 		}
 	}
-	if secrets != 6 {
-		t.Errorf("secret badge count = %d, want 6", secrets)
+	if secrets != 7 {
+		t.Errorf("secret badge count = %d, want 7", secrets)
+	}
+	for _, key := range cardKeys {
+		if key == "secret" {
+			continue
+		}
+		if perCard[key] != 8 {
+			t.Errorf("card %q has %d badges, want 8", key, perCard[key])
+		}
 	}
 }
 

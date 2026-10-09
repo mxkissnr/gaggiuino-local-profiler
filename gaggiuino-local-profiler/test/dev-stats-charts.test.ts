@@ -5,7 +5,7 @@ import {
     modelBreakdownData,
     modelDisplayLabel,
     modelVendor,
-} from '../scripts/dev-stats.mjs';
+} from '../scripts/dev-stats.mts';
 
 // #1210: the dev-stats charts lost their fixed width and opaque dark
 // background, gained a light/dark pair switched with <picture>, and now colour

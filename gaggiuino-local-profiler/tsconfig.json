@@ -14,5 +14,6 @@
     "erasableSyntaxOnly": true,
     "skipLibCheck": true
   },
-  "include": ["public-src/**/*.ts", "test/**/*.ts", "*.config.ts"]
+  "include": ["public-src/**/*.ts", "test/**/*.ts", "*.config.ts", "eslint.config.mts", "eslint-rules/**/*.mts", "scripts/**/*.mts", "test/**/*.mts"],
+  "exclude": ["public-src/sw.ts"]
 }

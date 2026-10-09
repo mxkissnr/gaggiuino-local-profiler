@@ -24,6 +24,27 @@
 // instead of Vite's separate vendor-chartjs chunk; total first-load bytes
 // are unaffected, just in one request instead of two.
 //
+// The sticker cut-out worker
+// (public-src/components/sticker/segment.worker.ts) is built as its own entry
+// point into assets/ (#1354): the page bundle creates it with
+// `new Worker(new URL('./segment.worker.ts', import.meta.url))`, a pattern
+// only Vite rewrites, so esbuild would otherwise keep the raw .ts URL and
+// ship no worker file. The worker's hashed output name is injected into the
+// page bundle as __GLP_SEGMENT_WORKER__ (see segment.ts).
+//
+// The worker's onnxruntime-web runtime is not served from a models directory
+// either (#1404): the two ort-wasm-simd-threaded runtime files are copied into
+// assets/ under content-hashed names and those names injected into the worker
+// bundle as __GLP_ORT_WASM__/__GLP_ORT_MJS__ (see segment-core.ts), so the SPA
+// owns them and internal/webapp can safely serve everything under assets/
+// immutable. Both bundles also receive the pinned model manifest
+// (internal/cutoutmodels) as __GLP_CUTOUT_MODELS__.
+//
+// The app-shell service worker (#1270) is built from public-src/sw.ts to an
+// unhashed sw.js at the output root as a classic script (IIFE, no imports):
+// the page registers 'sw.js' relative to itself and a worker's scope is the
+// directory it is served from, so it cannot use the hashed assets/ names.
+//
 // esbuild resolves the SPA's bare imports (echarts, chart.js/auto,
 // topojson-client) out of node_modules, so the dependency tree is still a
 // prerequisite — but only `npm ci`, never `npm run build`: no Vite bundle is
@@ -38,15 +59,18 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/cutoutmodels"
 )
 
 func main() {
@@ -77,11 +101,81 @@ var pages = []page{
 	{html: "kiosk.html", script: "kiosk.ts"},
 }
 
+// workerSource is the sticker cut-out worker (#1354), relative to -src. It is
+// built as its own entry point because Vite's
+// `new Worker(new URL('./segment.worker.ts', import.meta.url))` rewrite is
+// Vite-specific: esbuild's Go API leaves the .ts URL in the page bundle and
+// ships no worker file.
+const workerSource = "components/sticker/segment.worker.ts"
+
+// swSource is the app-shell service worker (#1270), relative to -src. It is
+// built as its own entry point into an unhashed sw.js at the output root: the
+// page registers it as 'sw.js' and a worker's scope is the directory it is
+// served from, so it cannot live under the hashed assets/ names.
+const swSource = "sw.ts"
+
 // scriptTag is the exact module <script> tag a source page must carry for its
 // own entry point; writePageHTML strips it and injects the built output in
 // its place.
 func scriptTag(script string) string {
 	return fmt.Sprintf(`<script type="module" src="./%s"></script>`, script)
+}
+
+// esbuildEngines is the build target shared by the page bundles and the
+// sticker worker (#1354): Vite 8's implicit "baseline-widely-available"
+// target (chrome111/edge111/firefox114/safari16.4/ios16.4, see Vite's own
+// ESBUILD_BASELINE_WIDELY_AVAILABLE_TARGET). Carried over because esbuild
+// emits no CSS vendor prefixes at all without a target — the JS bundle is
+// byte-identical to an untargeted (esnext) build for this codebase, so this is
+// purely about not silently losing the CSS prefixes the Vite build produced.
+var esbuildEngines = []api.Engine{
+	{Name: api.EngineChrome, Version: "111"},
+	{Name: api.EngineEdge, Version: "111"},
+	{Name: api.EngineFirefox, Version: "114"},
+	{Name: api.EngineSafari, Version: "16.4"},
+	{Name: api.EngineIOS, Version: "16.4"},
+}
+
+// baseBundleOptions returns the esbuild options every bundle this command
+// produces shares — the page entries and the sticker worker (#1354): the
+// frontend root as AbsWorkingDir, the dependency tree, ES-module output to
+// assetsDir with hashed names, the target engines above and minification.
+// Callers add the fields that differ (EntryPoints, Splitting, the page
+// bundle's chunk/asset names and font loader).
+func baseBundleOptions(rootAbs, assetsDir, nodeModulesAbs string) api.BuildOptions {
+	return api.BuildOptions{
+		AbsWorkingDir: rootAbs,
+		// Explicit rather than relying on esbuild's own node_modules walk: in
+		// the image the tree is COPYed in from the deps stage, and this keeps
+		// that location authoritative (and greppable) instead of implicit.
+		NodePaths:         []string{nodeModulesAbs},
+		Bundle:            true,
+		Platform:          api.PlatformBrowser,
+		Format:            api.FormatESModule,
+		Outdir:            assetsDir,
+		Metafile:          true,
+		Write:             true,
+		EntryNames:        "[name]-[hash]",
+		Engines:           esbuildEngines,
+		MinifyWhitespace:  true,
+		MinifyIdentifiers: true,
+		MinifySyntax:      true,
+	}
+}
+
+// buildError turns esbuild's error list into the error run() returns, naming
+// which bundle failed.
+func buildError(what string, errs []api.Message) error {
+	msgs := api.FormatMessages(errs, api.FormatMessagesOptions{Color: false})
+	return fmt.Errorf("esbuild %s failed:\n%s", what, strings.Join(msgs, "\n"))
+}
+
+// logBuildWarnings prints esbuild's warnings for a bundle; both the page and
+// worker builds report them the same way.
+func logBuildWarnings(warnings []api.Message) {
+	for _, w := range api.FormatMessages(warnings, api.FormatMessagesOptions{Color: false}) {
+		log.Printf("esbuild warning: %s", w)
+	}
 }
 
 // run is the whole build: validate every page's inputs, bundle the pages'
@@ -157,55 +251,99 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 		return err
 	}
 
-	result := api.Build(api.BuildOptions{
-		EntryPoints:   entries,
-		AbsWorkingDir: rootAbs,
-		// Explicit rather than relying on esbuild's own node_modules walk: in
-		// the image the tree is COPYed in from the deps stage, and this keeps
-		// that location authoritative (and greppable) instead of implicit.
-		NodePaths:  []string{nodeModulesAbs},
-		Bundle:     true,
-		Splitting:  true,
-		Platform:   api.PlatformBrowser,
-		Format:     api.FormatESModule,
-		Outdir:     assetsDir,
-		Metafile:   true,
-		Write:      true,
-		EntryNames: "[name]-[hash]",
-		ChunkNames: "[name]-[hash]",
-		AssetNames: "[name]-[hash]",
-		// Vite 8's implicit build target ("baseline-widely-available":
-		// chrome111/edge111/firefox114/safari16.4/ios16.4, see Vite's own
-		// ESBUILD_BASELINE_WIDELY_AVAILABLE_TARGET). Carried over because
-		// esbuild emits no CSS vendor prefixes at all without a target —
-		// the JS bundle is byte-identical to an untargeted (esnext) build
-		// for this codebase, so this is purely about not silently losing
-		// the CSS prefixes the Vite build produced.
-		Engines: []api.Engine{
-			{Name: api.EngineChrome, Version: "111"},
-			{Name: api.EngineEdge, Version: "111"},
-			{Name: api.EngineFirefox, Version: "114"},
-			{Name: api.EngineSafari, Version: "16.4"},
-			{Name: api.EngineIOS, Version: "16.4"},
-		},
-		MinifyWhitespace:  true,
-		MinifyIdentifiers: true,
-		MinifySyntax:      true,
-		// style.css's three @font-face url()s are the only imported non-JS
-		// assets; everything else the SPA pulls in is either a fetch()
-		// against a path copied by copyPublicDir or an inline data: URI
-		// esbuild handles without a loader entry.
-		Loader: map[string]api.Loader{
-			".woff2": api.LoaderFile,
-		},
-	})
+	// The worker bundle imports onnxruntime-web, which loads its wasm module
+	// from env.wasm.wasmPaths at run time. Copy the two runtime files next to
+	// the worker under content-hashed names and inject those names below, so the
+	// worker resolves them same-origin from assets/ (#1404). The pair is fixed,
+	// so a missing source is a hard error like the rest of the build.
+	ortDist := filepath.Join(nodeModulesAbs, "onnxruntime-web", "dist")
+	ortNames := make(map[string]string, len(ortRuntimeFiles))
+	for _, f := range ortRuntimeFiles {
+		name, err := copyHashedAsset(filepath.Join(ortDist, f.base+f.ext), assetsDir, f.base, f.ext)
+		if err != nil {
+			return fmt.Errorf("copy onnxruntime %s: %w", f.base+f.ext, err)
+		}
+		ortNames[f.ext] = name
+	}
+
+	// The barcode-detector ponyfill resolves zxing-wasm's reader wasm, so copy
+	// it into assets/ and inject the hashed relative name as __GLP_ZXING_WASM__
+	// into the page bundle's Define below (#1500). A missing source is a hard
+	// error, like the onnxruntime pair.
+	zxingName, err := copyHashedAsset(
+		filepath.Join(nodeModulesAbs, filepath.FromSlash(zxingReaderWasm)),
+		assetsDir, "zxing_reader", ".wasm",
+	)
+	if err != nil {
+		return fmt.Errorf("copy zxing reader wasm: %w", err)
+	}
+
+	modelsDefine, err := cutoutModelsDefine()
+	if err != nil {
+		return fmt.Errorf("render cut-out model manifest: %w", err)
+	}
+
+	// The worker is validated and built first so its hashed output name can be
+	// handed to the page bundles through Define. Splitting is off: the worker
+	// is a single file, and onnxruntime-web is inlined (it loads its own wasm
+	// at runtime from env.wasm.wasmPaths).
+	workerAbs := filepath.Join(srcAbs, workerSource)
+	if _, err := os.Stat(workerAbs); err != nil {
+		return fmt.Errorf("sticker worker source: %w", err)
+	}
+	workerEntry, err := filepath.Rel(rootAbs, workerAbs)
+	if err != nil {
+		return fmt.Errorf("resolve worker entry point relative to %s: %w", rootAbs, err)
+	}
+	workerOpts := baseBundleOptions(rootAbs, assetsDir, nodeModulesAbs)
+	workerOpts.EntryPoints = []string{workerEntry}
+	// segment-core.ts reads these to point onnxruntime-web at the hashed assets
+	// copied above, and to size each model download from the pinned manifest.
+	workerOpts.Define = map[string]string{
+		"__GLP_ORT_WASM__":      strconv.Quote("./" + ortNames[".wasm"]),
+		"__GLP_ORT_MJS__":       strconv.Quote("./" + ortNames[".mjs"]),
+		"__GLP_CUTOUT_MODELS__": modelsDefine,
+	}
+	workerResult := api.Build(workerOpts)
+	if len(workerResult.Errors) > 0 {
+		return buildError("worker build", workerResult.Errors)
+	}
+	logBuildWarnings(workerResult.Warnings)
+	workerMeta, err := parseMetafile(workerResult.Metafile)
+	if err != nil {
+		return fmt.Errorf("parse worker metafile: %w", err)
+	}
+	workerOut, _, ok := workerMeta.entryOutput(rootAbs, workerEntry)
+	if !ok {
+		return fmt.Errorf("metafile has no output for worker entry point %s", workerEntry)
+	}
+
+	opts := baseBundleOptions(rootAbs, assetsDir, nodeModulesAbs)
+	opts.EntryPoints = entries
+	opts.Splitting = true
+	opts.ChunkNames = "[name]-[hash]"
+	opts.AssetNames = "[name]-[hash]"
+	// The page bundle keeps Vite's
+	// `new Worker(new URL('./segment.worker.ts', import.meta.url))` pattern;
+	// esbuild does not rewrite it, so inject the worker's real hashed file
+	// name under the identifier segment.ts reads (#1354).
+	opts.Define = map[string]string{
+		"__GLP_SEGMENT_WORKER__": strconv.Quote("./" + filepath.Base(workerOut)),
+		"__GLP_ZXING_WASM__":     strconv.Quote("./" + zxingName),
+		"__GLP_CUTOUT_MODELS__":  modelsDefine,
+	}
+	// style.css's three @font-face url()s are the only imported non-JS assets;
+	// everything else the SPA pulls in is either a fetch() against a path
+	// copied by copyPublicDir or an inline data: URI esbuild handles without a
+	// loader entry.
+	opts.Loader = map[string]api.Loader{
+		".woff2": api.LoaderFile,
+	}
+	result := api.Build(opts)
 	if len(result.Errors) > 0 {
-		msgs := api.FormatMessages(result.Errors, api.FormatMessagesOptions{Color: false})
-		return fmt.Errorf("esbuild build failed:\n%s", strings.Join(msgs, "\n"))
+		return buildError("build", result.Errors)
 	}
-	for _, w := range api.FormatMessages(result.Warnings, api.FormatMessagesOptions{Color: false}) {
-		log.Printf("esbuild warning: %s", w)
-	}
+	logBuildWarnings(result.Warnings)
 
 	meta, err := parseMetafile(result.Metafile)
 	if err != nil {
@@ -215,6 +353,25 @@ func run(srcDir, outDir, nodeModulesFlag string) error {
 	if err := copyPublicDir(filepath.Join(srcAbs, "public"), outAbs); err != nil {
 		return fmt.Errorf("copy public assets: %w", err)
 	}
+
+	// The app-shell service worker (#1270) is bundled separately into an
+	// unhashed sw.js at the output root. Format IIFE keeps it a classic script
+	// (it imports nothing) and Outfile pins the name main.ts registers as
+	// 'sw.js'.
+	swAbs := filepath.Join(srcAbs, swSource)
+	if _, err := os.Stat(swAbs); err != nil {
+		return fmt.Errorf("service worker source: %w", err)
+	}
+	swResult := api.Build(api.BuildOptions{
+		AbsWorkingDir: rootAbs, EntryPoints: []string{swAbs}, Bundle: true,
+		Platform: api.PlatformBrowser, Format: api.FormatIIFE,
+		Outfile: filepath.Join(outAbs, "sw.js"), Write: true, Engines: esbuildEngines,
+		MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true,
+	})
+	if len(swResult.Errors) > 0 {
+		return buildError("service worker build", swResult.Errors)
+	}
+	logBuildWarnings(swResult.Warnings)
 
 	for _, src := range sources {
 		if err := writePageHTML(string(src.srcHTML), src.html, scriptTag(src.script), outAbs, meta, rootAbs, src.entry); err != nil {
@@ -361,8 +518,8 @@ func relFromOutDir(base, outDir, p string) (string, error) {
 }
 
 // copyPublicDir copies Vite's former "public dir" convention verbatim into
-// outDir: static files (manifest.json, sw.js, icon.png,
-// countries-110m.json) that are referenced by relative URL/fetch rather than
+// outDir: static files (manifest.json, icon.png, countries-110m.json) that
+// are referenced by relative URL/fetch rather than
 // imported, and so must ship unbundled at the same top-level path. os.CopyFS
 // recurses, so a nested file under public-src/public/ keeps its relative
 // path instead of being silently skipped; the caller has already removed and
@@ -375,6 +532,68 @@ func copyPublicDir(publicDir, outDir string) error {
 		return err
 	}
 	return os.CopyFS(outDir, os.DirFS(publicDir))
+}
+
+// ortRuntimeFile names one of the onnxruntime-web 1.30 runtime files the worker
+// needs beside it, by its extension-free base and extension.
+type ortRuntimeFile struct {
+	base string
+	ext  string
+}
+
+// ortRuntimeFiles is the fixed pair of onnxruntime-web runtime files the worker
+// bundle imports at run time (#1404): the wasm module and its JS loader. They
+// ship from node_modules/onnxruntime-web/dist and are copied into assets/ under
+// content-hashed names, so the SPA owns them same-origin and internal/webapp
+// can serve all of assets/ immutable.
+var ortRuntimeFiles = []ortRuntimeFile{
+	{base: "ort-wasm-simd-threaded", ext: ".wasm"},
+	{base: "ort-wasm-simd-threaded", ext: ".mjs"},
+}
+
+// zxingReaderWasm is the barcode-detector ponyfill's (zxing-wasm) reader wasm,
+// relative to node_modules (#1500). The page bundle's dynamic
+// `import('barcode-detector/ponyfill')` loads it at run time; copying it into
+// assets/ and injecting the hashed name as __GLP_ZXING_WASM__ keeps it
+// same-origin instead of the jsDelivr CDN default, which the CSP's
+// connect-src 'self' blocks. Same relative-URL reasoning as the onnxruntime
+// pair above (works under HA Ingress).
+const zxingReaderWasm = "zxing-wasm/dist/reader/zxing_reader.wasm"
+
+// copyHashedAsset copies one source file into assetsDir as
+// base-<first 8 hex of sha256><ext> and returns the written file name. The name
+// is content-derived, which is what makes everything under assets/ safe to
+// serve with a year-long immutable Cache-Control (internal/webapp).
+func copyHashedAsset(src, assetsDir, base, ext string) (string, error) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	name := fmt.Sprintf("%s-%x%s", base, sum[:4], ext)
+	if err := os.WriteFile(filepath.Join(assetsDir, name), data, 0o644); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+// cutoutModelsDefine renders the pinned model manifest (internal/cutoutmodels)
+// as the JSON object both bundles read through __GLP_CUTOUT_MODELS__: the
+// release version plus a name->bytes size map. Later slices use the sizes to
+// size a download-on-first-use fetch before the response reports a length.
+func cutoutModelsDefine() (string, error) {
+	sizes := make(map[string]int64, len(cutoutmodels.Files))
+	for _, f := range cutoutmodels.Files {
+		sizes[f.Name] = f.Size
+	}
+	raw, err := json.Marshal(struct {
+		Version string           `json:"version"`
+		Sizes   map[string]int64 `json:"sizes"`
+	}{Version: cutoutmodels.Version, Sizes: sizes})
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 // writePageHTML mirrors what Vite's HTML plugin does to a source page: strip

@@ -39,7 +39,8 @@ FROM --platform=$BUILDPLATFORM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0d
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts: no package lifecycle script runs during the image build.
+RUN npm ci --ignore-scripts
 
 # ── Go builder ────────────────────────────────────────────────────────────
 # Digest-pinned (#1063, Scorecard pinned-dependencies) like the alpine
@@ -57,7 +58,7 @@ RUN npm ci
 # downloading the newer toolchain itself — ubuntu-latest GitHub-hosted
 # runners have network access, so that degrades to a slower build rather
 # than failing.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -95,7 +96,8 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
 # tool to keep the same chown-/data-then-run-unprivileged entrypoint
 # pattern the old Node image used (#271). Alpine also gives HEALTHCHECK a
 # plain `wget`, and ships a CA bundle for the outbound HTTPS calls to Open
-# Food Facts (barcode scan) and GitHub (update check).
+# Food Facts (barcode scan) and GitHub (update check, plus the first-use
+# cut-out model download, see go/internal/cutoutmodels).
 # Digest-pinned like the node:24-slim stage above — this is the image that
 # actually ships, so a moved upstream tag must not change it silently.
 # Renovate's dockerfile manager keeps the digest current.
@@ -116,6 +118,13 @@ ENV GLP_DEV_BUILD=${GLP_DEV_BUILD}
 # pulling the ~190 MB warm RSS back toward the old Node image's ~90 MB.
 ENV GOMEMLIMIT=160MiB
 
+# internal/webapp serves the on-device cut-out models same-origin from here,
+# downloading each pinned file from its GitHub release on first use (see
+# go/internal/cutoutmodels). The versioned subdirectory is created on demand,
+# so a mount over /data persists the models across upgrades. Empty would
+# disable the route (every request 404s).
+ENV GLP_MODELS_DIR=/data/cutout-models
+
 # /data is created (not just relied on as a bind-mount point) so the image
 # also runs standalone without an explicit `-v` — matching the HA add-on's
 # real usage, where Supervisor always provides the mount, but keeping local
@@ -128,6 +137,7 @@ RUN apk add --no-cache wget ca-certificates su-exec \
     && chown glp:glp /data
 
 COPY --from=builder /out/glp-server /usr/local/bin/glp-server
+COPY THIRD_PARTY_NOTICES.md /usr/share/glp/THIRD_PARTY_NOTICES.md
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

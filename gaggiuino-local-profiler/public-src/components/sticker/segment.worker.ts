@@ -1,0 +1,78 @@
+/**
+ * Module Web Worker for the sticker cut-out (#1347).
+ *
+ * The onnxruntime-web models run here, off the main thread, so IS-Net and the
+ * SAM encoder can no longer freeze the page while they run. The worker owns the
+ * wasm heap, so terminating it when the editor closes is what gives the memory
+ * back to the browser.
+ */
+
+import { autoCutout, tapMask, resetCutout, type CutoutProgress } from './segment-core.js';
+
+interface AutoRequest {
+  id: number;
+  type: 'auto';
+  rgba: Uint8ClampedArray;
+  w: number;
+  h: number;
+  modelsBase: string;
+}
+
+interface TapRequest {
+  id: number;
+  type: 'tap';
+  x: number;
+  y: number;
+  label: 0 | 1;
+  w: number;
+  h: number;
+}
+
+interface ResetRequest {
+  type: 'reset';
+}
+
+type Request = AutoRequest | TapRequest | ResetRequest;
+
+/**
+ * The slice of DedicatedWorkerGlobalScope this module uses. tsconfig only pulls
+ * in the DOM lib, which does not declare DedicatedWorkerGlobalScope (that is in
+ * the WebWorker lib), so the shape is declared locally rather than referencing
+ * the lib and having its globals collide with DOM.
+ */
+interface WorkerScope {
+  onmessage: ((event: MessageEvent) => void) | null;
+  postMessage(message: unknown, transfer: Transferable[]): void;
+  postMessage(message: unknown): void;
+}
+
+const ctx = self as unknown as WorkerScope;
+
+function reply(id: number, mask: Uint8Array): void {
+  ctx.postMessage({ id, mask }, [mask.buffer as ArrayBuffer]);
+}
+
+async function handle(msg: AutoRequest | TapRequest): Promise<void> {
+  try {
+    if (msg.type === 'auto') {
+      const onProgress = (progress: CutoutProgress): void => {
+        ctx.postMessage({ id: msg.id, progress });
+      };
+      reply(msg.id, await autoCutout(msg.rgba, msg.w, msg.h, msg.modelsBase, onProgress));
+    } else {
+      reply(msg.id, await tapMask(msg.x, msg.y, msg.label, msg.w, msg.h));
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'segment: worker request failed';
+    ctx.postMessage({ id: msg.id, error: message });
+  }
+}
+
+ctx.onmessage = (event: MessageEvent<Request>): void => {
+  const msg = event.data;
+  if (msg.type === 'reset') {
+    resetCutout();
+    return;
+  }
+  void handle(msg);
+};

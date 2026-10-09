@@ -24,7 +24,7 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.window ??= globalThis;
 g.document ??= { documentElement: {}, getElementById: () => undefined };
 
-const { etaText, isEinkMode } = await import('../public-src/kiosk-helpers.js');
+const { etaText, isEinkMode, toggleVariantSelection, variantOrderField } = await import('../public-src/kiosk-helpers.js');
 const { t } = await import('../public-src/i18n.js');
 const { resolveAccentInk } = await import('../public-src/components/machines-settings.js');
 
@@ -110,5 +110,34 @@ describe('kiosk light-theme accent ink', () => {
     if (ink === undefined) throw new Error('--accent-ink not declared in the kiosk light-theme block');
     expect(ink).toBe(resolveAccentInk('amber-americano', '#f59e0b', true));
     expect(ink).toBe('#905c06');
+  });
+});
+
+// #1542: the kiosk used to send the chosen variants as a `variants` array, but
+// the server reads only the single `variant` string, so every order arrived
+// variant-less and completing it booked neither the milk nor the bean. These
+// cover the pure helpers that now back the chips and the POST /api/orders body.
+describe('kiosk single variant selection (#1542)', () => {
+  it('keeps only the most recently tapped variant selected', () => {
+    const afterOat = toggleVariantSelection([], 'Oat');
+    expect(afterOat).toEqual(['Oat']);
+    expect(toggleVariantSelection(afterOat, 'Soy')).toEqual(['Soy']);
+  });
+
+  it('clears the selection when the selected chip is tapped again', () => {
+    expect(toggleVariantSelection(['Soy'], 'Soy')).toEqual([]);
+  });
+
+  it('builds a body with the chosen variant as a string and no variants array', () => {
+    const body = variantOrderField(['Oat']);
+    expect(body).toEqual({ variant: 'Oat' });
+    expect(JSON.stringify(body)).toBe('{"variant":"Oat"}');
+    expect(body).not.toHaveProperty('variants');
+  });
+
+  it('adds no variant field when the guest picked none', () => {
+    const body = variantOrderField([]);
+    expect(body).toEqual({});
+    expect(body).not.toHaveProperty('variant');
   });
 });

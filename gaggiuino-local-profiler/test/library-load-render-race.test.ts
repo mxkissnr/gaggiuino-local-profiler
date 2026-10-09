@@ -12,8 +12,9 @@ g.navigator ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   loadLibrary: () => Promise<void>;
+  renderBeanCard: (b: unknown, beans: unknown[]) => string;
 }
-const { loadLibrary } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
+const { loadLibrary, renderBeanCard } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
 // #526: loadLibrary()'s fetch is fired unawaited from main.js's init
 // sequence and races switchMode('library') (mode.js), which renders the
@@ -51,6 +52,7 @@ const bean = {
   id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun',
   origin: 'ET', variety: 'Heirloom', process: 'Washed', roastType: 'filter',
   flavors: ['Jasmin', 'Zitrone', 'Bergamotte', 'Schwarzer Tee'],
+  bags: [{ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true }],
 };
 
 describe('loadLibrary (#526 render race)', () => {
@@ -68,8 +70,12 @@ describe('loadLibrary (#526 render race)', () => {
 
     g.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ beans: [bean], grinders: [] }) });
     await loadLibrary();
-
-    expect(beanListUI.innerHTML).toContain('data-action="open-flavor-wheel"');
+    // One-shelf layout (#1330): the bean renders as a tile that opens the
+    // detail sheet, where the flavor-wheel action now lives. A rendered tile
+    // proves the fetch re-rendered the list (#526); the card is rendered
+    // directly to pin that the action is still reachable.
+    expect(beanListUI.innerHTML).toContain('data-action="open-bean-sheet"');
+    expect(renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans)).toContain('data-action="open-flavor-wheel"');
   });
 
   it('is a harmless no-op re-render when the Library view is not the current DOM (elements absent)', async () => {

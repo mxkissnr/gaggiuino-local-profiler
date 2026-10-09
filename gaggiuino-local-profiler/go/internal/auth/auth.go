@@ -150,6 +150,11 @@ func writeTokenFile(path, content string) error {
 // the CSP. frame-ancestors 'self' is added as defense-in-depth alongside the
 // header fix above — belt-and-braces, not required, since X-Frame-Options
 // already governs when frame-ancestors is absent.
+//
+// script-src also carries 'wasm-unsafe-eval': the on-device photo cut-out
+// compiles onnxruntime-web as WebAssembly, which that source permits on its
+// own while still forbidding the general 'unsafe-eval' the bundle does not
+// need.
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -159,11 +164,14 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		h.Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self'; "+
+				"script-src 'self' 'wasm-unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"font-src 'self' data:; "+
 				"img-src 'self' data: blob:; "+
 				"connect-src 'self'; "+
+				"base-uri 'none'; "+
+				"object-src 'none'; "+
+				"form-action 'self'; "+
 				"frame-ancestors 'self';")
 		next.ServeHTTP(w, r)
 	})
@@ -241,6 +249,106 @@ func RequireToken(token string) func(http.Handler) http.Handler {
 				return
 			}
 			writeJSONError(w, http.StatusUnauthorized, "Unauthorized")
+		})
+	}
+}
+
+// allowedHostSuffixes are the private-LAN domain suffixes the app answers for.
+// Each is matched with its leading dot, so a host must end in exactly that
+// suffix: "homeassistant.fritz.box" matches, "fritz.box.example.com" does not.
+// None of these can be controlled by an attacker in public DNS, so allowing
+// them does not reintroduce the DNS-rebinding hole this package guards against.
+var allowedHostSuffixes = []string{
+	".local",
+	".lan",
+	".home",
+	".home.arpa",
+	".internal",
+	".localdomain",
+	".fritz.box",
+}
+
+// HostAllowed reports whether host — a request Host header value, which may
+// carry a port and IPv6 brackets — names a host the app should answer for.
+// It strips the port, lower-cases, trims a trailing dot and any IPv6
+// brackets, then accepts an IP literal, "localhost", a single label with no
+// dot (the Supervisor-internal app hostname an add-on is reached by), a name
+// ending in one of the allowedHostSuffixes private-LAN suffixes, or an exact
+// (case-insensitive) match against extra. An empty host is not allowed.
+func HostAllowed(host string, extra []string) bool {
+	name := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		name = h
+	}
+	name = strings.ToLower(name)
+	name = strings.TrimSuffix(name, ".")
+	name = strings.Trim(name, "[]")
+	if name == "" {
+		return false
+	}
+	if net.ParseIP(name) != nil || name == "localhost" {
+		return true
+	}
+	if !strings.Contains(name, ".") {
+		return true
+	}
+	for _, suffix := range allowedHostSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	for _, e := range extra {
+		if strings.EqualFold(name, e) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseAllowedHosts splits a comma- or whitespace-separated list of host
+// names (the allowed_hosts add-on option or GLP_ALLOWED_HOSTS) into cleaned
+// entries: trimmed, lower-cased, port-stripped, with empties dropped.
+func ParseAllowedHosts(s string) []string {
+	fields := strings.Fields(strings.ReplaceAll(s, ",", " "))
+	var out []string
+	for _, f := range fields {
+		name := f
+		if h, _, err := net.SplitHostPort(f); err == nil {
+			name = h
+		}
+		name = strings.ToLower(name)
+		name = strings.TrimSuffix(name, ".")
+		name = strings.Trim(name, "[]")
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// RequireKnownHost returns the DNS-rebinding-protection middleware: when the
+// request Host header is not a known host name (HostAllowed — an IP literal,
+// "localhost", a local network name such as ".local", ".lan" or ".fritz.box",
+// or an entry in extra) the request is refused with 421 before any handler
+// runs, so a name the app does not expect cannot reach even the public
+// GET /api/token. Home Assistant Ingress requests (IsIngressRequest) always
+// pass — their Host is the HA host, which the app has no way to enumerate.
+// There is deliberately no Origin check: the bearer token is never attached
+// by the browser on its own, and the Order Card's direct-URL mode posts
+// cross-origin legitimately. It runs behind SecurityHeaders and ahead of the
+// rate limiter — see cmd/server's middleware chain.
+func RequireKnownHost(extra []string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if IsIngressRequest(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if !HostAllowed(r.Host, extra) {
+				writeJSONError(w, http.StatusMisdirectedRequest, "host not allowed; add it to the allowed_hosts setting")
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

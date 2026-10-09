@@ -18,7 +18,15 @@ I will acknowledge your report within **7 days** and aim to release a fix within
 
 ## Scope
 
-This app runs locally on your Home Assistant instance and communicates only with your Gaggiuino machine on the local network. The primary attack surface is:
+This app runs locally on your Home Assistant instance. It talks to:
+
+- your Gaggiuino and GaggiMate machines on the local network
+- GitHub: the check for new app and Gaggiuino firmware releases, and the one-time download of the sticker cut-out models
+- roaster shop pages, when you import a bean from a URL
+- OpenStreetMap Nominatim, to place a bean's origin on the map
+- clients of its own optional MCP endpoint, which is off by default and token-protected
+
+The primary attack surface is:
 
 - The HTTP API (token-protected endpoints)
 - The HA ingress proxy

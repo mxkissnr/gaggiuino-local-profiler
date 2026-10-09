@@ -9,11 +9,40 @@ body:
   - type: input
     id: version
     attributes:
-      label: Add-on version
-      description: Visible in Home Assistant → Settings → Add-ons → Gaggiuino Local Profiler
-      placeholder: "e.g. 1.62.0"
+      label: App version
+      description: Home Assistant → Settings → Apps → Gaggiuino Local Profiler (or the version shown at the bottom of the app's sidebar)
+      placeholder: "e.g. 3.3.0"
     validations:
       required: true
+
+  - type: dropdown
+    id: firmware
+    attributes:
+      label: Machine firmware
+      options:
+        - Gaggiuino
+        - GaggiMate
+        - Both
+        - Not relevant
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install type
+      options:
+        - Home Assistant app
+        - Home Assistant dev app
+        - Standalone Docker
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "e.g. 2026.10.0"
 
   - type: textarea
     id: description
@@ -38,5 +67,5 @@ body:
     id: logs
     attributes:
       label: Relevant logs
-      description: "Paste any relevant output from HA logs (Settings → System → Logs) or the browser console."
+      description: "The app's own log (Home Assistant → Settings → Apps → Gaggiuino Local Profiler → Log), Home Assistant's log, or the browser console."
       render: text

@@ -11,7 +11,7 @@ import (
 )
 
 // The single read snapshot every badge check() runs against, built once
-// per evaluation pass so evaluating 54 badges costs one pass over each
+// per evaluation pass so evaluating 63 badges costs one pass over each
 // table, not 54.
 //
 // Per-install, not per-machine (see registry.go's header) — every

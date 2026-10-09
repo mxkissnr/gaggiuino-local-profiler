@@ -246,20 +246,36 @@ func (p *Poller) syncDefaultMachineShots(ctx context.Context) error {
 		return nil
 	}
 
-	// #773: one sync at a time.
+	// #773: one sync at a time. A trigger that arrives mid-run is merged into
+	// one follow-up pass (#1409) instead of being dropped.
 	p.state.mu.Lock()
 	if p.state.defaultSyncInFlight {
+		p.state.defaultSyncRerun = true
 		p.state.mu.Unlock()
 		return nil
 	}
 	p.state.defaultSyncInFlight = true
 	p.state.mu.Unlock()
-	defer func() {
+
+	for {
+		lastErr := p.syncDefaultMachineShotsOnce(ctx)
 		p.state.mu.Lock()
+		rerun := p.state.defaultSyncRerun
+		p.state.defaultSyncRerun = false
+		if rerun && ctx.Err() == nil {
+			p.state.mu.Unlock()
+			continue
+		}
 		p.state.defaultSyncInFlight = false
 		p.state.mu.Unlock()
-	}()
+		return lastErr
+	}
+}
 
+// syncDefaultMachineShotsOnce is the single-pass body of
+// syncDefaultMachineShots: resolve the default machine and pull its history.
+// The caller holds the defaultSyncInFlight guard.
+func (p *Poller) syncDefaultMachineShotsOnce(ctx context.Context) error {
 	machine, err := p.registry.GetDefaultMachine()
 	if err != nil || machine == nil {
 		return err

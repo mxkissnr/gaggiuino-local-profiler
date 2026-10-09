@@ -19,7 +19,7 @@ const WRITE_MESSAGE = 'glp-demo-write';
 const NOT_SAVED_MS = 3000;
 const README_URL = 'https://github.com/mxkissnr/gaggiuino-local-profiler#readme';
 const FIXED_PANES = ['main', 'sidebar'];
-// Values-must-match contract with the service worker (demo/sw/demo-sw.js):
+// Values-must-match contract with the service worker (demo/sw/demo-sw.ts):
 // posting this asks it to replay the newest recorded shot as a live brew.
 const SIMULATE_MESSAGE = { type: 'glp-demo-simulate' };
 

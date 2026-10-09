@@ -30,14 +30,22 @@ export const BELL_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 2
 
 // #419 follow-up: same reuse-a-shared-icon pattern for the remaining
 // i18n-embedded decorative glyphs found outside the original #417 sweep
-// (bean_age_at_shot, lib_scan_barcode, lib_url_import, lib_import_settings_btn,
-// settings_machine_experimental_badge).
+// (bean_age_at_shot, lib_scan_barcode, lib_url_import, lib_import_settings_btn).
 
 export const BEAN_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z"/><path d="M8.5 15c2-1 3-3 3-6"/></svg>`;
 
+// #1328: moved here from views/orders.ts (single-use there until the
+// library and annotation milk pickers also needed an icon for a milk
+// whose user-chosen emoji is empty).
+export const MILK_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 4v13a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7z"/><path d="M9 3 12 6 15 3"/><path d="M8 10h8"/></svg>`;
+
 export const BARCODE_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg>`;
 
-export const GEAR_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/></svg>`;
+export const GEAR_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M11.05 5.27L10.54 1.6A10.5 10.5 0 0 1 13.46 1.6L12.95 5.27A6.8 6.8 0 0 1 16.09 6.57L18.32 3.61A10.5 10.5 0 0 1 20.39 5.68L17.43 7.91A6.8 6.8 0 0 1 18.73 11.05L22.4 10.54A10.5 10.5 0 0 1 22.4 13.46L18.73 12.95A6.8 6.8 0 0 1 17.43 16.09L20.39 18.32A10.5 10.5 0 0 1 18.32 20.39L16.09 17.43A6.8 6.8 0 0 1 12.95 18.73L13.46 22.4A10.5 10.5 0 0 1 10.54 22.4L11.05 18.73A6.8 6.8 0 0 1 7.91 17.43L5.68 20.39A10.5 10.5 0 0 1 3.61 18.32L6.57 16.09A6.8 6.8 0 0 1 5.27 12.95L1.6 13.46A10.5 10.5 0 0 1 1.6 10.54L5.27 11.05A6.8 6.8 0 0 1 6.57 7.91L3.61 5.68A10.5 10.5 0 0 1 5.68 3.61L7.91 6.57A6.8 6.8 0 0 1 11.05 5.27Z"/></svg>`;
+
+// #1514: the desktop topbar's fixed Settings button inlines these same paths
+// at the larger .rail-icon size (index.html), since static HTML cannot import
+// this module — so this .sm-sized constant and its existing callers stay as they are.
 
 export const WARNING_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4"/><path d="M12 17v.01"/></svg>`;
 

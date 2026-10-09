@@ -1,0 +1,74 @@
+// App-shell service worker for the installable PWA (v1.112.0).
+//
+// This file is only ever registered by pages served OUTSIDE HA Ingress —
+// the backend only injects the <link rel="manifest"> (which main.ts checks
+// for before calling register()) for non-Ingress requests. The HA Companion
+// App's embedded WebView loads GLP through Ingress and therefore never sees
+// this script run. That's a deliberate structural fix: the previous
+// installable-PWA attempt (v1.102.0) registered its service worker
+// unconditionally and broke the Companion App's live shot graph, most
+// likely because its fetch handler intercepted every request — including
+// the plain `fetch()` polling `/api/system/status` every second for the
+// live view. See CHANGELOG "Reverted the v1.102.0 installable-PWA service
+// worker".
+//
+// Caching strategy: network-first with cache fallback, and ONLY for the
+// app shell (this document + built /assets/ bundles) — never for anything
+// under /api/. Network-first (not cache-first) means app updates always
+// win when the network is reachable; the cache only kicks in offline or on
+// a flaky connection. Chart.js/ECharts/topojson-client/QRCode and both
+// bundled fonts (Figtree, Fraunces) are all same-origin /assets/ output and
+// covered by this caching — no cross-origin request is left uncached.
+//
+// This file is TypeScript (#1270), bundled to sw.js by both frontend builds:
+// go/cmd/frontend-build (the image) and vite.config.ts (`npm run build`). It
+// is deliberately a global script with no import/export, so both bundlers emit
+// a classic script and the unit test can run it in a vm; tsconfig.sw.json
+// types it against the WebWorker lib.
+
+const SHELL_CACHE = 'glp-shell-v1';
+
+const sw = self as unknown as ServiceWorkerGlobalScope;
+
+sw.addEventListener('install', () => { void sw.skipWaiting(); });
+
+sw.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys()
+            .then(keys => Promise.all(keys.filter(k => k !== SHELL_CACHE).map(k => caches.delete(k))))
+            .then(() => sw.clients.claim())
+    );
+});
+
+sw.addEventListener('fetch', (event) => {
+    const { request } = event;
+    if (request.method !== 'GET') return;
+
+    const url = new URL(request.url);
+
+    // Never intercept API calls — this is the single most important line in
+    // this file. The live-shot status poll and every other /api/ call must
+    // always go straight to the network, unmediated.
+    if (url.pathname.startsWith('/api/')) return;
+
+    // onnxruntime-web's runtime is a multi-megabyte .wasm served from
+    // /assets/; caching it would bloat the shell cache for no offline benefit,
+    // so leave it to the network like /api/.
+    if (url.pathname.endsWith('.wasm')) return;
+
+    // Only shell-cache same-origin document navigations and built bundles.
+    const isShellAsset = url.origin === sw.location.origin &&
+        (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html' ||
+         url.pathname.startsWith('/assets/'));
+    if (!isShellAsset) return;
+
+    event.respondWith(
+        fetch(request)
+            .then(res => {
+                const copy = res.clone();
+                void caches.open(SHELL_CACHE).then(c => c.put(request, copy));
+                return res;
+            })
+            .catch(async () => (await caches.match(request)) ?? Response.error())
+    );
+});

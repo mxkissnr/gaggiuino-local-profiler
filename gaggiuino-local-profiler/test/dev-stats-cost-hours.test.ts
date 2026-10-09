@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { monthsSinceStart, clusterIntoSessions } from '../scripts/dev-stats.mjs';
+import { monthsSinceStart, clusterIntoSessions, subscriptionCostSentence } from '../scripts/dev-stats.mts';
 
 // #623: replaced the token/line-based cost estimate (scripts/dev-stats.pricing.json,
 // now deleted) with the real flat-rate Claude Pro subscription cost, and added a
@@ -22,6 +22,23 @@ describe('dev-stats monthsSinceStart (#623)', () => {
 
     it('returns 0 for a missing firstDate', () => {
         expect(monthsSinceStart(undefined, new Date('2026-01-05'))).toBe(0);
+    });
+});
+
+// #1407: the cost sentence named the maintainer personally. It must describe the
+// figure without a personal name and make clear the month count is calendar months
+// touched (May..Oct = 6), not elapsed months.
+describe('dev-stats subscription cost sentence (#1407)', () => {
+    it('names the maintainer, not a person, and counts calendar months touched', () => {
+        const sentence = subscriptionCostSentence(6, '2026-05-20', 120);
+        expect(sentence.startsWith('The maintainer pays a flat')).toBe(true);
+        expect(sentence).not.toMatch(/\bMax\b/);
+        expect(sentence).toContain('Counting every calendar month touched since the first commit (2026-05-20), 6 months');
+        expect(sentence).toContain('**$120.00**');
+    });
+
+    it('singularises a one-month span', () => {
+        expect(subscriptionCostSentence(1, '2026-05-20', 20)).toContain('(2026-05-20), 1 month works out to');
     });
 });
 

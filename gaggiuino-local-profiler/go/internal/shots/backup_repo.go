@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 )
 
@@ -77,6 +78,37 @@ func (r *Repository) ForEachShotForBackup(batch int, fn func(Shot) error) error 
 			return nil
 		}
 	}
+}
+
+// ForEachImageRef streams (shot id, photo extension) for every shot that has
+// a stored photo, trashed shots included. It reads only the id and the
+// `image` field of the JSON blob via json_extract, so unlike FindAll it never
+// hydrates a shot's datapoints — #1525's referenced-image set is built on the
+// backup export's O(1)-memory path. fn is called once per shot that has a
+// non-empty image extension.
+func (r *Repository) ForEachImageRef(fn func(id int64, ext string) error) error {
+	rows, err := r.db.Query(`SELECT id, json_extract(data, '$.image') FROM shots`)
+	if err != nil {
+		return fmt.Errorf("shots: listing image refs: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id  int64
+			ext sql.NullString
+		)
+		if err := rows.Scan(&id, &ext); err != nil {
+			return fmt.Errorf("shots: scanning image ref: %w", err)
+		}
+		if !ext.Valid || ext.String == "" {
+			continue
+		}
+		if err := fn(id, ext.String); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // TrashMap ports the export path's trash id->deleted_at collection without
@@ -189,9 +221,19 @@ func (r *Repository) RestoreShots(in RestoreInput) error {
 		}
 	}
 
+	// A backup's annotations can name a shot it does not bundle (a rating
+	// left behind for a shot that was deleted before the export). The shots
+	// table was just wiped and repopulated from in.Shots, so `restored` is
+	// exactly the set of shots present now: an annotation outside it would
+	// trip annotations' FK to shots and abort the whole restore. Skip it.
+	skippedAnnotations := 0
 	for idStr, m := range in.Annotations {
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
+			continue
+		}
+		if !restored[id] {
+			skippedAnnotations++
 			continue
 		}
 		b, err := json.Marshal(m)
@@ -201,6 +243,9 @@ func (r *Repository) RestoreShots(in RestoreInput) error {
 		if _, err := annStmt.Exec(id, string(b)); err != nil {
 			return fmt.Errorf("shots: restoring annotation %s: %w", idStr, err)
 		}
+	}
+	if skippedAnnotations > 0 {
+		log.Printf("shots: restore skipped %d annotation(s) for shots not in the backup", skippedAnnotations)
 	}
 
 	trashStmt, err := tx.Prepare(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`)

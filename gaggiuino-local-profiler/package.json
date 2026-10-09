@@ -1,23 +1,26 @@
 {
   "name": "gaggiuino-local-profiler-frontend",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "scripts": {
     "build": "vite build",
     "build:demo": "vite build --mode demo",
     "dev": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "node --test --test-force-exit test/e2e/*.test.mjs",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "test:e2e": "node --test --test-force-exit test/e2e/*.test.mts",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "types:api": "openapi-typescript go/internal/system/openapi.yaml -o public-src/api/schema.gen.ts",
-    "release:check": "node scripts/release-check.mjs",
-    "demo:fixtures": "node scripts/demo-fixtures.mjs",
-    "demo:smoke": "node scripts/demo-smoke.mjs"
+    "release:check": "node scripts/release-check.mts",
+    "changelog:collect": "node scripts/changelog-collect.mts",
+    "demo:fixtures": "node scripts/demo-fixtures.mts",
+    "demo:smoke": "node scripts/demo-smoke.mts"
   },
   "dependencies": {
+    "barcode-detector": "3.2.2",
     "chart.js": "4.5.1",
     "echarts": "6.1.0",
+    "onnxruntime-web": "1.30.0",
     "qrcode": "1.5.4",
     "topojson-client": "3.1.0"
   },
@@ -29,9 +32,9 @@
     "openapi-typescript": "7.13.0",
     "playwright": "^1.62.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.70.1",
-    "vite": "8.3.1",
-    "vitest": "5.0.2"
+    "typescript-eslint": "8.71.0",
+    "vite": "8.3.2",
+    "vitest": "5.0.3"
   },
   "overrides": {
     "openapi-typescript": {

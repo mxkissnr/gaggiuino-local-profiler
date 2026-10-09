@@ -278,6 +278,16 @@ func TestAnnotate_HappyPathAndPersists(t *testing.T) {
 	if body["ok"] != true {
 		t.Errorf("expected {ok:true}, got %+v", body)
 	}
+	merged := toMap(body["annotation"])
+	if merged["coffee"] != "Bean" {
+		t.Errorf("expected response annotation.coffee = Bean, got %+v", merged)
+	}
+	if merged["rating"] != float64(5) {
+		t.Errorf("expected response annotation.rating = 5, got %+v", merged)
+	}
+	if _, has := body["score"]; !has {
+		t.Errorf("expected response to carry a score key, got %+v", body)
+	}
 
 	ann, err := s.FindByID(1)
 	if err != nil {
@@ -468,6 +478,18 @@ func TestImage_UploadServeDeleteRoundTrip(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
 		t.Errorf("Content-Type = %q, want image/png", ct)
 	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-cache" {
+		t.Errorf("Cache-Control = %q, want private, no-cache", cc)
+	}
+	if lm := rec.Header().Get("Last-Modified"); lm != "" {
+		req304 := httptest.NewRequest(http.MethodGet, "/api/shots/1/image", nil)
+		req304.Header.Set("If-Modified-Since", lm)
+		rec304 := httptest.NewRecorder()
+		mux.ServeHTTP(rec304, req304)
+		if rec304.Code != http.StatusNotModified {
+			t.Errorf("revalidation status = %d, want 304", rec304.Code)
+		}
+	}
 	if !bytes.Equal(rec.Body.Bytes(), pngMagic) {
 		t.Errorf("served image bytes don't match uploaded bytes")
 	}
@@ -629,5 +651,28 @@ func TestPostImage_RateLimited(t *testing.T) {
 	}
 	if rec := post(); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("request %d: status = %d, want 429", imageRateLimitPerMin, rec.Code)
+	}
+}
+
+// TestDeleteShot_RemovesPhotoAndThumbnail (#1525): permanently deleting a shot
+// removes its photo and thumbnail from disk as well as its rows.
+func TestDeleteShot_RemovesPhotoAndThumbnail(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	insertShot(t, sqlDB, 1, 1000, nil, "Espresso", map[string]any{"image": "jpg"}, nil)
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+		if err := os.WriteFile(filepath.Join(h.imageDir, name), []byte{0x01}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/shots/1/delete", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+		if _, err := os.Stat(filepath.Join(h.imageDir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s should have been removed (err=%v)", name, err)
+		}
 	}
 }

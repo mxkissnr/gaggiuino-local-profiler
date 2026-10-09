@@ -1,6 +1,7 @@
 import { apiFetch } from './fetch.js';
 import { apiFetchToBlob, apiUpload } from './transport.js';
 import type { ApiFetchToBlobResult, ApiUploadResult } from './transport.js';
+import type { UiPrefs } from './types.js';
 
 // Catch-all typed client for the `system` domain (go/internal/system — the
 // routes that package registers outside dedicated feature packages) plus the
@@ -95,6 +96,32 @@ export function getImportSettings(): Promise<Response> {
 /** POST /api/import/settings — save provider toggles / custom domains (a partial body is deliberate). */
 export function saveImportSettings(payload: unknown): Promise<Response> {
   return apiFetch('api/import/settings', _json(payload));
+}
+
+// ── Shared UI preferences (#1375) ────────────────────────────────────────
+
+/**
+ * GET /api/ui-prefs — the per-install UI choices (a flat key/value object).
+ * The response body is the generated `UiPrefs` map (schema.gen.ts).
+ */
+export function getUiPrefs(): Promise<Response> {
+  return apiFetch('api/ui-prefs');
+}
+
+export interface SaveUiPrefsOptions {
+  /** Send with `keepalive` so the browser may finish the PUT while the page unloads. */
+  keepalive?: boolean | undefined;
+}
+
+/** PUT /api/ui-prefs — partial update; a `null` value deletes that key. */
+export function saveUiPrefs(payload: UiPrefs, opts: SaveUiPrefsOptions = {}): Promise<Response> {
+  const init: RequestInit = {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  };
+  if (opts.keepalive) init.keepalive = true;
+  return apiFetch('api/ui-prefs', init);
 }
 
 // ── Demo mode (#274) ─────────────────────────────────────────────────────

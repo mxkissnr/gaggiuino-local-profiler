@@ -137,6 +137,14 @@ components:
         milkType:        { type: integer, nullable: true, description: Barista-order milk type id (orders feature) }
         score:           { type: number, nullable: true, description: Score snapshot read by the live view's reference-shot selector }
 
+    AnnotateResult:
+      type: object
+      required: [ok, annotation, score]
+      properties:
+        ok:         { type: boolean, example: true }
+        annotation: { $ref: '#/components/schemas/Annotation' }
+        score:      { type: integer, nullable: true, description: "Computed 0-100 score after the change; null when the shot has too little data to score" }
+
     Shot:
       type: object
       description: >
@@ -557,6 +565,7 @@ components:
               reachable: { type: boolean, nullable: true, description: "Per-machine reachability (#1201)" }
               lastError: { type: string, nullable: true, description: "Last poll/sync error for this machine (#1201); authenticated callers only (valid X-GLP-Token), like lastMachineError" }
               firmwareVersion: { type: string, nullable: true, description: "Cached firmware version for this machine (#1201)" }
+              firmwareName: { type: string, nullable: true, description: "Machine name set in the machine's firmware, when it reports one (#1454)" }
               on:        { type: boolean, nullable: true }
               theme:     { type: string, nullable: true, description: "#701 accent color, synced from Settings → Machines" }
         # ── authenticated only (H1) ──────────────────────────────────────
@@ -603,6 +612,7 @@ components:
       type: object
       properties:
         ready:       { type: boolean }
+        standby:     { type: boolean, description: "True only when the machine itself reports a standby/sleep mode (GaggiMate m == 0); Gaggiuino never sets it" }
         elapsed:     { type: integer, description: Elapsed seconds }
         remaining:   { type: integer, description: Remaining seconds }
         pct:         { type: number, minimum: 0, maximum: 1 }
@@ -617,7 +627,7 @@ components:
       description: >
         GET /api/live/data and the SSE live-snapshot payload (one shared Go
         builder, so every key below is always present — null where noted).
-      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel]
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable, machineControl]
       properties:
         isLive:      { type: boolean }
         profileName: { type: string }
@@ -673,6 +683,12 @@ components:
         targetTemperature: { type: number, nullable: true, description: "#902 idle stats: current target temperature" }
         pressure: { type: number, nullable: true, description: "#902 idle stats: current pressure" }
         waterLevel: { type: integer, nullable: true, description: "#902 idle stats: current water level" }
+        machineWarnings: { type: array, items: { type: string }, description: "#1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino" }
+        machineUpdateAvailable: { type: boolean, description: "#1409: GaggiMate reports a firmware update; always false for Gaggiuino" }
+        machineControl:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/MachineControlState'
 
     # ── Backup ────────────────────────────────────────────────────────────
 
@@ -979,7 +995,11 @@ components:
       description: >
         GET /api/machine/settings — the machine's own settings object, passed
         through from its GET /api/settings/{category}. Only releaseChannel is
-        read by the app today, so the rest stays an open object.
+        read by the app today, so the rest stays an open object. For the system
+        category the machine's own mqttPassword is redacted to mqttPasswordSet
+        (#1431: never sent to the browser); on a write, mqttPassword is
+        write-only and is restored from the machine's current settings when the
+        payload omits it.
       properties:
         releaseChannel: { type: integer }
       additionalProperties: true
@@ -1023,6 +1043,30 @@ components:
         hasWaterSensor: { type: boolean, description: "Whether the machine reports a water-level sensor" }
         enabled: { type: boolean, description: "Defaults to true when omitted" }
 
+    MachineControlSettings:
+      type: object
+      required: [enabled]
+      description: >
+        GET/POST /api/machine/control/settings body and response — the opt-in
+        machine-control toggle (off by default; deliberately not part of
+        backup/restore, #1324).
+      properties:
+        enabled: { type: boolean, description: "Whether opt-in machine control (flush, brew confirmation) is enabled" }
+
+    MachineControlState:
+      type: object
+      required: [machineId, canFlush, flushing, brewConfirm]
+      description: >
+        GET /api/live/data's machineControl and the SSE live-snapshot's
+        equivalent — the opt-in machine-control snapshot for the default
+        machine (#1324). Null when the machine has no machine control, the
+        opt-in setting is off, or the machine is unreachable.
+      properties:
+        machineId:   { type: integer, description: Owning machine id }
+        canFlush:    { type: boolean, description: "Whether a flush may be started (connected GaggiMate, idle in brew mode)" }
+        flushing:    { type: boolean, description: "Whether a flush is currently running" }
+        brewConfirm: { type: array, nullable: true, items: { type: string }, description: "Warning keys of a pending brew confirmation, in order; null when none is pending" }
+
     # ── MQTT ───────────────────────────────────────────────────────────────
 
     MqttSettings:
@@ -1058,6 +1102,7 @@ components:
         username: { type: string }
         password: { type: string, description: "Write-only: omit to keep the stored password unchanged (#1050); a present value overwrites it unless clearPassword is also set." }
         clearPassword: { type: boolean, description: "Write-only: wipe the stored password regardless of the password field (#1062)." }
+        useDiscoveredPassword: { type: boolean, description: "Write-only: with an empty or absent password, use the password of the broker found through Supervisor discovery." }
         prefix: { type: string }
 
     # ── MCP ────────────────────────────────────────────────────────────────
@@ -1279,7 +1324,9 @@ paths:
         Merges the posted fields into the shot's stored annotation: a key
         omitted from the body keeps its stored value, while a key sent as
         null or "" clears it. The orderedBy attribution is server-owned and
-        cannot be changed here.
+        cannot be changed here. Milk stock and frozen-portion counts follow a
+        drinkType/milkType/frozenPortionId change in the same save: the
+        previous choice is booked back and the new one booked out.
       parameters:
         - name: id
           in: path
@@ -1291,7 +1338,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/Annotation' }
       responses:
-        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/AnnotateResult' } } } }
         "400": { description: Invalid shot ID, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/shots/{id}/trash:
@@ -2777,7 +2824,7 @@ paths:
         - { name: category, in: query, schema: { type: string, enum: [boiler, system, display, scales, led, theme, versions] } }
       responses:
         "200":
-          description: Settings object (shape mirrors the machine's own GET /api/settings/* response)
+          description: Settings object (shape mirrors the machine's own GET /api/settings/* response). The system category redacts mqttPassword to mqttPasswordSet (#1431).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MachineSystemSettings' }
@@ -2934,6 +2981,95 @@ paths:
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
+  # A response description that contains a comma must be quoted inside a flow
+  # mapping, or openapi-typescript reads only the text before the comma (#1324).
+
+  /api/machine/flush/start:
+    post:
+      tags: [MachineControl]
+      summary: Start a flush on a GaggiMate (req:flush:start over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+, only while idle in brew mode
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: "machine is not idle in brew mode, or no connected GaggiMate on firmware v1.9.0+" }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/flush/stop:
+    post:
+      tags: [MachineControl]
+      summary: End a hold-to-flush on a GaggiMate (req:flush:stop over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/brew-confirm/confirm:
+    post:
+      tags: [MachineControl]
+      summary: Accept a pending brew confirmation and start the brew (req:process:activate with ignoreWarnings over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: "no brew confirmation is pending, or no connected GaggiMate on firmware v1.9.0+" }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/brew-confirm/cancel:
+    post:
+      tags: [MachineControl]
+      summary: Decline a pending brew confirmation for every UI (req:brew:confirm:cancel over the persistent WebSocket) — opt-in machine control, firmware v1.9.0+
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { machineId: { type: integer } } }
+      responses:
+        "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        "403": { description: machine control is disabled }
+        "409": { description: no connected GaggiMate on firmware v1.9.0+ }
+        "501": { description: machine type does not support machine control }
+        "502": { description: "Machine unreachable, timed out, or rejected the command" }
+
+  /api/machine/control/settings:
+    get:
+      tags: [MachineControl]
+      summary: Read the opt-in machine-control setting (off by default; deliberately not part of backup/restore)
+      responses:
+        "200":
+          description: "{ enabled }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineControlSettings' }
+    post:
+      tags: [MachineControl]
+      summary: Set the opt-in machine-control setting (off by default; deliberately not part of backup/restore)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineControlSettings' }
+      responses:
+        "200":
+          description: "{ enabled }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineControlSettings' }
+        "400": { description: enabled is missing or not a boolean }
+
   /api/mcp/settings:
     get:
       tags: [Mcp]
@@ -2961,7 +3097,7 @@ paths:
       tags: [Mqtt]
       summary: Supervisor MQTT service auto-discovery (requires services [mqtt:want] in config.yaml)
       responses:
-        "200": { description: "{ available: false } or { available: true, host, port, username, password } from the Supervisor's /services/mqtt" }
+        "200": { description: "{ available: false } or { available: true, host, port, username, hasPassword } from the Supervisor's /services/mqtt" }
 
   /api/mqtt/settings:
     get:
@@ -3177,6 +3313,51 @@ paths:
                   latest:            { type: string, nullable: true }
                   update_available:  { type: boolean }
                   release_url:       { type: string, nullable: true }
+
+  /api/ui-prefs:
+    get:
+      tags: [System]
+      summary: Stored UI preferences (view, filter and sort choices)
+      description: >
+        One flat JSON object of per-install UI choices, kept in the kv store
+        under `ui_prefs`; `{}` when nothing is stored yet.
+      responses:
+        "200":
+          description: Stored preferences object
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: >
+                  At most 64 keys, each matching
+                  `^[a-z][a-zA-Z0-9._-]{0,63}$`. Values are a string (at most
+                  256 characters), a number, a boolean, null, or a flat object
+                  of up to 16 of those scalars (no deeper nesting). The encoded
+                  object is at most 16 KiB.
+    put:
+      tags: [System]
+      summary: Partial-update the stored UI preferences
+      description: >
+        Merges the request body into the stored object; a `null` value deletes
+        that key. The merged object is validated like the stored one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Full stored preferences object after the merge
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Validation error (invalid key, too many keys, oversized value, or deeper nesting)
 
   /api/achievements:
     get:
