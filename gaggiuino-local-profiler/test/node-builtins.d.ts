@@ -21,6 +21,7 @@ declare module 'node:child_process' {
 
 declare module 'node:fs' {
     export function readFileSync(path: string, encoding: string): string;
+    export function readFileSync(path: string): Buffer;
     export function writeFileSync(path: string, data: string | Uint8Array): void;
     export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
     export function mkdtempSync(prefix: string): string;
@@ -43,6 +44,13 @@ declare module 'node:path' {
     export function join(...parts: string[]): string;
     export function dirname(path: string): string;
     export function resolve(...parts: string[]): string;
+    export function basename(path: string, suffix?: string): string;
+}
+
+// node:zlib is used by scripts/perf-dataset.mts to (de)compress ZIP entries.
+declare module 'node:zlib' {
+    export function deflateRawSync(data: Uint8Array): Buffer;
+    export function inflateRawSync(data: Uint8Array): Buffer;
 }
 
 declare module 'node:url' {
@@ -63,7 +71,13 @@ declare const process: {
 };
 declare class Buffer extends Uint8Array {
     static from(data: readonly number[] | ArrayBuffer | Uint8Array | string, encoding?: string): Buffer;
-    toString(encoding?: string): string;
+    static alloc(size: number): Buffer;
+    static concat(list: readonly Uint8Array[]): Buffer;
+    readUInt16LE(offset: number): number;
+    readUInt32LE(offset: number): number;
+    writeUInt16LE(value: number, offset: number): number;
+    writeUInt32LE(value: number, offset: number): number;
+    toString(encoding?: string, start?: number, end?: number): string;
 }
 
 interface ImportMeta {

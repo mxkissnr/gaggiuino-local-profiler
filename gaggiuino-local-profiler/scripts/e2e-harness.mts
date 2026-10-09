@@ -154,7 +154,12 @@ export async function seed(baseUrl: string): Promise<{ machine2: unknown }> {
 // un-restored instance. The restored token is written to disk but the running
 // process keeps the one it started with (see go/internal/backup/doc.go), so
 // fetching the token before the restore is fine.
-export async function restoreBackup(baseUrl: string, zipPath: string): Promise<RestoreResult> {
+//
+// `token` lets a caller that already holds a token (perf-measure.mts's --token /
+// GLP_PERF_TOKEN) skip GET /api/token, which is refused when the app runs as a
+// plain Docker container outside Home Assistant. Absent, the token is fetched
+// from the already-public GET /api/token as before.
+export async function restoreBackup(baseUrl: string, zipPath: string, token?: string): Promise<RestoreResult> {
     let zip: Buffer;
     try {
         zip = readFileSync(zipPath);
@@ -163,9 +168,12 @@ export async function restoreBackup(baseUrl: string, zipPath: string): Promise<R
         throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${message}`, { cause: err });
     }
 
-    // Same auth the SPA and seed() use: the token from the already-public
-    // GET /api/token, sent back as the x-glp-token header.
-    const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken: string };
+    // Same auth the SPA and seed() use, sent back as the x-glp-token header.
+    let apiToken = token;
+    if (apiToken === undefined) {
+        const res = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken?: string };
+        apiToken = res.apiToken ?? '';
+    }
     const headers: Record<string, string> = { 'Content-Type': 'application/zip', 'x-glp-token': apiToken };
     if (process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE) {
         headers['X-GLP-Passphrase'] = process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE;
