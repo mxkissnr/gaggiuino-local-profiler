@@ -536,4 +536,3 @@ func TestFirmwareVersion_ReachableOrUnknownStillFetchesSettings(t *testing.T) {
 		})
 	}
 }
-

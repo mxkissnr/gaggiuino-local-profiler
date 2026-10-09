@@ -432,4 +432,3 @@ func TestListMachineProfiles_ReachableOrUnknownStillGoesLive(t *testing.T) {
 		})
 	}
 }
-
