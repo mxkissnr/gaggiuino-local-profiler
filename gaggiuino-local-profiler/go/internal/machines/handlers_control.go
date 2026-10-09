@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -392,6 +393,12 @@ func (h *Handlers) firmwareFromTo(ctx context.Context, machine *Machine, adapter
 	return from, to
 }
 
+// errMachineOffline marks the firmwareVersion fast path where the poller already
+// knows the machine is unreachable (#1572). It only exists to drive the handler
+// into its existing "settings fetches failed" branch; it is never surfaced to
+// the client, which sees the ordinary unknown-version 200.
+var errMachineOffline = errors.New("machine known offline")
+
 // firmwareVersion serves GET /api/machine/firmware/version (#620).
 func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
@@ -401,32 +408,42 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 	if !requireSettingsProxySupport(w, adapter, machine) {
 		return
 	}
-	// The "versions" and "system" settings reads are independent (#901 code
-	// review), so fetch them concurrently instead of paying two round-trips
-	// back to back.
 	var versionsRaw, systemRaw json.RawMessage
 	var versionsErr, systemErr error
 	var versionsPanicked bool
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if httputil.SafeCall("machines: firmware version fetch", func() {
-			versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
-		}) {
-			versionsErr = fmt.Errorf("internal error fetching versions settings")
-			versionsPanicked = true
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		if httputil.SafeCall("machines: firmware version fetch", func() {
-			systemRaw, systemErr = adapter.GetSettings(r.Context(), machine, "system")
-		}) {
-			systemErr = fmt.Errorf("internal error fetching system settings")
-		}
-	}()
-	wg.Wait()
+	if h.machineKnownOffline(machine.ID) {
+		// #1572: the poller already knows this machine is unreachable, so skip
+		// both live settings fetches and fall through to the existing
+		// versionsErr branch below. That branch already writes exactly the
+		// "unknown" response (installed/latest null, updateAvailable false)
+		// this endpoint gives when the settings reads fail.
+		versionsErr = errMachineOffline
+		systemErr = errMachineOffline
+	} else {
+		// The "versions" and "system" settings reads are independent (#901 code
+		// review), so fetch them concurrently instead of paying two round-trips
+		// back to back.
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if httputil.SafeCall("machines: firmware version fetch", func() {
+				versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
+			}) {
+				versionsErr = fmt.Errorf("internal error fetching versions settings")
+				versionsPanicked = true
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if httputil.SafeCall("machines: firmware version fetch", func() {
+				systemRaw, systemErr = adapter.GetSettings(r.Context(), machine, "system")
+			}) {
+				systemErr = fmt.Errorf("internal error fetching system settings")
+			}
+		}()
+		wg.Wait()
+	}
 	// #1037: a recovered panic is a genuine backend bug, not a routine
 	// offline machine -- keep surfacing that as 502 (see
 	// TestFirmwareVersion_PanicDuringSettingsFetchReturns502).
