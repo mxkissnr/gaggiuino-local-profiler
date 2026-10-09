@@ -126,6 +126,13 @@ describe('originFrameCoords / featureBounds (#1543)', () => {
     expect(north).toBeGreaterThanOrEqual(35.5);
   });
 
+  it('shows a centroid-only frame leaves India\'s east edge outside (old behaviour)', () => {
+    // India's centre [78.96, 20.59] framed alone: the east edge lands below
+    // the country's ~97.4 E extent, so the centroid frame cut India short.
+    const centroidOnly = computeMapBoundingCoords([[78.96, 20.59]])!;
+    expect(centroidOnly[1][0]).toBeLessThan(97.4);
+  });
+
   it('skips a country whose bounds are unknown', () => {
     expect(originFrameCoords(['IN', 'ZZ'], new Map([['IN', [68.1, 8.0, 97.4, 35.5]]])))
       .toEqual([[68.1, 8.0], [97.4, 35.5]]);
