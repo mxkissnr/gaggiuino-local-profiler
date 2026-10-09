@@ -2,6 +2,9 @@
 
 Bug reports, feature ideas and pull requests are welcome!
 
+The [roadmap board](https://github.com/users/mxkissnr/projects/2/views/2) shows what is planned for the next release, what comes later and
+where help is wanted.
+
 ## Workflow
 
 1. **Open an issue first** — describe the bug or feature before writing any code
