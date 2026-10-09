@@ -4,11 +4,28 @@ Bug reports, feature ideas and pull requests are welcome!
 
 ## Workflow
 
-1. **Open an issue first** — describe the bug or feature before writing any code  
-   (no PRs without a linked issue — see [CLAUDE.md](CLAUDE.md) for context)
-2. **Fork & branch** — `feature/short-description` or `fix/short-description`
-3. **Implement** — commit with `Closes #N` in the message
-4. **Pull request** — see [Pull requests](#pull-requests) below
+1. **Open an issue first** — describe the bug or feature before writing any code
+   (no PRs without a linked issue)
+2. **Fork & branch** — `fix/…` or `feat/…`
+3. **Target the right branch** — open the PR against `dev`, or against the feature branch named
+   in the issue when the issue belongs to a feature, such as the score epic. See
+   [Which branch?](#which-branch) below
+4. **Implement with tests**
+5. **Open the pull request** — see [Pull requests](#pull-requests) below
+
+See [docs/MAINTAINING.md](docs/MAINTAINING.md) for release and branch maintenance.
+
+### Which branch?
+
+`main` stays the default branch because Home Assistant's app store reads the default branch, so
+contributors pick `dev` as the PR base by hand.
+
+| Branch | Holds | Open PRs against it? |
+|---|---|---|
+| `main` | released versions only | No — only the release PR from `release/vX.Y.0` |
+| `dev` | exactly what the next release ships | Yes — fixes and small features go here |
+| `feature/*` | a large change that may ship in a later release | Yes — when the issue belongs to that feature |
+| `release/*` | a release in acceptance, or a patch line | No — maintainers cut and merge these |
 
 ## Pull requests
 
@@ -19,7 +36,7 @@ Every PR must:
 - **Use a Conventional Commits title in English** — `feat:` `fix:` `docs:` `chore:` `refactor:` `test:` `build:`
 - **Explain what and why** in the description, not just what
 - **Pass CI** — lint, tests and build green before requesting review
-- **Update `CHANGELOG.md`** for any user-facing change
+- **Add a changelog fragment** in `gaggiuino-local-profiler/changelog.d/<issue>.<added|changed|fixed|removed|security>.md` for user-visible changes. One bold sentence ending with `Closes #N`. Never edit `CHANGELOG.md` directly.
 - **Include before/after screenshots** for UI changes
 - **Disclose AI assistance** — see below
 - **No real names** in commit messages, PR text, code comments or docs
@@ -30,9 +47,8 @@ Be transparent about AI tool use so reviewers know what they are reviewing.
 
 - **Per commit (machine-readable, required):** every commit an AI tool helped write carries a
   trailer, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>` or
-  `Co-Authored-By: Copilot <198982749+Copilot@users.noreply.github.com>`. Claude Code also
-  adds a `Claude-Session:` trailer. For this repo the Claude trailer names the specific model,
-  e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` (see [CLAUDE.md](CLAUDE.md)).
+  `Co-Authored-By: Copilot <198982749+Copilot@users.noreply.github.com>`. For this repo the
+  Claude trailer names the specific model, e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 - **Per PR (summary, required):** the "AI assistance disclosure" section of the PR template —
   one of `none` / `assisted` / `substantial` / `generated`, plus the tool and model names.
 
@@ -56,6 +72,14 @@ Include:
 | Storage | SQLite (`go/internal/db`, `modernc.org/sqlite` — pure Go, no CGo) at `/data/glp.db` for shot data **and** machine config (the `machines` table is the source of truth — see [CLAUDE.md](CLAUDE.md#key-conventions)); `/data/*.json` for token, preheat state, profile cache, and `options.json` (a tracked *input* to the machine registry, adopted on start — not live config, see `go/internal/machines`) |
 | Translations | UI strings via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL) — add all 6 languages for new keys |
 | URLs | Always relative (no leading `/`) for HA ingress compatibility |
+
+## Large files
+
+`gaggiuino-local-profiler/public-src/views/analytics.ts`,
+`gaggiuino-local-profiler/public-src/main.ts` and
+`gaggiuino-local-profiler/go/internal/system/poll.go` are oversized. When a PR changes one of
+them substantially, move the part it touches into its own module in the same PR. Do not open PRs
+that only reorganize these files.
 
 ## Frontend build
 
