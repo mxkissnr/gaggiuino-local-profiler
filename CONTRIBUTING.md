@@ -176,6 +176,56 @@ personal data (IP literals, e-mail addresses, long hex blobs) and aborts on a hi
 passes is safe to serve but never committed. Like `screenshots.mts` it needs
 `npx playwright install chromium` once.
 
+## Performance comparison
+
+The manually triggered `perf-compare` GitHub Actions workflow measures the same
+workload against two images — a base ref (for example the previous release tag)
+and a head ref (the release candidate) — runs them one after the other on the
+same runner, and writes a Markdown table. It only runs in GitHub Actions, never
+on a local machine, and it is not a pull-request gate; it feeds the release
+acceptance pass (#1558). Deployment begins when the workflow lands; this section
+documents the scripts it drives.
+
+The three Node scripts it runs can also be called by hand from
+`gaggiuino-local-profiler/`:
+
+```sh
+npm run perf:dataset -- --shots 5000 --out /tmp/dataset.zip
+npm run perf:measure -- --base-url http://127.0.0.1:8099 --ref v3.5.0 --out /tmp/head.json
+npm run perf:compare -- /tmp/base.json /tmp/head.json
+```
+
+`perf:dataset` grows `demo/glp-demo-backup.zip` to the requested shot count with
+a seeded generator (default 5000 shots, seed 1558), so the same input and seed
+give a byte-identical ZIP. `perf:measure` optionally restores that ZIP
+(`--restore <zip>`) and times the shot list, a shot detail with its curve, the
+full `/shots.json` history the statistics page loads, and the library,
+maintenance, achievements and status endpoints, each as median and p95 over
+`--runs` runs (default 30, after `--warmup`, default 3). It also measures the
+built frontend bundle size: every same-origin script, stylesheet and
+modulepreload the index page references, plus the total.
+
+`perf:measure` takes the API token from `--token <value>`, else the environment
+variable `GLP_PERF_TOKEN`, and otherwise fetches `GET /api/token`. When GLP runs
+as a plain Docker container outside Home Assistant that endpoint is refused
+(`expose_api_port`), so pass `--token` or `GLP_PERF_TOKEN`; the token is sent as
+`x-glp-token` on every request, including `POST /api/restore`.
+
+The workflow merges its own container metrics (startup time, idle RSS/CPU, peak
+RSS and image size), measured outside Node, into the same JSON with `jq`. Every
+metric has one shape:
+`{ "value": number, "unit": "ms" | "bytes" | "%", "better": "lower" | "higher" }`.
+
+`perf:compare` prints `Metric | Base | Head | Change (%)`. A row whose change is
+worse than `--threshold` percent (default 15) in the metric's `better` direction
+is marked `review`; a metric present in only one file is listed with `n/a`. The
+command always exits 0 — a regression is a review item, not a failure.
+
+Lighthouse is deliberately not measured: its run-to-run noise on CI runners is
+well above the 10 % the issue asks for, so a 15 % threshold could not tell a
+real regression from noise. Bundle size and the API timings above cover the
+frontend instead.
+
 ## Versioning
 
 `MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.ts` and `scripts/release-check.mts` enforce the match.
