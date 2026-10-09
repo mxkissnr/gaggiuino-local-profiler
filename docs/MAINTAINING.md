@@ -39,8 +39,12 @@ appear in the dev version string.
 Add or drop a feature and rebuild:
 
 ```sh
-gh variable set DEV_FEATURES --body "feature/a feature/b" && gh workflow run build-dev.yaml
+gh variable set DEV_FEATURES --body "feature/a feature/b" && gh workflow run build-dev.yaml --ref dev
 ```
+
+A push to a listed feature branch does not rebuild the channel on its own: the workflow and the
+secrets it uses only ever run from `dev`'s own copy, never from an unreviewed branch. Run
+`gh workflow run build-dev.yaml --ref dev` after pushing.
 
 A conflict fails the dev build and names the branch. The fix is to merge `dev` into that feature
 branch; the next build picks up the merge.

@@ -2,7 +2,7 @@ name: Test and build
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, main, 'feature/**', 'release/**']
   pull_request:
 
 env:

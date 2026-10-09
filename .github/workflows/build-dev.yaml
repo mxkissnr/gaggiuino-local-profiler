@@ -13,6 +13,16 @@
 # `image:{version}` and only offers an update when `version` changes. A fixed
 # tag like `:dev` would be pulled once and then never refreshed, so each build
 # gets its own immutable tag and the manifest is bumped to match.
+#
+# #1557: the channel is dev plus the feature branches listed (space-separated)
+# in the repository variable DEV_FEATURES. Each build merges them onto dev in
+# the runner, so a large feature can be tested here without ever landing on
+# dev, which only holds what the next release ships. Add or drop one with
+#   gh variable set DEV_FEATURES --body "feature/a feature/b" && gh workflow run build-dev.yaml --ref dev
+# A push to a feature branch does not trigger a build on its own: the workflow
+# file and the secrets it uses must always come from dev, never from a branch
+# that has not been reviewed into dev. Re-run the command above after
+# pushing to a listed feature branch.
 name: Build dev channel image
 
 on:
@@ -44,13 +54,25 @@ jobs:
   prep:
     name: Compute dev build version
     # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
-    if: github.server_url == 'https://github.com'
+    # Only dev's own copy of this workflow may publish (see the header).
+    if: github.server_url == 'https://github.com' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      # The listed feature names go into the version, so Home Assistant shows
+      # which features the installed dev build carries. Docker tags only allow
+      # [A-Za-z0-9_.-], hence the rewrite.
       - id: version
-        run: echo "version=dev-$(date -u +%Y%m%d_%H%M)" >> "$GITHUB_OUTPUT"
+        env:
+          DEV_FEATURES: ${{ vars.DEV_FEATURES }}
+        run: |
+          set -euo pipefail
+          v="dev-$(date -u +%Y%m%d_%H%M)"
+          for b in $DEV_FEATURES; do
+            v="$v-$(echo "${b#feature/}" | tr -c 'A-Za-z0-9_.\n-' '-')"
+          done
+          echo "version=$v" >> "$GITHUB_OUTPUT"
 
   # #705: split off from the armv7/aarch64 matrix below and NOT in
   # publish-manifest's `needs` -- amd64 is the maintainer's own daily HAOS
@@ -69,6 +91,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      # #1557: dev plus the listed feature branches. A conflict fails the
+      # build and names the branch instead of publishing a half-merged image.
+      - name: Merge dev-channel features
+        env:
+          DEV_FEATURES: ${{ vars.DEV_FEATURES }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for b in $DEV_FEATURES; do
+            git fetch --no-tags origin "$b"
+            git merge --no-edit FETCH_HEAD || {
+              echo "::error::$b does not merge cleanly onto dev -- merge dev into $b first"
+              exit 1
+            }
+          done
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
@@ -174,6 +216,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      # #1557: dev plus the listed feature branches. A conflict fails the
+      # build and names the branch instead of publishing a half-merged image.
+      - name: Merge dev-channel features
+        env:
+          DEV_FEATURES: ${{ vars.DEV_FEATURES }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for b in $DEV_FEATURES; do
+            git fetch --no-tags origin "$b"
+            git merge --no-edit FETCH_HEAD || {
+              echo "::error::$b does not merge cleanly onto dev -- merge dev into $b first"
+              exit 1
+            }
+          done
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
