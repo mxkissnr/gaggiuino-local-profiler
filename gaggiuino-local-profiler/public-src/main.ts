@@ -206,7 +206,7 @@ function _maintenanceCanRefetch(): boolean {
   if (view.querySelector('details[open]')) return false;
   if (view.querySelector('[contenteditable="true"]')) return false;
   const logForm = document.getElementById('maintLogForm');
-  return !logForm || (logForm as HTMLElement).style.display === 'none';
+  return !logForm || logForm.style.display === 'none';
 }
 
 // ── Toast helper ──────────────────────────────────────────────────────────
