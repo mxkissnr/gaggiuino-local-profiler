@@ -25,8 +25,6 @@
 
 import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { performance } from 'node:perf_hooks';
-import { pathToFileURL } from 'node:url';
 
 import { restoreBackup } from './e2e-harness.mts';
 
@@ -62,8 +60,7 @@ function argValue(argv: readonly string[], name: string): string | undefined {
 }
 
 function isMain(): boolean {
-    const entry = process.argv[1];
-    return entry !== undefined && import.meta.url === pathToFileURL(entry).href;
+    return import.meta.url === `file://${process.argv[1] ?? ''}`;
 }
 
 function round3(value: number): number {

@@ -23,7 +23,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -343,8 +343,7 @@ function argValue(argv: readonly string[], name: string): string | undefined {
 }
 
 function isMain(): boolean {
-    const entry = process.argv[1];
-    return entry !== undefined && import.meta.url === pathToFileURL(entry).href;
+    return import.meta.url === `file://${process.argv[1] ?? ''}`;
 }
 
 if (isMain()) {

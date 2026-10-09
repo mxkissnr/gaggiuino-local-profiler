@@ -47,12 +47,15 @@ describe('compareMetrics (#1558)', () => {
 
     it('lists a metric missing on one side with n/a', () => {
         const rows = compareMetrics({ onlyBase: metric(10) }, { onlyHead: metric(20) }, 15);
-        const byName = new Map(rows.map((row) => [row.metric, row]));
 
-        expect(byName.get('onlyBase')?.head).toBeNull();
-        expect(byName.get('onlyBase')?.changePct).toBeNull();
-        expect(byName.get('onlyBase')?.review).toBe(false);
-        expect(byName.get('onlyHead')?.base).toBeNull();
+        const missingHead = rows.find((row) => row.metric === 'onlyBase');
+        expect(missingHead?.head).toBeNull();
+        expect(missingHead?.changePct).toBeNull();
+        expect(missingHead?.review).toBe(false);
+
+        const missingBase = rows.find((row) => row.metric === 'onlyHead');
+        expect(missingBase?.base).toBeNull();
+
         expect(formatReport(rows)).toContain('n/a');
     });
 

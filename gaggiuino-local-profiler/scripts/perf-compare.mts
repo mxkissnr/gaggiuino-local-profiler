@@ -12,7 +12,6 @@
 // test/perf-compare.test.ts; the CLI only reads two files.
 
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
 
 export interface Metric {
     value: number;
@@ -91,8 +90,7 @@ function argValue(argv: readonly string[], name: string): string | undefined {
 }
 
 function isMain(): boolean {
-    const entry = process.argv[1];
-    return entry !== undefined && import.meta.url === pathToFileURL(entry).href;
+    return import.meta.url === `file://${process.argv[1] ?? ''}`;
 }
 
 if (isMain()) {
@@ -107,5 +105,5 @@ if (isMain()) {
     const threshold = Number(argValue(argv, '--threshold') ?? '15');
     const base = JSON.parse(readFileSync(basePath, 'utf8')) as MeasureFile;
     const head = JSON.parse(readFileSync(headPath, 'utf8')) as MeasureFile;
-    process.stdout.write(formatReport(compareMetrics(base.metrics ?? {}, head.metrics ?? {}, threshold)));
+    console.log(formatReport(compareMetrics(base.metrics ?? {}, head.metrics ?? {}, threshold)).trimEnd());
 }
