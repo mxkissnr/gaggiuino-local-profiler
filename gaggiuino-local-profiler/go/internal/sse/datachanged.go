@@ -99,6 +99,21 @@ func (c *DataChanges) Publish(kind, id, src string) {
 	})
 }
 
+// Revs returns this instance's epoch and a copy of the per-kind revisions, so
+// GET /api/status can report the current counters and a reconnecting client can
+// tell which kinds it missed. The copy is detached from the live map, so a
+// caller may read it after the lock is released.
+func (c *DataChanges) Revs() (string, map[string]int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	revs := make(map[string]int64, len(c.revs))
+	for kind, rev := range c.revs {
+		revs[kind] = rev
+	}
+	return c.Epoch, revs
+}
+
 // clientIDRe is the accepted shape of the X-GLP-Client header: a short opaque
 // token a page generates for itself. Anything else is dropped rather than
 // echoed back, so a hostile client cannot inject content into the event.
