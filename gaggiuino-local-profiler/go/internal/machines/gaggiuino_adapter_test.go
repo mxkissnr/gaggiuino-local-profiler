@@ -265,15 +265,16 @@ func TestGaggiuinoAdapter_GetStatusSetsBrewingFlag(t *testing.T) {
 	defer fake.Close()
 	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
 
+	host := hostFromBaseURL(fake.URL)
 	if _, err := a.GetStatus(context.Background(), testMachine(fake.URL)); err != nil {
 		t.Fatalf("GetStatus: %v", err)
 	}
 	// The status request itself was counted while the flag was still false, so it
 	// is idle; the next counted request must be brewing.
-	countMachineRequest(hostFromBaseURL(fake.URL), false)
+	countMachineRequest(host, false)
 
-	snap := counter.Snapshot(time.Now(), nil)
-	if len(snap) != 1 || snap[0].RequestsPerMinBrewing <= 0 {
+	snap := counter.Snapshot(time.Now(), func(h string) (int64, bool) { return 1, h == host })
+	if len(snap) != 1 || snap[0].MachineID != 1 || snap[0].RequestsPerMinBrewing <= 0 {
 		t.Fatalf("expected a counted request in the brewing bucket after GetStatus, got %+v", snap)
 	}
 }
@@ -290,12 +291,13 @@ func TestWSReadCountsMachineTraffic(t *testing.T) {
 	fake := newFakeGaggiuinoMachine()
 	defer fake.Close()
 
+	host := hostFromBaseURL(fake.URL)
 	if _, err := wsGetProfileByID(context.Background(), fake.URL, 5); err != nil {
 		t.Fatalf("wsGetProfileByID: %v", err)
 	}
 
-	snap := counter.Snapshot(time.Now(), nil)
-	if len(snap) != 1 || snap[0].WSMessagesPerMin <= 0 {
+	snap := counter.Snapshot(time.Now(), func(h string) (int64, bool) { return 1, h == host })
+	if len(snap) != 1 || snap[0].MachineID != 1 || snap[0].WSMessagesPerMin <= 0 {
 		t.Fatalf("expected the WebSocket response to be counted, got %+v", snap)
 	}
 }

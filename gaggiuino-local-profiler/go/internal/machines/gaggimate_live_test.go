@@ -407,9 +407,13 @@ func TestGaggiMateLiveClient_ClearsBrewingFlagOnSessionEnd(t *testing.T) {
 	base := fake.URL
 	host := hostFromBaseURL(base)
 
+	// Open the persistent session (Status lazily creates it) so the fake starts
+	// pushing partial evt:status frames, including process.a==1 / stage brew.
+	c.Status(base)
+
 	brewing := func(at time.Time) float64 {
-		for _, snap := range counter.Snapshot(at, nil) {
-			if snap.Unknown {
+		for _, snap := range counter.Snapshot(at, func(h string) (int64, bool) { return 1, h == host }) {
+			if snap.MachineID == 1 {
 				return snap.RequestsPerMinBrewing
 			}
 		}
