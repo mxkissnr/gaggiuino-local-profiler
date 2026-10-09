@@ -84,24 +84,35 @@ func TestUnmatchedRequestRecorded(t *testing.T) {
 	}
 }
 
-func TestRecentWindowDropsOldSamples(t *testing.T) {
+func TestRecentQuantilesIgnoreOldSamples(t *testing.T) {
 	rec := New()
 	now := time.Now()
-	rec.record("GET /x", now.Add(-20*time.Minute), ms(5))
-	rec.record("GET /x", now, ms(7))
+	// Two samples far outside the window and two inside it. The since-start
+	// counters see all four, but the recent median/p95/max must use only the two
+	// in-window samples.
+	rec.record("GET /x", now.Add(-20*time.Minute), ms(500))
+	rec.record("GET /x", now.Add(-20*time.Minute), ms(500))
+	rec.record("GET /x", now.Add(-time.Minute), ms(4))
+	rec.record("GET /x", now.Add(-time.Minute), ms(6))
 
 	got := findRoute(t, rec.Snapshot(now), "GET /x")
-	if got.Count != 2 {
-		t.Fatalf("count = %d, want 2", got.Count)
+	if got.Count != 4 {
+		t.Fatalf("count = %d, want 4", got.Count)
 	}
-	if got.RecentCount != 1 {
-		t.Fatalf("recent_count = %d, want 1 (only the in-window sample)", got.RecentCount)
+	if got.MaxMs != 500 {
+		t.Fatalf("since-start max = %v, want 500", got.MaxMs)
 	}
-	if got.RecentMedianMs != 7 || got.RecentMaxMs != 7 {
-		t.Fatalf("recent median/max = %v/%v, want 7/7", got.RecentMedianMs, got.RecentMaxMs)
+	if got.RecentCount != 2 {
+		t.Fatalf("recent_count = %d, want 2", got.RecentCount)
 	}
-	if got.MedianMs != 6 {
-		t.Fatalf("median over both samples = %v, want 6", got.MedianMs)
+	if got.RecentMedianMs != 5 {
+		t.Fatalf("recent median = %v, want 5", got.RecentMedianMs)
+	}
+	if got.RecentP95Ms != 6 {
+		t.Fatalf("recent p95 = %v, want 6", got.RecentP95Ms)
+	}
+	if got.RecentMaxMs != 6 {
+		t.Fatalf("recent max = %v, want 6", got.RecentMaxMs)
 	}
 }
 
@@ -125,18 +136,15 @@ func TestRoutesAndRingsStayBounded(t *testing.T) {
 	for name, rs := range rec.routes {
 		if name != otherRoute {
 			realRoutes++
-			if rs.all.total != requests/patterns {
-				t.Fatalf("route %q total = %d, want %d", name, rs.all.total, requests/patterns)
+			if rs.ring.total != requests/patterns {
+				t.Fatalf("route %q total = %d, want %d", name, rs.ring.total, requests/patterns)
 			}
 		} else {
-			otherTotal = rs.all.total
-			otherRingCount = rs.all.count
+			otherTotal = rs.ring.total
+			otherRingCount = rs.ring.count
 		}
-		if rs.all.count > maxRingCount {
-			maxRingCount = rs.all.count
-		}
-		if rs.recent.count > maxRingCount {
-			maxRingCount = rs.recent.count
+		if rs.ring.count > maxRingCount {
+			maxRingCount = rs.ring.count
 		}
 	}
 	rec.mu.Unlock()
@@ -200,6 +208,85 @@ func TestRecorderConcurrentUse(t *testing.T) {
 	}
 	if len(rec.Snapshot(time.Now()).Routes) == 0 {
 		t.Fatalf("no routes recorded")
+	}
+}
+
+func TestRecentCountExactPastRingSize(t *testing.T) {
+	rec := New()
+	now := time.Now()
+	// 900 requests scattered over the window: more than the ring can hold, so
+	// recent_count must come from the per-minute buckets rather than the ring.
+	for i := 0; i < 900; i++ {
+		rec.record("GET /x", now.Add(-time.Duration(i%14)*time.Minute), ms(1))
+	}
+	got := findRoute(t, rec.Snapshot(now), "GET /x")
+	if got.Count != 900 {
+		t.Fatalf("count = %d, want 900", got.Count)
+	}
+	if got.RecentCount != 900 {
+		t.Fatalf("recent_count = %d, want 900 (not capped at the ring size %d)", got.RecentCount, ringSize)
+	}
+}
+
+func TestHeadRequestKeepsExistingMethodPattern(t *testing.T) {
+	rec := New()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /x", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodHead, "/x", nil)
+	rec.Middleware(mux).ServeHTTP(httptest.NewRecorder(), req)
+
+	snap := rec.Snapshot(time.Now())
+	if len(snap.Routes) != 1 {
+		t.Fatalf("routes = %d, want 1: %+v", len(snap.Routes), snap.Routes)
+	}
+	if got := snap.Routes[0].Route; got != "GET /x" {
+		t.Fatalf("HEAD request key = %q, want the pattern %q", got, "GET /x")
+	}
+}
+
+func TestBarePatternKeyedByMethod(t *testing.T) {
+	rec := New()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/x", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	rec.Middleware(mux).ServeHTTP(httptest.NewRecorder(), req)
+
+	snap := rec.Snapshot(time.Now())
+	if len(snap.Routes) != 1 {
+		t.Fatalf("routes = %d, want 1: %+v", len(snap.Routes), snap.Routes)
+	}
+	if got := snap.Routes[0].Route; got != "GET /x" {
+		t.Fatalf("bare-path key = %q, want %q", got, "GET /x")
+	}
+}
+
+func TestSSEStreamNotRecordedButStillFlushes(t *testing.T) {
+	rec := New()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /stream", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		f, ok := w.(http.Flusher)
+		if !ok {
+			t.Errorf("middleware response writer does not implement http.Flusher")
+			return
+		}
+		f.Flush()
+	})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
+	rec.Middleware(mux).ServeHTTP(rr, req)
+
+	if !rr.Flushed {
+		t.Fatalf("stream did not flush through the middleware")
+	}
+	if routes := rec.Snapshot(time.Now()).Routes; len(routes) != 0 {
+		t.Fatalf("SSE stream was recorded: %+v", routes)
 	}
 }
 
