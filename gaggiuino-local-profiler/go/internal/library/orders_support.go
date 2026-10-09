@@ -428,14 +428,20 @@ func SimulateBagQueue(bean Entity, doseRows []shots.AnnotatedDose, allBeans []En
 	}
 	out := make([]BagStatus, len(queue))
 	for i, e := range queue {
-		rem := e.stockG - consumed[i]
+		roundedConsumed := mathRoundInt(consumed[i])
+		// Two separate rounds, not one round of the difference:
+		// Math.round(Math.max(0, Math.round(stockG) - Math.round(consumed))).
+		// Same "round consumption first, then subtract" rule as
+		// ComputeBeanRemaining, so a bag's remainingG agrees with the
+		// bean-level value the stock line reads.
+		rem := mathRoundInt(e.stockG) - roundedConsumed
 		if rem < 0 {
 			rem = 0
 		}
 		out[i] = BagStatus{
 			BagID:      e.id,
-			ConsumedG:  mathRoundInt(consumed[i]),
-			RemainingG: mathRoundInt(rem),
+			ConsumedG:  roundedConsumed,
+			RemainingG: rem,
 			Current:    i == head,
 		}
 	}
