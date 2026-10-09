@@ -183,8 +183,9 @@ workload against two images — a base ref (for example the previous release tag
 and a head ref (the release candidate) — runs them one after the other on the
 same runner, and writes a Markdown table. It only runs in GitHub Actions, never
 on a local machine, and it is not a pull-request gate; it feeds the release
-acceptance pass (#1558). Deployment begins when the workflow lands; this section
-documents the scripts it drives.
+acceptance pass (#1558). Start it from the Actions tab or with
+`gh workflow run perf-compare.yml -f base=v3.4.0 -f head=dev`; the table lands in
+the run's job summary and both JSON files in its `perf-compare` artifact.
 
 The three Node scripts it runs can also be called by hand from
 `gaggiuino-local-profiler/`:
@@ -214,8 +215,9 @@ as a plain Docker container outside Home Assistant that endpoint is refused
 (`expose_api_port`), so pass `--token` or `GLP_PERF_TOKEN`; the token is sent as
 `x-glp-token` on every request, including `POST /api/restore`.
 
-The workflow merges its own container metrics (startup time, idle RSS/CPU, peak
-RSS and image size), measured outside Node, into the same JSON with `jq`. Every
+The workflow merges its own container metrics (startup time until `/api/status`
+answers, image size, and idle CPU, idle memory and peak memory from the
+container's cgroup), measured outside Node, into the same JSON with `jq`. Every
 metric has one shape:
 `{ "value": number, "unit": "ms" | "bytes" | "%", "better": "lower" | "higher" }`.
 
