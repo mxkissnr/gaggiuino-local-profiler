@@ -156,3 +156,22 @@ func TestMachineCounterBoundsTrackedHosts(t *testing.T) {
 		t.Fatalf("tracked hosts = %d, want at most %d", got, maxTrackedHosts)
 	}
 }
+
+// A steady 60 requests/min host must read 60 ± 1 when snapshotted at an
+// arbitrary second inside the minute: the divisor is the window span actually
+// covered (14 full minutes plus the elapsed fraction), not a flat 15.
+func TestMachineCounterRateTracksElapsedWindow(t *testing.T) {
+	c := newMachineCounterAt(counterStart)
+	// One request per second from the start until just before the snapshot,
+	// which is a steady 60 requests/min.
+	const elapsed = 15*time.Minute + 37*time.Second
+	for i := 0; i < int(elapsed/time.Second); i++ {
+		c.countRequestAt("alpha", false, counterStart.Add(time.Duration(i)*time.Second))
+	}
+
+	now := counterStart.Add(elapsed)
+	m := findMachine(t, c.Snapshot(now, resolveMap(map[string]int64{"alpha": 1})), 1)
+	if m.RequestsPerMinIdle < 59 || m.RequestsPerMinIdle > 61 {
+		t.Fatalf("idle rate = %v, want 60 ± 1", m.RequestsPerMinIdle)
+	}
+}

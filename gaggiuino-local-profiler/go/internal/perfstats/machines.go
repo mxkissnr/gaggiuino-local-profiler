@@ -29,7 +29,8 @@ const (
 // into one aggregate "unknown" entry. Per-host state is bounded — a fixed ring
 // of 15 one-minute buckets and at most maxTrackedHosts host keys.
 type MachineCounter struct {
-	start time.Time
+	start       time.Time
+	firstSample time.Time
 
 	mu    sync.Mutex
 	hosts map[string]*hostTraffic
@@ -76,6 +77,7 @@ func (c *MachineCounter) CountRequest(host string, failed bool) {
 func (c *MachineCounter) countRequestAt(host string, failed bool, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.markFirstSample(now)
 	h := c.hostLocked(host)
 	b := bucketFor(h, now)
 	if h.brewing {
@@ -99,7 +101,17 @@ func (c *MachineCounter) CountWSMessage(host string) {
 func (c *MachineCounter) countWSMessageAt(host string, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.markFirstSample(now)
 	bucketFor(c.hostLocked(host), now).wsMessages++
+}
+
+// markFirstSample remembers the earliest counted traffic so the rate divisor
+// never spans time before the counter saw any data. It must be called with
+// c.mu held.
+func (c *MachineCounter) markFirstSample(now time.Time) {
+	if c.firstSample.IsZero() || now.Before(c.firstSample) {
+		c.firstSample = now
+	}
 }
 
 // SetBrewing records whether host is currently taking a shot, so subsequent
@@ -230,15 +242,25 @@ func (c *MachineCounter) Snapshot(now time.Time, resolve func(host string) (mach
 }
 
 // rateMinutes is the divisor that turns a window count into a per-minute rate:
-// the minutes elapsed since start, capped at the window length and at least 1
-// so a young counter never divides by zero or reports a spike.
+// the length of the window the buckets actually span, at least 1 so a young
+// counter never divides by zero or reports a spike.
+//
+// The buckets hold the current minute plus the previous machineWindowMinutes-1
+// full minutes, so the span grows from 14 minutes at the top of a minute to 15
+// as the current minute fills. Dividing by a flat 15 would read up to about 7%
+// low. A counter that has existed for less than that, or whose first sample is
+// newer, spans only the shorter time.
 func (c *MachineCounter) rateMinutes(now time.Time) float64 {
-	m := now.Sub(c.start).Minutes()
-	if m > float64(machineWindowMinutes) {
-		m = float64(machineWindowMinutes)
+	window := float64(machineWindowMinutes-1) + now.Sub(now.Truncate(time.Minute)).Minutes()
+	from := c.firstSample
+	if from.IsZero() {
+		from = c.start
 	}
-	if m < 1 {
-		m = 1
+	if age := now.Sub(from).Minutes(); age < window {
+		window = age
 	}
-	return m
+	if window < 1 {
+		window = 1
+	}
+	return window
 }
