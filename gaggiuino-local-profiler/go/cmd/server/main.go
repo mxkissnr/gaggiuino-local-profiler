@@ -197,6 +197,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	}
 
 	hub := sse.NewHub()
+	// #1539: publish one data-changed event after every successful write, driven
+	// by the dataRoutes table in datachanged.go.
+	changes := sse.NewDataChanges(hub, dataKinds)
 	sseHandler := &sse.Handler{Hub: hub}
 	// Prime is wired below, once poller exists: it primes a newly-connected
 	// client with the current preheat-update/live-snapshot snapshot
@@ -572,7 +575,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	handler := auth.SecurityHeaders(
 		auth.RequireKnownHost(cfg.allowedHosts)(
 			limiter.Middleware(
-				auth.RequireToken(token)(recorder.Middleware(mux)),
+				auth.RequireToken(token)(recorder.Middleware(changes.Middleware(dataRoutes)(mux))),
 			),
 		),
 	)
