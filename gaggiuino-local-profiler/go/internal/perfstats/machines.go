@@ -2,6 +2,7 @@ package perfstats
 
 import (
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -112,7 +113,7 @@ func (c *MachineCounter) SetBrewing(host string, brewing bool) {
 func (c *MachineCounter) setBrewingAt(host string, brewing bool, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	h, ok := c.hosts[host]
+	h, ok := c.hosts[strings.ToLower(host)]
 	if !ok || !brewing {
 		return
 	}
@@ -120,10 +121,14 @@ func (c *MachineCounter) setBrewingAt(host string, brewing bool, now time.Time) 
 }
 
 // hostLocked returns host's traffic, creating it when new with firstSample set
-// to now, the host's own age origin. It must be called with c.mu held. A new
-// host past the cap is folded into otherHost so the map can never exceed
+// to now, the host's own age origin. The host is lowercased before it is used
+// as a key, so the as-typed host a request carries (GaggiMate.local:8080) and
+// the NormalizeMachineHost-lowercased host the poller sets the brewing flag
+// with resolve to the same entry. It must be called with c.mu held. A new host
+// past the cap is folded into otherHost so the map can never exceed
 // maxTrackedHosts keys.
 func (c *MachineCounter) hostLocked(host string, now time.Time) *hostTraffic {
+	host = strings.ToLower(host)
 	if h, ok := c.hosts[host]; ok {
 		return h
 	}
@@ -175,10 +180,16 @@ type hostSpan struct {
 }
 
 // rate divides count by minutes, reporting 0 when the host had no minutes of
-// that kind — so a machine that never brewed never reports a brewing rate.
+// that kind — so a machine that never brewed never reports a brewing rate. The
+// divisor is never below one minute: a host first seen seconds ago has too
+// little data to divide by, and its short age would otherwise report an
+// inflated rate (6 messages in the first second would read as 360/min).
 func (s hostSpan) rate(count int64, minutes float64) float64 {
 	if minutes <= 0 {
 		return 0
+	}
+	if minutes < 1 {
+		minutes = 1
 	}
 	return float64(count) / minutes
 }

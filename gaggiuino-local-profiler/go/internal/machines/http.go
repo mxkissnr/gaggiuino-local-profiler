@@ -59,8 +59,10 @@ func countMachineWSMessage(host string) {
 // SetMachineBrewing records whether host is currently taking a shot, so the
 // machine-traffic counter files that minute's requests in the brewing bucket.
 // The poller calls it once per poll tick with the host normalized by
-// NormalizeMachineHost, the same key the counting round tripper records, so
-// every adapter and fallback path is covered by one call.
+// NormalizeMachineHost; the counter lowercases the host key itself, so that
+// key matches the as-typed host the counting round tripper records (e.g.
+// GaggiMate.local:8080), and every adapter and fallback path is covered by one
+// call.
 func SetMachineBrewing(host string, brewing bool) {
 	machineTraffic.Load().SetBrewing(host, brewing)
 }

@@ -47,6 +47,23 @@ func TestMachineCounterKeepsHostsSeparate(t *testing.T) {
 	}
 }
 
+// The counter folds the host key to lower case, so a request carrying the
+// mixed-case host the round tripper records and the poller's lowercased
+// brewing flag land on the same entry.
+func TestMachineCounterHostKeyIsCaseInsensitive(t *testing.T) {
+	c := newMachineCounterAt(counterStart)
+	c.countRequestAt("GaggiMate.local:8080", false, counterStart)
+	c.setBrewingAt("gaggimate.local:8080", true, counterStart)
+
+	if got := len(c.hosts); got != 1 {
+		t.Fatalf("tracked hosts = %d, want 1", got)
+	}
+	m := findMachine(t, c.Snapshot(counterStart.Add(time.Minute), resolveMap(map[string]int64{"gaggimate.local:8080": 1})), 1)
+	if m.RequestsPerMinBrewing != 1 {
+		t.Fatalf("brewing rate = %v, want 1", m.RequestsPerMinBrewing)
+	}
+}
+
 // Requests are split by whether their minute was brewing, not by the flag in
 // effect when each one arrived.
 func TestMachineCounterSplitsBrewingMinutes(t *testing.T) {
@@ -69,9 +86,10 @@ func TestMachineCounterSplitsBrewingMinutes(t *testing.T) {
 	}
 }
 
-// A 30 s shot at 2 req/s sits inside an otherwise idle window: the brewing rate
-// is the requests in the brewing minute divided by the time actually spent in
-// it, so a half-minute shot reports 60 requests / 0.5 min = 120 req/min.
+// A one-minute shot at 2 req/s sits inside an otherwise idle window: the
+// brewing rate divides by the time actually spent brewing, not by the host's
+// own two-minute age, so a full-minute shot reports 120 requests / 1 min = 120
+// req/min (the host-age divisor would read only 60).
 func TestMachineCounterBrewingRateIsPerBrewingMinute(t *testing.T) {
 	c := newMachineCounterAt(counterStart)
 	const host = "alpha"
@@ -79,13 +97,28 @@ func TestMachineCounterBrewingRateIsPerBrewingMinute(t *testing.T) {
 
 	shotStart := counterStart.Add(time.Minute)
 	c.setBrewingAt(host, true, shotStart)
-	for i := 0; i < 60; i++ { // 30 s at 2 req/s
+	for i := 0; i < 120; i++ { // 60 s at 2 req/s
 		c.countRequestAt(host, false, shotStart.Add(time.Duration(i)*500*time.Millisecond))
 	}
 
-	m := findMachine(t, c.Snapshot(shotStart.Add(30*time.Second), resolveMap(map[string]int64{host: 1})), 1)
+	m := findMachine(t, c.Snapshot(shotStart.Add(time.Minute), resolveMap(map[string]int64{host: 1})), 1)
 	if m.RequestsPerMinBrewing < 115 || m.RequestsPerMinBrewing > 125 {
 		t.Fatalf("brewing rate = %v, want about 120", m.RequestsPerMinBrewing)
+	}
+}
+
+// A rate is never extrapolated over less than a minute: 6 requests in the
+// first second read 6/min, not 360.
+func TestMachineCounterRateUsesMinimumMinute(t *testing.T) {
+	c := newMachineCounterAt(counterStart)
+	const host = "alpha"
+	for i := 0; i < 6; i++ {
+		c.countRequestAt(host, false, counterStart.Add(time.Duration(i)*150*time.Millisecond))
+	}
+
+	m := findMachine(t, c.Snapshot(counterStart.Add(time.Second), resolveMap(map[string]int64{host: 1})), 1)
+	if m.RequestsPerMinIdle != 6 {
+		t.Fatalf("idle rate = %v, want 6", m.RequestsPerMinIdle)
 	}
 }
 
