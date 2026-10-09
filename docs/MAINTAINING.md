@@ -82,3 +82,14 @@ git tag vX.Y.Z
   re-implement them.
 - Close issues from users only with a comment that says what happened (the fix and the version)
   or why not.
+
+## Triage
+
+New issues from the bug and feature forms arrive with `needs-triage`. To triage one:
+
+1. Check the type label (`bug` or `enhancement`) and fix it if it is wrong.
+2. Add `good first issue` or `help wanted` where it fits.
+3. Remove `needs-triage`.
+
+`gh issue list --label needs-triage` shows what is still waiting. The other three GLP repos use
+the same label.
