@@ -163,9 +163,10 @@ type hostSums struct {
 }
 
 // Snapshot resolves each tracked host to a machine id and returns one entry per
-// machine that saw traffic, busiest-independent (sorted by id, id 0 last). Hosts
-// that do not resolve are combined into a single unknown entry. resolve may be
-// nil, in which case every host counts as unknown.
+// machine that saw traffic in the window, sorted by machine id with the
+// aggregate unknown entry last. Hosts that do not resolve are combined into
+// that single unknown entry. resolve may be nil, in which case every host
+// counts as unknown.
 func (c *MachineCounter) Snapshot(now time.Time, resolve func(host string) (machineID int64, ok bool)) []MachineTrafficSnapshot {
 	if c == nil {
 		return []MachineTrafficSnapshot{}
