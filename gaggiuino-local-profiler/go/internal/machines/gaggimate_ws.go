@@ -58,6 +58,8 @@ func gaggimateRequest(ctx context.Context, baseURL, reqType string, payload map[
 	defer cancel()
 	defer conn.CloseNow()
 
+	host := hostFromBaseURL(baseURL)
+
 	frame := map[string]any{"tp": reqType, "rid": rid}
 	for k, v := range payload {
 		frame[k] = v
@@ -78,6 +80,7 @@ func gaggimateRequest(ctx context.Context, baseURL, reqType string, payload map[
 			}
 			return nil, fmt.Errorf("waiting for %q from the machine: %w", resType, err)
 		}
+		countMachineWSMessage(host)
 		var msg map[string]any
 		if err := json.Unmarshal(data, &msg); err != nil {
 			continue
@@ -127,6 +130,8 @@ func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Du
 	defer cancel()
 	defer conn.CloseNow()
 
+	host := hostFromBaseURL(baseURL)
+
 	merged := map[string]any{}
 	for {
 		_, data, err := conn.Read(ctx)
@@ -136,6 +141,7 @@ func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Du
 			}
 			return nil, fmt.Errorf("waiting for evt:status from the machine: %w", err)
 		}
+		countMachineWSMessage(host)
 		var msg map[string]any
 		if err := json.Unmarshal(data, &msg); err != nil {
 			continue

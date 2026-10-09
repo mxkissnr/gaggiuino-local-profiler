@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"regexp"
 	"sort"
@@ -699,9 +698,15 @@ func machineHostResolver(registry *machines.Registry) func(host string) (int64, 
 	byHost := map[string]int64{}
 	byHostname := map[string]int64{}
 	if registry != nil {
-		if list, err := registry.ListMachines(); err == nil {
+		list, err := registry.ListMachines()
+		if err != nil {
+			// Do not swallow: without the machine list every traffic host
+			// folds into the aggregate unknown bucket, so a failure to list
+			// them must be visible.
+			log.Printf("mcp: get_perf_stats: listing machines for traffic resolution: %v", err)
+		} else {
 			for _, m := range list {
-				host, hostname := canonicalMachineHost(m.Host)
+				host, hostname := machines.NormalizeMachineHost(m.Host)
 				if host != "" {
 					byHost[host] = m.ID
 				}
@@ -712,7 +717,7 @@ func machineHostResolver(registry *machines.Registry) func(host string) (int64, 
 		}
 	}
 	return func(host string) (int64, bool) {
-		full, hostname := canonicalMachineHost(host)
+		full, hostname := machines.NormalizeMachineHost(host)
 		if id, ok := byHost[full]; ok {
 			return id, true
 		}
@@ -721,27 +726,6 @@ func machineHostResolver(registry *machines.Registry) func(host string) (int64, 
 		}
 		return 0, false
 	}
-}
-
-// canonicalMachineHost normalizes a machine Host or a traffic host key to a
-// lowercase host:port and its bare hostname, accepting a bare host as well as
-// one with an http(s) scheme. A port in the key wins the exact match; the
-// hostname fallback covers a key with a default port and a stored host without
-// one.
-func canonicalMachineHost(raw string) (host, hostname string) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", ""
-	}
-	lower := strings.ToLower(raw)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
-		raw = "http://" + raw
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", ""
-	}
-	return strings.ToLower(u.Host), strings.ToLower(u.Hostname())
 }
 
 // dbSizeBytes totals the SQLite file and its -wal sidecar, skipping whichever

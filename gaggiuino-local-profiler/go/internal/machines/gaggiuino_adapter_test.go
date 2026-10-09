@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
@@ -246,5 +248,54 @@ func TestGaggiuinoAdapter_Firmware(t *testing.T) {
 	}
 	if !jsonContains(string(result), `"success":true`) {
 		t.Fatalf("unexpected firmware update result: %s", result)
+	}
+}
+
+// TestGaggiuinoAdapter_GetStatusSetsBrewingFlag is the #1568 review fix for the
+// Gaggiuino side: GetStatus must flag the host as brewing when the machine
+// reports brewSwitchState, so its subsequent counted requests split into the
+// brewing bucket instead of all being filed as idle.
+func TestGaggiuinoAdapter_GetStatusSetsBrewingFlag(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	counter := perfstats.NewMachineCounter()
+	SetMachineTrafficCounter(counter)
+	t.Cleanup(func() { SetMachineTrafficCounter(nil) })
+
+	fake := newFakeGaggiuinoMachine() // /api/system/status reports brewSwitchState:true
+	defer fake.Close()
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+
+	if _, err := a.GetStatus(context.Background(), testMachine(fake.URL)); err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	// The status request itself was counted while the flag was still false, so it
+	// is idle; the next counted request must be brewing.
+	countMachineRequest(hostFromBaseURL(fake.URL), false)
+
+	snap := counter.Snapshot(time.Now(), nil)
+	if len(snap) != 1 || snap[0].RequestsPerMinBrewing <= 0 {
+		t.Fatalf("expected a counted request in the brewing bucket after GetStatus, got %+v", snap)
+	}
+}
+
+// TestWSReadCountsMachineTraffic is the #1568 review fix for the short-lived
+// Gaggiuino WebSocket client: every message read in ws.go must increment the
+// machine-traffic WS counter, the same way the two live clients do.
+func TestWSReadCountsMachineTraffic(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	counter := perfstats.NewMachineCounter()
+	SetMachineTrafficCounter(counter)
+	t.Cleanup(func() { SetMachineTrafficCounter(nil) })
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+
+	if _, err := wsGetProfileByID(context.Background(), fake.URL, 5); err != nil {
+		t.Fatalf("wsGetProfileByID: %v", err)
+	}
+
+	snap := counter.Snapshot(time.Now(), nil)
+	if len(snap) != 1 || snap[0].WSMessagesPerMin <= 0 {
+		t.Fatalf("expected the WebSocket response to be counted, got %+v", snap)
 	}
 }

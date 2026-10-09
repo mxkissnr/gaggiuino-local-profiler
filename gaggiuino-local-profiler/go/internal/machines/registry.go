@@ -564,12 +564,7 @@ var machineHostGuardResolved = newGuardVar[func(context.Context, string) (net.IP
 // (once per outbound machine call, not a hot loop). Security over
 // performance here.
 func BaseURLFor(ctx context.Context, m *Machine) (string, error) {
-	raw := strings.TrimSpace(m.Host)
-	normalized := raw
-	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
-		normalized = "http://" + raw
-	}
-	u, err := url.Parse(normalized)
+	u, err := parseMachineHost(m.Host)
 	if err != nil {
 		return "", fmt.Errorf("invalid host: %w", err)
 	}
@@ -586,16 +581,39 @@ func BaseURLFor(ctx context.Context, m *Machine) (string, error) {
 // a bare host or one already prefixed with a scheme, and returns just the
 // hostname portion.
 func hostnameOf(host string) (string, error) {
-	normalized := host
-	lower := strings.ToLower(host)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
-		normalized = "http://" + host
-	}
-	u, err := url.Parse(normalized)
+	u, err := parseMachineHost(host)
 	if err != nil || u.Hostname() == "" {
 		return "", fmt.Errorf("invalid host")
 	}
 	return u.Hostname(), nil
+}
+
+// NormalizeMachineHost normalizes a machine Host or a machine-traffic host key
+// to a lowercase host:port and its bare hostname, accepting a bare host as
+// well as one already carrying an http(s) scheme. It applies the same
+// scheme-defaulting parse BaseURLFor and hostnameOf use, so callers outside
+// this package — e.g. the MCP developer tools' traffic-to-machine resolution —
+// can key machine traffic exactly the way the registry builds each machine's
+// base URL. An empty or unparseable input yields ("", "").
+func NormalizeMachineHost(raw string) (host, hostname string) {
+	u, err := parseMachineHost(raw)
+	if err != nil {
+		return "", ""
+	}
+	return strings.ToLower(u.Host), strings.ToLower(u.Hostname())
+}
+
+// parseMachineHost applies this package's one host-normalization step to a
+// machine Host or a machine-traffic host key: trim it, then default a
+// scheme-less host to http:// before parsing. BaseURLFor, hostnameOf and
+// NormalizeMachineHost all go through it, so a stored host and a counted host
+// normalize identically.
+func parseMachineHost(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
+		raw = "http://" + raw
+	}
+	return url.Parse(raw)
 }
 
 func nullableString(s *string) any {

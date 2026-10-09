@@ -289,8 +289,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	registry := machines.NewRegistry(sqlDB)
 	// The machine-traffic counter backs the get_perf_stats developer MCP tool.
 	// Installed before any machine traffic starts — the poller below is the
-	// first caller — so every outbound HTTP round trip and WebSocket message
-	// from this process is counted per machine host.
+	// first caller — so every outbound HTTP round trip and every WebSocket
+	// message read is counted per machine host, and each host's HTTP traffic is
+	// split into the idle and brewing buckets by the brew state it last reported.
 	machineCounter := perfstats.NewMachineCounter()
 	machines.SetMachineTrafficCounter(machineCounter)
 	// Startup logRegistrySnapshot() (#714) — behind debug_logging (#977

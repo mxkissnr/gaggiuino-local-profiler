@@ -68,21 +68,9 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 	// firmware's single-client WebSocket limit rejects.
 	raw, _ := json.Marshal(evt)
 
-	// m==1 (BREW mode) means "brew screen selected", not "pump running".
-	// Actual brewing requires process.a==1 AND process.s in ("brew","infusion")
-	// AND process.u!=1: a utility process (u==1) is a flush, not a brew.
-	// Steaming: process.a==1 AND m==2. Source: ha-integration sensor.py _get_status.
-	var isBrewing, isSteaming, isFlushing bool
-	if process, ok := evt["process"].(map[string]any); ok {
-		if looseFloat(process["a"]) == 1 && looseFloat(process["u"]) == 1 {
-			// A running utility process (u == 1) is a flush, not a brew (#1541).
-			isFlushing = true
-		} else if looseFloat(process["a"]) == 1 {
-			stage, _ := process["s"].(string)
-			isBrewing = stage == "brew" || stage == "infusion"
-			isSteaming = looseFloat(evt["m"]) == 2
-		}
-	}
+	// m==1 (BREW mode) means "brew screen selected", not "pump running" — the
+	// process rule itself lives in gaggiMateProcessState below.
+	isBrewing, isFlushing, isSteaming := gaggiMateProcessState(evt)
 	steamOn := isSteaming
 
 	// Standby: the machine's own sleep/standby mode (m == 0). Only a frame
@@ -114,6 +102,28 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 		PumpFlow:          looseFloatOrNil(evt["fl"]),
 		Raw:               raw,
 	}, nil
+}
+
+// gaggiMateProcessState resolves the process.a/process.u/process.s rule that
+// decides whether a GaggiMate evt:status describes a running brew, a flush, or
+// steaming. A frame carrying process.a==1 is a running process: when
+// process.u==1 it is a utility process, i.e. a flush, not a brew (#1541);
+// otherwise a brew/infusion stage is a brew, and mode m==2 alongside it means
+// steaming. Shared by GetStatus and the live client's machine-traffic counter
+// so both classify a shot the same way. Source: ha-integration sensor.py
+// _get_status.
+func gaggiMateProcessState(evt map[string]any) (brewing, flushing, steaming bool) {
+	process, ok := evt["process"].(map[string]any)
+	if !ok || looseFloat(process["a"]) != 1 {
+		return false, false, false
+	}
+	if looseFloat(process["u"]) == 1 {
+		return false, true, false
+	}
+	stage, _ := process["s"].(string)
+	brewing = stage == "brew" || stage == "infusion"
+	steaming = looseFloat(evt["m"]) == 2
+	return brewing, flushing, steaming
 }
 
 // Shot-history sync (index.bin/.slog binary parsing) lives in

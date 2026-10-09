@@ -203,6 +203,10 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 		s.mu.Lock()
 		s.connected = false
 		s.mu.Unlock()
+		// A session that has ended is no longer taking a shot: clear the
+		// host's brewing flag so its later traffic is not miscounted as
+		// brewing.
+		setMachineBrewing(host, false)
 	}()
 
 	// Ask for the firmware version right away; firmware v1.9.0 answers with
@@ -264,7 +268,7 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 				// A status carrying the brew process (process.a==1, stage
 				// brew/infusion) marks this host as taking a shot, so the
 				// traffic counter splits its requests into the brewing bucket.
-				brewing := gaggiMateBrewing(s.status)
+				brewing, _, _ := gaggiMateProcessState(s.status)
 				s.mu.Unlock()
 				setMachineBrewing(host, brewing)
 			} else if tp == "evt:brew:confirm" {
@@ -331,19 +335,6 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 			return
 		}
 	}
-}
-
-// gaggiMateBrewing reports whether a merged evt:status describes a running
-// brew, using the same process rule as gaggiMateAdapter.GetStatus: process.a==1
-// with a brew/infusion stage, and process.u!=1 (a utility process is a flush,
-// not a brew). It feeds the machine-traffic counter's idle/brewing split.
-func gaggiMateBrewing(status map[string]any) bool {
-	process, ok := status["process"].(map[string]any)
-	if !ok || looseFloat(process["a"]) != 1 || looseFloat(process["u"]) == 1 {
-		return false
-	}
-	stage, _ := process["s"].(string)
-	return stage == "brew" || stage == "infusion"
 }
 
 func (s *gaggiMateLiveSession) addInflight(req *gaggimateInflightReq) {
