@@ -7,6 +7,7 @@ let homeCountryFromLocale: (typeof import('../public-src/views/analytics.js'))['
 let featureLabelPoint: (typeof import('../public-src/views/analytics.js'))['featureLabelPoint'];
 let greatCircleKm: (typeof import('../public-src/views/analytics.js'))['greatCircleKm'];
 let computeMapBoundingCoords: (typeof import('../public-src/views/analytics.js'))['computeMapBoundingCoords'];
+let originsNeedingMarkers: (typeof import('../public-src/views/analytics.js'))['originsNeedingMarkers'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -22,6 +23,7 @@ beforeAll(async () => {
   featureLabelPoint = mod.featureLabelPoint;
   greatCircleKm = mod.greatCircleKm;
   computeMapBoundingCoords = mod.computeMapBoundingCoords;
+  originsNeedingMarkers = mod.originsNeedingMarkers;
 });
 
 describe('homeCountryFromLocale (#1467)', () => {
@@ -98,5 +100,35 @@ describe('computeMapBoundingCoords (#1467)', () => {
   it('returns undefined when there are no usable coordinates', () => {
     expect(computeMapBoundingCoords(null)).toBeUndefined();
     expect(computeMapBoundingCoords([[NaN, 5], null])).toBeUndefined();
+  });
+});
+
+// #1543: an origin that only appears as a blend's secondary country has a chip
+// but no bean scatter point of its own, so it drew nothing on the map. These
+// are the codes that need an extra marker; the acceptance report named India.
+describe('originsNeedingMarkers (#1543)', () => {
+  it('adds a secondary origin that has shots but no bean point of its own', () => {
+    expect(originsNeedingMarkers(['BR', 'ET'], ['BR', 'ET', 'IN'])).toEqual(['IN']);
+  });
+
+  it('adds nothing when every origin already has a bean point', () => {
+    expect(originsNeedingMarkers(['BR', 'ET', 'IN'], ['BR', 'ET', 'IN'])).toEqual([]);
+  });
+
+  it('emits a repeated code only once', () => {
+    expect(originsNeedingMarkers([], ['IN', 'IN'])).toEqual(['IN']);
+  });
+
+  it('frames the added origin inside the initial view', () => {
+    // The home point (Berlin) plus a bean in Ethiopia; India is the origin the
+    // frame would otherwise be missing on screen.
+    const added = originsNeedingMarkers(['ET'], ['ET', 'IN']).map(code => ({ IN: [78.96, 20.59] } as Record<string, [number, number]>)[code]);
+    const box = computeMapBoundingCoords([[40.49, 9.15], ...added, [13.405, 52.52]]);
+    expect(box).toBeDefined();
+    const [[west, north], [east, south]] = box!;
+    expect(78.96).toBeGreaterThanOrEqual(west);
+    expect(78.96).toBeLessThanOrEqual(east);
+    expect(20.59).toBeGreaterThanOrEqual(south);
+    expect(20.59).toBeLessThanOrEqual(north);
   });
 });

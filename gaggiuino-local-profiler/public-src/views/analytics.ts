@@ -1475,6 +1475,22 @@ export function computeMapBoundingCoords(coords: (number[] | null | undefined)[]
   return [[west, north], [east, south]];
 }
 
+// Pure helper (unit-testable): the origin countries that have shots but no
+// bean marker of their own. Each bean draws exactly one point, at its primary
+// origin, so a blend's secondary origin (India in the acceptance run) would
+// otherwise carry a chip yet draw nothing on the map. Insertion order follows
+// `originCodes`; a code is only emitted once (#1543).
+export function originsNeedingMarkers(markedCodes: Iterable<string>, originCodes: string[]): string[] {
+  const marked = new Set(markedCodes);
+  const out: string[] = [];
+  for (const code of originCodes) {
+    if (marked.has(code)) continue;
+    marked.add(code);
+    out.push(code);
+  }
+  return out;
+}
+
 // Pure helper (unit-testable): splits a ring's [lon, lat] coordinate array
 // wherever two consecutive points jump by more than 180° of longitude — the
 // signature of a landmass crossing the antimeridian in raw topojson→GeoJSON
@@ -2013,6 +2029,23 @@ export async function buildWorldMap() {
     points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null, _code: primaryCode });
   }
 
+  // #1543: give every origin with shots a marker. A blend's secondary origin
+  // has no bean point of its own, so without this it would carry a chip but
+  // draw nothing on the map (India in the acceptance run). The point lands on
+  // the country centroid; the frame below is unchanged but now every chipped
+  // origin is actually drawn inside it.
+  const beanMarkedCodes = new Set(points.map(p => p._code));
+  for (const code of originsNeedingMarkers(beanMarkedCodes, countriesWithShots)) {
+    const centroid = COUNTRY_CENTROIDS[code];
+    if (!centroid) continue;
+    points.push({
+      name: countryName(code, S.currentLang),
+      value: [centroid[0], centroid[1], byCode[code]?.shots ?? 0],
+      _region: null,
+      _code: code,
+    });
+  }
+
   // Brand + chrome colors, read live from the CSS custom properties so the
   // map follows whichever accent/theme the user has picked (#1024: this used
   // to be true only for accentTo/mutedText, with the rest hardcoded dark).
@@ -2026,15 +2059,8 @@ export async function buildWorldMap() {
   }
 
   const home = _worldMapHome;
-  // #1543: frame every origin that has a marker, not just the scatter points:
-  // a country can carry a chip while its only bean marker was skipped (e.g.
-  // a secondary blend origin), and then it could sit outside the initial view
-  // (India in the acceptance run). Countries with shots are added by their
-  // centroid, so the frame always covers every chip. A small margin is applied
-  // inside computeMapBoundingCoords(); the zoom limits below stay untouched.
   const mapPoints = [
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
-    ...countriesWithShots.map(code => COUNTRY_CENTROIDS[code]),
     ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
     // #1467: include the home point so the routes to it stay fully visible.
     ...(home ? [home] : []),

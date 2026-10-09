@@ -527,16 +527,23 @@ export async function _handleScanPhoto(file: File): Promise<void> {
   }
 }
 
-// Open Food Facts' categories arrive as machine slugs
-// ("beverages-and-beverages-preparations"), which are not human-readable and
-// never belong in a bean's Notes. Drop those segments and keep only the
-// human-readable ones (labels like "Organic"); the result stays empty when
-// nothing readable is left (#1543).
-function humanReadableNotes(notes: string | undefined): string {
+// A slug is either hyphen-joined lowercase words
+// ("beverages-and-beverages-preparations") or a language-prefixed Open Food
+// Facts tag ("en:coffees"). A plain lowercase note ("organic", "fairtrade")
+// is not a slug and is kept.
+function _isCategorySlug(segment: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(segment) || /^[a-z]{2}:[a-z0-9-]+$/.test(segment);
+}
+
+// Open Food Facts' categories reach Notes as machine slugs, which are not
+// human-readable and never belong in a bean's Notes. Drop only slug-shaped
+// segments and keep the human-readable labels (e.g. "Organic"); the result
+// stays empty when nothing readable is left (#1543). Exported for its test.
+export function humanReadableNotes(notes: string | undefined): string {
   return (notes ?? '')
     .split(',')
     .map(segment => segment.trim())
-    .filter(segment => segment !== '' && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segment))
+    .filter(segment => segment !== '' && !_isCategorySlug(segment))
     .join(', ');
 }
 
