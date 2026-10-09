@@ -138,6 +138,11 @@ func (h *Handlers) setDefaultMachine(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	previous, err := h.registry.GetDefaultMachine()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	machine, err := h.registry.SetDefaultMachine(id)
 	if err != nil {
 		internalError(w, err)
@@ -146,6 +151,11 @@ func (h *Handlers) setDefaultMachine(w http.ResponseWriter, r *http.Request) {
 	if machine == nil {
 		writeError(w, http.StatusNotFound, "not found")
 		return
+	}
+	// #1543: notify the poller only on an actual change, so re-selecting the
+	// current default never restarts an in-progress preheat session.
+	if h.onDefaultChanged != nil && (previous == nil || previous.ID != machine.ID) {
+		h.onDefaultChanged()
 	}
 	h.registry.LogRegistrySnapshot()
 	writeJSON(w, http.StatusOK, machine)

@@ -59,6 +59,14 @@ type Handlers struct {
 	// import-cycle reason as onFirmwareUpdate: internal/achievements already
 	// imports internal/machines, so the wiring has to run this direction.
 	onProfileSaved func(action string)
+
+	// onDefaultChanged runs after the default machine has been reassigned
+	// (#1543). Set via SetOnDefaultChanged by cmd/server; internal/system
+	// uses it to reset the poller's preheat session for the new default — a
+	// default switch to an already-on machine otherwise leaves the preheat
+	// countdown stuck at the full window. A callback for the same
+	// import-cycle reason as onProfileSaved. A nil hook is a no-op.
+	onDefaultChanged func()
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB
@@ -106,6 +114,17 @@ func (h *Handlers) SetOnFirmwareUpdate(fn func(m *Machine, from, to string) erro
 // already succeeded.
 func (h *Handlers) SetOnProfileSaved(fn func(action string)) {
 	h.onProfileSaved = fn
+}
+
+// SetOnDefaultChanged wires the side effect to run after the default machine
+// has actually changed (#1543). cmd/server uses it to reset the poller's
+// preheat session for the new default. internal/system imports
+// internal/machines, so this is a callback for the same import-cycle reason as
+// SetOnProfileSaved. A nil hook (never wired, e.g. in this package's own unit
+// tests) is a no-op, and the callback never changes the response — the
+// reassignment itself already succeeded.
+func (h *Handlers) SetOnDefaultChanged(fn func()) {
+	h.onDefaultChanged = fn
 }
 
 // SetOnShotSaved wires the side effect to run when the GaggiMate controller

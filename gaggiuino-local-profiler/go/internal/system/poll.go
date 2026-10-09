@@ -676,6 +676,33 @@ func (p *Poller) applyStandbyTransition(now int64, standby bool) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
+// HandleDefaultMachineChange resets the preheat session when the configured
+// default machine changes (#1543). The runtime's on/standby flags carry over
+// from the previous default: when the machine is on (and not in standby) this
+// starts a fresh preheat session, so the countdown runs and a preheat run is
+// recorded instead of the full window showing forever; when it is off, any
+// switch-on time is dropped so no stale clock is counted down. A no-op when
+// live polling is not running (there is no session to reset). Wired from the
+// set-default handler through machines.Handlers.SetOnDefaultChanged.
+func (p *Poller) HandleDefaultMachineChange() {
+	p.liveMu.Lock()
+	if p.liveTicker == nil {
+		p.liveMu.Unlock()
+		return
+	}
+	now := time.Now().UnixMilli()
+	snap := p.runtime.Get()
+	if snap.MachineOn && !snap.Standby {
+		p.beginPreheatSession(now)
+		log.Printf("system: default machine changed -- preheat session started")
+	} else {
+		p.runtime.SetSwitchOnAt(nil)
+		p.savePreheatState()
+	}
+	p.liveMu.Unlock()
+	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+}
+
 // pollTick is the isPollRunning mutex guard around one pollViaGaggiuinoStatus
 // call, so a slow poll (e.g. a machine taking >1s to answer) can never overlap
 // with the next tick.
