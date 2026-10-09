@@ -1,9 +1,10 @@
 // Package sse implements the single /api/events Server-Sent Events endpoint
 // multiplexing live-snapshot and preheat-update pushes over one connection
-// (see the Event* constants in sse.go for the exact set; the other event
-// types — shot-saved/bean-changed/maintenance-acknowledged/order-completed,
-// plus profile-saved/backup-exported — are consumed elsewhere and are out of
-// scope here).
+// (see the Event* constants in sse.go for the exact set), plus the
+// data-changed push (see datachanged.go and EventDataChanged). The older
+// per-domain event types — shot-saved/bean-changed/maintenance-acknowledged/
+// order-completed, plus profile-saved/backup-exported — stay retired (#1200):
+// one data-changed event naming a kind replaces them.
 //
 // The documented HA-Ingress-buffering workarounds are replicated exactly,
 // not approximated — see project_glp_sse_ingress_nginx_buffering in the
@@ -31,10 +32,9 @@
 // package's handler behind unchanged rather than this package reimplementing
 // it.
 //
-// Hub is a minimal in-process pub/sub. The sync, preheat and poll packages
-// are the intended producers via Hub.Publish/Handler.Prime; none is wired up
-// as a producer yet, so cmd/server currently wires this package up with no
-// real producer, only the endpoint itself and its own
-// connect/priming/keepalive/multiplexing mechanics — verified by
-// sse_test.go's placeholder Publish/Prime calls.
+// Hub is a minimal in-process pub/sub. Producers publish through
+// Hub.Publish/Handler.Prime; cmd/server wires DataChanges (datachanged.go) as
+// the data-changed producer and the poller as the prime/live-snapshot
+// producer. The endpoint's own connect/priming/keepalive/multiplexing
+// mechanics are verified by sse_test.go.
 package sse
