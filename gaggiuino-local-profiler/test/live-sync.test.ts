@@ -283,11 +283,8 @@ describe('client identity header (#1539)', () => {
 });
 
 describe('bean-image invalidation (#1539)', () => {
-  function okImage(mock: { mockImplementation: (fn: () => Promise<Response>) => unknown }): void {
-    mock.mockImplementation(() => Promise.resolve({
-      ok: true,
-      blob: () => Promise.resolve(new Blob(['x'])),
-    } as unknown as Response));
+  function imageResponse(): Response {
+    return { ok: true, blob: () => Promise.resolve(new Blob(['x'])) } as unknown as Response;
   }
 
   it('invalidateLibraryImages drops only the library keys', async () => {
@@ -297,8 +294,9 @@ describe('bean-image invalidation (#1539)', () => {
     };
     S.glpToken = '';
     const beanImage = await import('../public-src/bean-image.js');
-    const fetchMock = vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>();
-    okImage(fetchMock);
+    const fetchMock = vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(
+      () => Promise.resolve(imageResponse()),
+    );
     vi.stubGlobal('fetch', fetchMock);
     g.URL = { createObjectURL: vi.fn(() => 'blob:x') };
 
@@ -325,8 +323,9 @@ describe('bean-image invalidation (#1539)', () => {
     };
     S.glpToken = '';
     const beanImage = await import('../public-src/bean-image.js');
-    const fetchMock = vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>();
-    okImage(fetchMock);
+    const fetchMock = vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(
+      () => Promise.resolve(imageResponse()),
+    );
     vi.stubGlobal('fetch', fetchMock);
     g.URL = { createObjectURL: vi.fn(() => 'blob:x') };
 
