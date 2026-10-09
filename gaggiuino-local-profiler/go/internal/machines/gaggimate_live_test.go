@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-
 )
 
 // streamingGaggiMate is a fake GaggiMate controller that keeps pushing
