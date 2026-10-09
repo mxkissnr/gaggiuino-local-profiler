@@ -390,6 +390,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	demoService := system.NewDemoService(sqlDB, shotsRepo, libRepo)
 	systemHandlers := system.NewHandlers(poller, demoService, token)
+	// #1539 slice 2: GET /api/status reports the data-change tracker's epoch and
+	// per-kind revisions so a client that reconnects (or falls back to polling)
+	// can resync only the kinds it missed.
+	systemHandlers.SetDataRevs(changes.Revs)
 	systemHandlers.RegisterRoutes(mux)
 
 	// #1375: per-install UI choices (view/filter/sort) that follow the user
@@ -461,6 +465,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		RateLimitWindow: rateLimitWindow,
 		RateLimitMax:    rateLimitMax,
 		Settings:        mcpRepo,
+		OnDataChanged:   func(k, id string) { changes.Publish(k, id, "") },
 	}))
 	mcp.NewSettingsHandlers(mcpRepo).RegisterRoutes(mux)
 

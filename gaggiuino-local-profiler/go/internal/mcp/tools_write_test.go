@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -22,6 +24,13 @@ import (
 // so the same DB backs the handler and the assertions.
 func newWriteServer(t *testing.T, allowWrite bool) (*httptest.Server, *sql.DB, *library.Repository, *maintenance.Repository, *machines.Registry) {
 	t.Helper()
+	return newWriteServerHook(t, allowWrite, nil)
+}
+
+// newWriteServerHook is newWriteServer with a data-change hook wired into the
+// MCP deps, so a test can assert what the write tools publish.
+func newWriteServerHook(t *testing.T, allowWrite bool, onDataChanged func(kind, id string)) (*httptest.Server, *sql.DB, *library.Repository, *maintenance.Repository, *machines.Registry) {
+	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "glp.db")
 	sqlDB, err := db.Open(dbPath)
 	if err != nil {
@@ -34,14 +43,15 @@ func newWriteServer(t *testing.T, allowWrite bool) (*httptest.Server, *sql.DB, *
 	registry := machines.NewRegistry(sqlDB)
 	mux := http.NewServeMux()
 	mux.Handle(Path, NewHandler(Deps{
-		Shots:       shots.NewService(shotsRepo),
-		ShotsRepo:   shotsRepo,
-		Library:     libRepo,
-		Maintenance: maintRepo,
-		Registry:    registry,
-		Poller:      fakePoller{},
-		Version:     "test",
-		Settings:    settingsSource(true, allowWrite, false),
+		Shots:         shots.NewService(shotsRepo),
+		ShotsRepo:     shotsRepo,
+		Library:       libRepo,
+		Maintenance:   maintRepo,
+		Registry:      registry,
+		Poller:        fakePoller{},
+		Version:       "test",
+		Settings:      settingsSource(true, allowWrite, false),
+		OnDataChanged: onDataChanged,
 	}))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
@@ -343,5 +353,84 @@ func TestMarkMaintenanceDoneLogsAndRejectsUnknownTask(t *testing.T) {
 
 	if res := call(t, session, "mark_maintenance_done", map[string]any{"task": "bogus"}); !res.IsError {
 		t.Fatalf("expected isError for an unknown task")
+	}
+}
+
+// dataChangedRecorder collects the (kind, id) pairs the write tools publish
+// through Deps.OnDataChanged, so a test can assert the exact sequence. The MCP
+// handler runs on its own goroutine, so access is mutex-guarded for -race.
+type dataChangedRecorder struct {
+	mu     sync.Mutex
+	events [][2]string
+}
+
+func (r *dataChangedRecorder) record(kind, id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, [2]string{kind, id})
+}
+
+func (r *dataChangedRecorder) snapshot() [][2]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([][2]string, len(r.events))
+	copy(out, r.events)
+	return out
+}
+
+// TestWriteToolsPublishDataChanged pins the #1539 slice-2 contract: each write
+// tool publishes its change exactly once on success, and annotate_shot publishes
+// both the shot and the library because a shot's dose drives bag stock.
+func TestWriteToolsPublishDataChanged(t *testing.T) {
+	rec := &dataChangedRecorder{}
+	ts, sqlDB, libRepo, _, registry := newWriteServerHook(t, true, rec.record)
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	insertShot(t, sqlDB, 41, 1000, nil, map[string]any{"coffee": "Alpha"})
+	lib, err := libRepo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = []library.Entity{{"id": int64(1), "name": "Alpha", "enabled": true}}
+	if err := libRepo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	session := connect(t, ts.URL+Path)
+
+	if res := call(t, session, "annotate_shot", map[string]any{"id": 41, "rating": 4}); res.IsError {
+		t.Fatalf("annotate_shot failed: %s", errorText(t, res))
+	}
+	if res := call(t, session, "set_known_grind", map[string]any{"bean_id": 1, "grinder": "Niche", "grind_setting": "12"}); res.IsError {
+		t.Fatalf("set_known_grind failed: %s", errorText(t, res))
+	}
+	if res := call(t, session, "mark_maintenance_done", map[string]any{"task": "descaling"}); res.IsError {
+		t.Fatalf("mark_maintenance_done failed: %s", errorText(t, res))
+	}
+
+	want := [][2]string{{"shot", "41"}, {"library", ""}, {"library", ""}, {"maintenance", ""}}
+	if got := rec.snapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("published %v, want %v", got, want)
+	}
+}
+
+// TestWriteToolsDoNotPublishOnError proves a rejected write publishes nothing.
+func TestWriteToolsDoNotPublishOnError(t *testing.T) {
+	rec := &dataChangedRecorder{}
+	ts, _, _, _, _ := newWriteServerHook(t, true, rec.record)
+	session := connect(t, ts.URL+Path)
+
+	if res := call(t, session, "annotate_shot", map[string]any{"id": 424242, "rating": 3}); !res.IsError {
+		t.Fatalf("expected isError for an unknown shot id")
+	}
+	if res := call(t, session, "set_known_grind", map[string]any{"bean_id": 999, "grinder": "Niche", "grind_setting": "12"}); !res.IsError {
+		t.Fatalf("expected isError for an unknown bean")
+	}
+	if res := call(t, session, "mark_maintenance_done", map[string]any{"task": "bogus"}); !res.IsError {
+		t.Fatalf("expected isError for an unknown task")
+	}
+
+	if got := rec.snapshot(); len(got) != 0 {
+		t.Fatalf("published %v on failed writes, want none", got)
 	}
 }

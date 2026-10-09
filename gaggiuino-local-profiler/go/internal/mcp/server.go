@@ -70,6 +70,13 @@ type Deps struct {
 	// reports an empty machine-traffic section rather than failing the tool
 	// (the routes/process/database sections stay available).
 	Machines MachineTrafficSource
+	// OnDataChanged, when non-nil, is called once after each successful write
+	// tool with the changed data kind and, for a single entity, its id, so the
+	// host can publish a data-changed SSE event. A callback rather than an
+	// internal/sse dependency keeps the MCP package free of the SSE wiring.
+	// Nil-safe: the write tools then publish nothing (every test that does not
+	// set it).
+	OnDataChanged func(kind, id string)
 	// DBPath is the SQLite database file get_perf_stats reports the size of,
 	// together with its -wal sidecar when present. Empty is tolerated and
 	// reports a size of zero.
