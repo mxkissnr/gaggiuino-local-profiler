@@ -49,7 +49,6 @@ func TestDataChanges_MiddlewarePublishesOnSuccess(t *testing.T) {
 	sub, unsub := hub.Subscribe()
 	defer unsub()
 
-	start := time.Now().UnixMilli()
 	dc := NewDataChanges(hub, []string{"library"})
 
 	mux := http.NewServeMux()
@@ -74,8 +73,11 @@ func TestDataChanges_MiddlewarePublishesOnSuccess(t *testing.T) {
 	if got.Src != "abc_DEF-123" {
 		t.Errorf("src = %q, want abc_DEF-123", got.Src)
 	}
-	if got.Rev < start {
-		t.Errorf("rev = %d, want >= seed %d", got.Rev, start)
+	if got.Rev != 1 {
+		t.Errorf("rev = %d, want 1 (the first change after the 0 seed)", got.Rev)
+	}
+	if got.Epoch != dc.Epoch || got.Epoch == "" {
+		t.Errorf("epoch = %q, want %q", got.Epoch, dc.Epoch)
 	}
 }
 
@@ -176,41 +178,31 @@ func TestDataChanges_MultiKindPublishesInTableOrder(t *testing.T) {
 	if first.Kind != "library" || second.Kind != "maintenance" {
 		t.Errorf("kinds = %q then %q, want library then maintenance", first.Kind, second.Kind)
 	}
-	// Each kind has its own counter seeded at the same instant, so the two revs
-	// may be equal; their relative order across kinds is not meaningful, only
-	// that each kind's own counter advanced.
-	if first.Rev <= 0 || second.Rev <= 0 {
-		t.Errorf("revs = %d then %d, want both positive", first.Rev, second.Rev)
+	// Each kind's counter starts at 0 independently, so both first changes are 1.
+	if first.Rev != 1 || second.Rev != 1 {
+		t.Errorf("revs = %d then %d, want both 1", first.Rev, second.Rev)
 	}
 }
 
-func TestDataChanges_RevsSeedAndGrow(t *testing.T) {
+func TestDataChanges_RevsStartAtZeroAndGrow(t *testing.T) {
 	hub := NewHub()
-	start := time.Now().UnixMilli()
+	sub, unsub := hub.Subscribe()
+	defer unsub()
+
 	dc := NewDataChanges(hub, []string{"library", "shots"})
 
-	for _, kind := range []string{"library", "shots"} {
-		if got := dc.Revs()[kind]; got < start {
-			t.Errorf("seed rev for %s = %d, want >= start %d", kind, got, start)
-		}
-	}
-
-	before := dc.Revs()["library"]
 	dc.Publish("library", "", "")
-	after := dc.Revs()["library"]
-	if after != before+1 {
-		t.Errorf("rev after one publish = %d, want %d", after, before+1)
+	if got := changedData(t, waitEvent(t, sub)); got.Rev != 1 {
+		t.Errorf("first library rev = %d, want 1 (the counter starts at 0)", got.Rev)
+	}
+	dc.Publish("library", "", "")
+	if got := changedData(t, waitEvent(t, sub)); got.Rev != 2 {
+		t.Errorf("second library rev = %d, want 2 (must grow strictly)", got.Rev)
 	}
 
 	dc.Publish("brand-new", "", "")
-	if got := dc.Revs()["brand-new"]; got != 1 {
-		t.Errorf("unknown kind rev = %d, want 1", got)
-	}
-
-	snapshot := dc.Revs()
-	snapshot["library"] = -1
-	if got := dc.Revs()["library"]; got != after {
-		t.Errorf("Revs() leaked its backing map: library = %d, want %d", got, after)
+	if got := changedData(t, waitEvent(t, sub)); got.Rev != 1 {
+		t.Errorf("unknown kind rev = %d, want 1", got.Rev)
 	}
 }
 
@@ -219,18 +211,9 @@ func TestDataChanges_AllBumpsEveryKind(t *testing.T) {
 	sub, unsub := hub.Subscribe()
 	defer unsub()
 
-	kinds := []string{"library", "shots", "orders"}
-	dc := NewDataChanges(hub, kinds)
-	before := dc.Revs()
+	dc := NewDataChanges(hub, []string{"library", "shots", "orders"})
 
 	dc.Publish(KindAll, "", "t9")
-
-	after := dc.Revs()
-	for _, kind := range kinds {
-		if after[kind] != before[kind]+1 {
-			t.Errorf("rev for %s = %d, want %d", kind, after[kind], before[kind]+1)
-		}
-	}
 
 	got := changedData(t, waitEvent(t, sub))
 	if got.Kind != KindAll {
@@ -242,11 +225,72 @@ func TestDataChanges_AllBumpsEveryKind(t *testing.T) {
 	if got.Rev != 0 || got.ID != "" {
 		t.Errorf("all event = %+v, want no rev and no id", got)
 	}
+	if got.Epoch != dc.Epoch || got.Epoch == "" {
+		t.Errorf("all event epoch = %q, want %q", got.Epoch, dc.Epoch)
+	}
+
+	// Every seeded kind was bumped by the all event, so the next change to one of
+	// them carries its second revision.
+	dc.Publish("library", "", "")
+	if next := changedData(t, waitEvent(t, sub)); next.Rev != 2 {
+		t.Errorf("library rev after the all event = %d, want 2", next.Rev)
+	}
+}
+
+func TestDataChanges_EpochIdentifiesInstance(t *testing.T) {
+	hub := NewHub()
+	sub, unsub := hub.Subscribe()
+	defer unsub()
+
+	dc := NewDataChanges(hub, []string{"library"})
+	if dc.Epoch == "" {
+		t.Fatal("Epoch is empty")
+	}
+	if len(dc.Epoch) != 16 {
+		t.Errorf("Epoch %q length = %d, want 16 hex chars", dc.Epoch, len(dc.Epoch))
+	}
+
+	dc.Publish("library", "", "")
+	first := changedData(t, waitEvent(t, sub))
+	dc.Publish("library", "", "")
+	second := changedData(t, waitEvent(t, sub))
+	if first.Epoch != dc.Epoch || second.Epoch != dc.Epoch {
+		t.Errorf("event epochs = %q then %q, want %q on both", first.Epoch, second.Epoch, dc.Epoch)
+	}
+
+	other := NewDataChanges(NewHub(), []string{"library"})
+	if other.Epoch == dc.Epoch {
+		t.Errorf("two instances share the epoch %q", dc.Epoch)
+	}
+}
+
+func TestDataChanges_EarlyHintsDoesNotHideSuccess(t *testing.T) {
+	hub := NewHub()
+	sub, unsub := hub.Subscribe()
+	defer unsub()
+
+	dc := NewDataChanges(hub, []string{"library"})
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/things", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(103)
+		w.WriteHeader(http.StatusOK)
+	})
+	h := dc.Middleware(map[string]Route{"POST /api/things": {Kinds: []string{"library"}}})(mux)
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/things", nil))
+
+	got := changedData(t, waitEvent(t, sub))
+	if got.Kind != "library" {
+		t.Errorf("kind = %q, want library after a 103 then a 200", got.Kind)
+	}
 }
 
 func TestStatusWriter_ResponseControllerFlush(t *testing.T) {
 	rec := httptest.NewRecorder()
 	sw := &statusWriter{w: rec}
+	if _, ok := http.ResponseWriter(sw).(http.Flusher); !ok {
+		t.Fatal("statusWriter does not satisfy http.Flusher on a write route")
+	}
 	if err := http.NewResponseController(sw).Flush(); err != nil {
 		t.Fatalf("Flush through the wrapper: %v", err)
 	}

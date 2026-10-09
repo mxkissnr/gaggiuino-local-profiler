@@ -157,10 +157,41 @@ func TestDataChangedKindsDeclared(t *testing.T) {
 	}
 }
 
+// TestDataChangedReclassifiedRoutes pins the classification the live-sync
+// review settled on: a shot write changes the library's derived stock and wear
+// too, and completing an order changes the shot list and the library.
+func TestDataChangedReclassifiedRoutes(t *testing.T) {
+	cases := []struct {
+		pattern string
+		kinds   []string
+		withID  bool
+	}{
+		{"POST /api/shots/{id}/annotate", []string{"shot", "library"}, true},
+		{"POST /api/shots/{id}/trash", []string{"shots", "library"}, false},
+		{"POST /api/shots/{id}/restore", []string{"shots", "library"}, false},
+		{"POST /api/shots/{id}/delete", []string{"shots", "library"}, false},
+		{"POST /api/orders/{id}/complete", []string{"orders", "shots", "library"}, false},
+	}
+	for _, tc := range cases {
+		route, ok := dataRoutes[tc.pattern]
+		if !ok {
+			t.Errorf("route %q is not in dataRoutes", tc.pattern)
+			continue
+		}
+		if got := strings.Join(route.Kinds, ","); got != strings.Join(tc.kinds, ",") {
+			t.Errorf("route %q kinds = %v, want %v", tc.pattern, route.Kinds, tc.kinds)
+		}
+		if route.WithID != tc.withID {
+			t.Errorf("route %q WithID = %v, want %v", tc.pattern, route.WithID, tc.withID)
+		}
+	}
+}
+
 // readDataChanged reads the SSE stream until an EventDataChanged frame arrives
 // and decodes its payload, skipping the priming, live-snapshot and ping frames
-// interleaved on the connection.
-func readDataChanged(t *testing.T, reader *bufio.Reader) sse.DataChanged {
+// interleaved on the connection. It returns the typed payload and its raw keys,
+// so a caller can pin the exact wire shape.
+func readDataChanged(t *testing.T, reader *bufio.Reader) (sse.DataChanged, map[string]json.RawMessage) {
 	t.Helper()
 	for {
 		line, err := reader.ReadString('\n')
@@ -174,11 +205,32 @@ func readDataChanged(t *testing.T, reader *bufio.Reader) sse.DataChanged {
 		if err != nil {
 			t.Fatalf("reading the data-changed data line: %v", err)
 		}
+		raw := []byte(strings.TrimPrefix(dataLine, "data: "))
 		var dc sse.DataChanged
-		if err := json.Unmarshal([]byte(strings.TrimPrefix(dataLine, "data: ")), &dc); err != nil {
+		if err := json.Unmarshal(raw, &dc); err != nil {
 			t.Fatalf("decoding data-changed payload %q: %v", dataLine, err)
 		}
-		return dc
+		var keys map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &keys); err != nil {
+			t.Fatalf("decoding data-changed payload keys %q: %v", dataLine, err)
+		}
+		return dc, keys
+	}
+}
+
+// assertPayloadKeys fails unless an event payload carries exactly the four keys
+// the live-sync client relies on: kind, rev, src and epoch. An id only appears
+// on a route that addresses one entity, so these events omit it.
+func assertPayloadKeys(t *testing.T, keys map[string]json.RawMessage, label string) {
+	t.Helper()
+	got := make([]string, 0, len(keys))
+	for k := range keys {
+		got = append(got, k)
+	}
+	sort.Strings(got)
+	want := []string{"epoch", "kind", "rev", "src"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("%s payload keys = %v, want exactly %v", label, got, want)
 	}
 }
 
@@ -228,12 +280,16 @@ func TestDataChangedEndToEnd(t *testing.T) {
 	}
 
 	write(http.MethodPut, "/api/ui-prefs", `{"view":"grid"}`, "t1")
-	if got := readDataChanged(t, reader); got.Kind != "ui-prefs" || got.Src != "t1" || got.ID != "" || got.Rev == 0 {
-		t.Errorf("ui-prefs event = %+v, want kind ui-prefs, src t1, no id, non-zero rev", got)
+	uiPrefs, uiPrefsKeys := readDataChanged(t, reader)
+	if uiPrefs.Kind != "ui-prefs" || uiPrefs.Src != "t1" || uiPrefs.ID != "" || uiPrefs.Rev == 0 || uiPrefs.Epoch == "" {
+		t.Errorf("ui-prefs event = %+v, want kind ui-prefs, src t1, no id, non-zero rev, an epoch", uiPrefs)
 	}
+	assertPayloadKeys(t, uiPrefsKeys, "ui-prefs")
 
 	write(http.MethodPost, "/api/library/bean", `{"name":"Live Sync Bean"}`, "t2")
-	if got := readDataChanged(t, reader); got.Kind != "library" || got.Src != "t2" || got.ID != "" || got.Rev == 0 {
-		t.Errorf("library event = %+v, want kind library, src t2, no id, non-zero rev", got)
+	bean, beanKeys := readDataChanged(t, reader)
+	if bean.Kind != "library" || bean.Src != "t2" || bean.ID != "" || bean.Rev == 0 || bean.Epoch == "" {
+		t.Errorf("library event = %+v, want kind library, src t2, no id, non-zero rev, an epoch", bean)
 	}
+	assertPayloadKeys(t, beanKeys, "library")
 }
