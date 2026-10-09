@@ -149,7 +149,7 @@ Die Werkzeuge zum Lesen kommen mit dem Hauptschalter. Die Schreibwerkzeuge haben
 |---|---|---|
 | Nur lesend (kommt mit dem Hauptschalter) | — | `list_shots`, `get_shot`, `compare_shots`, `list_beans`, `get_library`, `get_maintenance_status`, `get_machine_status`, `get_analytics_summary` |
 | Schreiben | Kontrollkästchen „Schreibwerkzeuge" | `annotate_shot`, `set_known_grind`, `mark_maintenance_done` — diese verändern deine Daten |
-| Entwickler | Kontrollkästchen „Entwicklerwerkzeuge" (nur Dev-Channel-Builds) | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history` — größere Ausgaben, inklusive der aktuellen Log-Zeilen der App |
+| Entwickler | Kontrollkästchen „Entwicklerwerkzeuge" (nur Dev-Channel-Builds) | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history`, `get_perf_stats` — größere Ausgaben, inklusive der aktuellen Log-Zeilen der App; `get_perf_stats` meldet die API-Antwortzeiten pro Route, den Speicher, die Datenbankgröße und die Anfrage-Rate an jede Maschine |
 
 Der Server bietet außerdem zwei Prompts, die dem Assistenten einen fertigen Plan an die Hand geben: `dial_in_bean` und `analyse_shot`.
 

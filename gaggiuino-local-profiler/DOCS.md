@@ -149,7 +149,7 @@ The read-only tools come with the main switch. The write tools have their own ch
 |---|---|---|
 | Read-only (comes with the main switch) | — | `list_shots`, `get_shot`, `compare_shots`, `list_beans`, `get_library`, `get_maintenance_status`, `get_machine_status`, `get_analytics_summary` |
 | Write | Write-tools checkbox | `annotate_shot`, `set_known_grind`, `mark_maintenance_done` — these change your data |
-| Developer | Developer-tools checkbox (dev-channel builds only) | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history` — larger outputs, including the app's recent log lines |
+| Developer | Developer-tools checkbox (dev-channel builds only) | `get_shot_raw`, `explain_score`, `export_shots_dataset`, `get_diagnostics`, `get_preheat_history`, `get_perf_stats` — larger outputs, including the app's recent log lines; `get_perf_stats` reports the running install's API response times per route, memory, database size and requests per minute to each machine |
 
 The server also offers two prompts that hand the assistant a ready-made plan: `dial_in_bean` and `analyse_shot`.
 
