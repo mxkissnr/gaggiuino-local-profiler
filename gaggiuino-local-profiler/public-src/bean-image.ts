@@ -68,4 +68,18 @@ export function loadShotThumbBlobUrl(shotId: number): Promise<string | null> {
 
 export function invalidateShotImage(shotId: number): void {
   _cache.delete(`shot:${shotId}`);
+  // #1351/#1539: the thumbnail is cached under its own key, so a replaced shot
+  // photo must drop both entries.
+  _cache.delete(`shotthumb:${shotId}`);
+}
+
+// #1539: a remote library change (or a whole-database one) can touch any bean,
+// grinder, basket or puck-screen photo, with no per-entity id available, so drop
+// every library cache entry at once. Shot photos are addressed per id and are
+// invalidated separately, so they are deliberately left alone here.
+export function invalidateLibraryImages(): void {
+  const libraryKeys = ['bean:', 'grinder:', 'basket:', 'puckscreen:'];
+  for (const key of [..._cache.keys()]) {
+    if (libraryKeys.some((prefix) => key.startsWith(prefix))) _cache.delete(key);
+  }
 }
