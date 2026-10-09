@@ -46,13 +46,14 @@ func (a *GaggiuinoAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 
 	weight := looseFloat(obj["weight"])
 	steamOn := looseTruthy(obj["steamSwitchState"])
+	brewing := looseTruthy(obj["brewSwitchState"])
 	return Status{
 		Reachable:         true,
 		Temperature:       looseFloat(obj["temperature"]),
 		TargetTemperature: looseFloat(obj["targetTemperature"]),
 		Pressure:          looseFloat(obj["pressure"]),
 		Weight:            &weight,
-		Brewing:           looseTruthy(obj["brewSwitchState"]),
+		Brewing:           brewing,
 		SteamOn:           &steamOn,
 		ProfileID:         looseIntPtr(obj["profileId"]),
 		ProfileName:       looseStringPtr(obj["profileName"]),

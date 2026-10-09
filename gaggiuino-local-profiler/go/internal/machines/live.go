@@ -194,11 +194,13 @@ func (c *gaggiuinoLiveClient) connectOnce(ctx context.Context, baseURL string, s
 	}
 	defer conn.CloseNow()
 
+	host := hostFromBaseURL(baseURL)
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
 			return // closed/errored/ctx cancelled — run() decides whether to reconnect
 		}
+		countMachineWSMessage(host)
 		var envelope proto.WebSocketMessageDto
 		if err := envelope.Unmarshal(data); err != nil {
 			continue // not a valid envelope frame, ignore

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -14,6 +15,8 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -117,6 +120,18 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 		OutputSchema: mustSchema[getPreheatHistoryOutput](),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getPreheatHistoryInput) (*mcpsdk.CallToolResult, getPreheatHistoryOutput, error) {
 		out, err := getPreheatHistory(deps, in)
+		return nil, out, err
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:         "get_perf_stats",
+		Title:        "Get performance stats",
+		Description:  "Report the running install's own performance counters, held only in memory since process start: API request count, median, p95 and max per route pattern over all requests and over the last 15 minutes; process memory, goroutine count, uptime and GC pause p95; the database size and shot count; and outbound machine traffic per machine id, requests and WebSocket messages per minute split by idle and brewing plus the error count, resolved to machine ids so no host is ever returned. Read-only.",
+		Annotations:  readOnlyAnnotations("Get performance stats"),
+		InputSchema:  mustSchema[getPerfStatsInput](),
+		OutputSchema: mustSchema[getPerfStatsOutput](),
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ getPerfStatsInput) (*mcpsdk.CallToolResult, getPerfStatsOutput, error) {
+		out, err := getPerfStats(deps)
 		return nil, out, err
 	})
 }
@@ -633,4 +648,89 @@ func toPreheatRunOutput(run system.PreheatRun, includeSamples bool) preheatRunOu
 // same format get_machine_status uses for LastMachineSuccess.
 func formatMillis(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
+}
+
+// get_perf_stats takes no input: it reports whatever the recorder has seen.
+type getPerfStatsInput struct{}
+
+type databaseStats struct {
+	SizeBytes int64 `json:"size_bytes" jsonschema:"the SQLite database file's size on disk plus its -wal sidecar when present, bytes"`
+	ShotCount int   `json:"shot_count" jsonschema:"number of shots stored, including trashed ones"`
+}
+
+type getPerfStatsOutput struct {
+	Routes   []perfstats.RouteSnapshot          `json:"routes" jsonschema:"per-route request timings, busiest first"`
+	Process  perfstats.ProcessStats             `json:"process" jsonschema:"process resource use since start"`
+	Database databaseStats                      `json:"database" jsonschema:"database size and shot count"`
+	Machines []perfstats.MachineTrafficSnapshot `json:"machines" jsonschema:"outbound machine traffic per machine id since start, split by idle and brewing; hosts that did not resolve are one aggregate unknown entry, never a hostname"`
+}
+
+func getPerfStats(deps Deps) (getPerfStatsOutput, error) {
+	if deps.Recorder == nil {
+		return getPerfStatsOutput{}, fmt.Errorf("performance stats are not available")
+	}
+	snap := deps.Recorder.Snapshot(time.Now())
+	out := getPerfStatsOutput{
+		Routes:   snap.Routes,
+		Process:  snap.Process,
+		Database: databaseStats{SizeBytes: dbSizeBytes(deps.DBPath)},
+		Machines: []perfstats.MachineTrafficSnapshot{},
+	}
+	if deps.ShotsRepo != nil {
+		n, err := deps.ShotsRepo.Count()
+		if err != nil {
+			return getPerfStatsOutput{}, err
+		}
+		out.Database.ShotCount = n
+	}
+	if deps.Machines != nil {
+		out.Machines = deps.Machines.Snapshot(time.Now(), machineHostResolver(deps.Registry))
+	}
+	return out, nil
+}
+
+// machineHostResolver maps a traffic-counter host key (a URL host, e.g.
+// "192.168.1.50" or "machine.local:8080") to the registry machine id whose
+// Host normalizes to exactly that host:port. It lists the registry once, so
+// Snapshot's per-host resolve calls never touch the database. A host that is
+// unparseable, or that matches no machine's host:port exactly, maps to
+// (0, false) and folds into the aggregate unknown bucket; a hostname-only
+// fallback is deliberately not attempted.
+func machineHostResolver(registry *machines.Registry) func(host string) (int64, bool) {
+	byHost := map[string]int64{}
+	if registry != nil {
+		list, err := registry.ListMachines()
+		if err != nil {
+			// Do not swallow: without the machine list every traffic host
+			// folds into the aggregate unknown bucket, so a failure to list
+			// them must be visible.
+			log.Printf("mcp: get_perf_stats: listing machines for traffic resolution: %v", err)
+		} else {
+			for _, m := range list {
+				if host, _ := machines.NormalizeMachineHost(m.Host); host != "" {
+					byHost[host] = m.ID
+				}
+			}
+		}
+	}
+	return func(host string) (int64, bool) {
+		full, _ := machines.NormalizeMachineHost(host)
+		id, ok := byHost[full]
+		return id, ok
+	}
+}
+
+// dbSizeBytes totals the SQLite file and its -wal sidecar, skipping whichever
+// is not present.
+func dbSizeBytes(path string) int64 {
+	if path == "" {
+		return 0
+	}
+	var total int64
+	for _, p := range []string{path, path + "-wal"} {
+		if fi, err := os.Stat(p); err == nil {
+			total += fi.Size()
+		}
+	}
+	return total
 }

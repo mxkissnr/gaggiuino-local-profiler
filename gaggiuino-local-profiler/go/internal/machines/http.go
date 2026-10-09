@@ -6,11 +6,14 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 )
 
 // maxMachineResponseBytes caps a machine response body at 8 MiB so a
@@ -29,13 +32,76 @@ var machinesDialer = netguard.NewGuardedDialer(func(ctx context.Context, hostnam
 	return machineHostGuardResolved.get()(ctx, hostname)
 })
 
+// machineTraffic is the process-wide machine-traffic counter cmd/server
+// installs once at startup via SetMachineTrafficCounter. It is nil in tests
+// and in any build without the developer tools, and every helper below is a
+// no-op then (the counter's own methods are nil-receiver safe).
+var machineTraffic atomic.Pointer[perfstats.MachineCounter]
+
+// SetMachineTrafficCounter installs c as the process-wide machine-traffic
+// counter the guards below feed. Call once, from cmd/server before any machine
+// traffic starts.
+func SetMachineTrafficCounter(c *perfstats.MachineCounter) {
+	machineTraffic.Store(c)
+}
+
+// countMachineRequest records one outbound HTTP round trip to host. failed is
+// true when the round trip errored or the response was a 5xx.
+func countMachineRequest(host string, failed bool) {
+	machineTraffic.Load().CountRequest(host, failed)
+}
+
+// countMachineWSMessage records one WebSocket message received from host.
+func countMachineWSMessage(host string) {
+	machineTraffic.Load().CountWSMessage(host)
+}
+
+// SetMachineBrewing records whether host is currently taking a shot, so the
+// machine-traffic counter files that minute's requests in the brewing bucket.
+// The poller calls it once per poll tick with the host normalized by
+// NormalizeMachineHost; the counter lowercases the host key itself, so that
+// key matches the as-typed host the counting round tripper records (e.g.
+// GaggiMate.local:8080), and every adapter and fallback path is covered by one
+// call.
+func SetMachineBrewing(host string, brewing bool) {
+	machineTraffic.Load().SetBrewing(host, brewing)
+}
+
+// hostFromBaseURL returns baseURL's host:port — the same key req.URL.Host
+// yields for the HTTP calls to that machine — so a live session's WebSocket
+// messages count against the same machine as its HTTP requests.
+func hostFromBaseURL(baseURL string) string {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+	return u.Host
+}
+
+// countingRoundTripper wraps a machine transport and records every round trip
+// against the machine-traffic counter, keyed by the request's host. A WebSocket
+// handshake carries an Upgrade header and is skipped: it is not an HTTP request
+// to the machine, and its messages are counted separately.
+type countingRoundTripper struct {
+	base http.RoundTripper
+}
+
+func (t countingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if !strings.EqualFold(req.Header.Get("Upgrade"), "websocket") {
+		countMachineRequest(req.URL.Host, err != nil || (resp != nil && resp.StatusCode >= 500))
+	}
+	return resp, err
+}
+
 // httpClient is package-level (not http.DefaultClient directly) so tests
 // can point it at an httptest.Server's transport if ever needed. Its
 // Transport is deliberately a minimal custom one (not http.DefaultTransport)
 // so machinesDialer is the only dialer in play — no environment-driven
-// proxy that could route guarded traffic somewhere the guard never saw.
+// proxy that could route guarded traffic somewhere the guard never saw. The
+// countingRoundTripper wrapper observes every call for get_perf_stats.
 var httpClient = &http.Client{
-	Transport: &http.Transport{DialContext: machinesDialer.DialContext},
+	Transport: countingRoundTripper{base: &http.Transport{DialContext: machinesDialer.DialContext}},
 }
 
 // NewGuardedHTTPClient returns an *http.Client dialing exclusively through
@@ -65,7 +131,7 @@ var httpClient = &http.Client{
 func NewGuardedHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:   timeout,
-		Transport: &http.Transport{DialContext: machinesDialer.DialContext},
+		Transport: countingRoundTripper{base: &http.Transport{DialContext: machinesDialer.DialContext}},
 	}
 }
 

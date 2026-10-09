@@ -184,6 +184,8 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 	}
 	defer conn.CloseNow()
 
+	host := hostFromBaseURL(baseURL)
+
 	// A new connection starts a new session: drop the status merged from the
 	// previous connection so stale live readings can't survive a reconnect. The
 	// controller sends a full snapshot to every client right after it connects.
@@ -225,6 +227,7 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 				}
 				return
 			}
+			countMachineWSMessage(host)
 			select {
 			case readCh <- data:
 			case <-ctx.Done():

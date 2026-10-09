@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
@@ -246,5 +248,28 @@ func TestGaggiuinoAdapter_Firmware(t *testing.T) {
 	}
 	if !jsonContains(string(result), `"success":true`) {
 		t.Fatalf("unexpected firmware update result: %s", result)
+	}
+}
+
+// TestWSReadCountsMachineTraffic is the #1568 review fix for the short-lived
+// Gaggiuino WebSocket client: every message read in ws.go must increment the
+// machine-traffic WS counter, the same way the two live clients do.
+func TestWSReadCountsMachineTraffic(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	counter := perfstats.NewMachineCounter()
+	SetMachineTrafficCounter(counter)
+	t.Cleanup(func() { SetMachineTrafficCounter(nil) })
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+
+	host := hostFromBaseURL(fake.URL)
+	if _, err := wsGetProfileByID(context.Background(), fake.URL, 5); err != nil {
+		t.Fatalf("wsGetProfileByID: %v", err)
+	}
+
+	snap := counter.Snapshot(time.Now(), func(h string) (int64, bool) { return 1, h == host })
+	if len(snap) != 1 || snap[0].MachineID != 1 || snap[0].WSMessagesPerMin <= 0 {
+		t.Fatalf("expected the WebSocket response to be counted, got %+v", snap)
 	}
 }

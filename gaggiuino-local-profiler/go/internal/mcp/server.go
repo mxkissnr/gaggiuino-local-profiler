@@ -12,6 +12,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
@@ -58,6 +59,21 @@ type Deps struct {
 	// than a wider MachineStatus so tests can fake history without a live
 	// poller; nil reports that the history is unavailable.
 	Preheat PreheatHistorySource
+	// Recorder is the request-timing snapshot source for the get_perf_stats
+	// developer tool. A separate, nil-safe interface rather than
+	// *perfstats.Recorder so tests can supply a canned snapshot; nil reports
+	// that performance stats are unavailable.
+	Recorder PerfStatsSource
+	// Machines is the machine-traffic snapshot source for the get_perf_stats
+	// developer tool. A separate, nil-safe interface rather than
+	// *perfstats.MachineCounter so tests can supply a canned snapshot; nil
+	// reports an empty machine-traffic section rather than failing the tool
+	// (the routes/process/database sections stay available).
+	Machines MachineTrafficSource
+	// DBPath is the SQLite database file get_perf_stats reports the size of,
+	// together with its -wal sidecar when present. Empty is tolerated and
+	// reports a size of zero.
+	DBPath string
 	// Version is the app version reported as the MCP server identity; mirrors
 	// GET /api/version (internal/system.Version). Empty falls back to "dev".
 	Version string
@@ -94,6 +110,22 @@ type SyncSource interface {
 // history is unavailable.
 type PreheatHistorySource interface {
 	PreheatHistory() []system.PreheatRun
+}
+
+// PerfStatsSource is the narrow slice of internal/perfstats.Recorder the
+// get_perf_stats developer tool reads: a snapshot of per-route timings and
+// process stats. Nil-safe: without it the tool reports that performance stats
+// are unavailable.
+type PerfStatsSource interface {
+	Snapshot(time.Time) perfstats.Snapshot
+}
+
+// MachineTrafficSource is the narrow slice of *perfstats.MachineCounter the
+// get_perf_stats developer tool reads: per-host traffic resolved to machine
+// ids through resolve, plus one aggregate unknown entry for hosts that do not
+// resolve. Nil-safe: without it the tool reports an empty machines list.
+type MachineTrafficSource interface {
+	Snapshot(time.Time, func(host string) (machineID int64, ok bool)) []perfstats.MachineTrafficSnapshot
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
@@ -195,7 +227,8 @@ func newServer(deps Deps, allowWrite, allowDeveloperTools bool) *mcpsdk.Server {
 			"explain_score breaks a shot's score into its weighted parts and the targets used, " +
 			"export_shots_dataset returns a filtered batch of shots as one flat dataset for comparing a scoring idea against the user's ratings, " +
 			"get_diagnostics returns the app's own recent log lines plus sync and machine-reachability state for bug triage, " +
-			"and get_preheat_history returns the machine's recent preheat runs with their predicted and actual ready times for tuning the preheat and ready-by logic."
+			"get_preheat_history returns the machine's recent preheat runs with their predicted and actual ready times for tuning the preheat and ready-by logic, " +
+			"and get_perf_stats reports the running install's own performance: API response times per route, process memory, database size and requests per minute to each machine split by idle and brewing."
 	}
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,

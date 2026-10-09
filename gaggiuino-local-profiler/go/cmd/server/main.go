@@ -52,6 +52,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mqtt"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
@@ -286,6 +287,13 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	importerHandlers.RegisterRoutes(mux)
 
 	registry := machines.NewRegistry(sqlDB)
+	// The machine-traffic counter backs the get_perf_stats developer MCP tool.
+	// Installed before any machine traffic starts — the poller below is the
+	// first caller — so every outbound HTTP round trip and every WebSocket
+	// message read is counted per machine host, and each host's HTTP traffic is
+	// split into the idle and brewing buckets by the brew state it last reported.
+	machineCounter := perfstats.NewMachineCounter()
+	machines.SetMachineTrafficCounter(machineCounter)
 	// Startup logRegistrySnapshot() (#714) — behind debug_logging (#977
 	// follow-up), so it's a no-op unless that option is on. Nothing has
 	// necessarily called EnsureDefaultMachine yet at this point (it's a lazy,
@@ -412,6 +420,11 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		return err
 	})
 
+	// The request-timing recorder backs the get_perf_stats developer MCP tool.
+	// It wraps the mux as the innermost layer of the chain below, so it reads
+	// the route pattern net/http's ServeMux matched — never the raw path.
+	recorder := perfstats.New()
+
 	// MCP (#1196, #1288): the Model Context Protocol server is always mounted
 	// under /api/ so auth.RequireToken guards it with X-GLP-Token like every
 	// other API route. Whether it answers is decided per request from the
@@ -431,6 +444,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		Logs:            cfg.logs,
 		Sync:            poller,
 		Preheat:         poller,
+		Recorder:        recorder,
+		Machines:        machineCounter,
+		DBPath:          dbPath,
 		Version:         system.Version(),
 		RateLimitWindow: rateLimitWindow,
 		RateLimitMax:    rateLimitMax,
@@ -525,15 +541,21 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	// The middleware order: security headers, then the known-host check, then
 	// the app-level rate limiter (deliberately ahead of auth so it also caps
-	// unauthenticated login/token-probing traffic), then token auth. Read from
-	// the innermost handler outward, this chain applies auth first, rate-limit
-	// second, the known-host check third and security headers last, which is
-	// the correct nesting to make requests experience them in that order.
+	// unauthenticated login/token-probing traffic), then token auth, and
+	// innermost the perfstats recorder. Read from the innermost handler outward,
+	// this chain applies the recorder first, auth second, rate-limit third, the
+	// known-host check fourth and security headers last, which is the correct
+	// nesting to make requests experience them in that order.
 	//
 	// auth.RequireKnownHost sits ahead of the rate limiter on purpose: a
 	// request for an unknown Host is refused with 421 before it costs a
 	// rate-limit slot or reaches any handler, including the public
 	// GET /api/token.
+	//
+	// The perfstats recorder wraps the mux directly, so after each response it
+	// reads the route pattern net/http's ServeMux wrote onto the request and
+	// records one timing per matched route, never the raw path; that is what the
+	// get_perf_stats developer MCP tool reports.
 	//
 	// There is no global body-parser step to slot in here: net/http reads a
 	// request body lazily per-handler, not through a chained global
@@ -543,7 +565,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	handler := auth.SecurityHeaders(
 		auth.RequireKnownHost(cfg.allowedHosts)(
 			limiter.Middleware(
-				auth.RequireToken(token)(mux),
+				auth.RequireToken(token)(recorder.Middleware(mux)),
 			),
 		),
 	)
