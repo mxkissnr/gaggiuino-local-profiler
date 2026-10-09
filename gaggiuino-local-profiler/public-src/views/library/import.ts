@@ -527,6 +527,19 @@ export async function _handleScanPhoto(file: File): Promise<void> {
   }
 }
 
+// Open Food Facts' categories arrive as machine slugs
+// ("beverages-and-beverages-preparations"), which are not human-readable and
+// never belong in a bean's Notes. Drop those segments and keep only the
+// human-readable ones (labels like "Organic"); the result stays empty when
+// nothing readable is left (#1543).
+function humanReadableNotes(notes: string | undefined): string {
+  return (notes ?? '')
+    .split(',')
+    .map(segment => segment.trim())
+    .filter(segment => segment !== '' && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segment))
+    .join(', ');
+}
+
 export async function _handleScanResult(raw: string, status: HTMLElement): Promise<void> {
   const glp = parseGlpQrParams(raw);
   if (glp) {
@@ -566,7 +579,8 @@ export async function _handleScanResult(raw: string, status: HTMLElement): Promi
     library.openBeanForm();
     if (name)    _field('beanFormName').value    = name;
     if (roaster) _field('beanFormRoaster').value = roaster;
-    if (notes)   _field('beanFormNotes').value   = notes;
+    const humanNotes = humanReadableNotes(notes);
+    if (humanNotes) _field('beanFormNotes').value = humanNotes;
   } catch (e) {
     console.error('Barcode scan lookup failed:', e);
     status.textContent = t('scan_error');

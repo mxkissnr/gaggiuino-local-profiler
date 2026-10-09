@@ -2026,8 +2026,15 @@ export async function buildWorldMap() {
   }
 
   const home = _worldMapHome;
+  // #1543: frame every origin that has a marker, not just the scatter points:
+  // a country can carry a chip while its only bean marker was skipped (e.g.
+  // a secondary blend origin), and then it could sit outside the initial view
+  // (India in the acceptance run). Countries with shots are added by their
+  // centroid, so the frame always covers every chip. A small margin is applied
+  // inside computeMapBoundingCoords(); the zoom limits below stay untouched.
   const mapPoints = [
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
+    ...countriesWithShots.map(code => COUNTRY_CENTROIDS[code]),
     ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
     // #1467: include the home point so the routes to it stay fully visible.
     ...(home ? [home] : []),
