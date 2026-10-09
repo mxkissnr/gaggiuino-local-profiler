@@ -287,6 +287,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	importerHandlers.RegisterRoutes(mux)
 
 	registry := machines.NewRegistry(sqlDB)
+	// The machine-traffic counter backs the get_perf_stats developer MCP tool.
+	// Installed before any machine traffic starts — the poller below is the
+	// first caller — so every outbound HTTP round trip and WebSocket message
+	// from this process is counted per machine host.
+	machineCounter := perfstats.NewMachineCounter()
+	machines.SetMachineTrafficCounter(machineCounter)
 	// Startup logRegistrySnapshot() (#714) — behind debug_logging (#977
 	// follow-up), so it's a no-op unless that option is on. Nothing has
 	// necessarily called EnsureDefaultMachine yet at this point (it's a lazy,
@@ -438,6 +444,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		Sync:            poller,
 		Preheat:         poller,
 		Recorder:        recorder,
+		Machines:        machineCounter,
 		DBPath:          dbPath,
 		Version:         system.Version(),
 		RateLimitWindow: rateLimitWindow,

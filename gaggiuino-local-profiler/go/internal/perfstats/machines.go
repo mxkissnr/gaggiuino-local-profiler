@@ -176,7 +176,7 @@ func (c *MachineCounter) Snapshot(now time.Time, resolve func(host string) (mach
 		var s hostSums
 		for i := range h.buckets {
 			b := h.buckets[i]
-			if now.Unix()/60-b.minute >= machineWindowMinutes {
+			if now.Unix()/60-b.minute >= int64(machineWindowMinutes) {
 				continue
 			}
 			s.idle += b.reqIdle

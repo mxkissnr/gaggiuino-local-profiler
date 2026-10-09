@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"regexp"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
@@ -125,7 +127,7 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:         "get_perf_stats",
 		Title:        "Get performance stats",
-		Description:  "Report the running install's own performance counters, held only in memory since process start: API request count, median, p95 and max per route pattern over all requests and over the last 15 minutes, plus process memory, goroutine count, uptime, GC pause p95 and the database size and shot count. Read-only.",
+		Description:  "Report the running install's own performance counters, held only in memory since process start: API request count, median, p95 and max per route pattern over all requests and over the last 15 minutes; process memory, goroutine count, uptime and GC pause p95; the database size and shot count; and outbound machine traffic per machine id, requests and WebSocket messages per minute split by idle and brewing plus the error count, resolved to machine ids so no host is ever returned. Read-only.",
 		Annotations:  readOnlyAnnotations("Get performance stats"),
 		InputSchema:  mustSchema[getPerfStatsInput](),
 		OutputSchema: mustSchema[getPerfStatsOutput](),
@@ -658,9 +660,10 @@ type databaseStats struct {
 }
 
 type getPerfStatsOutput struct {
-	Routes   []perfstats.RouteSnapshot `json:"routes" jsonschema:"per-route request timings, busiest first"`
-	Process  perfstats.ProcessStats    `json:"process" jsonschema:"process resource use since start"`
-	Database databaseStats             `json:"database" jsonschema:"database size and shot count"`
+	Routes   []perfstats.RouteSnapshot          `json:"routes" jsonschema:"per-route request timings, busiest first"`
+	Process  perfstats.ProcessStats             `json:"process" jsonschema:"process resource use since start"`
+	Database databaseStats                      `json:"database" jsonschema:"database size and shot count"`
+	Machines []perfstats.MachineTrafficSnapshot `json:"machines" jsonschema:"outbound machine traffic per machine id since start, split by idle and brewing; hosts that did not resolve are one aggregate unknown entry, never a hostname"`
 }
 
 func getPerfStats(deps Deps) (getPerfStatsOutput, error) {
@@ -672,6 +675,7 @@ func getPerfStats(deps Deps) (getPerfStatsOutput, error) {
 		Routes:   snap.Routes,
 		Process:  snap.Process,
 		Database: databaseStats{SizeBytes: dbSizeBytes(deps.DBPath)},
+		Machines: []perfstats.MachineTrafficSnapshot{},
 	}
 	if deps.ShotsRepo != nil {
 		n, err := deps.ShotsRepo.Count()
@@ -680,7 +684,64 @@ func getPerfStats(deps Deps) (getPerfStatsOutput, error) {
 		}
 		out.Database.ShotCount = n
 	}
+	if deps.Machines != nil {
+		out.Machines = deps.Machines.Snapshot(time.Now(), machineHostResolver(deps.Registry))
+	}
 	return out, nil
+}
+
+// machineHostResolver maps a traffic-counter host key (a URL host, e.g.
+// "192.168.1.50" or "machine.local:8080") to the registry machine id whose
+// Host names it. It lists the registry once, so Snapshot's per-host resolve
+// calls never touch the database. An unparseable or unknown host maps to
+// (0, false) and folds into the aggregate unknown bucket.
+func machineHostResolver(registry *machines.Registry) func(host string) (int64, bool) {
+	byHost := map[string]int64{}
+	byHostname := map[string]int64{}
+	if registry != nil {
+		if list, err := registry.ListMachines(); err == nil {
+			for _, m := range list {
+				host, hostname := canonicalMachineHost(m.Host)
+				if host != "" {
+					byHost[host] = m.ID
+				}
+				if hostname != "" {
+					byHostname[hostname] = m.ID
+				}
+			}
+		}
+	}
+	return func(host string) (int64, bool) {
+		full, hostname := canonicalMachineHost(host)
+		if id, ok := byHost[full]; ok {
+			return id, true
+		}
+		if id, ok := byHostname[hostname]; ok {
+			return id, true
+		}
+		return 0, false
+	}
+}
+
+// canonicalMachineHost normalizes a machine Host or a traffic host key to a
+// lowercase host:port and its bare hostname, accepting a bare host as well as
+// one with an http(s) scheme. A port in the key wins the exact match; the
+// hostname fallback covers a key with a default port and a stored host without
+// one.
+func canonicalMachineHost(raw string) (host, hostname string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", ""
+	}
+	lower := strings.ToLower(raw)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", ""
+	}
+	return strings.ToLower(u.Host), strings.ToLower(u.Hostname())
 }
 
 // dbSizeBytes totals the SQLite file and its -wal sidecar, skipping whichever
