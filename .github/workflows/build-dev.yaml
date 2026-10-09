@@ -18,14 +18,16 @@
 # in the repository variable DEV_FEATURES. Each build merges them onto dev in
 # the runner, so a large feature can be tested here without ever landing on
 # dev, which only holds what the next release ships. Add or drop one with
-#   gh variable set DEV_FEATURES --body "feature/a feature/b" && gh workflow run build-dev.yaml
+#   gh variable set DEV_FEATURES --body "feature/a feature/b" && gh workflow run build-dev.yaml --ref dev
+# A push to a feature branch does not trigger a build on its own: the workflow
+# file and the secrets it uses must always come from dev, never from a branch
+# that has not been reviewed into dev. Re-run the command above after
+# pushing to a listed feature branch.
 name: Build dev channel image
 
 on:
   push:
-    # A feature branch push only builds when it is listed in DEV_FEATURES
-    # (see the prep job's condition).
-    branches: [dev, 'feature/**']
+    branches: [dev]
     # Documentation-only pushes to dev don't change the image.
     paths-ignore:
       - '**.md'
@@ -38,7 +40,7 @@ env:
 permissions:
   contents: read
 
-# A newer push to dev or a listed feature branch makes an in-flight build obsolete.
+# A newer push to dev makes an in-flight build obsolete.
 concurrency:
   group: build-dev
   cancel-in-progress: true
@@ -52,10 +54,8 @@ jobs:
   prep:
     name: Compute dev build version
     # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
-    if: >-
-      github.server_url == 'https://github.com' &&
-      (github.ref_name == 'dev' || github.event_name == 'workflow_dispatch' ||
-       contains(format(' {0} ', vars.DEV_FEATURES), format(' {0} ', github.ref_name)))
+    # Only dev's own copy of this workflow may publish (see the header).
+    if: github.server_url == 'https://github.com' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
