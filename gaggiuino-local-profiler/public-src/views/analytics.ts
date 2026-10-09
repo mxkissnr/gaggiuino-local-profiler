@@ -1379,6 +1379,10 @@ let _mapClickData: { byCode: Record<string, MapStats>; home: [number, number] | 
 // full country name), while the map data and detail sheet key countries by
 // ISO code — this maps the former to the latter for click-through.
 let _mapNameToCode: Map<string, string> | null = null;
+// #1543: each origin country's [minLon, minLat, maxLon, maxLat] from the
+// registered world geometry, so the initial map frame can cover a country's
+// full extent and not just its centre.
+let _mapCodeBounds: Map<string, [number, number, number, number]> | null = null;
 
 // Converts a #rrggbb (or #rgb) hex color to an rgba() string at the given
 // alpha; falls back to the raw input unchanged if it isn't hex (e.g. an
@@ -1475,18 +1479,16 @@ export function computeMapBoundingCoords(coords: (number[] | null | undefined)[]
   return [[west, north], [east, south]];
 }
 
-// Pure helper (unit-testable): the origin countries that have shots but no
-// bean marker of their own. Each bean draws exactly one point, at its primary
-// origin, so a blend's secondary origin (India in the acceptance run) would
-// otherwise carry a chip yet draw nothing on the map. Insertion order follows
-// `originCodes`; a code is only emitted once (#1543).
-export function originsNeedingMarkers(markedCodes: Iterable<string>, originCodes: string[]): string[] {
-  const marked = new Set(markedCodes);
-  const out: string[] = [];
-  for (const code of originCodes) {
-    if (marked.has(code)) continue;
-    marked.add(code);
-    out.push(code);
+// Pure helper (unit-testable): the [lon, lat] corners to feed the map frame so
+// each origin country's full extent — not just its centroid — sits inside the
+// initial view. A country wider than the padding (India) would otherwise be
+// cut off at the edge. Countries with no known bounds are skipped (#1543).
+export function originFrameCoords(codes: string[], bounds: Map<string, [number, number, number, number]>): [number, number][] {
+  const out: [number, number][] = [];
+  for (const code of codes) {
+    const b = bounds.get(code);
+    if (!b) continue;
+    out.push([b[0], b[1]], [b[2], b[3]]);
   }
   return out;
 }
@@ -1684,6 +1686,31 @@ export function featureLabelPoint(geometry: GeoJsonGeometry | null | undefined):
   if (!best) return null;
   const [minLon, minLat, maxLon, maxLat] = best.bbox;
   return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+}
+
+// [minLon, minLat, maxLon, maxLat] over every coordinate of a Polygon or
+// MultiPolygon. featureLabelPoint() ranks a country's parts by area; this is
+// its counterpart for the whole extent, used to frame an origin country
+// rather than only its centre (#1543).
+export function featureBounds(geometry: GeoJsonGeometry | null | undefined): [number, number, number, number] | null {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return null;
+  const polygons: Polygon[] = geometry.type === 'Polygon'
+    ? [geometry.coordinates as Polygon]
+    : geometry.type === 'MultiPolygon' ? (geometry.coordinates as MultiPolygon) : [];
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  let any = false;
+  for (const rings of polygons) {
+    for (const ring of rings) {
+      const bbox = _ringBbox(ring);
+      if (!bbox) continue;
+      any = true;
+      if (bbox[0] < minLon) minLon = bbox[0];
+      if (bbox[1] < minLat) minLat = bbox[1];
+      if (bbox[2] > maxLon) maxLon = bbox[2];
+      if (bbox[3] > maxLat) maxLat = bbox[3];
+    }
+  }
+  return any ? [minLon, minLat, maxLon, maxLat] : null;
 }
 
 function _ringBbox(ring: number[][]): [number, number, number, number] | null {
@@ -1978,9 +2005,15 @@ export async function buildWorldMap() {
     // #1467: ECharts fires a map click with the region's full name; remember
     // the name -> ISO code relationship so click-through can resolve it.
     _mapNameToCode = new Map<string, string>();
+    // #1543: remember each origin's full extent so the frame can cover it.
+    _mapCodeBounds = new Map<string, [number, number, number, number]>();
     for (const f of geo.features) {
       const props = f.properties as { name?: string; code?: string | null };
       if (props.name && props.code) _mapNameToCode.set(props.name, props.code);
+      if (props.code) {
+        const bounds = featureBounds(f.geometry);
+        if (bounds) _mapCodeBounds.set(props.code, bounds);
+      }
     }
     // #1467: place the home point on the registered geometry once — the
     // bounding-box centre of the home country's largest landmass.
@@ -2029,23 +2062,6 @@ export async function buildWorldMap() {
     points.push({ name: bean.name, value: [...coord, shots], _region: bean.region || null, _code: primaryCode });
   }
 
-  // #1543: give every origin with shots a marker. A blend's secondary origin
-  // has no bean point of its own, so without this it would carry a chip but
-  // draw nothing on the map (India in the acceptance run). The point lands on
-  // the country centroid; the frame below is unchanged but now every chipped
-  // origin is actually drawn inside it.
-  const beanMarkedCodes = new Set(points.map(p => p._code));
-  for (const code of originsNeedingMarkers(beanMarkedCodes, countriesWithShots)) {
-    const centroid = COUNTRY_CENTROIDS[code];
-    if (!centroid) continue;
-    points.push({
-      name: countryName(code, S.currentLang),
-      value: [centroid[0], centroid[1], byCode[code]?.shots ?? 0],
-      _region: null,
-      _code: code,
-    });
-  }
-
   // Brand + chrome colors, read live from the CSS custom properties so the
   // map follows whichever accent/theme the user has picked (#1024: this used
   // to be true only for accentTo/mutedText, with the rest hardcoded dark).
@@ -2060,6 +2076,11 @@ export async function buildWorldMap() {
 
   const home = _worldMapHome;
   const mapPoints = [
+    // #1543: frame each origin by its full country extent — a country wider
+    // than the padding (India) would otherwise be cut off at the edge — plus
+    // the bean points and the home point. computeMapBoundingCoords() adds the
+    // small margin; the zoom limits below are unchanged.
+    ...originFrameCoords(Object.keys(byCode), _mapCodeBounds ?? new Map<string, [number, number, number, number]>()),
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
     ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
     // #1467: include the home point so the routes to it stay fully visible.

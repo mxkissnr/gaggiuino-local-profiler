@@ -7,7 +7,8 @@ let homeCountryFromLocale: (typeof import('../public-src/views/analytics.js'))['
 let featureLabelPoint: (typeof import('../public-src/views/analytics.js'))['featureLabelPoint'];
 let greatCircleKm: (typeof import('../public-src/views/analytics.js'))['greatCircleKm'];
 let computeMapBoundingCoords: (typeof import('../public-src/views/analytics.js'))['computeMapBoundingCoords'];
-let originsNeedingMarkers: (typeof import('../public-src/views/analytics.js'))['originsNeedingMarkers'];
+let originFrameCoords: (typeof import('../public-src/views/analytics.js'))['originFrameCoords'];
+let featureBounds: (typeof import('../public-src/views/analytics.js'))['featureBounds'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -23,7 +24,8 @@ beforeAll(async () => {
   featureLabelPoint = mod.featureLabelPoint;
   greatCircleKm = mod.greatCircleKm;
   computeMapBoundingCoords = mod.computeMapBoundingCoords;
-  originsNeedingMarkers = mod.originsNeedingMarkers;
+  originFrameCoords = mod.originFrameCoords;
+  featureBounds = mod.featureBounds;
 });
 
 describe('homeCountryFromLocale (#1467)', () => {
@@ -103,33 +105,44 @@ describe('computeMapBoundingCoords (#1467)', () => {
   });
 });
 
-// #1543: an origin that only appears as a blend's secondary country has a chip
-// but no bean scatter point of its own, so it drew nothing on the map. These
-// are the codes that need an extra marker; the acceptance report named India.
-describe('originsNeedingMarkers (#1543)', () => {
-  it('adds a secondary origin that has shots but no bean point of its own', () => {
-    expect(originsNeedingMarkers(['BR', 'ET'], ['BR', 'ET', 'IN'])).toEqual(['IN']);
+// #1543: the frame must cover each origin country's full extent, not just its
+// centroid, or a country wider than the padding (India) is cut off at the edge.
+describe('originFrameCoords / featureBounds (#1543)', () => {
+  it('emits both diagonal corners of an origin country, not just its centre', () => {
+    const india: [number, number, number, number] = [68.1, 8.0, 97.4, 35.5];
+    const coords = originFrameCoords(['IN'], new Map([['IN', india]]));
+    expect(coords).toEqual([[68.1, 8.0], [97.4, 35.5]]);
   });
 
-  it('adds nothing when every origin already has a bean point', () => {
-    expect(originsNeedingMarkers(['BR', 'ET', 'IN'], ['BR', 'ET', 'IN'])).toEqual([]);
-  });
-
-  it('emits a repeated code only once', () => {
-    expect(originsNeedingMarkers([], ['IN', 'IN'])).toEqual(['IN']);
-  });
-
-  it('frames the added origin inside the initial view', () => {
-    // The home point (Berlin) plus a bean in Ethiopia; India is the origin the
-    // frame would otherwise be missing on screen.
-    const centroids: Record<string, [number, number]> = { IN: [78.96, 20.59] };
-    const added = originsNeedingMarkers(['ET'], ['ET', 'IN']).map(code => centroids[code]);
-    const box = computeMapBoundingCoords([[40.49, 9.15], ...added, [13.405, 52.52]]);
+  it('keeps India fully inside the computed frame (before: only its centre)', () => {
+    const india: [number, number, number, number] = [68.1, 8.0, 97.4, 35.5];
+    const box = computeMapBoundingCoords(originFrameCoords(['IN'], new Map([['IN', india]])))!;
     expect(box).toBeDefined();
-    const [[west, north], [east, south]] = box!;
-    expect(78.96).toBeGreaterThanOrEqual(west);
-    expect(78.96).toBeLessThanOrEqual(east);
-    expect(20.59).toBeGreaterThanOrEqual(south);
-    expect(20.59).toBeLessThanOrEqual(north);
+    const [[west, north], [east, south]] = box;
+    // India's whole extent, not only its centre [78.96, 20.59], is inside.
+    expect(west).toBeLessThanOrEqual(68.1);
+    expect(east).toBeGreaterThanOrEqual(97.4);
+    expect(south).toBeLessThanOrEqual(8.0);
+    expect(north).toBeGreaterThanOrEqual(35.5);
+  });
+
+  it('skips a country whose bounds are unknown', () => {
+    expect(originFrameCoords(['IN', 'ZZ'], new Map([['IN', [68.1, 8.0, 97.4, 35.5]]])))
+      .toEqual([[68.1, 8.0], [97.4, 35.5]]);
+  });
+
+  it('featureBounds spans a MultiPolygon and tolerates an empty geometry', () => {
+    type GeometryArg = Parameters<typeof featureBounds>[0];
+    const emptyPolygon = { type: 'Polygon', coordinates: [] } as unknown as GeometryArg;
+    const multi = {
+      type: 'MultiPolygon',
+      coordinates: [
+        [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]],
+        [[[10, 10], [14, 10], [14, 12], [10, 12], [10, 10]]],
+      ],
+    } as unknown as GeometryArg;
+    expect(featureBounds(null)).toBeNull();
+    expect(featureBounds(emptyPolygon)).toBeNull();
+    expect(featureBounds(multi)).toEqual([0, 0, 14, 12]);
   });
 });
