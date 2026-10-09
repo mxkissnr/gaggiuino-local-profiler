@@ -41,7 +41,7 @@ import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { initLiveSync, handleDataChanged } from './live-sync.js';
-import { invalidateLibraryImages } from './bean-image.js';
+import { invalidateImageKeys, invalidateAllImages } from './bean-image.js';
 import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
@@ -185,14 +185,28 @@ function _isActiveMachineGaggiMate() {
 // server (boot) or a live ui-prefs change has arrived. `includeMachine` is
 // false on the live path: each device keeps its own machine selection until
 // reload, so a remote machine.active change must not yank this device's view
-// (decided by the maintainer).
-function applyServerUiPrefs(includeMachine = true): void {
-  resetShelfPrefs();
+// (decided by the maintainer). `keepShelfQuery` is true on the live path too:
+// the shelf search is session-only, so a remote change must not wipe it.
+function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void {
+  resetShelfPrefs(keepShelfQuery);
   if (!includeMachine) return;
   const activeId = getUiPref<number | 'all'>('machine.active');
   if (activeId === undefined) return;
   const resolved = resolveActiveMachineId(activeId);
   if (resolved !== S.activeMachineId) setActiveMachine(resolved);
+}
+
+// #1539: a maintenance refetch must not tear down an editor the user has open —
+// an expanded card (its threshold/rename inputs), an open details/summary, or
+// the inline log form.
+function _maintenanceCanRefetch(): boolean {
+  const view = document.getElementById('maintenance-view');
+  if (!view) return true;
+  if (view.querySelector('.maint-card.expanded')) return false;
+  if (view.querySelector('details[open]')) return false;
+  if (view.querySelector('[contenteditable="true"]')) return false;
+  const logForm = document.getElementById('maintLogForm');
+  return !logForm || (logForm as HTMLElement).style.display === 'none';
 }
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -1198,25 +1212,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // #1539 slice 3: react to the server's data-changed pushes. Registered
     // before the stream opens so no early event is missed.
     onEvent(EVENTS.DATA_CHANGED, handleDataChanged);
+    // A whole-database change can touch any cached photo, so drop them all
+    // before the debounced refetches below run.
+    onEvent(EVENTS.DATA_CHANGED, data => {
+      if ((data as { kind?: string } | null)?.kind === 'all') invalidateAllImages();
+    });
     initLiveSync({
       library: {
-        run: async () => { invalidateLibraryImages(); await loadLibrary(); },
+        // A library change is usually a stock change derived from a shot, which
+        // does not touch the photos, so the cache is left alone here.
+        run: async () => { await loadLibrary(); },
+      },
+      'library-image': {
+        // An image write addresses its cache key (bean:<id>, grinder:<id>, ...),
+        // so drop exactly those entries and reload the library.
+        run: async ids => { invalidateImageKeys(ids ?? []); await loadLibrary(); },
       },
       orders: {
         run: async () => {
-          void loadDrinkMenu();
-          if (S.currentMode === 'orders') await loadOrdersView();
+          await Promise.all([loadDrinkMenu(), S.currentMode === 'orders' ? loadOrdersView() : undefined]);
         },
       },
       maintenance: {
         run: async () => { if (S.currentMode === 'maintenance') await loadMaintenanceView(); },
-        // The maintenance cards hold typing forms (the "add custom task"
-        // details and the threshold inputs); a deferred refetch must not tear
-        // the open form down or wipe text typed into it.
-        canRun: () => document.querySelector('details.maint-custom-add[open]') === null,
+        // The maintenance cards hold typing forms (threshold/rename inputs and
+        // the inline log form) inside expandable cards and details; a deferred
+        // refetch must not tear an open editor down and wipe what is typed.
+        canRun: () => _maintenanceCanRefetch(),
       },
       'ui-prefs': {
-        run: async () => { await loadUiPrefsFromServer(); applyServerUiPrefs(false); },
+        run: async () => {
+          const changed = await loadUiPrefsFromServer();
+          if (changed) applyServerUiPrefs(false, true);
+        },
       },
     });
     connectEvents(() => {});

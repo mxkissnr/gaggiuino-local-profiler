@@ -102,8 +102,12 @@ function shelfPrefs(): ShelfPrefs {
 
 // #1375: main.ts calls this once the shared choices fetched from the server
 // have replaced the local cache, so an already-rendered shelf re-reads them.
-export function resetShelfPrefs(): void {
+// #1539: the live path passes keepQuery, because the shelf search is
+// session-only and a remote change must not wipe what the user is typing.
+export function resetShelfPrefs(keepQuery = false): void {
+  const query = keepQuery ? (_shelfPrefsLazy?.query ?? '') : '';
   _shelfPrefsLazy = null;
+  if (query) shelfPrefs().query = query;
   renderBeanList();
 }
 
