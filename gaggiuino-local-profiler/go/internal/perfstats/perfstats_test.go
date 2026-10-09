@@ -118,7 +118,8 @@ func TestRoutesAndRingsStayBounded(t *testing.T) {
 
 	rec.mu.Lock()
 	total := len(rec.routes)
-	other := rec.routes[otherRoute]
+	otherTotal := int64(-1)
+	otherRingCount := -1
 	realRoutes := 0
 	maxRingCount := 0
 	for name, rs := range rec.routes {
@@ -127,6 +128,9 @@ func TestRoutesAndRingsStayBounded(t *testing.T) {
 			if rs.all.total != requests/patterns {
 				t.Fatalf("route %q total = %d, want %d", name, rs.all.total, requests/patterns)
 			}
+		} else {
+			otherTotal = rs.all.total
+			otherRingCount = rs.all.count
 		}
 		if rs.all.count > maxRingCount {
 			maxRingCount = rs.all.count
@@ -143,17 +147,14 @@ func TestRoutesAndRingsStayBounded(t *testing.T) {
 	if total != maxRoutes+1 {
 		t.Fatalf("map entries = %d, want %d real plus %q", total, maxRoutes, otherRoute)
 	}
-	if other == nil {
-		t.Fatalf("%q route missing", otherRoute)
-	}
-	if other.all.total != requests-maxRoutes*(requests/patterns) {
-		t.Fatalf("%q total = %d, want the overflow", otherRoute, other.all.total)
+	if otherTotal != requests-maxRoutes*(requests/patterns) {
+		t.Fatalf("%q total = %d, want the overflow", otherRoute, otherTotal)
 	}
 	if maxRingCount != ringSize {
 		t.Fatalf("largest ring holds %d samples, want the cap %d", maxRingCount, ringSize)
 	}
-	if other.all.count != ringSize {
-		t.Fatalf("overflow ring holds %d samples, want %d", other.all.count, ringSize)
+	if otherRingCount != ringSize {
+		t.Fatalf("overflow ring holds %d samples, want %d", otherRingCount, ringSize)
 	}
 }
 
