@@ -20,7 +20,7 @@ import (
 // `version:` is canonical; this const must match it and is bumped alongside
 // it at release time (CLAUDE.md's Versioning section). Enforced by
 // test/version-sync.test.ts and scripts/release-check.mts.
-const glpVersion = "3.3.0"
+const glpVersion = "3.4.0"
 
 // gatherSmallSections collects every bundle section that is small
 // regardless of shot/image count: coffee_library, blocklist, trash (via

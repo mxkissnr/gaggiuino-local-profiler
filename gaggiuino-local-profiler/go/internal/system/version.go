@@ -25,7 +25,7 @@ const versionCacheTTL = time.Hour
 // Duplicated rather than imported — no shared "constants" package exists in
 // this Go port; every domain package that needs a version-shaped value
 // defines its own, see internal/db's schema version handling.
-const glpVersion = "3.3.0"
+const glpVersion = "3.4.0"
 
 // Version returns the GLP version this binary reports from GET /api/version,
 // for callers that need the same value (the MCP server identity, #1196).

@@ -27,7 +27,7 @@
 // GLP_SCREENSHOT_BACKUP in backup mode, or the built-in demo seed when the
 // env var is unset:
 //
-//   shots.png, library.png, flavor-wheel.png, analytics.png,
+//   shots.png, library.png, bean-sheet.png, flavor-wheel.png, analytics.png,
 //   analytics-machines.png, maintenance.png, dialin.png, settings.png
 //       -> backup/seed (captured from whichever instance was loaded).
 //   live.png, orders.png
@@ -297,6 +297,14 @@ async function main(): Promise<void> {
         return null;
     });
     if (flavoredId) {
+        // The open bean sheet itself (stock, bags, small wheel) over the
+        // shelf, full viewport like shots.png. Wait for the slide-in to finish
+        // and the sheet's photos to decode before shooting.
+        await page.waitForSelector('#beanSheet .lib-sheet', { state: 'visible' });
+        await page.waitForTimeout(400);
+        await waitForImages(page, '#beanSheet img[src]');
+        await page.screenshot({ path: path.join(outDir, 'bean-sheet.png') });
+
         const wheelBtn = page.locator('#beanSheet [data-action="open-flavor-wheel"]').first();
         await wheelBtn.click();
         await page.waitForSelector('#flavorWheelModal', { state: 'visible' });

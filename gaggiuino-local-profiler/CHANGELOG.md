@@ -1,4 +1,7 @@
-## [Unreleased]
+## [3.4.0] - 2026-10-09
+
+> **Before you update:** the app now refuses requests for unknown host names. Through the Home Assistant sidebar, by IP address or under a local name such as `.local` or `.fritz.box` nothing changes. If you open GLP under your own domain, for example through a reverse proxy, add that domain to the new `allowed_hosts` option right after updating, otherwise that address stops working.
+
 ### Added
 - **The coffee library is one shelf: beans you are drinking stay on top, your stock stands as bag photos with a stock bar and bag stacks, empty or archived beans tidy themselves away, and the shelf can switch to a compact list.** Part of #1329, #1330
 - **Find beans faster: search, filter and sort the shelf, and add a photo right when you create a bean.** Closes #1329
@@ -8,10 +11,15 @@
 - **A sticker editor lets you touch up the cut-out with tap and brush, and pinch to zoom for the fine edges on a phone.** Part of #1336
 - **The sticker cut-out downloads its models (about 60 MB) once, the first time you use it, so updates are about 60 MB smaller; nothing leaves your network.** Closes #1404
 - **The sticker cut-out shows a progress bar with the current step, so it is clear how long the first cut-out still takes.** (#1358)
-- **Analytics shows a month calendar with a photo of the day's bean and a one-line summary of how your shots are going.** (#1331)
-- **The month calendar has compact cells with day numbers and a marker for days without a bean photo.** Closes #1389
 - **View, filter and sort choices now follow you across devices.** (#1375)
 - **Reorder opens the shop page a bean was imported from.** (#1373)
+- **Flush a GaggiMate machine on firmware v1.9.0 or newer from the Live view and answer its brew confirmation in GLP, once machine control is turned on in Settings.** Closes #1324
+- **GaggiMate shots now sync the moment the machine saves them and show their recorded phases and why the shot ended, and the Live tab shows the machine's own warnings and a firmware update hint.** Closes #1409
+- **Achievements have a new "Moments" stamp card and three more endurance stamps.** Closes #1466
+- **Statistics now tell you a few surprising facts about your own coffee habits, a tap away from the details.** Part of #1467
+- **The app's options in Home Assistant now have readable names and short explanations in all six languages.** Closes #1495
+- **Statistics section counters now name the selected period and the verdict says which machine or machines the numbers cover.** Closes #1496
+- **Barcode scanning now works on iPhone and iPad, and a barcode can also be typed in by hand.** Closes #1500
 ### Changed
 - **The app now says App instead of Add-on, matching Home Assistant.** Closes #1423. Part of #1407
 - **GaggiMate is no longer labelled experimental.** Closes #1423. Part of #1407
@@ -21,6 +29,20 @@
 - **Shop product photos on a plain or transparent background are cut out much more cleanly, because the bag is found first and only that part goes to the models.** Closes #1348
 - **Bean photos are cropped in the bag's 3:4 shape, and cut-out stickers keep it, so tall bags are no longer clipped.** Closes #1346
 - **Calmer interface: flat accent colors, theme-aware badges and activity colors, and a proper milk icon instead of a fallback emoji.** Closes #1328
+- **When another machine than the default is selected, the Live tab offers to make it the default instead of showing the default machine's readings.** Closes #1449
+- **The topbar shows the name you gave your Gaggiuino in its own settings, falling back to the name in GLP and then the hostname.** Closes #1454
+- **The sticker cut-out is easier on a phone: it fills the screen, you choose Keep or Remove, tap for a smart selection or drag to paint, and removed parts show in red.** Closes #1461
+- **Statistics show your coffee year: a day grid with streaks, perfect-shot days and a tap for each day's shots.** Part of #1467
+- **Statistics: the score trend uses the score colours, a monotone curve and a click-point popover, and your recipe on average.** Part of #1467
+- **The coffee map frames only your origins instead of the whole globe, shows routes to your cup, whole-number shot counts, the zoom hint on one line and each country's beans with a tap.** Part of #1467
+- **Statistics show your beans as one shelf by score — only complete rows, photos included — with each bean's details a tap away.** Part of #1467
+- **Statistics open with a one-line verdict, and one sticky toolbar filters the whole page by period, bean or profile.** Part of #1467
+- **Statistics read like the coffee library now: open sections, two columns on wide screens and the rarer charts folded away.** Part of #1467
+- **Sheets have a clear header bar like Home Assistant: close on the left, the name, the main actions as icons on the right.** Closes #1489
+- **On phones the statistics stay readable with long periods: a calm score trend and a coffee year with a legend.** Closes #1490
+- **On narrower desktop windows the top bar fades out at the edge where more tabs are hidden, and the active tab scrolls into view.** Closes #1516
+### Removed
+- **Statistics no longer show a separate month calendar; the activity calendar already shows every day.** Part of #1467
 ### Fixed
 - **The off-centre photo in the large flavor wheel is centred again.** Closes #1381
 - **A machine whose reachability is unknown now shows as off instead of on.** Part of #1383
@@ -29,8 +51,6 @@
 - **The sticker cut-out no longer gives up on a slow first download that is still making progress, and a full disk is reported as a storage problem.** Part of #1404
 - **The sticker cut-out now works in the installed app, not just in the development preview.** Closes #1354
 - **Cutting out a sticker no longer freezes the app or runs the browser out of memory, and closing the editor gives the memory back straight away.** Closes #1347
-- **The Analytics month calendar moves on to the new month when the app stays open over a month change.** Closes #1401
-- **The Analytics month calendar no longer requests a photo for beans that have none.** Part of #1331
 - **Restoring a backup no longer pushes leftover profile edits to a machine that now has a different address.** Closes #1406
 - **View, filter and sort choices made shortly before closing the app or while offline are no longer lost, and one invalid setting can no longer stop syncing.** Closes #1403
 - **A slow GaggiMate no longer ends up with duplicate profiles after a profile save timed out.** Closes #1405
@@ -44,6 +64,41 @@
 - **The bean stock line no longer shows the gram unit twice, and the shelf sort by roast date now reads naturally in German.** (#1373)
 - **Tapping inside an open bean sheet no longer jumps it back to the top, and the slide-in now plays only when the sheet opens.** Part of #1330
 - **A replaced bean, grinder, basket, puck screen or shot photo now shows up right away in every app instead of the old one lingering for up to a day, also for photos the browser cached earlier.** Closes #1357
+- **Milk stock and frozen-portion counts now follow corrections to a shot: changing or clearing its drink, milk or frozen portion books the earlier amount back.** Closes #1411
+- **Text typed into an open bag, freeze or stock form in a bean's detail sheet now stays when the sheet refreshes, for example after switching language or machine.** Closes #1412
+- **A GaggiMate default machine shows its own live readings and live brews when the MQTT live-data transport is selected.** Closes #1447
+- **Opening a bean in the library slides in its detail sheet without fading the whole screen.** Closes #1452
+- **The shot annotation only asks which milk was used when the chosen drink contains milk.** Closes #1453
+- **A shot keeps its saved milk annotation when its drink is not in the loaded drink menu, instead of clearing it.** Closes #1453
+- **A shot annotated with a milk but no drink keeps that milk when the annotation panel is opened, instead of clearing it on the next autosave.** Closes #1453
+- **Tapping on a phone no longer flashes a blue box around buttons and bean tiles.** Closes #1458
+- **The library's List button shows its full outline when active, and shelf text lines up next to frozen beans.** Closes #1460
+- **The Keep/Remove switch in the sticker editor shows a cleanly filled button again.** Closes #1469
+- **Tapping in the sticker editor works again after zooming with two fingers.** Closes #1472
+- **The Go server's test suite no longer fails intermittently while cleaning up after itself.** Closes #1477
+- **Opening a bean in the library no longer stops halfway with an error.** Closes #1479
+- **Opening the flavour wheel from a bean no longer flashes the whole screen on phones.** Closes #1482
+- **Sheets on phones slide in and out smoothly and follow your finger when you drag them down.** Closes #1488
+- **The achievements page on the demo site shows its badges again.** Closes #1497
+- **A GaggiMate in standby now shows as standby instead of counting down to "ready" with a cold boiler.** Closes #1498
+- **A GaggiMate waking from standby starts a fresh preheat, and standby clears when the machine is unreachable.** Part of #1498
+- **The GaggiMate profile editor's buttons now follow the app language, and browsers no longer mistake the page for German.** Closes #1499
+- **Settings is now a gear icon in the desktop top bar and is no longer cut off on narrower windows.** Closes #1514
+- **Backups no longer carry leftover images that belong to no entry, and such files are cleaned up on start.** Closes #1525
+- **Restoring a backup no longer fails when it contains a rating for a shot that is not in the backup; that rating is skipped.** Closes #1526
+- **The Save button at the top of the bean sheet shows its label again.** Closes #1531
+- **The barcode scanner now says when the camera is blocked by a missing HTTPS connection or a denied permission instead of a generic error, and can read a barcode from a photo when the live camera is unavailable.** Closes #1536
+- **Adding the first bag to a new bean no longer leaves an empty extra bag behind, and the bag keeps the roast date entered for the bean.** Closes #1540
+- **The Live status shows standby, warming up and flushing instead of Ready, and the display on the machine picture shows the current temperature.** Closes #1541
+- **Orders placed on the kiosk page keep the chosen milk or bean, so completing them books the stock again.** Closes #1542
+- **Smaller fixes in statistics, the flavour wheel, the bean form and the Live preheat countdown, and close buttons labelled in every language.** Closes #1543
+- **The preheat countdown now starts when you switch the default machine to one that is off and then turn it on, instead of staying at the full window.** Closes #1551
+### Security
+- **Tighter limits on machine responses and the page security policy.** Closes #1408
+- **Requests for unknown host names are refused.** The app answers when it is reached by IP address, `localhost`, its Home Assistant hostname or a local network name (such as `.local`, `.lan`, `.home.arpa` or `.fritz.box`). If you reach it under your own domain, for example through a reverse proxy, add that domain to the new `allowed_hosts` setting after updating. Closes #1430
+- **The MQTT broker password is no longer sent to the browser.** Settings show that a password is set instead. Closes #1431
+- **The MQTT settings form no longer pre-fills the broker password.** Leave the field blank to reuse the password found with Home Assistant. Closes #1431
+- **The app is built with Go 1.27.2 and an updated HTTP/2 library, closing several published denial-of-service vulnerabilities in the web server.** Closes #1549
 
 ## [3.3.0] – 2026-10-02
 ### Added

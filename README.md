@@ -65,16 +65,16 @@ All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-l
 
 <table>
   <tr>
-    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="100%"/></td>
-    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="100%"/></td>
+    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library shelf with bean bags" width="100%"/></td>
+    <td width="50%"><img src="gaggiuino-local-profiler/docs/screenshots/bean-sheet.png" alt="Bean detail sheet with stock, bags and flavor wheel" width="100%"/></td>
+  </tr>
+  <tr>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/flavor-wheel.png" alt="Interactive flavor wheel for a bean" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics.png" alt="Analytics view with interactive coffee world map" width="100%"/></td>
   </tr>
   <tr>
     <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison and dial-in progression in the More insights fold" width="100%"/></td>
     <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
-  </tr>
-  <tr>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/library.png" alt="Coffee library shelf with bean bags" width="100%"/></td>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/shots.png" alt="Shots view with pressure/flow/weight/temperature chart" width="100%"/></td>
   </tr>
 </table>
 

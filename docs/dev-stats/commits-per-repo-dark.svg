@@ -4,14 +4,14 @@
 <line x1="220" y1="38" x2="220" y2="176" stroke="#383835" stroke-width="1"/>
 <text x="208" y="61" fill="#c3c2b7" font-size="13" text-anchor="end">gaggiuino-local-profiler</text>
 <path d="M220,46 H816 Q820,46 820,50 V64 Q820,68 816,68 H220 Z" fill="#3987e5"/>
-<text x="830" y="61" fill="#ffffff" font-size="13" font-weight="600">1772</text>
-<text x="208" y="97" fill="#c3c2b7" font-size="13" text-anchor="end">glp-integration</text>
-<path d="M220,82 H280 Q284,82 284,86 V100 Q284,104 280,104 H220 Z" fill="#3987e5"/>
-<text x="294" y="97" fill="#ffffff" font-size="13" font-weight="600">189</text>
-<text x="208" y="133" fill="#c3c2b7" font-size="13" text-anchor="end">glp-lovelace-card</text>
-<path d="M220,118 H275 Q279,118 279,122 V136 Q279,140 275,140 H220 Z" fill="#3987e5"/>
-<text x="289" y="133" fill="#ffffff" font-size="13" font-weight="600">174</text>
-<text x="208" y="169" fill="#c3c2b7" font-size="13" text-anchor="end">glp-order-card</text>
-<path d="M220,154 H264 Q268,154 268,158 V172 Q268,176 264,176 H220 Z" fill="#3987e5"/>
-<text x="278" y="169" fill="#ffffff" font-size="13" font-weight="600">141</text>
+<text x="830" y="61" fill="#ffffff" font-size="13" font-weight="600">1932</text>
+<text x="208" y="97" fill="#c3c2b7" font-size="13" text-anchor="end">glp-lovelace-card</text>
+<path d="M220,82 H298 Q302,82 302,86 V100 Q302,104 298,104 H220 Z" fill="#3987e5"/>
+<text x="312" y="97" fill="#ffffff" font-size="13" font-weight="600">265</text>
+<text x="208" y="133" fill="#c3c2b7" font-size="13" text-anchor="end">glp-order-card</text>
+<path d="M220,118 H280 Q284,118 284,122 V136 Q284,140 280,140 H220 Z" fill="#3987e5"/>
+<text x="294" y="133" fill="#ffffff" font-size="13" font-weight="600">206</text>
+<text x="208" y="169" fill="#c3c2b7" font-size="13" text-anchor="end">glp-integration</text>
+<path d="M220,154 H277 Q281,154 281,158 V172 Q281,176 277,176 H220 Z" fill="#3987e5"/>
+<text x="291" y="169" fill="#ffffff" font-size="13" font-weight="600">198</text>
 </svg>
