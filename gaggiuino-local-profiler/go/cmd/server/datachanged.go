@@ -35,7 +35,6 @@ func buildDataRoutes() map[string]sse.Route {
 
 	routeLibrary := sse.Route{Kinds: []string{"library"}}
 	routeShot := sse.Route{Kinds: []string{"shot"}, WithID: true}
-	routeShots := sse.Route{Kinds: []string{"shots"}}
 	routeOrders := sse.Route{Kinds: []string{"orders"}}
 	routeMaintenance := sse.Route{Kinds: []string{"maintenance"}}
 	routeUIPrefs := sse.Route{Kinds: []string{"ui-prefs"}}
@@ -83,20 +82,25 @@ func buildDataRoutes() map[string]sse.Route {
 	add("PUT /api/library/recipe/{id}", routeLibrary)
 	add("POST /api/library/recipe/{id}/delete", routeLibrary)
 
-	// shot — one shot's own annotation or photo, addressed by id. The client
-	// refetches that shot, not the whole list.
-	add("POST /api/shots/{id}/annotate", routeShot)
+	// shot — one shot's own photo, addressed by id. The client refetches that
+	// shot, not the whole list.
 	add("POST /api/shots/{id}/image", routeShot)
 	add("DELETE /api/shots/{id}/image", routeShot)
 
-	// shots — the shot list itself.
-	add("POST /api/shots/{id}/trash", routeShots)
-	add("POST /api/shots/{id}/restore", routeShots)
-	add("POST /api/shots/{id}/delete", routeShots)
+	// shot + library — annotating a shot also changes the library, because
+	// GET /api/library derives bag stock and grinder wear from shots.
+	add("POST /api/shots/{id}/annotate", sse.Route{Kinds: []string{"shot", "library"}, WithID: true})
+
+	// shots + library — trashing, restoring or deleting a shot changes the shot
+	// list and the library's derived stock and wear.
+	add("POST /api/shots/{id}/trash", sse.Route{Kinds: []string{"shots", "library"}})
+	add("POST /api/shots/{id}/restore", sse.Route{Kinds: []string{"shots", "library"}})
+	add("POST /api/shots/{id}/delete", sse.Route{Kinds: []string{"shots", "library"}})
 
 	// orders — every write under /api/orders/... is an order change. Completing
 	// one also annotates the shot it links to (orders.Service.CompleteOrder
-	// calls shotsRepo.UpdateAnnotation), so the shot list changes too.
+	// calls shotsRepo.UpdateAnnotation) and deducts milk stock, so both the shot
+	// list and the library change too.
 	add("POST /api/orders", routeOrders)
 	add("POST /api/orders/menu", routeOrders)
 	add("PUT /api/orders/menu/{id}", routeOrders)
@@ -107,7 +111,7 @@ func buildDataRoutes() map[string]sse.Route {
 	add("POST /api/orders/{id}/decline", routeOrders)
 	add("DELETE /api/orders/{id}", routeOrders)
 	add("DELETE /api/orders/history", routeOrders)
-	add("POST /api/orders/{id}/complete", sse.Route{Kinds: []string{"orders", "shot"}})
+	add("POST /api/orders/{id}/complete", sse.Route{Kinds: []string{"orders", "shots", "library"}})
 
 	// maintenance — the log and custom tasks, plus a firmware update which
 	// records a maintenance entry (main.go's machinesHandlers.SetOnFirmwareUpdate).
@@ -157,8 +161,9 @@ func buildDataIgnored() map[string]string {
 	reasons := make(map[string]string, 16)
 	add := func(pattern, reason string) { reasons[pattern] = reason }
 
-	// Reads or pushes elsewhere: nothing written to GLP's own database.
-	add("POST /api/backup", "export only: reads the database, writes nothing to it")
+	// Not part of live sync: writes data a client never refetches, or pushes
+	// elsewhere; achievements are not synced live.
+	add("POST /api/backup", "writes only achievement unlocks; achievements are not part of live sync")
 	add("POST /api/sync", "a manual shot pull: new shots arrive through the status poll's revision")
 	add("POST /api/preheat/ready-by", "preheat-update already carries the resulting status")
 	add("/api/mcp", "MCP write tools publish their own data-changed events (slice 2)")

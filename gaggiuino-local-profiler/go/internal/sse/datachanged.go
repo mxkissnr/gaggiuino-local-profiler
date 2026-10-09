@@ -1,10 +1,11 @@
 package sse
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"regexp"
 	"sync"
-	"time"
 )
 
 // The data-changed push (#1539): one SSE event per successful write telling
@@ -25,12 +26,16 @@ const ClientIDHeader = "X-GLP-Client"
 
 // DataChanged is the payload of one EventDataChanged push. Kind is always set;
 // Rev is present for a single-kind bump; ID only for a route that addresses one
-// entity; Src only when the writing client sent a valid ClientIDHeader.
+// entity; Src only when the writing client sent a valid ClientIDHeader. Epoch
+// is always set: it names the revision space this event belongs to, so a client
+// that sees a different epoch knows the server reset its revisions and must
+// drop the ones it has seen (slice 3).
 type DataChanged struct {
-	Kind string `json:"kind"`
-	Rev  int64  `json:"rev,omitempty"`
-	ID   string `json:"id,omitempty"`
-	Src  string `json:"src,omitempty"`
+	Kind  string `json:"kind"`
+	Rev   int64  `json:"rev,omitempty"`
+	ID    string `json:"id,omitempty"`
+	Src   string `json:"src,omitempty"`
+	Epoch string `json:"epoch"`
 }
 
 // Route classifies one write route: the kinds it changes, in table order, and
@@ -41,11 +46,17 @@ type Route struct {
 }
 
 // DataChanges publishes data-changed events and tracks a revision per kind. One
-// instance lives for the process lifetime; its revisions are seeded from the
-// wall clock at start, so they are monotonic across restarts and exactly
-// representable in JavaScript (Unix milliseconds are well inside 2^53).
+// instance lives for the process lifetime. Revisions are process-local: every
+// kind starts at 0 and grows by one per change, so they are exact integers well
+// inside 2^53. Epoch, a random token fixed at construction, tells a client when
+// that revision space has been reset — a wall-clock seed would be wrong when the
+// host boots before its clock is set (an HA box before NTP), which would make
+// clients ignore every event.
 type DataChanges struct {
 	hub *Hub
+
+	// Epoch identifies this instance's revision space; every event carries it.
+	Epoch string
 
 	// mu serialises a revision bump with its Hub publish, so the order events
 	// reach subscribers matches the order of their revisions.
@@ -53,15 +64,16 @@ type DataChanges struct {
 	revs map[string]int64
 }
 
-// NewDataChanges returns a DataChanges publishing through hub, with a revision
-// seeded for every kind in kinds. A kind not in kinds is added on first Publish.
+// NewDataChanges returns a DataChanges publishing through hub, with every kind
+// in kinds started at revision 0. A kind not in kinds is added on first Publish.
 func NewDataChanges(hub *Hub, kinds []string) *DataChanges {
-	seed := time.Now().UnixMilli()
+	buf := make([]byte, 8)
+	_, _ = rand.Read(buf)
 	revs := make(map[string]int64, len(kinds))
 	for _, kind := range kinds {
-		revs[kind] = seed
+		revs[kind] = 0
 	}
-	return &DataChanges{hub: hub, revs: revs}
+	return &DataChanges{hub: hub, Epoch: hex.EncodeToString(buf), revs: revs}
 }
 
 // Publish bumps kind's revision and pushes one EventDataChanged. KindAll bumps
@@ -76,26 +88,15 @@ func (c *DataChanges) Publish(kind, id, src string) {
 		for k := range c.revs {
 			c.revs[k]++
 		}
-		c.hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{Kind: KindAll, Src: src}})
+		c.hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{Kind: KindAll, Src: src, Epoch: c.Epoch}})
 		return
 	}
 
 	c.revs[kind]++
 	c.hub.Publish(Event{
 		Type: EventDataChanged,
-		Data: DataChanged{Kind: kind, Rev: c.revs[kind], ID: id, Src: src},
+		Data: DataChanged{Kind: kind, Rev: c.revs[kind], ID: id, Src: src, Epoch: c.Epoch},
 	})
-}
-
-// Revs returns a copy of the current per-kind revisions.
-func (c *DataChanges) Revs() map[string]int64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	out := make(map[string]int64, len(c.revs))
-	for k, v := range c.revs {
-		out[k] = v
-	}
-	return out
 }
 
 // clientIDRe is the accepted shape of the X-GLP-Client header: a short opaque
@@ -114,7 +115,9 @@ type statusWriter struct {
 func (s *statusWriter) Header() http.Header { return s.w.Header() }
 
 func (s *statusWriter) WriteHeader(code int) {
-	if s.status == 0 {
+	// A 1xx (e.g. 103 Early Hints) is not the final status, so it must not be
+	// recorded; the later 2xx that follows is what the middleware acts on.
+	if s.status == 0 && code >= 200 {
 		s.status = code
 	}
 	s.w.WriteHeader(code)
@@ -125,6 +128,12 @@ func (s *statusWriter) Write(b []byte) (int, error) {
 		s.status = http.StatusOK
 	}
 	return s.w.Write(b)
+}
+
+// Flush forwards to the wrapped writer, so a handler that type-asserts
+// w.(http.Flusher) keeps working on a write route.
+func (s *statusWriter) Flush() {
+	_ = http.NewResponseController(s.w).Flush()
 }
 
 // Unwrap exposes the wrapped writer to http.ResponseController (and anything
