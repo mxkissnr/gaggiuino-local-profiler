@@ -25,11 +25,12 @@ interface ScanState {
 }
 interface ScanModule {
   _submitManualScan: () => void;
+  humanReadableNotes: (notes: string | undefined) => string;
 }
 
 const { S } = (await import('../public-src/state/index.js')) as unknown as { S: ScanState };
 const { t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string };
-const { _submitManualScan } =
+const { _submitManualScan, humanReadableNotes } =
   (await import('../public-src/views/library/import.js')) as unknown as ScanModule;
 
 interface FakeEl {
@@ -107,3 +108,31 @@ describe('barcode scan manual entry (#1500)', () => {
 // only to require it stays green: manual entry adds a form that feeds the existing
 // _handleScanResult(), and does not touch public-src/glp-qr.ts or parseGlpQrParams,
 // so the generateBeanQR/parseGlpQrParams tests there remain valid as-is.
+
+// #1543: the backend joins an Open Food Facts category slug with the product's
+// labels; the slug must never reach the bean's Notes, but a plain lowercase
+// note ("organic") is not a slug and has to survive.
+describe('humanReadableNotes (#1543)', () => {
+  it('drops a hyphenated category slug and keeps nothing when it was alone', () => {
+    expect(humanReadableNotes('beverages-and-beverages-preparations')).toBe('');
+  });
+
+  it('keeps human-readable labels after the slug', () => {
+    expect(humanReadableNotes('beverages-and-beverages-preparations, Organic, Fair trade'))
+      .toBe('Organic, Fair trade');
+  });
+
+  it('drops a language-prefixed slug', () => {
+    expect(humanReadableNotes('en:coffees, Organic')).toBe('Organic');
+  });
+
+  it('keeps a plain lowercase one-word note', () => {
+    expect(humanReadableNotes('organic')).toBe('organic');
+    expect(humanReadableNotes('fairtrade, Organic')).toBe('fairtrade, Organic');
+  });
+
+  it('is empty for empty input', () => {
+    expect(humanReadableNotes(undefined)).toBe('');
+    expect(humanReadableNotes('')).toBe('');
+  });
+});

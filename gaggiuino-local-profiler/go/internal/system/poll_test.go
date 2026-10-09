@@ -655,3 +655,78 @@ func TestStopLivePolling_StillWarmRestartKeepsClock(t *testing.T) {
 		t.Fatalf("SwitchOnAt = %v after a still-warm restart, want the kept %d", snap.SwitchOnAt, onAt)
 	}
 }
+
+// TestHandleDefaultMachineChange_StartsSessionWhenNewDefaultOn covers #1543:
+// switching the default to an already-on machine while live polling runs must
+// start a fresh preheat session (switch-on time present, countdown running)
+// instead of leaving the countdown stuck at the full window forever.
+func TestHandleDefaultMachineChange_StartsSessionWhenNewDefaultOn(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	// Machine B becomes the default while it is already switched on.
+	registry := machines.NewRegistry(sqlDB)
+	name, typ, host := "Machine B", "gaggiuino", "machine-b.invalid"
+	b, err := registry.CreateMachine(machines.MachineInput{Name: &name, Type: &typ, Host: &host})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if _, err := registry.SetDefaultMachine(b.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+
+	// The stuck state the issue describes: on, but no switch-on time.
+	p.runtime.SetMachineOn(true)
+	p.runtime.SetSwitchOnAt(nil)
+
+	p.HandleDefaultMachineChange()
+
+	snap := p.runtime.Get()
+	if snap.SwitchOnAt == nil {
+		t.Fatal("SwitchOnAt = nil after a default switch to an on machine, want a fresh session")
+	}
+	status := p.PreheatStatus()
+	if status.StabilityReady == nil {
+		t.Error("StabilityReady = nil, want present (a session is active)")
+	}
+	if status.Remaining <= 0 {
+		t.Errorf("Remaining = %d, want a running countdown", status.Remaining)
+	}
+}
+
+// TestHandleDefaultMachineChange_ClearsClockWhenNewDefaultOff covers the other
+// #1543 branch: switching the default to an off machine must drop the previous
+// machine's switch-on time instead of counting down a stale session.
+func TestHandleDefaultMachineChange_ClearsClockWhenNewDefaultOff(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+	markLivePollingActive(t, p)
+
+	onAt := time.Now().UnixMilli() - 60_000
+	p.runtime.SetMachineOn(true)
+	p.runtime.SetSwitchOnAt(&onAt)
+
+	p.runtime.SetMachineOn(false)
+	p.HandleDefaultMachineChange()
+
+	if snap := p.runtime.Get(); snap.SwitchOnAt != nil {
+		t.Fatalf("SwitchOnAt = %v after a default switch to an off machine, want nil", snap.SwitchOnAt)
+	}
+}
+
+// TestHandleDefaultMachineChange_NoLivePollingNoop pins that a default change
+// with live polling inactive changes nothing (there is no session to reset).
+func TestHandleDefaultMachineChange_NoLivePollingNoop(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+
+	onAt := time.Now().UnixMilli() - 60_000
+	p.runtime.SetMachineOn(true)
+	p.runtime.SetSwitchOnAt(&onAt)
+
+	p.HandleDefaultMachineChange()
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil {
+		t.Fatal("SwitchOnAt = nil, want the existing clock left untouched when live polling is off")
+	}
+}

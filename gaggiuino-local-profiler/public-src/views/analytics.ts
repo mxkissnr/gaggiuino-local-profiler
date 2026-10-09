@@ -731,7 +731,7 @@ export function buildTimeOfDay() {
         tooltip: { callbacks: { label: (c: TooltipItem<'bar'>) => {
           const h = hours[c.dataIndex];
           const sc = h ? avgSc(h) : null;
-          return `${c.parsed.y} Shot${c.parsed.y !== 1 ? 's' : ''}${sc !== null ? ' · Ø ' + sc : ''}`;
+          return `${c.parsed.y} ${t('analytics_unit_shots', c.parsed.y)}${sc !== null ? ' · Ø ' + sc : ''}`;
         }}}
       },
       scales: {
@@ -1114,11 +1114,11 @@ export function _renderStreaks(stats: CalendarStats, locale: string): Html {
       ${_cups(longest ? longest.len : 0)}
     </div>
     <div class="cal-fig cal-fig-busiest">
-      <span class="cal-fig-num">${esc(stats.busiest ? stats.busiest.count : 0)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots'))}</span></span>
+      <span class="cal-fig-num">${esc(stats.busiest ? stats.busiest.count : 0)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots', stats.busiest ? stats.busiest.count : 0))}</span></span>
       <span class="cal-fig-lbl">${esc(busiestLbl)}</span>
     </div>
     <div class="cal-fig cal-fig-perfect">
-      <span class="cal-fig-num">${esc(stats.perfect)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots'))}</span></span>
+      <span class="cal-fig-num">${esc(stats.perfect)}<span class="cal-fig-unit">${esc(t('analytics_unit_shots', stats.perfect))}</span></span>
       <span class="cal-fig-lbl">${esc(t('analytics_perfect', stats.perfectShare))}</span>
     </div>`;
 }
@@ -1150,7 +1150,7 @@ export function openCalendarDayDetail(day: string, anchor: HTMLElement | DetailA
     .map(s => (window.calcShotScore ? window.calcShotScore(s) : null))
     .filter((sc): sc is number => sc !== null);
   const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-  const sub = `${shots.length} ${t('analytics_unit_shots')}${avg !== null ? ` · Ø ${avg}` : ''}`;
+  const sub = `${shots.length} ${t('analytics_unit_shots', shots.length)}${avg !== null ? ` · Ø ${avg}` : ''}`;
   const rows = shots.map(s => {
     const time = new Date(s.timestamp * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const name = s.annotation?.coffee || s.profile?.name || s.profileName || '';
@@ -1193,6 +1193,38 @@ function _bindCalendarResize(): void {
   if (_calResizeBound) return;
   _calResizeBound = true;
   window.addEventListener('resize', _onCalendarResize);
+}
+
+// A month label is drawn at the first week column of its month. Short locale
+// names ("Mär", "Apr") are wider than one column, so two labels whose months
+// start in adjacent columns would draw over each other ("MärApr"). A label is
+// kept only when it starts at least this many columns after the previous one.
+export const _MONTH_LABEL_MIN_COLUMNS = 3;
+
+export interface MonthLabelStart { col: number; label: string }
+
+// Pick the month labels to draw from the first-week column of each month. A
+// label is dropped when it would start fewer than _MONTH_LABEL_MIN_COLUMNS
+// columns after the last kept label, but the last visible month always keeps
+// its label: when it collides with the label before it, that earlier label
+// gives way instead. A dropped month still occupies its columns, so the next
+// label keeps its own column and the month runs stay aligned with the grid.
+export function _monthLabelsToDraw(starts: MonthLabelStart[]): MonthLabelStart[] {
+  const kept: MonthLabelStart[] = [];
+  for (const start of starts) {
+    const prev = kept[kept.length - 1];
+    if (!prev || start.col - prev.col >= _MONTH_LABEL_MIN_COLUMNS) kept.push(start);
+  }
+  const last = starts[starts.length - 1];
+  if (last && kept[kept.length - 1] !== last) {
+    let prev = kept[kept.length - 1];
+    while (prev && last.col - prev.col < _MONTH_LABEL_MIN_COLUMNS) {
+      kept.pop();
+      prev = kept[kept.length - 1];
+    }
+    kept.push(last);
+  }
+  return kept;
 }
 
 export function _renderCalendar() {
@@ -1252,17 +1284,19 @@ export function _renderCalendar() {
     weeks.push(week);
   }
 
-  // Month labels above the first week of each month.
-  const monthRuns: { span: number; label: string }[] = [];
+  // Month labels above the first week of each month. Overlapping short names
+  // are suppressed (their columns stay reserved by the span).
+  const monthRuns: { col: number; span: number; label: string }[] = [];
   let lastMonth = -1;
-  for (const week of weeks) {
-    const monday = week[0];
+  for (let w = 0; w < weeks.length; w++) {
+    const monday = weeks[w]?.[0];
     if (!monday) continue;
     const label = monday.date.toLocaleDateString(locale, { month: 'short' });
-    if (monday.date.getMonth() !== lastMonth) { monthRuns.push({ span: 1, label }); lastMonth = monday.date.getMonth(); }
+    if (monday.date.getMonth() !== lastMonth) { monthRuns.push({ col: w, span: 1, label }); lastMonth = monday.date.getMonth(); }
     else { const run = monthRuns[monthRuns.length - 1]; if (run) run.span++; }
   }
-  const monthItems = monthRuns.map(m => html`<span class="cal-month" style="grid-column: span ${esc(m.span)}">${esc(m.label)}</span>`);
+  const drawnCols = new Set(_monthLabelsToDraw(monthRuns).map(m => m.col));
+  const monthItems = monthRuns.map(m => html`<span class="cal-month" style="grid-column: span ${esc(m.span)}">${drawnCols.has(m.col) ? esc(m.label) : esc('')}</span>`);
 
   // First grid column: Monday/Wednesday/Friday labels; the rest empty.
   const cells: Html[] = [];
@@ -1282,7 +1316,7 @@ export function _renderCalendar() {
       if (day.count > 0) {
         classes.push('cal-day-link');
         const dateStr = day.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-        const aria = `${dateStr} · ${day.count} ${t('analytics_unit_shots')}${day.avg !== null ? ` · Ø ${day.avg}` : ''}`;
+        const aria = `${dateStr} · ${day.count} ${t('analytics_unit_shots', day.count)}${day.avg !== null ? ` · Ø ${day.avg}` : ''}`;
         cells.push(html`<button type="button" class="${esc(classes.join(' '))}" data-action="analytics-day" data-day="${esc(day.key)}" aria-label="${esc(aria)}"></button>`);
       } else {
         cells.push(html`<span class="${esc(classes.join(' '))}" aria-hidden="true"></span>`);
@@ -1345,6 +1379,10 @@ let _mapClickData: { byCode: Record<string, MapStats>; home: [number, number] | 
 // full country name), while the map data and detail sheet key countries by
 // ISO code — this maps the former to the latter for click-through.
 let _mapNameToCode: Map<string, string> | null = null;
+// #1543: each origin country's [minLon, minLat, maxLon, maxLat] from the
+// registered world geometry, so the initial map frame can cover a country's
+// full extent and not just its centre.
+let _mapCodeBounds: Map<string, [number, number, number, number]> | null = null;
 
 // Converts a #rrggbb (or #rgb) hex color to an rgba() string at the given
 // alpha; falls back to the raw input unchanged if it isn't hex (e.g. an
@@ -1439,6 +1477,20 @@ export function computeMapBoundingCoords(coords: (number[] | null | undefined)[]
   west = Math.max(-180, west); east = Math.min(180, east);
   south = Math.max(-85, south); north = Math.min(85, north);
   return [[west, north], [east, south]];
+}
+
+// Pure helper (unit-testable): the [lon, lat] corners to feed the map frame so
+// each origin country's full extent — not just its centroid — sits inside the
+// initial view. A country wider than the padding (India) would otherwise be
+// cut off at the edge. Countries with no known bounds are skipped (#1543).
+export function originFrameCoords(codes: string[], bounds: Map<string, [number, number, number, number]>): [number, number][] {
+  const out: [number, number][] = [];
+  for (const code of codes) {
+    const b = bounds.get(code);
+    if (!b) continue;
+    out.push([b[0], b[1]], [b[2], b[3]]);
+  }
+  return out;
 }
 
 // Pure helper (unit-testable): splits a ring's [lon, lat] coordinate array
@@ -1634,6 +1686,31 @@ export function featureLabelPoint(geometry: GeoJsonGeometry | null | undefined):
   if (!best) return null;
   const [minLon, minLat, maxLon, maxLat] = best.bbox;
   return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+}
+
+// [minLon, minLat, maxLon, maxLat] over every coordinate of a Polygon or
+// MultiPolygon. featureLabelPoint() ranks a country's parts by area; this is
+// its counterpart for the whole extent, used to frame an origin country
+// rather than only its centre (#1543).
+export function featureBounds(geometry: GeoJsonGeometry | null | undefined): [number, number, number, number] | null {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return null;
+  const polygons: Polygon[] = geometry.type === 'Polygon'
+    ? [geometry.coordinates as Polygon]
+    : geometry.type === 'MultiPolygon' ? (geometry.coordinates as MultiPolygon) : [];
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  let any = false;
+  for (const rings of polygons) {
+    for (const ring of rings) {
+      const bbox = _ringBbox(ring);
+      if (!bbox) continue;
+      any = true;
+      if (bbox[0] < minLon) minLon = bbox[0];
+      if (bbox[1] < minLat) minLat = bbox[1];
+      if (bbox[2] > maxLon) maxLon = bbox[2];
+      if (bbox[3] > maxLat) maxLat = bbox[3];
+    }
+  }
+  return any ? [minLon, minLat, maxLon, maxLat] : null;
 }
 
 function _ringBbox(ring: number[][]): [number, number, number, number] | null {
@@ -1928,9 +2005,15 @@ export async function buildWorldMap() {
     // #1467: ECharts fires a map click with the region's full name; remember
     // the name -> ISO code relationship so click-through can resolve it.
     _mapNameToCode = new Map<string, string>();
+    // #1543: remember each origin's full extent so the frame can cover it.
+    _mapCodeBounds = new Map<string, [number, number, number, number]>();
     for (const f of geo.features) {
       const props = f.properties as { name?: string; code?: string | null };
       if (props.name && props.code) _mapNameToCode.set(props.name, props.code);
+      if (props.code) {
+        const bounds = featureBounds(f.geometry);
+        if (bounds) _mapCodeBounds.set(props.code, bounds);
+      }
     }
     // #1467: place the home point on the registered geometry once — the
     // bounding-box centre of the home country's largest landmass.
@@ -1993,6 +2076,11 @@ export async function buildWorldMap() {
 
   const home = _worldMapHome;
   const mapPoints = [
+    // #1543: frame each origin by its full country extent — a country wider
+    // than the padding (India) would otherwise be cut off at the edge — plus
+    // the bean points and the home point. computeMapBoundingCoords() adds the
+    // small margin; the zoom limits below are unchanged.
+    ...originFrameCoords(Object.keys(byCode), _mapCodeBounds ?? new Map<string, [number, number, number, number]>()),
     ...Object.keys(byCode).map(code => COUNTRY_CENTROIDS[code]).filter(Boolean),
     ...points.map(p => [p.value[0] ?? 0, p.value[1] ?? 0]),
     // #1467: include the home point so the routes to it stay fully visible.
@@ -2118,7 +2206,7 @@ export function buildProfileChart() {
         legend: { display: false },
         tooltip: { callbacks: { afterLabel: (c: { dataIndex: number }) => {
           const e = entries[c.dataIndex];
-          return `${e ? e.count : 0} Shots`;
+          return `${e ? e.count : 0} ${t('analytics_unit_shots', e ? e.count : 0)}`;
         } } }
       },
       scales: {
@@ -2172,7 +2260,7 @@ export function buildWeekdayHourHeatmap() {
     const cells: Html[] = [];
     for (let h = 0; h < 24; h++) {
       const c = matrix[wd]?.[h] ?? 0;
-      const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} Shot${c === 1 ? '' : 's'}`;
+      const title = `${weekdayLabels[wd]} ${String(h).padStart(2, '0')}:00 — ${c} ${t('analytics_unit_shots', c)}`;
       cells.push(html`<div class="wh-cell wh-l${esc(level(c))}" title="${esc(title)}"></div>`);
     }
     dayRows.push(html`<div class="wh-row"><div class="wh-label">${esc(weekdayLabels[wd])}</div>${joinHtml(cells)}</div>`);
@@ -2329,7 +2417,7 @@ function _beanShelfTile(row: BeanRankRow, rank: number): Html {
     <span class="analytics-shelf-bag">${shelfBagImage(_shelfImageBean(row, bean))}</span>
     <span class="analytics-shelf-name serif-display">${esc(row.name)}</span>
     <span class="analytics-shelf-row2">${score}${crema}</span>
-    <span class="analytics-shelf-shots">${esc(row.shots)} ${tHtml('bean_stat_shots')}</span>
+    <span class="analytics-shelf-shots">${esc(row.shots)} ${esc(t('analytics_unit_shots', row.shots))}</span>
   </button>`;
 }
 

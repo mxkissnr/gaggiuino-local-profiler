@@ -1318,8 +1318,12 @@
         .lib-frozen-edit-btn:hover { opacity: 1; }
         /* Flavor chips (form input + static display) */
         .lib-form-field-wide { grid-column: 1 / -1; }
-        .lib-form-hint { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; }
+        .lib-form-hint { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; margin-bottom: var(--sp-2); }
         .flavor-chips-wrap { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); }
+        /* #1543: the origin picker's chip list draws an empty bordered bar when
+           the bean has no origins yet; hide it until it holds chips (the
+           flavour chip list always contains its input, so it is unaffected). */
+        #beanFormOriginChips:empty { display: none; }
         .flavor-chips-wrap input { background: transparent; border: none; outline: none; color: var(--gray-200); font-size: var(--fs-1); flex: 1; min-width: 110px; padding: var(--sp-1) 0; }
         .flavor-chip { display: inline-flex; align-items: center; gap: var(--sp-1); background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.3); color: #c084fc; border-radius:var(--radius); padding: 2px var(--sp-2); font-size: var(--fs-1); font-weight: 600; overflow-wrap: break-word; max-width: 100%; }
         .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: var(--fs-1); padding: 0; opacity: .7; }
@@ -1345,7 +1349,10 @@
         .lib-aroma-svg.has-hl .lib-aroma-seg { opacity: .35; }
         .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px rgba(255,255,255,.65)); }
         .lib-aroma-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); flex: 1 1 120px; }
-        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--chip-color); cursor: pointer; }
+        /* #1543: the note's own colour as text was unreadable for dark notes
+           (e.g. Molasses) on the dark theme -- keep it as the border/background
+           tint only and use the theme's primary text colour for readability. */
+        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--gray-100); cursor: pointer; }
         @media (prefers-reduced-motion: no-preference) {
             .lib-aroma-seg.is-pulse { animation: aroma-pulse 500ms ease-out; }
             @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
@@ -1556,6 +1563,8 @@
         .lib-url-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
         .lib-url-btn:hover { border-color:var(--gray-500); color:var(--gray-200); }
         .lib-item-source { font-size: var(--fs-1); color:var(--gray-600); margin-top: var(--sp-1); overflow-wrap: break-word; word-break: break-word; }
+        /* #1543: the shop link inherited the browser's default link blue. */
+        .lib-item-source a { color: var(--accent-ink); }
         .lib-variant-picker { margin-top: var(--sp-2); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
         .lib-variant-picker-label { font-size: var(--fs-1); color:var(--gray-300); margin-bottom: var(--sp-2); }
         .lib-variant-picker-option { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-200); padding: var(--sp-1) 0; cursor:pointer; }

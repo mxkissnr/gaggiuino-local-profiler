@@ -30,6 +30,7 @@ interface SunburstEntry {
     textBorderWidth: number;
     fontSize: number;
     fontWeight: string;
+    formatter?: () => string;
   };
 }
 
@@ -59,6 +60,72 @@ function resolveModalBgHex(container: Element | null | undefined): string {
   return rgbStringToHex(bg, '#18181b');
 }
 
+// Width ECharts gives the depth-1 ring's labels (see the `levels` block in
+// renderFlavorWheel) and the font those labels start at.
+const WHEEL_LABEL_WIDTH = 64;
+const WHEEL_LABEL_FONT = 12;
+const WHEEL_LABEL_MIN_FONT = 8;
+
+export interface WheelLabelLayout {
+  text: string;
+  fontSize: number;
+}
+
+// Splits a wheel label into the tokens a line may break between: words, and a
+// trailing '/' kept glued to the word before it so it ends a line instead of
+// starting one. Nothing else is a break point — a word is never split.
+export function wrapWheelLabelTokens(label: string): string[] {
+  const tokens: string[] = [];
+  for (const chunk of label.split(/\s+/)) {
+    if (!chunk) continue;
+    if (chunk.includes('/')) {
+      const parts = chunk.split('/');
+      parts.forEach((part, i) => {
+        const token = i < parts.length - 1 ? `${part}/` : part;
+        if (token) tokens.push(token);
+      });
+    } else {
+      tokens.push(chunk);
+    }
+  }
+  return tokens;
+}
+
+// Rough advance width of a bold sans glyph as a fraction of the font size —
+// enough to decide a wrap without a canvas/DOM, so the helper stays pure. A
+// little generous (real bold sans averages below 0.6 em) so a line we accept
+// stays under ECharts' `width` and never gets re-broken mid-word.
+function estimateWheelLabelWidth(text: string, fontSize: number): number {
+  return text.length * fontSize * 0.62;
+}
+
+// ECharts' `overflow:'break'` wraps at any character once a line passes the
+// level's width, which split the middle-ring label "Säuerlich / Fermentiert"
+// into "Fermentier"/"t". Wrap at spaces or the flavour slash ourselves, and
+// shrink the font when a single word is still too wide at the minimum size,
+// so a word is never broken mid-word.
+export function wrapWheelLabel(
+  label: string,
+  maxWidth: number,
+  fontSize: number,
+  measure: (text: string, size: number) => number = estimateWheelLabelWidth,
+): WheelLabelLayout {
+  const tokens = wrapWheelLabelTokens(label);
+  if (!tokens.length) return { text: label, fontSize };
+  const longest = tokens.reduce((a, b) => (measure(a, fontSize) >= measure(b, fontSize) ? a : b));
+  let size = fontSize;
+  while (size > WHEEL_LABEL_MIN_FONT && measure(longest, size) > maxWidth) size -= 1;
+  const lines: string[] = [];
+  let line = '';
+  for (const token of tokens) {
+    const candidate = line ? `${line} ${token}` : token;
+    if (line && measure(candidate, size) > maxWidth) { lines.push(line); line = token; }
+    else line = candidate;
+  }
+  if (line) lines.push(line);
+  return { text: lines.join('\n'), fontSize: size };
+}
+
 function toSunburstData(node: FlavorNode, depth: number, lang: FlavorLang, bgHex: string): SunburstEntry {
   const label = node[lang] || node.en;
   const lit   = node._lit;
@@ -74,7 +141,7 @@ function toSunburstData(node: FlavorNode, depth: number, lang: FlavorLang, bgHex
   // #1350: the 9 top categories always carry their label so the overview is
   // readable on its own; the outer two rings only label the bean's own
   // flavours (depth 2/3 use ECharts' native `rotate:'radial'`, see `levels`).
-  const labelCfg = {
+  const labelCfg: SunburstEntry['label'] = {
     show: depth === 1 || lit,
     color: '#fff',
     textBorderColor: 'rgba(0,0,0,.65)',
@@ -82,6 +149,13 @@ function toSunburstData(node: FlavorNode, depth: number, lang: FlavorLang, bgHex
     fontSize: (depth === 1 ? 11 : depth === 3 ? 9 : 10) + 1,
     fontWeight: 'bold',
   };
+  // #1543: only the depth-1 ring wraps onto several lines (the outer rings
+  // truncate radially); wrap it ourselves so ECharts cannot break a word.
+  if (depth === 1) {
+    const layout = wrapWheelLabel(label, WHEEL_LABEL_WIDTH, WHEEL_LABEL_FONT);
+    labelCfg.fontSize = layout.fontSize;
+    labelCfg.formatter = () => layout.text;
+  }
   const itemStyle: SunburstEntry['itemStyle'] = { color: fillColor, borderColor: lit ? '#fff' : '#111113', borderWidth: lit ? 3 : 1 };
   if (lit) { itemStyle.shadowBlur = 12; itemStyle.shadowColor = realColor; }
   const entry: SunburstEntry = {
@@ -256,7 +330,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
         // names (e.g. "Nussig / Kakao") unreadable. `overflow:'break'` with
         // a fixed `width` wraps those long names onto a second line instead
         // of clipping or squeezing them.
-        { r0: '22%', r: '38%', label: { rotate: 0, overflow: 'break', width: 64 } },
+        { r0: '22%', r: '38%', label: { rotate: 0, overflow: 'break', width: WHEEL_LABEL_WIDTH } },
         // Radial (spoke-pointing) labels on the outer two rings, matching
         // the real SCA/WCR wheel's signature look — you tilt the wheel to
         // read the far side, same as the paper original. `minAngle` keeps a
@@ -301,6 +375,7 @@ export async function renderFlavorWheel(container: HTMLElement, flavors: unknown
 
 export function disposeFlavorWheel(): void {
   ++_renderReqToken; // invalidate a still-pending renderFlavorWheel() chunk load, if any
+  unwireWheelKeys();
   disconnectResizeObserver();
   if (_chart) { _chart.dispose(); _chart = null; }
   _rootId = null;
@@ -370,6 +445,33 @@ function finishWheelClose(): void {
   disposeFlavorWheel();
 }
 
+// ── Escape to close (#1543) ───────────────────────────────────────────────
+// The overlay ignores Escape by default. While it is open, Escape closes it —
+// and only it: the bean sheet's own Escape handler is shielded whenever this
+// modal is visible (see `_overlayShieldsSheets` in bean-sheet.ts), so the
+// sheet underneath stays put.
+let _wheelKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+function onWheelKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopPropagation();
+  closeFlavorWheel();
+}
+
+function wireWheelKeys(): void {
+  if (_wheelKeyHandler || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  _wheelKeyHandler = onWheelKeydown;
+  document.addEventListener('keydown', _wheelKeyHandler);
+}
+
+function unwireWheelKeys(): void {
+  const handler = _wheelKeyHandler;
+  _wheelKeyHandler = null;
+  if (!handler || typeof document === 'undefined' || typeof document.removeEventListener !== 'function') return;
+  document.removeEventListener('keydown', handler);
+}
+
 export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const bean = S.coffeeLibrary?.beans?.find(b => b.id === beanId);
   if (!bean) return;
@@ -424,6 +526,7 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   // `fw-modal-in`/`fw-panel-in` keyframes), so there is no view transition to
   // wait on and the modal is visible on this tick.
   modal.style.display = 'flex';
+  wireWheelKeys();
 
   if (!await renderFlavorWheel(container, bean.flavors, lang, breadcrumbEl)) {
     container.innerHTML = html`<p class="empty-note" style="text-align:center">${tHtml('flavor_wheel_unavailable')}</p>`;
@@ -432,6 +535,7 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
 }
 
 export function closeFlavorWheel(): void {
+  unwireWheelKeys();
   const modal = document.getElementById('flavorWheelModal');
   if (!modal) { disposeFlavorWheel(); return; }
   cancelWheelClose(modal);

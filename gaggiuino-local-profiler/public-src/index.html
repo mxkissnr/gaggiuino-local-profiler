@@ -223,7 +223,7 @@
                 <div class="sph-actions" style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
                     <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
                     <button class="export-btn" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
-                    <button class="export-btn" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
+                    <button class="export-btn" id="exportProfileBtn" data-i18n="btn_export_profile" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
                     <div class="card-fmt-wrap" id="cardFmtWrap">
                       <button class="export-btn" id="shareCardBtn" data-i18n="share_card" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
                       <div class="card-fmt-menu" id="cardFmtMenu">
@@ -974,7 +974,7 @@
         <div class="guided-maint-modal profile-editor-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="profile_editor_title" style="margin:0">Profil-Editor</h3>
-                <button type="button" class="fw-close-x" id="closeProfileFormBtn" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" id="closeProfileFormBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div class="pe-scroll">
                 <div class="lib-form-grid">
@@ -1028,7 +1028,7 @@
             <div class="fw-header">
                 <img id="flavorWheelImage" class="fw-bean-image" style="display:none">
                 <h3 class="maint-section-title" id="flavorWheelTitle" style="margin:0"></h3>
-                <button type="button" class="fw-close-x" data-action="close-flavor-wheel" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="close-flavor-wheel" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div class="fw-body">
                 <div class="fw-main">
@@ -1405,7 +1405,7 @@
         <div class="guided-maint-modal dialin-wizard-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="dialin_wizard_title" style="margin:0">Geführtes Einwählen</h3>
-                <button type="button" class="fw-close-x" data-action="dialin-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div id="dwBody" class="dw-body"></div>
         </div>
@@ -1416,7 +1416,7 @@
         <div class="guided-maint-modal dialin-wizard-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="profile_dialin_title" style="margin:0">Profil-Dial-In</h3>
-                <button type="button" class="fw-close-x" data-action="profile-dialin-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="profile-dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div id="pdwBody" class="dw-body"></div>
         </div>
@@ -1427,7 +1427,7 @@
         <div class="guided-maint-modal dialin-wizard-modal">
             <div class="fw-header">
                 <h3 class="maint-section-title" data-i18n="setup_wizard_title" style="margin:0">Willkommen bei GLP</h3>
-                <button type="button" class="fw-close-x" data-action="setup-wizard-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <button type="button" class="fw-close-x" data-action="setup-wizard-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             </div>
             <div id="swBody" class="dw-body"></div>
         </div>
@@ -1732,7 +1732,7 @@
     <div class="guided-maint-modal profile-editor-modal">
         <div class="fw-header">
             <h3 class="maint-section-title" id="gmEditorTitle" style="margin:0">GaggiMate Profil</h3>
-            <button type="button" class="fw-close-x" data-action="gm-editor-close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <button type="button" class="fw-close-x" data-action="gm-editor-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </div>
         <div class="pe-scroll" id="gmEditorBody">
             <!-- rendered by gaggimate-profile-editor.js -->

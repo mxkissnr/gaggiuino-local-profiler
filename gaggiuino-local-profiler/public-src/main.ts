@@ -451,6 +451,9 @@ Object.assign(window, {
   togglePastBags,
   openBeanSheet,
   closeBeanSheet,
+  // #1543: mode.js closes the wheel on a tab switch; exposed here like the
+  // sheet's own close so the components/ tree never imports the view graph.
+  closeFlavorWheel,
   toggleBagCard,
   reorderBags,
   openFreezeForm,

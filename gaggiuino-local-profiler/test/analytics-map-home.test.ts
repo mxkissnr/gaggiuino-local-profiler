@@ -7,6 +7,8 @@ let homeCountryFromLocale: (typeof import('../public-src/views/analytics.js'))['
 let featureLabelPoint: (typeof import('../public-src/views/analytics.js'))['featureLabelPoint'];
 let greatCircleKm: (typeof import('../public-src/views/analytics.js'))['greatCircleKm'];
 let computeMapBoundingCoords: (typeof import('../public-src/views/analytics.js'))['computeMapBoundingCoords'];
+let originFrameCoords: (typeof import('../public-src/views/analytics.js'))['originFrameCoords'];
+let featureBounds: (typeof import('../public-src/views/analytics.js'))['featureBounds'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -22,6 +24,8 @@ beforeAll(async () => {
   featureLabelPoint = mod.featureLabelPoint;
   greatCircleKm = mod.greatCircleKm;
   computeMapBoundingCoords = mod.computeMapBoundingCoords;
+  originFrameCoords = mod.originFrameCoords;
+  featureBounds = mod.featureBounds;
 });
 
 describe('homeCountryFromLocale (#1467)', () => {
@@ -98,5 +102,54 @@ describe('computeMapBoundingCoords (#1467)', () => {
   it('returns undefined when there are no usable coordinates', () => {
     expect(computeMapBoundingCoords(null)).toBeUndefined();
     expect(computeMapBoundingCoords([[NaN, 5], null])).toBeUndefined();
+  });
+});
+
+// #1543: the frame must cover each origin country's full extent, not just its
+// centroid, or a country wider than the padding (India) is cut off at the edge.
+describe('originFrameCoords / featureBounds (#1543)', () => {
+  it('emits both diagonal corners of an origin country, not just its centre', () => {
+    const india: [number, number, number, number] = [68.1, 8.0, 97.4, 35.5];
+    const coords = originFrameCoords(['IN'], new Map([['IN', india]]));
+    expect(coords).toEqual([[68.1, 8.0], [97.4, 35.5]]);
+  });
+
+  it('keeps India fully inside the computed frame (before: only its centre)', () => {
+    const india: [number, number, number, number] = [68.1, 8.0, 97.4, 35.5];
+    const box = computeMapBoundingCoords(originFrameCoords(['IN'], new Map([['IN', india]])))!;
+    expect(box).toBeDefined();
+    const [[west, north], [east, south]] = box;
+    // India's whole extent, not only its centre [78.96, 20.59], is inside.
+    expect(west).toBeLessThanOrEqual(68.1);
+    expect(east).toBeGreaterThanOrEqual(97.4);
+    expect(south).toBeLessThanOrEqual(8.0);
+    expect(north).toBeGreaterThanOrEqual(35.5);
+  });
+
+  it('shows a centroid-only frame leaves India\'s east edge outside (old behaviour)', () => {
+    // India's centre [78.96, 20.59] framed alone: the east edge lands below
+    // the country's ~97.4 E extent, so the centroid frame cut India short.
+    const centroidOnly = computeMapBoundingCoords([[78.96, 20.59]])!;
+    expect(centroidOnly[1][0]).toBeLessThan(97.4);
+  });
+
+  it('skips a country whose bounds are unknown', () => {
+    expect(originFrameCoords(['IN', 'ZZ'], new Map([['IN', [68.1, 8.0, 97.4, 35.5]]])))
+      .toEqual([[68.1, 8.0], [97.4, 35.5]]);
+  });
+
+  it('featureBounds spans a MultiPolygon and tolerates an empty geometry', () => {
+    type GeometryArg = Parameters<typeof featureBounds>[0];
+    const emptyPolygon = { type: 'Polygon', coordinates: [] } as unknown as GeometryArg;
+    const multi = {
+      type: 'MultiPolygon',
+      coordinates: [
+        [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]],
+        [[[10, 10], [14, 10], [14, 12], [10, 12], [10, 10]]],
+      ],
+    } as unknown as GeometryArg;
+    expect(featureBounds(null)).toBeNull();
+    expect(featureBounds(emptyPolygon)).toBeNull();
+    expect(featureBounds(multi)).toEqual([0, 0, 14, 12]);
   });
 });

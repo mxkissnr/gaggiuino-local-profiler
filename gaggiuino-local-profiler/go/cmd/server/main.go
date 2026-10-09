@@ -335,6 +335,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// default machine's shot history right away instead of waiting for the
 	// post-brew timer. The hook hand-offs to SafeGo inside SyncAfterShotSaved.
 	machinesHandlers.SetOnShotSaved(poller.SyncAfterShotSaved)
+	// #1543: a default-machine switch while the new default is already on
+	// would otherwise leave the preheat countdown stuck at the full window;
+	// reset the poller's preheat session for the new default.
+	machinesHandlers.SetOnDefaultChanged(poller.HandleDefaultMachineChange)
 	// POST /api/sync's manual shot-history pull loop persists through
 	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)
