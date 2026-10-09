@@ -691,12 +691,13 @@ func getPerfStats(deps Deps) (getPerfStatsOutput, error) {
 
 // machineHostResolver maps a traffic-counter host key (a URL host, e.g.
 // "192.168.1.50" or "machine.local:8080") to the registry machine id whose
-// Host names it. It lists the registry once, so Snapshot's per-host resolve
-// calls never touch the database. An unparseable or unknown host maps to
-// (0, false) and folds into the aggregate unknown bucket.
+// Host normalizes to exactly that host:port. It lists the registry once, so
+// Snapshot's per-host resolve calls never touch the database. A host that is
+// unparseable, or that matches no machine's host:port exactly, maps to
+// (0, false) and folds into the aggregate unknown bucket; a hostname-only
+// fallback is deliberately not attempted.
 func machineHostResolver(registry *machines.Registry) func(host string) (int64, bool) {
 	byHost := map[string]int64{}
-	byHostname := map[string]int64{}
 	if registry != nil {
 		list, err := registry.ListMachines()
 		if err != nil {
@@ -706,25 +707,16 @@ func machineHostResolver(registry *machines.Registry) func(host string) (int64, 
 			log.Printf("mcp: get_perf_stats: listing machines for traffic resolution: %v", err)
 		} else {
 			for _, m := range list {
-				host, hostname := machines.NormalizeMachineHost(m.Host)
-				if host != "" {
+				if host, _ := machines.NormalizeMachineHost(m.Host); host != "" {
 					byHost[host] = m.ID
-				}
-				if hostname != "" {
-					byHostname[hostname] = m.ID
 				}
 			}
 		}
 	}
 	return func(host string) (int64, bool) {
-		full, hostname := machines.NormalizeMachineHost(host)
-		if id, ok := byHost[full]; ok {
-			return id, true
-		}
-		if id, ok := byHostname[hostname]; ok {
-			return id, true
-		}
-		return 0, false
+		full, _ := machines.NormalizeMachineHost(host)
+		id, ok := byHost[full]
+		return id, ok
 	}
 }
 

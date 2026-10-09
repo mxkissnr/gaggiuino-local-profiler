@@ -97,11 +97,11 @@ func (r *ring) add(at time.Time, d time.Duration) {
 }
 
 // windowStats describes only samples at or after cutoff; older samples are
-// dropped here, at read time, so no per-sample timer is needed.
-func (r *ring) windowStats(cutoff time.Time) (median, p95, max time.Duration) {
-	ds := make([]time.Duration, 0, r.count)
-	for i := 0; i < r.count; i++ {
-		s := r.samples[i]
+// dropped here, at read time, so no per-sample timer is needed. It reads a
+// copied sample slice, so a snapshot never sorts under the recorder's lock.
+func windowStats(samples []sample, cutoff time.Time) (median, p95, max time.Duration) {
+	ds := make([]time.Duration, 0, len(samples))
+	for _, s := range samples {
 		if s.at.Before(cutoff) {
 			continue
 		}
@@ -157,30 +157,19 @@ func New() *Recorder {
 //
 // A response whose Content-Type is text/event-stream is not recorded: such a
 // connection stays open for the whole stream, so its lifetime is not a request
-// duration.
+// duration. The handler's own ResponseWriter is passed through untouched, so
+// http.Hijacker, Unwrap and http.ResponseController keep working for streaming
+// handlers.
 func (rec *Recorder) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		rw := &responseWriter{ResponseWriter: w}
-		next.ServeHTTP(rw, r)
+		next.ServeHTTP(w, r)
 		end := time.Now()
-		if strings.HasPrefix(rw.Header().Get("Content-Type"), sseContentType) {
+		if strings.HasPrefix(w.Header().Get("Content-Type"), sseContentType) {
 			return
 		}
 		rec.record(routeKey(r.Method, r.Pattern), end, end.Sub(start))
 	})
-}
-
-// responseWriter exposes the handler's response headers to the middleware while
-// keeping http.Flusher working, so streaming responses still flush.
-type responseWriter struct {
-	http.ResponseWriter
-}
-
-func (w *responseWriter) Flush() {
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
 }
 
 // routeKey returns the recording key for a request. ServeMux's r.Pattern
@@ -225,12 +214,13 @@ func (rs *routeStats) addRecent(at time.Time) {
 	b.count++
 }
 
-// recentCount sums the buckets still inside the recent window.
-func (rs *routeStats) recentCount(now time.Time) int64 {
+// recentCount sums the buckets still inside the recent window. It reads a
+// copied bucket array, so a snapshot never walks the live one.
+func recentCount(buckets *[recentBuckets]recentBucket, now time.Time) int64 {
 	cur := now.Unix() / 60
 	var n int64
-	for i := range rs.recent {
-		b := rs.recent[i]
+	for i := range buckets {
+		b := buckets[i]
 		if b.minute == 0 || b.minute > cur || cur-b.minute >= int64(recentBuckets) {
 			continue
 		}
@@ -239,8 +229,20 @@ func (rs *routeStats) recentCount(now time.Time) int64 {
 	return n
 }
 
+// routeCopy is one route's state copied out from under the lock, so sorting and
+// quantile work happen without holding up request recording.
+type routeCopy struct {
+	name    string
+	total   int64
+	max     time.Duration
+	samples []sample
+	recent  [recentBuckets]recentBucket
+}
+
 // Snapshot returns the routes sorted by count descending (ties by route name)
-// plus the current process stats. now anchors the 15-minute window.
+// plus the current process stats. now anchors the 15-minute window. Each route's
+// samples and buckets are copied under the lock, so the sort and quantile work
+// run without blocking request recording.
 func (rec *Recorder) Snapshot(now time.Time) Snapshot {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
@@ -254,20 +256,33 @@ func (rec *Recorder) Snapshot(now time.Time) Snapshot {
 
 	cutoff := now.Add(-recentWindow)
 	rec.mu.Lock()
-	routes := make([]RouteSnapshot, 0, len(rec.routes))
+	copies := make([]routeCopy, 0, len(rec.routes))
 	for name, rs := range rec.routes {
-		recentMedian, recentP95, recentMax := rs.ring.windowStats(cutoff)
+		samples := make([]sample, rs.ring.count)
+		copy(samples, rs.ring.samples[:rs.ring.count])
+		copies = append(copies, routeCopy{
+			name:    name,
+			total:   rs.ring.total,
+			max:     rs.ring.max,
+			samples: samples,
+			recent:  rs.recent,
+		})
+	}
+	rec.mu.Unlock()
+
+	routes := make([]RouteSnapshot, 0, len(copies))
+	for _, rc := range copies {
+		recentMedian, recentP95, recentMax := windowStats(rc.samples, cutoff)
 		routes = append(routes, RouteSnapshot{
-			Route:          name,
-			Count:          rs.ring.total,
-			MaxMs:          toMillis(rs.ring.max),
-			RecentCount:    rs.recentCount(now),
+			Route:          rc.name,
+			Count:          rc.total,
+			MaxMs:          toMillis(rc.max),
+			RecentCount:    recentCount(&rc.recent, now),
 			RecentMedianMs: toMillis(recentMedian),
 			RecentP95Ms:    toMillis(recentP95),
 			RecentMaxMs:    toMillis(recentMax),
 		})
 	}
-	rec.mu.Unlock()
 
 	sort.Slice(routes, func(i, j int) bool {
 		if routes[i].Count != routes[j].Count {
