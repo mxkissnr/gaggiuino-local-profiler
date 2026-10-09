@@ -7,6 +7,11 @@
 // `annotations` entries under the new shot id, and writes a new ZIP. Every other
 // section and every image entry is copied unchanged.
 //
+// The input is the committed demo backup
+// (gaggiuino-local-profiler/demo/glp-demo-backup.zip) by default; it is read
+// only, never rewritten — the scaled ZIP goes to the path given with --out. So
+// this slice adds the generator and leaves that fixture untouched.
+//
 // Determinism: a fixed seeded PRNG (mulberry32, never Math.random) and a fixed
 // ZIP layout (input entry order, DOS timestamp 1980-01-01, method 8) mean the
 // same input plus seed give a byte-identical ZIP. The perf-compare workflow

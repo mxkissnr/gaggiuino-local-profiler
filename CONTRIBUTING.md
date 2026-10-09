@@ -195,9 +195,12 @@ npm run perf:measure -- --base-url http://127.0.0.1:8099 --ref v3.5.0 --out /tmp
 npm run perf:compare -- /tmp/base.json /tmp/head.json
 ```
 
-`perf:dataset` grows `demo/glp-demo-backup.zip` to the requested shot count with
-a seeded generator (default 5000 shots, seed 1558), so the same input and seed
-give a byte-identical ZIP. `perf:measure` optionally restores that ZIP
+`perf:dataset` grows the committed demo backup
+(`gaggiuino-local-profiler/demo/glp-demo-backup.zip`, overridable with
+`--input`) to the requested shot count with a seeded generator (default 5000
+shots, seed 1558), so the same input and seed give a byte-identical ZIP. That
+demo ZIP is only read — the scaled result is written to the `--out` path, never
+back into the fixture. `perf:measure` optionally restores that ZIP
 (`--restore <zip>`) and times the shot list, a shot detail with its curve, the
 full `/shots.json` history the statistics page loads, and the library,
 maintenance, achievements and status endpoints, each as median and p95 over
