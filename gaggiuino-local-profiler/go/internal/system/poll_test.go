@@ -767,3 +767,92 @@ func TestHandleDefaultMachineChange_StartsPollingWithoutLivePolling(t *testing.T
 		t.Fatal("SwitchOnAt = nil, want a fresh session")
 	}
 }
+
+// TestMachineKnownOffline pins #1572's "known offline" predicate that lets the
+// profiles and firmware-version handlers skip their fetch timeouts: an
+// explicitly unreachable poll state, or the default machine with a configured
+// switch that reads off. Everything else stays live, including standby (still
+// reachable and answering) and unknown non-default machines.
+func TestMachineKnownOffline(t *testing.T) {
+	setReachable := func(p *Poller, id int64, v bool) {
+		p.state.mu.Lock()
+		p.state.machine(id).reachable = ptrBool(v)
+		p.state.mu.Unlock()
+	}
+	setSwitch := func(t *testing.T, p *Poller, entity string) {
+		t.Helper()
+		if _, err := p.registry.UpdateMachine(1, machines.MachineInput{SwitchEntity: &entity}, nil); err != nil {
+			t.Fatalf("UpdateMachine: %v", err)
+		}
+	}
+
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, p *Poller) int64
+		want  bool
+	}{
+		{
+			name: "unreachable poll state",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setReachable(p, 1, false)
+				return 1
+			},
+			want: true,
+		},
+		{
+			name: "default machine switch off",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setSwitch(t, p, "switch.gaggia")
+				p.runtime.SetMachineOn(false)
+				return 1
+			},
+			want: true,
+		},
+		{
+			name: "default machine switch off but no switch entity",
+			setup: func(t *testing.T, p *Poller) int64 {
+				p.runtime.SetMachineOn(false)
+				return 1
+			},
+			want: false,
+		},
+		{
+			name: "default machine standby with switch on",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setSwitch(t, p, "switch.gaggia")
+				p.runtime.SetMachineOn(true)
+				p.runtime.SetStandby(true)
+				return 1
+			},
+			want: false,
+		},
+		{
+			name: "non-default machine unknown state",
+			setup: func(t *testing.T, p *Poller) int64 {
+				return addOtherMachine(t, p.registry, "Second", "gaggiuino", "machine2.test", true).ID
+			},
+			want: false,
+		},
+		{
+			name: "reachable wins over switch off",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setSwitch(t, p, "switch.gaggia")
+				p.runtime.SetMachineOn(false)
+				setReachable(p, 1, true)
+				return 1
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, _ := newTestPoller(t, &fakeAdapter{})
+			t.Cleanup(p.stopLivePolling)
+			id := tc.setup(t, p)
+			if got := p.MachineKnownOffline(id); got != tc.want {
+				t.Errorf("MachineKnownOffline(%d) = %v, want %v", id, got, tc.want)
+			}
+		})
+	}
+}
