@@ -1,5 +1,18 @@
 import { S } from '../state/index.js';
 
+// #1539: a random per-page id sent as X-GLP-Client so the server can attach it
+// to the data-changed event a write produced (DataChanged.src) and this page
+// can skip reacting to its own write. 16 bytes of crypto.getRandomValues, hex —
+// deliberately not randomUUID(), which is unavailable on plain-http LAN pages
+// (window.crypto.randomUUID is only exposed in secure contexts).
+function _makeClientId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export const CLIENT_ID = _makeClientId();
+
 export async function initToken(): Promise<void> {
   // Migration for pre-#522 installs: the token used to be cached in
   // localStorage under this key. Idempotent no-op once the key is gone.
@@ -29,6 +42,13 @@ export async function initToken(): Promise<void> {
 }
 
 export async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
+  // #1539: identify this page on writes only (GET/HEAD are not data changes),
+  // so the server can tag the resulting data-changed event with our id and we
+  // skip the echo. Same header-spread pattern as the token below.
+  const method = (opts.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Client': CLIENT_ID } };
+  }
   if (S.glpToken) opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Token': S.glpToken } };
   return fetch(url, opts);
 }
@@ -110,6 +130,8 @@ export function apiUpload(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open(method, url);
+    // #1539: apiUpload is always a write, so it always identifies this page.
+    xhr.setRequestHeader('X-GLP-Client', CLIENT_ID);
     if (S.glpToken) xhr.setRequestHeader('X-GLP-Token', S.glpToken);
     for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => {

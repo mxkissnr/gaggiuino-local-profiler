@@ -14,6 +14,9 @@ import { S } from './state/index.js';
 export const EVENTS = {
   LIVE_SNAPSHOT: 'live-snapshot',
   PREHEAT_UPDATE: 'preheat-update',
+  // #1539: the server publishes one of these after every successful write, with
+  // the changed data kind and revision — see live-sync.ts.
+  DATA_CHANGED: 'data-changed',
 };
 
 const WATCHDOG_MS = 8000;
