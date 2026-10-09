@@ -144,8 +144,10 @@ export function expandShots(
         const newId = maxId + cloneIndex;
         const clone = cloneJson(source);
         // A clone has no photo of its own (the images/ entries are left
-        // untouched), so drop any dangling reference to the source's image.
-        delete clone.image;
+        // untouched), so clear any reference to the source's image. Assigning
+        // undefined rather than deleting keeps the index-signature type happy;
+        // JSON.stringify drops the key either way.
+        clone.image = undefined;
         clone.id = newId;
         clone.nativeId = newId;
         clone.timestamp = oldestTimestamp - cloneIndex * CLONE_STEP_SECONDS - Math.floor(rng() * 60);
