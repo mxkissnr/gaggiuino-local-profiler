@@ -6496,7 +6496,7 @@ export interface paths {
         };
         /**
          * Server-Sent Events stream multiplexing every push event type over one connection (#735/#736)
-         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, the token as a `?token=` query parameter — EventSource can't set custom headers, so this is the one exception to header-only auth.
+         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus), `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write bumped a data kind's revision). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, the token as a `?token=` query parameter — EventSource can't set custom headers, so this is the one exception to header-only auth.
          */
         get: {
             parameters: {
@@ -7755,6 +7755,12 @@ export interface components {
             legacyMachineOptionsPending?: boolean;
             /** @description Stable per-database identity (#751) — changes only when glp.db is freshly (re)created */
             installId?: string;
+            /** @description Server data-revision epoch (#1539); changes when the process restarts and resets dataRevs, telling a client to drop the revisions it has seen */
+            dataEpoch?: string;
+            /** @description Per-kind write revisions (#1539); a client refetches a kind whose revision advanced since it last polled */
+            dataRevs?: {
+                [key: string]: number;
+            };
             /** @description All configured machines (#317). The fields above always describe the default machine, unchanged, for backward compatibility. */
             machines?: {
                 id?: number;
