@@ -792,56 +792,56 @@ func TestMachineKnownOffline(t *testing.T) {
 		want  bool
 	}{
 		{
-			name:  "unreachable poll state",
+			name: "unreachable poll state",
 			setup: func(t *testing.T, p *Poller) int64 {
 				setReachable(p, 1, false)
 				return 1
 			},
-			want:  true,
+			want: true,
 		},
 		{
-			name:  "default machine switch off",
+			name: "default machine switch off",
 			setup: func(t *testing.T, p *Poller) int64 {
 				setSwitch(t, p, "switch.gaggia")
 				p.runtime.SetMachineOn(false)
 				return 1
 			},
-			want:  true,
+			want: true,
 		},
 		{
-			name:  "default machine switch off but no switch entity",
+			name: "default machine switch off but no switch entity",
 			setup: func(t *testing.T, p *Poller) int64 {
 				p.runtime.SetMachineOn(false)
 				return 1
 			},
-			want:  false,
+			want: false,
 		},
 		{
-			name:  "default machine standby with switch on",
+			name: "default machine standby with switch on",
 			setup: func(t *testing.T, p *Poller) int64 {
 				setSwitch(t, p, "switch.gaggia")
 				p.runtime.SetMachineOn(true)
 				p.runtime.SetStandby(true)
 				return 1
 			},
-			want:  false,
+			want: false,
 		},
 		{
-			name:  "non-default machine unknown state",
+			name: "non-default machine unknown state",
 			setup: func(t *testing.T, p *Poller) int64 {
 				return addOtherMachine(t, p.registry, "Second", "gaggiuino", "machine2.test", true).ID
 			},
-			want:  false,
+			want: false,
 		},
 		{
-			name:  "reachable wins over switch off",
+			name: "reachable wins over switch off",
 			setup: func(t *testing.T, p *Poller) int64 {
 				setSwitch(t, p, "switch.gaggia")
 				p.runtime.SetMachineOn(false)
 				setReachable(p, 1, true)
 				return 1
 			},
-			want:  false,
+			want: false,
 		},
 	}
 
