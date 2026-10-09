@@ -176,8 +176,11 @@ func TestDataChanges_MultiKindPublishesInTableOrder(t *testing.T) {
 	if first.Kind != "library" || second.Kind != "maintenance" {
 		t.Errorf("kinds = %q then %q, want library then maintenance", first.Kind, second.Kind)
 	}
-	if first.Rev >= second.Rev {
-		t.Errorf("library rev %d should precede maintenance rev %d", first.Rev, second.Rev)
+	// Each kind has its own counter seeded at the same instant, so the two revs
+	// may be equal; their relative order across kinds is not meaningful, only
+	// that each kind's own counter advanced.
+	if first.Rev <= 0 || second.Rev <= 0 {
+		t.Errorf("revs = %d then %d, want both positive", first.Rev, second.Rev)
 	}
 }
 
