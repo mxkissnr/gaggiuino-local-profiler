@@ -59,15 +59,8 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
-	defer cancel()
-
-	status, err := adapter.GetStatus(liveCtx, machine)
 	var currentID *int
 	var currentName *string
-	if err == nil {
-		currentID, currentName = status.ProfileID, status.ProfileName
-	} // machine unreachable — profile list can still come from the local cache, current stays nil
 
 	respond := func(rows []ProfileRow, stale bool) {
 		options := make([]string, len(rows))
@@ -88,6 +81,29 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 			"optionsRaw": optionsRaw,
 		})
 	}
+
+	// #1572: when the poller already knows this machine is unreachable, serve
+	// the local cache right away — same shape as the post-failure fallback
+	// below (cached rows, stale: true, no current profile) — instead of paying
+	// the live GetStatus/ListProfiles timeouts. Reachable or unknown machines
+	// fall through to the live path unchanged.
+	if h.machineKnownOffline(machine.ID) {
+		cached, err := h.profilesRepo.ListByMachine(machine.ID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		respond(cached, true)
+		return
+	}
+
+	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
+	defer cancel()
+
+	status, err := adapter.GetStatus(liveCtx, machine)
+	if err == nil {
+		currentID, currentName = status.ProfileID, status.ProfileName
+	} // machine unreachable — profile list can still come from the local cache, current stays nil
 
 	raw, err := adapter.ListProfiles(liveCtx, machine)
 	if err != nil {
