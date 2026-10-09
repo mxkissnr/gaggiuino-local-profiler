@@ -348,14 +348,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// reset the poller's preheat session for the new default.
 	machinesHandlers.SetOnDefaultChanged(poller.HandleDefaultMachineChange)
 	// #1572: the profiles and firmware-version handlers answer instantly from
-	// local state when the poller's last poll already reported the machine
-	// unreachable, instead of waiting out the live fetch timeouts. A nil
-	// Reachable (no poll observed yet) counts as not offline, so a machine that
-	// was just switched on is still tried live.
-	machinesHandlers.SetKnownUnreachable(func(id int64) bool {
-		st := poller.MachineStatus(id)
-		return st.Reachable != nil && !*st.Reachable
-	})
+	// local state when the poller already knows the machine is offline — either
+	// its last poll reported the machine unreachable, or the default machine's
+	// switch is configured and reads off (so live polling never started).
+	// Unknown state (no poll observed yet, no switch, or the machine just
+	// switched on) counts as not offline, so the machine is tried live.
+	machinesHandlers.SetKnownUnreachable(poller.MachineKnownOffline)
 	// POST /api/sync's manual shot-history pull loop persists through
 	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)

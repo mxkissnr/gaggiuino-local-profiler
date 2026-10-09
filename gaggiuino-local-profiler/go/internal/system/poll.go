@@ -412,6 +412,30 @@ func (p *Poller) MachineStatus(id int64) MachinePollStatus {
 	return MachinePollStatus{Reachable: ms.reachable, LastError: ms.lastError, FirmwareVersion: ms.version, FirmwareName: ms.firmwareName}
 }
 
+// MachineKnownOffline reports whether machine id can be treated as known
+// offline without a live probe (#1572), so the profiles and firmware-version
+// handlers can skip their fetch timeouts.
+//
+// A definite unreachability answer wins: Reachable set and false is offline,
+// Reachable set and true is not (a machine that answers is never offline, even
+// if its switch reads off). Only when reachability is still unknown (nil) does
+// the default machine's switch decide — a configured switch that reads off
+// means live polling never started, so the machine is offline. That is exactly
+// the machine-off condition the preheat logic uses (preheat.go); a machine
+// reporting its own standby is still reachable and is NOT offline. Every other
+// case (non-default machine with no poll state, no switch configured, switch
+// on) stays false so the live path runs unchanged.
+func (p *Poller) MachineKnownOffline(id int64) bool {
+	if st := p.MachineStatus(id); st.Reachable != nil {
+		return !*st.Reachable
+	}
+	defID, ok := p.defaultMachineID()
+	if !ok || id != defID {
+		return false
+	}
+	return p.defaultSwitchEntity() != "" && !p.runtime.Get().MachineOn
+}
+
 // Start runs this domain's startup sequence: load any persisted preheat
 // session, run one unconditional checkAndApplyMachinePower (the call that
 // actually starts live polling on a fresh boot for the common
