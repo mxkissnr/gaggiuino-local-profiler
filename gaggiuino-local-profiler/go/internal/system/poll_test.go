@@ -3,7 +3,9 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -695,38 +697,73 @@ func TestHandleDefaultMachineChange_StartsSessionWhenNewDefaultOn(t *testing.T) 
 	}
 }
 
-// TestHandleDefaultMachineChange_ClearsClockWhenNewDefaultOff covers the other
-// #1543 branch: switching the default to an off machine must drop the previous
-// machine's switch-on time instead of counting down a stale session.
-func TestHandleDefaultMachineChange_ClearsClockWhenNewDefaultOff(t *testing.T) {
+// TestHandleDefaultMachineChange_OffDefaultStartsSessionOnSwitchOn is the
+// #1551 regression test: live polling and the on/standby flags of the previous
+// default (a GaggiMate in standby, no switch entity) must not carry over to a
+// new default whose HA switch is off. Polling stops, and the later switch-on
+// is a real off->on transition that starts a fresh preheat session instead of
+// leaving the countdown at the full window.
+func TestHandleDefaultMachineChange_OffDefaultStartsSessionOnSwitchOn(t *testing.T) {
+	var switchState atomic.Value
+	switchState.Store("off")
+	haClient := fakeHA(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/states/switch.machine" {
+			_ = json.NewEncoder(w).Encode(map[string]string{"state": switchState.Load().(string)})
+			return
+		}
+		t.Errorf("unexpected HA call: %s %s", r.Method, r.URL.Path)
+	})
 	fake := &fakeAdapter{}
-	p, _ := newTestPoller(t, fake)
+	p := newTestPollerWithHA(t, fake, newTestDB(t), haClient, "switch.machine")
+	var c syncCounter
+	p.syncFn = c.fn
 	markLivePollingActive(t, p)
 
+	// The previous default's leftovers: polling running, on, in standby, an
+	// old switch-on time.
 	onAt := time.Now().UnixMilli() - 60_000
 	p.runtime.SetMachineOn(true)
+	p.runtime.SetStandby(true)
 	p.runtime.SetSwitchOnAt(&onAt)
 
-	p.runtime.SetMachineOn(false)
 	p.HandleDefaultMachineChange()
 
-	if snap := p.runtime.Get(); snap.SwitchOnAt != nil {
-		t.Fatalf("SwitchOnAt = %v after a default switch to an off machine, want nil", snap.SwitchOnAt)
+	if p.livePollActive() {
+		t.Fatal("live polling still active after a default switch to a machine whose switch is off")
+	}
+	if snap := p.runtime.Get(); snap.SwitchOnAt != nil || snap.MachineOn || snap.Standby {
+		t.Fatalf("runtime after the switch = on %v, standby %v, switch-on %v; want all cleared", snap.MachineOn, snap.Standby, snap.SwitchOnAt)
+	}
+
+	switchState.Store("on")
+	if err := p.checkAndApplyMachinePower(context.Background()); err != nil {
+		t.Fatalf("checkAndApplyMachinePower: %v", err)
+	}
+	if !p.livePollActive() {
+		t.Fatal("live polling not started after switching the new default on")
+	}
+	if snap := p.runtime.Get(); snap.SwitchOnAt == nil || *snap.SwitchOnAt == onAt {
+		t.Fatalf("SwitchOnAt = %v after switch-on, want a fresh session", snap.SwitchOnAt)
+	}
+	if status := p.PreheatStatus(); status.Remaining <= 0 {
+		t.Errorf("Remaining = %d, want a running countdown", status.Remaining)
 	}
 }
 
-// TestHandleDefaultMachineChange_NoLivePollingNoop pins that a default change
-// with live polling inactive changes nothing (there is no session to reset).
-func TestHandleDefaultMachineChange_NoLivePollingNoop(t *testing.T) {
+// TestHandleDefaultMachineChange_StartsPollingWithoutLivePolling pins that a
+// default change also works when live polling was off before: a new default
+// without a switch entity gets live polling and a fresh session right away.
+func TestHandleDefaultMachineChange_StartsPollingWithoutLivePolling(t *testing.T) {
 	fake := &fakeAdapter{}
 	p, _ := newTestPoller(t, fake)
-
-	onAt := time.Now().UnixMilli() - 60_000
-	p.runtime.SetMachineOn(true)
-	p.runtime.SetSwitchOnAt(&onAt)
+	t.Cleanup(p.stopLivePolling)
 
 	p.HandleDefaultMachineChange()
+
+	if !p.livePollActive() {
+		t.Fatal("live polling not started for a new default without a switch entity")
+	}
 	if snap := p.runtime.Get(); snap.SwitchOnAt == nil {
-		t.Fatal("SwitchOnAt = nil, want the existing clock left untouched when live polling is off")
+		t.Fatal("SwitchOnAt = nil, want a fresh session")
 	}
 }

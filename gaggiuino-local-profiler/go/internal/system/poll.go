@@ -676,30 +676,26 @@ func (p *Poller) applyStandbyTransition(now int64, standby bool) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
-// HandleDefaultMachineChange resets the preheat session when the configured
-// default machine changes (#1543). The runtime's on/standby flags carry over
-// from the previous default: when the machine is on (and not in standby) this
-// starts a fresh preheat session, so the countdown runs and a preheat run is
-// recorded instead of the full window showing forever; when it is off, any
-// switch-on time is dropped so no stale clock is counted down. A no-op when
-// live polling is not running (there is no session to reset). Wired from the
+// HandleDefaultMachineChange drops the previous default's live state when the
+// configured default machine changes (#1543, #1551) and re-evaluates the new
+// default from scratch: live polling is stopped (ending the session), the
+// switch-on time and the on/standby flags are cleared, then the power check
+// runs at once. It starts live polling and a fresh preheat session when the
+// new default is on or has no switch entity, and leaves polling stopped when
+// its switch is off, so the next switch-on is a real off->on transition.
+// Carrying the old flags over left the countdown stuck at the full window:
+// polling kept running for an off machine, so its later switch-on found the
+// ticker already running and never started a session. Wired from the
 // set-default handler through machines.Handlers.SetOnDefaultChanged.
 func (p *Poller) HandleDefaultMachineChange() {
-	p.liveMu.Lock()
-	if p.liveTicker == nil {
-		p.liveMu.Unlock()
-		return
+	p.stopLivePolling()
+	p.runtime.SetSwitchOnAt(nil)
+	p.runtime.SetMachineOn(false)
+	p.runtime.SetStandby(false)
+	p.savePreheatState()
+	if err := p.checkAndApplyMachinePower(p.syncCtx()); err != nil {
+		log.Printf("system: machine power check after default change failed: %v", err)
 	}
-	now := time.Now().UnixMilli()
-	snap := p.runtime.Get()
-	if snap.MachineOn && !snap.Standby {
-		p.beginPreheatSession(now)
-		log.Printf("system: default machine changed -- preheat session started")
-	} else {
-		p.runtime.SetSwitchOnAt(nil)
-		p.savePreheatState()
-	}
-	p.liveMu.Unlock()
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
