@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -117,6 +119,18 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 		OutputSchema: mustSchema[getPreheatHistoryOutput](),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in getPreheatHistoryInput) (*mcpsdk.CallToolResult, getPreheatHistoryOutput, error) {
 		out, err := getPreheatHistory(deps, in)
+		return nil, out, err
+	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:         "get_perf_stats",
+		Title:        "Get performance stats",
+		Description:  "Report the running install's own performance counters, held only in memory since process start: API request count, median, p95 and max per route pattern over all requests and over the last 15 minutes, plus process memory, goroutine count, uptime, GC pause p95 and the database size and shot count. Read-only.",
+		Annotations:  readOnlyAnnotations("Get performance stats"),
+		InputSchema:  mustSchema[getPerfStatsInput](),
+		OutputSchema: mustSchema[getPerfStatsOutput](),
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ getPerfStatsInput) (*mcpsdk.CallToolResult, getPerfStatsOutput, error) {
+		out, err := getPerfStats(deps)
 		return nil, out, err
 	})
 }
@@ -633,4 +647,53 @@ func toPreheatRunOutput(run system.PreheatRun, includeSamples bool) preheatRunOu
 // same format get_machine_status uses for LastMachineSuccess.
 func formatMillis(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
+}
+
+// get_perf_stats takes no input: it reports whatever the recorder has seen.
+type getPerfStatsInput struct{}
+
+type databaseStats struct {
+	SizeBytes int64 `json:"size_bytes" jsonschema:"the SQLite database file's size on disk plus its -wal sidecar when present, bytes"`
+	ShotCount int   `json:"shot_count" jsonschema:"number of shots stored, including trashed ones"`
+}
+
+type getPerfStatsOutput struct {
+	Routes   []perfstats.RouteSnapshot `json:"routes" jsonschema:"per-route request timings, busiest first"`
+	Process  perfstats.ProcessStats    `json:"process" jsonschema:"process resource use since start"`
+	Database databaseStats             `json:"database" jsonschema:"database size and shot count"`
+}
+
+func getPerfStats(deps Deps) (getPerfStatsOutput, error) {
+	if deps.Recorder == nil {
+		return getPerfStatsOutput{}, fmt.Errorf("performance stats are not available")
+	}
+	snap := deps.Recorder.Snapshot(time.Now())
+	out := getPerfStatsOutput{
+		Routes:   snap.Routes,
+		Process:  snap.Process,
+		Database: databaseStats{SizeBytes: dbSizeBytes(deps.DBPath)},
+	}
+	if deps.ShotsRepo != nil {
+		n, err := deps.ShotsRepo.Count()
+		if err != nil {
+			return getPerfStatsOutput{}, err
+		}
+		out.Database.ShotCount = n
+	}
+	return out, nil
+}
+
+// dbSizeBytes totals the SQLite file and its -wal sidecar, skipping whichever
+// is not present.
+func dbSizeBytes(path string) int64 {
+	if path == "" {
+		return 0
+	}
+	var total int64
+	for _, p := range []string{path, path + "-wal"} {
+		if fi, err := os.Stat(p); err == nil {
+			total += fi.Size()
+		}
+	}
+	return total
 }
