@@ -151,8 +151,11 @@ function collectAssets(html: string, root: string): string[] {
     return [...found];
 }
 
+// Vite appends an 8-character content hash (`index-BMcO6Aro.js`); it is
+// stripped so the same asset gets the same metric name in base and head.
 function assetMetricName(url: string): string {
     const clean = new URL(url).pathname
+        .replace(/-[A-Za-z0-9_-]{8}(\.[a-z0-9]+)$/, '$1')
         .replace(/^\/+/, '')
         .replace(/[^A-Za-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');

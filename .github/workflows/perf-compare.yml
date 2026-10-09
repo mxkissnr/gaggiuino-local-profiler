@@ -1,0 +1,133 @@
+name: perf-compare
+
+# Manually triggered performance comparison of two refs (#1558): both images
+# are built and measured one after the other on the same runner with the same
+# generated dataset. The measurement scripts always come from the head
+# checkout, so an older base ref (e.g. a release tag) works too. A report, not
+# a gate: rows over the threshold are marked "review" and the job stays green.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Base ref (tag or branch), e.g. the previous release tag
+        required: true
+        default: v3.4.0
+      head:
+        description: Head ref (tag or branch)
+        required: true
+        default: dev
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Compare ${{ inputs.base }} vs ${{ inputs.head }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.head }}
+          path: head
+          persist-credentials: false
+
+      - name: Checkout base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.base }}
+          path: base
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: head/gaggiuino-local-profiler/package-lock.json
+
+      - name: Install head dependencies
+        working-directory: head/gaggiuino-local-profiler
+        run: npm ci
+
+      - name: Generate dataset
+        working-directory: head/gaggiuino-local-profiler
+        run: node scripts/perf-dataset.mts --out "$RUNNER_TEMP/perf-dataset.zip"
+
+      - name: Measure base and head
+        env:
+          BASE_REF: ${{ inputs.base }}
+          HEAD_REF: ${{ inputs.head }}
+        run: |
+          set -euo pipefail
+          scripts="$GITHUB_WORKSPACE/head/gaggiuino-local-profiler/scripts"
+          metric() { jq -n --arg n "$1" --argjson v "$2" --arg u "$3" '{($n): {value: $v, unit: $u, better: "lower"}}'; }
+
+          for side in base head; do
+            ref_var="${side^^}_REF"; ref="${!ref_var}"
+            echo "::group::$side ($ref)"
+            docker build -q -t "glp-perf:$side" "$side/gaggiuino-local-profiler" >/dev/null
+            image_bytes=$(docker image inspect --format '{{.Size}}' "glp-perf:$side")
+
+            start=$(date +%s%3N)
+            cid=$(docker run -d --name "glp-$side" -p 127.0.0.1:8099:8099 "glp-perf:$side")
+            for _ in $(seq 1 120); do
+              curl -sf -o /dev/null http://127.0.0.1:8099/api/status && break
+              sleep 0.25
+            done
+            startup_ms=$(( $(date +%s%3N) - start ))
+
+            docker cp "$cid:/data/api_token.txt" "$RUNNER_TEMP/token-$side"
+            token=$(cat "$RUNNER_TEMP/token-$side")
+
+            node "$scripts/perf-measure.mts" --base-url http://127.0.0.1:8099 --ref "$ref" \
+              --token "$token" --restore "$RUNNER_TEMP/perf-dataset.zip" --out "$RUNNER_TEMP/raw-$side.json"
+
+            # Idle memory and CPU after the measurement, from the container's
+            # cgroup (cgroup v2 on GitHub's Ubuntu runners).
+            cg="/sys/fs/cgroup/system.slice/docker-$cid.scope"
+            sleep 10
+            cpu0=$(awk '/^usage_usec/{print $2}' "$cg/cpu.stat"); sleep 10
+            cpu1=$(awk '/^usage_usec/{print $2}' "$cg/cpu.stat")
+            idle_cpu=$(jq -n "($cpu1 - $cpu0) / 100000 | . * 1000 | round / 1000")
+            idle_mem=$(cat "$cg/memory.current")
+            peak_mem=$(cat "$cg/memory.peak")
+
+            jq -s '.[0] * {metrics: (.[1] + .[2] + .[3] + .[4] + .[5])}' "$RUNNER_TEMP/raw-$side.json" \
+              <(metric container.startup_ms "$startup_ms" ms) \
+              <(metric container.image_bytes "$image_bytes" bytes) \
+              <(metric container.idle_memory_bytes "$idle_mem" bytes) \
+              <(metric container.peak_memory_bytes "$peak_mem" bytes) \
+              <(metric container.idle_cpu_pct "$idle_cpu" %) \
+              > "$RUNNER_TEMP/perf-$side.json"
+
+            docker rm -f "glp-$side" >/dev/null
+            echo "::endgroup::"
+          done
+
+      - name: Compare
+        working-directory: head/gaggiuino-local-profiler
+        env:
+          BASE_REF: ${{ inputs.base }}
+          HEAD_REF: ${{ inputs.head }}
+        run: |
+          {
+            echo "## Performance: \`$BASE_REF\` vs \`$HEAD_REF\`"
+            echo
+            node scripts/perf-compare.mts "$RUNNER_TEMP/perf-base.json" "$RUNNER_TEMP/perf-head.json"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-compare
+          path: |
+            ${{ runner.temp }}/perf-base.json
+            ${{ runner.temp }}/perf-head.json
+          if-no-files-found: warn
