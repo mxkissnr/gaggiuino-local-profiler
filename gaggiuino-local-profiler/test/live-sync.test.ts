@@ -106,7 +106,7 @@ async function loadLive() {
   vi.resetModules();
   const transport = await import('../public-src/api/transport.js');
   const live = await import('../public-src/live-sync.js');
-  return { live, CLIENT_ID: transport.CLIENT_ID };
+  return { live, transport, CLIENT_ID: transport.CLIENT_ID };
 }
 
 let doc: FakeDoc;
@@ -540,6 +540,60 @@ describe('live-sync review fixes (#1539)', () => {
   });
 });
 
+describe('live-sync own-write and resync dedup (#1539)', () => {
+  it('does not refetch a status rev bump within 5 s of an own write', async () => {
+    const { live, transport } = await loadLive();
+    const run = vi.fn();
+    live.initLiveSync({ library: { run } });
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true } as Response)));
+
+    live.noteServerRevs('e1', { library: 1 }); // baseline
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).not.toHaveBeenCalled();
+
+    // This page writes; the server's next status snapshot reports the bump
+    // before that write's SSE echo has arrived.
+    await transport.apiFetch('api/x', { method: 'POST' });
+    live.noteServerRevs('e1', { library: 2 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('refetches a status rev bump more than 5 s after an own write', async () => {
+    const { live, transport } = await loadLive();
+    const run = vi.fn();
+    live.initLiveSync({ library: { run } });
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true } as Response)));
+
+    live.noteServerRevs('e1', { library: 1 }); // baseline
+    await vi.advanceTimersByTimeAsync(400);
+    await transport.apiFetch('api/x', { method: 'POST' });
+
+    // Past the grace window the higher revision is no longer assumed to be ours.
+    await vi.advanceTimersByTimeAsync(5100);
+    live.noteServerRevs('e1', { library: 2 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('collapses two resyncAll calls within 2 s into one round', async () => {
+    const { live } = await loadLive();
+    const run = vi.fn();
+    live.initLiveSync({ library: { run } });
+
+    live.resyncAll();
+    live.resyncAll();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    // A later call, past the throttle, resyncs again.
+    await vi.advanceTimersByTimeAsync(2000);
+    live.resyncAll();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('client identity header (#1539)', () => {
   it('sends X-GLP-Client on a write but not on a read', async () => {
     vi.resetModules();
@@ -702,7 +756,7 @@ describe('boot wiring (#1539)', () => {
     expect(src).toMatch(/library:\s*\{[\s\S]*?run: async \(\) => \{ await loadLibrary\(\); \}/);
     // ...while library-image drops the cache keys the server sent (null = all
     // library photos) and reloads the library.
-    expect(src).toMatch(/'library-image':\s*\{[\s\S]*?invalidateImageKeys\(ids \?\? null\)/);
+    expect(src).toMatch(/'library-image':\s*\{[\s\S]*?invalidateImageKeys\(ids\)/);
     // A remote whole-database change reloads the page through the all handler.
     expect(src).toMatch(/all:\s*\{[\s\S]*?location\.reload\(\)/);
     // There is no longer a whole-cache wipe.
