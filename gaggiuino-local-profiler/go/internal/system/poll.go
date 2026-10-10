@@ -313,6 +313,9 @@ type Poller struct {
 	// no-ops then.
 	profilesRepo *machines.ProfilesRepository
 
+	// onProfilesChanged, when set, runs once after a sweep changed profile rows (see profile_sync.go); nil is a no-op.
+	onProfilesChanged func()
+
 	// liveTransport is the optional MQTT live-data override (#608), wired via
 	// SetLiveTransport. nil in tests and when MQTT support isn't compiled in
 	// — the poller then always reads live data through the adapter's WS path,

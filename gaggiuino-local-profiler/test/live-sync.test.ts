@@ -275,16 +275,18 @@ describe('live-sync handleDataChanged', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('records but does not refetch an unregistered kind', async () => {
+  it('records but does not refetch a kind with no handler', async () => {
     const { live } = await loadLive();
     const run = vi.fn();
     live.initLiveSync({ library: { run } });
 
-    live.handleDataChanged({ kind: 'settings', rev: 1, epoch: 'e1' });
+    // Every real data kind is registered since slice 5; a kind the server does
+    // not publish still only records its revision and never runs a handler.
+    live.handleDataChanged({ kind: 'mystery', rev: 1, epoch: 'e1' });
     await vi.advanceTimersByTimeAsync(400);
     expect(run).not.toHaveBeenCalled();
 
-    live.noteServerRevs('e1', { settings: 2 });
+    live.noteServerRevs('e1', { mystery: 2 });
     await vi.advanceTimersByTimeAsync(400);
     expect(run).not.toHaveBeenCalled();
   });

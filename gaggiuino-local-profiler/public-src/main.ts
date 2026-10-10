@@ -212,6 +212,22 @@ function _maintenanceCanRefetch(): boolean {
   return !logForm || logForm.style.display === 'none';
 }
 
+// #1539 slice 5: the Settings-page state the server's "settings" kind covers,
+// extracted so the live-sync handler and the boot share one loader. The
+// shot-defaults card is awaited (the first shot render reads S.shotDefaults
+// directly); the others stay fire-and-forget exactly as at boot, and the
+// machine list reloads because the machine-registry routes publish "settings"
+// too. A remote refresh of this state is held back while the user is on the
+// Settings page (the handler's canRun) so it never re-renders a form mid-edit;
+// the scheduler's own canRun retry runs it once the page is left.
+async function loadSettingsState(): Promise<void> {
+  void loadMqttSettings();
+  void loadMcpSettingsCard();
+  void loadMachineControlSetting();
+  void loadMachines();
+  await loadShotDefaultsSettingsCard();
+}
+
 // ── Toast helper ──────────────────────────────────────────────────────────
 function showToast(msg: string, duration = 3000) {
   let el = document.getElementById('glpToast');
@@ -1259,6 +1275,20 @@ document.addEventListener('DOMContentLoaded', () => {
           if (changed) applyServerUiPrefs(false, true);
         },
       },
+      profiles: {
+        // The machine's profile list changed on the server — a profile write,
+        // or the profile-sync sweep publishing the kind. loadMachineProfileList()
+        // re-renders the list and its autocomplete from the current state.
+        run: () => loadMachineProfileList(),
+      },
+      settings: {
+        // The shot defaults, machine registry and broker/MCP/control options.
+        // Held back while the user is on the Settings page so a remote change
+        // never re-renders a form mid-edit; the scheduler retries it once the
+        // page is left.
+        canRun: () => S.currentMode !== 'settings',
+        run: loadSettingsState,
+      },
       all: {
         // A whole-database change (restore, DB import, demo seed/end): reload
         // through the live-sync pipeline, so it honours the focus and
@@ -1296,19 +1326,19 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!changed) return;
       applyServerUiPrefs();
     });
-    void loadMqttSettings();
+    // The Settings-page loaders (#1539 slice 5) are shared with the live-sync
+    // "settings" handler. The returned promise is awaited below: loadData() can
+    // render the annotation panel for the initially-selected shot synchronously
+    // once it resolves (updateView() -> renderAnnotationPanel()), which reads
+    // S.shotDefaults directly — on a slow connection, firing the shot-defaults
+    // load unawaited could let that first render see S.shotDefaults still null
+    // with nothing to re-render it once the fetch actually completes. The other
+    // cards stay fire-and-forget as before.
+    const settingsState = loadSettingsState();
     void loadNotifySettingsCard();
-    void loadMcpSettingsCard();
-    void loadMachineControlSetting();
     void loadDrinkMenu();
     void loadMilkTypes();
-    // Awaited (unlike the two loads above): loadData() below can render the
-    // annotation panel for the initially-selected shot synchronously once
-    // it resolves (updateView() -> renderAnnotationPanel()), which reads
-    // S.shotDefaults directly — on a slow connection, firing this
-    // unawaited could let that first render see S.shotDefaults still null
-    // with nothing to re-render it once the fetch actually completes.
-    await loadShotDefaultsSettingsCard();
+    await settingsState;
     // #700: same class of bug as above — renderAnnotationPanel() also reads
     // S.coffeeLibrary.baskets/puckScreens (via _renderBasketSelect/
     // _renderPuckScreenSelect). Firing loadLibrary() unawaited let the first

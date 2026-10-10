@@ -37,6 +37,16 @@ var profilePushTimeout = 10 * time.Second
 // NewPoller parameter keeps every existing call site unchanged.
 func (p *Poller) SetProfilesRepo(repo *machines.ProfilesRepository) { p.profilesRepo = repo }
 
+// SetOnProfilesChanged wires a nil-safe hook the sweep runs once when a push changed a row's sync state.
+func (p *Poller) SetOnProfilesChanged(fn func()) { p.onProfilesChanged = fn }
+
+// notifyProfilesChanged runs the onProfilesChanged hook (if wired).
+func (p *Poller) notifyProfilesChanged() {
+	if p.onProfilesChanged != nil {
+		p.onProfilesChanged()
+	}
+}
+
 // PushDirtyProfiles pushes every not-yet-synced local profile for one
 // machine through its adapter — bounded like BackfillGaggiMatePhases (60s
 // self-timeout independent of the caller's context, since this can be
@@ -87,13 +97,25 @@ func (p *Poller) PushDirtyProfiles(ctx context.Context, machineID int64) error {
 	if err != nil {
 		return err
 	}
+	// #1539 slice 5: notify once per sweep, and only when a row's sync status or
+	// recorded error actually changed — a row that keeps failing with the same
+	// error must not re-notify on every sweep.
+	changed := false
 	for _, row := range rows {
+		prevError := row.LastSyncError
 		if err := p.pushOneProfile(ctx, machine, adapter, row); err != nil {
 			log.Printf("system: pushing profile %d (machine %d) failed, will retry next sweep: %v", row.LocalID, machineID, err)
 			if merr := p.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
 				log.Printf("system: recording sync error for profile %d also failed: %v", row.LocalID, merr)
+			} else if prevError == nil || *prevError != err.Error() {
+				changed = true
 			}
+		} else {
+			changed = true
 		}
+	}
+	if changed {
+		p.notifyProfilesChanged()
 	}
 	return nil
 }
