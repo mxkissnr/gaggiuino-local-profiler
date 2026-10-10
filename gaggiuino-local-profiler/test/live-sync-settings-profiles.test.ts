@@ -74,7 +74,7 @@ describe('profiles live refresh (#1539 slice 5)', () => {
     const loadMachineProfileList = vi.fn();
 
     // Mirrors main.ts's `profiles` registration.
-    live.initLiveSync({ profiles: { run: () => loadMachineProfileList() } });
+    live.initLiveSync({ profiles: { run: () => { loadMachineProfileList(); } } });
 
     live.handleDataChanged({ kind: 'profiles', rev: 1 });
     await vi.advanceTimersByTimeAsync(400);
@@ -84,7 +84,7 @@ describe('profiles live refresh (#1539 slice 5)', () => {
   it('coalesces a burst of profiles events into one reload', async () => {
     const { live } = await loadRuntime();
     const loadMachineProfileList = vi.fn();
-    live.initLiveSync({ profiles: { run: () => loadMachineProfileList() } });
+    live.initLiveSync({ profiles: { run: () => { loadMachineProfileList(); } } });
 
     live.handleDataChanged({ kind: 'profiles', rev: 1 });
     live.handleDataChanged({ kind: 'profiles', rev: 2 });
