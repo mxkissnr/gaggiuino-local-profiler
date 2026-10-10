@@ -69,6 +69,15 @@ function makeEl(): FakeEl {
   };
 }
 
+// Only the annotation form fields the save path reads are synthesised; every
+// other id resolves to undefined exactly like the original fake, so the banner
+// / onboarding code keeps taking its "element absent" branch.
+const ANNOTATION_IDS = new Set([
+  'annCoffee', 'annBasket', 'annPuckScreen', 'annGrinder', 'annGrindSetting',
+  'annDose', 'annTds', 'annNotes', 'annDrinkType', 'annMilkType', 'annRecipe',
+  'annFrozenPortionId', 'autoSaveStatus',
+]);
+
 function fakeDocument() {
   const elements: Record<string, FakeEl> = {
     shots:         { innerHTML: 'KEEP' },
@@ -78,7 +87,10 @@ function fakeDocument() {
   return {
     elements,
     document: {
-      getElementById: (id: string) => (elements[id] ??= makeEl()),
+      getElementById: (id: string) => {
+        if (elements[id]) return elements[id];
+        return ANNOTATION_IDS.has(id) ? (elements[id] = makeEl()) : undefined;
+      },
       querySelectorAll: () => [],
     },
   };
