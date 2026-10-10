@@ -171,14 +171,14 @@ describe('refreshShots (#1539 slice 4)', () => {
   it('reloads the list quietly when ids is null, without the loading placeholder', async () => {
     await refreshShots(null);
 
-    expect(docEl.shots.innerHTML).toBe('KEEP');
+    expect(docEl.shots?.innerHTML).toBe('KEEP');
     expect(apiFetchSpy).toHaveBeenCalledWith(expect.stringContaining('api/shots?'));
   });
 
   it('reloads the list quietly when more than five ids are dirtied', async () => {
     await refreshShots(['1', '2', '3', '4', '5', '6']);
 
-    expect(docEl.shots.innerHTML).toBe('KEEP');
+    expect(docEl.shots?.innerHTML).toBe('KEEP');
     // No per-shot fetch happened; only the list was reloaded.
     expect(apiFetchSpy).not.toHaveBeenCalledWith(expect.stringMatching(/^api\/shots\/\d+$/));
   });
@@ -189,7 +189,7 @@ describe('refreshShots (#1539 slice 4)', () => {
 
     await refreshShots(['7']);
 
-    expect(docEl.shots.innerHTML).toBe('KEEP');
+    expect(docEl.shots?.innerHTML).toBe('KEEP');
     expect(spies.renderAnnotationPanel).not.toHaveBeenCalled();
     expect(spies.renderSidebar).toHaveBeenCalledTimes(1);
   });
