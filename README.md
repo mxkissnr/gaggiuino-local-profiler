@@ -53,6 +53,7 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.
 - **Maintenance tracking** - descaling, backflush, group-head and gasket tasks tracked per machine, with grinder cleaning and burr-wear tracking alongside.
 - **Orders & kiosk mode** - take drink orders from a tablet kiosk page with variants and notes, and watch the barista queue update on its own.
+- **Live updates across devices** - an open page picks up a change made on another device within seconds, without a reload.
 - **Exports & sharing** - export shots as `.shot` or CSV, or turn any shot into a shareable card.
 - **AI assistants via MCP** - optionally expose a built-in Model Context Protocol server so AI assistants can read your shots, beans, maintenance and analytics, with separate opt-ins for write and developer tools.
 - **Six languages & themes** - the full UI ships in DE, EN, IT, FR, ES and NL, with light/dark/auto themes and eight accent colour schemes. Your view, filter and sort choices are synced across devices.

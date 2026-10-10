@@ -356,6 +356,8 @@ An alternative to the WebSocket connection above for getting live sensor/system 
 
 ## Features
 
+**Open pages stay in sync.** When something changes on another device — or in another tab — the affected view refreshes within seconds by itself, with no reload.
+
 | Tab | Description |
 |---|---|
 | **Live** | Real-time pressure, flow, weight and temperature charts during a shot. When a brew starts, the most recent shot with the same profile name is automatically overlaid as a dashed reference curve. Can be overridden or cleared via the dropdown. The tab is only visible when the machine is on (requires `switch_entity`). A pre-shot setup panel (bean, dose, grinder, grind setting, basket, puck screen, recipe) lets you choose the next shot's setup before pulling it; the values are written onto the next finished brew's annotation automatically. |
