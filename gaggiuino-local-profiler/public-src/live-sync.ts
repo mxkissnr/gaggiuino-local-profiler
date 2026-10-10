@@ -108,23 +108,41 @@ function _focusBlocked(): boolean {
   return el.isContentEditable === true;
 }
 
-// The app marks an open bottom sheet by adding .lib-sheet-open to <body> (see
-// bean-form-sheet.ts / detail-sheet.ts); a native <dialog> carries its own
-// [open] attribute. A reload must not fire over either, even after focus has
-// left the sheet's fields.
+// The surfaces that must hold back a reload. Bottom sheets mark <body> with
+// .lib-sheet-open (see bean-form-sheet.ts / detail-sheet.ts). The modal
+// overlays are .guided-maint-overlay (profile/dial-in editors, guided
+// maintenance, flavor wheel, brew confirm), while the backup and scan dialogs
+// are #backupModal/#scanModal shown through their .open class. The
+// guided-maint overlays hide/show by inline display (the default markup is
+// display:none), so a bare selector cannot tell an open one from the hidden
+// default -- each candidate is checked for visibility. A native <dialog>
+// carries its own [open] attribute.
+const OVERLAY_SELECTOR = '.guided-maint-overlay, #backupModal.open, #scanModal.open';
+
+function _elementShown(el: Element): boolean {
+  const style = (el as HTMLElement).style;
+  return !style || style.display !== 'none';
+}
+
 function _overlayOpen(): boolean {
   if (typeof document === 'undefined') return false;
   const body = document.body;
   if (body && body.classList && body.classList.contains('lib-sheet-open')) return true;
   if (typeof document.querySelector !== 'function') return false;
-  return document.querySelector('dialog[open]') !== null;
+  if (document.querySelector('dialog[open]') !== null) return true;
+  if (typeof document.querySelectorAll !== 'function') return false;
+  for (const el of document.querySelectorAll(OVERLAY_SELECTOR)) {
+    if (_elementShown(el)) return true;
+  }
+  return false;
 }
 
 /**
  * True while an automatic whole-page reload would discard user work: a
- * text-entry field has focus or a bottom sheet / dialog is open. Exported so
- * the `all` (whole-database reload) handler can carry it into its canRun. The
- * scheduler already applies the focus and hidden-tab guards to every kind.
+ * text-entry field has focus or a bottom sheet, modal or dialog is open.
+ * Exported so the `all` (whole-database reload) handler can carry it into its
+ * canRun. The scheduler already applies the focus and hidden-tab guards to
+ * every kind.
  */
 export function reloadBlocked(): boolean {
   return _focusBlocked() || _overlayOpen();

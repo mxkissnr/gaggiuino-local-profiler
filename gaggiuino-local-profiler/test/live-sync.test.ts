@@ -41,6 +41,10 @@ interface FakeClassList {
   contains(name: string): boolean;
 }
 
+interface FakeOverlay {
+  style: { display: string };
+}
+
 interface FakeDoc {
   visibilityState: string;
   activeElement: unknown;
@@ -48,6 +52,7 @@ interface FakeDoc {
   addEventListener(type: string, cb: Listener): void;
   dispatch(type: string): void;
   querySelector(sel: string): unknown;
+  querySelectorAll(sel: string): FakeOverlay[];
 }
 
 function makeDoc(): FakeDoc {
@@ -72,6 +77,7 @@ function makeDoc(): FakeDoc {
       for (const cb of listeners.get(type) ?? []) cb();
     },
     querySelector: () => null,
+    querySelectorAll: () => [],
   };
 }
 
@@ -375,6 +381,41 @@ describe('live-sync review fixes (#1539)', () => {
     expect(reload).not.toHaveBeenCalled();
 
     doc.body.classList.remove('lib-sheet-open');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('defers the all reload while a modal overlay is visible, even with no text focus', async () => {
+    const { live } = await loadLive();
+    const reload = vi.fn();
+    live.initLiveSync({ all: { run: reload, canRun: () => !live.reloadBlocked() } });
+
+    // E.g. the profile editor: a .guided-maint-overlay shown via inline display,
+    // while a select/checkbox (which no longer blocks on its own) has focus.
+    doc.activeElement = selectEl();
+    doc.querySelectorAll = () => [{ style: { display: 'flex' } }];
+    live.handleDataChanged({ kind: 'all', epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(reload).not.toHaveBeenCalled();
+
+    // The hidden default (display:none) does not block.
+    doc.querySelectorAll = () => [{ style: { display: 'none' } }];
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reload).toHaveBeenCalledTimes(1);
+    doc.activeElement = null;
+  });
+
+  it('defers the all reload while a native dialog is open', async () => {
+    const { live } = await loadLive();
+    const reload = vi.fn();
+    live.initLiveSync({ all: { run: reload, canRun: () => !live.reloadBlocked() } });
+
+    doc.querySelector = (sel: string) => (sel === 'dialog[open]' ? { tagName: 'DIALOG' } : null);
+    live.handleDataChanged({ kind: 'all', epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(reload).not.toHaveBeenCalled();
+
+    doc.querySelector = () => null;
     await vi.advanceTimersByTimeAsync(2000);
     expect(reload).toHaveBeenCalledTimes(1);
   });
@@ -689,6 +730,15 @@ describe('boot wiring (#1539)', () => {
     const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/import \{[^}]*reloadBlocked[^}]*\} from '\.\/live-sync\.js'/);
     expect(src).toMatch(/canRun: \(\) => !reloadBlocked\(\)/);
+  });
+
+  it('checks the app modal overlays, not just bottom sheets, before a reload', () => {
+    const src = readFileSync(new URL('../public-src/live-sync.ts', import.meta.url), 'utf8');
+    // The modals index.html defines: .guided-maint-overlay (profile/dial-in
+    // editors, guided maintenance, flavor wheel, brew confirm) plus the
+    // backup/scan dialogs opened through their .open class.
+    expect(src).toMatch(/const OVERLAY_SELECTOR = '\.guided-maint-overlay, #backupModal\.open, #scanModal\.open'/);
+    expect(src).toMatch(/querySelectorAll\(OVERLAY_SELECTOR\)/);
   });
 
   it('awaits both order fetches inside one run', () => {
