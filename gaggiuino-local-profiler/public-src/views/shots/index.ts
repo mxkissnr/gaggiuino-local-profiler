@@ -17,7 +17,7 @@ import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindL
 import { mapShotDatapoints } from '../../utils.js';
 import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
-import { renderAnnotationPanel, annotationBusy }                 from './annotation.js';
+import { renderAnnotationPanel }                                from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
@@ -88,6 +88,10 @@ interface GmPhasesOption {
 // allowed to write state, same pattern as loadMachineProfileList() in
 // library-profile-editor.js (#521, #644).
 let _loadDataReqToken = 0;
+// True while a loadData() request is in flight. A live-sync reload defers on
+// shotsLoadInProgress() so it never starts mid-walk and truncates S.allShots
+// back to the first page.
+let _loadDataInFlight = false;
 
 // GaggiMate phase-name lookup cache, keyed by `${machineId}:${profileName}`.
 // Invalidated by invalidateGmPhaseCache() after a profile save.
@@ -215,6 +219,18 @@ async function fetchShotsPage({ cursor = null, trash = false }: { cursor?: strin
 // placeholder would read as a reload.
 export async function loadData(opts?: { quiet?: boolean }): Promise<void> {
   const token = ++_loadDataReqToken;
+  _loadDataInFlight = true;
+  try {
+    await _loadDataBody(opts, token);
+  } finally {
+    // A superseded call must not clear the flag a newer loadData() still owns.
+    if (token === _loadDataReqToken) _loadDataInFlight = false;
+  }
+}
+
+// The body of loadData(), separated so the in-flight flag above is cleared on
+// every early return too.
+async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: number): Promise<void> {
   const shotsEl = _el('shots');
   if (!opts?.quiet) shotsEl.innerHTML = html`<div class="loading-state">${tHtml('loading')}</div>`;
 
@@ -223,6 +239,9 @@ export async function loadData(opts?: { quiet?: boolean }): Promise<void> {
     const page = await fetchShotsPage();
     if (token !== _loadDataReqToken) return;
     if (page.error != null) {
+      // A quiet reload is best-effort: keep the painted sidebar/list untouched
+      // rather than replacing them with an error card.
+      if (opts?.quiet) return;
       // #807: Shots is the landing view, so a session that arrived on the
       // direct port with expose_api_port off sees this 401 before it ever
       // sees the Settings card that explains it. Everything needed to
@@ -239,6 +258,7 @@ export async function loadData(opts?: { quiet?: boolean }): Promise<void> {
     S.allShotsLoaded  = !page.hasMore;
   } catch {
     if (token !== _loadDataReqToken) return;
+    if (opts?.quiet) return;
     shotsEl.innerHTML = joinHtml([
       // #814: was a hardcoded #ef4444 (the pre-redesign err value) and an
       // untranslated German string in an otherwise six-language app.
@@ -304,11 +324,12 @@ export async function loadData(opts?: { quiet?: boolean }): Promise<void> {
 //  - an id the server no longer has (trashed/deleted between the event and the
 //    fetch) falls back to the quiet list reload, since the row left the page.
 //  - an id outside S.allShots (older than the loaded window) is ignored.
-//  - otherwise the row's annotation/image/score are patched from the fresh
-//    single-shot payload and the cached photo/thumbnail dropped, the sidebar is
-//    re-rendered, and — only when this is the open shot and no autosave/save is
-//    pending — the annotation panel is refreshed, so a remote change never
-//    clobbers an in-progress edit.
+//  - otherwise every field the detail returns is patched: annotation, score,
+//    usedBeanTarget, and the image (deleted when the payload no longer has one,
+//    i.e. a removed photo). The cached photo/thumbnail is dropped, the sidebar
+//    and its highlighting re-render once after the loop, and the open shot's
+//    panel refreshes once. The scheduler's canRun held this run back while an
+//    edit or save was pending, so it cannot clobber one.
 const REFRESH_INLINE_MAX = 5;
 
 export async function refreshShots(ids: string[] | null): Promise<void> {
@@ -316,6 +337,8 @@ export async function refreshShots(ids: string[] | null): Promise<void> {
     await loadData({ quiet: true });
     return;
   }
+  let changed = false;
+  let openEntry: ShotRow | null = null;
   for (const raw of ids) {
     const id = Number(raw);
     const shot = await getShot(id);
@@ -325,14 +348,19 @@ export async function refreshShots(ids: string[] | null): Promise<void> {
     }
     const entry = (S.allShots as ShotRow[]).find(s => s.id === id);
     if (!entry) continue;
-    if ('annotation' in shot) entry.annotation = shot.annotation ?? null;
-    if ('image' in shot) entry.image = shot.image ?? null;
-    if ('score' in shot) entry.score = shot.score ?? null;
+    entry.annotation = shot.annotation ?? null;
+    entry.score = shot.score;
+    entry.usedBeanTarget = shot.usedBeanTarget;
+    if (shot.image) entry.image = shot.image;
+    else delete entry.image;
     invalidateShotImage(id);
-    renderSidebar();
-    updateSidebarHighlighting();
-    if (id === S.primaryShotId && !annotationBusy()) renderAnnotationPanel(entry);
+    changed = true;
+    if (id === S.primaryShotId) openEntry = entry;
   }
+  if (!changed) return;
+  renderSidebar();
+  updateSidebarHighlighting();
+  if (openEntry) renderAnnotationPanel(openEntry);
 }
 
 // loadAllShotMeta walks api/shots page by page (oldest direction) from
@@ -343,6 +371,14 @@ export async function refreshShots(ids: string[] | null): Promise<void> {
 // await), and every S write takes its value from the just-fetched page, so
 // there is no read-then-write race on S.
 let _metaWalkActive = false;
+
+// True while the shots list is being (re)loaded: a loadData() request is in
+// flight, or loadAllShotMeta() is still walking older pages. The live-sync
+// `shots` handler's canRun defers a reload until this clears, so a quiet
+// reload cannot cut S.allShots back to the first page mid-walk.
+export function shotsLoadInProgress(): boolean {
+  return _loadDataInFlight || _metaWalkActive;
+}
 
 export async function loadAllShotMeta(token: number, startCursor: string | null): Promise<void> {
   if (_metaWalkActive) return;

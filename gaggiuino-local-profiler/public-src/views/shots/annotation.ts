@@ -105,16 +105,17 @@ type BeanRow = LibraryRow & { remainingG?: number | null };
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
 let _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
-// True while a POST /annotate is in flight. The live-sync `shot` handler reads
-// it (through annotationBusy()) before re-rendering the panel for the open
-// shot, so a remote change never overwrites an edit this page is still saving.
-let _saveInFlight = false;
+// Number of POST /annotate requests in flight. A counter, not a flag: a flush
+// that lands while the debounce's own save is still running must not clear
+// annotationBusy() while that first save is still writing.
+let _saveCount = 0;
 
 // True while this page has an annotation change that has not reached the
-// server yet: the 1 s autosave debounce is pending, or its save request is in
-// flight. The live-sync refresh defers the panel render until it clears.
+// server yet: the 1 s autosave debounce is pending, or a save request is in
+// flight. The live-sync `shot` handler's canRun defers its refresh until this
+// clears, so a remote change never overwrites an edit this page is saving.
 export function annotationBusy(): boolean {
-  return _autoSaveTimer !== null || _saveInFlight;
+  return _autoSaveTimer !== null || _saveCount > 0;
 }
 
 // #1411: the server books milk stock and frozen-portion counts while it
@@ -199,7 +200,7 @@ async function _performAnnotationSave(): Promise<void> {
   const shot = _shots().find(s => s.id === id);
   const prev = shot?.annotation;
   const payload = _buildAnnotationPayload(shot);
-  _saveInFlight = true;
+  _saveCount++;
   try {
     const r = await annotateShot(id, payload);
     if (r.ok) {
@@ -221,7 +222,7 @@ async function _performAnnotationSave(): Promise<void> {
       _setAutoSaveStatus('idle');
     }
   } catch { _setAutoSaveStatus('idle'); }
-  finally { _saveInFlight = false; }
+  finally { _saveCount--; }
 }
 
 export function scheduleAutoSave(): void {

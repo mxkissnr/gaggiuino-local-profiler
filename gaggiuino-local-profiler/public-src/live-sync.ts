@@ -89,9 +89,11 @@ function _activeKinds(): DataKind[] {
 // over. library-image is deliberately excluded: a reconnect or an online event
 // must not evict and re-download every library photo. Photo writes still reach
 // us as their own library-image events (and through the status revision
-// check), so nothing is missed.
+// check), so nothing is missed. `shot` is excluded too: a resync marks `shots`
+// (its whole state) dirty, whose handler already reloads the whole list, so
+// refetching each individual shot on top would be redundant.
 function _activeResyncKinds(): DataKind[] {
-  return _activeKinds().filter((k) => k !== 'library-image');
+  return _activeKinds().filter((k) => k !== 'library-image' && k !== 'shot');
 }
 
 function _isHidden(): boolean {
