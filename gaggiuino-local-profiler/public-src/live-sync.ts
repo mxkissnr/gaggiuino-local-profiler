@@ -329,7 +329,10 @@ export function handleDataChanged(data: unknown): void {
  * snapshot is only a baseline; on later polls a higher revision (same epoch)
  * marks that kind dirty, catching anything a missed SSE event left behind.
  * A bump within OWN_WRITE_GRACE_MS of this page's own mutating request is
- * skipped: it is our own write, whose SSE echo records the revision.
+ * skipped entirely -- neither recorded nor marked dirty -- so a remote change
+ * that raised the revision further still arrives through its own SSE event
+ * (the watermark stays behind it). The own echo, or the first poll after the
+ * window, then records the revision.
  */
 export function noteServerRevs(epoch?: string | null, revs?: Record<string, number> | null): void {
   const first = !_statusSynced;
@@ -339,8 +342,13 @@ export function noteServerRevs(epoch?: string | null, revs?: Record<string, numb
   if (revs && typeof revs === 'object') {
     for (const [kind, rev] of Object.entries(revs)) {
       if (typeof rev !== 'number') continue;
+      // Within the grace window a later poll's bump is assumed to be this
+      // page's own write: record nothing and mark nothing. If it was actually
+      // a remote change, its own event -- or the first poll after the window
+      // -- still sees the untouched watermark and refetches.
+      if (!first && ownRecently) continue;
       if (!_recordSeen(kind, rev)) continue;
-      if (!first && !ownRecently && _isRegistered(kind)) _markDirty(kind, null);
+      if (!first && _isRegistered(kind)) _markDirty(kind, null);
     }
   }
   _statusSynced = true;

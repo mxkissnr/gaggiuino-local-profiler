@@ -559,6 +559,29 @@ describe('live-sync own-write and resync dedup (#1539)', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  it('still refetches a remote change whose poll bump was skipped as own-write', async () => {
+    const { live, transport } = await loadLive();
+    const run = vi.fn();
+    live.initLiveSync({ library: { run } });
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true } as Response)));
+
+    live.noteServerRevs('e1', { library: 1 }); // baseline
+    await vi.advanceTimersByTimeAsync(400);
+
+    // This page writes, then a remote write raises the revision before the
+    // poll: the poll bump is skipped as ours and must NOT advance the watermark.
+    await transport.apiFetch('api/x', { method: 'POST' });
+    live.noteServerRevs('e1', { library: 2 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).not.toHaveBeenCalled();
+
+    // The remote write's own event carries that same revision; a watermark the
+    // skipped poll had advanced would incorrectly drop it.
+    live.handleDataChanged({ kind: 'library', rev: 2, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it('refetches a status rev bump more than 5 s after an own write', async () => {
     const { live, transport } = await loadLive();
     const run = vi.fn();
