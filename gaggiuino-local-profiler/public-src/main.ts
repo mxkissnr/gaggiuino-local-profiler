@@ -1325,17 +1325,19 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!changed) return;
       applyServerUiPrefs();
     });
-    // Awaited: loadData() below can render the annotation panel for the
-    // initially-selected shot synchronously once it resolves (updateView() ->
-    // renderAnnotationPanel()), which reads S.shotDefaults directly — on a
-    // slow connection, firing the shot-defaults load unawaited could let that
-    // first render see S.shotDefaults still null with nothing to re-render it
-    // once the fetch actually completes. The other Settings cards stay
-    // fire-and-forget inside loadSettingsState().
-    await loadSettingsState();
+    // The Settings-page loaders (#1539 slice 5) are shared with the live-sync
+    // "settings" handler. The returned promise is awaited below: loadData() can
+    // render the annotation panel for the initially-selected shot synchronously
+    // once it resolves (updateView() -> renderAnnotationPanel()), which reads
+    // S.shotDefaults directly — on a slow connection, firing the shot-defaults
+    // load unawaited could let that first render see S.shotDefaults still null
+    // with nothing to re-render it once the fetch actually completes. The other
+    // cards stay fire-and-forget as before.
+    const settingsState = loadSettingsState();
     void loadNotifySettingsCard();
     void loadDrinkMenu();
     void loadMilkTypes();
+    await settingsState;
     // #700: same class of bug as above — renderAnnotationPanel() also reads
     // S.coffeeLibrary.baskets/puckScreens (via _renderBasketSelect/
     // _renderPuckScreenSelect). Firing loadLibrary() unawaited let the first

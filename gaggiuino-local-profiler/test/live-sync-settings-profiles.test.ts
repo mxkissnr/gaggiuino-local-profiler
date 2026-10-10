@@ -103,7 +103,9 @@ describe('boot wiring (#1539 slice 5)', () => {
   it('extracts loadSettingsState and reuses it at boot', () => {
     const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/async function loadSettingsState\(\): Promise<void>/);
-    expect(src).toMatch(/await loadSettingsState\(\);/);
+    // Reused at boot: the promise is held and awaited before loadData() runs.
+    expect(src).toMatch(/const settingsState = loadSettingsState\(\);/);
+    expect(src).toMatch(/await settingsState;/);
     // The shot-defaults card is loaded inside loadSettingsState, not also at the
     // boot call site (which would double-fetch it).
     const callSites = src.match(/await loadShotDefaultsSettingsCard\(\);/g) ?? [];
