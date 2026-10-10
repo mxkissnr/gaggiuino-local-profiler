@@ -270,10 +270,26 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// Fire-and-forget bean-region geocoding: library.CreateBean/UpdateBean
 	// call library.GeocodeHook without waiting when a bean's region is
 	// set/changed. Set here (nil in tests) to keep those functions'
-	// signatures unchanged.
+	// signatures unchanged. #1580: the geocode runs after the create/update
+	// response (and its route-table data-changed event) has already been
+	// written; when it actually stored new coordinates, publish `library`
+	// again with no src, so every open page — the writing one included —
+	// picks up the new map position.
 	geocoder := library.NewGeocoder(libRepo)
 	library.GeocodeHook = func(beanID int64, _, _ string) {
-		geocoder.GeocodeBean(context.Background(), beanID)
+		if geocoder.GeocodeBean(context.Background(), beanID) {
+			changes.Publish("library", "", "")
+		}
+	}
+
+	// #1580: the bean photo download runs after POST /api/library/bean has
+	// answered, so the route-table `library` event fires before the image
+	// exists. When SetBeanImage has actually stored the extension, publish
+	// `library-image` for that bean's cache key (bean:<id>) with no src, so
+	// the creating page refreshes too — the same shape the
+	// POST /api/library/bean/{id}/image route already produces.
+	library.BeanImageHook = func(beanID int64) {
+		changes.Publish("library-image", "bean:"+strconv.FormatInt(beanID, 10), "")
 	}
 
 	// The bean-import domain — GET /api/import/url plus GET/POST

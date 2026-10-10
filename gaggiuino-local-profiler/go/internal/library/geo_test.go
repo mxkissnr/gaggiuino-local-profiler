@@ -109,6 +109,49 @@ func TestGeocodeBean_WritesLocation(t *testing.T) {
 	}
 }
 
+// TestGeocodeBean_ReportsStoredChange guards #1580: GeocodeBean's bool is what
+// main.go uses to decide whether to publish a `library` data-changed event, so
+// it must be true only when a non-nil location was committed.
+func TestGeocodeBean_ReportsStoredChange(t *testing.T) {
+	hit, _ := newTestGeocoder(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"lat":"6.16","lon":"38.20"}]`))
+	})
+	lib, err := hit.repo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = append(lib.Beans, Entity{"id": int64(2001), "name": "Yirg", "region": "Yirgacheffe", "origin": "ET"})
+	if err := hit.repo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	if !hit.GeocodeBean(context.Background(), 2001) {
+		t.Fatal("GeocodeBean stored coordinates but reported false")
+	}
+
+	// A bean that no longer exists cannot have coordinates stored.
+	if hit.GeocodeBean(context.Background(), 999999) {
+		t.Fatal("GeocodeBean for a missing bean reported a stored change")
+	}
+
+	// A Nominatim miss stores nil, not coordinates — must report false.
+	miss, _ := newTestGeocoder(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	})
+	lib, err = miss.repo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = append(lib.Beans, Entity{"id": int64(2002), "name": "Nowhere", "region": "Nowhere-At-All", "origin": "ET"})
+	if err := miss.repo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	if miss.GeocodeBean(context.Background(), 2002) {
+		t.Fatal("a geocode miss reported a stored change")
+	}
+}
+
 func TestCountryNameForCode(t *testing.T) {
 	if got := countryNameForCode("ET"); got != "Ethiopia" {
 		t.Errorf("countryNameForCode(ET) = %q", got)
