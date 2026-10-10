@@ -79,13 +79,13 @@ type Handlers struct {
 	// no-op (and machineKnownOffline then always reports false).
 	knownUnreachable func(machineID int64) bool
 
-	// onProfilesChanged runs after a machine's profile list is observed to
-	// have changed — either by the cache-first background refresh below, or by
-	// the background profile-sync sweep (system.Poller, which publishes into
-	// the same "profiles" data-changed kind). Set via SetOnProfilesChanged by
-	// cmd/server; the callback publishes that kind so open pages refetch. A
-	// callback for the same import-cycle reason as onDefaultChanged, and nil
-	// (never wired, e.g. in this package's own unit tests) is a no-op.
+	// onProfilesChanged runs after the cache-first background refresh below
+	// observes that a machine's profile list changed. Set via
+	// SetOnProfilesChanged by cmd/server, which publishes the "profiles"
+	// data-changed kind so open pages refetch; the profile-sync sweep
+	// publishes that same kind through system.Poller's own hook. A callback
+	// for the same import-cycle reason as onDefaultChanged, and nil (never
+	// wired, e.g. in this package's own unit tests) is a no-op.
 	onProfilesChanged func(machineID int64)
 
 	// The cache-first profile state (#1539 slice 5), all keyed by machine id
