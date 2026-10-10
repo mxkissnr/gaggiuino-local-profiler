@@ -100,21 +100,25 @@ func maybeGeocode(beanID int64, region, origin string) {
 // GeocodeBean looks the bean up, resolves its region (with the origin country
 // name appended for precision), then writes the result back onto a FRESH
 // library read — the bean may have been edited or deleted while the request
-// was in flight, so a region that no longer matches is discarded.
-func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
+// was in flight, so a region that no longer matches is discarded. It reports
+// whether it stored new coordinates for the bean: true only when the update
+// committed a non-nil location, so the caller can publish a data-changed event
+// on a real change (a cached miss, an unchanged/edited/deleted bean, or an
+// error all report false).
+func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) bool {
 	lib, err := g.repo.GetLibrary()
 	if err != nil {
 		log.Printf("library: geocodeBean: reading library for bean %d: %v", beanID, err)
-		return
+		return false
 	}
 	idx := findBeanIndex(lib, beanID)
 	if idx == -1 {
-		return
+		return false
 	}
 	bean := lib.Beans[idx]
 	region, _ := bean["region"].(string)
 	if strings.TrimSpace(region) == "" {
-		return
+		return false
 	}
 	origin, _ := bean["origin"].(string)
 	countryName := countryNameForCode(origin)
@@ -122,7 +126,7 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
 	loc, err := g.GeocodeRegion(ctx, region, countryName)
 	if err != nil {
 		log.Printf("library: geocodeBean: geocoding %q for bean %d: %v", region, beanID, err)
-		return
+		return false
 	}
 
 	var name string
@@ -143,15 +147,16 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return
+		return false
 	}
 	if err != nil {
 		log.Printf("library: geocodeBean: updating library for bean %d: %v", beanID, err)
-		return
+		return false
 	}
 	if loc != nil {
 		log.Printf("library: geocoded bean %q region %q -> %g,%g", name, region, loc.Lat, loc.Lon)
 	}
+	return loc != nil
 }
 
 // GeocodeRegion returns the cached result (including a cached nil for a known

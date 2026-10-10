@@ -224,11 +224,20 @@ func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, fou
 	return bean, lib, true, nil
 }
 
+// BeanImageHook, when set by cmd/server at startup, is invoked once after a
+// bean's downloaded photo has been stored on a fresh library read (see
+// SetBeanImage). It lets the server announce the image write that happened
+// after the create/update HTTP response already published its own
+// data-changed event. nil (the default, and in every test that doesn't set
+// it) makes the call a no-op.
+var BeanImageHook func(beanID int64)
+
 // SetBeanImage runs fire-and-forget after a bean create with an `imageUrl`
 // field — it downloads the image once and records its extension on a FRESH
 // read of the library (not the `lib` object the create handler already
 // saved), because the bean may have been edited/deleted by the time this
-// finishes. Called from a goroutine on the bean create path.
+// finishes. Called from a goroutine on the bean create path. When the new
+// extension is actually stored it fires BeanImageHook exactly once.
 func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL string) {
 	ext := fetchBeanImage(imageDir, beanID, imageURL)
 	if ext == "" {
@@ -256,5 +265,9 @@ func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL stri
 	}
 	if err != nil {
 		log.Printf("library: setBeanImage: updating library for bean %d: %v", beanID, err)
+		return
+	}
+	if BeanImageHook != nil {
+		BeanImageHook(beanID)
 	}
 }
