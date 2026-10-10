@@ -17,11 +17,20 @@ import { CLIENT_ID, lastWriteAt } from './api/transport.js';
 //    never clobbers what the user is reading or typing.
 
 // The kinds this client can register a handler for. The server tracks more
-// (shot, shots, settings, profiles); an unregistered kind's revision is still
-// recorded, but no handler runs for it.
-export type DataKind = 'library' | 'orders' | 'maintenance' | 'ui-prefs' | 'library-image';
+// (settings, profiles); an unregistered kind's revision is still recorded, but
+// no handler runs for it.
+export type DataKind =
+  | 'library'
+  | 'orders'
+  | 'maintenance'
+  | 'ui-prefs'
+  | 'library-image'
+  | 'shot'
+  | 'shots';
 
-const REGISTERED_KINDS: readonly DataKind[] = ['library', 'orders', 'maintenance', 'ui-prefs', 'library-image'];
+const REGISTERED_KINDS: readonly DataKind[] = [
+  'library', 'orders', 'maintenance', 'ui-prefs', 'library-image', 'shot', 'shots',
+];
 const ALL_KIND = 'all';
 const DEBOUNCE_MS = 300;
 // A run a canRun() guard deferred polls on this interval until it is allowed
@@ -80,9 +89,11 @@ function _activeKinds(): DataKind[] {
 // over. library-image is deliberately excluded: a reconnect or an online event
 // must not evict and re-download every library photo. Photo writes still reach
 // us as their own library-image events (and through the status revision
-// check), so nothing is missed.
+// check), so nothing is missed. `shot` is excluded too: a resync marks `shots`
+// (its whole state) dirty, whose handler already reloads the whole list, so
+// refetching each individual shot on top would be redundant.
 function _activeResyncKinds(): DataKind[] {
-  return _activeKinds().filter((k) => k !== 'library-image');
+  return _activeKinds().filter((k) => k !== 'library-image' && k !== 'shot');
 }
 
 function _isHidden(): boolean {
@@ -177,6 +188,18 @@ function _markDirty(kind: SyncKind, id: string | null): void {
   else if (current === undefined) _dirty.set(kind, new Set([id]));
   else current.add(id);
   _schedule(kind);
+}
+
+/**
+ * Mark `kind` dirty for `ids` (or for everything when `ids` is null) so the
+ * scheduler refetches it. A handler that discovers partway through a run that
+ * it must not apply the change after all re-dirties the affected ids here and
+ * lets the scheduler retry once its canRun clears. See refreshShots(), which
+ * re-checks the annotation edit guard before patching the open shot.
+ */
+export function markDirty(kind: DataKind, ids: string[] | null): void {
+  if (ids === null) { _markDirty(kind, null); return; }
+  for (const id of ids) _markDirty(kind, id);
 }
 
 // Switching epoch forgets every recorded revision and marks each resync kind

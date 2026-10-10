@@ -58,7 +58,8 @@ import { switchMode, goToShot } from './components/mode.js';
 import { initTopbarNavFade } from './components/topbar-nav-fade.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
 
-import { getShotData, calcShotScore, loadData, loadTrashData, renderTrash, toggleTrash,
+import { getShotData, calcShotScore, loadData, refreshShots, shotsLoadInProgress, annotationBusy,
+         loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
          renderAnnotationPanel, renderStars, quickClone, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
          suggestGrindDoseForBean,
@@ -1225,6 +1226,21 @@ document.addEventListener('DOMContentLoaded', () => {
         // so drop those entries (null drops every library photo) and reload the
         // library once.
         run: async ids => { invalidateImageKeys(ids); await loadLibrary(); },
+      },
+      shot: {
+        // One shot's own write (annotation or photo). refreshShots() patches the
+        // loaded row in place; the library refetch an annotation also triggers is
+        // handled by the `library` kind the server publishes alongside it.
+        // Deferred, not dropped, while this page is saving an edit or (re)loading
+        // the list -- the scheduler retries once the guard clears.
+        canRun: () => !annotationBusy() && !shotsLoadInProgress(),
+        run: ids => refreshShots(ids),
+      },
+      shots: {
+        // A shot-list change (trash/restore/delete). No single id to patch, so
+        // the whole list is re-fetched quietly, deferred on the same guards.
+        canRun: () => !annotationBusy() && !shotsLoadInProgress(),
+        run: () => refreshShots(null),
       },
       orders: {
         run: async () => {

@@ -359,6 +359,8 @@ Eine Alternative zur obigen WebSocket-Verbindung, um Live-Sensor-/Systemdaten vo
 
 ## Features
 
+**Offene Seiten bleiben synchron.** Ändert sich etwas auf einem anderen Gerät — oder in einem anderen Tab —, aktualisiert sich die betroffene Ansicht nach wenigen Sekunden von selbst, ohne Neuladen.
+
 | Tab | Beschreibung |
 |---|---|
 | **Live** | Echtzeit-Charts für Druck, Flow, Gewicht und Temperatur während eines Shots. Beim Start eines Bezugs wird automatisch der letzte Shot mit demselben Profil als gestrichelte Referenzkurve eingeblendet. Kann über das Dropdown überschrieben oder entfernt werden. Der Tab ist nur sichtbar wenn die Maschine eingeschaltet ist (erfordert `switch_entity`). Ein Setup-Bereich vor dem Bezug (Bohne, Dosis, Mühle, Mahlgrad, Sieb, Puck Screen, Rezept) lässt die Ausstattung des nächsten Shots schon vorher wählen; die Werte werden automatisch in die Annotation des nächsten abgeschlossenen Bezugs geschrieben. |
