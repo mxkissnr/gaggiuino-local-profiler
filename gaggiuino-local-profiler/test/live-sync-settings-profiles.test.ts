@@ -1,0 +1,125 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+// #1539 slice 5: the Settings and machine-profiles live-sync handlers. The
+// scheduler is driven with handlers that mirror main.ts's registrations (the
+// real loaders render the DOM and hit the network, so they are stubbed the same
+// way live-sync-shots.test.ts stubs its reload); the boot wiring itself (which
+// kinds main.ts registers, and that switchMode() flushes deferred runs) is
+// pinned from source, the established pattern for it.
+//
+// live-sync keeps its state (seen revisions, handlers, listeners) at module
+// scope, so every test loads a fresh instance through vi.resetModules(). The
+// minimum browser globals the import chain (state.js/ui-prefs.js) needs are
+// stubbed first.
+
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+g.window ??= {};
+
+async function loadRuntime() {
+  vi.resetModules();
+  const { S } = await import('../public-src/state/index.js');
+  const live = await import('../public-src/live-sync.js');
+  return { S, live };
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
+
+describe('settings live refresh (#1539 slice 5)', () => {
+  it('defers while on Settings and runs after leaving', async () => {
+    const { S, live } = await loadRuntime();
+    const run = vi.fn();
+
+    // Mirrors main.ts's `settings` registration.
+    live.initLiveSync({ settings: { canRun: () => S.currentMode !== 'settings', run } });
+
+    S.currentMode = 'settings';
+    live.handleDataChanged({ kind: 'settings', rev: 1 });
+    await vi.advanceTimersByTimeAsync(300); // debounce fires, canRun holds it back
+    await vi.advanceTimersByTimeAsync(2000); // the deferred retry still holds
+    expect(run).not.toHaveBeenCalled();
+
+    // Leaving Settings lifts the guard; switchMode() calls retryDeferred(),
+    // which the test invokes directly.
+    S.currentMode = 'shots';
+    live.retryDeferred();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs immediately when not on Settings', async () => {
+    const { S, live } = await loadRuntime();
+    const run = vi.fn();
+    live.initLiveSync({ settings: { canRun: () => S.currentMode !== 'settings', run } });
+
+    S.currentMode = 'shots';
+    live.handleDataChanged({ kind: 'settings', rev: 1 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('profiles live refresh (#1539 slice 5)', () => {
+  it('calls loadMachineProfileList on a profiles event', async () => {
+    const { live } = await loadRuntime();
+    const loadMachineProfileList = vi.fn();
+
+    // Mirrors main.ts's `profiles` registration.
+    live.initLiveSync({ profiles: { run: () => loadMachineProfileList() } });
+
+    live.handleDataChanged({ kind: 'profiles', rev: 1 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(loadMachineProfileList).toHaveBeenCalledTimes(1);
+  });
+
+  it('coalesces a burst of profiles events into one reload', async () => {
+    const { live } = await loadRuntime();
+    const loadMachineProfileList = vi.fn();
+    live.initLiveSync({ profiles: { run: () => loadMachineProfileList() } });
+
+    live.handleDataChanged({ kind: 'profiles', rev: 1 });
+    live.handleDataChanged({ kind: 'profiles', rev: 2 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(loadMachineProfileList).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('boot wiring (#1539 slice 5)', () => {
+  it('registers the settings and profiles kinds in main.ts', () => {
+    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/settings:\s*\{[\s\S]*?canRun: \(\) => S\.currentMode !== 'settings'[\s\S]*?run: loadSettingsState/);
+    expect(src).toMatch(/profiles:\s*\{[\s\S]*?run: \(\) => loadMachineProfileList\(\)/);
+  });
+
+  it('extracts loadSettingsState and reuses it at boot', () => {
+    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/async function loadSettingsState\(\): Promise<void>/);
+    expect(src).toMatch(/await loadSettingsState\(\);/);
+    // The shot-defaults card is loaded inside loadSettingsState, not also at the
+    // boot call site (which would double-fetch it).
+    const callSites = src.match(/await loadShotDefaultsSettingsCard\(\);/g) ?? [];
+    expect(callSites).toHaveLength(1);
+  });
+
+  it('flushes deferred live-sync runs at the end of switchMode', () => {
+    const src = readFileSync(new URL('../public-src/components/mode.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/import \{ retryDeferred \} from '\.\.\/live-sync\.js'/);
+    // The call is the last statement of switchMode, after the view bookkeeping.
+    expect(src).toMatch(/updateMobileShotSidebarVisibility\(\);\s*\n\s*\/\/ #1539 slice 5:[\s\S]*?retryDeferred\(\);\s*\n\}/);
+  });
+
+  it('lists settings and profiles among the registered live-sync kinds', () => {
+    const src = readFileSync(new URL('../public-src/live-sync.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/const REGISTERED_KINDS: readonly DataKind\[\] = \[[\s\S]*?'settings', 'profiles',[\s\S]*?\];/);
+    expect(src).toMatch(/\| 'settings'[\s\S]*?\| 'profiles';/);
+  });
+});
