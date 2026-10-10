@@ -7,6 +7,9 @@ import { shotImageUrl } from './api/shots.js';
 // re-uploaded/removed, so invalidate*Image() clears a stale cache entry.
 // 'bean:<id>' | 'grinder:<id>' | 'basket:<id>' | 'puckscreen:<id>' |
 // 'shot:<id>' | 'shotthumb:<id>' -> Promise<string|null>
+// A dropped entry's object URL is deliberately not revoked: a still-displayed
+// <img> and an in-flight load both need it, and the leak is negligible because
+// photos change rarely.
 const _cache = new Map<string, Promise<string | null>>();
 
 function _load(key: string, url: string): Promise<string | null> {
@@ -23,13 +26,6 @@ function _load(key: string, url: string): Promise<string | null> {
   return p;
 }
 
-// Drops one cache entry. The object URL it produced is deliberately not
-// revoked: a still-displayed <img> and an in-flight load both need it, and the
-// leak is negligible because photos change rarely.
-function _evict(key: string): void {
-  _cache.delete(key);
-}
-
 export function loadBeanImageBlobUrl(beanId: unknown): Promise<string | null> {
   return _load(`bean:${beanId as string}`, `api/library/bean/${beanId as string}/image`);
 }
@@ -39,11 +35,11 @@ export function loadGrinderImageBlobUrl(grinderId: unknown): Promise<string | nu
 }
 
 export function invalidateGrinderImage(grinderId: unknown): void {
-  _evict(`grinder:${grinderId as string}`);
+  _cache.delete(`grinder:${grinderId as string}`);
 }
 
 export function invalidateBeanImage(beanId: unknown): void {
-  _evict(`bean:${beanId as string}`);
+  _cache.delete(`bean:${beanId as string}`);
 }
 
 // #635: basket/puck screen photos — same pattern as bean/grinder images.
@@ -52,7 +48,7 @@ export function loadBasketImageBlobUrl(basketId: unknown): Promise<string | null
 }
 
 export function invalidateBasketImage(basketId: unknown): void {
-  _evict(`basket:${basketId as string}`);
+  _cache.delete(`basket:${basketId as string}`);
 }
 
 export function loadPuckScreenImageBlobUrl(puckScreenId: unknown): Promise<string | null> {
@@ -60,7 +56,7 @@ export function loadPuckScreenImageBlobUrl(puckScreenId: unknown): Promise<strin
 }
 
 export function invalidatePuckScreenImage(puckScreenId: unknown): void {
-  _evict(`puckscreen:${puckScreenId as string}`);
+  _cache.delete(`puckscreen:${puckScreenId as string}`);
 }
 
 export function loadShotImageBlobUrl(shotId: number): Promise<string | null> {
@@ -77,8 +73,8 @@ export function loadShotThumbBlobUrl(shotId: number): Promise<string | null> {
 export function invalidateShotImage(shotId: number): void {
   // #1351/#1539: the thumbnail is cached under its own key, so a replaced shot
   // photo must drop both entries.
-  _evict(`shot:${shotId}`);
-  _evict(`shotthumb:${shotId}`);
+  _cache.delete(`shot:${shotId}`);
+  _cache.delete(`shotthumb:${shotId}`);
 }
 
 // The cache-key prefixes every library photo is loaded under; a null key list
@@ -92,9 +88,9 @@ const LIBRARY_PHOTO_PREFIXES = ['bean:', 'grinder:', 'basket:', 'puckscreen:'] a
 export function invalidateImageKeys(keys?: readonly string[] | null): void {
   if (keys == null) {
     for (const key of [..._cache.keys()]) {
-      if (LIBRARY_PHOTO_PREFIXES.some(prefix => key.startsWith(prefix))) _evict(key);
+      if (LIBRARY_PHOTO_PREFIXES.some(prefix => key.startsWith(prefix))) _cache.delete(key);
     }
     return;
   }
-  for (const key of keys) _evict(key);
+  for (const key of keys) _cache.delete(key);
 }

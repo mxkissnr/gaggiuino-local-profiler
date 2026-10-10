@@ -1224,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // An image write addresses its cache key (bean:<id>, grinder:<id>, ...),
         // so drop those entries (null drops every library photo) and reload the
         // library once.
-        run: async ids => { invalidateImageKeys(ids ?? null); await loadLibrary(); },
+        run: async ids => { invalidateImageKeys(ids); await loadLibrary(); },
       },
       orders: {
         run: async () => {

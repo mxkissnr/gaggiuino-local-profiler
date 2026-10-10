@@ -1,4 +1,4 @@
-import { CLIENT_ID } from './api/transport.js';
+import { CLIENT_ID, lastWriteAt } from './api/transport.js';
 
 // #1539 slice 3: the client half of live sync. The server pushes one
 // `data-changed` SSE event per successful write (kind, revision, epoch, and
@@ -27,6 +27,13 @@ const DEBOUNCE_MS = 300;
 // A run a canRun() guard deferred polls on this interval until it is allowed
 // through.
 const CANRUN_RETRY_MS = 2000;
+// A status revision this page's own write produced is not a reason to refetch
+// for this long after that write's request: the write's SSE echo records the
+// revision, so within the window the poll only waits for that echo.
+const OWN_WRITE_GRACE_MS = 5000;
+// The shortest gap between two resyncAll() rounds, so the online event, the SSE
+// reconnect and the epoch-change resync of one network blip collapse into one.
+const RESYNC_MIN_INTERVAL_MS = 2000;
 
 export interface DataChangedPayload {
   kind: string;
@@ -63,6 +70,8 @@ let _epoch: string | null = null;
 // first snapshot is the baseline, later increases are what trigger refetches.
 let _statusSynced = false;
 let _listenersBound = false;
+// The time of the last resyncAll() this page ran, for RESYNC_MIN_INTERVAL_MS.
+let _lastResyncAt: number | null = null;
 
 function _isRegistered(kind: string): kind is DataKind {
   return (REGISTERED_KINDS as readonly string[]).includes(kind);
@@ -158,11 +167,13 @@ function _schedule(kind: SyncKind, delay = DEBOUNCE_MS): void {
 }
 
 // Records a revision with the never-lower rule: a stale (lower) value from an
-// out-of-order event must not undo a higher watermark.
-function _recordSeen(kind: string, rev: number): void {
+// out-of-order event must not undo a higher watermark. Returns whether the
+// watermark advanced past what was already recorded.
+function _recordSeen(kind: string, rev: number): boolean {
   const seen = _lastSeen.get(kind);
-  if (seen !== undefined && rev <= seen) return;
+  if (seen !== undefined && rev <= seen) return false;
   _lastSeen.set(kind, rev);
+  return true;
 }
 
 function _markDirty(kind: SyncKind, id: string | null): void {
@@ -255,8 +266,14 @@ export function retryDeferred(): void {
  * here rather than by a per-run retry. Photos are left alone -- re-downloading
  * the whole library image cache on every reconnect is wasteful, and photo
  * writes are still caught by their own events and the status revision check.
+ * A second call within RESYNC_MIN_INTERVAL_MS is a no-op, so the triggers of
+ * one network blip -- the online event, the SSE reconnect, the epoch change --
+ * do not refetch every kind several times.
  */
 export function resyncAll(): void {
+  const now = Date.now();
+  if (_lastResyncAt !== null && now - _lastResyncAt < RESYNC_MIN_INTERVAL_MS) return;
+  _lastResyncAt = now;
   for (const kind of _activeResyncKinds()) _markDirty(kind, null);
 }
 
@@ -302,11 +319,7 @@ export function handleDataChanged(data: unknown): void {
     return;
   }
 
-  if (rev !== null) {
-    const seen = _lastSeen.get(kind);
-    if (seen !== undefined && rev <= seen) return;
-    _recordSeen(kind, rev);
-  }
+  if (rev !== null && !_recordSeen(kind, rev)) return;
   if (!_isRegistered(kind)) return;
   _markDirty(kind, typeof p.id === 'string' ? p.id : null);
 }
@@ -315,17 +328,19 @@ export function handleDataChanged(data: unknown): void {
  * Records the server's epoch and per-kind revisions from /api/status. The first
  * snapshot is only a baseline; on later polls a higher revision (same epoch)
  * marks that kind dirty, catching anything a missed SSE event left behind.
+ * A bump within OWN_WRITE_GRACE_MS of this page's own mutating request is
+ * skipped: it is our own write, whose SSE echo records the revision.
  */
 export function noteServerRevs(epoch?: string | null, revs?: Record<string, number> | null): void {
   const first = !_statusSynced;
   if (typeof epoch === 'string' && epoch) _syncEpoch(epoch);
+  const at = lastWriteAt();
+  const ownRecently = at !== null && Date.now() - at < OWN_WRITE_GRACE_MS;
   if (revs && typeof revs === 'object') {
     for (const [kind, rev] of Object.entries(revs)) {
       if (typeof rev !== 'number') continue;
-      const seen = _lastSeen.get(kind);
-      if (seen !== undefined && rev <= seen) continue;
-      _recordSeen(kind, rev);
-      if (!first && _isRegistered(kind)) _markDirty(kind, null);
+      if (!_recordSeen(kind, rev)) continue;
+      if (!first && !ownRecently && _isRegistered(kind)) _markDirty(kind, null);
     }
   }
   _statusSynced = true;

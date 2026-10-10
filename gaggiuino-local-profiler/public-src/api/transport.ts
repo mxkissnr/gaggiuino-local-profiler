@@ -13,6 +13,16 @@ function _makeClientId(): string {
 
 export const CLIENT_ID = _makeClientId();
 
+// #1539 slice 3: the time of this page's most recent mutating request, or null
+// before the first one. The status poll (live-sync's noteServerRevs) reads it so
+// the revision this page's own write produced does not mark the kind dirty
+// again before that write's SSE echo lands -- the echo records the revision.
+let _lastWriteAt: number | null = null;
+
+export function lastWriteAt(): number | null {
+  return _lastWriteAt;
+}
+
 export async function initToken(): Promise<void> {
   // Migration for pre-#522 installs: the token used to be cached in
   // localStorage under this key. Idempotent no-op once the key is gone.
@@ -47,6 +57,7 @@ export async function apiFetch(url: string, opts: RequestInit = {}): Promise<Res
   // skip the echo. Same header-spread pattern as the token below.
   const method = (opts.method ?? 'GET').toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') {
+    _lastWriteAt = Date.now();
     opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Client': CLIENT_ID } };
   }
   if (S.glpToken) opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Token': S.glpToken } };
@@ -131,6 +142,7 @@ export function apiUpload(
     const xhr = new XMLHttpRequest();
     xhr.open(method, url);
     // #1539: apiUpload is always a write, so it always identifies this page.
+    _lastWriteAt = Date.now();
     xhr.setRequestHeader('X-GLP-Client', CLIENT_ID);
     if (S.glpToken) xhr.setRequestHeader('X-GLP-Token', S.glpToken);
     for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
