@@ -215,14 +215,16 @@ function _maintenanceCanRefetch(): boolean {
 // #1539 slice 5: the Settings-page state the server's "settings" kind covers,
 // extracted so the live-sync handler and the boot share one loader. The
 // shot-defaults card is awaited (the first shot render reads S.shotDefaults
-// directly); the others stay fire-and-forget exactly as at boot. A remote
-// refresh of this state is held back while the user is on the Settings page
-// (the handler's canRun) so it never re-renders a form mid-edit — leaving the
-// page flushes it through switchMode()'s retryDeferred().
+// directly); the others stay fire-and-forget exactly as at boot, and the
+// machine list reloads because the machine-registry routes publish "settings"
+// too. A remote refresh of this state is held back while the user is on the
+// Settings page (the handler's canRun) so it never re-renders a form mid-edit;
+// the scheduler's own canRun retry runs it once the page is left.
 async function loadSettingsState(): Promise<void> {
   void loadMqttSettings();
   void loadMcpSettingsCard();
   void loadMachineControlSetting();
+  void loadMachines();
   await loadShotDefaultsSettingsCard();
 }
 
@@ -1274,17 +1276,16 @@ document.addEventListener('DOMContentLoaded', () => {
         },
       },
       profiles: {
-        // The machine's profile list changed on the server (a write, or the
-        // cache-first background refresh / profile-sync sweep publishing the
-        // kind). loadMachineProfileList() re-renders the list and its
-        // autocomplete from the current state.
+        // The machine's profile list changed on the server — a profile write,
+        // or the profile-sync sweep publishing the kind. loadMachineProfileList()
+        // re-renders the list and its autocomplete from the current state.
         run: () => loadMachineProfileList(),
       },
       settings: {
         // The shot defaults, machine registry and broker/MCP/control options.
         // Held back while the user is on the Settings page so a remote change
-        // never re-renders a form mid-edit; leaving the page flushes it through
-        // switchMode()'s retryDeferred().
+        // never re-renders a form mid-edit; the scheduler retries it once the
+        // page is left.
         canRun: () => S.currentMode !== 'settings',
         run: loadSettingsState,
       },
