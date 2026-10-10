@@ -94,7 +94,7 @@ function triggerFallback(onFallback?: () => void): void {
 // `onFallback` fires at most once, only if the connection has NEVER
 // successfully opened -- a normal EventSource auto-reconnect after a
 // mid-session drop must not flicker the app back into polling mode.
-export function connectEvents(onFallback?: () => void): void {
+export function connectEvents(onFallback?: () => void, onReconnect?: () => void): void {
   disconnectEvents();
   everConnected = false;
   strikes = 0;
@@ -109,11 +109,15 @@ export function connectEvents(onFallback?: () => void): void {
   }, WATCHDOG_MS);
 
   source.onopen = () => {
+    // A second open within one connection is EventSource's own auto-reconnect
+    // after a drop; tell the caller so it can resync what it missed.
+    const reconnected = everConnected;
     everConnected = true;
     strikes = 0;
     S.sseActive = true;
     clearWatchdog();
     armStaleTimer();
+    if (reconnected) onReconnect?.();
   };
 
   source.onerror = () => {

@@ -24,9 +24,8 @@ export type DataKind = 'library' | 'orders' | 'maintenance' | 'ui-prefs' | 'libr
 const REGISTERED_KINDS: readonly DataKind[] = ['library', 'orders', 'maintenance', 'ui-prefs', 'library-image'];
 const ALL_KIND = 'all';
 const DEBOUNCE_MS = 300;
-// A run that threw backs off before retrying; a run a canRun() guard deferred
-// polls on this interval until it is allowed through.
-const RETRY_MS = 5000;
+// A run a canRun() guard deferred polls on this interval until it is allowed
+// through.
 const CANRUN_RETRY_MS = 2000;
 
 export interface DataChangedPayload {
@@ -46,15 +45,18 @@ export interface LiveSyncHandler {
   canRun?(): boolean;
 }
 
-export type LiveSyncHandlers = Partial<Record<DataKind, LiveSyncHandler>>;
+// "all" is not a data kind the server tracks; it is the sync key for a
+// whole-database change, whose handler reloads the page.
+export type LiveSyncHandlers = Partial<Record<DataKind | typeof ALL_KIND, LiveSyncHandler>>;
+type SyncKind = DataKind | typeof ALL_KIND;
 
 let _handlers: LiveSyncHandlers = {};
 // Per kind: the ids dirtied since the last run, or null for "everything".
-const _dirty = new Map<DataKind, Set<string> | null>();
+const _dirty = new Map<SyncKind, Set<string> | null>();
 // Last revision seen per kind, including kinds with no handler.
 const _lastSeen = new Map<string, number>();
-const _timers = new Map<DataKind, ReturnType<typeof setTimeout>>();
-const _running = new Set<DataKind>();
+const _timers = new Map<SyncKind, ReturnType<typeof setTimeout>>();
+const _running = new Set<SyncKind>();
 // The server epoch `_lastSeen` belongs to; null until the first epoch is seen.
 let _epoch: string | null = null;
 // False until the first /api/status revision snapshot has been recorded: that
@@ -83,7 +85,7 @@ function _focusBlocked(): boolean {
   return el.isContentEditable === true;
 }
 
-function _schedule(kind: DataKind, delay = DEBOUNCE_MS): void {
+function _schedule(kind: SyncKind, delay = DEBOUNCE_MS): void {
   const existing = _timers.get(kind);
   if (existing !== undefined) clearTimeout(existing);
   _timers.set(kind, setTimeout(() => {
@@ -100,16 +102,7 @@ function _recordSeen(kind: string, rev: number): void {
   _lastSeen.set(kind, rev);
 }
 
-// Puts back the ids a failed run had consumed, merged with anything dirtied
-// while it ran (null means "everything" and wins).
-function _mergeDirty(kind: DataKind, ids: string[] | null): void {
-  const current = _dirty.get(kind);
-  if (current === null || ids === null) { _dirty.set(kind, null); return; }
-  if (current === undefined) { _dirty.set(kind, new Set(ids)); return; }
-  for (const id of ids) current.add(id);
-}
-
-function _markDirty(kind: DataKind, id: string | null): void {
+function _markDirty(kind: SyncKind, id: string | null): void {
   const current = _dirty.get(kind);
   if (current === null || id == null) _dirty.set(kind, null);
   else if (current === undefined) _dirty.set(kind, new Set([id]));
@@ -131,10 +124,9 @@ function _syncEpoch(epoch: string): void {
 
 // Single-flight per kind: concurrent drains collapse into one run, and if the
 // kind is dirtied again while that run is in flight exactly one rerun follows.
-// The dirty mark is cleared only for a run that succeeds; a run that throws has
-// its ids merged back and is retried once after a backoff, so a transient
-// failure can never drop the refresh.
-async function _drain(kind: DataKind): Promise<void> {
+// The loaders swallow their own errors, so a failed refetch is not retried here
+// -- recovery comes from resyncAll() (an online event or SSE reconnect).
+async function _drain(kind: SyncKind): Promise<void> {
   if (!_dirty.has(kind)) return;
   if (_running.has(kind)) return;
   const handler = _handlers[kind];
@@ -145,19 +137,14 @@ async function _drain(kind: DataKind): Promise<void> {
   const ids = current === null || current === undefined ? null : [...current];
   _dirty.delete(kind);
   _running.add(kind);
-  let failed = false;
   try {
     await handler.run(ids);
   } catch {
-    failed = true;
+    // A throwing handler must not wedge the kind as permanently running; the
+    // loaders do not throw, so this is only a scheduler safety net.
   } finally {
     _running.delete(kind);
-    // "Dirtied meanwhile -> rerun" only after a success; a failure backs off.
-    if (!failed && _dirty.has(kind)) void _drain(kind);
-  }
-  if (failed) {
-    _mergeDirty(kind, ids);
-    _schedule(kind, RETRY_MS);
+    if (_dirty.has(kind)) void _drain(kind);
   }
 }
 
@@ -198,6 +185,16 @@ export function retryDeferred(): void {
 }
 
 /**
+ * Marks every registered kind dirty with null (its whole state), so the next
+ * drain refetches it. Called after the browser comes back online or the SSE
+ * stream reconnects: a refetch that failed or was missed while offline is
+ * recovered here rather than by a per-run retry.
+ */
+export function resyncAll(): void {
+  for (const kind of _activeKinds()) _markDirty(kind, null);
+}
+
+/**
  * Handles one `data-changed` SSE payload: records revisions, dedupes stale and
  * self-produced events, and marks the affected registered kinds dirty.
  */
@@ -214,23 +211,26 @@ export function handleDataChanged(data: unknown): void {
 
   if (kind === ALL_KIND) {
     // The all event carries every kind's post-bump revision (step 4); record
-    // them, and refetch every registered kind unless this is our own echo.
+    // them. A remote whole-database change reloads the page through the all
+    // handler, deferred by the same focus/hidden guards as any other run; our
+    // own echo only records the revisions.
     if (p.revs && typeof p.revs === 'object') {
       for (const [k, r] of Object.entries(p.revs)) {
         if (typeof r === 'number') _recordSeen(k, r);
       }
     }
-    if (!own) for (const k of _activeKinds()) _markDirty(k, null);
+    if (!own) _markDirty(ALL_KIND, null);
     return;
   }
 
   if (own) {
     // Our own write: remember its revision so the echo cannot re-trigger us. A
     // gap (rev > seen + 1) means a remote change landed before the echo, so
-    // catch up rather than hiding it behind the higher watermark.
+    // catch up rather than hiding it behind the higher watermark. With no
+    // baseline yet we cannot tell, so refetch once.
     if (rev !== null) {
       const seen = _lastSeen.get(kind);
-      if (seen !== undefined && rev > seen + 1 && _isRegistered(kind)) _markDirty(kind, null);
+      if (_isRegistered(kind) && (seen === undefined || rev > seen + 1)) _markDirty(kind, null);
       _recordSeen(kind, rev);
     }
     return;
