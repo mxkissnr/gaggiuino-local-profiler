@@ -190,6 +190,18 @@ function _markDirty(kind: SyncKind, id: string | null): void {
   _schedule(kind);
 }
 
+/**
+ * Mark `kind` dirty for `ids` (or for everything when `ids` is null) so the
+ * scheduler refetches it. A handler that discovers partway through a run that
+ * it must not apply the change after all re-dirties the affected ids here and
+ * lets the scheduler retry once its canRun clears. See refreshShots(), which
+ * re-checks the annotation edit guard before patching the open shot.
+ */
+export function markDirty(kind: DataKind, ids: string[] | null): void {
+  if (ids === null) { _markDirty(kind, null); return; }
+  for (const id of ids) _markDirty(kind, id);
+}
+
 // Switching epoch forgets every recorded revision and marks each resync kind
 // dirty: the server restarted, so its counters begin again from zero and the
 // client must refetch rather than trust its stale high-water marks. Photos are

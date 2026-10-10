@@ -19,6 +19,12 @@ const spies = vi.hoisted(() => ({
   updateSidebarHighlighting: vi.fn(),
   renderAnnotationPanel: vi.fn(),
   invalidateShotImage: vi.fn(),
+  markDirty: vi.fn(),
+}));
+
+vi.mock('../public-src/live-sync.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../public-src/live-sync.js')>()),
+  markDirty: spies.markDirty,
 }));
 
 vi.mock('../public-src/components/sidebar.js', async (importOriginal) => ({
@@ -134,6 +140,7 @@ beforeEach(() => {
   spies.updateSidebarHighlighting.mockReset();
   spies.renderAnnotationPanel.mockReset();
   spies.invalidateShotImage.mockReset();
+  spies.markDirty.mockReset();
   detailById = new Map();
   installFetch();
 
@@ -235,6 +242,48 @@ describe('refreshShots (#1539 slice 4)', () => {
     expect(docEl.shots?.innerHTML).toBe('KEEP');
     expect(spies.renderAnnotationPanel).not.toHaveBeenCalled();
     expect(spies.renderSidebar).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-checks the guard and re-dirties the open shot when an edit starts mid-run', async () => {
+    vi.useFakeTimers();
+    try {
+      S.allShots = [{ id: 7, timestamp: 1 }, { id: 8, timestamp: 2 }];
+      S.primaryShotId = 7;
+      detailById.set(7, { id: 7, annotation: { rating: 4 }, score: 80 });
+      detailById.set(8, { id: 8, annotation: { rating: 9 }, score: 70 });
+
+      // The open shot's detail resolves only after an edit has started, so
+      // annotationBusy() turns true during the getShot await.
+      const base = apiFetchSpy.getMockImplementation() as ((url: string) => Promise<Response>) | undefined;
+      apiFetchSpy.mockImplementation((url: string) => {
+        if (url === 'api/shots/7') {
+          scheduleAutoSave();
+          return Promise.resolve(jsonResponse(detailById.get(7)));
+        }
+        return base ? base(url) : Promise.resolve(jsonResponse({}));
+      });
+
+      await refreshShots(['7', '8']);
+
+      const open = S.allShots[0] as unknown as Record<string, unknown>;
+      const other = S.allShots[1] as unknown as Record<string, unknown>;
+      // The open shot is left unpatched and re-dirtied for a later run.
+      expect(open.annotation).toBeUndefined();
+      expect(spies.invalidateShotImage).not.toHaveBeenCalledWith(7);
+      expect(spies.markDirty).toHaveBeenCalledWith('shot', ['7']);
+      expect(spies.renderAnnotationPanel).not.toHaveBeenCalled();
+      // The non-open shot in the same run is patched as usual.
+      expect(other.annotation).toEqual({ rating: 9 });
+      expect(other.score).toBe(70);
+      expect(spies.renderSidebar).toHaveBeenCalledTimes(1);
+    } finally {
+      // Drain the autosave this test started so annotationBusy() clears for
+      // the tests that follow.
+      await vi.advanceTimersByTimeAsync(1000);
+      await flushPromises();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });
 

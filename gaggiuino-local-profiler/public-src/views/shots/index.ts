@@ -17,7 +17,8 @@ import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindL
 import { mapShotDatapoints } from '../../utils.js';
 import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
-import { renderAnnotationPanel }                                from './annotation.js';
+import { renderAnnotationPanel, annotationBusy }              from './annotation.js';
+import { markDirty }                                          from '../../live-sync.js';
 import { updatePQChart }                                      from './charts.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
@@ -329,7 +330,9 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
 //    i.e. a removed photo). The cached photo/thumbnail is dropped, the sidebar
 //    and its highlighting re-render once after the loop, and the open shot's
 //    panel refreshes once. The scheduler's canRun held this run back while an
-//    edit or save was pending, so it cannot clobber one.
+//    edit or save was pending, so it cannot clobber one; and because the loop's
+//    sequential fetches give an edit time to start mid-run, the guard is
+//    re-checked for the open shot right before it is patched (see below).
 const REFRESH_INLINE_MAX = 5;
 
 export async function refreshShots(ids: string[] | null): Promise<void> {
@@ -348,6 +351,15 @@ export async function refreshShots(ids: string[] | null): Promise<void> {
     }
     const entry = (S.allShots as ShotRow[]).find(s => s.id === id);
     if (!entry) continue;
+    // The `shot` handler's canRun checked the edit guard once before this loop
+    // started, but up to five sequential getShot round-trips can elapse before
+    // this id is reached. If the user began editing the open shot meanwhile,
+    // patching it now would clobber that edit: leave it untouched and re-dirty
+    // it so the scheduler retries once the edit clears.
+    if (id === S.primaryShotId && annotationBusy()) {
+      markDirty('shot', [String(id)]);
+      continue;
+    }
     entry.annotation = shot.annotation ?? null;
     entry.score = shot.score;
     entry.usedBeanTarget = shot.usedBeanTarget;
