@@ -313,6 +313,15 @@ type Poller struct {
 	// no-ops then.
 	profilesRepo *machines.ProfilesRepository
 
+	// onProfilesChanged, when set, runs with a machine id after the
+	// profile-sync sweep changes that machine's local profile rows
+	// (profile_sync.go) — wired via SetOnProfilesChanged by cmd/server to
+	// publish the "profiles" data-changed kind, so the pending-sync badge
+	// clears on every open page, not just the one that made the change. A
+	// callback for the same import-cycle reason as the other SetOn* hooks;
+	// nil (never wired, e.g. in tests) is a no-op.
+	onProfilesChanged func(machineID int64)
+
 	// liveTransport is the optional MQTT live-data override (#608), wired via
 	// SetLiveTransport. nil in tests and when MQTT support isn't compiled in
 	// — the poller then always reads live data through the adapter's WS path,

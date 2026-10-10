@@ -37,6 +37,22 @@ var profilePushTimeout = 10 * time.Second
 // NewPoller parameter keeps every existing call site unchanged.
 func (p *Poller) SetProfilesRepo(repo *machines.ProfilesRepository) { p.profilesRepo = repo }
 
+// SetOnProfilesChanged wires the side effect to run after the sweep changes a
+// machine's local profile rows (#1539 slice 5). cmd/server uses it to publish
+// the "profiles" data-changed kind, so the pending-sync badge clears on every
+// open page — the sweep has no HTTP response of its own to drive that push.
+// machines imports nothing from system, so this is a callback for the same
+// import-cycle reason as the machines.Handlers hooks. A nil hook (never wired,
+// e.g. in tests) is a no-op.
+func (p *Poller) SetOnProfilesChanged(fn func(machineID int64)) { p.onProfilesChanged = fn }
+
+// notifyProfilesChanged runs the onProfilesChanged hook (if wired).
+func (p *Poller) notifyProfilesChanged(machineID int64) {
+	if p.onProfilesChanged != nil {
+		p.onProfilesChanged(machineID)
+	}
+}
+
 // PushDirtyProfiles pushes every not-yet-synced local profile for one
 // machine through its adapter — bounded like BackfillGaggiMatePhases (60s
 // self-timeout independent of the caller's context, since this can be
@@ -87,13 +103,25 @@ func (p *Poller) PushDirtyProfiles(ctx context.Context, machineID int64) error {
 	if err != nil {
 		return err
 	}
+	// #1539 slice 5: a pushed row changes its sync status (pending_* ->
+	// synced/deleted, or -> error), which the pages showing the pending badge
+	// must learn about — the sweep has no HTTP response to carry that, so one
+	// notify per machine is enough.
+	changed := false
 	for _, row := range rows {
 		if err := p.pushOneProfile(ctx, machine, adapter, row); err != nil {
 			log.Printf("system: pushing profile %d (machine %d) failed, will retry next sweep: %v", row.LocalID, machineID, err)
 			if merr := p.profilesRepo.MarkSyncError(row.LocalID, err.Error()); merr != nil {
 				log.Printf("system: recording sync error for profile %d also failed: %v", row.LocalID, merr)
+			} else {
+				changed = true
 			}
+		} else {
+			changed = true
 		}
+	}
+	if changed {
+		p.notifyProfilesChanged(machineID)
 	}
 	return nil
 }

@@ -364,6 +364,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// edits to the machine on reconnect/after a brew/periodically — see
 	// go/internal/system/profile_sync.go.
 	poller.SetProfilesRepo(profilesRepo)
+	// #1539 slice 5: the profiles list is cache-first and background work can
+	// change it without any request — the handlers' own refresh, and the
+	// profile-sync sweep above changing a row's sync status. Both publish the
+	// "profiles" kind so every open page refetches (and the pending badge
+	// clears everywhere), matching the dataRoutes table that already classifies
+	// the profile write routes.
+	machinesHandlers.SetOnProfilesChanged(func(int64) { changes.Publish("profiles", "", "") })
+	poller.SetOnProfilesChanged(func(int64) { changes.Publish("profiles", "", "") })
 
 	// MQTT live-data transport (#608). mqttRepo is the Settings-page toggle +
 	// broker connection (kv.key = 'mqtt_settings', no migration needed).

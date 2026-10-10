@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
@@ -77,6 +78,27 @@ type Handlers struct {
 	// internal/system already imports internal/machines. A nil hook is a
 	// no-op (and machineKnownOffline then always reports false).
 	knownUnreachable func(machineID int64) bool
+
+	// onProfilesChanged runs after a machine's profile list is observed to
+	// have changed — either by the cache-first background refresh below, or by
+	// the background profile-sync sweep (system.Poller, which publishes into
+	// the same "profiles" data-changed kind). Set via SetOnProfilesChanged by
+	// cmd/server; the callback publishes that kind so open pages refetch. A
+	// callback for the same import-cycle reason as onDefaultChanged, and nil
+	// (never wired, e.g. in this package's own unit tests) is a no-op.
+	onProfilesChanged func(machineID int64)
+
+	// The cache-first profile state (#1539 slice 5), all keyed by machine id
+	// under profilesMu. profilesCurrent remembers the current profile the last
+	// successful live GetStatus observed plus a fingerprint of the rows it came
+	// with: while it holds an entry, listMachineProfiles can answer from the
+	// local cache at once and refresh in the background instead of paying the
+	// live fetch timeouts again. profilesRefreshing marks a machine whose
+	// asynchronous refresh is in flight, so a burst of GETs collapses into one
+	// refresh (single-flight) rather than one per request.
+	profilesMu         sync.Mutex
+	profilesCurrent    map[int64]profileCurrent
+	profilesRefreshing map[int64]bool
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB
@@ -89,13 +111,15 @@ func NewHandlers(registry *Registry, hub *sse.Hub, profilesRepo *ProfilesReposit
 	live := newGaggiuinoLiveClient(hub)
 	gmLive := newGaggiMateLiveClient()
 	return &Handlers{
-		registry:      registry,
-		gaggiuino:     NewGaggiuinoAdapter(live),
-		gaggimate:     NewGaggiMateAdapter(gmLive),
-		firmware:      NewFirmwareChecker(),
-		profilesRepo:  profilesRepo,
-		liveClient:    live,
-		gaggimateLive: gmLive,
+		registry:           registry,
+		gaggiuino:          NewGaggiuinoAdapter(live),
+		gaggimate:          NewGaggiMateAdapter(gmLive),
+		firmware:           NewFirmwareChecker(),
+		profilesRepo:       profilesRepo,
+		liveClient:         live,
+		gaggimateLive:      gmLive,
+		profilesCurrent:    map[int64]profileCurrent{},
+		profilesRefreshing: map[int64]bool{},
 	}
 }
 
@@ -159,6 +183,26 @@ func (h *Handlers) machineKnownOffline(id int64) bool {
 		return false
 	}
 	return h.knownUnreachable(id)
+}
+
+// SetOnProfilesChanged wires the side effect to run when a machine's profile
+// list is observed to have changed (#1539 slice 5 — the cache-first background
+// refresh, and the system poller's profile-sync sweep). cmd/server uses it to
+// publish the "profiles" data-changed kind, so every open page refetches the
+// list and the pending-sync badge clears everywhere. internal/system imports
+// internal/machines, so this is a callback for the same import-cycle reason as
+// SetOnDefaultChanged. A nil hook (never wired, e.g. in this package's own unit
+// tests) is a no-op, and the callback never changes a response — the change it
+// reports has already been applied to the local cache.
+func (h *Handlers) SetOnProfilesChanged(fn func(machineID int64)) {
+	h.onProfilesChanged = fn
+}
+
+// notifyProfilesChanged runs the onProfilesChanged hook (if wired).
+func (h *Handlers) notifyProfilesChanged(machineID int64) {
+	if h.onProfilesChanged != nil {
+		h.onProfilesChanged(machineID)
+	}
 }
 
 // SetOnShotSaved wires the side effect to run when the GaggiMate controller
