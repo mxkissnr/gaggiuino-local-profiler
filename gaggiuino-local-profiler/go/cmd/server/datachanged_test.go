@@ -295,8 +295,8 @@ func TestDataChangedEndToEnd(t *testing.T) {
 }
 
 // TestDataChangedImageRoutes pins the classification of the library image write
-// routes: each publishes library-image (with the client's cache key as the event
-// id) plus library, so a remote page drops exactly that photo and reloads.
+// routes: each publishes library-image alone (with the client's cache key as the
+// event id), so a remote page drops exactly that photo and reloads the library.
 func TestDataChangedImageRoutes(t *testing.T) {
 	cases := []struct {
 		pattern string
@@ -313,8 +313,8 @@ func TestDataChangedImageRoutes(t *testing.T) {
 			t.Errorf("route %q is not in dataRoutes", tc.pattern)
 			continue
 		}
-		if got := strings.Join(route.Kinds, ","); got != "library-image,library" {
-			t.Errorf("route %q kinds = %v, want [library-image library]", tc.pattern, route.Kinds)
+		if got := strings.Join(route.Kinds, ","); got != "library-image" {
+			t.Errorf("route %q kinds = %v, want [library-image]", tc.pattern, route.Kinds)
 		}
 		if !route.WithID {
 			t.Errorf("route %q WithID = false, want true", tc.pattern)
