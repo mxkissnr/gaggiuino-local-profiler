@@ -23,12 +23,18 @@ g.navigator ??= { language: 'en-US' };
 type Listener = (ev: { data: string }) => void;
 
 class FakeEventSource {
+  // Mirror the browser's EventSource statics so sse.js's `readyState ===
+  // EventSource.CLOSED` check works against the fake.
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
   static instances: FakeEventSource[] = [];
   url: string;
   listeners: Record<string, Listener[]> = {};
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
   closed = false;
+  readyState: number = FakeEventSource.OPEN;
   constructor(url: string) {
     this.url = url;
     FakeEventSource.instances.push(this);
@@ -40,6 +46,8 @@ class FakeEventSource {
   // test-only helpers to drive the fake connection
   _open(): void { this.onopen?.(); }
   _error(): void { this.onerror?.(); }
+  // A stream the browser has given up on: CLOSED, then onerror fires.
+  _fail(): void { this.readyState = FakeEventSource.CLOSED; this.onerror?.(); }
   _emit(type: string, data: unknown): void {
     for (const cb of this.listeners[type] || []) cb({ data: JSON.stringify(data) });
   }
@@ -47,11 +55,17 @@ class FakeEventSource {
 
 // FakeEventSource.instances is a plain array, so instances[0] is
 // `FakeEventSource | undefined` under noUncheckedIndexedAccess; each test
-// asserts/creates exactly one instance, so this narrows it back and throws
+// asserts/creates the expected instance, so this narrows it back and throws
 // rather than dereferencing undefined.
 function firstSource(): FakeEventSource {
   const es = FakeEventSource.instances[0];
   if (es === undefined) throw new Error('no FakeEventSource instance created');
+  return es;
+}
+
+function sourceAt(i: number): FakeEventSource {
+  const es = FakeEventSource.instances[i];
+  if (es === undefined) throw new Error(`no FakeEventSource instance ${i}`);
   return es;
 }
 
@@ -116,6 +130,77 @@ describe('public-src/sse.js', () => {
     es._error();
     expect(onFallback).not.toHaveBeenCalled();
     expect(S.sseActive).toBe(true);
+  });
+
+  // #1539: after a successful connect, EventSource stops retrying once the
+  // stream reaches CLOSED (e.g. a 502 while Home Assistant restarts). sse.js
+  // drives its own backoff reconnect so a live session recovers.
+  it('reopens a connected stream that reaches CLOSED, then calls onReconnect on open', () => {
+    const onReconnect = vi.fn();
+    connectEvents(() => {}, onReconnect);
+    const es = firstSource();
+    es._open();
+    expect(onReconnect).not.toHaveBeenCalled();
+
+    es._fail();
+    vi.advanceTimersByTime(4999);
+    expect(FakeEventSource.instances.length).toBe(1);
+    vi.advanceTimersByTime(1);
+    expect(FakeEventSource.instances.length).toBe(2);
+    expect(es.closed).toBe(true);
+
+    const reopened = sourceAt(1);
+    reopened._open();
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+    expect(S.sseActive).toBe(true);
+    expect(reopened.readyState).toBe(FakeEventSource.OPEN);
+  });
+
+  it('backs off 5s, 10s, 20s, 40s then caps at 60s, resetting on success', () => {
+    connectEvents(() => {});
+    sourceAt(0)._open();
+
+    for (const delay of [5000, 10000, 20000, 40000, 60000, 60000]) {
+      const before = FakeEventSource.instances.length;
+      sourceAt(before - 1)._fail();
+      vi.advanceTimersByTime(delay - 1);
+      expect(FakeEventSource.instances.length).toBe(before);
+      vi.advanceTimersByTime(1);
+      expect(FakeEventSource.instances.length).toBe(before + 1);
+    }
+
+    // A successful open resets the backoff to the base delay.
+    sourceAt(6)._open();
+    sourceAt(6)._fail();
+    vi.advanceTimersByTime(4999);
+    expect(FakeEventSource.instances.length).toBe(7);
+    vi.advanceTimersByTime(1);
+    expect(FakeEventSource.instances.length).toBe(8);
+  });
+
+  it('schedules only one reconnect while one is already pending', () => {
+    connectEvents(() => {});
+    sourceAt(0)._open();
+    sourceAt(0)._fail();
+    sourceAt(0)._fail();
+    vi.advanceTimersByTime(5000);
+    expect(FakeEventSource.instances.length).toBe(2);
+
+    // The second fail did not queue a second timer.
+    vi.advanceTimersByTime(5000);
+    expect(FakeEventSource.instances.length).toBe(2);
+  });
+
+  it('disconnectEvents cancels a scheduled reconnect', () => {
+    const onReconnect = vi.fn();
+    connectEvents(() => {}, onReconnect);
+    sourceAt(0)._open();
+    sourceAt(0)._fail();
+
+    disconnectEvents();
+    vi.advanceTimersByTime(120000);
+    expect(FakeEventSource.instances.length).toBe(1);
+    expect(onReconnect).not.toHaveBeenCalled();
   });
 
   it('the 8s watchdog fires the fallback if the connection never opens', () => {

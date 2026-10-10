@@ -35,18 +35,34 @@ vi.mock('../public-src/api/library.js', async (importOriginal) => {
 
 type Listener = (e?: unknown) => void;
 
+interface FakeClassList {
+  add(name: string): void;
+  remove(name: string): void;
+  contains(name: string): boolean;
+}
+
 interface FakeDoc {
   visibilityState: string;
   activeElement: unknown;
+  body: { classList: FakeClassList };
   addEventListener(type: string, cb: Listener): void;
   dispatch(type: string): void;
+  querySelector(sel: string): unknown;
 }
 
 function makeDoc(): FakeDoc {
   const listeners = new Map<string, Listener[]>();
+  const classes = new Set<string>();
   return {
     visibilityState: 'visible',
     activeElement: null,
+    body: {
+      classList: {
+        add: (name) => { classes.add(name); },
+        remove: (name) => { classes.delete(name); },
+        contains: (name) => classes.has(name),
+      },
+    },
     addEventListener(type, cb) {
       const arr = listeners.get(type) ?? [];
       arr.push(cb);
@@ -55,11 +71,22 @@ function makeDoc(): FakeDoc {
     dispatch(type) {
       for (const cb of listeners.get(type) ?? []) cb();
     },
+    querySelector: () => null,
   };
 }
 
+// A focused text field (no type counts as text) blocks a background refetch; a
+// checkbox, select or other non-text control does not.
 function inputEl(): unknown {
-  return { tagName: 'INPUT', isContentEditable: false };
+  return { tagName: 'INPUT', type: 'text', isContentEditable: false };
+}
+
+function checkboxEl(): unknown {
+  return { tagName: 'INPUT', type: 'checkbox', isContentEditable: false };
+}
+
+function selectEl(): unknown {
+  return { tagName: 'SELECT', isContentEditable: false };
 }
 
 function bodyEl(): unknown {
@@ -277,37 +304,100 @@ describe('live-sync revisions and epochs', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
-  it('resets and refetches every registered kind when the epoch changes', async () => {
+  it('resets and refetches every registered kind on an epoch change, except photos', async () => {
     const { live } = await loadLive();
     const library = vi.fn();
     const orders = vi.fn();
-    live.initLiveSync({ library: { run: library }, orders: { run: orders } });
+    const image = vi.fn();
+    live.initLiveSync({ library: { run: library }, orders: { run: orders }, 'library-image': { run: image } });
 
     live.handleDataChanged({ kind: 'library', rev: 5, epoch: 'e1' });
     await vi.advanceTimersByTimeAsync(400);
     expect(library).toHaveBeenCalledTimes(1);
+    expect(image).not.toHaveBeenCalled();
 
     library.mockClear();
     orders.mockClear();
+    image.mockClear();
     live.handleDataChanged({ kind: 'orders', rev: 1, epoch: 'e2' });
     await vi.advanceTimersByTimeAsync(400);
     expect(library).toHaveBeenCalledTimes(1);
     expect(orders).toHaveBeenCalledTimes(1);
+    // The epoch change refetches the resync kinds but not the photo cache.
+    expect(image).not.toHaveBeenCalled();
   });
 });
 
 describe('live-sync review fixes (#1539)', () => {
-  it('resyncAll marks every registered kind dirty with null', async () => {
+  it('resyncAll marks every resync kind dirty but leaves photos alone', async () => {
     const { live } = await loadLive();
     const library = vi.fn();
     const orders = vi.fn();
-    live.initLiveSync({ library: { run: library }, orders: { run: orders } });
+    const image = vi.fn();
+    live.initLiveSync({ library: { run: library }, orders: { run: orders }, 'library-image': { run: image } });
 
     live.resyncAll();
     await vi.advanceTimersByTimeAsync(400);
     expect(library).toHaveBeenCalledTimes(1);
     expect(orders).toHaveBeenCalledTimes(1);
     expect(library).toHaveBeenCalledWith(null);
+    // A reconnect must not evict and re-download the whole photo cache.
+    expect(image).not.toHaveBeenCalled();
+  });
+
+  it('still refetches a photo change from its own event and the status revision check', async () => {
+    const { live } = await loadLive();
+    const image = vi.fn();
+    live.initLiveSync({ 'library-image': { run: image } });
+
+    live.handleDataChanged({ kind: 'library-image', rev: 1, epoch: 'e1', id: 'bean:1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(image).toHaveBeenCalledTimes(1);
+    expect(image).toHaveBeenCalledWith(['bean:1']);
+
+    live.noteServerRevs('e1', { 'library-image': 2 }); // baseline, no change
+    await vi.advanceTimersByTimeAsync(400);
+    expect(image).toHaveBeenCalledTimes(1);
+
+    live.noteServerRevs('e1', { 'library-image': 3 }); // a missed write catches up
+    await vi.advanceTimersByTimeAsync(400);
+    expect(image).toHaveBeenCalledTimes(2);
+  });
+
+  it('defers the all reload while a sheet is open and runs after it closes', async () => {
+    const { live } = await loadLive();
+    const reload = vi.fn();
+    live.initLiveSync({ all: { run: reload, canRun: () => !live.reloadBlocked() } });
+
+    doc.body.classList.add('lib-sheet-open');
+    live.handleDataChanged({ kind: 'all', epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(reload).not.toHaveBeenCalled();
+
+    doc.body.classList.remove('lib-sheet-open');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a run on text entry but not on a checkbox or select', async () => {
+    const { live } = await loadLive();
+    const run = vi.fn();
+    live.initLiveSync({ library: { run } });
+
+    doc.activeElement = checkboxEl();
+    live.handleDataChanged({ kind: 'library', rev: 1, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    doc.activeElement = selectEl();
+    live.handleDataChanged({ kind: 'library', rev: 2, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(2);
+
+    doc.activeElement = inputEl();
+    live.handleDataChanged({ kind: 'library', rev: 3, epoch: 'e1' });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(run).toHaveBeenCalledTimes(2);
   });
 
   it('marks the kind dirty when an own echo skipped a revision', async () => {
@@ -583,10 +673,22 @@ describe('boot wiring (#1539)', () => {
     const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/canRun: \(\) => _maintenanceCanRefetch\(\)/);
     expect(src).toMatch(/if \(S\.currentMode !== 'maintenance'\) return true;/);
-    expect(src).toMatch(/querySelector\('\.maint-card\.expanded'\)/);
     expect(src).toMatch(/getElementById\('maintLogForm'\)/);
+    // An expanded card is restored by the run, not used to block it.
+    expect(src).not.toContain("querySelector('.maint-card.expanded')");
+    expect(src).toMatch(/await refreshMaintenanceView\(\)/);
     // The "disabled tasks" details are no longer a guard.
     expect(src).not.toMatch(/querySelector\('details\[open\]'\)/);
+
+    const maintSrc = readFileSync(new URL('../public-src/views/maintenance.ts', import.meta.url), 'utf8');
+    expect(maintSrc).toMatch(/export async function refreshMaintenanceView\(\): Promise<void>/);
+    expect(maintSrc).toMatch(/\.maint-card\.expanded \.maint-detail-toggle/);
+  });
+
+  it('holds the all reload back when a sheet or dialog is open', () => {
+    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/import \{[^}]*reloadBlocked[^}]*\} from '\.\/live-sync\.js'/);
+    expect(src).toMatch(/canRun: \(\) => !reloadBlocked\(\)/);
   });
 
   it('awaits both order fetches inside one run', () => {
