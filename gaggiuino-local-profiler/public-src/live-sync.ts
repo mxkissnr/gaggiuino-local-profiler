@@ -17,7 +17,7 @@ import { CLIENT_ID, lastWriteAt } from './api/transport.js';
 //    never clobbers what the user is reading or typing.
 
 // The kinds this client can register a handler for. The server tracks more
-// (settings, profiles); an unregistered kind's revision is still recorded, but
+// (kind:"all" spans them all); any other kind's revision is still recorded, but
 // no handler runs for it.
 export type DataKind =
   | 'library'
@@ -26,10 +26,13 @@ export type DataKind =
   | 'ui-prefs'
   | 'library-image'
   | 'shot'
-  | 'shots';
+  | 'shots'
+  | 'settings'
+  | 'profiles';
 
 const REGISTERED_KINDS: readonly DataKind[] = [
   'library', 'orders', 'maintenance', 'ui-prefs', 'library-image', 'shot', 'shots',
+  'settings', 'profiles',
 ];
 const ALL_KIND = 'all';
 const DEBOUNCE_MS = 300;

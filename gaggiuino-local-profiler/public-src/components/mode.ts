@@ -2,6 +2,7 @@ import { S } from '../state/index.js';
 import { updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
 import { updateTopbarNavFade, isFullyVisibleIn } from './topbar-nav-fade.js';
+import { retryDeferred } from '../live-sync.js';
 
 export function goToShot(id: number): void {
   switchMode('shots');
@@ -98,4 +99,9 @@ export function switchMode(mode: string): void {
   // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover
   // burger-drawer overlay closes when leaving Shots for Library.
   updateMobileShotSidebarVisibility();
+
+  // #1539 slice 5: a mode switch can lift a live-sync canRun guard — the
+  // settings handler defers while the user is on the Settings page, so a
+  // remote change that arrived there must run once the page is left.
+  retryDeferred();
 }
