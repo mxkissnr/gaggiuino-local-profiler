@@ -17,11 +17,20 @@ import { CLIENT_ID, lastWriteAt } from './api/transport.js';
 //    never clobbers what the user is reading or typing.
 
 // The kinds this client can register a handler for. The server tracks more
-// (shot, shots, settings, profiles); an unregistered kind's revision is still
-// recorded, but no handler runs for it.
-export type DataKind = 'library' | 'orders' | 'maintenance' | 'ui-prefs' | 'library-image';
+// (settings, profiles); an unregistered kind's revision is still recorded, but
+// no handler runs for it.
+export type DataKind =
+  | 'library'
+  | 'orders'
+  | 'maintenance'
+  | 'ui-prefs'
+  | 'library-image'
+  | 'shot'
+  | 'shots';
 
-const REGISTERED_KINDS: readonly DataKind[] = ['library', 'orders', 'maintenance', 'ui-prefs', 'library-image'];
+const REGISTERED_KINDS: readonly DataKind[] = [
+  'library', 'orders', 'maintenance', 'ui-prefs', 'library-image', 'shot', 'shots',
+];
 const ALL_KIND = 'all';
 const DEBOUNCE_MS = 300;
 // A run a canRun() guard deferred polls on this interval until it is allowed

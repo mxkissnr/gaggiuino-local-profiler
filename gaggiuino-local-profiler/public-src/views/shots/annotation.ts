@@ -105,6 +105,17 @@ type BeanRow = LibraryRow & { remainingG?: number | null };
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
 let _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+// True while a POST /annotate is in flight. The live-sync `shot` handler reads
+// it (through annotationBusy()) before re-rendering the panel for the open
+// shot, so a remote change never overwrites an edit this page is still saving.
+let _saveInFlight = false;
+
+// True while this page has an annotation change that has not reached the
+// server yet: the 1 s autosave debounce is pending, or its save request is in
+// flight. The live-sync refresh defers the panel render until it clears.
+export function annotationBusy(): boolean {
+  return _autoSaveTimer !== null || _saveInFlight;
+}
 
 // #1411: the server books milk stock and frozen-portion counts while it
 // saves; the library only needs a reload when a field it books from changed.
@@ -188,6 +199,7 @@ async function _performAnnotationSave(): Promise<void> {
   const shot = _shots().find(s => s.id === id);
   const prev = shot?.annotation;
   const payload = _buildAnnotationPayload(shot);
+  _saveInFlight = true;
   try {
     const r = await annotateShot(id, payload);
     if (r.ok) {
@@ -209,6 +221,7 @@ async function _performAnnotationSave(): Promise<void> {
       _setAutoSaveStatus('idle');
     }
   } catch { _setAutoSaveStatus('idle'); }
+  finally { _saveInFlight = false; }
 }
 
 export function scheduleAutoSave(): void {

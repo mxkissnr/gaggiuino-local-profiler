@@ -3,7 +3,7 @@ import { S, filterShotsByMachine }                            from '../../state/
 import * as chartRegistry                                     from '../../state/charts.js';
 import { t, tHtml }                                           from '../../i18n.js';
 import { isApiPortBlocked }                                   from '../../api/transport.js';
-import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard } from '../../api/shots.js';
+import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard, getShot } from '../../api/shots.js';
 import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges, buildRecordedGmPhaseRanges, exitReasonKey } from '../../constants.js';
 import {
@@ -11,17 +11,17 @@ import {
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
   chartColors, html, joinHtml
 } from '../../utils.js';
-import { renderSidebar }                                      from '../../components/sidebar.js';
+import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
 import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
-import { renderAnnotationPanel }                              from './annotation.js';
+import { renderAnnotationPanel, annotationBusy }                 from './annotation.js';
 import { updatePQChart }                                      from './charts.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
-import { loadShotImageBlobUrl }                               from '../../bean-image.js';
+import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
 import type { ShotMeta } from '../../state/index.js';
 import type { ShotDatapoints, ShotSeries, Html } from '../../utils.js';
@@ -210,10 +210,13 @@ async function fetchShotsPage({ cursor = null, trash = false }: { cursor?: strin
   return { shots: page.shots || [], nextCursor: page.nextCursor ?? null, hasMore: !!page.hasMore };
 }
 
-export async function loadData(): Promise<void> {
+// `quiet` skips the "Loading…" placeholder: the live-sync refresh calls it to
+// re-fetch the list behind an already-painted sidebar, where flashing the
+// placeholder would read as a reload.
+export async function loadData(opts?: { quiet?: boolean }): Promise<void> {
   const token = ++_loadDataReqToken;
   const shotsEl = _el('shots');
-  shotsEl.innerHTML = html`<div class="loading-state">${tHtml('loading')}</div>`;
+  if (!opts?.quiet) shotsEl.innerHTML = html`<div class="loading-state">${tHtml('loading')}</div>`;
 
   let fetched;
   try {
@@ -289,6 +292,47 @@ export async function loadData(): Promise<void> {
   // holds the full history for analytics / dial-in wizards / per-machine
   // counts / findPreviousShot, without blocking first paint.
   void loadAllShotMeta(token, S.shotsPageCursor);
+}
+
+// #1539 slice 4: refetch the shots a live-sync `shot`/`shots` event dirtied and
+// patch the already-loaded rows in place, so another device's annotation (or
+// photo) lands without a full list reload. No library reload is needed here:
+// the server publishes `library` together with `shot` for an annotation, which
+// covers the derived stock/wear change.
+//  - null, or more than REFRESH_INLINE_MAX ids, is not worth a per-shot fetch,
+//    so the list is re-fetched quietly (no loading placeholder).
+//  - an id the server no longer has (trashed/deleted between the event and the
+//    fetch) falls back to the quiet list reload, since the row left the page.
+//  - an id outside S.allShots (older than the loaded window) is ignored.
+//  - otherwise the row's annotation/image/score are patched from the fresh
+//    single-shot payload and the cached photo/thumbnail dropped, the sidebar is
+//    re-rendered, and — only when this is the open shot and no autosave/save is
+//    pending — the annotation panel is refreshed, so a remote change never
+//    clobbers an in-progress edit.
+const REFRESH_INLINE_MAX = 5;
+
+export async function refreshShots(ids: string[] | null): Promise<void> {
+  if (!ids || ids.length > REFRESH_INLINE_MAX) {
+    await loadData({ quiet: true });
+    return;
+  }
+  for (const raw of ids) {
+    const id = Number(raw);
+    const shot = await getShot(id);
+    if (!shot) {
+      await loadData({ quiet: true });
+      return;
+    }
+    const entry = (S.allShots as ShotRow[]).find(s => s.id === id);
+    if (!entry) continue;
+    if ('annotation' in shot) entry.annotation = shot.annotation ?? null;
+    if ('image' in shot) entry.image = shot.image ?? null;
+    if ('score' in shot) entry.score = shot.score ?? null;
+    invalidateShotImage(id);
+    renderSidebar();
+    updateSidebarHighlighting();
+    if (id === S.primaryShotId && !annotationBusy()) renderAnnotationPanel(entry);
+  }
 }
 
 // loadAllShotMeta walks api/shots page by page (oldest direction) from
