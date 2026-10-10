@@ -14,7 +14,7 @@ g.localStorage = {
 g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { apiFetchToBlob, apiUpload } = await import('../public-src/api/transport.js');
+const { apiFetchToBlob, apiUpload, CLIENT_ID } = await import('../public-src/api/transport.js');
 
 // apiFetchToBlob's result is a discriminated union; the tests below assert the
 // ok branch before reading .blob, so pin that member of the union for them.
@@ -167,15 +167,16 @@ describe('apiUpload', () => {
     expect(lastXHR!.method).toBe('POST');
     expect(lastXHR!.url).toBe('api/debug/import-db');
     expect(lastXHR!.headers).toEqual({
+      'X-GLP-Client': CLIENT_ID,
       'X-GLP-Token': 'tok-123',
       'Content-Type': 'application/octet-stream',
     });
     expect(lastXHR!.body).toBe('BYTES');
   });
 
-  it('omits X-GLP-Token when there is no token', async () => {
+  it('omits X-GLP-Token when there is no token but still identifies the client', async () => {
     await apiUpload('api/x', { body: 'x' });
-    expect(lastXHR!.headers).toEqual({});
+    expect(lastXHR!.headers).toEqual({ 'X-GLP-Client': CLIENT_ID });
   });
 
   it('drives onProgress from lengthComputable upload events', async () => {

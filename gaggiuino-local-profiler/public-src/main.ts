@@ -40,6 +40,8 @@ import { initToken, apiFetch } from './api/transport.js';
 import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
+import { initLiveSync, handleDataChanged, resyncAll, reloadBlocked } from './live-sync.js';
+import { invalidateImageKeys } from './bean-image.js';
 import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
@@ -87,7 +89,8 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, s
          renderMaintenanceDashboard, maintStatusLabel,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
-         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask } from './views/maintenance.js';
+         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
+         refreshMaintenanceView } from './views/maintenance.js';
 import { loadAchievementsView } from './views/achievements.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from './components/flavor-wheel.js';
 import { highlightSheetFlavor } from './components/flavor-mini-wheel.js';
@@ -177,6 +180,35 @@ declare global {
 // Gaggiuino one for GaggiMate machines — checked at 3 call sites below.
 function _isActiveMachineGaggiMate() {
   return (S.machines || []).find(m => m.id === S.activeMachineId)?.type === 'gaggimate';
+}
+
+// #1375/#1539: apply the shared UI choices once they have been loaded from the
+// server (boot) or a live ui-prefs change has arrived. `includeMachine` is
+// false on the live path: each device keeps its own machine selection until
+// reload, so a remote machine.active change must not yank this device's view
+// (decided by the maintainer). `keepShelfQuery` is true on the live path too:
+// the shelf search is session-only, so a remote change must not wipe it.
+function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void {
+  resetShelfPrefs(keepShelfQuery);
+  if (!includeMachine) return;
+  const activeId = getUiPref<number | 'all'>('machine.active');
+  if (activeId === undefined) return;
+  const resolved = resolveActiveMachineId(activeId);
+  if (resolved !== S.activeMachineId) setActiveMachine(resolved);
+}
+
+// #1539: a maintenance refetch must not tear down an editor the user has open.
+// Outside the maintenance view the run is a no-op (the view reloads on entry),
+// so the guard only applies inside it, and then only to an open inline edit
+// (not the "disabled tasks" details). An expanded card is no longer a guard:
+// the run restores it itself through refreshMaintenanceView().
+function _maintenanceCanRefetch(): boolean {
+  if (S.currentMode !== 'maintenance') return true;
+  const view = document.getElementById('maintenance-view');
+  if (!view) return true;
+  if (view.querySelector('[contenteditable="true"]')) return false;
+  const logForm = document.getElementById('maintLogForm');
+  return !logForm || logForm.style.display === 'none';
 }
 
 // ── Toast helper ──────────────────────────────────────────────────────────
@@ -1179,7 +1211,54 @@ document.addEventListener('DOMContentLoaded', () => {
     // reuse live.js's own handlers).
     onEvent(EVENTS.LIVE_SNAPSHOT, handleTopbarLiveSnapshotEvent);
     onEvent(EVENTS.PREHEAT_UPDATE, handleTopbarPreheatUpdateEvent);
-    connectEvents(() => {});
+    // #1539 slice 3: react to the server's data-changed pushes. Registered
+    // before the stream opens so no early event is missed.
+    onEvent(EVENTS.DATA_CHANGED, handleDataChanged);
+    initLiveSync({
+      library: {
+        // A library change is usually a stock change derived from a shot, which
+        // does not touch the photos, so the cache is left alone here.
+        run: async () => { await loadLibrary(); },
+      },
+      'library-image': {
+        // An image write addresses its cache key (bean:<id>, grinder:<id>, ...),
+        // so drop those entries (null drops every library photo) and reload the
+        // library once.
+        run: async ids => { invalidateImageKeys(ids); await loadLibrary(); },
+      },
+      orders: {
+        run: async () => {
+          await Promise.all([loadDrinkMenu(), S.currentMode === 'orders' ? loadOrdersView() : undefined]);
+        },
+      },
+      maintenance: {
+        // refreshMaintenanceView() restores the card the user had expanded, so
+        // the refetch no longer needs to be held back while one is open.
+        run: async () => { if (S.currentMode === 'maintenance') await refreshMaintenanceView(); },
+        canRun: () => _maintenanceCanRefetch(),
+      },
+      'ui-prefs': {
+        run: async () => {
+          const changed = await loadUiPrefsFromServer();
+          if (changed) applyServerUiPrefs(false, true);
+        },
+      },
+      all: {
+        // A whole-database change (restore, DB import, demo seed/end): reload
+        // through the live-sync pipeline, so it honours the focus and
+        // hidden-tab guards like any other run.
+        run: () => { location.reload(); },
+        // ...but a reload discards more than focus alone protects: an open
+        // bottom sheet or dialog (e.g. the bean form) must hold it back too,
+        // even after focus has left its fields. The scheduler retries until
+        // the sheet closes.
+        canRun: () => !reloadBlocked(),
+      },
+    });
+    // #1539 slice 3: recover refetches that failed or were missed while
+    // offline -- a browser online event or an SSE reconnect resyncs every kind.
+    connectEvents(() => {}, resyncAll);
+    window.addEventListener('online', resyncAll);
 
     // #390 — loadMachines() calls the token-gated /api/machines; it used to
     // fire straight from this handler (before initToken() ever ran), so its
@@ -1199,11 +1278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // (#1323) whichever of the two requests finishes first.
     void loadUiPrefsFromServer().then(changed => {
       if (!changed) return;
-      resetShelfPrefs();
-      const activeId = getUiPref<number | 'all'>('machine.active');
-      if (activeId === undefined) return;
-      const resolved = resolveActiveMachineId(activeId);
-      if (resolved !== S.activeMachineId) setActiveMachine(resolved);
+      applyServerUiPrefs();
     });
     void loadMqttSettings();
     void loadNotifySettingsCard();

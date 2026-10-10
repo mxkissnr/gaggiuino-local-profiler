@@ -237,6 +237,58 @@ func TestDataChanges_AllBumpsEveryKind(t *testing.T) {
 	}
 }
 
+func TestDataChanges_AllCarriesRevs(t *testing.T) {
+	hub := NewHub()
+	sub, unsub := hub.Subscribe()
+	defer unsub()
+
+	dc := NewDataChanges(hub, []string{"library", "shots", "orders"})
+
+	// A change to one kind so the all event's revs are not all one.
+	dc.Publish("library", "", "")
+	_ = waitEvent(t, sub)
+
+	dc.Publish(KindAll, "", "")
+	got := changedData(t, waitEvent(t, sub))
+	if got.Kind != KindAll {
+		t.Fatalf("kind = %q, want %q", got.Kind, KindAll)
+	}
+	want := map[string]int64{"library": 2, "shots": 1, "orders": 1}
+	if len(got.Revs) != len(want) {
+		t.Fatalf("revs = %v, want %v", got.Revs, want)
+	}
+	for kind, rev := range want {
+		if got.Revs[kind] != rev {
+			t.Errorf("revs[%q] = %d, want %d", kind, got.Revs[kind], rev)
+		}
+	}
+}
+
+func TestDataChanges_IDPrefixPrepended(t *testing.T) {
+	hub := NewHub()
+	sub, unsub := hub.Subscribe()
+	defer unsub()
+
+	// The production shape of an image route: the single library-image kind,
+	// with the client's cache key prefixed onto the event id.
+	dc := NewDataChanges(hub, []string{"library-image"})
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/library/bean/{id}/image", func(w http.ResponseWriter, r *http.Request) {})
+	h := dc.Middleware(map[string]Route{
+		"POST /api/library/bean/{id}/image": {Kinds: []string{"library-image"}, WithID: true, IDPrefix: "bean:"},
+	})(mux)
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/library/bean/7/image", nil))
+
+	got := changedData(t, waitEvent(t, sub))
+	if got.Kind != "library-image" {
+		t.Errorf("kind = %q, want library-image", got.Kind)
+	}
+	if got.ID != "bean:7" {
+		t.Errorf("id = %q, want bean:7", got.ID)
+	}
+}
+
 func TestDataChanges_EpochIdentifiesInstance(t *testing.T) {
 	hub := NewHub()
 	sub, unsub := hub.Subscribe()

@@ -293,3 +293,34 @@ func TestDataChangedEndToEnd(t *testing.T) {
 	}
 	assertPayloadKeys(t, beanKeys, "library")
 }
+
+// TestDataChangedImageRoutes pins the classification of the library image write
+// routes: each publishes library-image alone (with the client's cache key as the
+// event id), so a remote page drops exactly that photo and reloads the library.
+func TestDataChangedImageRoutes(t *testing.T) {
+	cases := []struct {
+		pattern string
+		prefix  string
+	}{
+		{"POST /api/library/bean/{id}/image", "bean:"},
+		{"POST /api/library/grinder/{id}/image", "grinder:"},
+		{"POST /api/library/basket/{id}/image", "basket:"},
+		{"POST /api/library/puckscreen/{id}/image", "puckscreen:"},
+	}
+	for _, tc := range cases {
+		route, ok := dataRoutes[tc.pattern]
+		if !ok {
+			t.Errorf("route %q is not in dataRoutes", tc.pattern)
+			continue
+		}
+		if got := strings.Join(route.Kinds, ","); got != "library-image" {
+			t.Errorf("route %q kinds = %v, want [library-image]", tc.pattern, route.Kinds)
+		}
+		if !route.WithID {
+			t.Errorf("route %q WithID = false, want true", tc.pattern)
+		}
+		if route.IDPrefix != tc.prefix {
+			t.Errorf("route %q IDPrefix = %q, want %q", tc.pattern, route.IDPrefix, tc.prefix)
+		}
+	}
+}

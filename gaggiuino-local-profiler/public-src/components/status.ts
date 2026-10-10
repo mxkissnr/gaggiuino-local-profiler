@@ -8,6 +8,7 @@ import {
   importDevDb as importDevDbRequest,
 } from '../api/system.js';
 import { shareOrDownloadBlob, syncInstallId } from '../utils.js';
+import { noteServerRevs } from '../live-sync.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
 import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
@@ -46,6 +47,10 @@ interface StatusPayload {
   ordersFeature?: boolean;
   isDemo?: boolean;
   legacyMachineOptionsPending?: boolean;
+  // #1539 slice 2/3: the SSE data-change tracker's epoch and per-kind
+  // revisions, so a reconnecting client can tell which kinds it missed.
+  dataEpoch?: string;
+  dataRevs?: Record<string, number>;
 }
 
 // Tracks the server-side shot count as of the last status poll, so the periodic
@@ -84,6 +89,10 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     updateMachineBanner(s);
     updateLegacyMachineOptionsBanner(s);
     updateOnboardingPanel();
+    // #1539 slice 3: feed the server's data-change epoch/revisions to the
+    // live-sync tracker, so a reconnect (or a missed SSE event) shows up as a
+    // refetch on the next poll.
+    if (s.dataEpoch != null && s.dataRevs != null) noteServerRevs(s.dataEpoch, s.dataRevs);
     // #750: must run before main.js's shouldOpenSetupWizard() check on the
     // very first status poll after boot -- see syncInstallId()'s own comment.
     syncInstallId(s.installId);
