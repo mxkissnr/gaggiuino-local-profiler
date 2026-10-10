@@ -92,6 +92,12 @@ function notFound(): Response {
   return { ok: false, status: 404, json: () => Promise.resolve(null) } as unknown as Response;
 }
 
+// Drains the promise continuations a resolved fetch/annotate chains (a few
+// microtask hops) without advancing any (possibly faked) timer.
+async function flushPromises(times = 8): Promise<void> {
+  for (let i = 0; i < times; i += 1) await Promise.resolve();
+}
+
 // Routes the real apiFetch: GET /api/shots/{id} serves the registered single
 // shot (or 404), the trash fetch fails so loadTrashData() bails before its DOM
 // render, and the plain list returns an empty page.
@@ -284,6 +290,7 @@ describe('live-sync deferral and resync (#1539 slice 4)', () => {
       flushAutoSave(); // clears the pending autosave, starts the in-flight save
       expect(annotationBusy()).toBe(true);
       resolveAnnotate?.(jsonResponse({ annotation: {} }));
+      await flushPromises();
       await vi.advanceTimersByTimeAsync(0);
       expect(annotationBusy()).toBe(false);
 
@@ -370,11 +377,13 @@ describe('annotationBusy save counter (#1539 slice 4)', () => {
       expect(annotationBusy()).toBe(true);
 
       resolvers[0]?.(jsonResponse({ annotation: {} }));
+      await flushPromises();
       await vi.advanceTimersByTimeAsync(0);
       // One save is still in flight, so the counter keeps it busy.
       expect(annotationBusy()).toBe(true);
 
       resolvers[1]?.(jsonResponse({ annotation: {} }));
+      await flushPromises();
       await vi.advanceTimersByTimeAsync(0);
       expect(annotationBusy()).toBe(false);
     } finally {
