@@ -11,7 +11,7 @@ import { CLIENT_ID } from './api/transport.js';
 //    module that merely imports this one (tests, the demo bundle) stays inert.
 //  - Revisions are only comparable within one server epoch. A different epoch
 //    means the server restarted and reset its counters, so every known
-//    revision is dropped and every registered kind is refetched once.
+//    revision is dropped and every resync kind (photos excepted) is refetched.
 //  - Nothing runs while the tab is hidden (the work is flushed on visibility)
 //    or while an input has focus (retried on focusout), so a background refresh
 //    never clobbers what the user is reading or typing.
@@ -72,17 +72,62 @@ function _activeKinds(): DataKind[] {
   return REGISTERED_KINDS.filter((k) => _handlers[k] !== undefined);
 }
 
+// Kinds a full resync refetches when the stream reconnects or the epoch turns
+// over. library-image is deliberately excluded: a reconnect or an online event
+// must not evict and re-download every library photo. Photo writes still reach
+// us as their own library-image events (and through the status revision
+// check), so nothing is missed.
+function _activeResyncKinds(): DataKind[] {
+  return _activeKinds().filter((k) => k !== 'library-image');
+}
+
 function _isHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';
 }
+
+// Only text entry holds off a background refetch: a refetch (or a reload) can
+// discard in-progress text, but it cannot corrupt a checkbox, radio, range,
+// button, color, file input or <select> -- those re-render from their stored
+// value, so focusing one must not block a resync. An <input> with no type (or
+// an unknown one) is a text field.
+const TEXT_INPUT_TYPES = new Set([
+  'text', 'search', 'number', 'email', 'url', 'tel', 'password',
+  'date', 'time', 'datetime-local', '',
+]);
 
 function _focusBlocked(): boolean {
   if (typeof document === 'undefined') return false;
   const el = document.activeElement as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName ? el.tagName.toLowerCase() : '';
-  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  if (tag === 'textarea') return true;
+  if (tag === 'input') {
+    const type = ((el as HTMLInputElement).type || '').toLowerCase();
+    return TEXT_INPUT_TYPES.has(type);
+  }
   return el.isContentEditable === true;
+}
+
+// The app marks an open bottom sheet by adding .lib-sheet-open to <body> (see
+// bean-form-sheet.ts / detail-sheet.ts); a native <dialog> carries its own
+// [open] attribute. A reload must not fire over either, even after focus has
+// left the sheet's fields.
+function _overlayOpen(): boolean {
+  if (typeof document === 'undefined') return false;
+  const body = document.body;
+  if (body && body.classList && body.classList.contains('lib-sheet-open')) return true;
+  if (typeof document.querySelector !== 'function') return false;
+  return document.querySelector('dialog[open]') !== null;
+}
+
+/**
+ * True while an automatic whole-page reload would discard user work: a
+ * text-entry field has focus or a bottom sheet / dialog is open. Exported so
+ * the `all` (whole-database reload) handler can carry it into its canRun. The
+ * scheduler already applies the focus and hidden-tab guards to every kind.
+ */
+export function reloadBlocked(): boolean {
+  return _focusBlocked() || _overlayOpen();
 }
 
 function _schedule(kind: SyncKind, delay = DEBOUNCE_MS): void {
@@ -110,16 +155,17 @@ function _markDirty(kind: SyncKind, id: string | null): void {
   _schedule(kind);
 }
 
-// Switching epoch forgets every recorded revision and marks each registered
-// kind dirty: the server restarted, so its counters begin again from zero and
-// the client must refetch rather than trust its stale high-water marks.
+// Switching epoch forgets every recorded revision and marks each resync kind
+// dirty: the server restarted, so its counters begin again from zero and the
+// client must refetch rather than trust its stale high-water marks. Photos are
+// excluded (see _activeResyncKinds).
 function _syncEpoch(epoch: string): void {
   if (_epoch === epoch) return;
   const changed = _epoch !== null;
   _epoch = epoch;
   if (!changed) return;
   _lastSeen.clear();
-  for (const kind of _activeKinds()) _markDirty(kind, null);
+  for (const kind of _activeResyncKinds()) _markDirty(kind, null);
 }
 
 // Single-flight per kind: concurrent drains collapse into one run, and if the
@@ -185,13 +231,15 @@ export function retryDeferred(): void {
 }
 
 /**
- * Marks every registered kind dirty with null (its whole state), so the next
- * drain refetches it. Called after the browser comes back online or the SSE
- * stream reconnects: a refetch that failed or was missed while offline is
- * recovered here rather than by a per-run retry.
+ * Marks every resync kind dirty with null (its whole state), so the next drain
+ * refetches it. Called after the browser comes back online or the SSE stream
+ * reconnects: a refetch that failed or was missed while offline is recovered
+ * here rather than by a per-run retry. Photos are left alone -- re-downloading
+ * the whole library image cache on every reconnect is wasteful, and photo
+ * writes are still caught by their own events and the status revision check.
  */
 export function resyncAll(): void {
-  for (const kind of _activeKinds()) _markDirty(kind, null);
+  for (const kind of _activeResyncKinds()) _markDirty(kind, null);
 }
 
 /**

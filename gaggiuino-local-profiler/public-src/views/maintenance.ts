@@ -499,6 +499,19 @@ export async function saveMaintThreshold(task: string, field: string, value: str
   } catch { /* ignore */ }
 }
 
+// Reload the maintenance view while keeping the card the user has expanded
+// open. Capturing the task key before the reload and re-adding .expanded
+// afterwards survives the re-render; every write action and the live refetch
+// go through here so none of them collapses the open detail.
+export async function refreshMaintenanceView(): Promise<void> {
+  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
+  await loadMaintenanceView();
+  if (expandedTask) {
+    document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
+      ?.closest('.maint-card')?.classList.add('expanded');
+  }
+}
+
 export async function setMaintMode(
   task: string,
   mode: string,
@@ -507,7 +520,6 @@ export async function setMaintMode(
   currentDays?: string,
   currentG?: string,
 ): Promise<void> {
-  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
   const defShots = parseInt(currentShots ?? '', 10) || 200;
   const defDays  = parseInt(currentDays  ?? '', 10) || 30;
   const defG     = parseInt(currentG     ?? '', 10) || 10000;
@@ -517,11 +529,7 @@ export async function setMaintMode(
              :                    { threshold_shots: defShots, threshold_days: defDays, threshold_g: null };
   try {
     await saveMaintenanceThreshold(task, _writeMachineId(machineId), body);
-    await loadMaintenanceView();
-    if (expandedTask) {
-      document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
-        ?.closest('.maint-card')?.classList.add('expanded');
-    }
+    await refreshMaintenanceView();
   } catch { /* ignore */ }
 }
 
@@ -559,14 +567,9 @@ export async function deleteCustomMaintTask(task: string, machineId?: string | n
 export async function renameCustomMaintTask(task: string, newLabel: string, machineId?: string | number | null): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
-  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
   try {
     await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
-    await loadMaintenanceView();
-    if (expandedTask) {
-      document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
-        ?.closest('.maint-card')?.classList.add('expanded');
-    }
+    await refreshMaintenanceView();
   } catch { /* ignore */ }
 }
 
