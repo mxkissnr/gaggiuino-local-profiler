@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 // scheduler is driven with handlers that mirror main.ts's registrations (the
 // real loaders render the DOM and hit the network, so they are stubbed the same
 // way live-sync-shots.test.ts stubs its reload); the boot wiring itself (which
-// kinds main.ts registers, and that switchMode() flushes deferred runs) is
-// pinned from source, the established pattern for it.
+// kinds main.ts registers, and that the settings reloader also reloads the
+// machine list) is pinned from source, the established pattern for it.
 //
 // live-sync keeps its state (seen revisions, handlers, listeners) at module
 // scope, so every test loads a fresh instance through vi.resetModules(). The
@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe('settings live refresh (#1539 slice 5)', () => {
-  it('defers while on Settings and runs after leaving', async () => {
+  it('defers while on Settings and runs on the scheduler retry after leaving', async () => {
     const { S, live } = await loadRuntime();
     const run = vi.fn();
 
@@ -45,14 +45,13 @@ describe('settings live refresh (#1539 slice 5)', () => {
     S.currentMode = 'settings';
     live.handleDataChanged({ kind: 'settings', rev: 1 });
     await vi.advanceTimersByTimeAsync(300); // debounce fires, canRun holds it back
-    await vi.advanceTimersByTimeAsync(2000); // the deferred retry still holds
+    await vi.advanceTimersByTimeAsync(2000); // the scheduler's canRun retry still holds
     expect(run).not.toHaveBeenCalled();
 
-    // Leaving Settings lifts the guard; switchMode() calls retryDeferred(),
-    // which the test invokes directly.
+    // Leaving Settings lifts the guard. No explicit flush is needed: the
+    // scheduler's own 2s canRun retry runs it.
     S.currentMode = 'shots';
-    live.retryDeferred();
-    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(2000);
     expect(run).toHaveBeenCalledTimes(1);
   });
 
@@ -112,11 +111,11 @@ describe('boot wiring (#1539 slice 5)', () => {
     expect(callSites).toHaveLength(1);
   });
 
-  it('flushes deferred live-sync runs at the end of switchMode', () => {
-    const src = readFileSync(new URL('../public-src/components/mode.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/import \{ retryDeferred \} from '\.\.\/live-sync\.js'/);
-    // The call is the last statement of switchMode, after the view bookkeeping.
-    expect(src).toMatch(/updateMobileShotSidebarVisibility\(\);\s*\n\s*\/\/ #1539 slice 5:[\s\S]*?retryDeferred\(\);\s*\n\}/);
+  it('reloads the machine list with the settings state', () => {
+    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    // The machine-registry routes publish "settings" too, so the shared settings
+    // reloader must reload the machine list, not just the shot defaults.
+    expect(src).toMatch(/async function loadSettingsState\(\): Promise<void> \{[\s\S]*?void loadMachines\(\);[\s\S]*?await loadShotDefaultsSettingsCard\(\);\n\}/);
   });
 
   it('lists settings and profiles among the registered live-sync kinds', () => {

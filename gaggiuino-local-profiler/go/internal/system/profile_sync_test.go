@@ -680,3 +680,53 @@ func TestPushOneProfile_NonTimeoutErrorCreatesInsteadOfAdopting(t *testing.T) {
 		t.Fatalf("Get(gm-2) = %+v, %v; want the newly created row", created, err)
 	}
 }
+
+// TestPushDirtyProfiles_NotifiesOnlyWhenSyncStateChanges: the sweep's
+// onProfilesChanged hook publishes the "profiles" kind so other pages refetch
+// the list and clear the pending badge — but only when a push actually changed
+// a row's sync status or recorded error. A row that keeps failing with the same
+// error must not re-notify on every sweep (that would spam every open page).
+func TestPushDirtyProfiles_NotifiesOnlyWhenSyncStateChanges(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, sqlDB := newTestPoller(t, fake)
+	repo := machines.NewProfilesRepository(sqlDB)
+	p.SetProfilesRepo(repo)
+
+	var notifies int32
+	p.SetOnProfilesChanged(func() { atomic.AddInt32(&notifies, 1) })
+
+	if _, err := repo.UpsertDirty(1, nil, nil, "Boom", json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		return machines.ProfileSummary{}, errBoom
+	}
+
+	// First sweep: the row's stored error goes from empty to "boom" — changed.
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+	if got := atomic.LoadInt32(&notifies); got != 1 {
+		t.Fatalf("notifies after the first (changed) sweep = %d, want 1", got)
+	}
+
+	// Second sweep: the same row fails again with the same error — unchanged,
+	// so the hook must not run again.
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+	if got := atomic.LoadInt32(&notifies); got != 1 {
+		t.Fatalf("notifies after a repeated same-error sweep = %d, want 1 (an unchanged error must not notify)", got)
+	}
+
+	// The push now succeeds and the row flips to synced — a status change.
+	fake.createProfileFn = func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error) {
+		return machines.ProfileSummary{ID: "gm-1", Name: "Boom"}, nil
+	}
+	if err := p.PushDirtyProfiles(context.Background(), 1); err != nil {
+		t.Fatalf("PushDirtyProfiles: %v", err)
+	}
+	if got := atomic.LoadInt32(&notifies); got != 2 {
+		t.Fatalf("notifies after the row synced = %d, want 2 (a status change notifies)", got)
+	}
+}
