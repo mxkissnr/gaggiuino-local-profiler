@@ -40,8 +40,8 @@ import { initToken, apiFetch } from './api/transport.js';
 import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
-import { initLiveSync, handleDataChanged } from './live-sync.js';
-import { invalidateImageKeys, invalidateAllImages } from './bean-image.js';
+import { initLiveSync, handleDataChanged, resyncAll } from './live-sync.js';
+import { invalidateImageKeys } from './bean-image.js';
 import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
@@ -196,14 +196,15 @@ function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void
   if (resolved !== S.activeMachineId) setActiveMachine(resolved);
 }
 
-// #1539: a maintenance refetch must not tear down an editor the user has open —
-// an expanded card (its threshold/rename inputs), an open details/summary, or
-// the inline log form.
+// #1539: a maintenance refetch must not tear down an editor the user has open.
+// Outside the maintenance view the run is a no-op (the view reloads on entry),
+// so the guard only applies inside it, and then only to an expanded card or an
+// open inline edit (not the "disabled tasks" details).
 function _maintenanceCanRefetch(): boolean {
+  if (S.currentMode !== 'maintenance') return true;
   const view = document.getElementById('maintenance-view');
   if (!view) return true;
   if (view.querySelector('.maint-card.expanded')) return false;
-  if (view.querySelector('details[open]')) return false;
   if (view.querySelector('[contenteditable="true"]')) return false;
   const logForm = document.getElementById('maintLogForm');
   return !logForm || logForm.style.display === 'none';
@@ -1212,11 +1213,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // #1539 slice 3: react to the server's data-changed pushes. Registered
     // before the stream opens so no early event is missed.
     onEvent(EVENTS.DATA_CHANGED, handleDataChanged);
-    // A whole-database change can touch any cached photo, so drop them all
-    // before the debounced refetches below run.
-    onEvent(EVENTS.DATA_CHANGED, data => {
-      if ((data as { kind?: string } | null)?.kind === 'all') invalidateAllImages();
-    });
     initLiveSync({
       library: {
         // A library change is usually a stock change derived from a shot, which
@@ -1225,8 +1221,9 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       'library-image': {
         // An image write addresses its cache key (bean:<id>, grinder:<id>, ...),
-        // so drop exactly those entries and reload the library.
-        run: async ids => { invalidateImageKeys(ids ?? []); await loadLibrary(); },
+        // so drop those entries (null drops every library photo) and reload the
+        // library once.
+        run: async ids => { invalidateImageKeys(ids ?? null); await loadLibrary(); },
       },
       orders: {
         run: async () => {
@@ -1235,9 +1232,6 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       maintenance: {
         run: async () => { if (S.currentMode === 'maintenance') await loadMaintenanceView(); },
-        // The maintenance cards hold typing forms (threshold/rename inputs and
-        // the inline log form) inside expandable cards and details; a deferred
-        // refetch must not tear an open editor down and wipe what is typed.
         canRun: () => _maintenanceCanRefetch(),
       },
       'ui-prefs': {
@@ -1246,8 +1240,17 @@ document.addEventListener('DOMContentLoaded', () => {
           if (changed) applyServerUiPrefs(false, true);
         },
       },
+      all: {
+        // A whole-database change (restore, DB import, demo seed/end): reload
+        // through the live-sync pipeline, so it honours the focus and
+        // hidden-tab guards like any other run.
+        run: () => { location.reload(); },
+      },
     });
-    connectEvents(() => {});
+    // #1539 slice 3: recover refetches that failed or were missed while
+    // offline -- a browser online event or an SSE reconnect resyncs every kind.
+    connectEvents(() => {}, resyncAll);
+    window.addEventListener('online', resyncAll);
 
     // #390 — loadMachines() calls the token-gated /api/machines; it used to
     // fire straight from this handler (before initToken() ever ran), so its

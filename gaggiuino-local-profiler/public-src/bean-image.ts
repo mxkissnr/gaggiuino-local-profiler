@@ -23,13 +23,11 @@ function _load(key: string, url: string): Promise<string | null> {
   return p;
 }
 
-// Drops one cache entry and revokes the object URL it produced, so the browser
-// releases the blob. A load still in flight revokes once it settles.
+// Drops one cache entry. The object URL it produced is deliberately not
+// revoked: a still-displayed <img> and an in-flight load both need it, and the
+// leak is negligible because photos change rarely.
 function _evict(key: string): void {
-  const p = _cache.get(key);
-  if (p === undefined) return;
   _cache.delete(key);
-  void p.then(url => { if (url) URL.revokeObjectURL(url); }).catch(() => {});
 }
 
 export function loadBeanImageBlobUrl(beanId: unknown): Promise<string | null> {
@@ -83,15 +81,20 @@ export function invalidateShotImage(shotId: number): void {
   _evict(`shotthumb:${shotId}`);
 }
 
+// The cache-key prefixes every library photo is loaded under; a null key list
+// (a library-image event that addresses no single entity) drops them all.
+const LIBRARY_PHOTO_PREFIXES = ['bean:', 'grinder:', 'basket:', 'puckscreen:'] as const;
+
 // #1539: the server addresses a changed photo by the cache key it was loaded
 // under (bean:<id>, grinder:<id>, basket:<id>, puckscreen:<id>), so a
-// library-image event drops exactly those entries.
-export function invalidateImageKeys(keys: readonly string[]): void {
+// library-image event drops exactly those entries. A null/absent list drops
+// every library photo key (but never the shot photos).
+export function invalidateImageKeys(keys?: readonly string[] | null): void {
+  if (keys == null) {
+    for (const key of [..._cache.keys()]) {
+      if (LIBRARY_PHOTO_PREFIXES.some(prefix => key.startsWith(prefix))) _evict(key);
+    }
+    return;
+  }
   for (const key of keys) _evict(key);
-}
-
-// A whole-database change can touch any cached photo (library and shot), so
-// drop every entry.
-export function invalidateAllImages(): void {
-  for (const key of [..._cache.keys()]) _evict(key);
 }
