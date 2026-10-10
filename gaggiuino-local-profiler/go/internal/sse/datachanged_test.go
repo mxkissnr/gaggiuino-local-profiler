@@ -269,22 +269,23 @@ func TestDataChanges_IDPrefixPrepended(t *testing.T) {
 	sub, unsub := hub.Subscribe()
 	defer unsub()
 
-	dc := NewDataChanges(hub, []string{"library-image", "library"})
+	// The production shape of an image route: the single library-image kind,
+	// with the client's cache key prefixed onto the event id.
+	dc := NewDataChanges(hub, []string{"library-image"})
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/library/bean/{id}/image", func(w http.ResponseWriter, r *http.Request) {})
 	h := dc.Middleware(map[string]Route{
-		"POST /api/library/bean/{id}/image": {Kinds: []string{"library-image", "library"}, WithID: true, IDPrefix: "bean:"},
+		"POST /api/library/bean/{id}/image": {Kinds: []string{"library-image"}, WithID: true, IDPrefix: "bean:"},
 	})(mux)
 
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/library/bean/7/image", nil))
 
-	first := changedData(t, waitEvent(t, sub))
-	second := changedData(t, waitEvent(t, sub))
-	if first.Kind != "library-image" || second.Kind != "library" {
-		t.Errorf("kinds = %q then %q, want library-image then library", first.Kind, second.Kind)
+	got := changedData(t, waitEvent(t, sub))
+	if got.Kind != "library-image" {
+		t.Errorf("kind = %q, want library-image", got.Kind)
 	}
-	if first.ID != "bean:7" || second.ID != "bean:7" {
-		t.Errorf("ids = %q then %q, want bean:7 on both", first.ID, second.ID)
+	if got.ID != "bean:7" {
+		t.Errorf("id = %q, want bean:7", got.ID)
 	}
 }
 
