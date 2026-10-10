@@ -599,21 +599,25 @@ describe('live-sync own-write and resync dedup (#1539)', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
-  it('collapses two resyncAll calls within 2 s into one round', async () => {
+  it('a second resyncAll 1 s later marks every kind dirty again', async () => {
     const { live } = await loadLive();
-    const run = vi.fn();
-    live.initLiveSync({ library: { run } });
+    const library = vi.fn();
+    const orders = vi.fn();
+    const image = vi.fn();
+    live.initLiveSync({ library: { run: library }, orders: { run: orders }, 'library-image': { run: image } });
 
     live.resyncAll();
-    live.resyncAll();
     await vi.advanceTimersByTimeAsync(400);
-    expect(run).toHaveBeenCalledTimes(1);
+    expect(library).toHaveBeenCalledTimes(1);
+    expect(orders).toHaveBeenCalledTimes(1);
 
-    // A later call, past the throttle, resyncs again.
-    await vi.advanceTimersByTimeAsync(2000);
+    // 1 s later, inside the old 2 s throttle window, the round must still run.
+    await vi.advanceTimersByTimeAsync(1000);
     live.resyncAll();
     await vi.advanceTimersByTimeAsync(400);
-    expect(run).toHaveBeenCalledTimes(2);
+    expect(library).toHaveBeenCalledTimes(2);
+    expect(orders).toHaveBeenCalledTimes(2);
+    expect(image).not.toHaveBeenCalled();
   });
 });
 

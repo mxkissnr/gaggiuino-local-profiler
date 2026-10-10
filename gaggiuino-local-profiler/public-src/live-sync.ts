@@ -31,9 +31,6 @@ const CANRUN_RETRY_MS = 2000;
 // for this long after that write's request: the write's SSE echo records the
 // revision, so within the window the poll only waits for that echo.
 const OWN_WRITE_GRACE_MS = 5000;
-// The shortest gap between two resyncAll() rounds, so the online event, the SSE
-// reconnect and the epoch-change resync of one network blip collapse into one.
-const RESYNC_MIN_INTERVAL_MS = 2000;
 
 export interface DataChangedPayload {
   kind: string;
@@ -70,8 +67,6 @@ let _epoch: string | null = null;
 // first snapshot is the baseline, later increases are what trigger refetches.
 let _statusSynced = false;
 let _listenersBound = false;
-// The time of the last resyncAll() this page ran, for RESYNC_MIN_INTERVAL_MS.
-let _lastResyncAt: number | null = null;
 
 function _isRegistered(kind: string): kind is DataKind {
   return (REGISTERED_KINDS as readonly string[]).includes(kind);
@@ -266,14 +261,12 @@ export function retryDeferred(): void {
  * here rather than by a per-run retry. Photos are left alone -- re-downloading
  * the whole library image cache on every reconnect is wasteful, and photo
  * writes are still caught by their own events and the status revision check.
- * A second call within RESYNC_MIN_INTERVAL_MS is a no-op, so the triggers of
- * one network blip -- the online event, the SSE reconnect, the epoch change --
- * do not refetch every kind several times.
+ * Back-to-back calls are already coalesced by each kind's debounce, so no
+ * throttle is applied here: a resync that follows an earlier round whose
+ * refetches failed (the online event often fires before the network works) must
+ * still run rather than be swallowed.
  */
 export function resyncAll(): void {
-  const now = Date.now();
-  if (_lastResyncAt !== null && now - _lastResyncAt < RESYNC_MIN_INTERVAL_MS) return;
-  _lastResyncAt = now;
   for (const kind of _activeResyncKinds()) _markDirty(kind, null);
 }
 
