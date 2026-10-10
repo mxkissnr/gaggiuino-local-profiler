@@ -2,21 +2,22 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // #1539 slice 4: the Shots view's live-sync refresh. refreshShots() turns a
 // dirtied `shot`/`shots` kind into either an in-place patch of the already
-// loaded rows (a single id it still has) or a quiet list reload, and defers the
-// annotation panel render while this page has an unsaved edit. The sidebar and
-// annotation modules are spied on through their real implementations (the
-// importOriginal pattern) so the assertions see calls without pulling in the
-// full DOM render path.
+// loaded rows (a single id it still has) or a quiet list reload, and the
+// live-sync scheduler's canRun (wired in main.ts) defers a run while this page
+// is saving an edit or (re)loading the list. The sidebar and annotation
+// modules are spied on through their real implementations (the importOriginal
+// pattern) so the assertions see calls without pulling in the full DOM render
+// path; annotationBusy() stays real so the save counter is exercised.
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
+g.window ??= {};
 
 const spies = vi.hoisted(() => ({
   renderSidebar: vi.fn(),
   updateSidebarHighlighting: vi.fn(),
   renderAnnotationPanel: vi.fn(),
-  annotationBusy: vi.fn(),
   invalidateShotImage: vi.fn(),
 }));
 
@@ -29,7 +30,6 @@ vi.mock('../public-src/components/sidebar.js', async (importOriginal) => ({
 vi.mock('../public-src/views/shots/annotation.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/views/shots/annotation.js')>()),
   renderAnnotationPanel: spies.renderAnnotationPanel,
-  annotationBusy: spies.annotationBusy,
 }));
 
 vi.mock('../public-src/bean-image.js', async (importOriginal) => ({
@@ -40,15 +40,33 @@ vi.mock('../public-src/bean-image.js', async (importOriginal) => ({
 const { S } = await import('../public-src/state/index.js');
 const transport = await import('../public-src/api/transport.js');
 const apiFetchSpy = vi.spyOn(transport, 'apiFetch');
-const { refreshShots } = await import('../public-src/views/shots/index.js');
+const { refreshShots, loadData, shotsLoadInProgress } = await import('../public-src/views/shots/index.js');
+const { annotationBusy, scheduleAutoSave, flushAutoSave } = await import('../public-src/views/shots/annotation.js');
+const { initLiveSync, handleDataChanged, resyncAll } = await import('../public-src/live-sync.js');
 
-// The nodes loadData() writes to; it only touches innerHTML/style on each, so
-// both stay optional. `shots` starts at a sentinel the quiet path must leave
-// untouched (a non-quiet load replaces it with the loading placeholder).
+// The nodes loadData() writes to and the fields the annotation save reads; a
+// generic element is created on first getElementById so both paths are served.
+// `shots` starts at a sentinel the quiet path must leave untouched (a non-quiet
+// load replaces it with the loading placeholder).
 interface FakeEl {
   innerHTML?: string;
   style?: Record<string, string>;
   textContent?: string;
+  value?: string;
+  selectedOptions?: { dataset: Record<string, unknown> }[];
+  classList?: { add: () => void; remove: () => void; contains: () => boolean };
+  [key: string]: unknown;
+}
+
+function makeEl(): FakeEl {
+  return {
+    innerHTML: '',
+    style: {},
+    textContent: '',
+    value: '',
+    selectedOptions: [{ dataset: {} }],
+    classList: { add: () => {}, remove: () => {}, contains: () => false },
+  };
 }
 
 function fakeDocument() {
@@ -60,7 +78,7 @@ function fakeDocument() {
   return {
     elements,
     document: {
-      getElementById: (id: string) => elements[id],
+      getElementById: (id: string) => (elements[id] ??= makeEl()),
       querySelectorAll: () => [],
     },
   };
@@ -98,8 +116,6 @@ beforeEach(() => {
   spies.updateSidebarHighlighting.mockReset();
   spies.renderAnnotationPanel.mockReset();
   spies.invalidateShotImage.mockReset();
-  spies.annotationBusy.mockReset();
-  spies.annotationBusy.mockReturnValue(false);
   detailById = new Map();
   installFetch();
 
@@ -119,7 +135,7 @@ describe('refreshShots (#1539 slice 4)', () => {
   it('patches the loaded row and re-renders the sidebar', async () => {
     S.allShots = [{ id: 7, timestamp: 1000 }];
     S.primaryShotId = 7;
-    detailById.set(7, { id: 7, annotation: { rating: 5, notes: 'remote' }, image: 'jpg', score: 91 });
+    detailById.set(7, { id: 7, annotation: { rating: 5, notes: 'remote' }, image: 'jpg', score: 91, usedBeanTarget: true });
 
     await refreshShots(['7']);
 
@@ -127,6 +143,7 @@ describe('refreshShots (#1539 slice 4)', () => {
     expect(row.annotation).toEqual({ rating: 5, notes: 'remote' });
     expect(row.image).toBe('jpg');
     expect(row.score).toBe(91);
+    expect(row.usedBeanTarget).toBe(true);
     expect(spies.renderSidebar).toHaveBeenCalledTimes(1);
     expect(spies.updateSidebarHighlighting).toHaveBeenCalledTimes(1);
     // The cached photo and its thumbnail are dropped for the changed shot.
@@ -134,18 +151,26 @@ describe('refreshShots (#1539 slice 4)', () => {
     expect(spies.renderAnnotationPanel).toHaveBeenCalledTimes(1);
   });
 
-  it('does not re-render the annotation panel while a save is pending', async () => {
-    spies.annotationBusy.mockReturnValue(true);
-    S.allShots = [{ id: 7, timestamp: 1000 }];
-    S.primaryShotId = 7;
-    detailById.set(7, { id: 7, annotation: { rating: 4 } });
+  it('deletes the row image when the detail payload no longer has one', async () => {
+    S.allShots = [{ id: 7, timestamp: 1000, image: 'old.jpg' }];
+    detailById.set(7, { id: 7, annotation: {}, score: 70, usedBeanTarget: false });
 
     await refreshShots(['7']);
 
-    expect(spies.renderAnnotationPanel).not.toHaveBeenCalled();
-    // The list entry still updates; only the open panel is held back.
-    expect((S.allShots[0] as unknown as Record<string, unknown>).annotation).toEqual({ rating: 4 });
+    const row = S.allShots[0] as unknown as Record<string, unknown>;
+    expect('image' in row).toBe(false);
+    expect(spies.invalidateShotImage).toHaveBeenCalledWith(7);
+  });
+
+  it('re-renders the sidebar once for a batch of dirtied ids', async () => {
+    S.allShots = [{ id: 7, timestamp: 1 }, { id: 8, timestamp: 2 }];
+    detailById.set(7, { id: 7, annotation: { rating: 1 } });
+    detailById.set(8, { id: 8, annotation: { rating: 2 } });
+
+    await refreshShots(['7', '8']);
+
     expect(spies.renderSidebar).toHaveBeenCalledTimes(1);
+    expect(spies.updateSidebarHighlighting).toHaveBeenCalledTimes(1);
   });
 
   it('does not re-render the panel when the dirtied shot is not the open one', async () => {
@@ -192,5 +217,169 @@ describe('refreshShots (#1539 slice 4)', () => {
     expect(docEl.shots?.innerHTML).toBe('KEEP');
     expect(spies.renderAnnotationPanel).not.toHaveBeenCalled();
     expect(spies.renderSidebar).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('quiet reload errors (#1539 slice 4)', () => {
+  it('keeps the painted list unchanged on an HTTP error', async () => {
+    apiFetchSpy.mockImplementation(() => Promise.resolve({ ok: false, status: 500 } as unknown as Response));
+
+    await loadData({ quiet: true });
+
+    expect(docEl.shots?.innerHTML).toBe('KEEP');
+  });
+
+  it('keeps the painted list unchanged on a network error', async () => {
+    apiFetchSpy.mockImplementation(() => Promise.reject(new Error('offline')));
+
+    await loadData({ quiet: true });
+
+    expect(docEl.shots?.innerHTML).toBe('KEEP');
+  });
+});
+
+describe('shotsLoadInProgress (#1539 slice 4)', () => {
+  it('is true while a loadData() is in flight and clears afterwards', async () => {
+    let releaseList: ((r: Response) => void) | undefined;
+    apiFetchSpy.mockImplementation((url: string) => {
+      if (url.includes('trash=1')) return Promise.resolve({ ok: false, status: 500 } as unknown as Response);
+      if (url.startsWith('api/shots?')) return new Promise<Response>(res => { releaseList = res; });
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    const pending = loadData();
+    expect(shotsLoadInProgress()).toBe(true);
+
+    releaseList?.(jsonResponse({ shots: [], nextCursor: null, hasMore: false }));
+    await pending;
+    expect(shotsLoadInProgress()).toBe(false);
+  });
+});
+
+describe('live-sync deferral and resync (#1539 slice 4)', () => {
+  it('defers the shot refresh while a save is pending, then runs it', async () => {
+    vi.useFakeTimers();
+    try {
+      S.allShots = [{ id: 7, timestamp: 1000 }];
+      S.shots = [{ id: 7, timestamp: 1000 }];
+      S.primaryShotId = 7;
+      detailById.set(7, { id: 7, annotation: { rating: 4 }, score: 80, usedBeanTarget: true });
+
+      let resolveAnnotate: ((r: Response) => void) | undefined;
+      apiFetchSpy.mockImplementation((url: string) => {
+        if (url.includes('/annotate')) return new Promise<Response>(res => { resolveAnnotate = res; });
+        return Promise.resolve(jsonResponse({}));
+      });
+
+      // Mirrors main.ts's `shot` registration.
+      initLiveSync({ shot: { canRun: () => !annotationBusy(), run: ids => refreshShots(ids) } });
+
+      scheduleAutoSave();
+      expect(annotationBusy()).toBe(true);
+
+      handleDataChanged({ kind: 'shot', id: '7', rev: 1 });
+      await vi.advanceTimersByTimeAsync(300); // debounce fires; canRun holds it back
+      expect(spies.renderAnnotationPanel).not.toHaveBeenCalled();
+
+      flushAutoSave(); // clears the pending autosave, starts the in-flight save
+      expect(annotationBusy()).toBe(true);
+      resolveAnnotate?.(jsonResponse({ annotation: {} }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(annotationBusy()).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(2000); // the deferred run's retry
+      expect(spies.renderAnnotationPanel).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      initLiveSync({});
+    }
+  });
+
+  it('defers a shots reload while the list is loading, then runs it', async () => {
+    vi.useFakeTimers();
+    try {
+      let releaseList: ((r: Response) => void) | undefined;
+      apiFetchSpy.mockImplementation((url: string) => {
+        if (url.includes('trash=1')) return Promise.resolve({ ok: false, status: 500 } as unknown as Response);
+        if (url.startsWith('api/shots?')) return new Promise<Response>(res => { releaseList = res; });
+        return Promise.resolve(jsonResponse({}));
+      });
+
+      const reload = vi.fn();
+      initLiveSync({ shots: { canRun: () => !shotsLoadInProgress(), run: reload } });
+
+      handleDataChanged({ kind: 'shots', rev: 1 });
+      const pending = loadData();
+      await vi.advanceTimersByTimeAsync(300); // debounce fires; the load is still in flight
+      expect(reload).not.toHaveBeenCalled();
+
+      releaseList?.(jsonResponse({ shots: [], nextCursor: null, hasMore: false }));
+      await pending;
+      await vi.advanceTimersByTimeAsync(2000); // the deferred run's retry
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      initLiveSync({});
+    }
+  });
+
+  it('resyncs shots on reconnect but not each individual shot', async () => {
+    vi.useFakeTimers();
+    try {
+      const shotsRun = vi.fn();
+      const shotRun = vi.fn();
+      initLiveSync({ shots: { run: shotsRun }, shot: { run: shotRun } });
+
+      resyncAll();
+      await vi.advanceTimersByTimeAsync(400);
+
+      expect(shotsRun).toHaveBeenCalledTimes(1);
+      expect(shotRun).not.toHaveBeenCalled();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      initLiveSync({});
+    }
+  });
+});
+
+describe('annotationBusy save counter (#1539 slice 4)', () => {
+  it('stays true until overlapping saves both finish', async () => {
+    vi.useFakeTimers();
+    try {
+      S.shots = [{ id: 7, timestamp: 1000 }];
+      S.primaryShotId = 7;
+
+      const resolvers: ((r: Response) => void)[] = [];
+      apiFetchSpy.mockImplementation((url: string) => {
+        if (url.includes('/annotate')) return new Promise<Response>(res => { resolvers.push(res); });
+        return Promise.resolve(jsonResponse({}));
+      });
+
+      // First save: the debounce fires and its request is still in flight.
+      scheduleAutoSave();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(resolvers.length).toBe(1);
+
+      // Second save: a flush starts while the first is still running.
+      scheduleAutoSave();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(resolvers.length).toBe(2);
+      expect(annotationBusy()).toBe(true);
+
+      resolvers[0]?.(jsonResponse({ annotation: {} }));
+      await vi.advanceTimersByTimeAsync(0);
+      // One save is still in flight, so the counter keeps it busy.
+      expect(annotationBusy()).toBe(true);
+
+      resolvers[1]?.(jsonResponse({ annotation: {} }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(annotationBusy()).toBe(false);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });
