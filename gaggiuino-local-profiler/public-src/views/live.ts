@@ -357,6 +357,7 @@ function _applyRefDatasets(d: ShotSeries): void {
 export function populateRefSelector(): void {
   const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
   if (!sel) return;
+  sel.setAttribute('aria-label', t('ref_label'));
   const prev = sel.value;
   sel.innerHTML = html`<option value="">${tHtml('ref_none')}</option>`;
   S.shots.filter(s => s.hasChartData)

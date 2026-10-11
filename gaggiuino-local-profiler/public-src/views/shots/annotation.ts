@@ -441,6 +441,7 @@ export function renderGrinderField(selectId: string, otherId: string, currentVal
   if (other) {
     other.style.display = isOther ? '' : 'none';
     other.value = isOther ? currentValue : '';
+    other.setAttribute('aria-label', t('dialin_wizard_grinder_other_ph'));
   }
 }
 
