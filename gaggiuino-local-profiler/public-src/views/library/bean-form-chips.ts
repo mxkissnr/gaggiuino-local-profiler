@@ -86,7 +86,7 @@ function renderOriginChips(): void {
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   wrap.innerHTML = joinHtml(_formOrigins.map((o, i) => html`
     <span class="flavor-chip origin-chip">${esc(countryName(o.code, S.currentLang))}
-      <input type="number" class="origin-chip-percent" data-origin-idx="${esc(i)}" min="0" max="100" step="1" placeholder="%" value="${esc(o.percent ?? '')}">
+      <input type="number" class="origin-chip-percent" aria-label="${tHtml('bean_origin_hint')}" data-origin-idx="${esc(i)}" min="0" max="100" step="1" placeholder="%" value="${esc(o.percent ?? '')}">
       <button type="button" class="flavor-chip-x" data-origin-idx-remove="${esc(i)}">${CLOSE_ICON_SVG}</button>
     </span>`));
 }

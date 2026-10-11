@@ -110,8 +110,8 @@ function _renderStepRows(steps: Recipe['steps']): void {
 function _stepRowHtml(i: number, text: string | undefined = '', dur: number | string | null | undefined = ''): Html {
   return html`<div class="lib-step-row" id="recipeStep${esc(i)}">
     <span class="lib-step-num">${esc(i + 1)}</span>
-    <input class="lib-step-text" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
-    <input class="lib-step-dur" type="number" min="0" step="1" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
+    <input class="lib-step-text" aria-label="${tHtml('lib_recipe_step_ph')}" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
+    <input class="lib-step-dur" type="number" min="0" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
     <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}">${ICON_TRASH}</button>
   </div>`;
 }
