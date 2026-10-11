@@ -46,7 +46,8 @@ function _asRow(grinder: Grinder): GrinderRow {
 }
 
 // Every form field read/written here is an <input>; the shared .value API is
-// all that is used.
+// all that is used. The grinder form's markup is static in index.html, so this
+// module renders no field and has no accessible name to add (#1547).
 function _input(id: string): HTMLInputElement {
   return document.getElementById(id) as HTMLInputElement;
 }

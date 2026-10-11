@@ -195,6 +195,10 @@ function closeBackupModal(): void {
     passConfirm.value = '';
 }
 
+// #1547: the only form control this module renders is the section checkbox
+// below, created inside its own <label> whose text is the control's accessible
+// name. The passphrase/confirm and secrets fields are static in index.html, so
+// there is no unlabelled field to name here.
 function renderSectionCheckboxes(presentSections: Set<string> | null): void {
     const { sectionsBox } = els();
     sectionsBox.innerHTML = html``;

@@ -788,6 +788,8 @@ function renderFirmwareProgressBar(row: HTMLElement, progress: FirmwareProgress 
   bar.style.display = '';
 }
 
+// #1547: the machine form's fields are static in index.html; this module only
+// reads/writes them, so it renders no field and has no accessible name to add.
 export function openMachineForm(machine?: MachineView | null): void {
   const card = document.getElementById('machineFormCard');
   if (!card) return;

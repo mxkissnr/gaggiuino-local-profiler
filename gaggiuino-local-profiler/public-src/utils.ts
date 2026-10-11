@@ -1,6 +1,9 @@
 import type { Chart } from 'chart.js';
 import type { RecordedPhaseTransition } from './constants.js';
 
+// #1547: this module holds pure helpers and renders no <input>/<select>/<textarea>,
+// so there is no form field here to give an accessible name.
+
 // ── HTML escaping (XSS prevention) ───────────────────────────────────────
 // Branded marker for a string known to be safe to interpolate into markup
 // (either escaped by esc() or authored as trusted HTML). A plain string is
