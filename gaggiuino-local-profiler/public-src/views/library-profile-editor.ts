@@ -280,6 +280,16 @@ export function removeProfilePhase(i: number): void {
     const delBtn = row.querySelector('.lib-btn-sm.del') as HTMLElement;
     delBtn.dataset.action = 'remove-profile-phase';
     delBtn.dataset.idx = String(idx);
+    // The labelled fields' ids (and their labels' `for`) are keyed off this
+    // row's index as well, so renumber them too — otherwise a later
+    // addProfilePhase() would generate an id a shifted row still carries.
+    row.querySelectorAll<HTMLElement>('[id^="profilePhase"]').forEach(el => {
+      el.id = el.id.replace(/^profilePhase\d+/, `profilePhase${idx}`);
+    });
+    row.querySelectorAll<HTMLElement>('label[for^="profilePhase"]').forEach(el => {
+      const forAttr = el.getAttribute('for') ?? '';
+      el.setAttribute('for', forAttr.replace(/^profilePhase\d+/, `profilePhase${idx}`));
+    });
   });
   renderProfilePreviewChart();
 }
