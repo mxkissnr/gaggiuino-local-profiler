@@ -126,7 +126,7 @@ function renderShelfToolbar(prefs: ShelfPrefs): Html {
       <div class="lib-shelf-views">${viewBtn('shelf', 'lib_shelf_view_shelf')}${viewBtn('list', 'lib_shelf_view_list')}</div>
     </div>
     <div class="lib-shelf-chips">${chip('all', 'lib_shelf_all')}${chip('espresso', 'roast_type_espresso')}${chip('filter', 'roast_type_filter')}${chip('decaf', 'lib_bean_decaf')}</div>
-    <select id="libShelfSort" class="lib-shelf-sort">
+    <select id="libShelfSort" class="lib-shelf-sort" aria-label="${tHtml('lib_shelf_sort')}">
       <option value="fresh" ${esc(prefs.sort === 'fresh' ? 'selected' : '')}>${tHtml('lib_shelf_sort_fresh')}</option>
       <option value="name" ${esc(prefs.sort === 'name' ? 'selected' : '')}>${tHtml('lib_shelf_sort_name')}</option>
       <option value="remaining" ${esc(prefs.sort === 'remaining' ? 'selected' : '')}>${tHtml('lib_shelf_sort_remaining')}</option>
