@@ -294,7 +294,7 @@ function _renderCustomSection(container: HTMLElement | null, scope: MaintScope):
     <details class="maint-custom-add">
       <summary>${esc(t('maint_custom_add_summary'))}</summary>
       <div class="maint-custom-form">
-        <input type="text" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
+        <input type="text" aria-label="${esc(t('maint_custom_label_ph'))}" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
         <div class="maint-custom-thresholds">
           <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> ${esc(t('maint_unit_shots'))}</label>
           <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> ${esc(t('maint_by_days'))}</label>
