@@ -679,7 +679,7 @@ const de: Partial<Translations> = {
     profile_form_coffee_in:'Dosis (g)', profile_form_coffee_out:'Ausbeute (g)', profile_form_ratio:'Ratio',
     profile_form_weight:'Stopp-Gewicht (g)',
     profile_phases_title:'Phasen', profile_add_phase:'+ Phase', profile_apply_suggestion:'Bohnen-Vorschlag anwenden',
-    profile_phase_name:'Phasenname', profile_phase_skip:'Überspringen',
+    profile_phase_name:'Phasenname', profile_phase_type:'Phasentyp', profile_phase_skip:'Überspringen',
     profile_phase_target_start:'Ziel Start', profile_phase_target_end:'Ziel Ende',
     profile_phase_target_curve:'Kurve', profile_phase_target_time:'Dauer (ms)', profile_phase_target_volume:'Ziel-Volumen (ml)',
     profile_phase_restriction:'Restriktion', profile_phase_water_temperature:'Phasen-Temperatur (°C)',

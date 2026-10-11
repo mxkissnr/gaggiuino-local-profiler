@@ -705,7 +705,7 @@ const fr: Partial<Translations> = {
     profile_form_coffee_in:'Dose (g)', profile_form_coffee_out:'Rendement (g)', profile_form_ratio:'Ratio',
     profile_form_weight:'Poids d\'arrêt (g)',
     profile_phases_title:'Phases', profile_add_phase:'+ Phase', profile_apply_suggestion:'Appliquer la suggestion du café',
-    profile_phase_name:'Nom de phase', profile_phase_skip:'Ignorer',
+    profile_phase_name:'Nom de phase', profile_phase_type:'Type de phase', profile_phase_skip:'Ignorer',
     profile_phase_target_start:'Cible début', profile_phase_target_end:'Cible fin',
     profile_phase_target_curve:'Courbe', profile_phase_target_time:'Durée (ms)', profile_phase_target_volume:'Volume cible (ml)',
     profile_phase_restriction:'Restriction', profile_phase_water_temperature:'Température de phase (°C)',

@@ -705,7 +705,7 @@ const en: Translations = {
     profile_form_coffee_in:'Dose (g)', profile_form_coffee_out:'Yield (g)', profile_form_ratio:'Ratio',
     profile_form_weight:'Stop weight (g)',
     profile_phases_title:'Phases', profile_add_phase:'+ Phase', profile_apply_suggestion:'Apply bean suggestion',
-    profile_phase_name:'Phase name', profile_phase_skip:'Skip',
+    profile_phase_name:'Phase name', profile_phase_type:'Phase type', profile_phase_skip:'Skip',
     profile_phase_target_start:'Target start', profile_phase_target_end:'Target end',
     profile_phase_target_curve:'Curve', profile_phase_target_time:'Duration (ms)', profile_phase_target_volume:'Target volume (ml)',
     profile_phase_restriction:'Restriction', profile_phase_water_temperature:'Phase temperature (°C)',

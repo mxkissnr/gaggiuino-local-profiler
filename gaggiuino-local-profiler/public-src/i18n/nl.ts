@@ -705,7 +705,7 @@ const nl: Partial<Translations> = {
     profile_form_coffee_in:'Dosis (g)', profile_form_coffee_out:'Opbrengst (g)', profile_form_ratio:'Ratio',
     profile_form_weight:'Stopgewicht (g)',
     profile_phases_title:'Fasen', profile_add_phase:'+ Fase', profile_apply_suggestion:'Boonsuggestie toepassen',
-    profile_phase_name:'Fasenaam', profile_phase_skip:'Overslaan',
+    profile_phase_name:'Fasenaam', profile_phase_type:'Fasetype', profile_phase_skip:'Overslaan',
     profile_phase_target_start:'Doel start', profile_phase_target_end:'Doel einde',
     profile_phase_target_curve:'Curve', profile_phase_target_time:'Duur (ms)', profile_phase_target_volume:'Doelvolume (ml)',
     profile_phase_restriction:'Restrictie', profile_phase_water_temperature:'Fasetemperatuur (°C)',

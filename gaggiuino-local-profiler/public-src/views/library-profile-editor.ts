@@ -230,8 +230,8 @@ function _phaseRowHtml(i: number, p: Phase = {}): Html {
   return html`<div class="pp-row" id="profilePhase${esc(i)}">
     <div class="pp-header">
       <span class="pp-num">${esc(i + 1)}</span>
-      <input class="pp-name" placeholder="${tHtml('profile_phase_name')}" value="${esc(p.name || '')}">
-      <select class="pp-type">
+      <input class="pp-name" aria-label="${tHtml('profile_phase_name')}" placeholder="${tHtml('profile_phase_name')}" value="${esc(p.name || '')}">
+      <select class="pp-type" aria-label="${tHtml('profile_phase_type')}">
         ${joinHtml(PHASE_TYPES.map(pt => html`<option value="${esc(pt)}" ${pt === type ? html`selected` : html``}>${tHtml('phase_type_' + pt.toLowerCase())}</option>`))}
       </select>
       <label class="lib-check-label pp-skip-label">
@@ -241,22 +241,22 @@ function _phaseRowHtml(i: number, p: Phase = {}): Html {
       <button class="lib-btn-sm del lib-btn-icon" data-action="remove-profile-phase" data-idx="${esc(i)}">${ICON_TRASH}</button>
     </div>
     <div class="pp-grid">
-      <div class="pp-field"><label>${tHtml('profile_phase_target_start')}</label><input type="number" step="0.1" class="pp-target-start" value="${esc(target.start ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_end')}</label><input type="number" step="0.1" class="pp-target-end" value="${esc(target.end ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_curve')}</label>
-        <select class="pp-target-curve">${joinHtml(CURVES.map(c => html`<option value="${esc(c)}" ${c === curve ? html`selected` : html``}>${tHtml('curve_' + c.toLowerCase())}</option>`))}</select>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-start">${tHtml('profile_phase_target_start')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-target-start" class="pp-target-start" value="${esc(target.start ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-end">${tHtml('profile_phase_target_end')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-target-end" class="pp-target-end" value="${esc(target.end ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-curve">${tHtml('profile_phase_target_curve')}</label>
+        <select class="pp-target-curve" id="profilePhase${esc(i)}-target-curve">${joinHtml(CURVES.map(c => html`<option value="${esc(c)}" ${c === curve ? html`selected` : html``}>${tHtml('curve_' + c.toLowerCase())}</option>`))}</select>
       </div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_time')}</label><input type="number" step="1" class="pp-target-time" value="${esc(target.time ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_volume')}</label><input type="number" step="0.1" class="pp-target-volume" value="${esc(target.volume ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_restriction')}</label><input type="number" step="0.1" class="pp-restriction" value="${esc(p.restriction ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_water_temperature')}</label><input type="number" step="0.1" class="pp-water-temp" value="${esc(p.waterTemperature ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_time')}</label><input type="number" step="1" class="pp-stop-time" value="${esc(stop.time ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_pressure_above')}</label><input type="number" step="0.1" class="pp-stop-pressure-above" value="${esc(stop.pressureAbove ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_pressure_below')}</label><input type="number" step="0.1" class="pp-stop-pressure-below" value="${esc(stop.pressureBelow ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_flow_above')}</label><input type="number" step="0.1" class="pp-stop-flow-above" value="${esc(stop.flowAbove ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_flow_below')}</label><input type="number" step="0.1" class="pp-stop-flow-below" value="${esc(stop.flowBelow ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_weight')}</label><input type="number" step="0.1" class="pp-stop-weight" value="${esc(stop.weight ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_water_pumped')}</label><input type="number" step="0.1" class="pp-stop-water-pumped" value="${esc(stop.waterPumpedInPhase ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-time">${tHtml('profile_phase_target_time')}</label><input type="number" step="1" id="profilePhase${esc(i)}-target-time" class="pp-target-time" value="${esc(target.time ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-volume">${tHtml('profile_phase_target_volume')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-target-volume" class="pp-target-volume" value="${esc(target.volume ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-restriction">${tHtml('profile_phase_restriction')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-restriction" class="pp-restriction" value="${esc(p.restriction ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-water-temp">${tHtml('profile_phase_water_temperature')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-water-temp" class="pp-water-temp" value="${esc(p.waterTemperature ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-time">${tHtml('profile_stop_time')}</label><input type="number" step="1" id="profilePhase${esc(i)}-stop-time" class="pp-stop-time" value="${esc(stop.time ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-pressure-above">${tHtml('profile_stop_pressure_above')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-pressure-above" class="pp-stop-pressure-above" value="${esc(stop.pressureAbove ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-pressure-below">${tHtml('profile_stop_pressure_below')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-pressure-below" class="pp-stop-pressure-below" value="${esc(stop.pressureBelow ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-flow-above">${tHtml('profile_stop_flow_above')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-flow-above" class="pp-stop-flow-above" value="${esc(stop.flowAbove ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-flow-below">${tHtml('profile_stop_flow_below')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-flow-below" class="pp-stop-flow-below" value="${esc(stop.flowBelow ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-weight">${tHtml('profile_stop_weight')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-weight" class="pp-stop-weight" value="${esc(stop.weight ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-water-pumped">${tHtml('profile_stop_water_pumped')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-water-pumped" class="pp-stop-water-pumped" value="${esc(stop.waterPumpedInPhase ?? '')}"></div>
     </div>
   </div>`;
 }
