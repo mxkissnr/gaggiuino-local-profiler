@@ -65,7 +65,7 @@ function buildShell(root: HTMLElement): void {
         <div id="nameStep" class="step">
           <p class="step-prompt">${esc(t('kiosk_name_prompt'))}</p>
           <input id="nameInput" class="name-input" type="text" maxlength="${esc(NAME_MAX)}"
-                 autocomplete="off" placeholder="${esc(t('kiosk_name_placeholder'))}">
+                 aria-label="${esc(t('kiosk_name_placeholder'))}" autocomplete="off" placeholder="${esc(t('kiosk_name_placeholder'))}">
           <button id="nameNext" class="btn-primary" type="button" disabled>${esc(t('kiosk_next'))}</button>
         </div>
 
@@ -81,7 +81,7 @@ function buildShell(root: HTMLElement): void {
           </div>
           <div class="order-bar">
             <input id="noteInput" class="note-input" type="text" maxlength="${esc(NOTE_MAX)}"
-                   placeholder="${esc(t('kiosk_note_placeholder'))}">
+                   aria-label="${esc(t('kiosk_note_placeholder'))}" placeholder="${esc(t('kiosk_note_placeholder'))}">
             <button id="placeOrder" class="btn-primary" type="button" disabled>${esc(t('kiosk_place_order'))}</button>
           </div>
           <div id="orderError" class="order-error"></div>

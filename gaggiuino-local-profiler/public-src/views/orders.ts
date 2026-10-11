@@ -325,7 +325,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
       <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-eta-picker">
         ${joinHtml(etaBtns.map(m => html`<button class="order-eta-btn${selectedEta === m ? html` selected` : html``}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
-        <input class="order-eta-custom" type="number" min="1" max="60" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" placeholder="min">
+        <input class="order-eta-custom" type="number" min="1" max="60" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
         ${queuePos ? html`<span class="order-eta-suggest">${tHtml('orders_suggested_eta', queuePos.suggestedEta)}</span>` : html``}
       </div>
       <div class="order-actions">
@@ -333,7 +333,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
         <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
       ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${tHtml('orders_decline_ph')}">
+        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
         <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>` : html``}
     </div>`;
@@ -354,7 +354,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
         <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
       ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${tHtml('orders_decline_ph')}">
+        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
         <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>` : html``}
     </div>`;
@@ -414,7 +414,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
       : useMilks
       ? html`<span class="orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
       : html`${chipHtml}
-         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${tHtml('orders_variant_ph')}">
+         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" aria-label="${esc(t('orders_variant_ph'))}" placeholder="${tHtml('orders_variant_ph')}">
          <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
     const milkMl = item.milkMl || '';
     return html`
@@ -429,7 +429,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
       <div class="orders-menu-milk-row">
-        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}"> ${tHtml('orders_milk_per_order')}
+        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
       </div>
     </div>`;
   }));
@@ -609,7 +609,7 @@ export async function loadNotifyMappingView(): Promise<void> {
     <div class="orders-broadcast-section">
       <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
       <p class="orders-notify-hint">${tHtml('orders_barista_desc')}</p>
-      <select class="orders-notify-select" id="ordersBaristaSelect">${baristaOptions}</select>
+      <select class="orders-notify-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
       <div class="orders-notify-actions">
         <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
       </div>
@@ -626,7 +626,7 @@ export async function loadNotifyMappingView(): Promise<void> {
         ${joinHtml(haUserIds.map(uid => html`
           <div class="orders-notify-row">
             <span class="orders-notify-customer">${esc(customers[uid])}</span>
-            <select class="orders-notify-select" data-uid="${esc(uid)}">
+            <select class="orders-notify-select" data-uid="${esc(uid)}" aria-label="${esc(t('orders_notify_desc'))}">
               <option value="">${tHtml('orders_notify_no_service')}</option>
               ${serviceOptions}
             </select>
