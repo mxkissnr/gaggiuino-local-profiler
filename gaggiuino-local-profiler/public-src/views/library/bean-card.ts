@@ -202,9 +202,9 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     const editForm: Html = html`
       <div id="editFrozenForm${esc(fp.id)}" class="lib-new-bag-form" style="display:none">
         <div class="lib-new-bag-fields">
-          <input type="number" class="lib-new-bag-input" id="editFrozenRemaining${esc(fp.id)}" placeholder="${tHtml('bag_freeze_count')}" min="0" max="${esc(fp.portionCount)}" step="1" value="${esc(remaining)}">
-          <input type="number" class="lib-new-bag-input" id="editFrozenWeight${esc(fp.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1" value="${esc(fp.portionWeight_g)}">
-          <input type="date" class="lib-new-bag-input" id="editFrozenDate${esc(fp.id)}" value="${esc(toIsoDateInput(new Date(fp.frozenAt).toISOString()))}" max="${esc(todayIsoDate())}">
+          <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="editFrozenRemaining${esc(fp.id)}" placeholder="${tHtml('bag_freeze_count')}" min="0" max="${esc(fp.portionCount)}" step="1" value="${esc(remaining)}">
+          <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="editFrozenWeight${esc(fp.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1" value="${esc(fp.portionWeight_g)}">
+          <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="editFrozenDate${esc(fp.id)}" value="${esc(toIsoDateInput(new Date(fp.frozenAt).toISOString()))}" max="${esc(todayIsoDate())}">
         </div>
         <div class="lib-form-actions">
           <button class="lib-btn-sm" data-action="close-edit-frozen-form" data-portion-id="${esc(fp.id)}">${tHtml('lib_cancel')}</button>
@@ -322,9 +322,9 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     </div>
     <div id="newBagForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
       <div class="lib-new-bag-fields">
-        <input type="date" class="lib-new-bag-input" id="newBagRoastDate${esc(b.id)}" title="${tHtml('lib_bag_roast_date')}" max="${esc(todayIsoDate())}">
-        <input type="number" class="lib-new-bag-input" id="newBagStock${esc(b.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1">
-        <input type="text" class="lib-new-bag-input" id="newBagBatchNumber${esc(b.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50">
+        <input type="date" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_roast_date')}" id="newBagRoastDate${esc(b.id)}" title="${tHtml('lib_bag_roast_date')}" max="${esc(todayIsoDate())}">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="newBagStock${esc(b.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1">
+        <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="newBagBatchNumber${esc(b.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50">
       </div>
       <div class="lib-form-actions">
         <button class="lib-btn-sm" data-action="close-new-bag" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
@@ -333,9 +333,9 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     </div>
     <div id="freezeForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
       <div class="lib-new-bag-fields">
-        <input type="number" class="lib-new-bag-input" id="freezePortionCount${esc(b.id)}" placeholder="${tHtml('bag_freeze_count')}" min="1" step="1">
-        <input type="number" class="lib-new-bag-input" id="freezePortionWeight${esc(b.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1">
-        <input type="date" class="lib-new-bag-input" id="freezeDate${esc(b.id)}" title="${tHtml('bag_freeze_date')}" value="${esc(todayIsoDate())}" max="${esc(todayIsoDate())}">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="freezePortionCount${esc(b.id)}" placeholder="${tHtml('bag_freeze_count')}" min="1" step="1">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="freezePortionWeight${esc(b.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1">
+        <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="freezeDate${esc(b.id)}" title="${tHtml('bag_freeze_date')}" value="${esc(todayIsoDate())}" max="${esc(todayIsoDate())}">
       </div>
       <div class="lib-form-actions">
         <button class="lib-btn-sm" data-action="close-freeze-form" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>

@@ -152,7 +152,7 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
   // own always-visible button — both are "change this bag's stock" actions.
   const stockRow: Html = editingStock
     ? html`<div class="lib-stock-edit-row">
-         <input type="number" class="lib-new-bag-input" id="bagStockEditInput${esc(bg.id)}" value="${esc(remaining ?? 0)}" min="0" step="1" placeholder="${tHtml('lib_stock_adjust_ph')}">
+         <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_stock_adjust_ph')}" id="bagStockEditInput${esc(bg.id)}" value="${esc(remaining ?? 0)}" min="0" step="1" placeholder="${tHtml('lib_stock_adjust_ph')}">
          <button class="lib-save-btn" data-action="save-bag-stock-edit" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_save')}</button>
          <button class="lib-btn-sm" data-action="mark-bag-empty" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_mark_empty')}</button>
          <button class="lib-btn-sm" data-action="close-bag-stock-edit" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
@@ -166,10 +166,10 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
   const editRow: Html = editingFull
     ? html`<div class="lib-new-bag-form" style="display:flex">
          <div class="lib-new-bag-fields">
-           <input type="date" class="lib-new-bag-input" id="editBagRoastDate${esc(bg.id)}" title="${tHtml('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${esc(todayIsoDate())}">
-           <input type="number" class="lib-new-bag-input" id="editBagStock${esc(bg.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1" value="${esc(stockG ?? '')}">
-           <input type="number" class="lib-new-bag-input" id="editBagPrice${esc(bg.id)}" placeholder="${tHtml('lib_bag_price')}" min="0" step="0.01" value="${esc(bg.price_eur ?? '')}">
-           <input type="text" class="lib-new-bag-input" id="editBagBatchNumber${esc(bg.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
+           <input type="date" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_roast_date')}" id="editBagRoastDate${esc(bg.id)}" title="${tHtml('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${esc(todayIsoDate())}">
+           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="editBagStock${esc(bg.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1" value="${esc(stockG ?? '')}">
+           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_price')}" id="editBagPrice${esc(bg.id)}" placeholder="${tHtml('lib_bag_price')}" min="0" step="0.01" value="${esc(bg.price_eur ?? '')}">
+           <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="editBagBatchNumber${esc(bg.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
          </div>
          <div class="lib-form-actions">
            <button class="lib-btn-sm" data-action="close-edit-bag" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
