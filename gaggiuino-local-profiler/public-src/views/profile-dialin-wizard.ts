@@ -347,7 +347,7 @@ function _renderRound(s: ProfileDialinSession): Html {
           <div class="dw-actions">
             <button class="lib-save-btn" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button>
             <div class="dw-override-row">
-              <input type="number" step="0.1" id="pdwOverrideInput" placeholder="${esc(sug.newValue)}">
+              <input type="number" step="0.1" id="pdwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${esc(sug.newValue)}">
               <button class="lib-btn-sm" data-action="profile-dialin-override">${tHtml('dialin_wizard_override')}</button>
             </div>
           </div>`;

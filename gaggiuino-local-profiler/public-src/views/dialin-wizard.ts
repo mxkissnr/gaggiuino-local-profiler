@@ -436,7 +436,7 @@ function _renderGrinderField(s: DialinSession): Html {
       ${joinHtml(grinders.map(g => html`<option value="${esc(g.name as string)}"${!isOther && s.grinder === g.name ? html` selected` : html``}>${esc(g.name as string)}</option>`))}
       <option value="__other__"${isOther ? html` selected` : html``}>${tHtml('dialin_wizard_grinder_other')}</option>
     </select>
-    <input type="text" id="dwGrinderOther" placeholder="${tHtml('dialin_wizard_grinder_other_ph')}"
+    <input type="text" id="dwGrinderOther" aria-label="${esc(t('dialin_wizard_grinder_other_ph'))}" placeholder="${tHtml('dialin_wizard_grinder_other_ph')}"
       style="${isOther ? html`` : html`display:none`};margin-top:6px" value="${isOther ? esc(s.grinder) : html``}">`;
 }
 
@@ -453,24 +453,24 @@ function _renderSetup(s: DialinSession): Html {
   const beans = S.coffeeLibrary?.beans || [];
   return html`<div class="dw-setup">
     <div class="lib-form-field">
-      <label>${tHtml('dialin_wizard_setup_bean')}</label>
+      <label for="dwBean">${tHtml('dialin_wizard_setup_bean')}</label>
       <input type="text" id="dwBean" list="dwBeanList" value="${esc(s.bean)}">
       <datalist id="dwBeanList">${joinHtml(beans.map(b => html`<option value="${esc(b.name as string)}">`))}</datalist>
     </div>
     <div class="lib-form-field">
-      <label>${tHtml('dialin_wizard_setup_grinder')}</label>
+      <label for="dwGrinder">${tHtml('dialin_wizard_setup_grinder')}</label>
       ${_renderGrinderField(s)}
     </div>
     <div class="lib-form-field">
-      <label>${tHtml('dialin_wizard_setup_dose')}</label>
+      <label for="dwDose">${tHtml('dialin_wizard_setup_dose')}</label>
       <input type="number" step="0.1" min="0" id="dwDose" value="${esc(s.dose)}">
     </div>
     <div class="lib-form-field">
-      <label>${tHtml('dialin_wizard_setup_ratio')}</label>
+      <label for="dwRatio">${tHtml('dialin_wizard_setup_ratio')}</label>
       <input type="number" step="0.1" min="0" id="dwRatio" value="${esc(s.targetRatio ?? 2)}">
     </div>
     <div class="lib-form-field">
-      <label>${tHtml('dialin_wizard_setup_start_grind')}</label>
+      <label for="dwStartGrind">${tHtml('dialin_wizard_setup_start_grind')}</label>
       <input type="text" id="dwStartGrind" value="${esc(String(s.pendingGrind ?? ''))}">
     </div>
   </div>
@@ -499,7 +499,7 @@ function _renderRound(s: DialinSession): Html {
       <div class="dw-actions">
         <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_accept_next')}</button>
         <div class="dw-override-row">
-          <input type="text" id="dwOverrideInput" placeholder="${tHtml('dialin_wizard_override')}">
+          <input type="text" id="dwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${tHtml('dialin_wizard_override')}">
           <button class="lib-btn-sm" data-action="dialin-override">${tHtml('dialin_wizard_override')}</button>
         </div>
         <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
