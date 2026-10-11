@@ -476,15 +476,15 @@ function _toggleGroup(action: string, options: { val: string; label: string }[],
 
 // Identical between Standard and Pro phases (only data-action differs).
 function _phaseTypeSelect(ph: GmPhase, i: number, action: string): Html {
-  return html`<select class="lib-select" data-action="${esc(action)}" data-idx="${esc(i)}">
+  return html`<select class="lib-select" aria-label="${tHtml('profile_phase_type')}" data-action="${esc(action)}" data-idx="${esc(i)}">
       <option value="preinfusion"${ph.phase === 'preinfusion' ? html` selected` : html``}>${tHtml('gm_phase_type_preinfusion')}</option>
       <option value="brew"${ph.phase === 'brew' ? html` selected` : html``}>${tHtml('gm_phase_type_brew')}</option>
     </select>`;
 }
 function _durationField(ph: GmPhase, i: number, action: string): Html {
   return html`<div class="lib-form-field">
-      <label>${tHtml('gm_field_duration')}</label>
-      <input type="number" class="lib-input" value="${esc(ph.duration ?? 0)}" min="1" max="${esc(MAX_PHASE_DUR)}" step="1"
+      <label for="gm-duration-${esc(i)}">${tHtml('gm_field_duration')}</label>
+      <input type="number" class="lib-input" value="${esc(ph.duration ?? 0)}" min="1" max="${esc(MAX_PHASE_DUR)}" step="1" id="gm-duration-${esc(i)}"
         data-action="${esc(action)}" data-idx="${esc(i)}">
     </div>`;
 }
@@ -507,15 +507,15 @@ function _renderInfo(): Html {
   return html`
     <div class="lib-form-grid">
       <div class="lib-form-field">
-        <label>${tHtml('gm_field_name')}</label>
+        <label for="gmLabel">${tHtml('gm_field_name')}</label>
         <input type="text" id="gmLabel" value="${esc(_profile!.label || '')}" maxlength="48" placeholder="${esc(t('gm_field_name_placeholder'))}">
       </div>
       <div class="lib-form-field">
-        <label>${tHtml('gm_field_description')}</label>
+        <label for="gmDescription">${tHtml('gm_field_description')}</label>
         <textarea id="gmDescription" class="lib-input" rows="2" style="width:100%;resize:vertical">${esc(_profile!.description || '')}</textarea>
       </div>
       <div class="lib-form-field">
-        <label>${tHtml('gm_field_temperature')}</label>
+        <label for="gmTemperature">${tHtml('gm_field_temperature')}</label>
         <input type="number" id="gmTemperature" value="${esc(_profile!.temperature ?? 93)}" min="0" max="150" step="0.5">
       </div>
       <div class="lib-form-field">
@@ -523,9 +523,9 @@ function _renderInfo(): Html {
         ${_toggleGroup('gm-type', [{ val: 'standard', label: t('gm_type_standard') }, { val: 'pro', label: t('gm_type_pro') }], _profile!.type)}
       </div>
       <div class="lib-form-field" style="flex-direction:row;align-items:center;gap:.75rem">
-        <label style="margin:0">${tHtml('gm_field_favorite')}</label>
+        <label for="gmFavorite" style="margin:0">${tHtml('gm_field_favorite')}</label>
         <input type="checkbox" id="gmFavorite" class="toggle toggle-sm" ${_profile!.favorite ? html`checked` : html``}>
-        <label style="margin:0;margin-left:1rem">${tHtml('gm_field_utility')}</label>
+        <label for="gmUtility" style="margin:0;margin-left:1rem">${tHtml('gm_field_utility')}</label>
         <input type="checkbox" id="gmUtility" class="toggle toggle-sm" ${_profile!.utility ? html`checked` : html``}>
       </div>
     </div>
@@ -557,15 +557,15 @@ function _renderStandardPhase(ph: GmPhase, i: number): Html {
     <div class="gm-phase" data-phase-idx="${esc(i)}">
       <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
         ${_phaseTypeSelect(ph, i, 'gm-std-phase-type')}
-        <input type="text" class="lib-input flex-1" value="${esc(ph.name || '')}"
+        <input type="text" class="lib-input flex-1" aria-label="${esc(t('gm_phase_name_placeholder'))}" value="${esc(ph.name || '')}"
           data-action="gm-std-phase-name" data-idx="${esc(i)}" placeholder="${esc(t('gm_phase_name_placeholder'))}">
         <button class="lib-btn-sm del" data-action="gm-remove-phase" data-idx="${esc(i)}" title="${esc(t('gm_remove_phase_title'))}">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
         ${_durationField(ph, i, 'gm-std-duration')}
         <div class="lib-form-field">
-          <label>${tHtml('gm_field_stop_weight')}</label>
-          <input type="number" class="lib-input" value="${esc(volValue)}" min="0" step="0.1"
+          <label for="gm-std-vol-${esc(i)}">${tHtml('gm_field_stop_weight')}</label>
+          <input type="number" class="lib-input" value="${esc(volValue)}" min="0" step="0.1" id="gm-std-vol-${esc(i)}"
             data-action="gm-std-vol-target" data-idx="${esc(i)}">
         </div>
       </div>
@@ -581,8 +581,8 @@ function _renderStandardPhase(ph: GmPhase, i: number): Html {
       </div>
       ${mode === 'power' ? html`
         <div class="lib-form-field" style="margin-top:.5rem">
-          <label>${tHtml('gm_field_pump_power')}</label>
-          <input type="number" class="lib-input" value="${esc(pumpPower)}" min="0" max="100" step="1"
+          <label for="gm-std-pump-power-${esc(i)}">${tHtml('gm_field_pump_power')}</label>
+          <input type="number" class="lib-input" value="${esc(pumpPower)}" min="0" max="100" step="1" id="gm-std-pump-power-${esc(i)}"
             data-action="gm-std-pump-power" data-idx="${esc(i)}">
         </div>` : html``}
     </div>
@@ -646,15 +646,15 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
     <div class="gm-phase">
       <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
         ${_phaseTypeSelect(ph, i, 'gm-pro-phase-type')}
-        <input type="text" class="lib-input flex-1" value="${esc(ph.name || '')}"
+        <input type="text" class="lib-input flex-1" aria-label="${esc(t('gm_phase_name_placeholder'))}" value="${esc(ph.name || '')}"
           data-action="gm-pro-phase-name" data-idx="${esc(i)}" placeholder="${esc(t('gm_phase_name_placeholder'))}">
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
         ${_durationField(ph, i, 'gm-pro-duration')}
         <div class="lib-form-field">
-          <label>${tHtml('gm_field_temperature_pro')}</label>
-          <input type="number" class="lib-input" value="${esc(ph.temperature ?? 0)}" min="0" max="150" step="0.5"
+          <label for="gm-pro-temperature-${esc(i)}">${tHtml('gm_field_temperature_pro')}</label>
+          <input type="number" class="lib-input" value="${esc(ph.temperature ?? 0)}" min="0" max="150" step="0.5" id="gm-pro-temperature-${esc(i)}"
             data-action="gm-pro-temperature" data-idx="${esc(i)}">
         </div>
       </div>
@@ -675,21 +675,21 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
 
       ${mode === 'power' ? html`
         <div class="lib-form-field" style="margin-bottom:.5rem">
-          <label>${tHtml('gm_field_pump_power')}</label>
-          <input type="number" class="lib-input" value="${esc(pumpPower)}" min="0" max="100" step="1"
+          <label for="gm-pro-pump-power-${esc(i)}">${tHtml('gm_field_pump_power')}</label>
+          <input type="number" class="lib-input" value="${esc(pumpPower)}" min="0" max="100" step="1" id="gm-pro-pump-power-${esc(i)}"
             data-action="gm-pro-pump-power" data-idx="${esc(i)}">
         </div>` : html``}
 
       ${(mode === 'pressure' || mode === 'flow') ? html`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
           <div class="lib-form-field">
-            <label>${mode === 'pressure' ? tHtml('gm_field_pressure_target') : tHtml('gm_field_pressure_max')} (bar)</label>
-            <input type="number" class="lib-input" value="${esc(pressure)}" min="0.1" step="0.01"
+            <label for="gm-pro-pressure-${esc(i)}">${mode === 'pressure' ? tHtml('gm_field_pressure_target') : tHtml('gm_field_pressure_max')} (bar)</label>
+            <input type="number" class="lib-input" value="${esc(pressure)}" min="0.1" step="0.01" id="gm-pro-pressure-${esc(i)}"
               data-action="gm-pro-pressure" data-idx="${esc(i)}">
           </div>
           <div class="lib-form-field">
-            <label>${mode === 'flow' ? tHtml('gm_field_flow_target') : tHtml('gm_field_flow_max')} (ml/s)</label>
-            <input type="number" class="lib-input" value="${esc(flow)}" min="0.1" step="0.01"
+            <label for="gm-pro-flow-${esc(i)}">${mode === 'flow' ? tHtml('gm_field_flow_target') : tHtml('gm_field_flow_max')} (ml/s)</label>
+            <input type="number" class="lib-input" value="${esc(flow)}" min="0.1" step="0.01" id="gm-pro-flow-${esc(i)}"
               data-action="gm-pro-flow" data-idx="${esc(i)}">
           </div>
         </div>` : html``}
@@ -704,8 +704,8 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
       ${rampType !== 'instant' ? html`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
           <div class="lib-form-field">
-            <label>${tHtml('gm_field_ramp_length')} (${esc(rampUnit)})</label>
-            <input type="number" class="lib-input" value="${esc(trans.duration ?? 0)}" min="0" step="0.1"
+            <label for="gm-pro-ramp-duration-${esc(i)}">${tHtml('gm_field_ramp_length')} (${esc(rampUnit)})</label>
+            <input type="number" class="lib-input" value="${esc(trans.duration ?? 0)}" min="0" step="0.1" id="gm-pro-ramp-duration-${esc(i)}"
               data-action="gm-pro-ramp-duration" data-idx="${esc(i)}">
           </div>
           <div class="lib-form-field">
@@ -749,7 +749,7 @@ function _renderProTarget(tg: GmTarget, phaseIdx: number, targetIdx: number): Ht
   return html`
     <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem">
       <span style="flex:1;font-size:.9em">${esc(tt.label)}</span>
-      <input type="number" class="lib-input" style="width:80px" value="${esc(tg.value ?? 0)}" min="0" step="0.1"
+      <input type="number" class="lib-input" style="width:80px" aria-label="${esc(tt.label)}" value="${esc(tg.value ?? 0)}" min="0" step="0.1"
         data-action="gm-pro-target-value" data-idx="${esc(phaseIdx)}" data-tidx="${esc(targetIdx)}">
       <span style="opacity:.6;font-size:.85em">${esc(tt.unit)}</span>
       <button type="button" class="lib-btn-sm del" data-action="gm-pro-remove-target"
