@@ -75,9 +75,15 @@ func TestBroadcastShopState_OpenedSendsNotify(t *testing.T) {
 // TestBroadcastShopState_NoRecipients_NeverCallsHA guards against a
 // regression where an empty broadcastRecipients still fires a request.
 func TestBroadcastShopState_NoRecipients_NeverCallsHA(t *testing.T) {
-	called := false
+	// A buffered channel, not a plain bool: the fake server runs on its own
+	// goroutine, so the observation must be synchronised (the old `called` bool
+	// was a data race under -race).
+	called := make(chan struct{}, 1)
 	haSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
+		select {
+		case called <- struct{}{}:
+		default:
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer haSrv.Close()
@@ -95,8 +101,13 @@ func TestBroadcastShopState_NoRecipients_NeverCallsHA(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	time.Sleep(50 * time.Millisecond) // give a wrongly-fired goroutine a chance to hit the fake server
-	if called {
-		t.Error("HA server was called despite no broadcastRecipients being configured")
+	// The broadcast is fire-and-forget and the orders handler exposes no
+	// completion hook, so a bounded deadline is the only way to observe an
+	// unwanted call. A wrongly-fired broadcast reaches the fake HA server via
+	// its GetPersons lookup, so any arrival within the window fails the test.
+	select {
+	case <-called:
+		t.Fatal("HA server was called despite no broadcastRecipients being configured")
+	case <-time.After(500 * time.Millisecond):
 	}
 }

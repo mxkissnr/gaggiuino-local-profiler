@@ -353,6 +353,12 @@ type Poller struct {
 	// triggers (sync_triggers.go) — tests only, so a trigger's behavior can
 	// be observed without a live machine.
 	syncFn func(context.Context) error
+
+	// bg tracks the fire-and-forget sync goroutines the trigger methods start
+	// (sync_triggers.go), so a test can join them before its DB/temp dirs are
+	// torn down (#1599). Production never waits on it: each goroutine is bounded
+	// by its own delay and the poller-lifetime context.
+	bg sync.WaitGroup
 }
 
 // NewPoller wires registry (the default machine's host/switch-entity source of
