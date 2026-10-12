@@ -6,6 +6,8 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
@@ -217,9 +219,19 @@ type preheatStateFileShape struct {
 	PlannedSwitchOnAt *int64 `json:"plannedSwitchOnAt"`
 }
 
-// savePreheatState uses the write-to-.tmp-then-rename pattern; it is
-// best-effort and swallows errors.
+// preheatSaveMu serializes savePreheatState so two callers can't interleave
+// their temp-file write and rename (an older snapshot renamed last).
+var preheatSaveMu sync.Mutex
+
+// savePreheatState persists the current preheat state. The write goes through
+// a fresh temp file renamed over the target, so a concurrent reader never sees
+// a half-written file; failures are logged rather than swallowed.
 func (p *Poller) savePreheatState() {
+	// Held across the snapshot too: the last writer must write the newest
+	// state, not a stale read taken before an earlier caller's rename.
+	preheatSaveMu.Lock()
+	defer preheatSaveMu.Unlock()
+
 	snap := p.runtime.Get()
 	p.state.mu.Lock()
 	readyByTargetAt := p.state.readyByTargetAt
@@ -231,13 +243,31 @@ func (p *Poller) savePreheatState() {
 		ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt,
 	})
 	if err != nil {
+		log.Printf("system: saving preheat state: %v", err)
 		return
 	}
-	tmp := preheatStateFile + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(preheatStateFile), "preheat_state-*.tmp")
+	if err != nil {
+		log.Printf("system: saving preheat state: %v", err)
 		return
 	}
-	_ = os.Rename(tmp, preheatStateFile)
+	tmp := f.Name()
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		log.Printf("system: saving preheat state: %v", err)
+		return
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		log.Printf("system: saving preheat state: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, preheatStateFile); err != nil {
+		os.Remove(tmp)
+		log.Printf("system: saving preheat state: %v", err)
+		return
+	}
 }
 
 // loadPreheatState, called once from Start(): restores switchOnAt/switchOffAt

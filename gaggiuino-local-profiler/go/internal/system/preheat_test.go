@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -502,5 +503,49 @@ func TestCheckReadyByPreheat_ClearsTargetExpiredWhileRunning(t *testing.T) {
 	}
 	if status := p.PreheatStatus(); status.ReadyByTargetAt != nil || status.PlannedSwitchOnAt != nil {
 		t.Errorf("expired pair not cleared: %v / %v", status.ReadyByTargetAt, status.PlannedSwitchOnAt)
+	}
+}
+
+// TestSavePreheatState_ConcurrentSavesLeaveNoTempFile pins the interleave fix:
+// many goroutines saving at once share preheatSaveMu, so the last writer wins
+// with a complete file and no *.tmp file is left behind. Before the mutex and
+// per-call temp file, concurrent callers could rename a stale snapshot last or
+// leave a temp file (or a rename failure) behind.
+func TestSavePreheatState_ConcurrentSavesLeaveNoTempFile(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+	useTempPreheatStateFile(t)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			target := time.Now().UnixMilli() + int64(i)*60_000
+			planned := target - int64(loadPreheatMinutes())*60_000
+			p.state.mu.Lock()
+			p.state.readyByTargetAt = &target
+			p.state.plannedSwitchOnAt = &planned
+			p.state.mu.Unlock()
+			p.savePreheatState()
+		}(i)
+	}
+	wg.Wait()
+
+	data, err := os.ReadFile(preheatStateFile)
+	if err != nil {
+		t.Fatalf("reading state file after concurrent saves: %v", err)
+	}
+	var s preheatStateFileShape
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("state file is not valid JSON: %v (%s)", err, data)
+	}
+
+	tmps, err := filepath.Glob(filepath.Join(filepath.Dir(preheatStateFile), "*.tmp"))
+	if err != nil {
+		t.Fatalf("globbing temp files: %v", err)
+	}
+	if len(tmps) != 0 {
+		t.Fatalf("leftover temp files after concurrent saves: %v", tmps)
 	}
 }
