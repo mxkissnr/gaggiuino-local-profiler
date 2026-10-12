@@ -39,12 +39,16 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 		t = Task{}
 	}
 	// new Date().toISOString() — millisecond-precision UTC timestamp.
-	t["lastDate"] = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	lastDate := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	t["lastDate"] = lastDate
 	maint[task] = t
-	if err := repo.SaveMaintenance(maint, machineID); err != nil {
+	// Save only this task's lastDate; the in-memory map above already carries
+	// it for the stats computed below, and writing the one row (rather than
+	// the whole snapshot) keeps a concurrent edit to another task intact.
+	if err := repo.SaveTask(machineID, task, Task{"lastDate": lastDate}); err != nil {
 		return nil, err
 	}
-	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID); err != nil {
+	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, time.Now()); err != nil {
 		return nil, err
 	}
 	return ComputeMaintenanceStats(shotsRepo, maint, machineID)

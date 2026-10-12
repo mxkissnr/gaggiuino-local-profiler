@@ -460,7 +460,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine, from, to string) error {
 		notes := maintenance.FirmwareUpdateNote(from, to)
 		shotCount := maintenance.ShotCountFor(shotsRepo, "firmware_update", m.ID)
-		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID)
+		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID, time.Now())
 		return err
 	})
 
