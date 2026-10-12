@@ -26,8 +26,12 @@ jobs:
         with:
           script: |
             const body = context.payload.pull_request.body || '';
-            const re = /\b(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s*:?\s*#(\d+)/gi;
-            const issueNumbers = [...new Set([...body.matchAll(re)].map(m => Number(m[1])))];
+            // #1597: a keyword covers a whole list ("Closes #1, #2 and #3"), and a
+            // negated one ("does not fix #9", "doesn't close #9") closes nothing.
+            const re = /((?:not|n't)\s+)?\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*(#\d+(?:\s*(?:,|and|&)\s*#\d+)*)/gi;
+            const issueNumbers = [...new Set([...body.matchAll(re)]
+              .filter(m => !m[1])
+              .flatMap(m => [...m[2].matchAll(/#(\d+)/g)].map(n => Number(n[1]))))];
 
             if (issueNumbers.length === 0) {
               core.info('No "Closes #N"-style references found in the PR body.');
