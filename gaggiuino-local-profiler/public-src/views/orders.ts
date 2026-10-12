@@ -15,6 +15,7 @@ import type {
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { localeFor } from '../constants.js';
+import { textEntryFocused } from '../live-sync.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
 // use-beans/use-milks toggle buttons and their inline notes below.
@@ -118,6 +119,23 @@ function _notifyNewOrders(newOrders: Order[]): void {
   });
 }
 
+// True while the orders view holds text a background reload would discard: a
+// text field focused inside #orders-view, or a decline-reason input left with a
+// value (its row stays open even without focus, so `textEntryFocused()` alone
+// misses it).
+function _ordersDraftOpen(): boolean {
+  if (textEntryFocused()) {
+    const view = document.getElementById('orders-view');
+    const active = document.activeElement;
+    if (view && active && view.contains(active)) return true;
+  }
+  for (const el of document.querySelectorAll<HTMLInputElement>('[id^="declineReason_"]')) {
+    if (el.value.trim() !== '') return true;
+  }
+  return false;
+}
+export const ordersDraftOpen = _ordersDraftOpen;
+
 export function startOrdersPolling(): void {
   stopOrdersPolling();
   if ('Notification' in window && Notification.permission === 'default') {
@@ -125,7 +143,10 @@ export function startOrdersPolling(): void {
   }
   SO._knownPendingIds = null; // reset so first load doesn't trigger notify
   void loadOrdersView();
-  timerRegistry.set('_ordersPollTimer', setInterval(() => { void loadOrdersView(); }, 10000));
+  timerRegistry.set('_ordersPollTimer', setInterval(() => {
+    if (_ordersDraftOpen()) return;
+    void loadOrdersView();
+  }, 10000));
 }
 
 export function stopOrdersPolling(): void {

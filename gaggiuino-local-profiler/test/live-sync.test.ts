@@ -845,6 +845,18 @@ describe('boot wiring (#1539)', () => {
   });
 });
 
+describe('live-sync textEntryFocused', () => {
+  it('is true for a focused text input and false for a focused checkbox', async () => {
+    const { live } = await loadLive();
+
+    doc.activeElement = inputEl();
+    expect(live.textEntryFocused()).toBe(true);
+
+    doc.activeElement = checkboxEl();
+    expect(live.textEntryFocused()).toBe(false);
+  });
+});
+
 // ── Library handler integration: an open bean-sheet inline form survives the
 // refetch (reusing the #1412 capture/restore helpers through the real render
 // path, exactly as the live library handler drives it).

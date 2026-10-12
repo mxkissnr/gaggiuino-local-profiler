@@ -25,6 +25,7 @@ import { _miniShotChart } from './shots/grind.js';
 import { suggestPhaseAdjustment, applyPhaseAdjustment, isProfileDialinConverged, profileDialinConvergenceReason }
   from '../profile-dialin-convergence.js';
 import type { ProfileSuggestion } from '../profile-dialin-convergence.js';
+import { textEntryFocused }  from '../live-sync.js';
 
 // state/index.ts types the session as Record<string, unknown> and shot rows
 // as metadata-only ShotMeta; these aliases name the fields this wizard
@@ -90,6 +91,7 @@ function _startPoll(): void {
   _stopPoll();
   _pollTimer = setInterval(() => {
     if (!S.profileDialinSession || S.profileDialinSession.status !== 'active') return;
+    if (textEntryFocused() || _overrideHasValue()) return;
     renderProfileDialinWizard();
   }, POLL_MS);
 }
@@ -97,6 +99,13 @@ function _startPoll(): void {
 function _stopPoll(): void {
   if (_pollTimer) clearInterval(_pollTimer);
   _pollTimer = null;
+}
+
+// A manual override value the user has typed but not yet committed: the poll
+// must not re-render the wizard over it.
+function _overrideHasValue(): boolean {
+  const input = document.getElementById('pdwOverrideInput') as HTMLInputElement | null;
+  return input !== null && input.value !== '';
 }
 
 // ── Open / close ────────────────────────────────────────────────────────

@@ -103,7 +103,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          acceptOrder, toggleDeclineRow, submitDecline, completeOrder,
          deleteOrder, clearOrderHistory,
          loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients, saveBaristaNotify,
-         _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
+         ordersDraftOpen, _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, resetShelfPrefs, renderGrinderList,
          openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
@@ -1259,6 +1259,10 @@ document.addEventListener('DOMContentLoaded', () => {
         run: () => refreshShots(null),
       },
       orders: {
+        // Deferred, not dropped, while the orders view holds uncommitted text
+        // (a focused field or an open decline row); the scheduler retries once
+        // it clears.
+        canRun: () => !ordersDraftOpen(),
         run: async () => {
           await Promise.all([loadDrinkMenu(), S.currentMode === 'orders' ? loadOrdersView() : undefined]);
         },
