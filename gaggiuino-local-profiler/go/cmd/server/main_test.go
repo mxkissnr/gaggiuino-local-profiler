@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 )
 
 func TestGetEnvNumber(t *testing.T) {
@@ -13,38 +15,78 @@ func TestGetEnvNumber(t *testing.T) {
 
 	t.Run("unset falls back to default", func(t *testing.T) {
 		os.Unsetenv(name)
-		if got := getEnvNumber(name, 600); got != 600 {
+		if got := getEnvNumber(name, 600, 1); got != 600 {
 			t.Errorf("getEnvNumber() = %v, want 600 (default)", got)
 		}
 	})
 
 	t.Run("valid override wins", func(t *testing.T) {
 		t.Setenv(name, "1200")
-		if got := getEnvNumber(name, 600); got != 1200 {
+		if got := getEnvNumber(name, 600, 1); got != 1200 {
 			t.Errorf("getEnvNumber() = %v, want 1200 (override)", got)
 		}
 	})
 
 	t.Run("invalid value falls back to default", func(t *testing.T) {
 		t.Setenv(name, "not-a-number")
-		if got := getEnvNumber(name, 600); got != 600 {
+		if got := getEnvNumber(name, 600, 1); got != 600 {
 			t.Errorf("getEnvNumber() = %v, want 600 (default, invalid input)", got)
 		}
 	})
 
 	t.Run("zero falls back to default, matching JS falsy semantics", func(t *testing.T) {
 		t.Setenv(name, "0")
-		if got := getEnvNumber(name, 600); got != 600 {
+		if got := getEnvNumber(name, 600, 1); got != 600 {
 			t.Errorf("getEnvNumber() = %v, want 600 (default, zero is falsy in JS)", got)
 		}
 	})
 
 	t.Run("empty string falls back to default", func(t *testing.T) {
 		t.Setenv(name, "")
-		if got := getEnvNumber(name, 600); got != 600 {
+		if got := getEnvNumber(name, 600, 1); got != 600 {
 			t.Errorf("getEnvNumber() = %v, want 600 (default, empty string)", got)
 		}
 	})
+
+	t.Run("fractional value below min falls back to default", func(t *testing.T) {
+		t.Setenv(name, "0.5")
+		if got := getEnvNumber(name, 600, 1); got != 600 {
+			t.Errorf("getEnvNumber() = %v, want 600 (default, below min)", got)
+		}
+	})
+
+	t.Run("negative value falls back to default", func(t *testing.T) {
+		t.Setenv(name, "-5")
+		if got := getEnvNumber(name, 600, 1); got != 600 {
+			t.Errorf("getEnvNumber() = %v, want 600 (default, negative)", got)
+		}
+	})
+
+	t.Run("NaN falls back to default", func(t *testing.T) {
+		t.Setenv(name, "NaN")
+		if got := getEnvNumber(name, 600, 1); got != 600 {
+			t.Errorf("getEnvNumber() = %v, want 600 (default, NaN)", got)
+		}
+	})
+
+	t.Run("integer above min wins", func(t *testing.T) {
+		t.Setenv(name, "200")
+		if got := getEnvNumber(name, 600, 1); got != 200 {
+			t.Errorf("getEnvNumber() = %v, want 200 (override)", got)
+		}
+	})
+}
+
+func TestConfigFromEnvRateLimitMaxFallback(t *testing.T) {
+	// A fractional max truncates to 0 as an int, which used to panic inside
+	// ratelimit.New's divide by zero; it must fall back to the default instead.
+	t.Setenv("GLP_RATE_LIMIT_MAX", "0.5")
+	cfg := configFromEnv()
+	if cfg.rateLimitMax != ratelimit.DefaultMax {
+		t.Errorf("rateLimitMax = %d, want default %d", cfg.rateLimitMax, ratelimit.DefaultMax)
+	}
+	// The returned settings must not panic when handed to ratelimit.New.
+	_ = ratelimit.New(cfg.rateLimitWindow, cfg.rateLimitMax)
 }
 
 func TestRequireKnownHostOnBuiltHandler(t *testing.T) {
