@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // sidebar.js's import chain touches state.js/i18n.js, which read
 // localStorage/navigator at module load time — stub the minimum browser
@@ -65,7 +65,7 @@ describe('toggleMonthGroup (#439 month-accordion restore)', () => {
     expect(S._expandedMonths.has('2099-01')).toBe(false);
   });
 
-  it('keeps expanded state in S._expandedMonths so a later render (e.g. after switching to another shot and back) would see it already expanded, but a fresh Set (page reload) would not', () => {
+  it('keeps expanded state in S._expandedMonths for the session, but a fresh module load starts empty', async () => {
     fakeMonthGroup('2026-04', 'April 2026', false);
     toggleMonthGroup('2026-04');
     // A subsequent renderSidebar() call reads S._expandedMonths.has(key) to
@@ -73,10 +73,17 @@ describe('toggleMonthGroup (#439 month-accordion restore)', () => {
     // the shot list re-renders within the same session.
     expect(S._expandedMonths.has('2026-04')).toBe(true);
 
-    // A fresh page load constructs S fresh (state.js module init), which
-    // starts _expandedMonths as an empty Set — never reads it back from
-    // localStorage, unlike e.g. S.dialinSession.
-    const freshExpandedMonths = new Set();
-    expect(freshExpandedMonths.has('2026-04')).toBe(false);
+    // A fresh page load re-imports state/index.js from scratch. The accordion
+    // set is in-memory only, so the new instance must start empty even though
+    // the previous one had the key. Point localStorage at a value a naive
+    // "restore from storage" implementation would pick up, so this exercises
+    // the not-restored behaviour instead of constructing an empty Set inline.
+    g.localStorage = {
+      getItem: (k: string) => (k === 'glp_expandedMonths' ? JSON.stringify(['2026-04']) : null),
+      setItem: () => {},
+    };
+    vi.resetModules();
+    const fresh = await import('../public-src/state/index.js');
+    expect(fresh.S._expandedMonths.has('2026-04')).toBe(false);
   });
 });

@@ -49,7 +49,20 @@ function makeFakeDocument(): FakeDocument {
   };
 }
 
-function mockResponses({ switchBody }: { switchBody: { configured: boolean; state: boolean } | null }): void {
+interface FakeResponse { ok: boolean; json: () => Promise<unknown> }
+
+// A pending fetch response whose resolution the test controls, so it can
+// observe the in-flight (disabled) state of toggleMachinePower().
+function deferredResponse(): { promise: Promise<FakeResponse>; resolve: (r: FakeResponse) => void } {
+  let resolve!: (r: FakeResponse) => void;
+  const promise = new Promise<FakeResponse>(res => { resolve = res; });
+  return { promise, resolve };
+}
+
+function mockResponses({ switchBody, togglePending }: {
+  switchBody: { configured: boolean; state: boolean } | null;
+  togglePending?: Promise<FakeResponse>;
+}): void {
   g.fetch = vi.fn((url: string) => {
     if (String(url).startsWith('api/status')) {
       return Promise.resolve({
@@ -58,6 +71,7 @@ function mockResponses({ switchBody }: { switchBody: { configured: boolean; stat
       });
     }
     if (String(url).startsWith('api/switch/toggle')) {
+      if (togglePending) return togglePending;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ state: switchBody?.state ?? true }) });
     }
     if (String(url).startsWith('api/switch')) {
@@ -107,10 +121,23 @@ describe('#railPowerBtn mirrors #powerBtn (#914)', () => {
   });
 
   it('toggleMachinePower disables and re-enables both buttons in lockstep', async () => {
-    mockResponses({ switchBody: { configured: true, state: false } });
+    // Hold the switch request pending so the in-flight state is observable;
+    // checking only the resolved end state would never catch a build that
+    // forgets to disable one of the two buttons.
+    const pending = deferredResponse();
+    mockResponses({ switchBody: { configured: true, state: false }, togglePending: pending.promise });
     const btn = doc.getElementById('powerBtn')!;
     const railBtn = doc.getElementById('railPowerBtn')!;
-    await toggleMachinePower();
+
+    const done = toggleMachinePower();
+    // Both surfaces must be disabled while the request is in flight, so a
+    // second tap on either can't double-fire the toggle.
+    expect(btn.disabled).toBe(true);
+    expect(railBtn.disabled).toBe(true);
+
+    pending.resolve({ ok: true, json: () => Promise.resolve({ state: true }) });
+    await done;
+
     expect(btn.disabled).toBe(false);
     expect(railBtn.disabled).toBe(false);
   });
