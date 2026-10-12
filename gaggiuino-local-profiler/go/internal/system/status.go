@@ -116,9 +116,8 @@ func hasUnconfirmedLegacyMachineOptions() bool { return false }
 // unparseable, or carrying some other scheme -- yields no machineUrl and no
 // machineHostname (nil, ""), exactly like the no-host case, rather than a
 // built-in placeholder address. Deliberately NOT read here: options.json's
-// deprecated
-// machine_host/machine_url legacy fields (#662 removed them from config.yaml's
-// schema) — same scope boundary internal/machines/registry.go's
+// deprecated machine_host/machine_url legacy fields (#662 removed them from
+// config.yaml's schema) — same scope boundary internal/machines/registry.go's
 // EnsureDefaultMachine doc comment already draws for the read side of that same
 // deprecation.
 func apiURLAndHostnameFor(host string) (*string, string) {
