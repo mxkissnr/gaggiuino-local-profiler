@@ -486,7 +486,8 @@ export async function submitGuidedMaint(): Promise<void> {
 
 export async function markMaintDone(task: string, machineId?: string | number | null): Promise<void> {
   try {
-    await markMaintenanceDone(task, _writeMachineId(machineId));
+    const r = await markMaintenanceDone(task, _writeMachineId(machineId));
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -495,7 +496,8 @@ export async function saveMaintThreshold(task: string, field: string, value: str
   // empty string → null (clears the threshold)
   const parsed = value === '' || value == null ? null : parseInt(value, 10);
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parsed });
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parsed });
+    if (!r.ok) window.showToast?.(t('error_generic', r.status));
   } catch { /* ignore */ }
 }
 
@@ -528,14 +530,16 @@ export async function setMaintMode(
              : mode === 'g'     ? { threshold_shots: null,     threshold_days: null, threshold_g: defG }
              :                    { threshold_shots: defShots, threshold_days: defDays, threshold_g: null };
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), body);
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), body);
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await refreshMaintenanceView();
   } catch { /* ignore */ }
 }
 
 export async function toggleMaintDisabled(task: string, machineId?: string | number | null, disabled?: boolean): Promise<void> {
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { disabled });
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { disabled });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -551,7 +555,8 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
     threshold_days:  days  ? parseInt(days,  10) : null,
   };
   try {
-    await addCustomMaintenanceTask(_writeMachineId(machineId), body);
+    const r = await addCustomMaintenanceTask(_writeMachineId(machineId), body);
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -559,7 +564,8 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
 export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
   if (!confirm(t('maint_confirm_delete_custom', task.replace('custom_', '')))) return;
   try {
-    await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
+    const r = await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -568,7 +574,8 @@ export async function renameCustomMaintTask(task: string, newLabel: string, mach
   const label = newLabel.trim();
   if (!label) return;
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await refreshMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -674,7 +681,8 @@ export async function submitMaintLogEntry(): Promise<void> {
   const notes = (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value.trim();
   if (!task || !date) return;
   try {
-    await addMaintenanceLogEntry(_writeMachineId(), { task, date, notes });
+    const r = await addMaintenanceLogEntry(_writeMachineId(), { task, date, notes });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     closeMaintLogForm();
     void loadMaintLog();
   } catch { /* ignore */ }
@@ -683,7 +691,8 @@ export async function submitMaintLogEntry(): Promise<void> {
 export async function deleteMaintLogEntry(id: number | string): Promise<void> {
   if (!confirm(t('maint_log_confirm_delete'))) return;
   try {
-    await deleteMaintenanceLogEntry(id);
+    const r = await deleteMaintenanceLogEntry(id);
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     void loadMaintLog();
   } catch { /* ignore */ }
 }
