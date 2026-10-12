@@ -327,15 +327,21 @@ describe('computeFacts quick_refill (#1467)', () => {
     expect(byId(facts, 'quick_refill')?.big).toBe('30 s');
   });
 
-  it('never reports a zero-second refill', () => {
+  it('reports the real 40 s gap and never a zero-second refill', () => {
     const base = at(2024, 3, 6, 10, 0);
+    // Two shots share a timestamp (a duplicate import) and a third lands 40 s
+    // later. quick_refill skips the 0 s duplicate gap and must report the 40 s
+    // one — asserting the concrete value also fails when the fact is missing,
+    // which a bare `not.toBe('0 s')` could not tell apart.
     const shots = [
       shot(base, { duration: 300, score: 100 }),
       shot(base, { duration: 300, score: 100 }),
       shot(base + 40, { duration: 300, score: 100 }),
     ];
     const facts = computeFacts(shots, scoreOf, 'en-US');
-    expect(byId(facts, 'quick_refill')?.big).not.toBe('0 s');
+    const qr = byId(facts, 'quick_refill');
+    expect(qr).toBeDefined();
+    expect(qr?.big).toBe('40 s');
   });
 });
 

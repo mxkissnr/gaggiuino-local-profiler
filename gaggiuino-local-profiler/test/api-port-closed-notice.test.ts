@@ -149,9 +149,15 @@ describe('app-wide banner (#807)', () => {
   it('stays dismissed for the rest of the session, across further status polls', () => {
     S.apiPortExposed = false;
     updateApiPortClosedBanner();
+    // Without these two guards the optional chaining used to swallow a banner
+    // that never rendered or a missing close button, so the dismissal could
+    // "pass" without ever having been clicked.
     const banner = doc.getElementById('glpApiPortClosedBanner');
-    const closeBtn = banner?.children[banner.children.length - 1];
-    closeBtn?._listeners.click?.();
+    expect(banner).toBeDefined();
+    const closeBtn = banner!.children[banner!.children.length - 1];
+    expect(closeBtn).toBeDefined();
+    expect(closeBtn!._listeners.click).toBeTypeOf('function');
+    closeBtn!._listeners.click!();
 
     expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
     updateApiPortClosedBanner();
