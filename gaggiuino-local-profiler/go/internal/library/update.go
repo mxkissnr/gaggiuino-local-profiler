@@ -1,6 +1,10 @@
 package library
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
+)
 
 // This file extracts the field-patch logic each PUT /api/library/<kind>/:id
 // REST handler (handlers_beans.go et al.) used to inline directly into its
@@ -17,7 +21,7 @@ import "errors"
 // UpdateBean applies a partial update to bean id, mirroring
 // PUT /api/library/bean/:id's own field-by-field patch semantics: omitted
 // fields keep their current value.
-func UpdateBean(repo *Repository, id int64, body Entity) (Entity, Library, bool, error) {
+func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.AnnotatedDose) (Entity, Library, bool, error) {
 	var bean Entity
 	var saved Library
 	regionChanged := false
@@ -27,6 +31,14 @@ func UpdateBean(repo *Repository, id int64, body Entity) (Entity, Library, bool,
 			return ErrSkipSave
 		}
 		bean = lib.Beans[idx]
+
+		// Resolve the bag this update writes roastDate/stock_g/batchNumber into
+		// BEFORE applying this update's own field changes: currentBag reads
+		// bean["name"]/bean["stock_g"], both of which the patch below can
+		// change, and the bag must be the one the user was actually drawing
+		// from when they made the edit — not the array-last (newest, usually
+		// still-queued) bag the old code wrote into.
+		target := currentBag(bean, doseRows, lib.Beans)
 
 		if v, present := trimMaxOrUndefined(body, "name", 200); present {
 			if v != "" {
@@ -134,20 +146,15 @@ func UpdateBean(repo *Repository, id int64, body Entity) (Entity, Library, bool,
 		_, roastDatePresent := body["roastDate"]
 		_, stockPresent := body["stock_g"]
 		_, batchPresent := body["batchNumber"]
-		if roastDatePresent || stockPresent || batchPresent {
-			if bags := bagsOf(bean); len(bags) > 0 {
-				last, _ := bags[len(bags)-1].(Entity)
-				if last != nil {
-					if roastDatePresent {
-						last["roastDate"] = trimMax(body["roastDate"], 10)
-					}
-					if stockPresent {
-						last["stock_g"] = floatOrNilFalsy(body["stock_g"])
-					}
-					if batchPresent {
-						last["batchNumber"] = trimMax(body["batchNumber"], 50)
-					}
-				}
+		if target != nil && (roastDatePresent || stockPresent || batchPresent) {
+			if roastDatePresent {
+				target["roastDate"] = trimMax(body["roastDate"], 10)
+			}
+			if stockPresent {
+				target["stock_g"] = floatOrNilFalsy(body["stock_g"])
+			}
+			if batchPresent {
+				target["batchNumber"] = trimMax(body["batchNumber"], 50)
 			}
 		}
 

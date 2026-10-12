@@ -338,12 +338,12 @@ func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	// Freeze attaches to the queue's CURRENT bag, not the array-last one:
 	// bag[1] was just zeroed to stock_g=0 above (empty/past), so bag[0]
 	// (still stock_g=300, lower sortOrder) is current per
-	// resolveCurrentBagSimple — this is the whole point of the sortOrder
+	// currentBag — this is the whole point of the sortOrder
 	// rework replacing the old "always the last-pushed bag" convention.
-	currentBag, _ := bags[0].(map[string]any)
-	fps, _ := currentBag["frozenPortions"].([]any)
+	curBag, _ := bags[0].(map[string]any)
+	fps, _ := curBag["frozenPortions"].([]any)
 	if len(fps) != 1 {
-		t.Fatalf("expected one frozen-portion batch, got %+v", currentBag["frozenPortions"])
+		t.Fatalf("expected one frozen-portion batch, got %+v", curBag["frozenPortions"])
 	}
 	portion, _ := fps[0].(map[string]any)
 	portionID := int64(portion["id"].(float64))
@@ -359,8 +359,8 @@ func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	}
 	bean = decodeBody(t, rec.Body.Bytes())
 	bags, _ = bean["bags"].([]any)
-	currentBag, _ = bags[0].(map[string]any)
-	fps, _ = currentBag["frozenPortions"].([]any)
+	curBag, _ = bags[0].(map[string]any)
+	fps, _ = curBag["frozenPortions"].([]any)
 	portion, _ = fps[0].(map[string]any)
 	if portion["remainingCount"] != float64(3) {
 		t.Errorf("remainingCount after thaw = %v, want 3", portion["remainingCount"])
@@ -377,8 +377,8 @@ func TestBean_BagFreezeThawAdjustLifecycle(t *testing.T) {
 	}
 	bean = decodeBody(t, rec.Body.Bytes())
 	bags, _ = bean["bags"].([]any)
-	currentBag, _ = bags[0].(map[string]any)
-	fps, _ = currentBag["frozenPortions"].([]any)
+	curBag, _ = bags[0].(map[string]any)
+	fps, _ = curBag["frozenPortions"].([]any)
 	portion, _ = fps[0].(map[string]any)
 	if _, thawed := portion["thawedAt"]; !thawed {
 		t.Errorf("expected thawedAt to be set once remainingCount reaches 0")
@@ -427,7 +427,7 @@ func TestBean_NewBagJoinsBackOfQueue_DoesNotBecomeCurrent(t *testing.T) {
 	}
 	// The bean-level display fields must still reflect the bag actually
 	// being drawn from (first), not the new, not-yet-current second bag —
-	// see writeEnrichedBean/newBag's resolveCurrentBagSimple guard.
+	// see writeEnrichedBean/newBag's currentBag guard.
 	if bean["roastDate"] != "2026-08-01" {
 		t.Fatalf("bean roastDate = %v, want 2026-08-01 (the still-current first bag's), not the new bag's 2026-08-15", bean["roastDate"])
 	}

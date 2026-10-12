@@ -331,7 +331,12 @@ func (h *Handlers) getBeansInfo(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, GetBeansInfo(lib))
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, GetBeansInfo(lib, doseRows))
 }
 
 // ── image handling shared by bean/grinder/basket/puckscreen ───────────────

@@ -56,7 +56,15 @@ func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	bean, _, found, err := UpdateBean(h.repo, id, body)
+	// UpdateBean writes the body's roastDate/stock_g/batchNumber into the bag
+	// actually being drawn from, so it needs the dose rows to find that bag;
+	// without them it could only guess, and guessing would edit the wrong bag.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	bean, _, found, err := UpdateBean(h.repo, id, body, doseRows)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -177,7 +185,7 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 		// was already exhausted, so this one is drawn from immediately) — not
 		// unconditionally, which would overwrite the bean's displayed roast
 		// date/stock with a bag still queued behind the real current one.
-		if cur := resolveCurrentBagSimple(bean); cur != nil {
+		if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
 			if cid, ok := idOf(cur, "id"); ok && cid == bagID {
 				bean["roastDate"] = bag["roastDate"]
 				bean["stock_g"] = bag["stock_g"]
@@ -210,8 +218,18 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bagIds required")
 		return
 	}
+	// The upcoming set is exactly the bags the client may reorder, so this
+	// needs the same dose replay SimulateBagQueue does — without it an
+	// already-emptied past bag looks "upcoming" and a still-full bag looks
+	// current. A read failure here would misclassify them and wrongly accept
+	// or reject the request, so fail rather than guess.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
+	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
 			idx = findBeanIndex(*lib, id)
@@ -236,16 +254,20 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 		// "upcoming"). Past/exhausted bags are unaffected either way since a
 		// bag with 0 capacity left never advances the queue regardless of its
 		// position.
+		statuses := SimulateBagQueue(bean, doseRows, lib.Beans)
 		baseline := int64(0)
 		currentBagID := int64(-1)
-		if cur := resolveCurrentBagSimple(bean); cur != nil {
+		if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
 			baseline = effectiveSortOrder(cur)
 			if cid, ok := idOf(cur, "id"); ok {
 				currentBagID = cid
 			}
 		}
-		// bagIds must be exactly the set of "upcoming" (non-current) bags —
-		// no duplicates, none missing. Assigning sortOrder to only a subset
+		// bagIds must be exactly the set of "upcoming" bags the client can
+		// reorder — tracked (SimulateBagQueue resolved it), not current, and
+		// still with stock left (classifyBeanBags' `upcoming`) — no
+		// duplicates, none missing. Past/emptied and untracked bags are
+		// neither required nor allowed. Assigning sortOrder to only a subset
 		// would leave the omitted bags' old values unchanged, which can now
 		// collide with or fall between the freshly-assigned ones (the new
 		// values are baseline+1, baseline+2, ... contiguous integers, so any
@@ -253,10 +275,11 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 		// duplicate id in the request would just assign it a sortOrder twice,
 		// silently discarding whichever assignment came first.
 		upcoming := make(map[int64]bool, len(bags))
-		for bid := range byID {
-			if bid != currentBagID {
-				upcoming[bid] = true
+		for _, s := range statuses {
+			if s.Current || s.RemainingG <= 0 {
+				continue
 			}
+			upcoming[s.BagID] = true
 		}
 		seen := make(map[int64]bool, len(rawIDs))
 		for _, rawID := range rawIDs {
@@ -299,8 +322,16 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Freezing attaches to the bag actually being drawn from, which needs the
+	// dose replay to identify; a read failure would attach the portion to the
+	// wrong bag, so fail rather than guess.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
+	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
 			idx = findBeanIndex(*lib, id)
@@ -329,7 +360,7 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 		// Attach to the queue's current bag — the one actually being drawn
 		// from — not the array-last bag (see #sortOrder rework; those can now
 		// differ once bags are manually reordered).
-		target := resolveCurrentBagSimple(bean)
+		target := currentBag(bean, doseRows, lib.Beans)
 		if target == nil {
 			target, _ = bags[len(bags)-1].(Entity)
 		}
@@ -611,7 +642,8 @@ func validateBagRoastDate(body Entity) (string, bool) {
 
 // updateBag handles PUT /api/library/bean/{id}/bag/{bagId}: edit any bag's
 // mutable fields (roastDate, stock_g, batchNumber, price_eur). If the updated
-// bag is the active (last) bag, bean-level roastDate and stock_g are synced.
+// bag is the one actually being drawn from, bean-level roastDate and stock_g
+// are synced to it.
 func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 	id, idNoMatch := parseIDParam(r.PathValue("id"))
 	bagID, bagNoMatch := parseIDParam(r.PathValue("bagId"))
@@ -619,8 +651,15 @@ func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Best-effort read: updateBag's currentBag use is only the bean-level
+	// roastDate/stock_g sync below, so a shots-lookup failure skips that sync
+	// rather than failing an otherwise valid bag edit.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		log.Printf("library: reading doses for current-bag sync: %v", err)
+	}
 	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
+	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !idNoMatch {
 			idx = findBeanIndex(*lib, id)
@@ -679,7 +718,7 @@ func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 		bean["bags"] = bags
 		// Sync bean-level fields only when the edited bag is the one SimulateBagQueue
 		// considers current — not the array-last bag, which differs after reorderBags.
-		if cur := resolveCurrentBagSimple(bean); cur != nil {
+		if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
 			if cid, ok := idOf(cur, "id"); ok && cid == bagID {
 				bean["roastDate"] = bag["roastDate"]
 				bean["stock_g"] = bag["stock_g"]
