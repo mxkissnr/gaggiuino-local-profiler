@@ -79,6 +79,24 @@ interface SeriesPoint {
 // still the latest one when its response lands is allowed to write state.
 let _profileListReqToken = 0;
 
+// The machine the profile form was opened for, captured at open so a topbar
+// machine switch mid-edit cannot retarget the save (#1605). null = no explicit
+// machine ('all'/none selected), so the save sends no machineId and the
+// backend uses the default machine.
+let _formMachineId: number | null = null;
+
+// The active machine as a concrete numeric id, or null when none is selected
+// ('all'/null).
+function _concreteMachineId(): number | null {
+  const id: unknown = S.activeMachineId;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  if (typeof id === 'string' && id !== 'all' && id.trim() !== '') {
+    const n = Number(id);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 // Kept as its own (non-async) function so the read of S.activeMachineId
 // happens in a separate code path from loadMachineProfileList's own —
 // otherwise eslint's require-atomic-updates can't tell that the later
@@ -158,6 +176,7 @@ export async function deleteMachineProfile(id: string): Promise<void> {
 
 // ── Editor modal ──────────────────────────────────────────────────────
 export function openProfileForm(profile?: MachineProfile | null, beanId?: string | number | null): void {
+  _formMachineId      = _concreteMachineId();
   S.profileEditId     = (profile?.id ?? null) as number | null;
   S.profileEditBeanId = (beanId ?? null) as number | null;
   (document.getElementById('profileFormName') as HTMLInputElement).value       = profile?.name ?? '';
@@ -175,6 +194,7 @@ export function openProfileForm(profile?: MachineProfile | null, beanId?: string
 }
 
 export function closeProfileForm(): void {
+  _formMachineId      = null;
   S.profileEditId     = null;
   S.profileEditBeanId = null;
   (document.getElementById('profileEditorModal') as HTMLElement).classList.remove('open');
@@ -367,7 +387,11 @@ export async function sendProfileToMachine(): Promise<void> {
   if (!profile.phases.length) { window.showToast?.(t('profile_no_phases_error')); return; }
   if (!confirm(t('profile_confirm_send'))) return;
 
-  const r = await machinesApi.saveMachineProfile(S.profileEditId ?? null, { ...profile, machineId: S.activeMachineId });
+  // Target the machine the form was opened for, not whatever is active now
+  // (#1605). With none captured, send no machineId so the backend uses the
+  // default machine.
+  const body = _formMachineId != null ? { ...profile, machineId: _formMachineId } : { ...profile };
+  const r = await machinesApi.saveMachineProfile(S.profileEditId ?? null, body);
   if (!r.ok) {
     const body: unknown = await r.json().catch(() => null);
     const err = (body as { error?: string } | null)?.error;
