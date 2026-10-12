@@ -34,10 +34,13 @@ import (
 // reachability/error/firmware state (#1201) but never the default-only
 // lastSyncTime/lastSyncError.
 //
+// syncNativeMaintenance() (#578/#1639) is called here too: after a Gaggiuino
+// machine's shots are pulled, its native service log is mirrored onto the
+// descale/backflush maintenance tasks (maintenance_sync.go).
+//
 // Deliberately still NOT implemented here (see doc.go's "Deliberately not
 // implemented"):
 //
-//   - syncNativeMaintenance() (#578) — needs a maintenance-domain sync.
 //   - syncRetryCount — the scheduled loop (sync_triggers.go) retries with
 //     backoff but tracks it locally, so GET /api/status's syncRetryCount
 //     stays 0.
@@ -361,6 +364,7 @@ func (p *Poller) syncDefaultMachineShotsOnce(ctx context.Context) error {
 		}
 		return err
 	}
+	p.syncNativeMaintenance(ctx, machine)
 	p.recordSyncSuccess()
 	return nil
 }
@@ -479,6 +483,7 @@ func (p *Poller) syncGaggiuinoMachineShots(ctx context.Context, machine *machine
 		}
 		return err
 	}
+	p.syncNativeMaintenance(ctx, machine)
 	return nil
 }
 

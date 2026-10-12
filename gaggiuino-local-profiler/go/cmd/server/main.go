@@ -442,6 +442,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	}
 
 	maintenanceRepo := maintenance.NewRepository(sqlDB, libRepo)
+	// #1639: the sync loop mirrors a Gaggiuino's native service log onto the
+	// descale/backflush tasks — see go/internal/system/maintenance_sync.go.
+	poller.SetMaintenanceRepo(maintenanceRepo)
 	maintenanceHandlers := maintenance.NewHandlers(maintenanceRepo, shotsRepo, libRepo, registry)
 	maintenanceHandlers.RegisterRoutes(mux)
 	// Deleting a grinder now also removes its `grinder_{id}` maintenance-table

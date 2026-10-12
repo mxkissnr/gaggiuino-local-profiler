@@ -14,6 +14,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
@@ -306,6 +307,12 @@ type Poller struct {
 	// rather than NewPoller so the existing NewPoller call sites stay
 	// unchanged. nil until cmd/server sets it — RunManualSync no-ops then.
 	shots *shots.Repository
+
+	// maintenance is the maintenance Repository the machine-native service-log
+	// sync writes into, wired via SetMaintenanceRepo
+	// (maintenance_sync.go) — same rationale as shots above. nil until
+	// cmd/server sets it — syncNativeMaintenance no-ops then.
+	maintenance *maintenance.Repository
 
 	// profilesRepo is the offline-profile-editor local cache/outbox, wired
 	// via SetProfilesRepo (profile_sync.go) — same rationale as shots

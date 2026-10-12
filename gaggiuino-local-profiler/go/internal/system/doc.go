@@ -98,9 +98,10 @@
 //     handlers.go's getStatus doc comment.
 //
 //     syncNativeMaintenance() (#578) is no longer in that list: #1639
-//     re-implements it. Slice 1 adds the pieces — the Gaggiuino adapter's
-//     GetServiceLog and the maintenance service's ApplyMachineServiceLog —
-//     and the sync loop that calls them follows in slice 2.
+//     re-implements it. The Gaggiuino adapter's GetServiceLog and the
+//     maintenance service's ApplyMachineServiceLog are wired into the sync
+//     loop (maintenance_sync.go), so a backflush or descale recorded by a
+//     Gaggiuino marks the matching task done automatically.
 //
 //   - The rolling-window debug-log connectivity summary
 //     (recordConnectivity/summarizeConnectivity) — pure logging diagnostics,
