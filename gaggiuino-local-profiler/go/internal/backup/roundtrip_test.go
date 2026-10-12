@@ -33,19 +33,45 @@ func fakePNG() []byte {
 // for the duration of a test.
 func useImageDir(t *testing.T) string {
 	t.Helper()
-	prev := imageDir
 	dir := t.TempDir()
+	useImageDirAt(t, dir)
+	return dir
+}
+
+// useImageDirAt points imageDir at dir for the duration of the test,
+// restoring the previous value on cleanup. Unlike useImageDir it creates no
+// directory, so a test can install a second, distinct image directory — the
+// restore target — after exporting from the first.
+func useImageDirAt(t *testing.T, dir string) {
+	t.Helper()
+	prev := imageDir
 	imageDir = dir
 	t.Cleanup(func() { imageDir = prev })
-	return dir
+}
+
+// imagesIdentical reports whether name exists under both dirA and dirB with
+// byte-identical contents. A file missing on either side is not a match, so a
+// restore that dropped an image is detected instead of being masked by the
+// source copy still sitting in the export directory.
+func imagesIdentical(t *testing.T, dirA, dirB, name string) bool {
+	t.Helper()
+	a, err := os.ReadFile(filepath.Join(dirA, name))
+	if err != nil {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(dirB, name))
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(a, b)
 }
 
 // TestStreamRoundTrip_FullFidelity seeds a populated install, streams a
 // backup zip out, streams it back into a fresh install, and deep-compares
 // every restored section.
 func TestStreamRoundTrip_FullFidelity(t *testing.T) {
-	imgDir := useImageDir(t)
-	if err := os.WriteFile(filepath.Join(imgDir, "1.png"), fakePNG(), 0o644); err != nil {
+	srcDir := useImageDir(t)
+	if err := os.WriteFile(filepath.Join(srcDir, "1.png"), fakePNG(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -76,7 +102,10 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	}
 	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
 
-	// Fresh install.
+	// Fresh install with a SEPARATE image directory: a restore that silently
+	// drops the image can no longer be masked by the source copy in srcDir.
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
 	h2, deps2, _ := newTestHandlersInDir(t)
 	mux2 := newMux(h2)
 
@@ -107,8 +136,13 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	if len(lib.Beans) != 1 || lib.Beans[0]["name"] != "RT Bean" || lib.Beans[0]["image"] != "png" {
 		t.Errorf("library beans = %+v", lib.Beans)
 	}
-	if _, err := os.Stat(filepath.Join(imgDir, "1.png")); err != nil {
-		t.Errorf("bean image not written on restore: %v", err)
+	if !imagesIdentical(t, srcDir, dstDir, "1.png") {
+		t.Errorf("restored bean image 1.png is missing from the target dir or differs from the source")
+	}
+	// The comparison must be able to fail: a directory without the image is not
+	// a match, so a restore that wrote nothing could never pass the check above.
+	if imagesIdentical(t, srcDir, t.TempDir(), "1.png") {
+		t.Error("image comparison matched a target directory that has no restored image")
 	}
 	// Orders.
 	if o, _ := deps2.OrdersRepo.FindAll(); len(o) != 1 {
@@ -149,9 +183,9 @@ func oversizedJPEGWithEXIF(t *testing.T, w, h int) []byte {
 // thumbnailed by writePendingImages, while the stored extension (and the
 // bean row referencing it) stays put.
 func TestRestore_OptimizesImagesThroughPipeline(t *testing.T) {
-	imgDir := useImageDir(t)
+	srcDir := useImageDir(t)
 	big := oversizedJPEGWithEXIF(t, 1700, 1700)
-	if err := os.WriteFile(filepath.Join(imgDir, "1.jpg"), big, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "1.jpg"), big, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -167,15 +201,19 @@ func TestRestore_OptimizesImagesThroughPipeline(t *testing.T) {
 	}
 	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
 
+	// Restore into a separate, empty image directory so every file the pipeline
+	// writes is one the restore actually produced.
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
 	h2, deps2, _ := newTestHandlersInDir(t)
 	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
 	}
 
-	restored, err := os.ReadFile(filepath.Join(imgDir, "1.jpg"))
+	restored, err := os.ReadFile(filepath.Join(dstDir, "1.jpg"))
 	if err != nil {
-		t.Fatalf("restored image missing: %v", err)
+		t.Fatalf("restored image missing from the target dir: %v", err)
 	}
 	if len(restored) >= len(big) {
 		t.Errorf("restored image not shrunk: %d >= %d", len(restored), len(big))
@@ -190,7 +228,7 @@ func TestRestore_OptimizesImagesThroughPipeline(t *testing.T) {
 	if cfg.Width > 1600 || cfg.Height > 1600 {
 		t.Errorf("restored image not downscaled: %dx%d", cfg.Width, cfg.Height)
 	}
-	if _, err := os.Stat(filepath.Join(imgDir, "1.thumb.jpg")); err != nil {
+	if _, err := os.Stat(filepath.Join(dstDir, "1.thumb.jpg")); err != nil {
 		t.Errorf("thumbnail not generated on restore: %v", err)
 	}
 	lib, _ := deps2.LibRepo.GetLibrary()
@@ -309,14 +347,7 @@ func tinyJPEG(t *testing.T, w, h int) []byte {
 // landed on disk; it never exercised the serving route, never mixed library
 // images with a shot image, and never used a CreateBean-shaped id.
 func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
-	imgDir := useImageDir(t)
-	// The library package resolves its image dir once from
-	// library.DefaultImageDir; point it at the same throwaway dir so the real
-	// GET .../image handlers serve exactly what the restore wrote.
-	prevLibDir := library.DefaultImageDir
-	library.DefaultImageDir = imgDir
-	t.Cleanup(func() { library.DefaultImageDir = prevLibDir })
-
+	srcDir := useImageDir(t)
 	const (
 		beanID    int64 = 1783373357122
 		grinderID int64 = 1783373357200
@@ -328,7 +359,7 @@ func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
 	png := fakePNG()
 	write := func(name string, b []byte) {
 		t.Helper()
-		if err := os.WriteFile(filepath.Join(imgDir, name), b, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, name), b, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -360,6 +391,15 @@ func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
 		t.Fatalf("export status = %d; body=%s", recExp.Code, recExp.Body.String())
 	}
 	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	// Restore into a separate image directory, and point the library package's
+	// own dir at it, so the HTTP 200s below prove the restore wrote the files
+	// rather than the handlers merely re-serving the seeded originals.
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
+	prevLibDir := library.DefaultImageDir
+	library.DefaultImageDir = dstDir
+	t.Cleanup(func() { library.DefaultImageDir = prevLibDir })
 
 	h2, deps2, _ := newTestHandlersInDir(t)
 	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
@@ -718,10 +758,10 @@ func TestRestore_InvalidBase64PassphraseHeader400(t *testing.T) {
 // as restored. A directory standing in for one target path makes the write
 // fail the way a full disk or a permission error would.
 func TestRestore_ReportsImagesThatCouldNotBeWritten(t *testing.T) {
-	imgDir := useImageDir(t)
+	srcDir := useImageDir(t)
 	jpg := tinyJPEG(t, 48, 36)
 	for _, name := range []string{"1.jpg", "2.jpg"} {
-		if err := os.WriteFile(filepath.Join(imgDir, name), jpg, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, name), jpg, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -741,16 +781,15 @@ func TestRestore_ReportsImagesThatCouldNotBeWritten(t *testing.T) {
 	}
 	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
 
-	// Make the second target path unwritable for the write step: replace the
-	// file with a directory so os.WriteFile fails (as it would on a full disk
-	// or a permission error). The source bytes still live in the backup zip, so
-	// pass-1 validation is unaffected.
-	if err := os.Remove(filepath.Join(imgDir, "2.jpg")); err != nil {
+	// Restore into a fresh target directory whose second image path is a
+	// directory, so os.WriteFile fails for it (as it would on a full disk or a
+	// permission error) while the first writes fine. The source bytes still live
+	// in the backup zip, so pass-1 validation is unaffected.
+	dstDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dstDir, "2.jpg"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(imgDir, "2.jpg"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	useImageDirAt(t, dstDir)
 
 	h2, _, _ := newTestHandlersInDir(t)
 	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
@@ -764,7 +803,7 @@ func TestRestore_ReportsImagesThatCouldNotBeWritten(t *testing.T) {
 	if got, _ := result["imagesFailed"].(float64); got != 1 {
 		t.Errorf("imagesFailed = %v; want 1 (the unwritable image)", result["imagesFailed"])
 	}
-	if _, err := os.Stat(filepath.Join(imgDir, "1.jpg")); err != nil {
-		t.Errorf("image that could be written is missing: %v", err)
+	if _, err := os.Stat(filepath.Join(dstDir, "1.jpg")); err != nil {
+		t.Errorf("image that could be written is missing from the target dir: %v", err)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 )
 
 func openTestDB(t *testing.T, path string) *sql.DB {
@@ -392,5 +393,66 @@ func TestDebugMachine_ReportsUnreachableMachine(t *testing.T) {
 	json.Unmarshal(rec.Body.Bytes(), &resp)
 	if resp["ok"] != false {
 		t.Errorf("ok = %v, want false", resp["ok"])
+	}
+}
+
+// TestDebugMachine_ReturnsFetchedStatus covers the machine handler's fetch
+// path (#1599): when the default machine's /api/system/status is reachable,
+// the decoded JSON must come back as { ok:true, baseUrl, data }. Without this
+// the only machine test exercised the failure branch, so a regression that
+// dropped the fetched body would go unnoticed.
+func TestDebugMachine_ReturnsFetchedStatus(t *testing.T) {
+	t.Setenv("GLP_DEV_BUILD", "dev")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/system/status" {
+			t.Errorf("fetched path = %q, want /api/system/status", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"firmware":"1.2.3","temperature":93}`)
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "glp.db")
+	sqlDB := openTestDB(t, dbPath)
+	registry := machines.NewRegistry(sqlDB)
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	// A private LAN address passes the machine SSRF guard (real machines live in
+	// RFC1918 space) with no DNS lookup; the fetch itself is served by the test
+	// server, so nothing is ever dialed.
+	host := "192.168.1.50"
+	if _, err := registry.UpdateMachine(1, machines.MachineInput{Host: &host}, nil); err != nil {
+		t.Fatalf("UpdateMachine: %v", err)
+	}
+
+	h := NewHandlers(sqlDB, dbPath, registry)
+	var gotURL string
+	h.httpGet = func(_ context.Context, url string) (*http.Response, error) {
+		gotURL = url
+		return srv.Client().Get(srv.URL + "/api/system/status")
+	}
+	mux := newMux(h)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/debug/machine", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if resp["ok"] != true {
+		t.Fatalf("ok = %v, want true (the fetched status must be returned; body=%s)", resp["ok"], rec.Body.String())
+	}
+	if want := "http://192.168.1.50/api/system/status"; gotURL != want {
+		t.Errorf("fetch url = %q, want %q", gotURL, want)
+	}
+	data, _ := resp["data"].(map[string]any)
+	if data["firmware"] != "1.2.3" {
+		t.Errorf("returned data = %+v, want the fetched firmware 1.2.3", resp["data"])
 	}
 }

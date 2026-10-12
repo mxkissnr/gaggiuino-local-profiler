@@ -59,6 +59,12 @@ func withShortDelays(t *testing.T) {
 	t.Cleanup(func() { syncAfterBrewDelay, syncRetryDelays, syncAfterPowerOnDelay = origBrew, origRetry, origPowerOn })
 }
 
+// waitBackground blocks until every background sync goroutine started by the
+// trigger methods has returned. It exists for tests (#1599) that must not tear
+// down their DB and temp dirs while a catch-up/post-brew sync is still writing;
+// nothing in production calls it.
+func (p *Poller) waitBackground() { p.bg.Wait() }
+
 func TestScheduleSyncAfterBrew_FiresAfterDelay(t *testing.T) {
 	withShortDelays(t)
 	fake := &fakeAdapter{}
@@ -107,24 +113,63 @@ func TestRunScheduledSync_PeriodicWithRetryBackoff(t *testing.T) {
 	fake := &fakeAdapter{}
 	p, sqlDB := newTestPoller(t, fake)
 	p.SetShotsRepo(shots.NewRepository(sqlDB))
-	p.syncIntervalOverride = 15 * time.Millisecond
-	var c syncCounter
-	c.failUntil = 2 // first two scheduled runs fail, then succeed
-	p.syncFn = c.fn
+	// Keep the regular interval clearly above the retry delays so the two
+	// cadences are distinguishable in the recorded gaps.
+	const interval = 500 * time.Millisecond
+	p.syncIntervalOverride = interval
+
+	var mu sync.Mutex
+	var attempts []time.Time
+	p.syncFn = func(context.Context) error {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts = append(attempts, time.Now())
+		if len(attempts) <= 2 { // first two scheduled runs fail, then succeed
+			return errors.New("sync failed")
+		}
+		return nil
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
 	go func() { p.runScheduledSync(ctx); close(done) }()
 
-	// Regular tick fails -> retry 1 (10ms) fails -> retry 2 (10ms) succeeds
-	// -> back to the regular cadence, which keeps ticking.
-	waitFor(t, 2*time.Second, func() bool { return c.count() >= 4 })
+	// Immediate run fails -> retry 1 (10ms) fails -> retry 2 (10ms) succeeds
+	// -> the regular cadence, which keeps ticking.
+	waitFor(t, 3*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(attempts) >= 4
+	})
 	cancel()
 	select {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("runScheduledSync did not exit after context cancel")
+	}
+
+	mu.Lock()
+	got := append([]time.Time(nil), attempts...)
+	mu.Unlock()
+	if len(got) < 4 {
+		t.Fatalf("recorded %d sync attempts, want >= 4", len(got))
+	}
+
+	// The two gaps leading into the successful third attempt are the configured
+	// backoff: at least the retry delay and well under the regular interval.
+	for i := 0; i < 2; i++ {
+		gap, delay := got[i+1].Sub(got[i]), syncRetryDelays[i]
+		if gap < delay {
+			t.Errorf("retry gap %d = %s, want >= the configured retry delay %s", i+1, gap, delay)
+		}
+		if gap >= interval {
+			t.Errorf("retry gap %d = %s, want < the regular interval %s", i+1, gap, interval)
+		}
+	}
+	// After the success the cadence returns to the regular interval.
+	if gap := got[3].Sub(got[2]); gap < interval {
+		t.Errorf("gap after the successful retry = %s, want >= the regular interval %s", gap, interval)
 	}
 }
 
@@ -198,6 +243,8 @@ func TestMaybeCatchUpAfterRecovery(t *testing.T) {
 			p.SetShotsRepo(shots.NewRepository(sqlDB))
 			var c syncCounter
 			p.syncFn = c.fn
+			// Join the catch-up goroutine before the DB/temp dirs are torn down.
+			t.Cleanup(p.waitBackground)
 
 			p.state.mu.Lock()
 			p.state.lastSyncError = tc.lastSyncError
