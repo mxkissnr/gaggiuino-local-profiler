@@ -30,7 +30,7 @@ describe('.shot export with a numeric grind setting (#1625)', () => {
     S.primaryShotId = 1;
     S.shots = [
       { id: 1, timestamp: 1700000000, profileName: 'Turbo', annotation: { grindSetting: 12 } },
-    ] as unknown as typeof S.shots;
+    ];
 
     await expect(exportShot()).resolves.toBeUndefined();
 

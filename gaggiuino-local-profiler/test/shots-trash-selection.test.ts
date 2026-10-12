@@ -36,7 +36,7 @@ const { trashShot } = await import('../public-src/views/shots/index.js');
 
 // S.shots is oldest-first: index 0 is the oldest shot of the history.
 function setShots(ids: number[]): void {
-  S.shots = ids.map(id => ({ id, timestamp: id, annotation: {} })) as unknown as typeof S.shots;
+  S.shots = ids.map(id => ({ id, timestamp: id, annotation: {} }));
   S.allShots = S.shots;
 }
 

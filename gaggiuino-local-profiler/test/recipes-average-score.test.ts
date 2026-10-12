@@ -23,12 +23,12 @@ describe('recipe average score skips unscored shots (#1625)', () => {
     S.coffeeLibrary = {
       beans: [], grinders: [],
       recipes: [{ id: 7, name: 'Test Recipe' }],
-    } as unknown as typeof S.coffeeLibrary;
+    };
     S.shots = [
       { id: 1, timestamp: 1, score: 8,    annotation: { recipeId: 7 } },
       { id: 2, timestamp: 2, score: null, annotation: { recipeId: 7 } },
       { id: 3, timestamp: 3, score: 6,    annotation: { recipeId: 7 } },
-    ] as unknown as typeof S.shots;
+    ];
   });
 
   it('averages only the scored shots and keeps the total shot count', () => {
