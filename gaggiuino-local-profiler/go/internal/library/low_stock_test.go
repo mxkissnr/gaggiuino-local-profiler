@@ -2,6 +2,7 @@ package library
 
 import (
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
@@ -162,5 +163,40 @@ func TestCheckLowStock_UnknownBeanNoop(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("notify called %d times for an unknown bean, want 0", calls)
+	}
+}
+
+// TestCheckLowStock_NotifyRunsOutsideTheLibraryLock pins the #1677 review fix:
+// notify is called with no repo.Update in progress, so a slow/blocked Home
+// Assistant call can no longer stall every other library write. The proof is
+// that notify can itself complete a repo.Update without deadlocking.
+func TestCheckLowStock_NotifyRunsOutsideTheLibraryLock(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 84))
+
+	notified := false
+	notify := func(string, int64) bool {
+		done := make(chan error, 1)
+		go func() { done <- repo.Update(func(*Library) error { return nil }) }()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("repo.Update inside notify: %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Error("repo.Update inside notify deadlocked: notify ran while the library lock was held")
+		}
+		notified = true
+		return true
+	}
+
+	if err := CheckLowStock(repo, noDoses, 10, notify); err != nil {
+		t.Fatalf("CheckLowStock: %v", err)
+	}
+	if !notified {
+		t.Fatal("notify was not called")
+	}
+	if _, ok := bagStamp(t, repo, 11); !ok {
+		t.Fatal("lowStockNotifiedAt not stored after a delivered push")
 	}
 }

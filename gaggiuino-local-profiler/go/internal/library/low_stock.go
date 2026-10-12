@@ -33,9 +33,13 @@ func ResolveLowStockBeanID(shot shots.Shot, beans []Entity) int64 {
 // lowStockNotifiedAt stamped so a second annotation does not re-notify. A new
 // current bag carries no stamp, so it re-arms automatically.
 //
-// The whole decision runs inside one repo.Update so the stamp lands with the
-// notification it gates; ErrSkipSave means "nothing to notify" and is
-// reported as a nil result, like the other library bookkeeping helpers.
+// The decision is a read-only GetLibrary and the push runs before any write
+// lock is taken, so an unreachable Home Assistant can no longer block every
+// other library write for the notify timeout. Only a delivered push is
+// followed by a repo.Update that re-finds the same bag by id and stamps it,
+// skipping the stamp if a concurrent check already set it. ErrSkipSave means
+// "nothing to notify" and is reported as a nil result, like the other library
+// bookkeeping helpers.
 func CheckLowStock(repo *Repository, doses func() ([]shots.AnnotatedDose, error), beanID int64, notify func(beanName string, remainingG int64) bool) error {
 	if beanID <= 0 {
 		return nil
@@ -44,26 +48,51 @@ func CheckLowStock(repo *Repository, doses func() ([]shots.AnnotatedDose, error)
 	if err != nil {
 		return err
 	}
-	err = repo.Update(func(lib *Library) error {
-		idx := findBeanIndex(*lib, beanID)
-		if idx == -1 {
-			return ErrSkipSave
-		}
-		bean := lib.Beans[idx]
-		bag := currentBag(bean, doseRows, lib.Beans)
-		if bag == nil || lowStockNotified(bag) {
-			return ErrSkipSave
-		}
-		remaining, tracked := ComputeBeanRemaining(bean, doseRows, lib.Beans)
-		if !tracked || remaining >= lowStockThresholdG {
-			return ErrSkipSave
-		}
-		name, _ := bean["name"].(string)
-		if !notify(name, max(remaining, 0)) {
-			return ErrSkipSave
-		}
-		bag["lowStockNotifiedAt"] = time.Now().UnixMilli()
+	lib, err := repo.GetLibrary()
+	if err != nil {
+		return err
+	}
+	idx := findBeanIndex(lib, beanID)
+	if idx == -1 {
 		return nil
+	}
+	bean := lib.Beans[idx]
+	bag := currentBag(bean, doseRows, lib.Beans)
+	if bag == nil || lowStockNotified(bag) {
+		return nil
+	}
+	remaining, tracked := ComputeBeanRemaining(bean, doseRows, lib.Beans)
+	if !tracked || remaining >= lowStockThresholdG {
+		return nil
+	}
+	bagID, ok := idOf(bag, "id")
+	if !ok || bagID <= 0 {
+		return nil
+	}
+	name, _ := bean["name"].(string)
+	if !notify(name, max(remaining, 0)) {
+		return nil
+	}
+	err = repo.Update(func(l *Library) error {
+		bi := findBeanIndex(*l, beanID)
+		if bi == -1 {
+			return ErrSkipSave
+		}
+		for _, raw := range bagsOf(l.Beans[bi]) {
+			b, ok := raw.(Entity)
+			if !ok {
+				continue
+			}
+			if id, _ := idOf(b, "id"); id != bagID {
+				continue
+			}
+			if lowStockNotified(b) {
+				return ErrSkipSave
+			}
+			b["lowStockNotifiedAt"] = time.Now().UnixMilli()
+			return nil
+		}
+		return ErrSkipSave
 	})
 	if errors.Is(err, ErrSkipSave) {
 		return nil
