@@ -503,35 +503,49 @@ func decorateBeanStatus(bean Entity, doseRows []shots.AnnotatedDose, allBeans []
 	return out
 }
 
-// resolveCurrentBagSimple picks the current bag for Go call sites (freeze)
-// that don't need gram-accurate consumption — just "which bag is the user
-// drawing from right now": the lowest-effectiveSortOrder bag with a
-// positive stock_g. Falls back to the array-last bag (old convention) when
-// no bag is stock-tracked at all, so freezing on an untracked bean still
-// attaches somewhere sensible.
-func resolveCurrentBagSimple(bean Entity) Entity {
-	bags := bagsOf(bean)
-	if len(bags) == 0 {
+// currentBag returns the bag this bean is being drawn from right now — the
+// one SimulateBagQueue marks Current after replaying every matching dose in
+// queue order. That is the same definition the UI reads (decorateBeanStatus
+// attaches `current` per bag), so the Go call sites that must act on the bag
+// actually in use (freeze, reorder, the bean-level roastDate/stock_g sync)
+// agree with what the user sees. The old resolveCurrentBagSimple guessed by
+// "lowest sortOrder bag with a positive stock_g", which kept treating an
+// already-emptied past bag as current.
+//
+// When the bean has no tracked bag at all (SimulateBagQueue returns no
+// statuses — every bag untracked), there is no queue to reason about, so fall
+// back to the array-last bag (activeBag, the old convention) to keep freezing
+// on an untracked bean attaching somewhere sensible.
+//
+// When there are tracked bags but none is current (the queue has run past its
+// end — every tracked bag is empty), return nil: no bag is being drawn from,
+// and the caller decides its own fallback (freeze keeps the array-last one;
+// UpdateBean writes into no bag).
+func currentBag(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) Entity {
+	statuses := SimulateBagQueue(bean, doseRows, allBeans)
+	if len(statuses) == 0 {
+		return activeBag(bean)
+	}
+	currentID := int64(0)
+	found := false
+	for _, s := range statuses {
+		if s.Current {
+			currentID = s.BagID
+			found = true
+			break
+		}
+	}
+	if !found {
 		return nil
 	}
-	var best Entity
-	bestSort := int64(0)
-	for _, raw := range bags {
+	for _, raw := range bagsOf(bean) {
 		bg, ok := raw.(Entity)
 		if !ok {
 			continue
 		}
-		stockG, hasStock := jsParseFloat(bg["stock_g"])
-		if !hasStock || !(stockG > 0) {
-			continue
-		}
-		s := effectiveSortOrder(bg)
-		if best == nil || s < bestSort {
-			best, bestSort = bg, s
+		if id, ok := idOf(bg, "id"); ok && id == currentID {
+			return bg
 		}
 	}
-	if best != nil {
-		return best
-	}
-	return activeBag(bean)
+	return nil
 }

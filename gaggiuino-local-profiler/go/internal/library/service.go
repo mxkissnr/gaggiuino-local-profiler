@@ -21,10 +21,10 @@ import (
 // /api/library/beans-info, a contract glp-integration's proxy and
 // glp-lovelace-card both consume directly, so field names/nullability here
 // must match byte-for-byte.
-func GetBeansInfo(lib Library) []Entity {
+func GetBeansInfo(lib Library, doseRows []shots.AnnotatedDose) []Entity {
 	out := make([]Entity, 0, len(lib.Beans))
 	for _, bean := range lib.Beans {
-		bag := resolveCurrentBagSimple(bean)
+		bag := currentBag(bean, doseRows, lib.Beans)
 		var roastDate any
 		if bag != nil {
 			if v, _ := bag["roastDate"].(string); v != "" {
