@@ -240,14 +240,16 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.applyRestoredToken(plan.restoredToken)
-	h.writePendingImages(plan.images, plan.pending)
+	written, failed := h.writePendingImages(plan.images, plan.pending)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "shots": shotCount * boolToInt(wantsShots),
-		// images mirrors preview()'s `images` count so a caller (the E2E /
+		// images is how many queued images were actually written and
+		// imagesFailed how many could not be — so a caller (the E2E /
 		// screenshot harness in particular) can verify the queued images were
-		// actually written instead of silently screenshotting 404s (#1185).
-		"images":         len(plan.pending),
+		// really written instead of silently screenshotting 404s (#1185).
+		"images":         written,
+		"imagesFailed":   failed,
 		"secretsPresent": plan.secretsPresent, "secretsRestored": plan.secretsRestored,
 	})
 }
@@ -807,18 +809,31 @@ func (h *Handlers) applyRestoredToken(token string) {
 // and a ".thumb" sibling is generated. The stored extension is never
 // changed, so the DB row written in the restore transaction stays
 // consistent (#961 decision 6).
-func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImageWrite) {
+//
+// It returns how many images were written and how many could not be: an
+// unreadable/oversized source, a mkdir failure, or a WriteOptimized error
+// (full disk, permissions) each count as failed, so a restore can report
+// the photos it dropped instead of silently claiming success (#1602).
+func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImageWrite) (written, failed int) {
 	for _, w := range pending {
 		buf, ok := imgs.getForWrite(w.srcName)
 		if !ok || len(buf) == 0 || len(buf) > imageMaxBytes {
-			log.Printf("backup: restore skipped image %s (source %q unreadable/empty/oversized)", w.path, w.srcName)
+			log.Printf("backup: restore failed to write image %s (source %q unreadable/empty/oversized)", w.path, w.srcName)
+			failed++
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
-			log.Printf("backup: restore skipped image %s (mkdir: %v)", w.path, err)
+			log.Printf("backup: restore failed to write image %s (mkdir: %v)", w.path, err)
+			failed++
 			continue
 		}
 		srcExt := strings.TrimPrefix(filepath.Ext(w.path), ".")
-		_, _ = img.WriteOptimized(w.path, buf, srcExt)
+		if _, err := img.WriteOptimized(w.path, buf, srcExt); err != nil {
+			log.Printf("backup: restore failed to write image %s: %v", w.path, err)
+			failed++
+			continue
+		}
+		written++
 	}
+	return written, failed
 }
