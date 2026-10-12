@@ -7,6 +7,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
+// _performAnnotationSave() now reports a rejected save through window.showToast,
+// so the toast bridge must exist (empty is enough — the optional call short-
+// circuits); same stub as test/live-sync-shots.test.ts.
+g.window       ??= {};
 
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
