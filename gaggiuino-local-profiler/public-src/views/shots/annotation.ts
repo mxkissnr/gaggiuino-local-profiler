@@ -220,8 +220,12 @@ async function _performAnnotationSave(): Promise<void> {
       _setAutoSaveStatus('saved');
     } else {
       _setAutoSaveStatus('idle');
+      window.showToast?.(t('error_generic', r.status));
     }
-  } catch { _setAutoSaveStatus('idle'); }
+  } catch {
+    _setAutoSaveStatus('idle');
+    window.showToast?.(t('error_generic', ''));
+  }
   finally { _saveCount--; }
 }
 

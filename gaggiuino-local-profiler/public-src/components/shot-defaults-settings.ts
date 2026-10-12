@@ -100,7 +100,13 @@ export async function saveShotDefaultsSettings(): Promise<void> {
   };
 
   const saved = await saveShotDefaults(body).catch(() => null);
-  if (saved) S.shotDefaults = { ...saved };
+  if (!saved) {
+    // saveShotDefaults() resolves to null on any non-ok (or thrown) response,
+    // so a rejected save must not look successful.
+    window.showToast?.(t('error_generic', ''));
+    return;
+  }
+  S.shotDefaults = { ...saved };
 
   const btn = document.getElementById('shotDefaultsSaveBtn');
   if (btn) {

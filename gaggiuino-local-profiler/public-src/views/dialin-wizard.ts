@@ -339,8 +339,14 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
       }
       renderSidebar();
       updateSidebarHighlighting();
+    } else {
+      window.showToast?.(t('error_generic', r.status));
     }
-  } catch { /* keep going even if the annotate call fails */ }
+  } catch {
+    // Keep going (the local round below still renders) but tell the user the
+    // annotation wasn't persisted.
+    window.showToast?.(t('error_generic', ''));
+  }
 
   const evald = await _evalShot(_shots().find(sh => sh.id === shotId) || shot);
   s.reviewRound = {
