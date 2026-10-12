@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { readFileSync } from 'node:fs';
+import type { LiveSyncHandlerDeps } from '../public-src/live-sync-handlers.js';
 
 // #1539 slice 3: the live-sync core, its transport identity header, the image
 // cache invalidation it drives, and the boot wiring it plugs into. The module
@@ -34,17 +36,17 @@ const mocks = vi.hoisted(() => ({ getLibrary: vi.fn() }));
 // bottom mocks those modules with vi.doMock; declaring the spies here lets the
 // mock factories reach them.
 const handlerLoaders = vi.hoisted(() => ({
-  loadLibrary: vi.fn(),
-  invalidateImageKeys: vi.fn(),
-  refreshShots: vi.fn(),
-  shotsLoadInProgress: vi.fn(),
-  annotationBusy: vi.fn(),
-  loadDrinkMenu: vi.fn(),
-  ordersDraftOpen: vi.fn(),
-  loadOrdersView: vi.fn(),
-  refreshMaintenanceView: vi.fn(),
-  loadMachineProfileList: vi.fn(),
-  loadUiPrefsFromServer: vi.fn(),
+  loadLibrary: vi.fn<() => Promise<void>>(),
+  invalidateImageKeys: vi.fn<(keys?: readonly string[] | null) => void>(),
+  refreshShots: vi.fn<(ids: string[] | null) => Promise<void>>(),
+  shotsLoadInProgress: vi.fn<() => boolean>(),
+  annotationBusy: vi.fn<() => boolean>(),
+  loadDrinkMenu: vi.fn<() => Promise<void>>(),
+  ordersDraftOpen: vi.fn<() => boolean>(),
+  loadOrdersView: vi.fn<() => Promise<void>>(),
+  refreshMaintenanceView: vi.fn<() => Promise<void>>(),
+  loadMachineProfileList: vi.fn<() => Promise<void>>(),
+  loadUiPrefsFromServer: vi.fn<() => Promise<boolean>>(),
 }));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
@@ -942,11 +944,10 @@ describe('live-sync handler map (#1539)', () => {
   type HandlersModule = typeof import('../public-src/live-sync-handlers.js');
   let createLiveSyncHandlers!: HandlersModule['createLiveSyncHandlers'];
   let S!: typeof import('../public-src/state/index.js').S;
-  let deps!: {
-    loadSettingsState: ReturnType<typeof vi.fn>;
-    applyServerUiPrefs: ReturnType<typeof vi.fn>;
-    maintenanceCanRefetch: ReturnType<typeof vi.fn>;
-  };
+  let loadSettingsStateMock!: Mock<() => Promise<void>>;
+  let applyServerUiPrefsMock!: Mock<(includeMachine?: boolean, keepShelfQuery?: boolean) => void>;
+  let maintenanceCanRefetchMock!: Mock<() => boolean>;
+  let deps!: LiveSyncHandlerDeps;
 
   const mockedPaths = [
     '../public-src/bean-image.js',
@@ -1027,12 +1028,14 @@ describe('live-sync handler map (#1539)', () => {
     handlerLoaders.loadUiPrefsFromServer.mockResolvedValue(false);
 
     S.currentMode = 'shots';
+    loadSettingsStateMock = vi.fn<() => Promise<void>>();
+    applyServerUiPrefsMock = vi.fn<(includeMachine?: boolean, keepShelfQuery?: boolean) => void>();
+    maintenanceCanRefetchMock = vi.fn<() => boolean>(() => true);
     deps = {
-      loadSettingsState: vi.fn(),
-      applyServerUiPrefs: vi.fn(),
-      maintenanceCanRefetch: vi.fn(),
+      loadSettingsState: loadSettingsStateMock,
+      applyServerUiPrefs: applyServerUiPrefsMock,
+      maintenanceCanRefetch: maintenanceCanRefetchMock,
     };
-    deps.maintenanceCanRefetch.mockReturnValue(true);
   });
 
   const make = () => createLiveSyncHandlers(deps);
@@ -1046,7 +1049,7 @@ describe('live-sync handler map (#1539)', () => {
   it('drops the addressed photo keys before reloading on library-image', async () => {
     const order: string[] = [];
     handlerLoaders.invalidateImageKeys.mockImplementation(() => { order.push('invalidate'); });
-    handlerLoaders.loadLibrary.mockImplementation(() => { order.push('load'); });
+    handlerLoaders.loadLibrary.mockImplementation(() => { order.push('load'); return Promise.resolve(); });
 
     await make()['library-image']!.run(['bean:1', 'grinder:2']);
 
@@ -1057,17 +1060,17 @@ describe('live-sync handler map (#1539)', () => {
   it('applies live ui-prefs only when the loader reports a change', async () => {
     handlerLoaders.loadUiPrefsFromServer.mockResolvedValue(false);
     await make()['ui-prefs']!.run(null);
-    expect(deps.applyServerUiPrefs).not.toHaveBeenCalled();
+    expect(applyServerUiPrefsMock).not.toHaveBeenCalled();
 
     handlerLoaders.loadUiPrefsFromServer.mockResolvedValue(true);
     await make()['ui-prefs']!.run(null);
-    expect(deps.applyServerUiPrefs).toHaveBeenCalledWith(false, true);
+    expect(applyServerUiPrefsMock).toHaveBeenCalledWith(false, true);
   });
 
   it('awaits both order fetches in one run while the orders view is open', async () => {
     S.currentMode = 'orders';
     let releaseDrink!: () => void;
-    handlerLoaders.loadDrinkMenu.mockReturnValue(new Promise<void>(res => { releaseDrink = res; }));
+    handlerLoaders.loadDrinkMenu.mockImplementation(() => new Promise<void>(res => { releaseDrink = () => { res(); }; }));
 
     let settled = false;
     const run = Promise.resolve(make().orders!.run(null)).then(() => { settled = true; });
@@ -1129,7 +1132,7 @@ describe('live-sync handler map (#1539)', () => {
 
   it('reloads the settings state through the shared loader', async () => {
     await make().settings!.run(null);
-    expect(deps.loadSettingsState).toHaveBeenCalledTimes(1);
+    expect(loadSettingsStateMock).toHaveBeenCalledTimes(1);
   });
 
   it('reloads the machine profile list on a profiles event', async () => {
@@ -1141,7 +1144,7 @@ describe('live-sync handler map (#1539)', () => {
     const handlers = make();
     expect(handlers.maintenance!.canRun!()).toBe(true);
 
-    deps.maintenanceCanRefetch.mockReturnValue(false);
+    maintenanceCanRefetchMock.mockReturnValue(false);
     expect(handlers.maintenance!.canRun!()).toBe(false);
   });
 

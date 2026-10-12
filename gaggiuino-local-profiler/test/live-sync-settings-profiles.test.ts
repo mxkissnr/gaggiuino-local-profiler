@@ -15,18 +15,18 @@ g.navigator ??= { language: 'en-US' };
 g.window ??= {};
 
 const loaders = vi.hoisted(() => ({
-  loadSettingsState: vi.fn(),
-  loadMachineProfileList: vi.fn(),
-  loadLibrary: vi.fn(),
-  invalidateImageKeys: vi.fn(),
-  refreshShots: vi.fn(),
-  shotsLoadInProgress: vi.fn(),
-  annotationBusy: vi.fn(),
-  loadDrinkMenu: vi.fn(),
-  ordersDraftOpen: vi.fn(),
-  loadOrdersView: vi.fn(),
-  refreshMaintenanceView: vi.fn(),
-  loadUiPrefsFromServer: vi.fn(),
+  loadSettingsState: vi.fn<() => Promise<void>>(),
+  loadMachineProfileList: vi.fn<() => Promise<void>>(),
+  loadLibrary: vi.fn<() => Promise<void>>(),
+  invalidateImageKeys: vi.fn<(keys?: readonly string[] | null) => void>(),
+  refreshShots: vi.fn<(ids: string[] | null) => Promise<void>>(),
+  shotsLoadInProgress: vi.fn<() => boolean>(),
+  annotationBusy: vi.fn<() => boolean>(),
+  loadDrinkMenu: vi.fn<() => Promise<void>>(),
+  ordersDraftOpen: vi.fn<() => boolean>(),
+  loadOrdersView: vi.fn<() => Promise<void>>(),
+  refreshMaintenanceView: vi.fn<() => Promise<void>>(),
+  loadUiPrefsFromServer: vi.fn<() => Promise<boolean>>(),
 }));
 
 vi.mock('../public-src/bean-image.js', async (importOriginal) => ({
@@ -71,8 +71,8 @@ vi.mock('../public-src/views/library-profile-editor.js', async (importOriginal) 
 function mkDeps(): LiveSyncHandlerDeps {
   return {
     loadSettingsState: loaders.loadSettingsState,
-    applyServerUiPrefs: vi.fn(),
-    maintenanceCanRefetch: vi.fn(() => true),
+    applyServerUiPrefs: vi.fn<(includeMachine?: boolean, keepShelfQuery?: boolean) => void>(),
+    maintenanceCanRefetch: vi.fn<() => boolean>(() => true),
   };
 }
 

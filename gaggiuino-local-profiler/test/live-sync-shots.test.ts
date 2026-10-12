@@ -368,8 +368,8 @@ describe('live-sync deferral and resync (#1539 slice 4)', () => {
       // The real `shot` handler from the map main.ts wires, not a copy.
       const { createLiveSyncHandlers } = await import('../public-src/live-sync-handlers.js');
       initLiveSync(createLiveSyncHandlers({
-        loadSettingsState: vi.fn(),
-        applyServerUiPrefs: vi.fn(),
+        loadSettingsState: vi.fn<() => Promise<void>>(),
+        applyServerUiPrefs: vi.fn<(includeMachine?: boolean, keepShelfQuery?: boolean) => void>(),
         maintenanceCanRefetch: () => true,
       }));
 
