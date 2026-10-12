@@ -165,10 +165,8 @@ func TestHandler_ConnectPrimeAndPublish(t *testing.T) {
 		t.Errorf("expected trailing blank line after primed data, got %q", lines[4])
 	}
 
-	// Give the handler a moment to finish Subscribe()-ing before publishing
-	// — priming and subscribing happen before this call returns control to
-	// the client, but the network round trip above doesn't guarantee it.
-	time.Sleep(50 * time.Millisecond)
+	// Subscribe now happens before priming, so the handler is already
+	// subscribed by the time the primed event above reached us; no sleep needed.
 	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"current": 3, "total": 10}})
 
 	pubLines := readLines(t, reader, 3, 2*time.Second)
@@ -378,5 +376,129 @@ func TestHandler_SlowConsumerGetsOnlyLatestSnapshot(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("handler did not exit after request cancel")
 		}
+	}
+}
+
+
+// waitForSubscribers blocks until hub has exactly want subscribers, failing the
+// test if that never happens.
+func waitForSubscribers(t *testing.T, hub *Hub, want int) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		hub.mu.Lock()
+		n := len(hub.subs)
+		hub.mu.Unlock()
+		if n == want {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("hub has %d subscribers, want %d", n, want)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
+// TestHandler_DroppedDataChangedDeliversCoalescedAll pins the fix for a dropped
+// data-changed: when a backed-up subscriber's buffer is full, Publish cannot
+// deliver one, so the handler must send a single whole-database data-changed
+// once the subscriber drains -- otherwise that tab stays stale until some
+// unrelated refetch.
+func TestHandler_DroppedDataChangedDeliversCoalescedAll(t *testing.T) {
+	hub := NewHub()
+	h := &Handler{Hub: hub, PingInterval: time.Hour}
+	gw := newGatedFlusher()
+	ctx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+
+	done := make(chan struct{})
+	go func() { h.ServeHTTP(gw, req); close(done) }()
+
+	// Release the padding flush so the handler subscribes and enters its loop.
+	gw.letFlush(1)
+	waitForSubscribers(t, hub, 1)
+
+	// A single snapshot is delivered immediately; the handler then blocks in
+	// Flush, so every event published next piles up on the subscriber channel.
+	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": 0}})
+	time.Sleep(20 * time.Millisecond)
+
+	// Overflow the 16-slot buffer with snapshots (a dropped snapshot is
+	// harmless), then drop a data-changed, which must not be lost.
+	for i := 0; i < subscriberBuffer+1; i++ {
+		hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": i + 1}})
+	}
+	hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{Kind: "library"}})
+
+	// Feed the handler enough flushes for the in-flight snapshot, the coalesced
+	// snapshot batch and the recovered data-changed.
+	flushDone := make(chan struct{})
+	go func() {
+		defer close(flushDone)
+		for i := 0; i < 10; i++ {
+			select {
+			case gw.release <- struct{}{}:
+			case <-done:
+				return
+			}
+		}
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	body := gw.body()
+	if !strings.Contains(body, "event: "+EventDataChanged+"\n") {
+		t.Fatalf("no data-changed delivered after one was dropped, body:\n%s", body)
+	}
+	if !strings.Contains(body, `"kind":"all"`) {
+		t.Errorf("recovered data-changed is not kind all, body:\n%s", body)
+	}
+
+	cancelReq()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not exit after request cancel")
+	}
+	<-flushDone
+}
+
+// TestHandler_EventPublishedDuringPrimeIsNotLost pins the subscribe-before-prime
+// ordering: an event published while Prime assembles its snapshots must be
+// queued for the connection and delivered, not dropped in the gap.
+func TestHandler_EventPublishedDuringPrimeIsNotLost(t *testing.T) {
+	hub := NewHub()
+	handler := &Handler{
+		Hub:   hub,
+		Prime: func() []Event {
+			hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"from": "prime"}})
+			return nil
+		},
+	}
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/api/events")
+	if err != nil {
+		t.Fatalf("GET %s: %v", srv.URL, err)
+	}
+	defer resp.Body.Close()
+
+	reader := bufio.NewReader(resp.Body)
+	// Padding, blank line, then the event published from Prime.
+	lines := readLines(t, reader, 4, 2*time.Second)
+	if lines[2] != "event: "+EventLiveSnapshot+"\n" {
+		t.Fatalf("event line = %q, want %q (published during Prime)", lines[2], "event: "+EventLiveSnapshot+"\n")
+	}
+	if !strings.HasPrefix(lines[3], "data: ") {
+		t.Fatalf("expected a data: line, got %q", lines[3])
+	}
+	var data map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(lines[3], "data: ")), &data); err != nil {
+		t.Fatalf("decoding event data: %v", err)
+	}
+	if data["from"] != "prime" {
+		t.Errorf("event data = %v, want from:prime", data)
 	}
 }
