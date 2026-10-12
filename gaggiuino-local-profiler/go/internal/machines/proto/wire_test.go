@@ -1,6 +1,10 @@
 package proto
 
-import "testing"
+import (
+	"encoding/json"
+	"math"
+	"testing"
+)
 
 func TestWriterVarint(t *testing.T) {
 	cases := []struct {
@@ -122,5 +126,30 @@ func TestSkipUnknownField(t *testing.T) {
 	}
 	if field != 1 {
 		t.Errorf("field after skip = %d, want 1", field)
+	}
+}
+
+// TestReaderFloatRejectsNonFinite is the #1601 regression test: a machine's
+// NaN/±Inf float must decode as 0 so json.Marshal of the snapshot can't fail
+// for the whole SSE event / API response, while a finite float is unchanged.
+func TestReaderFloatRejectsNonFinite(t *testing.T) {
+	w := &writer{}
+	w.floatField(2, math.NaN())
+	w.floatField(3, math.Inf(1))
+	w.floatField(4, math.Inf(-1))
+	w.floatField(5, 1.5)
+
+	var m PhaseStopConditionsDto
+	if err := m.Unmarshal(w.b); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if m.PressureAbove != 0 || m.PressureBelow != 0 || m.FlowAbove != 0 {
+		t.Fatalf("non-finite floats not zeroed: %+v", m)
+	}
+	if m.FlowBelow != 1.5 {
+		t.Fatalf("finite float changed: %v", m.FlowBelow)
+	}
+	if _, err := json.Marshal(&m); err != nil {
+		t.Fatalf("json.Marshal of decoded struct failed: %v", err)
 	}
 }
