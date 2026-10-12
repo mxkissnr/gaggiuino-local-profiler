@@ -68,6 +68,7 @@ declare const process: {
     argv: string[];
     exit(code?: number): never;
     cwd(): string;
+    on(event: 'exit', listener: (code: number) => void): void;
 };
 declare class Buffer extends Uint8Array {
     static from(data: readonly number[] | ArrayBuffer | Uint8Array | string, encoding?: string): Buffer;
