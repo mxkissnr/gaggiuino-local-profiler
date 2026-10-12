@@ -28,6 +28,24 @@ class URLStub extends URL {
 // sheet form" test can drive the real library render path without the network;
 // the other exports stay real (sticker-cutout/library-sheet test pattern).
 const mocks = vi.hoisted(() => ({ getLibrary: vi.fn() }));
+
+// #1539 slice 3: the loaders the real handler map (live-sync-handlers.ts) calls.
+// They live in their own modules, so the "live-sync handler map" describe at the
+// bottom mocks those modules with vi.doMock; declaring the spies here lets the
+// mock factories reach them.
+const handlerLoaders = vi.hoisted(() => ({
+  loadLibrary: vi.fn(),
+  invalidateImageKeys: vi.fn(),
+  refreshShots: vi.fn(),
+  shotsLoadInProgress: vi.fn(),
+  annotationBusy: vi.fn(),
+  loadDrinkMenu: vi.fn(),
+  ordersDraftOpen: vi.fn(),
+  loadOrdersView: vi.fn(),
+  refreshMaintenanceView: vi.fn(),
+  loadMachineProfileList: vi.fn(),
+  loadUiPrefsFromServer: vi.fn(),
+}));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
   return { ...actual, getLibrary: mocks.getLibrary };
@@ -762,73 +780,12 @@ describe('bean-image invalidation (#1539)', () => {
   });
 });
 
-describe('boot wiring (#1539)', () => {
-  it('applies live ui-prefs only on a change and keeps the shelf query', () => {
-    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
-    // The live ui-prefs handler reloads the server prefs, applies them only when
-    // the merge reported a change, excludes the machine selection (each device
-    // keeps its own) and keeps the session's shelf search.
-    expect(src).toMatch(/'ui-prefs':\s*\{[\s\S]*?const changed = await loadUiPrefsFromServer\(\);\s*\n\s*if \(changed\) applyServerUiPrefs\(false, true\)/);
-    expect(src).toMatch(/function applyServerUiPrefs\(includeMachine = true, keepShelfQuery = false\)/);
-    expect(src).toMatch(/resetShelfPrefs\(keepShelfQuery\)/);
-    expect(src).toMatch(/if \(!includeMachine\) return;/);
-
-    const libSrc = readFileSync(new URL('../public-src/views/library.ts', import.meta.url), 'utf8');
-    expect(libSrc).toMatch(/export function resetShelfPrefs\(keepQuery = false\): void/);
-    expect(libSrc).toMatch(/keepQuery \? \(_shelfPrefsLazy\?\.query \?\? ''\) : ''/);
-  });
-
-  it('does not touch the photo cache on a library change but drops keys on library-image', () => {
-    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
-    // A plain library change is usually a shot-derived stock change, which does
-    // not touch the photos, so the handler only reloads the library...
-    expect(src).toMatch(/library:\s*\{[\s\S]*?run: async \(\) => \{ await loadLibrary\(\); \}/);
-    // ...while library-image drops the cache keys the server sent (null = all
-    // library photos) and reloads the library.
-    expect(src).toMatch(/'library-image':\s*\{[\s\S]*?invalidateImageKeys\(ids\)/);
-    // A remote whole-database change reloads the page through the all handler.
-    expect(src).toMatch(/all:\s*\{[\s\S]*?location\.reload\(\)/);
-    // There is no longer a whole-cache wipe.
-    expect(src).not.toContain('invalidateAllImages');
-    expect(src).not.toContain('invalidateLibraryImages');
-  });
-
-  it('gates the maintenance refetch only inside the maintenance view', () => {
-    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/canRun: \(\) => _maintenanceCanRefetch\(\)/);
-    expect(src).toMatch(/if \(S\.currentMode !== 'maintenance'\) return true;/);
-    expect(src).toMatch(/getElementById\('maintLogForm'\)/);
-    // An expanded card is restored by the run, not used to block it.
-    expect(src).not.toContain("querySelector('.maint-card.expanded')");
-    expect(src).toMatch(/await refreshMaintenanceView\(\)/);
-    // The "disabled tasks" details are no longer a guard.
-    expect(src).not.toMatch(/querySelector\('details\[open\]'\)/);
-
-    const maintSrc = readFileSync(new URL('../public-src/views/maintenance.ts', import.meta.url), 'utf8');
-    expect(maintSrc).toMatch(/export async function refreshMaintenanceView\(\): Promise<void>/);
-    expect(maintSrc).toMatch(/\.maint-card\.expanded \.maint-detail-toggle/);
-  });
-
-  it('holds the all reload back when a sheet or dialog is open', () => {
-    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/import \{[^}]*reloadBlocked[^}]*\} from '\.\/live-sync\.js'/);
-    expect(src).toMatch(/canRun: \(\) => !reloadBlocked\(\)/);
-  });
-
-  it('checks the app modal overlays, not just bottom sheets, before a reload', () => {
-    const src = readFileSync(new URL('../public-src/live-sync.ts', import.meta.url), 'utf8');
-    // The modals index.html defines: .guided-maint-overlay (profile/dial-in
-    // editors, guided maintenance, flavor wheel, brew confirm) plus the
-    // backup/scan dialogs opened through their .open class.
-    expect(src).toMatch(/const OVERLAY_SELECTOR = '\.guided-maint-overlay, #backupModal\.open, #scanModal\.open'/);
-    expect(src).toMatch(/querySelectorAll\(OVERLAY_SELECTOR\)/);
-  });
-
-  it('awaits both order fetches inside one run', () => {
-    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/await Promise\.all\(\[loadDrinkMenu\(\), S\.currentMode === 'orders' \? loadOrdersView\(\) : undefined\]\)/);
-  });
-
+// #1539 slice 3: the handler map is behavioural-tested further down; what is
+// left here is main.ts's boot order -- the data-changed listener is registered
+// before the SSE stream opens, and an online event or an SSE reconnect resyncs.
+// There is no seam for these two short of booting the whole SPA, so they stay as
+// the file's only source-text check.
+describe('live-sync boot order (#1539)', () => {
   it('registers the data-changed handler before opening the SSE stream', () => {
     const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
     const on = src.indexOf('onEvent(EVENTS.DATA_CHANGED, handleDataChanged)');
@@ -950,5 +907,285 @@ describe('library handler keeps an open bean-sheet form (#1539)', () => {
     expect(mocks.getLibrary).toHaveBeenCalled();
     expect(made.elements.newBagForm1.style.display).toBe('');
     expect(made.elements.newBagStock1.value).toBe('250');
+  });
+});
+
+// #1539 slice 3: reloadBlocked() decides whether the `all` handler may reload. It
+// must see every surface that would lose user work: a bottom sheet, a native
+// <dialog>, and the shared modal overlay selector (each overlay only when it is
+// actually shown, since the guided-maint ones ship hidden by default).
+describe('live-sync reloadBlocked overlays (#1539)', () => {
+  it('blocks while a bottom sheet is open', async () => {
+    const { live } = await loadLive();
+    doc.body.classList.add('lib-sheet-open');
+    expect(live.reloadBlocked()).toBe(true);
+    doc.body.classList.remove('lib-sheet-open');
+    expect(live.reloadBlocked()).toBe(false);
+  });
+
+  it('blocks while a dialog is open', async () => {
+    const { live } = await loadLive();
+    doc.querySelector = () => ({ tagName: 'DIALOG' });
+    expect(live.reloadBlocked()).toBe(true);
+  });
+
+  it('checks the shared overlay selector and each overlay visibility', async () => {
+    const { live } = await loadLive();
+    const seen: string[] = [];
+    let overlays: { style: { display: string } }[] = [];
+    doc.querySelectorAll = (sel: string) => { seen.push(sel); return overlays; };
+
+    overlays = [{ style: { display: 'none' } }];
+    expect(live.reloadBlocked()).toBe(false);
+
+    overlays = [{ style: { display: 'block' } }];
+    expect(live.reloadBlocked()).toBe(true);
+    expect(seen).toContain('.guided-maint-overlay, #backupModal.open, #scanModal.open');
+  });
+
+  it('does not block on a focused non-text control', async () => {
+    const { live } = await loadLive();
+    doc.activeElement = checkboxEl();
+    expect(live.reloadBlocked()).toBe(false);
+  });
+});
+
+// #1539 slice 3: the real per-kind handler map, now in live-sync-handlers.ts. The
+// loaders it calls live in their own modules and render the DOM / hit the
+// network, so those modules are mocked just for this describe (vi.doMock, scoped
+// so the real modules stay untouched for the tests above); the three
+// main.ts-local helpers arrive through `deps` as spies. Each test drives exactly
+// what the scheduler would, so a dropped or reordered step fails here instead of
+// slipping past a source regex.
+describe('live-sync handler map (#1539)', () => {
+  type HandlersModule = typeof import('../public-src/live-sync-handlers.js');
+  let createLiveSyncHandlers!: HandlersModule['createLiveSyncHandlers'];
+  let S!: typeof import('../public-src/state/index.js').S;
+  let deps!: {
+    loadSettingsState: ReturnType<typeof vi.fn>;
+    applyServerUiPrefs: ReturnType<typeof vi.fn>;
+    maintenanceCanRefetch: ReturnType<typeof vi.fn>;
+  };
+
+  const mockedPaths = [
+    '../public-src/bean-image.js',
+    '../public-src/ui-prefs.js',
+    '../public-src/views/library.js',
+    '../public-src/views/shots.js',
+    '../public-src/views/orders.js',
+    '../public-src/views/maintenance.js',
+    '../public-src/views/library-profile-editor.js',
+  ];
+
+  beforeAll(async () => {
+    vi.resetModules();
+    vi.doMock('../public-src/bean-image.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../public-src/bean-image.js')>()),
+      invalidateImageKeys: handlerLoaders.invalidateImageKeys,
+    }));
+    vi.doMock('../public-src/ui-prefs.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../public-src/ui-prefs.js')>()),
+      loadUiPrefsFromServer: handlerLoaders.loadUiPrefsFromServer,
+    }));
+    vi.doMock('../public-src/views/library.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../public-src/views/library.js')>()),
+      loadLibrary: handlerLoaders.loadLibrary,
+    }));
+    vi.doMock('../public-src/views/shots.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../public-src/views/shots.js')>()),
+      refreshShots: handlerLoaders.refreshShots,
+      shotsLoadInProgress: handlerLoaders.shotsLoadInProgress,
+      annotationBusy: handlerLoaders.annotationBusy,
+      loadDrinkMenu: handlerLoaders.loadDrinkMenu,
+    }));
+    vi.doMock('../public-src/views/orders.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../public-src/views/orders.js')>()),
+      ordersDraftOpen: handlerLoaders.ordersDraftOpen,
+      loadOrdersView: handlerLoaders.loadOrdersView,
+    }));
+    vi.doMock('../public-src/views/maintenance.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../public-src/views/maintenance.js')>()),
+      refreshMaintenanceView: handlerLoaders.refreshMaintenanceView,
+    }));
+    vi.doMock('../public-src/views/library-profile-editor.js', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../public-src/views/library-profile-editor.js')>()),
+      loadMachineProfileList: handlerLoaders.loadMachineProfileList,
+    }));
+    ({ createLiveSyncHandlers } = await import('../public-src/live-sync-handlers.js'));
+    ({ S } = await import('../public-src/state/index.js'));
+  });
+
+  afterAll(() => {
+    for (const path of mockedPaths) vi.doUnmock(path);
+    vi.resetModules();
+  });
+
+  beforeEach(() => {
+    handlerLoaders.loadLibrary.mockReset();
+    handlerLoaders.invalidateImageKeys.mockReset();
+    handlerLoaders.refreshShots.mockReset();
+    handlerLoaders.shotsLoadInProgress.mockReset();
+    handlerLoaders.annotationBusy.mockReset();
+    handlerLoaders.loadDrinkMenu.mockReset();
+    handlerLoaders.ordersDraftOpen.mockReset();
+    handlerLoaders.loadOrdersView.mockReset();
+    handlerLoaders.refreshMaintenanceView.mockReset();
+    handlerLoaders.loadMachineProfileList.mockReset();
+    handlerLoaders.loadUiPrefsFromServer.mockReset();
+
+    handlerLoaders.loadLibrary.mockResolvedValue(undefined);
+    handlerLoaders.invalidateImageKeys.mockReturnValue(undefined);
+    handlerLoaders.refreshShots.mockResolvedValue(undefined);
+    handlerLoaders.shotsLoadInProgress.mockReturnValue(false);
+    handlerLoaders.annotationBusy.mockReturnValue(false);
+    handlerLoaders.loadDrinkMenu.mockResolvedValue(undefined);
+    handlerLoaders.ordersDraftOpen.mockReturnValue(false);
+    handlerLoaders.loadOrdersView.mockResolvedValue(undefined);
+    handlerLoaders.refreshMaintenanceView.mockResolvedValue(undefined);
+    handlerLoaders.loadMachineProfileList.mockResolvedValue(undefined);
+    handlerLoaders.loadUiPrefsFromServer.mockResolvedValue(false);
+
+    S.currentMode = 'shots';
+    deps = {
+      loadSettingsState: vi.fn(),
+      applyServerUiPrefs: vi.fn(),
+      maintenanceCanRefetch: vi.fn(),
+    };
+    deps.maintenanceCanRefetch.mockReturnValue(true);
+  });
+
+  const make = () => createLiveSyncHandlers(deps);
+
+  it('reloads only the library on a plain library change, leaving the cache alone', async () => {
+    await make().library!.run(null);
+    expect(handlerLoaders.loadLibrary).toHaveBeenCalledTimes(1);
+    expect(handlerLoaders.invalidateImageKeys).not.toHaveBeenCalled();
+  });
+
+  it('drops the addressed photo keys before reloading on library-image', async () => {
+    const order: string[] = [];
+    handlerLoaders.invalidateImageKeys.mockImplementation(() => { order.push('invalidate'); });
+    handlerLoaders.loadLibrary.mockImplementation(async () => { order.push('load'); });
+
+    await make()['library-image']!.run(['bean:1', 'grinder:2']);
+
+    expect(handlerLoaders.invalidateImageKeys).toHaveBeenCalledWith(['bean:1', 'grinder:2']);
+    expect(order).toEqual(['invalidate', 'load']);
+  });
+
+  it('applies live ui-prefs only when the loader reports a change', async () => {
+    handlerLoaders.loadUiPrefsFromServer.mockResolvedValue(false);
+    await make()['ui-prefs']!.run(null);
+    expect(deps.applyServerUiPrefs).not.toHaveBeenCalled();
+
+    handlerLoaders.loadUiPrefsFromServer.mockResolvedValue(true);
+    await make()['ui-prefs']!.run(null);
+    expect(deps.applyServerUiPrefs).toHaveBeenCalledWith(false, true);
+  });
+
+  it('awaits both order fetches in one run while the orders view is open', async () => {
+    S.currentMode = 'orders';
+    let releaseDrink!: () => void;
+    handlerLoaders.loadDrinkMenu.mockReturnValue(new Promise<void>(res => { releaseDrink = res; }));
+
+    let settled = false;
+    const run = Promise.resolve(make().orders!.run(null)).then(() => { settled = true; });
+    await Promise.resolve();
+    expect(handlerLoaders.loadOrdersView).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+
+    releaseDrink();
+    await run;
+    expect(settled).toBe(true);
+  });
+
+  it('refreshes the drink menu but not the orders view away from the orders view', async () => {
+    S.currentMode = 'shots';
+    await make().orders!.run(null);
+    expect(handlerLoaders.loadDrinkMenu).toHaveBeenCalledTimes(1);
+    expect(handlerLoaders.loadOrdersView).not.toHaveBeenCalled();
+  });
+
+  it('defers orders while a draft holds uncommitted text', () => {
+    handlerLoaders.ordersDraftOpen.mockReturnValue(true);
+    expect(make().orders!.canRun!()).toBe(false);
+
+    handlerLoaders.ordersDraftOpen.mockReturnValue(false);
+    expect(make().orders!.canRun!()).toBe(true);
+  });
+
+  it('defers the shot refresh while a save or a list load is in flight', () => {
+    const handlers = make();
+    expect(handlers.shot!.canRun!()).toBe(true);
+    expect(handlers.shots!.canRun!()).toBe(true);
+
+    handlerLoaders.annotationBusy.mockReturnValue(true);
+    expect(handlers.shot!.canRun!()).toBe(false);
+
+    handlerLoaders.annotationBusy.mockReturnValue(false);
+    handlerLoaders.shotsLoadInProgress.mockReturnValue(true);
+    expect(handlers.shots!.canRun!()).toBe(false);
+  });
+
+  it('patches one shot for the shot kind and reloads the list for shots', async () => {
+    const handlers = make();
+    await handlers.shot!.run(['7']);
+    expect(handlerLoaders.refreshShots).toHaveBeenCalledWith(['7']);
+
+    handlerLoaders.refreshShots.mockClear();
+    await handlers.shots!.run(null);
+    expect(handlerLoaders.refreshShots).toHaveBeenCalledWith(null);
+  });
+
+  it('holds the settings refetch back only while on the Settings page', () => {
+    const handlers = make();
+    S.currentMode = 'settings';
+    expect(handlers.settings!.canRun!()).toBe(false);
+
+    S.currentMode = 'shots';
+    expect(handlers.settings!.canRun!()).toBe(true);
+  });
+
+  it('reloads the settings state through the shared loader', async () => {
+    await make().settings!.run(null);
+    expect(deps.loadSettingsState).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads the machine profile list on a profiles event', async () => {
+    await make().profiles!.run(null);
+    expect(handlerLoaders.loadMachineProfileList).toHaveBeenCalledTimes(1);
+  });
+
+  it('defers the maintenance refetch whenever its guard says so', () => {
+    const handlers = make();
+    expect(handlers.maintenance!.canRun!()).toBe(true);
+
+    deps.maintenanceCanRefetch.mockReturnValue(false);
+    expect(handlers.maintenance!.canRun!()).toBe(false);
+  });
+
+  it('refreshes maintenance only inside the maintenance view', async () => {
+    const handlers = make();
+    S.currentMode = 'shots';
+    await handlers.maintenance!.run(null);
+    expect(handlerLoaders.refreshMaintenanceView).not.toHaveBeenCalled();
+
+    S.currentMode = 'maintenance';
+    await handlers.maintenance!.run(null);
+    expect(handlerLoaders.refreshMaintenanceView).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads the page on an all change and holds it back behind an overlay', async () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { reload });
+    const handlers = make();
+
+    await handlers.all!.run(null);
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    doc.body.classList.add('lib-sheet-open');
+    expect(handlers.all!.canRun!()).toBe(false);
+    doc.body.classList.remove('lib-sheet-open');
+    expect(handlers.all!.canRun!()).toBe(true);
   });
 });
