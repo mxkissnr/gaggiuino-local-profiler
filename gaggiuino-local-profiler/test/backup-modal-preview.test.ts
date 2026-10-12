@@ -75,7 +75,7 @@ function jsonFile(bundle: Record<string, unknown>): FileLike {
   return {
     arrayBuffer: () => {
       const bytes = new TextEncoder().encode(JSON.stringify(bundle));
-      return Promise.resolve(bytes.buffer as ArrayBuffer);
+      return Promise.resolve(bytes.buffer);
     },
   };
 }
