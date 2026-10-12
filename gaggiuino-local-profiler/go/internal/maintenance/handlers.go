@@ -77,6 +77,22 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 	return body, true
 }
 
+// hostnameFromHost turns a machine's stored host (with or without a scheme)
+// into a bare hostname, reporting whether that succeeded.
+func hostnameFromHost(raw string) (string, bool) {
+	if raw == "" {
+		return "", false
+	}
+	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return "", false
+	}
+	return u.Hostname(), true
+}
+
 // machineHostname returns the default machine's host, as a bare hostname,
 // falling back to "gaggiuino" on any error — cosmetic display/log text
 // stored on newly-written maintenance_log rows; no behavior depends on it.
@@ -84,18 +100,26 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 // MarkTaskDone can call it without needing a *Handlers instance.
 func machineHostname(registry *machines.Registry) string {
 	m, err := registry.GetDefaultMachine()
-	if err != nil || m == nil || m.Host == "" {
+	if err != nil || m == nil {
 		return "gaggiuino"
 	}
-	raw := m.Host
-	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
-		raw = "http://" + raw
+	if host, ok := hostnameFromHost(m.Host); ok {
+		return host
 	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Hostname() == "" {
-		return "gaggiuino"
+	return "gaggiuino"
+}
+
+// machineHostnameFor returns the bare hostname of the machine a maintenance
+// log entry is for, falling back to the default machine's host only when the
+// machine cannot be looked up or has no usable host.
+func machineHostnameFor(registry *machines.Registry, machineID int64) string {
+	m, err := registry.GetMachine(machineID)
+	if err == nil && m != nil {
+		if host, ok := hostnameFromHost(m.Host); ok {
+			return host
+		}
 	}
-	return u.Hostname()
+	return machineHostname(registry)
 }
 
 // parseMachineIDParam ports parseMachineIdParam(req): 'all' passes
@@ -112,14 +136,45 @@ func parseMachineIDParam(r *http.Request) (id int64, isAll bool) {
 	return v, false
 }
 
-// activeMachineID ports activeMachineId(req): 'all' resolves to 1 for
-// write routes, which always need one concrete target machine.
-func activeMachineID(r *http.Request) int64 {
-	id, isAll := parseMachineIDParam(r)
-	if isAll {
-		return 1
+// writeMachineID resolves the concrete target machine for a mutating
+// maintenance route. An absent machineId means the registry's default
+// machine; "all" or an unparseable value is a 400, and an id that names no
+// machine is a 404 -- a write must never silently land on a different
+// machine than the one asked for. It writes the error response itself and
+// returns ok == false when it did.
+func (h *Handlers) writeMachineID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := r.URL.Query().Get("machineId")
+	if raw == "" {
+		m, err := h.registry.GetDefaultMachine()
+		if err != nil {
+			internalError(w, err)
+			return 0, false
+		}
+		if m == nil {
+			internalError(w, errors.New("maintenance: no default machine"))
+			return 0, false
+		}
+		return m.ID, true
 	}
-	return id
+	if raw == "all" {
+		writeError(w, http.StatusBadRequest, "Invalid machineId")
+		return 0, false
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid machineId")
+		return 0, false
+	}
+	m, err := h.registry.GetMachine(id)
+	if err != nil {
+		internalError(w, err)
+		return 0, false
+	}
+	if m == nil {
+		writeError(w, http.StatusNotFound, "Unknown machine")
+		return 0, false
+	}
+	return id, true
 }
 
 func (h *Handlers) getMaintenance(w http.ResponseWriter, r *http.Request) {
@@ -156,7 +211,10 @@ func (h *Handlers) taskDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	notes, _ := body["notes"].(string)
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	stats, err := MarkTaskDone(h.repo, h.shotsRepo, h.libRepo, h.registry, r.PathValue("task"), notes, machineID)
 	if err != nil {
 		if errors.Is(err, ErrUnknownTask) {
@@ -234,7 +292,10 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	maint, err := h.repo.GetMaintenance(machineID)
 	if err != nil {
 		internalError(w, err)
@@ -363,7 +424,10 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	maint, err := h.repo.GetMaintenance(machineID)
 	if err != nil {
 		internalError(w, err)
@@ -396,7 +460,7 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 	if runes := []rune(notes); len(runes) > 500 {
 		notes = string(runes[:500])
 	}
-	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), ShotCountFor(h.shotsRepo, task, machineID), machineID, at)
+	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostnameFor(h.registry, machineID), ShotCountFor(h.shotsRepo, task, machineID), machineID, at)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -444,7 +508,10 @@ func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "label produced empty key")
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	maint, err := h.repo.GetMaintenance(machineID)
 	if err != nil {
 		internalError(w, err)
@@ -480,7 +547,10 @@ func (h *Handlers) customDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid custom task key")
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	if err := h.repo.DeleteCustomTask(machineID, key); err != nil {
 		internalError(w, err)
 		return
