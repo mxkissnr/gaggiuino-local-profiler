@@ -7,6 +7,7 @@ import { esc, html, joinHtml, scoreClass, scoreColor, chartColors, themeColor, o
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
+import { resolveBeanForAnnotation } from './shots/utils.js';
 import { summaryLine, filterAnalyticsShots } from './analytics-summary.js';
 import type { AnalyticsPageFilter } from './analytics-summary.js';
 import { computeFacts } from './analytics-facts.js';
@@ -2268,22 +2269,40 @@ export function buildWeekdayHourHeatmap() {
   el.innerHTML = html`<div class="wh-heatmap"><div class="wh-row wh-header"><div class="wh-label"></div>${joinHtml(hourLabels)}</div>${joinHtml(dayRows)}</div>`;
 }
 
+// #1625: the stable key a shot's bean groups under — the resolved library
+// bean's id when the annotation links to one ('id:<id>'), else the lower-cased
+// coffee name ('name:<name>'). The label is the library bean's CURRENT name,
+// so a rename follows the id; an unresolved bean keeps its annotated name.
+// Returns null when the shot names no bean and resolves to none either.
+function _beanGroup(annotation: ShotAnnotation | null | undefined, beans: SharedBean[]): { key: string; label: string; beanId: number | null } | null {
+  const resolved = resolveBeanForAnnotation(annotation, beans);
+  if (resolved) {
+    return { key: `id:${resolved.id}`, label: String(resolved.name || annotation?.coffee || ''), beanId: resolved.id ?? null };
+  }
+  const name = annotation?.coffee;
+  if (!name) return null;
+  return { key: `name:${name.toLowerCase()}`, label: name, beanId: null };
+}
+
 // ── Beans by score (#1467) ──────────────────────────────────────────────────
 // One shelf of beans, sorted by average score (or shot count), each tile a
 // tap away from the bean's detail sheet. Pure aggregation kept separate from
 // rendering (unit-testable without a DOM).
 export function _computeBeanRanking(shots: ShotRow[]): BeanRankRow[] {
-  const byBean: Record<string, ShotRow[]> = {};
+  const beans = _beans();
+  const byBean = new Map<string, { label: string; beanId: number | null; shots: ShotRow[] }>();
   for (const s of shots) {
-    const name = s.annotation?.coffee;
-    if (!name) continue;
-    let list = byBean[name];
-    if (!list) { list = []; byBean[name] = list; }
-    list.push(s);
+    const group = _beanGroup(s.annotation, beans);
+    if (!group) continue;
+    let entry = byBean.get(group.key);
+    if (!entry) { entry = { label: group.label, beanId: group.beanId, shots: [] }; byBean.set(group.key, entry); }
+    entry.shots.push(s);
   }
 
   const rows: BeanRankRow[] = [];
-  for (const [name, beanShots] of Object.entries(byBean)) {
+  for (const group of byBean.values()) {
+    const beanShots = group.shots;
+    const name = group.label;
     const sorted = [...beanShots].sort((a, b) => a.timestamp - b.timestamp);
     const scored = sorted
       .map(s => ({ s, sc: window.calcShotScore ? window.calcShotScore(s) : null }))
@@ -2311,7 +2330,9 @@ export function _computeBeanRanking(shots: ShotRow[]): BeanRankRow[] {
 
     const lastShot = sorted[sorted.length - 1];
     const lastBeanId = lastShot?.annotation?.beanId;
-    const beanId = typeof lastBeanId === 'number' ? lastBeanId : null;
+    // A resolved (id-keyed) group already knows its bean; only an unresolved
+    // group falls back to the most recent shot's beanId, as before.
+    const beanId = group.beanId ?? (typeof lastBeanId === 'number' ? lastBeanId : null);
 
     const lastGrindShot = [...sorted].reverse().find(s => s.annotation?.grindSetting);
     const lastGrind = lastGrindShot ? lastGrindShot.annotation!.grindSetting : null;
@@ -2702,39 +2723,40 @@ export function buildMachineComparison() {
 
 // ── Dial-in progression ─────────────────────────────────────────────────────
 // Per-bean line chart of grind setting and score across that bean's own shot
-// sequence, so a dial-in arc is visible independent of calendar time. Bean
-// names are matched case-insensitively (annotation.coffee), same convention
-// as suggestGrindDoseForBean()/computeBeanRemaining() elsewhere.
+// sequence, so a dial-in arc is visible independent of calendar time. Shots
+// are grouped by _beanGroup's key (beanId first, name fallback), so old and
+// new names of a renamed bean stay one series; the option label is the
+// library bean's current name. The <option> value is that key.
 export function buildDialinProgression() {
   const sel = document.getElementById('dialinProgressionBeanSelect') as HTMLSelectElement | null;
   if (!sel) return;
 
+  const beans = _beans();
   const seen = new Map<string, string>();
   for (const s of _pageShots()) {
-    const name = s.annotation?.coffee;
-    if (!name) continue;
-    const key = name.toLowerCase();
-    if (!seen.has(key)) seen.set(key, name);
+    const group = _beanGroup(s.annotation, beans);
+    if (!group) continue;
+    if (!seen.has(group.key)) seen.set(group.key, group.label);
   }
-  const beanNames = [...seen.values()].sort((a, b) => a.localeCompare(b));
+  const keys = [...seen.keys()].sort((a, b) => (seen.get(a) || '').localeCompare(seen.get(b) || ''));
 
-  if (!beanNames.length) {
+  if (!keys.length) {
     sel.innerHTML = html``;
     _renderDialinProgressionChart(null);
     return;
   }
 
   const prevValue = sel.value;
-  sel.innerHTML = joinHtml(beanNames.map(n => html`<option value="${esc(n)}">${esc(n)}</option>`));
-  sel.value = beanNames.includes(prevValue) ? prevValue : beanNames[0] ?? '';
+  sel.innerHTML = joinHtml(keys.map(k => html`<option value="${esc(k)}">${esc(seen.get(k) || '')}</option>`));
+  sel.value = keys.includes(prevValue) ? prevValue : keys[0] ?? '';
   _renderDialinProgressionChart(sel.value);
 }
 
-export function setDialinProgressionBean(name: string): void {
-  _renderDialinProgressionChart(name);
+export function setDialinProgressionBean(beanKey: string): void {
+  _renderDialinProgressionChart(beanKey);
 }
 
-function _renderDialinProgressionChart(beanName: string | null): void {
+function _renderDialinProgressionChart(beanKey: string | null): void {
   // #814: resolved per render, never at module load — the value has to be
   // whatever the ACTIVE theme resolves to right now.
   const C = chartColors();
@@ -2742,13 +2764,14 @@ function _renderDialinProgressionChart(beanName: string | null): void {
   if (!ctx) return;
   chartRegistry.dispose('dialinProgressionChart');
 
-  if (!beanName) {
+  if (!beanKey) {
     ctx.parentElement!.innerHTML = html`<p class="empty-note pad-top">${tHtml('analytics_no_beans')}</p>`;
     return;
   }
 
+  const beans = _beans();
   const shots = _pageShots()
-    .filter(s => (s.annotation?.coffee || '').toLowerCase() === beanName.toLowerCase())
+    .filter(s => _beanGroup(s.annotation, beans)?.key === beanKey)
     .sort((a, b) => a.timestamp - b.timestamp);
 
   if (shots.length < 2) {
