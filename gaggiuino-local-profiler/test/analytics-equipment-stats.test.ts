@@ -116,10 +116,21 @@ describe('_computeEquipmentStats (#668, generalized in #674 for grinder too)', (
     expect(rows[0]).toMatchObject({ count: 1, avgScore: null, bestScore: null, avgDuration: null });
   });
 
-  it('never touches calcShotScore\'s own formula — reuses it as-is via window.calcShotScore', () => {
-    const shots = [shot({ basketId: 1, score: 77 })];
-    const rows = basketStats(shots);
-    expect(at(rows, 0).avgScore).toBe(77);
+  it('uses the value window.calcShotScore returns, not the shot\'s stored score', () => {
+    const win = globalThis as unknown as {
+      window: { calcShotScore: (s: ShotRow) => number | null };
+    };
+    const original = win.window.calcShotScore;
+    // The fixture's stored score is 77, but the stub answers 42: the row must
+    // carry the stub's value, so a module that read shot.score directly (or
+    // recomputed its own formula) would fail this instead of passing by luck.
+    win.window.calcShotScore = () => 42;
+    try {
+      const rows = basketStats([shot({ basketId: 1, score: 77 })]);
+      expect(at(rows, 0).avgScore).toBe(42);
+    } finally {
+      win.window.calcShotScore = original;
+    }
   });
 
   it('keeps two same-named baskets as separate cards, grouped by id not by name', () => {
