@@ -45,7 +45,7 @@ const shot = (overrides: ShotOverrides = {}): ShotRow => ({
 
 describe('_computeBeanRanking groups by resolved bean id (#1625)', () => {
   it('merges a renamed bean\'s old and new names into one row labelled with the current name', () => {
-    S.coffeeLibrary = { beans: [{ id: 1, name: 'Current Name' }], grinders: [] } as unknown as typeof S.coffeeLibrary;
+    S.coffeeLibrary = { beans: [{ id: 1, name: 'Current Name' }], grinders: [] };
     const rows = _computeBeanRanking([
       shot({ coffee: 'Old Name', beanId: 1, timestamp: 1 }),
       shot({ coffee: 'Current Name', beanId: 1, timestamp: 2 }),
