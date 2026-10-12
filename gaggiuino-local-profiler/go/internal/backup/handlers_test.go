@@ -698,3 +698,52 @@ func TestRestoreLimits_ProductionValues(t *testing.T) {
 		t.Errorf("restoreUnzipTotalLimit = %d < restoreZipBodyLimit = %d", restoreUnzipTotalLimit, restoreZipBodyLimit)
 	}
 }
+
+// TestApplyKVSettings_NormalizesMenuAndSettings pins the restore path through
+// the same checks the orders API applies (#1603): a damaged menu item
+// (variants as a string, or no name at all) can no longer reach the stored
+// menu, and only valid settings fields survive.
+func TestApplyKVSettings_NormalizesMenuAndSettings(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	// m2 has no name and "not-a-map" is not an object: both must be skipped.
+	kv := map[string]any{}
+	kv["menu"] = []any{
+		map[string]any{"id": "m1", "name": "Latte", "variants": "x", "bogus": 1},
+		map[string]any{"id": "m2", "emoji": "☕"},
+		"not-a-map",
+	}
+	kv["orders_settings"] = map[string]any{
+		"enabled":             true,
+		"broadcastRecipients": []any{"notify.phone", "bogus"},
+		"notify_low_stock":    "yes",
+	}
+	if err := h.applyKVSettings(kv); err != nil {
+		t.Fatalf("applyKVSettings: %v", err)
+	}
+
+	menu, err := h.deps.OrdersRepo.GetMenu()
+	if err != nil {
+		t.Fatalf("GetMenu: %v", err)
+	}
+	if len(menu) != 1 {
+		t.Fatalf("menu length = %d; want 1 (invalid items skipped)", len(menu))
+	}
+	if variants, ok := menu[0]["variants"].([]any); !ok || len(variants) != 0 {
+		t.Errorf("variants = %#v; want an empty array", menu[0]["variants"])
+	}
+	if _, present := menu[0]["bogus"]; present {
+		t.Errorf("unknown menu key survived restore: %#v", menu[0])
+	}
+
+	s, err := h.deps.OrdersRepo.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	recipients, _ := s["broadcastRecipients"].([]any)
+	if len(recipients) != 1 || recipients[0] != "notify.phone" {
+		t.Errorf("broadcastRecipients = %#v; want just notify.phone", recipients)
+	}
+	if _, present := s["notify_low_stock"]; present {
+		t.Errorf("non-bool toggle survived restore: %#v", s)
+	}
+}
