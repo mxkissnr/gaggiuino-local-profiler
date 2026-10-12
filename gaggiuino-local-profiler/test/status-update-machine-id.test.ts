@@ -65,6 +65,7 @@ describe('updateStatus(machineId) — #464', () => {
     g.document = doc;
     S.primaryShotId = null;
     S.currentLang = 'en';
+    S.activeMachineId = null;
 
     statusPayload = { lastSync: '2026-01-01T00:00:00.000Z', machineHostname: 'kitchen.local' };
     fetchCalls = [];
@@ -81,17 +82,29 @@ describe('updateStatus(machineId) — #464', () => {
     });
   });
 
-  it('omits the query param when called with no argument (unparameterized 30s poll)', async () => {
+  // #1605: an argument-less call means "the machine the app is showing", so it
+  // scopes to S.activeMachineId instead of the default machine. Without this, the
+  // start-up call and the 30s poll overwrote a selected non-default machine's
+  // status with the default machine's (#464 regression).
+  it('scopes an argument-less call to the active machine, not the default machine', async () => {
+    S.activeMachineId = 2;
     await updateStatus();
-    expect(fetchCalls).toContain('api/status');
+    expect(fetchCalls).toContain('api/status?machineId=2');
   });
 
-  it('omits the query param for the "all machines" switcher value', async () => {
+  it('keeps an argument-less call unscoped when the active machine is "all"', async () => {
+    S.activeMachineId = 'all';
+    await updateStatus();
+    expect(fetchCalls).toContain('api/status');
+    expect(fetchCalls.some(u => u.includes('machineId'))).toBe(false);
+  });
+
+  it('omits the query param for the "all machines" switcher value passed explicitly', async () => {
     await updateStatus('all');
     expect(fetchCalls).toContain('api/status');
   });
 
-  it('omits the query param when explicitly passed null/undefined', async () => {
+  it('omits the query param when explicitly passed null', async () => {
     await updateStatus(null);
     expect(fetchCalls).toContain('api/status');
   });
