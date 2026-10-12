@@ -82,16 +82,31 @@ export function toIsoDateInput(str: string | null | undefined): string {
   return '';
 }
 
-// Today's date as YYYY-MM-DD in local time (not UTC — Date#toISOString()
-// would roll over a day early/late depending on the user's timezone) — used
-// as both the default value and the `max` of freeze-date-style pickers that
-// shouldn't accept a future date.
-export function todayIsoDate(nowMs: number = Date.now()): string {
-  const d = new Date(nowMs);
+// A timestamp's date as YYYY-MM-DD in local time (not UTC —
+// Date#toISOString() would roll over a day early/late depending on the
+// user's timezone).
+export function localIsoDate(ms: number): string {
+  const d = new Date(ms);
   const y = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, '0');
   const da = String(d.getDate()).padStart(2, '0');
   return `${y}-${mo}-${da}`;
+}
+
+// Today's local date — used as both the default value and the `max` of
+// freeze-date-style pickers that shouldn't accept a future date.
+export function todayIsoDate(nowMs: number = Date.now()): string {
+  return localIsoDate(nowMs);
+}
+
+// A YYYY-MM-DD date-input value as the epoch ms of local midnight (not UTC —
+// `new Date('2026-10-12')` parses as UTC midnight and lands on the previous
+// day for users east of UTC). Returns NaN for an empty/invalid value.
+export function localMidnightMs(isoDate: string): number {
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return NaN;
+  const [, yy = '', mm = '', dd = ''] = m;
+  return new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd)).getTime();
 }
 
 // Parses a date-input's YYYY-MM-DD value into a local-noon epoch ms

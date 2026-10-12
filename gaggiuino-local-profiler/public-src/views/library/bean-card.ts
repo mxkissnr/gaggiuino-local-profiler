@@ -3,7 +3,7 @@ import * as libraryApi from '../../api/library.js';
 import { S } from '../../state/index.js';
 import type { ShotMeta } from '../../state/index.js';
 import { localeFor, countryName } from '../../constants.js';
-import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, toIsoDateInput, todayIsoDate, html, joinHtml } from '../../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
 import { miniWheelSvg, flavorChipsHtml } from '../../components/flavor-mini-wheel.js';
@@ -204,7 +204,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
         <div class="lib-new-bag-fields">
           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="editFrozenRemaining${esc(fp.id)}" placeholder="${tHtml('bag_freeze_count')}" min="0" max="${esc(fp.portionCount)}" step="1" value="${esc(remaining)}">
           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="editFrozenWeight${esc(fp.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1" value="${esc(fp.portionWeight_g)}">
-          <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="editFrozenDate${esc(fp.id)}" value="${esc(toIsoDateInput(new Date(fp.frozenAt).toISOString()))}" max="${esc(todayIsoDate())}">
+          <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="editFrozenDate${esc(fp.id)}" value="${esc(localIsoDate(fp.frozenAt))}" max="${esc(todayIsoDate())}">
         </div>
         <div class="lib-form-actions">
           <button class="lib-btn-sm" data-action="close-edit-frozen-form" data-portion-id="${esc(fp.id)}">${tHtml('lib_cancel')}</button>

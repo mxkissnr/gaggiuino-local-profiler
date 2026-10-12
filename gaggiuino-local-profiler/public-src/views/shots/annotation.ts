@@ -697,7 +697,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   _renderPuckScreenSelect(ann.puckScreenId ?? null);
   _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null);
   (document.getElementById('annGrinder') as HTMLInputElement).value      = ann.grinder      || '';
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting || '');
+  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting ?? '');
   (document.getElementById('annDose') as HTMLInputElement).value         = String(ann.dose        || '');
   updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '');
   (document.getElementById('annTds') as HTMLInputElement).value          = String(ann.tds         || '');
