@@ -29,6 +29,19 @@ type Bean struct {
 	BrewRatio string
 }
 
+// PressureNote values explain the pressure part when it was not scored
+// against the fixed >=5-bar band. See ScoreDetail.PressureNote (#1538).
+const (
+	// PressureNoteProfile: the shot never reached 5 bar, so its pressure was
+	// scored against its own targetPressure curve over the samples that fall
+	// in a PRESSURE-type phase.
+	PressureNoteProfile = "profile"
+	// PressureNoteOmitted: the shot never reached 5 bar and its profile has
+	// no PRESSURE phase to measure against, so the pressure part was left
+	// out and the remaining weights redistribute.
+	PressureNoteOmitted = "omitted"
+)
+
 // ScoreDetail is the score plus whether a bean target was used. Score is nil
 // when there are not enough datapoints to score at all.
 type ScoreDetail struct {
@@ -37,6 +50,13 @@ type ScoreDetail struct {
 	// Components is the per-part breakdown behind Score, in the same order
 	// the parts are combined. It is nil whenever Score is nil.
 	Components []ScoreComponent
+	// PressureNote is "" for the common case (a shot that reaches 5 bar and
+	// is scored against the fixed band). It is PressureNoteProfile when the
+	// pressure part was scored against the shot's own targetPressure, or
+	// PressureNoteOmitted when the part was left out — the sub-5-bar paths
+	// #1538 added. It lets the shot detail and explain_score say why the
+	// pressure part looks the way it does instead of hard-coding one reason.
+	PressureNote string
 }
 
 // ScoreComponent is one weighted part of CalcShotScoreDetail's score.
@@ -378,6 +398,106 @@ func toFloat(v any) (float64, bool) {
 	}
 }
 
+// profilePressureScore maps the mean absolute error, in bar, between a shot's
+// recorded pressure and its own targetPressure to a 0-100 part score (#1538):
+// within 0.5 bar is full marks, then -20 per further bar, floored at 20. The
+// band boundaries are a first cut to be calibrated against the #1505 scoring
+// evaluation once it has more profile-relative samples.
+func profilePressureScore(mae float64) float64 {
+	if mae <= 0.5 {
+		return 100
+	}
+	return math.Max(20, 100-20*(mae-0.5))
+}
+
+// profilePressureMAE is the mean absolute error, in bar, between a shot's
+// recorded pressure (already /10) and its own targetPressure curve, over the
+// samples that fall in a PRESSURE-type phase. A FLOW phase's targetPressure is
+// a ceiling the pump respects, not a target the shot should hit, so those
+// samples are deliberately excluded. ok is false when there is no usable
+// phase metadata — no embedded profile, no phaseIndex/targetPressure series,
+// or no PRESSURE phase at all (GaggiMate shots, FLOW-only lever profiles) —
+// and the caller then leaves the pressure part out of the score.
+func profilePressureMAE(shot Shot, pressureBar []float64) (mae float64, samples int, ok bool) {
+	phases := pressurePhaseIndexes(shot["profile"])
+	if len(phases) == 0 {
+		return 0, 0, false
+	}
+	target, phaseIdx, ok := pressureTargetSeries(shot["datapoints"])
+	if !ok {
+		return 0, 0, false
+	}
+	n := len(pressureBar)
+	if len(target) < n {
+		n = len(target)
+	}
+	if len(phaseIdx) < n {
+		n = len(phaseIdx)
+	}
+	var sum float64
+	for i := 0; i < n; i++ {
+		if !phases[int(phaseIdx[i])] || target[i] <= 0 {
+			continue
+		}
+		d := pressureBar[i] - target[i]/10
+		if d < 0 {
+			d = -d
+		}
+		sum += d
+		samples++
+	}
+	if samples == 0 {
+		return 0, 0, false
+	}
+	return sum / float64(samples), samples, true
+}
+
+// pressurePhaseIndexes returns the set of phase indexes whose embedded profile
+// phase is a PRESSURE phase. profile is hydrateRow's decoded "profile" value (a
+// map[string]any — only datapoints stays raw). nil when the profile, its
+// phases, or any PRESSURE phase is absent.
+func pressurePhaseIndexes(profile any) map[int]bool {
+	phases, _ := toMap(profile)["phases"].([]any)
+	if len(phases) == 0 {
+		return nil
+	}
+	out := make(map[int]bool, len(phases))
+	for i, p := range phases {
+		if toMap(p)["type"] == "PRESSURE" {
+			out[i] = true
+		}
+	}
+	return out
+}
+
+// pressureTargetSeries pulls the targetPressure and phaseIndex arrays out of a
+// shot's "datapoints" value in either shape (hydrateRow's json.RawMessage or a
+// hand-built map[string]any), mirroring extractScoreSeries. ok is false when
+// either series is missing or empty — the sub-5-bar pressure path needs both.
+func pressureTargetSeries(v any) (target, phaseIdx []float64, ok bool) {
+	switch t := v.(type) {
+	case map[string]any:
+		target = floatSlice(t["targetPressure"])
+		phaseIdx = floatSlice(t["phaseIndex"])
+	case stdjson.RawMessage:
+		target, phaseIdx = pressureTargetFromRaw(t)
+	case []byte:
+		target, phaseIdx = pressureTargetFromRaw(t)
+	}
+	return target, phaseIdx, len(target) > 0 && len(phaseIdx) > 0
+}
+
+func pressureTargetFromRaw(raw []byte) (target, phaseIdx []float64) {
+	if isJSONNull(raw) {
+		return nil, nil
+	}
+	var m map[string]stdjson.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, nil
+	}
+	return decodeFloatArray(m["targetPressure"]), decodeFloatArray(m["phaseIndex"])
+}
+
 // CalcShotScoreDetail scores a shot, operating on the Shot map hydrateRow
 // produces (a shot's "datapoints"/"duration"/"annotation" fields).
 //
@@ -395,40 +515,72 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 
 	p := divAll(ss.pressure, 10)
 	var pVals []float64
+	nonzero := 0
 	for _, v := range p {
+		if v > 0 {
+			nonzero++
+		}
 		if v >= 5 {
 			pVals = append(pVals, v)
 		}
 	}
-	if len(pVals) <= 3 {
+	// #1538: "not enough data" means there is no pressure curve at all, not
+	// "the curve never reached 5 bar". A shot with >=4 recorded samples that
+	// stays below 5 bar (a flat lever profile, a choked grind) is scored — its
+	// pressure part against the profile's own target when it has one, or left
+	// out when it doesn't. Any shot with >=4 samples at/above 5 bar takes the
+	// unchanged fixed-band path below, byte-for-byte as before #1538.
+	if nonzero < 4 {
 		return ScoreDetail{}
 	}
 
 	var scores []int
 	var weights []int
 	var components []ScoreComponent
+	var pressureNote string
 	usedBeanTarget := false
 
-	avgP := avg(pVals)
-	var sPressure float64
-	switch {
-	case avgP >= 7 && avgP <= 9.5:
-		sPressure = 100
-	case avgP < 7:
-		sPressure = math.Max(20, 100-(7-avgP)*22)
-	default:
-		sPressure = math.Max(20, 100-(avgP-9.5)*28)
+	if len(pVals) > 3 {
+		avgP := avg(pVals)
+		var sPressure float64
+		switch {
+		case avgP >= 7 && avgP <= 9.5:
+			sPressure = 100
+		case avgP < 7:
+			sPressure = math.Max(20, 100-(7-avgP)*22)
+		default:
+			sPressure = math.Max(20, 100-(avgP-9.5)*28)
+		}
+		pressureScore := jsRound(sPressure)
+		scores = append(scores, pressureScore)
+		weights = append(weights, 25)
+		components = append(components, ScoreComponent{
+			Name:   "pressure",
+			Score:  pressureScore,
+			Weight: 25,
+			Inputs: map[string]float64{"avg_pressure_bar": avgP},
+			Target: "generic",
+		})
+	} else if mae, samples, ok := profilePressureMAE(shot, p); ok {
+		// A sub-5-bar shot whose profile has a PRESSURE phase: score how
+		// closely it tracked its own target instead of the unreachable band.
+		pressureScore := jsRound(profilePressureScore(mae))
+		scores = append(scores, pressureScore)
+		weights = append(weights, 25)
+		components = append(components, ScoreComponent{
+			Name:   "pressure",
+			Score:  pressureScore,
+			Weight: 25,
+			Inputs: map[string]float64{"pressure_mae_bar": mae, "samples": float64(samples)},
+			Target: "profile",
+		})
+		pressureNote = PressureNoteProfile
+	} else {
+		// Sub-5-bar shot with no pressure target to compare against (no
+		// embedded phases, or only FLOW phases whose targetPressure is a
+		// limit): leave the part out; the other weights redistribute.
+		pressureNote = PressureNoteOmitted
 	}
-	pressureScore := jsRound(sPressure)
-	scores = append(scores, pressureScore)
-	weights = append(weights, 25)
-	components = append(components, ScoreComponent{
-		Name:   "pressure",
-		Score:  pressureScore,
-		Weight: 25,
-		Inputs: map[string]float64{"avg_pressure_bar": avgP},
-		Target: "generic",
-	})
 
 	tVals := divAll(ss.temperature, 10)
 	if len(tVals) > 5 {
@@ -670,7 +822,12 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		weighted += float64(s * weights[i])
 	}
 	score := jsRound(weighted / float64(totalWeight))
-	return ScoreDetail{Score: &score, UsedBeanTarget: usedBeanTarget, Components: components}
+	return ScoreDetail{
+		Score:          &score,
+		UsedBeanTarget: usedBeanTarget,
+		Components:     components,
+		PressureNote:   pressureNote,
+	}
 }
 
 // CalcShotScore is the score-only wrapper every non-detail caller uses.

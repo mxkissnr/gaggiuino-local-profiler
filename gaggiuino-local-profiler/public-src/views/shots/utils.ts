@@ -2,6 +2,7 @@ import { S }                    from '../../state/index.js';
 import { mapShotDatapoints, isoToGerman } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
+import type { PressureNote } from '../../shared/score.js';
 
 // state/index.ts types shot rows as metadata-only `ShotMeta` with an index
 // signature; these local aliases name the fields these helpers actually read
@@ -21,6 +22,7 @@ export interface ShotLike {
   score?: number | null;
   usedBeanTarget?: boolean;
   datapoints?: ShotDatapoints;
+  profile?: { name?: string | null; phases?: unknown[] } | null;
   annotation?: ShotAnnotationLike | null;
 }
 
@@ -144,6 +146,22 @@ export function shotUsedBeanTarget(shot: ShotLike | null | undefined): boolean {
   if (shot && shot.usedBeanTarget !== undefined) return !!shot.usedBeanTarget;
   const bean = resolveBeanForAnnotation(shot?.annotation);
   return _calcShotScoreDetail(shot, bean).usedBeanTarget;
+}
+
+// #1538: why the pressure part was scored the way it was for a sub-5-bar shot
+// ('profile' when scored against the profile's own target, 'omitted' when left
+// out), or null for a normal >=5-bar shot. `data` is the raw datapoints object
+// (a metadata-only list row doesn't carry it; the detail view passes the curve
+// it fetched), falling back to the shot's own datapoints for synthetic/live
+// rows. Powers the verdict header's pressure hint, mirroring shotUsedBeanTarget.
+export function shotPressureNote(
+  shot: ShotLike | null | undefined,
+  data?: ShotDatapoints | null,
+): PressureNote | null {
+  if (!shot) return null;
+  const datapoints = data && Object.keys(data).length ? data : shot.datapoints;
+  if (!datapoints) return null;
+  return _calcShotScoreDetail({ ...shot, datapoints }).pressureNote;
 }
 
 // ── Same-profile auto-compare (#402) ────────────────────────────────────────

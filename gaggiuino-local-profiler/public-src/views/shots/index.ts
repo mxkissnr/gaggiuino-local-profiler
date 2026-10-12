@@ -13,7 +13,7 @@ import {
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
@@ -823,7 +823,13 @@ export async function updateView(): Promise<void> {
     // fallback band — native title tooltip, no new permanent header text.
     const beanTargetHint: Html = shotUsedBeanTarget(shotA)
       ? html`<span class="verdict-bean-target-hint" title="${tHtml('verdict_bean_target_hint')}">${TARGET_ICON_SVG}</span>` : html``;
-    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${beanTargetHint}`;
+    // #1538: the same hint treatment when a sub-5-bar shot's pressure was
+    // scored against the profile's own target (or left out entirely) rather
+    // than the fixed band.
+    const pressureNote = shotPressureNote(shotA, rawA);
+    const pressureHint: Html = pressureNote
+      ? html`<span class="verdict-bean-target-hint" title="${tHtml(pressureNote === 'profile' ? 'verdict_pressure_profile_hint' : 'verdict_pressure_omitted_hint')}">${TARGET_ICON_SVG}</span>` : html``;
+    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${beanTargetHint}${pressureHint}`;
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process-zone pressure card, so repeating them here was pure duplication.

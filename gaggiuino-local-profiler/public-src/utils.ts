@@ -324,6 +324,7 @@ export interface ShotDatapoints {
   timeInShot?: number[];
   pressure?: number[];
   targetPressure?: number[];
+  phaseIndex?: number[];
   pumpFlow?: number[];
   targetPumpFlow?: number[];
   shotWeight?: number[];

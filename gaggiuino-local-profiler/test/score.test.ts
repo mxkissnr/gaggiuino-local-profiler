@@ -121,12 +121,83 @@ describe('calcShotScoreDetail — usedBeanTarget flag (#457)', () => {
     });
 
     it('is false for a shot that scores null', () => {
-        expect(calcShotScoreDetail({ datapoints: [] }, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false });
-        expect(calcShotScoreDetail(null, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false });
+        expect(calcShotScoreDetail({ datapoints: [] }, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false, pressureNote: null });
+        expect(calcShotScoreDetail(null, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false, pressureNote: null });
     });
 
     it('calcShotScore stays a thin wrapper returning exactly calcShotScoreDetail(...).score', () => {
         expect(calcShotScore(baseShot, { brewTempC: 93 })).toBe(calcShotScoreDetail(baseShot, { brewTempC: 93 }).score);
         expect(calcShotScore(baseShot, null)).toBe(calcShotScoreDetail(baseShot, null).score);
+    });
+});
+
+// #1538: a sub-5-bar shot now scores — its pressure part against the profile's
+// own targetPressure when it has a PRESSURE phase, or left out when it doesn't.
+describe('calcShotScoreDetail — sub-5-bar pressure (#1538)', () => {
+    const phases = (types: string[]) => ({ phases: types.map(type => ({ type })) });
+
+    it('still scores a >=5-bar shot on the fixed band, with no pressure note', () => {
+        const detail = calcShotScoreDetail({
+            datapoints: { pressure: new Array(20).fill(80) },
+            duration: 300,
+        });
+        expect(detail.score).not.toBeNull();
+        expect(detail.pressureNote).toBeNull();
+    });
+
+    it('scores a flat 4-bar shot that hits its own 4-bar target full marks', () => {
+        const detail = calcShotScoreDetail({
+            profile: phases(['FLOW', 'PRESSURE']),
+            datapoints: {
+                pressure:       new Array(8).fill(40),
+                targetPressure: new Array(8).fill(40),
+                phaseIndex:     [0, 1, 1, 1, 1, 1, 1, 1],
+            },
+            duration: 300,
+        });
+        expect(detail.pressureNote).toBe('profile');
+        expect(detail.score).toBe(100);
+    });
+
+    it('scores an 8-bar target the shot only reaches 4.5 bar on low', () => {
+        const detail = calcShotScoreDetail({
+            profile: phases(['FLOW', 'PRESSURE']),
+            datapoints: {
+                pressure:       new Array(6).fill(45),
+                targetPressure: new Array(6).fill(80),
+                phaseIndex:     [0, 1, 1, 1, 1, 1],
+            },
+        });
+        // MAE 3.5 bar -> 100 - 20*(3.5-0.5) = 40, which drags the score down.
+        expect(detail.pressureNote).toBe('profile');
+        expect(detail.score).toBeLessThan(70);
+    });
+
+    it('leaves pressure out for a FLOW-only profile instead of penalising its limit', () => {
+        const detail = calcShotScoreDetail({
+            profile: phases(['FLOW', 'FLOW']),
+            datapoints: {
+                pressure:       new Array(5).fill(40),
+                targetPressure: new Array(5).fill(80),
+                phaseIndex:     [0, 1, 1, 1, 1],
+            },
+            duration: 300,
+        });
+        expect(detail.pressureNote).toBe('omitted');
+        expect(detail.score).not.toBeNull();
+    });
+
+    it('scores a sub-5-bar shot with no phase data at all, pressure left out', () => {
+        const detail = calcShotScoreDetail({
+            datapoints: { pressure: new Array(6).fill(40) },
+            duration: 300,
+        });
+        expect(detail.pressureNote).toBe('omitted');
+        expect(detail.score).not.toBeNull();
+    });
+
+    it('needs at least 4 samples above 0 to score at all', () => {
+        expect(calcShotScoreDetail({ datapoints: { pressure: [40, 40, 40] } }).score).toBeNull();
+        expect(calcShotScoreDetail({ datapoints: { pressure: [40, 40, 40, 40] }, duration: 300 }).score).not.toBeNull();
     });
 });

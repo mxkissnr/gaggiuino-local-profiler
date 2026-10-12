@@ -265,18 +265,37 @@ type explainScoreOutput struct {
 	ShotID         int64                   `json:"shot_id" jsonschema:"the shot's stable id"`
 	Score          *int                    `json:"score,omitempty" jsonschema:"the overall 0-100 score; omitted when there is too little data to score"`
 	UsedBeanTarget bool                    `json:"used_bean_target" jsonschema:"true when the score used a bean-specific target"`
+	PressureNote   string                  `json:"pressure_note,omitempty" jsonschema:"why the pressure part was scored against the profile target or left out; empty for a normal >=5-bar shot"`
 	Components     []scoreComponentOutput  `json:"components" jsonschema:"the weighted parts, in scoring order"`
 	Skipped        []skippedScoreComponent `json:"skipped" jsonschema:"parts that could not be scored, with the reason"`
 }
 
 // skippedScoreParts are the optional parts, in scoring order, with the fixed
-// reason each reports when it is absent. pressure and channeling always score
-// once the shot clears the pressure-samples guard, so they are never listed.
+// reason each reports when it is absent. channeling always scores once the
+// shot clears the pressure-samples guard; pressure does too for a shot that
+// reaches 5 bar, but a sub-5-bar shot can leave it out (#1538) — and then its
+// reason always comes from ScoreDetail.PressureNote below, so the entry
+// carries no fallback text of its own.
 var skippedScoreParts = []skippedScoreComponent{
+	{Name: "pressure"},
 	{Name: "temperature", Reason: "fewer than 6 temperature samples"},
 	{Name: "duration", Reason: "shot shorter than 5 s"},
 	{Name: "ratio", Reason: "no dose annotated or no weight recorded"},
 	{Name: "extraction_yield", Reason: "no TDS annotated (needs dose and weight too)"},
+}
+
+// pressureNoteReason renders a ScoreDetail.PressureNote as the sentence
+// explain_score reports — both surfaces read the same field, so the reason the
+// MCP tool returns can never drift from the shot detail hint.
+func pressureNoteReason(note string) string {
+	switch note {
+	case shots.PressureNoteProfile:
+		return "shot never reached 5 bar; pressure scored against the profile's own target"
+	case shots.PressureNoteOmitted:
+		return "shot never reached 5 bar and the profile has no pressure phase, so pressure was left out"
+	default:
+		return ""
+	}
 }
 
 func explainScoreInputSchema() *jsonschema.Schema {
@@ -308,10 +327,11 @@ func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput,
 	detail := svc.ComputeScoreDetail(shot)
 	out.Score = detail.Score
 	out.UsedBeanTarget = detail.UsedBeanTarget
+	out.PressureNote = pressureNoteReason(detail.PressureNote)
 	if detail.Score == nil {
 		out.Skipped = append(out.Skipped, skippedScoreComponent{
 			Name:   "all",
-			Reason: "fewer than 4 pressure samples at or above 5 bar",
+			Reason: "fewer than 4 pressure samples above 0 bar",
 		})
 		return out, nil
 	}
@@ -337,9 +357,17 @@ func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput,
 		})
 	}
 	for _, part := range skippedScoreParts {
-		if !present[part.Name] {
-			out.Skipped = append(out.Skipped, part)
+		if present[part.Name] {
+			continue
 		}
+		reason := part.Reason
+		if part.Name == "pressure" {
+			// pressure has no fallback text: whenever it is absent the score
+			// is non-nil and sub-5-bar, so PressureNote ("omitted") maps to a
+			// reason.
+			reason = pressureNoteReason(detail.PressureNote)
+		}
+		out.Skipped = append(out.Skipped, skippedScoreComponent{Name: part.Name, Reason: reason})
 	}
 	return out, nil
 }

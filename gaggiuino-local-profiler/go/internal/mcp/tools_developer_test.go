@@ -367,6 +367,85 @@ func TestExplainScoreInsufficientData(t *testing.T) {
 	}
 }
 
+// #1538: a sub-5-bar shot with a FLOW-only profile scores without the
+// pressure part, and explain_score explains why from the same field the shot
+// detail hint reads.
+func TestExplainScoreSub5BarOmitsPressure(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 44, 1000, map[string]any{
+		"profile": map[string]any{"phases": []any{map[string]any{"type": "FLOW"}}},
+		"datapoints": map[string]any{
+			"pressure":       []any{40.0, 40.0, 40.0, 40.0, 40.0},
+			"targetPressure": []any{80.0, 80.0, 80.0, 80.0, 80.0}, // a FLOW-phase limit
+			"phaseIndex":     []any{0.0, 0.0, 0.0, 0.0, 0.0},
+		},
+	}, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 44}))
+
+	if _, ok := out["score"]; !ok {
+		t.Fatalf("expected a score for a sub-5-bar shot: %v", out)
+	}
+	if note, _ := out["pressure_note"].(string); !strings.Contains(note, "left out") {
+		t.Fatalf("pressure_note = %q, want the left-out reason", note)
+	}
+	for _, raw := range objects(out, "components") {
+		c, _ := raw.(map[string]any)
+		if n, _ := c["name"].(string); n == "pressure" {
+			t.Fatalf("pressure component present for a FLOW-only profile: %v", c)
+		}
+	}
+	skipped := map[string]string{}
+	for _, raw := range objects(out, "skipped") {
+		s, _ := raw.(map[string]any)
+		n, _ := s["name"].(string)
+		r, _ := s["reason"].(string)
+		skipped[n] = r
+	}
+	if _, ok := skipped["pressure"]; !ok {
+		t.Fatalf("pressure not listed as skipped: %v", skipped)
+	}
+}
+
+// #1538: a sub-5-bar shot with a PRESSURE phase is scored against its own
+// target, visible as a profile-target pressure component and a note.
+func TestExplainScoreSub5BarProfileTarget(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 45, 1000, map[string]any{
+		"profile": map[string]any{"phases": []any{
+			map[string]any{"type": "FLOW"},
+			map[string]any{"type": "PRESSURE"},
+		}},
+		"datapoints": map[string]any{
+			"pressure":       []any{40.0, 40.0, 40.0, 40.0, 40.0, 40.0},
+			"targetPressure": []any{0.0, 40.0, 40.0, 40.0, 40.0, 40.0},
+			"phaseIndex":     []any{0.0, 1.0, 1.0, 1.0, 1.0, 1.0},
+		},
+	}, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 45}))
+
+	if _, ok := out["score"]; !ok {
+		t.Fatalf("expected a score for a flat 4-bar shot")
+	}
+	if note, _ := out["pressure_note"].(string); !strings.Contains(note, "profile") {
+		t.Fatalf("pressure_note = %q, want the profile-target reason", note)
+	}
+	var pressure map[string]any
+	for _, raw := range objects(out, "components") {
+		c, _ := raw.(map[string]any)
+		if n, _ := c["name"].(string); n == "pressure" {
+			pressure = c
+		}
+	}
+	if pressure == nil {
+		t.Fatalf("pressure component missing: %v", out)
+	}
+	if target, _ := pressure["target"].(string); target != "profile" {
+		t.Fatalf("pressure target = %q, want profile", target)
+	}
+}
+
 func TestExplainScoreUnknownID(t *testing.T) {
 	ts, _ := newDeveloperServer(t, true, false)
 	session := connect(t, ts.URL+Path)

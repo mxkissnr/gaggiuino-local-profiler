@@ -91,6 +91,8 @@ const en: Translations = {
     ach_prev:'Previous card', ach_next:'Next card', ach_loading:'Loading achievements …',
     verdict_no_data:'Not enough data yet for a verdict.',
     verdict_bean_target_hint:'Scored against this bean\'s own brew target',
+    verdict_pressure_profile_hint:'Scored against this profile\'s own pressure target',
+    verdict_pressure_omitted_hint:'Pressure not scored — this shot never reached 5 bar and the profile has no pressure phase',
     tab_time:`${CLOCK_ICON_SVG} Time`, tab_pq:'P·Q Curve',
     btn_fullscreen_close:`${CLOSE_ICON_SVG} Close`, btn_fullscreen_tooltip:'Fullscreen',
     btn_compare_tooltip:'Set as compare shot (B). Tip: click the name to select Shot A.', btn_delete_tooltip:'Delete shot',
