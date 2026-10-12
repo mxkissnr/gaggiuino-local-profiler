@@ -273,8 +273,8 @@ func (h *Handlers) postMenu(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name := trimMax(body["name"], 200)
-	if name == "" {
+	item, ok := NormalizeMenuItem(body)
+	if !ok {
 		writeError(w, http.StatusBadRequest, "name required")
 		return
 	}
@@ -283,13 +283,10 @@ func (h *Handlers) postMenu(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	item := MenuItem{
-		"id": "m_" + strconv.FormatInt(time.Now().UnixMilli(), 10), "name": name,
-		"emoji": sanitizeEmoji(body["emoji"], "☕"), "createdAt": time.Now().UnixMilli(), "trending": false,
-		"variants": stringSliceMax(body["variants"], 50),
-		"useBeans": boolOf(body["useBeans"]), "useMilks": boolOf(body["useMilks"]),
-		"milkMl": milkMlOrNil(body["milkMl"]),
-	}
+	// The create path always stamps a fresh id/createdAt, as it did before
+	// NormalizeMenuItem existed.
+	item["id"] = "m_" + strconv.FormatInt(time.Now().UnixMilli(), 10)
+	item["createdAt"] = time.Now().UnixMilli()
 	menu = append(menu, item)
 	if err := h.repo.SaveMenu(menu); err != nil {
 		internalError(w, err)
@@ -513,21 +510,11 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		s[k] = v
 	}
 	s["enabled"] = enabled
-	if arr, ok := body["broadcastRecipients"].([]any); ok {
-		recipients := make([]any, 0, len(arr))
-		for _, v := range arr {
-			if str, ok := v.(string); ok && strings.HasPrefix(str, "notify.") {
-				recipients = append(recipients, trimMax(str, 100))
-			}
-		}
-		s["broadcastRecipients"] = recipients
+	if _, ok := body["broadcastRecipients"].([]any); ok {
+		s["broadcastRecipients"] = normalizeRecipients(body["broadcastRecipients"])
 	}
 	if v, present := body["baristaNotifyService"]; present {
-		if str, ok := v.(string); ok && strings.HasPrefix(str, "notify.") {
-			s["baristaNotifyService"] = trimMax(str, 100)
-		} else {
-			s["baristaNotifyService"] = nil
-		}
+		s["baristaNotifyService"] = normalizeBaristaNotifyService(v)
 	}
 	for _, key := range notifyToggleKeys {
 		if v, ok := body[key].(bool); ok {
