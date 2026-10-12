@@ -98,8 +98,12 @@ export function _miniShotChart(shot: GrindShot): Html {
 // ── Grind setting parser ───────────────────────────────────────────────────
 
 export function _parseGrindNum(s: string | number | null | undefined): number | null {
-  if (!s) return null;
-  const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
+  // Only null/undefined and empty/whitespace strings mean "no value" — a
+  // grind setting of 0 is a real setting and must survive.
+  if (s === null || s === undefined) return null;
+  if (typeof s === 'number') return Number.isFinite(s) ? s : null;
+  if (s.trim() === '') return null;
+  const m = s.match(/(\d+(?:[.,]\d+)?)/);
   const captured = m?.[1];
   return captured !== undefined ? parseFloat(captured.replace(',', '.')) : null;
 }
