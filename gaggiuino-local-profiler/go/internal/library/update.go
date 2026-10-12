@@ -329,9 +329,7 @@ func UpdateMilk(repo *Repository, id int64, body Entity) (Entity, Library, bool,
 			}
 		}
 		if v, present := body["emoji"]; present {
-			if s := trimMax(v, 1<<30); s != "" {
-				milk["emoji"] = s
-			}
+			milk["emoji"] = sanitizeMilkEmoji(v)
 		}
 		if _, present := body["stockMl"]; present {
 			milk["stockMl"] = floatOrZero(body["stockMl"])
