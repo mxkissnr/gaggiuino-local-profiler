@@ -90,11 +90,12 @@ export type OrdersSettings = components['schemas']['OrdersSettings'];
 export type NotifyMapping = components['schemas']['NotifyMapping'];
 
 /**
- * POST /api/orders/settings body — the backend requires `enabled` as a
- * boolean and overwrites the whole stored settings blob, so every save
- * round-trips the other keys it wants to keep.
+ * POST /api/orders/settings body — a partial update: the backend only writes
+ * the keys present in the body, so omitting `enabled` keeps the stored value
+ * (and skips the shop-open/closed broadcast). Each saver therefore sends just
+ * the fields it owns instead of round-tripping the whole settings blob.
  */
-export type OrdersSettingsUpdate = OrdersSettings & { enabled: boolean };
+export type OrdersSettingsUpdate = OrdersSettings;
 
 /** One entry of GET /api/orders/queue-eta's `positions` map. */
 export type QueuePosition = components['schemas']['QueuePosition'];

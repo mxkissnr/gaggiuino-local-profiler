@@ -495,10 +495,16 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	enabled, isBool := body["enabled"].(bool)
-	if !isBool {
-		writeError(w, http.StatusBadRequest, "enabled (boolean) required")
-		return
+	var enabled bool
+	hasEnabled := false
+	if raw, present := body["enabled"]; present {
+		var isBool bool
+		enabled, isBool = raw.(bool)
+		if !isBool {
+			writeError(w, http.StatusBadRequest, "enabled must be a boolean")
+			return
+		}
+		hasEnabled = true
 	}
 	prev, err := h.repo.GetSettings()
 	if err != nil {
@@ -509,7 +515,9 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 	for k, v := range prev {
 		s[k] = v
 	}
-	s["enabled"] = enabled
+	if hasEnabled {
+		s["enabled"] = enabled
+	}
 	if _, ok := body["broadcastRecipients"].([]any); ok {
 		s["broadcastRecipients"] = normalizeRecipients(body["broadcastRecipients"])
 	}

@@ -4101,7 +4101,7 @@ export interface paths {
         put?: never;
         /**
          * Enable or disable the orders feature, and configure notification toggles/recipients
-         * @description Toggling `enabled` broadcasts a shop-open/shop-closed notification to `broadcastRecipients` (filtered to devices currently home, when HA person data is available), unless `notify_shop_state` is false.
+         * @description `enabled` is optional; omitting it keeps the stored value and skips the shop-open/shop-closed broadcast. When present, a change in `enabled` broadcasts a shop-open/shop-closed notification to `broadcastRecipients` (filtered to devices currently home, when HA person data is available), unless `notify_shop_state` is false.
          */
         post: {
             parameters: {
@@ -4125,7 +4125,7 @@ export interface paths {
                         "application/json": components["schemas"]["OrdersSettings"];
                     };
                 };
-                /** @description enabled (boolean) required */
+                /** @description enabled must be a boolean */
                 400: {
                     headers: {
                         [name: string]: unknown;

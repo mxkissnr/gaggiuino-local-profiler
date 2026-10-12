@@ -139,6 +139,9 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	baseCtx, cancelBase := context.WithCancel(context.Background())
+	defer cancelBase()
+
 	addr := ":" + cfg.port
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -148,8 +151,14 @@ func main() {
 	// ReadHeaderTimeout stops a slowloris client that dribbles headers forever;
 	// IdleTimeout reaps idle keep-alive connections. ReadTimeout/WriteTimeout are
 	// deliberately unset so large backup uploads and the SSE streams can run long.
+	//
+	// BaseContext derives every request's context from baseCtx, so cancelling
+	// baseCtx on shutdown unblocks long-lived handlers — the SSE stream selects
+	// on r.Context().Done() — that would otherwise hold the drain open until
+	// shutdownTimeout.
 	srv := &http.Server{
 		Handler:           handler,
+		BaseContext:       func(net.Listener) context.Context { return baseCtx },
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -157,14 +166,35 @@ func main() {
 	// Graceful shutdown: docker stop sends SIGTERM to this process directly
 	// (docker-entrypoint.sh execs it via su-exec, so there's no intermediate
 	// shell to relay the signal) and waits a grace period before SIGKILL.
-	// Catch it and drain in-flight requests via srv.Shutdown instead of
-	// letting the process die mid-request; sqlDB.Close() (deferred above)
-	// then runs once Serve returns below.
+	// serveUntilStopped drains in-flight requests on that signal and returns
+	// only once the drain has finished, so the deferred sqlDB.Close() above
+	// runs after the last request has been served — not, as returning on
+	// Serve's own http.ErrServerClosed would, while requests are still draining.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+
+	log.Printf("GLP Go server listening on port %s", cfg.port)
+	if err := serveUntilStopped(srv, tcpNoDelayListener{ln}, sigCh, cancelBase); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("server error: %v", err)
+	}
+}
+
+// serveUntilStopped serves srv on ln and, when a signal arrives on stop,
+// cancels baseCancel and calls srv.Shutdown with a shutdownTimeout deadline. It
+// returns only after Serve has returned AND that Shutdown has completed, so the
+// caller's deferred DB close runs after every in-flight request has finished.
+// That wait is the whole point: srv.Serve returns http.ErrServerClosed the
+// instant Shutdown begins, well before the drain finishes.
+func serveUntilStopped(srv *http.Server, ln net.Listener, stop <-chan os.Signal, baseCancel context.CancelFunc) error {
+	shutdownDone := make(chan struct{})
 	go func() {
-		sig := <-sigCh
+		defer close(shutdownDone)
+		sig := <-stop
 		log.Printf("received %s, shutting down gracefully", sig)
+		// Cancel the base context so long-lived handlers (notably the SSE
+		// stream, which selects on r.Context().Done()) end immediately rather
+		// than holding Shutdown open until the deadline.
+		baseCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
@@ -172,10 +202,14 @@ func main() {
 		}
 	}()
 
-	log.Printf("GLP Go server listening on port %s", cfg.port)
-	if err := srv.Serve(tcpNoDelayListener{ln}); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server error: %v", err)
+	err := srv.Serve(ln)
+	// ErrServerClosed means Shutdown (or Close) began; wait for the drain to
+	// finish before returning. Any other error is fatal to the listener and the
+	// goroutine is still blocked on stop, so returning straight away is correct.
+	if err == http.ErrServerClosed {
+		<-shutdownDone
 	}
+	return err
 }
 
 // onMux lets tests inspect the fully-registered mux (openapi_routes_test.go).

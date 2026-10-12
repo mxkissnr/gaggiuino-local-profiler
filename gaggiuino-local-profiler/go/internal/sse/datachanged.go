@@ -85,6 +85,12 @@ func NewDataChanges(hub *Hub, kinds []string) *DataChanges {
 // every known kind and pushes a single {kind:"all"} event instead. The bump and
 // the Hub publish happen under one lock, so delivery order matches revision
 // order.
+//
+// Losing this event to Hub backpressure is not fatal to a subscriber and needs
+// no handling here: Hub.Publish remembers a dropped EventDataChanged per
+// subscriber and the SSE handler closes that connection so the client
+// reconnects and resyncs (see Hub.Publish and Handler.ServeHTTP in sse.go). So
+// this file stays producer-only -- the recovery lives with the delivery side.
 func (c *DataChanges) Publish(kind, id, src string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -10,7 +10,7 @@ import {
 } from '../api/orders.js';
 import type {
   MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats,
-  OrdersSettings, OrdersSettingsUpdate, QueueEta,
+  OrdersSettings, QueueEta,
 } from '../api/types.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
@@ -656,8 +656,8 @@ export async function saveBroadcastRecipients(): Promise<void> {
   if (!list) return;
   const recipients = [...list.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked')]
     .map(cb => cb.dataset.svc).filter(Boolean) as string[];
-  const settings = await _getSettingsOr({});
-  await postOrdersSettings({ enabled: settings.enabled ?? true, broadcastRecipients: recipients });
+  const r = await postOrdersSettings({ broadcastRecipients: recipients });
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('ordersBroadcastSaveBtn');
   if (btn) {
     btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_broadcast_saved')}`;
@@ -668,12 +668,12 @@ export async function saveBroadcastRecipients(): Promise<void> {
 export async function saveNotifyToggles(): Promise<void> {
   const list = document.getElementById('ordersTypesList');
   if (!list) return;
-  const settings = await _getSettingsOr({});
-  const body: Record<string, unknown> = { enabled: settings.enabled ?? true };
+  const body: Record<string, unknown> = {};
   list.querySelectorAll<HTMLInputElement>('[data-notify-key]').forEach(cb => {
     body[cb.dataset.notifyKey as string] = cb.checked;
   });
-  await postOrdersSettings(body as OrdersSettingsUpdate);
+  const r = await postOrdersSettings(body);
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('ordersTypesSaveBtn');
   if (btn) {
     btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_types_saved')}`;
@@ -684,8 +684,8 @@ export async function saveNotifyToggles(): Promise<void> {
 export async function saveBaristaNotify(): Promise<void> {
   const sel = document.getElementById('ordersBaristaSelect') as HTMLSelectElement | null;
   if (!sel) return;
-  const settings = await _getSettingsOr({});
-  await postOrdersSettings({ enabled: settings.enabled ?? true, baristaNotifyService: sel.value || null });
+  const r = await postOrdersSettings({ baristaNotifyService: sel.value || null });
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('ordersBaristaSaveBtn');
   if (btn) {
     btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_barista_saved')}`;
