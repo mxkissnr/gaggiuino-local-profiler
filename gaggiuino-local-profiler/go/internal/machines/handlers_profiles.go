@@ -16,7 +16,10 @@ import (
 // seconds, observed hanging past 60s in the wild) before the offline
 // local-cache fallback below ever gets a chance to run — turning what's
 // supposed to be an instant "stale" response into an apparent total outage.
-const profileLiveFetchTimeout = 5 * time.Second
+// A guardVar (registry.go), not a const, so a test can shrink it to
+// milliseconds — the atomic wrapper keeps a concurrent reassignment
+// race-free under -race. Production value: 5s.
+var profileLiveFetchTimeout = newGuardVar[time.Duration](5 * time.Second)
 
 // profileLiveWriteTimeout bounds every live SelectProfile/CreateProfile/
 // UpdateProfile/DeleteProfile call in this file — and, via its own local copy,
@@ -98,7 +101,7 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
+	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout.get())
 	defer cancel()
 
 	status, err := adapter.GetStatus(liveCtx, machine)
@@ -252,7 +255,7 @@ func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
+	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout.get())
 	defer cancel()
 	profile, err := adapter.GetProfile(liveCtx, machine, id)
 	if err != nil {

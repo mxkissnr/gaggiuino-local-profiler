@@ -97,6 +97,8 @@ func (f fakeBlockingAdapter) GetLiveSystemState(context.Context, *Machine) (*pro
 // now be bounded by profileLiveFetchTimeout, so the fallback kicks in
 // promptly even against an adapter that never returns on its own.
 func TestListMachineProfiles_UnreachableMachineFallsBackWithinTimeout(t *testing.T) {
+	shrinkProfileLiveFetchTimeout(t, 100*time.Millisecond)
+
 	registry, sqlDB := newTestRegistry(t)
 	profilesRepo := NewProfilesRepository(sqlDB)
 	h := &Handlers{registry: registry, gaggimate: fakeBlockingAdapter{}, profilesRepo: profilesRepo}
@@ -117,10 +119,10 @@ func TestListMachineProfiles_UnreachableMachineFallsBackWithinTimeout(t *testing
 	rec := doRequest(mux, req)
 	elapsed := time.Since(start)
 
-	// Generous slack over profileLiveFetchTimeout (5s) — this must never
-	// approach the old 60+s hang; a regression here would fail loudly.
-	if elapsed > profileLiveFetchTimeout+3*time.Second {
-		t.Fatalf("listMachineProfiles took %v against an unreachable machine; want well under %v (the bounded timeout)", elapsed, profileLiveFetchTimeout)
+	// Generous slack over the shortened profileLiveFetchTimeout — this must
+	// never approach the old 60+s hang; a regression here would fail loudly.
+	if limit := profileLiveFetchTimeout.get() + 2*time.Second; elapsed > limit {
+		t.Fatalf("listMachineProfiles took %v against an unreachable machine; want well under %v (the bounded timeout)", elapsed, limit)
 	}
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
@@ -140,6 +142,8 @@ func TestListMachineProfiles_UnreachableMachineFallsBackWithinTimeout(t *testing
 // editor) — getMachineProfile's own offline fallback has the identical
 // unbounded-context bug.
 func TestGetMachineProfile_UnreachableMachineFallsBackWithinTimeout(t *testing.T) {
+	shrinkProfileLiveFetchTimeout(t, 100*time.Millisecond)
+
 	registry, sqlDB := newTestRegistry(t)
 	profilesRepo := NewProfilesRepository(sqlDB)
 	h := &Handlers{registry: registry, gaggimate: fakeBlockingAdapter{}, profilesRepo: profilesRepo}
@@ -160,8 +164,8 @@ func TestGetMachineProfile_UnreachableMachineFallsBackWithinTimeout(t *testing.T
 	rec := doRequest(mux, req)
 	elapsed := time.Since(start)
 
-	if elapsed > profileLiveFetchTimeout+3*time.Second {
-		t.Fatalf("getMachineProfile took %v against an unreachable machine; want well under %v", elapsed, profileLiveFetchTimeout)
+	if limit := profileLiveFetchTimeout.get() + 2*time.Second; elapsed > limit {
+		t.Fatalf("getMachineProfile took %v against an unreachable machine; want well under %v", elapsed, limit)
 	}
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
@@ -204,6 +208,15 @@ func shrinkProfileLiveWriteTimeout(t *testing.T, d time.Duration) {
 	orig := profileLiveWriteTimeout
 	profileLiveWriteTimeout = d
 	t.Cleanup(func() { profileLiveWriteTimeout = orig })
+}
+
+// shrinkProfileLiveFetchTimeout replaces the bounded read timeout with a short
+// one for the duration of a test, so the read-fallback cases run in
+// milliseconds instead of the production 5s. Restored via t.Cleanup.
+func shrinkProfileLiveFetchTimeout(t *testing.T, d time.Duration) {
+	t.Helper()
+	orig := profileLiveFetchTimeout.set(d)
+	t.Cleanup(func() { profileLiveFetchTimeout.set(orig) })
 }
 
 // TestCreateMachineProfile_UnresponsiveGaggiMateFallsBackWithinTimeout is the
@@ -372,8 +385,8 @@ func TestListMachineProfiles_KnownOfflineAnswersFromCacheWithoutAdapter(t *testi
 
 	start := time.Now()
 	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profiles?machineId="+strconv.FormatInt(machine.ID, 10), nil))
-	if elapsed := time.Since(start); elapsed > profileLiveFetchTimeout {
-		t.Fatalf("listMachineProfiles took %v for a known-offline machine; want an immediate cache answer, well under %v", elapsed, profileLiveFetchTimeout)
+	if elapsed := time.Since(start); elapsed > profileLiveFetchTimeout.get() {
+		t.Fatalf("listMachineProfiles took %v for a known-offline machine; want an immediate cache answer, well under %v", elapsed, profileLiveFetchTimeout.get())
 	}
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
