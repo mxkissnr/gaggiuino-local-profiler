@@ -34,6 +34,14 @@ type Limiter struct {
 
 // New creates a Limiter allowing up to max requests per window, per key.
 func New(window time.Duration, max int) *Limiter {
+	// Tolerate a caller's bad setting rather than panic or silently disable
+	// limiting: max < 1 divides by zero below, window <= 0 yields rate.Inf.
+	if max < 1 {
+		max = 1
+	}
+	if window <= 0 {
+		window = DefaultWindow
+	}
 	return &Limiter{
 		buckets: make(map[string]*rate.Limiter),
 		rate:    rate.Every(window / time.Duration(max)),

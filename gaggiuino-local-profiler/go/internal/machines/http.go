@@ -100,7 +100,13 @@ func (t countingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 // so machinesDialer is the only dialer in play — no environment-driven
 // proxy that could route guarded traffic somewhere the guard never saw. The
 // countingRoundTripper wrapper observes every call for get_perf_stats.
+// Timeout is a backstop against a machine that accepts a connection and then
+// never answers. Every caller already applies a shorter (3-10s) per-request
+// context deadline, and WebSocket dials are unaffected: coder/websocket
+// converts this into a handshake-only deadline, so the long-lived machine
+// socket is never closed by it.
 var httpClient = &http.Client{
+	Timeout:   30 * time.Second,
 	Transport: countingRoundTripper{base: &http.Transport{DialContext: machinesDialer.DialContext}},
 }
 
