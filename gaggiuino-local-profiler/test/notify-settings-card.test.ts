@@ -43,7 +43,6 @@ class FakeButton {
 }
 
 const showToast = vi.fn();
-g.window = { showToast };
 
 let list: FakeList | undefined;
 let btn: FakeButton;
@@ -61,6 +60,7 @@ beforeEach(() => {
   S.currentLang = 'en';
   fetchSpy.mockReset();
   showToast.mockReset();
+  g.window = { showToast };
   list = new FakeList(['notify_preheat_ready', 'notify_low_stock']);
   btn = new FakeButton();
 });
