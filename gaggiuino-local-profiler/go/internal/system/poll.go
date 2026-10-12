@@ -928,7 +928,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		p.state.liveSeq++
 		brewJustFinished = true
 	}
-	if result.IsBrewing && p.state.liveAccum != nil {
+	if result.IsBrewing && p.state.liveAccum != nil && !liveAccumFull(p.state.liveAccum.datapoints.TimeInShot) {
 		acc := p.state.liveAccum
 		elapsed := elapsedTenths(now, acc.startTime)
 		weightFlow := derived.Weight - acc.prevWeight
@@ -968,7 +968,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		p.state.steamAccum = nil
 		p.state.steamSeq++
 	}
-	if effectiveSteaming && p.state.steamAccum != nil {
+	if effectiveSteaming && p.state.steamAccum != nil && !liveAccumFull(p.state.steamAccum.datapoints.TimeInMode) {
 		acc := p.state.steamAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
 		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
@@ -984,7 +984,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		p.state.flushAccum = nil
 		p.state.flushSeq++
 	}
-	if effectiveFlushing && p.state.flushAccum != nil {
+	if effectiveFlushing && p.state.flushAccum != nil && !liveAccumFull(p.state.flushAccum.datapoints.TimeInMode) {
 		acc := p.state.flushAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
 		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
@@ -1000,7 +1000,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		p.state.descaleAccum = nil
 		p.state.descaleSeq++
 	}
-	if effectiveDescaling && p.state.descaleAccum != nil {
+	if effectiveDescaling && p.state.descaleAccum != nil && !liveAccumFull(p.state.descaleAccum.datapoints.TimeInMode) {
 		acc := p.state.descaleAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
 		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
@@ -1025,6 +1025,15 @@ func round10(v float64) int { return int(v*10 + 0.5) }
 // review: 950ms elapsed rounds to 10, truncates to 9).
 func elapsedTenths(now, startTime int64) int {
 	return int(math.Round(float64(now-startTime) / 100))
+}
+
+// liveAccumFull reports whether a live accumulator's per-tick time series has
+// reached maxLiveAccumPoints. The poll loop skips the append once it has, so a
+// machine stuck in a mode can't grow the series (and the per-tick copy and
+// broadcast of it) without bound. Every series of one accumulator is appended
+// together, so testing any one of them bounds them all.
+func liveAccumFull(series []int) bool {
+	return len(series) >= maxLiveAccumPoints
 }
 
 func zeroToNil(v float64) *float64 {
