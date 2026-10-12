@@ -103,3 +103,47 @@ func TestSyncDefaultMachineShots_NativeBlocklistIDStillHonored(t *testing.T) {
 		t.Fatalf("shot 3 missing after sync")
 	}
 }
+
+// TestSyncDefaultMachineShots_RejectsOutOfRangeLastShotID is the #1601
+// regression test: a garbage lastShotId (negative, or >= MachineIDOffset, i.e.
+// colliding with another machine's id range) must be treated like "no
+// lastShotId" — the sync fetches nothing and blocklists nothing, rather than
+// looping over millions of ids. A normal id still syncs.
+func TestSyncDefaultMachineShots_RejectsOutOfRangeLastShotID(t *testing.T) {
+	cases := []struct {
+		name       string
+		latest     string
+		wantStored int
+	}{
+		{"machine-id-range id ignored", `[{"lastShotId":10000000}]`, 0},
+		{"negative id ignored", `[{"lastShotId":-1}]`, 0},
+		{"normal id still syncs", `[{"lastShotId":3}]`, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newSyncFakeMachine(t, tc.latest, map[string]string{
+				"1": shotJSON(`1`, "1000"),
+				"2": shotJSON(`2`, "2000"),
+				"3": shotJSON(`3`, "3000"),
+			})
+			p, sqlDB := newTestPoller(t, &fakeAdapter{})
+			repo := shots.NewRepository(sqlDB)
+			p.SetShotsRepo(repo)
+			withSyncTestServer(t, srv.URL)
+
+			if err := p.syncDefaultMachineShots(context.Background()); err != nil {
+				t.Fatalf("syncDefaultMachineShots: %v", err)
+			}
+			if n, err := repo.Count(); err != nil {
+				t.Fatalf("Count: %v", err)
+			} else if n != tc.wantStored {
+				t.Fatalf("shot count = %d, want %d", n, tc.wantStored)
+			}
+			if bl, err := repo.GetBlocklist(); err != nil {
+				t.Fatalf("GetBlocklist: %v", err)
+			} else if len(bl) != 0 {
+				t.Fatalf("blocklist = %v, want empty (an out-of-range id must not be probed)", bl)
+			}
+		})
+	}
+}

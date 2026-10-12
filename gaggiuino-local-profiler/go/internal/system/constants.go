@@ -35,6 +35,11 @@ const (
 	// pollInterval is the live-polling cadence: one poll tick per second.
 	pollInterval = 1 * time.Second
 
+	// maxLiveAccumPoints caps a live session's per-tick time series at one
+	// hour (3600 ticks at pollInterval), so a machine stuck in a brew or
+	// steam/flush/descale mode cannot grow the accumulator without bound.
+	maxLiveAccumPoints = 3600
+
 	// firmwareNameFetchTimeout bounds the one-off GetSettings("system") request
 	// the live poll makes to read a Gaggiuino's firmware-set machine name
 	// (#1454).
