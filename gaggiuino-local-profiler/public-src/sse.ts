@@ -41,6 +41,11 @@ let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let staleTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = RECONNECT_BASE_MS;
+// The callbacks backing the connection currently open, kept here so the stale
+// timer (which has no parameters of its own) can hand them to
+// scheduleReconnect() when it tears a dead source down.
+let currentOnFallback: (() => void) | undefined;
+let currentOnReconnect: (() => void) | undefined;
 const listeners = new Map<string, Set<(data: unknown) => void>>(); // type -> Set<cb>
 const attachedTypes = new Set<string>(); // types with a native listener already wired on the current `source`
 
@@ -59,13 +64,17 @@ function clearReconnect(): void {
 // Re-armed on every open + every received event (see dispatch() below). If
 // it ever fires, no traffic at all has arrived for STALE_MS despite having
 // connected once -- the mid-session counterpart to the first-connect
-// watchdog above. Unlike triggerFallback(), this does NOT tear down
-// `source`: EventSource's own native reconnect may still be working in the
-// background and can flip S.sseActive back to true via onopen once it
-// recovers, same as any other transient drop.
+// watchdog above. A half-open socket (Wi-Fi switch, NAT timeout, sleeping
+// laptop) never fires onerror, so EventSource's own reconnect never runs and
+// the page would sit on polling forever; tear the dead source down and hand
+// off to scheduleReconnect() so live updates come back on their own.
 function armStaleTimer(): void {
   clearStaleTimer();
-  staleTimer = setTimeout(() => { S.sseActive = false; }, STALE_MS);
+  staleTimer = setTimeout(() => {
+    S.sseActive = false;
+    if (source) { source.close(); source = null; }
+    scheduleReconnect(currentOnFallback, currentOnReconnect);
+  }, STALE_MS);
 }
 
 function dispatch(type: string): (e: MessageEvent) => void {
@@ -106,6 +115,8 @@ function triggerFallback(onFallback?: () => void): void {
 // onReconnect instead of being mistaken for a first connect (which would arm
 // the fallback watchdog and reset the error counter).
 function _open(onFallback: (() => void) | undefined, onReconnect: (() => void) | undefined, isReconnect: boolean): void {
+  currentOnFallback = onFallback;
+  currentOnReconnect = onReconnect;
   const url = S.glpToken ? `api/events?token=${encodeURIComponent(S.glpToken)}` : 'api/events';
   source = new EventSource(url);
   for (const type of listeners.keys()) attachType(type);
