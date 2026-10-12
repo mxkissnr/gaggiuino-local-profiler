@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -162,7 +163,9 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) bool {
 // GeocodeRegion returns the cached result (including a cached nil for a known
 // miss) when the lower-cased "region, country" query is already in the kv
 // cache, otherwise makes one rate-limited, SSRF-guarded Nominatim call and
-// caches whatever it produced.
+// caches whatever it produced — except a transient failure, which is
+// returned as an error and deliberately NOT cached, so the region is looked up
+// again on the next call instead of being remembered as a permanent miss.
 func (g *Geocoder) GeocodeRegion(ctx context.Context, region, countryName string) (*Location, error) {
 	region = strings.TrimSpace(region)
 	if region == "" {
@@ -181,17 +184,24 @@ func (g *Geocoder) GeocodeRegion(ctx context.Context, region, countryName string
 	}
 
 	result, reqErr := g.request(ctx, query, region)
+	if reqErr != nil {
+		return nil, reqErr
+	}
 
 	// Re-load: another request may have written meanwhile.
 	fresh := g.loadCache()
 	fresh[key] = geoCacheEntry{Result: result, TS: time.Now().UnixMilli()}
 	g.saveCache(fresh)
-	return result, reqErr
+	return result, nil
 }
 
 // request performs one Nominatim call, serialized with >= geoMinIntervalMS
-// between calls, and SSRF-guarded. A network/parse failure is logged and
-// returns (nil, nil) — a miss, cached like any other.
+// between calls, and SSRF-guarded. A transient failure — a network error,
+// cancellation, a non-200 status, a decode error, or a failed host check that
+// is not an SSRF block — is returned as a non-nil error so the caller can
+// try again later rather than caching it as a miss. The two cases reported as
+// (nil, nil) are a genuine miss (a 200 with no usable hit, or unparsable
+// coordinates) and an SSRF block.
 func (g *Geocoder) request(ctx context.Context, query, region string) (*Location, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -210,8 +220,7 @@ func (g *Geocoder) request(ctx context.Context, query, region string) (*Location
 			log.Printf("library: geocode blocked by SSRF guard: %v", err)
 			return nil, nil
 		}
-		log.Printf("library: geocode host check failed for %q: %v", query, err)
-		return nil, nil
+		return nil, err
 	}
 
 	u, _ := url.Parse(g.apiURL)
@@ -223,19 +232,17 @@ func (g *Geocoder) request(ctx context.Context, query, region string) (*Location
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	req.Header.Set("User-Agent", geoUserAgent)
 
 	resp, err := g.http.Do(req)
 	if err != nil {
-		log.Printf("library: geocode failed for %q: %v", query, err)
-		return nil, nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("library: geocode failed for %q: HTTP %d", query, resp.StatusCode)
-		return nil, nil
+		return nil, fmt.Errorf("nominatim: HTTP %d", resp.StatusCode)
 	}
 
 	var hits []struct {
@@ -243,8 +250,7 @@ func (g *Geocoder) request(ctx context.Context, query, region string) (*Location
 		Lon string `json:"lon"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&hits); err != nil {
-		log.Printf("library: geocode failed for %q: %v", query, err)
-		return nil, nil
+		return nil, err
 	}
 	if len(hits) == 0 || hits[0].Lat == "" || hits[0].Lon == "" {
 		return nil, nil
