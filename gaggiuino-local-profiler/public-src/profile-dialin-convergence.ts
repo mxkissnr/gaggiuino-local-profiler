@@ -2,14 +2,12 @@
 // to dialin-convergence.js (the grind wizard's engine), adapted for tuning
 // machine-profile phases instead of a single grind number.
 //
-// v1 SCOPE DECISION (see ~/.claude/plans/glp-profile-dialin-phase2.md): the
-// primary tuning signal is a manual taste-symptom pick per round (sour/
-// balanced/bitter/watery/channeling), mapped to a concrete phase/field
-// adjustment via the coffee-expert skill's symptom→cause table — NOT
-// shot.profile.phases parsing, whose field shape is unverified against real
-// hardware. calcShotScore(shot) is the objective secondary
-// signal, used only for convergence detection, not for picking *which*
-// field to adjust.
+// v1 SCOPE DECISION: the primary tuning signal is a manual taste-symptom pick
+// per round (sour/balanced/bitter/watery/channeling), mapped to a concrete
+// phase/field adjustment via a symptom→cause table — NOT shot.profile.phases
+// parsing, whose field shape is unverified against real hardware.
+// calcShotScore(shot) is the objective secondary signal, used only for
+// convergence detection, not for picking *which* field to adjust.
 //
 // A "round" is one dialed-in shot in a profile dial-in session:
 //   { symptom: 'sour'|'balanced'|'bitter'|'watery'|'channeling', score: number|null,
@@ -156,10 +154,10 @@ function _setPath(obj: Record<string, unknown>, path: string, value: unknown): v
 
 // ── Field candidates per symptom ────────────────────────────────────────
 // min/max are sane per-session limits (not machine hard limits) grounded in
-// public-src/profile-suggestion.js's community-derived skeleton and the
-// coffee-expert skill's symptom table. Step sizes: "±0.5-1 bar for pressure,
-// ±1-2s for time" per plan (time fields are milliseconds on the wire — see
-// project_gaggiuino_protocol memory — so 1-2s = 1000-2000).
+// public-src/profile-suggestion.js's community-derived skeleton and a
+// symptom table. Step sizes: "±0.5-1 bar for pressure,
+// ±1-2s for time" per plan (time fields are milliseconds on the wire, so
+// 1-2s = 1000-2000).
 function _candidateDefs(primary: string): CandidateDef[] {
   switch (primary) {
     case 'sour':

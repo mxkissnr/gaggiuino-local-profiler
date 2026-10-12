@@ -7,9 +7,7 @@
 // one data-changed event naming a kind replaces them.
 //
 // The documented HA-Ingress-buffering workarounds are replicated exactly,
-// not approximated — see project_glp_sse_ingress_nginx_buffering in the
-// operator's memory for why: this broke Live View in production once
-// already.
+// not approximated: this broke Live View in production once already.
 //
 //   - Leading 2048-byte padding comment line, written before anything else.
 //   - X-Accel-Buffering: no.
