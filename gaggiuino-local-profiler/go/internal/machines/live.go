@@ -42,9 +42,16 @@ import (
 // session/reconnect/idle-eviction pattern as this file; it caches one
 // evt:status map instead of the two typed proto DTOs.
 
+// liveReconnectDelay is the pause run()'s reconnect loop waits between
+// dial attempts. A guardVar (registry.go) rather than a const so tests can
+// shrink it to milliseconds instead of sleeping the real 3s. The loop reads
+// it from a background goroutine while a test may reassign it, so the
+// atomic wrapper (not a bare var) is what keeps that race-free under -race.
+// Production value: 3s.
+var liveReconnectDelay = newGuardVar[time.Duration](3 * time.Second)
+
 const (
-	liveReconnectDelay = 3 * time.Second
-	liveStaleAfter     = 15 * time.Second
+	liveStaleAfter = 15 * time.Second
 
 	// liveIdleTimeout closes a machine's persistent live WebSocket session
 	// (and stops its reconnect goroutine) after this long without a
@@ -151,7 +158,7 @@ func (c *gaggiuinoLiveClient) run(ctx context.Context, baseURL string, s *gaggiu
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(liveReconnectDelay):
+		case <-time.After(liveReconnectDelay.get()):
 		}
 	}
 }

@@ -158,7 +158,7 @@ func (c *gaggiMateLiveClient) run(ctx context.Context, baseURL string, s *gaggiM
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(liveReconnectDelay):
+		case <-time.After(liveReconnectDelay.get()):
 		}
 	}
 }
