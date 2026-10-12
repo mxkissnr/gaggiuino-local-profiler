@@ -233,38 +233,46 @@ func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, fou
 var BeanImageHook func(beanID int64)
 
 // SetBeanImage runs fire-and-forget after a bean create with an `imageUrl`
-// field — it downloads the image once and records its extension on a FRESH
-// read of the library (not the `lib` object the create handler already
-// saved), because the bean may have been edited/deleted by the time this
-// finishes. Called from a goroutine on the bean create path. When the new
-// extension is actually stored it fires BeanImageHook exactly once.
+// field — it downloads the image into memory first, then records its extension
+// on a FRESH read of the library (not the `lib` object the create handler
+// already saved), because the bean may have been edited/deleted by the time
+// this finishes. Called from a goroutine on the bean create path.
+//
+// The image is only written, and BeanImageHook only fired, when the bean still
+// exists and has no image of its own: a photo the user uploaded while this
+// download was in flight must never be overwritten.
 func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL string) {
-	ext := fetchBeanImage(imageDir, beanID, imageURL)
-	if ext == "" {
+	data, contentType := downloadBeanImage(imageURL)
+	if data == nil {
 		return
 	}
+	storedExt := ""
 	err := repo.Update(func(lib *Library) error {
-		for i, bean := range lib.Beans {
-			id, ok := idOf(bean, "id")
-			if !ok || id != beanID {
-				continue
-			}
-			if oldExt, _ := bean["image"].(string); oldExt != "" && oldExt != ext {
-				img.Delete(imageDir, beanID, oldExt, "")
-			}
-			bean["image"] = ext
-			lib.Beans[i] = bean
-			return nil
+		idx := findBeanIndex(*lib, beanID)
+		if idx == -1 {
+			return ErrSkipSave // bean deleted before the download finished
 		}
-		return ErrSkipSave
+		bean := lib.Beans[idx]
+		if existing, _ := bean["image"].(string); existing != "" {
+			return ErrSkipSave // the user's own photo wins
+		}
+		ext, ok := img.Save(imageDir, "", beanID, data, contentType, img.ModeUpload)
+		if !ok {
+			return ErrSkipSave
+		}
+		bean["image"] = ext
+		lib.Beans[idx] = bean
+		storedExt = ext
+		return nil
 	})
-	if errors.Is(err, ErrSkipSave) {
-		// Bean was deleted before the download finished — clean up the orphaned file.
-		img.Delete(imageDir, beanID, ext, "")
+	if err != nil && !errors.Is(err, ErrSkipSave) {
+		if storedExt != "" {
+			img.Delete(imageDir, beanID, storedExt, "")
+		}
+		log.Printf("library: setBeanImage: updating library for bean %d: %v", beanID, err)
 		return
 	}
-	if err != nil {
-		log.Printf("library: setBeanImage: updating library for bean %d: %v", beanID, err)
+	if storedExt == "" {
 		return
 	}
 	if BeanImageHook != nil {
