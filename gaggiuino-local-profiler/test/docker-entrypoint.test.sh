@@ -130,27 +130,32 @@ reset_scenario() {
     rm -f "$WORK"/fail-* "$WORK/calls.log"
     FAKE_CHOWN_FAIL_SUBSTR=""
     fake_chown
-    fake_real_bin cp /usr/bin/cp
-    fake_real_bin touch /usr/bin/touch
+    # Resolve the real binaries instead of assuming an /usr/bin prefix --
+    # Alpine/BusyBox (and Debian's merged-/usr) put cp/touch under /bin.
+    fake_real_bin cp "$(command -v cp)"
+    fake_real_bin touch "$(command -v touch)"
 }
 
 # run_entrypoint sources the real script (functions only, per
 # DOCKER_ENTRYPOINT_TEST) and calls run_pre_go_backup against the DATA_DIR/
 # fake-bin PATH/FAKE_CHOWN_FAIL_SUBSTR set up by reset_scenario (and any
 # scenario-specific override made after it).
+#
+# The call runs in a *child* `sh -e -c` process, not an in-process subshell:
+# scenarios 4-7 need run_pre_go_backup's real exit status, and a function
+# invoked from the caller's `if`/`||` condition has `set -e` suppressed
+# inside it (POSIX ignores -e for a condition's command), so a failure that
+# would abort the real, `set -e`-guarded entrypoint was invisible there. A
+# fresh `sh -e` starts with errexit on no matter how the parent calls it, so
+# a regression that lets one failure escape the function's own error
+# handling really does abort, exactly as it would in the container, and the
+# caller can assert on that status.
 run_entrypoint() {
-    (
-        PATH="$FAKE_BIN:$PATH"
-        export PATH
-        DOCKER_ENTRYPOINT_TEST=1
-        export DOCKER_ENTRYPOINT_TEST
-        GLP_DATA_DIR="$DATA_DIR"
-        export GLP_DATA_DIR
-        export FAKE_CHOWN_FAIL_SUBSTR
-        # shellcheck disable=SC1090
-        . "$ENTRYPOINT"
-        run_pre_go_backup
-    )
+    PATH="$FAKE_BIN:$PATH" \
+        DOCKER_ENTRYPOINT_TEST=1 \
+        GLP_DATA_DIR="$DATA_DIR" \
+        FAKE_CHOWN_FAIL_SUBSTR="${FAKE_CHOWN_FAIL_SUBSTR:-}" \
+        sh -e -c '. "$1"; run_pre_go_backup' sh "$ENTRYPOINT"
 }
 
 # ── Scenario 1: fresh install -- no glp.db at all yet ──────────────────────
@@ -199,10 +204,12 @@ fi
 reset_scenario "cp failure (ENOSPC)"
 echo "fake db content" > "$DATA_DIR/glp.db"
 touch "$WORK/fail-cp"
-if run_entrypoint 2>"$WORK/stderr.log"; then
+status=0
+run_entrypoint 2>"$WORK/stderr.log" || status=$?
+if [ "$status" -eq 0 ]; then
     pass "run_pre_go_backup does not abort the whole entrypoint on a cp failure"
 else
-    fail "run_pre_go_backup does not abort the whole entrypoint on a cp failure"
+    fail "run_pre_go_backup does not abort the whole entrypoint on a cp failure (exit $status)"
 fi
 assert_file_contains "$WORK/stderr.log" "WARNING: backup of $DATA_DIR/glp.db failed" "cp failure is logged as a warning"
 assert_file_absent "$DATA_DIR/glp.db.pre-go-backup" "no backup file left behind on cp failure"
@@ -213,10 +220,12 @@ assert_file_exists "$DATA_DIR/.go-cutover-done" "marker still gets set despite t
 reset_scenario "chown failure on backup"
 echo "fake db content" > "$DATA_DIR/glp.db"
 FAKE_CHOWN_FAIL_SUBSTR=".pre-go-backup"
-if run_entrypoint 2>"$WORK/stderr.log"; then
+status=0
+run_entrypoint 2>"$WORK/stderr.log" || status=$?
+if [ "$status" -eq 0 ]; then
     pass "run_pre_go_backup does not abort the whole entrypoint on a chown failure"
 else
-    fail "run_pre_go_backup does not abort the whole entrypoint on a chown failure"
+    fail "run_pre_go_backup does not abort the whole entrypoint on a chown failure (exit $status)"
 fi
 assert_file_contains "$WORK/stderr.log" "chown glp:glp failed on $DATA_DIR/glp.db.pre-go-backup" "backup chown failure is logged"
 assert_file_absent "$DATA_DIR/glp.db.pre-go-backup" "misowned backup file is removed rather than left root-owned"
@@ -225,10 +234,12 @@ assert_file_exists "$DATA_DIR/.go-cutover-done" "marker (unaffected by the backu
 # ── Scenario 6: touch failure on the marker (disk full/read-only) ──────────
 reset_scenario "touch failure on marker"
 touch "$WORK/fail-touch"
-if run_entrypoint 2>"$WORK/stderr.log"; then
+status=0
+run_entrypoint 2>"$WORK/stderr.log" || status=$?
+if [ "$status" -eq 0 ]; then
     pass "run_pre_go_backup does not abort the whole entrypoint when the marker touch fails"
 else
-    fail "run_pre_go_backup does not abort the whole entrypoint when the marker touch fails"
+    fail "run_pre_go_backup does not abort the whole entrypoint when the marker touch fails (exit $status)"
 fi
 assert_file_contains "$WORK/stderr.log" "WARNING: failed to write $DATA_DIR/.go-cutover-done" "marker touch failure is logged"
 assert_file_absent "$DATA_DIR/.go-cutover-done" "marker stays absent so the backup-check re-runs next boot"
@@ -236,10 +247,12 @@ assert_file_absent "$DATA_DIR/.go-cutover-done" "marker stays absent so the back
 # ── Scenario 7: chown failure on the marker (touch ok, chown fails) ────────
 reset_scenario "chown failure on marker"
 FAKE_CHOWN_FAIL_SUBSTR=".go-cutover-done"
-if run_entrypoint 2>"$WORK/stderr.log"; then
+status=0
+run_entrypoint 2>"$WORK/stderr.log" || status=$?
+if [ "$status" -eq 0 ]; then
     pass "run_pre_go_backup does not abort the whole entrypoint on a marker chown failure"
 else
-    fail "run_pre_go_backup does not abort the whole entrypoint on a marker chown failure"
+    fail "run_pre_go_backup does not abort the whole entrypoint on a marker chown failure (exit $status)"
 fi
 assert_file_contains "$WORK/stderr.log" "chown glp:glp failed on $DATA_DIR/.go-cutover-done" "marker chown failure is logged"
 assert_file_absent "$DATA_DIR/.go-cutover-done" "misowned marker is removed so the backup-check re-runs next boot"
