@@ -684,10 +684,7 @@ function idlePhase(): 'standby' | 'warming' | 'ready' {
 // fetchLiveData's polling path, so with SSE (the default) they never ran.
 // handleLiveData now runs them first, before rendering, for both paths.
 function handleLiveTransitions(msg: LiveMessage): void {
-  // fetchLiveData's catch path routes a network failure through
-  // handleLiveData({ machineReachable: false, datapoints: {} }), which has no
-  // isLive field; without this guard a blip during a brew would clear
-  // S.liveWasLive and fire the brew-end draft apply.
+  // A network blip routes through handleLiveData({ machineReachable: false }) with no isLive; without this guard it would clear S.liveWasLive and fire the brew-end draft apply.
   if (msg.machineReachable === false || msg.isLive === undefined) return;
   // #1120 review: record whether this live session is a brew, so the
   // draft-apply branch below only ever fires for a finished brew. A brew is
