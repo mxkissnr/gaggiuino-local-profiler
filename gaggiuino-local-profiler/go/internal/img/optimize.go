@@ -223,14 +223,19 @@ func orientationFromExif(seg []byte) (int, bool) {
 	default:
 		return 0, false
 	}
-	ifdOff := int(bo.Uint32(tiff[4:8]))
-	if ifdOff+2 > len(tiff) {
+	// Keep the offset unsigned all the way through: the value is a 32-bit
+	// field from an attacker-controlled blob, and int is 32-bit on the armv7
+	// boards this runs on — an offset >= 2^31 would go negative, slip past a
+	// signed bounds check, and panic the slice below. Compare as uint64 so an
+	// out-of-range offset fails the check on every word size.
+	ifdOff := uint64(bo.Uint32(tiff[4:8]))
+	if ifdOff+2 > uint64(len(tiff)) {
 		return 0, false
 	}
 	count := int(bo.Uint16(tiff[ifdOff : ifdOff+2]))
 	entry := ifdOff + 2
 	for n := 0; n < count; n++ {
-		if entry+12 > len(tiff) {
+		if entry+12 > uint64(len(tiff)) {
 			return 0, false
 		}
 		tag := bo.Uint16(tiff[entry : entry+2])
