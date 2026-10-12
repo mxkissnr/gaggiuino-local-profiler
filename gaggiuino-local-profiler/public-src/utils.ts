@@ -103,7 +103,7 @@ export function todayIsoDate(nowMs: number = Date.now()): string {
 // `new Date('2026-10-12')` parses as UTC midnight and lands on the previous
 // day for users east of UTC). Returns NaN for an empty/invalid value.
 export function localMidnightMs(isoDate: string): number {
-  const m = typeof isoDate === 'string' && isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return NaN;
   const [, yy = '', mm = '', dd = ''] = m;
   return new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd)).getTime();
