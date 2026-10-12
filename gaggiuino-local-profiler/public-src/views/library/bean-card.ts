@@ -234,7 +234,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
   }))}</div>` : esc('');
 
-  const rating = calcBeanRating(b.name, _shots());
+  const rating = calcBeanRating(b, _shots(), S.coffeeLibrary?.beans);
   const ratingHtml: Html = rating ? html`<div class="lib-rating-row" title="${esc(t('bean_rating_tooltip', rating.count))}">
     ${joinHtml(Array.from({ length: 5 }, (_, i) => html`<span class="lib-star${esc(i < Math.round(rating.avg) ? ' on' : '')}">${STAR_ICON_SVG}</span>`))}
     <span class="lib-rating-num">${esc(rating.avg.toFixed(1))}</span>
