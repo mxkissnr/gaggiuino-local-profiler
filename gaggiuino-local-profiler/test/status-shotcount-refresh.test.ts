@@ -60,8 +60,6 @@ function makeFakeDocument() {
   };
 }
 
-interface FakeResponse { ok: boolean; json: () => Promise<unknown> }
-
 const { updateStatus } = await import('../public-src/components/status.js');
 
 describe('updateStatus() rising shotCount refresh', () => {
