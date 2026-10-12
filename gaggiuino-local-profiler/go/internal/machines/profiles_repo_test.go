@@ -309,3 +309,118 @@ func TestProfilesRepository_UpsertSynced_DoesNotClobberDirtyRow(t *testing.T) {
 		t.Fatalf("got = %+v, want the dirty local edit preserved", got)
 	}
 }
+
+// TestProfilesRepository_UpsertSynced_DirtyRowSurvivesListSummaryAndSyncedStillUpdates
+// pins the atomic in-SQL dirty-row guard on both upserts: a losing
+// read-then-write race used to let a machine reconcile clobber a
+// not-yet-pushed local edit and mark it synced, so the edit was never pushed
+// and was lost. With the guard in the DO UPDATE, a dirty row is skipped by
+// both upserts while a synced row is still updated and a brand-new remote id
+// is still inserted as synced.
+func TestProfilesRepository_UpsertSynced_DirtyRowSurvivesListSummaryAndSyncedStillUpdates(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	remoteID := "remote-1"
+	if err := repo.UpsertSynced(1, remoteID, "Original", json.RawMessage(`{"v":1}`), false); err != nil {
+		t.Fatalf("UpsertSynced (seed): %v", err)
+	}
+	seed, err := repo.Get(1, remoteID)
+	if err != nil || seed == nil {
+		t.Fatalf("Get after seed: %v", err)
+	}
+	if seed.SyncStatus != ProfileSyncSynced {
+		t.Fatalf("seeded SyncStatus = %q, want synced (new remote id inserted as synced)", seed.SyncStatus)
+	}
+	if _, err := repo.UpsertDirty(1, &seed.LocalID, &remoteID, "Locally Edited", json.RawMessage(`{"v":2}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+
+	if err := repo.UpsertSynced(1, remoteID, "Machine Copy", json.RawMessage(`{"v":3}`), false); err != nil {
+		t.Fatalf("UpsertSynced (while dirty): %v", err)
+	}
+	if err := repo.UpsertListSummary(1, remoteID, "Machine List Name", true); err != nil {
+		t.Fatalf("UpsertListSummary (while dirty): %v", err)
+	}
+	got, err := repo.Get(1, remoteID)
+	if err != nil || got == nil {
+		t.Fatalf("Get after reconcile: %v", err)
+	}
+	if got.SyncStatus != ProfileSyncDirty {
+		t.Fatalf("SyncStatus = %q, want dirty (the local edit must stay unsynced)", got.SyncStatus)
+	}
+	if got.Name != "Locally Edited" || string(got.Data) != `{"v":2}` {
+		t.Fatalf("got = %+v, want the local name/data preserved", got)
+	}
+	if got.Utility {
+		t.Fatalf("Utility = true, want the local row untouched by the list summary")
+	}
+
+	// A synced row is still updated by both upserts.
+	other := "remote-2"
+	if err := repo.UpsertSynced(1, other, "Synced", json.RawMessage(`{"v":1}`), false); err != nil {
+		t.Fatalf("UpsertSynced (other seed): %v", err)
+	}
+	if err := repo.UpsertSynced(1, other, "Synced Updated", json.RawMessage(`{"v":9}`), true); err != nil {
+		t.Fatalf("UpsertSynced (update synced): %v", err)
+	}
+	got, err = repo.Get(1, other)
+	if err != nil || got == nil {
+		t.Fatalf("Get(remote-2): %v", err)
+	}
+	if got.Name != "Synced Updated" || string(got.Data) != `{"v":9}` || !got.Utility || got.SyncStatus != ProfileSyncSynced {
+		t.Fatalf("synced row not updated by UpsertSynced: %+v", got)
+	}
+	if err := repo.UpsertListSummary(1, other, "List Renamed", false); err != nil {
+		t.Fatalf("UpsertListSummary (update synced): %v", err)
+	}
+	got, err = repo.Get(1, other)
+	if err != nil || got == nil {
+		t.Fatalf("Get(remote-2) after list: %v", err)
+	}
+	if got.Name != "List Renamed" || got.Utility || string(got.Data) != `{"v":9}` || got.SyncStatus != ProfileSyncSynced {
+		t.Fatalf("synced row not updated by UpsertListSummary: %+v", got)
+	}
+}
+
+// TestProfilesRepository_UpsertListSummary_KeepsDirtyRowAndInsertsNew covers
+// UpsertListSummary's side of the same guard: a dirty row survives the list
+// reconcile, while a never-seen remote id is inserted as synced with the
+// empty `{}` placeholder body.
+func TestProfilesRepository_UpsertListSummary_KeepsDirtyRowAndInsertsNew(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	remoteID := "r1"
+	if err := repo.UpsertSynced(1, remoteID, "Original", json.RawMessage(`{"v":1}`), false); err != nil {
+		t.Fatalf("UpsertSynced (seed): %v", err)
+	}
+	seed, err := repo.Get(1, remoteID)
+	if err != nil || seed == nil {
+		t.Fatalf("Get after seed: %v", err)
+	}
+	if _, err := repo.UpsertDirty(1, &seed.LocalID, &remoteID, "Local Edit", json.RawMessage(`{"v":2}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	if err := repo.UpsertListSummary(1, remoteID, "Machine Name", true); err != nil {
+		t.Fatalf("UpsertListSummary (while dirty): %v", err)
+	}
+	got, err := repo.Get(1, remoteID)
+	if err != nil || got == nil {
+		t.Fatalf("Get after list reconcile: %v", err)
+	}
+	if got.SyncStatus != ProfileSyncDirty || got.Name != "Local Edit" || string(got.Data) != `{"v":2}` {
+		t.Fatalf("got = %+v, want the dirty local edit preserved", got)
+	}
+
+	if err := repo.UpsertListSummary(1, "brand-new", "Brand New", true); err != nil {
+		t.Fatalf("UpsertListSummary (insert): %v", err)
+	}
+	fresh, err := repo.Get(1, "brand-new")
+	if err != nil || fresh == nil {
+		t.Fatalf("Get(brand-new): %v", err)
+	}
+	if fresh.SyncStatus != ProfileSyncSynced || fresh.Name != "Brand New" || !fresh.Utility || string(fresh.Data) != `{}` {
+		t.Fatalf("new list row = %+v, want synced with {} body", fresh)
+	}
+}
