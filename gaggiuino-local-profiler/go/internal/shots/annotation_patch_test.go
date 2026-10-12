@@ -82,9 +82,9 @@ func TestPatchAnnotation_PartialPatchKeepsOtherFields(t *testing.T) {
 	}
 }
 
-// TestPatchAnnotation_ClearsWithEmptyStringAndNull: a key present as "" or
-// JSON null overwrites (clears) the stored value.
-func TestPatchAnnotation_ClearsWithEmptyStringAndNull(t *testing.T) {
+// TestPatchAnnotation_DeletesWithEmptyStringAndNull: a key present as "" or
+// JSON null removes the stored key.
+func TestPatchAnnotation_DeletesWithEmptyStringAndNull(t *testing.T) {
 	_, repo, sqlDB := newTestHandlers(t)
 	insertShot(t, sqlDB, 1, 1000, nil, "V60", nil, map[string]any{
 		"notes": "tasty", "dose": float64(18),
@@ -98,11 +98,11 @@ func TestPatchAnnotation_ClearsWithEmptyStringAndNull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAnnotation: %v", err)
 	}
-	if notes, ok := ann["notes"].(string); !ok || notes != "" {
-		t.Fatalf("notes = %#v, want \"\"", ann["notes"])
+	if v, ok := ann["notes"]; ok {
+		t.Fatalf("notes = %#v, want the key removed", v)
 	}
-	if v, ok := ann["dose"]; !ok || v != nil {
-		t.Fatalf("dose = %#v, want present and null", ann["dose"])
+	if v, ok := ann["dose"]; ok {
+		t.Fatalf("dose = %#v, want the key removed", v)
 	}
 }
 

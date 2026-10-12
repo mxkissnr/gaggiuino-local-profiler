@@ -485,16 +485,26 @@ func (r *Repository) FindTrashed() ([]Shot, error) {
 
 // FindPreviousByProfile returns the most recent earlier shot before shotID
 // with the same profileName on the same machine, excluding trashed shots
-// (#402).
+// (#402). "Earlier" orders by (timestamp, id): a shot is previous when its
+// timestamp is older, or when it shares the reference shot's timestamp but has
+// a lower id, so two shots taken in the same second are still ordered
+// deterministically.
 func (r *Repository) FindPreviousByProfile(shotID int64, profileName string, machineID int64) (Shot, error) {
+	var refTimestamp int64
+	if err := r.db.QueryRow(`SELECT timestamp FROM shots WHERE id = ?`, shotID).Scan(&refTimestamp); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("shots: reading timestamp of shot %d: %w", shotID, err)
+	}
 	row := r.db.QueryRow(selectBase+`
 		WHERE s.machine_id = ?
 		  AND s.profile_name = ?
-		  AND s.timestamp < (SELECT timestamp FROM shots WHERE id = ?)
+		  AND (s.timestamp < ? OR (s.timestamp = ? AND s.id < ?))
 		  AND s.id NOT IN (SELECT shot_id FROM trash)
-		ORDER BY s.timestamp DESC
+		ORDER BY s.timestamp DESC, s.id DESC
 		LIMIT 1
-	`, machineID, profileName, shotID)
+	`, machineID, profileName, refTimestamp, refTimestamp, shotID)
 	shot, err := hydrateRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
