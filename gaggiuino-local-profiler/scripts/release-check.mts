@@ -31,6 +31,10 @@
 //  7. a changelog fragment (changelog.d/*.md other than README.md) is still
 //     on disk — its notes never reached CHANGELOG.md (run
 //     `npm run changelog:collect`)
+//  8. a tracked source file under public-src/, go/, scripts/ or test/
+//     references a private local notes path or an internal-only hostname
+//     (#1624). Example LAN addresses and the gaggiuino.local mDNS name are
+//     deliberately out of scope — tests and docs legitimately use them.
 
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'fs';
 import { execFileSync } from 'child_process';
@@ -586,6 +590,84 @@ export function checkChangelogFragments(fragmentsDir: string): string[] {
     return failures;
 }
 
+// ── Check 8: private references in shipped source ───────────────────────
+//
+// Slice 2 of #1624 extends check 6's "keep private infrastructure out of a
+// public file" idea to the source tree itself: `git ls-files` under the
+// shipped directories is read line by line. Only two classes of leak are in
+// scope — references to a private local notes directory and internal-only
+// hostnames — because tests and docs legitimately carry example LAN
+// addresses and the gaggiuino.local mDNS name, so those stay allowed. The
+// scanner is pure: it takes (path, content) pairs and returns one message per
+// finding, so it can be unit-tested without a git checkout.
+export function scanSourceLeaks(files: { path: string; content: string }[]): string[] {
+    const failures: string[] = [];
+    // Assembled from parts so this module does not itself contain the
+    // literals it looks for — the check scans scripts/ and test/ too.
+    const notesDir = '.cl' + 'aude';
+    const internalHost = new RegExp('\\b[a-z0-9-]+\\.' + 'intern\\b', 'i');
+    const patterns: { type: string; matches: (line: string) => boolean }[] = [
+        { type: 'private notes path', matches: (l) => l.includes('~/' + notesDir) },
+        { type: 'private plans path', matches: (l) => l.includes(notesDir + '/plans') },
+        { type: 'private projects path', matches: (l) => l.includes(notesDir + '/projects') },
+        { type: 'internal-only hostname', matches: (l) => internalHost.test(l) },
+    ];
+    for (const file of files) {
+        const lines = file.content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            for (const { type, matches } of patterns) {
+                if (matches(lines[i]!)) {
+                    failures.push(`Check 8 (source leaks): ${file.path}:${i + 1} references a ${type}`);
+                }
+            }
+        }
+    }
+    return failures;
+}
+
+// Extensions that are never text — skipped so a binary blob's bytes can't
+// produce a false positive (or a decode error).
+const BINARY_EXTENSIONS = new Set([
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp',
+    '.woff', '.woff2', '.ttf', '.otf', '.eot',
+    '.pdf', '.zip', '.gz', '.tgz', '.tar', '.bz2', '.xz', '.7z',
+    '.wasm', '.mp4', '.webm', '.mov', '.mp3', '.wav', '.ogg', '.flac',
+    '.bin', '.exe', '.dll', '.so', '.dylib', '.o', '.a', '.class', '.jar',
+]);
+
+// Gather the tracked text files the source scan covers: `git ls-files` under
+// the shipped directories, minus testdata/ and known binary types. Returns
+// null when git itself fails, so the caller can fail the check.
+function collectScannedSource(gitRoot: string, pkgRelDir: string): { path: string; content: string }[] | null {
+    const dirs = ['public-src', 'go', 'scripts', 'test'].map((d) => path.join(pkgRelDir, d));
+    let raw: string;
+    try {
+        raw = execFileSync('git', ['ls-files', '-z', '--', ...dirs], { cwd: gitRoot, encoding: 'utf8' });
+    } catch {
+        return null;
+    }
+    const files: { path: string; content: string }[] = [];
+    for (const rel of raw.split('\0')) {
+        if (!rel) continue;
+        if (rel.split('/').includes('testdata')) continue;
+        if (BINARY_EXTENSIONS.has(path.extname(rel).toLowerCase())) continue;
+        try {
+            files.push({ path: rel, content: readFileSync(path.join(gitRoot, rel), 'utf8') });
+        } catch {
+            // Unreadable (e.g. a submodule gitlink) — nothing to scan.
+        }
+    }
+    return files;
+}
+
+function checkSourceLeaks(gitRoot: string, pkgRelDir: string): string[] {
+    const files = collectScannedSource(gitRoot, pkgRelDir);
+    if (files === null) {
+        return ['Check 8 (source leaks): could not list tracked source files with git ls-files'];
+    }
+    return scanSourceLeaks(files);
+}
+
 function main(): void {
     const failures: string[] = [];
 
@@ -703,6 +785,9 @@ function main(): void {
 
     // ── Check 7: leftover changelog fragments ───────────────────────────
     failures.push(...checkChangelogFragments(path.join(packageRoot, 'changelog.d')));
+
+    // ── Check 8: private references in shipped source ───────────────────
+    failures.push(...checkSourceLeaks(repoRoot, pkgRelDir));
 
     // ── Report ───────────────────────────────────────────────────────────
     if (failures.length) {
