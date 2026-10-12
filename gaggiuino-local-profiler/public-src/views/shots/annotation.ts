@@ -7,7 +7,7 @@ import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '.
 import type { AnnotateResult, ShotDefaults } from '../../api/types.js';
 import { esc, germanToIso, html, joinHtml } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
-import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
+import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
 import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
@@ -359,12 +359,14 @@ function _activeFrozenPortionsForBean(bean: LibraryRow | null | undefined, shotM
 // frozen batches — Max wants that to be a deliberate recorded choice, not
 // just the absence of a selection. The whole field hides when the bean has
 // no active frozen stock at all, since there'd be nothing to choose between.
-export function _renderFrozenPortionPills(beanName: string | null, shotMs: number, selectedId: number | string | null | undefined): void {
+export function _renderFrozenPortionPills(beanName: string | null, shotMs: number, selectedId: number | string | null | undefined, beanId?: number | null): void {
   const field     = document.getElementById('frozenPortionField');
   const container = document.getElementById('frozenPortionPillsContainer');
   const hidden    = document.getElementById('annFrozenPortionId') as HTMLInputElement | null;
   if (!field || !container || !hidden) return;
-  const bean = beanName ? S.coffeeLibrary?.beans?.find(b => b.name === beanName) : null;
+  // #1625: link the pills to the bean by its stable id when the annotation has
+  // one, so a renamed bean still offers the same frozen batches.
+  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary?.beans);
   const portions = _activeFrozenPortionsForBean(bean, shotMs ?? Date.now());
   if (!portions.length) { field.style.display = 'none'; container.innerHTML = html``; hidden.value = ''; return; }
   field.style.display = '';
@@ -388,9 +390,14 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
 export function selectFrozenPortion(id: string | null | undefined): void {
   const hidden = document.getElementById('annFrozenPortionId');
   if (!hidden) return;
-  const beanName = (document.getElementById('annCoffee') as HTMLInputElement | null)?.value?.trim() || null;
+  const coffeeSelect = document.getElementById('annCoffee') as HTMLSelectElement | null;
+  const beanName = coffeeSelect?.value?.trim() || null;
+  // #456: the select's chosen option carries data-bean-id (see _renderBeanSelect),
+  // so a renamed bean still resolves to the same frozen batches.
+  const beanIdAttr = coffeeSelect ? coffeeSelect.selectedOptions[0]?.dataset.beanId : undefined;
+  const beanId = beanIdAttr ? parseInt(beanIdAttr, 10) : null;
   const shot     = S.primaryShotId ? S.shots.find(s => s.id === S.primaryShotId) : null;
-  _renderFrozenPortionPills(beanName, shot ? shot.timestamp * 1000 : Date.now(), id || null);
+  _renderFrozenPortionPills(beanName, shot ? shot.timestamp * 1000 : Date.now(), id || null, beanId);
   scheduleAutoSave();
 }
 
@@ -695,7 +702,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   _renderBeanSelect(ann.coffee || null, ann.beanId ?? null);
   _renderBasketSelect(ann.basketId ?? null);
   _renderPuckScreenSelect(ann.puckScreenId ?? null);
-  _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null);
+  _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null, ann.beanId ?? null);
   (document.getElementById('annGrinder') as HTMLInputElement).value      = ann.grinder      || '';
   (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting ?? '');
   (document.getElementById('annDose') as HTMLInputElement).value         = String(ann.dose        || '');
@@ -762,7 +769,7 @@ export function quickClone(): void {
   _renderRecipeSelect(ann.recipeId || null);
   // Frozen-portion choice is per-shot, not carried over from prev — a clone
   // starts unset (like milk above), even if prev used a frozen portion.
-  _renderFrozenPortionPills(beanName, currentShot?.timestamp ? currentShot.timestamp * 1000 : Date.now(), null);
+  _renderFrozenPortionPills(beanName, currentShot?.timestamp ? currentShot.timestamp * 1000 : Date.now(), null, beanId);
   // #430: quickClone sets field values programmatically (no 'input' event
   // fires), so it must schedule the save itself — there's no explicit Save
   // button left to catch this otherwise.

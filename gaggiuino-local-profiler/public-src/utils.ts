@@ -179,18 +179,55 @@ export function calcBrewRatio(
   return ratio > 0.5 && ratio < 6 ? ratio : null;
 }
 
+// ── Bean identity (#456) ───────────────────────────────────────────────────
+// Resolve an annotation to its library bean, preferring the stable beanId
+// link over the free-text coffee name — the rule the backend's
+// LibraryService.resolveBeanForAnnotation mirrors. This is the single
+// implementation; views/shots/utils.ts's exported resolveBeanForAnnotation
+// wraps it to default the bean list to the current library. Kept here, in the
+// pure helper module (beans are passed in), so calcBeanRating below does not
+// pull the state-backed shots utils into the import graph of modules that
+// only need utils. When beanId resolves to a bean it is trusted exclusively;
+// only an absent, or dangling, beanId falls back to a case-insensitive name
+// match (recovering a delete+reimport under the same name, and covering
+// annotations that predate beanId).
+export function resolveBeanForAnnotation(
+  annotation: unknown,
+  beans?: unknown,
+): { id?: number | null; name?: string | null } | null {
+  const ann = annotation as { beanId?: number | null; coffee?: string | null } | null | undefined;
+  const list = (Array.isArray(beans) ? beans : []) as { id?: number | null; name?: string | null }[];
+  if (ann?.beanId != null) {
+    const byId = list.find(b => b.id === ann.beanId);
+    if (byId) return byId;
+  }
+  const name = ann?.coffee;
+  if (!name) return null;
+  const key = String(name).toLowerCase();
+  return list.find(b => String(b.name || '').toLowerCase() === key) || null;
+}
+
 // ── Bean rating ───────────────────────────────────────────────────────────
-// Average star rating (1-5) across all shots annotated with this bean name
-// (case-insensitive, same join precedent as computeBeanRemaining). Returns
-// { avg, count } or null when no rated shot matches.
+// Average star rating (1-5) across all shots that belong to this bean, joined
+// through resolveBeanForAnnotation so a renamed bean (or a reimport under a
+// new name) keeps its history: a shot counts when it links to bean.id, and
+// only shots that resolve to no bean at all fall back to the name comparison.
+// Takes the library bean ({ id, name }); a bare name string is still accepted
+// for the name-only path. Returns { avg, count } or null when nothing matches.
 export function calcBeanRating(
-  beanName: string | null | undefined,
-  shots: { annotation?: { coffee?: string | null; rating?: string | null } | null }[] | null | undefined,
+  bean: { id?: number | null; name?: string | null } | string | null | undefined,
+  shots: { annotation?: { coffee?: string | null; beanId?: number | null; rating?: string | null } | null }[] | null | undefined,
+  beans?: unknown,
 ): { avg: number; count: number } | null {
-  if (!beanName || !Array.isArray(shots)) return null;
-  const name = beanName.toLowerCase();
+  const beanId = bean && typeof bean === 'object' ? bean.id ?? null : null;
+  const name = ((typeof bean === 'string' ? bean : bean?.name) || '').toLowerCase();
+  if ((!name && beanId == null) || !Array.isArray(shots)) return null;
   const ratings = shots
-    .filter(s => (s.annotation?.coffee || '').toLowerCase() === name)
+    .filter(s => {
+      const resolved = resolveBeanForAnnotation(s.annotation, beans);
+      if (resolved) return beanId != null && resolved.id === beanId;
+      return (s.annotation?.coffee || '').toLowerCase() === name;
+    })
     .map(s => parseFloat(s.annotation?.rating ?? ''))
     .filter(r => r >= 1 && r <= 5);
   if (!ratings.length) return null;
