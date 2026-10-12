@@ -45,7 +45,28 @@ describe('getWhatsNewEntries', () => {
     });
 
     it('caps the result at MAX_ENTRIES even if the source list were longer', () => {
-        expect(getWhatsNewEntries().length).toBeLessThanOrEqual(MAX_ENTRIES);
+        // The shipped list is exactly MAX_ENTRIES long, so merely calling the
+        // getter proves nothing about the cap. Push extra entries onto the
+        // exported array to actually make the source longer than the cap, then
+        // restore it so the sibling tests still see the original list.
+        const originalLength = WHATS_NEW_ENTRIES.length;
+        // Whatever version ships as newest; the cap keeps it on top, so
+        // don't hard-code it (a new release would break the assertion).
+        const newestVersion = getWhatsNewEntries()[0]?.version;
+        for (let i = 0; i < MAX_ENTRIES; i++) {
+            WHATS_NEW_ENTRIES.push({ version: `0.0.${i}`, date: '2000-01-01', highlights: ['older'] });
+        }
+        try {
+            expect(WHATS_NEW_ENTRIES.length).toBeGreaterThan(MAX_ENTRIES);
+            const result = getWhatsNewEntries();
+            expect(result).toHaveLength(MAX_ENTRIES);
+            // Newest-first survives the cap: the pushed oldest entries are the
+            // ones dropped.
+            expect(result[0]?.version).toBe(newestVersion);
+            expect(result.map(e => e.version)).not.toContain('0.0.0');
+        } finally {
+            WHATS_NEW_ENTRIES.length = originalLength;
+        }
     });
 
     it('does not mutate the underlying WHATS_NEW_ENTRIES array', () => {

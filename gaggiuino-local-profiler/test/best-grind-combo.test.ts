@@ -92,11 +92,21 @@ describe('calcBestGrindCombosForBean', () => {
       shot('Bean A', 'Niche Zero', '18', 90),
       shot('Bean A', 'Niche Zero', '18', 88),
       shot('Bean A', 'Niche Zero', '18', 92),
+      // Three rows with a missing grinder and three with an unparseable grind
+      // setting. Each bad group is large enough to clear MIN_COMBO_SAMPLES on
+      // its own, so removing the filter above the grouping would let it form an
+      // extra (bogus) combo and this test would fail. With only one bad row per
+      // kind they could never reach the sample floor and the filter would be
+      // untestable.
+      { annotation: { coffee: 'Bean A', grinder: '', grindSetting: '18' }, score: 99 },
+      { annotation: { coffee: 'Bean A', grinder: '   ', grindSetting: '18' }, score: 99 },
       { annotation: { coffee: 'Bean A', grinder: '', grindSetting: '18' }, score: 99 },
       { annotation: { coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '' }, score: 99 },
+      { annotation: { coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '   ' }, score: 99 },
+      { annotation: { coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: null }, score: 99 },
     ];
     const result = calcBestGrindCombosForBean('Bean A', shots)!;
     expect(result).toHaveLength(1);
-    expect(at(result, 0).shotCount).toBe(3);
+    expect(at(result, 0)).toMatchObject({ grinder: 'Niche Zero', grindSetting: 18, shotCount: 3 });
   });
 });
