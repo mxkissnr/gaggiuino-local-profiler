@@ -230,23 +230,36 @@ describe('public-src/sse.js', () => {
     expect(firstSource().url).toBe('api/events?token=abc123');
   });
 
-  // #1016: mid-session staleness -- a connected stream that goes silent
-  // (Ingress/proxy black-holed it) without ever firing onerror/onclose used
-  // to leave S.sseActive stuck at true forever, permanently suppressing the
-  // REST-polling fallback.
-  it('flips S.sseActive back to false if connected but no event arrives for the stale window, with no onerror at all', () => {
-    connectEvents(() => {});
+  // #1016/#1612: mid-session staleness -- a connected stream that goes silent
+  // (Ingress/proxy black-holed it, or a half-open socket after a Wi-Fi
+  // switch/NAT timeout/sleeping laptop) never fires onerror, so it used to
+  // leave S.sseActive stuck at true forever and EventSource never retried.
+  it('closes a silent connected stream and reconnects after the stale window, with no onerror at all', () => {
+    const onReconnect = vi.fn();
+    connectEvents(() => {}, onReconnect);
     const es = firstSource();
     es._open();
     expect(S.sseActive).toBe(true);
 
     vi.advanceTimersByTime(39999);
     expect(S.sseActive).toBe(true);
+    expect(es.closed).toBe(false);
 
     vi.advanceTimersByTime(1);
     expect(S.sseActive).toBe(false);
-    // native reconnect must still be allowed to happen in the background
-    expect(es.closed).toBe(false);
+    // the dead source is torn down instead of being left half-open
+    expect(es.closed).toBe(true);
+
+    // a fresh EventSource is opened after the reconnect backoff
+    vi.advanceTimersByTime(4999);
+    expect(FakeEventSource.instances.length).toBe(1);
+    vi.advanceTimersByTime(1);
+    expect(FakeEventSource.instances.length).toBe(2);
+
+    const reopened = sourceAt(1);
+    reopened._open();
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+    expect(S.sseActive).toBe(true);
   });
 
   it('a received event resets the staleness timer so a healthy stream never falsely goes inactive', () => {
@@ -262,6 +275,7 @@ describe('public-src/sse.js', () => {
       es._emit('live-snapshot', { seq: i });
       expect(S.sseActive).toBe(true);
     }
+    expect(es.closed).toBe(false);
   });
 
   it('an event arriving after the stream had already gone stale restores S.sseActive without needing onopen', () => {
