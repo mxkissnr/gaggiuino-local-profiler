@@ -177,7 +177,7 @@ func jsNumber(v any) (float64, bool) {
 // /api/orders/history's delete (which must reach done/declined orders
 // older than the 7-day TTL window FindActive applies).
 func (r *Repository) FindAll() ([]Order, error) {
-	rows, err := r.db.Query(`SELECT data FROM orders`)
+	rows, err := r.db.Query(`SELECT data FROM orders ORDER BY json_extract(data, '$.createdAt'), id`)
 	if err != nil {
 		return nil, fmt.Errorf("orders: listing: %w", err)
 	}
@@ -217,37 +217,34 @@ func orderMachineID(o Order) int64 {
 	return 1
 }
 
-// SaveAll upserts every order
-// in one transaction — used by the lifecycle mutations (place/accept/
-// complete/decline), each of which reads the whole active set, mutates one
-// entry, and writes the whole set back.
-func (r *Repository) SaveAll(orders []Order) error {
-	tx, err := r.db.Begin()
+// Insert adds one new order. Unlike the former INSERT OR REPLACE upsert, a
+// duplicate id is an error: placing an order must never overwrite a row a
+// concurrent lifecycle transition may have just changed.
+func (r *Repository) Insert(o Order) error {
+	data, err := json.Marshal(o)
 	if err != nil {
-		return fmt.Errorf("orders: starting save tx: %w", err)
+		return fmt.Errorf("orders: encoding order: %w", err)
 	}
-	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO orders (id, data, machine_id) VALUES (?,?,?)`)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("orders: preparing save: %w", err)
-	}
-	defer stmt.Close()
-	for _, o := range orders {
-		data, err := json.Marshal(o)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("orders: encoding order: %w", err)
-		}
-		id, _ := o["id"].(string)
-		if _, err := stmt.Exec(id, string(data), orderMachineID(o)); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("orders: saving %s: %w", id, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("orders: committing save: %w", err)
+	id, _ := o["id"].(string)
+	if _, err := r.db.Exec(`INSERT INTO orders (id, data, machine_id) VALUES (?,?,?)`, id, string(data), orderMachineID(o)); err != nil {
+		return fmt.Errorf("orders: inserting %s: %w", id, err)
 	}
 	return nil
+}
+
+// DeleteFinished removes every done/declined order in a single statement, so a
+// failure partway cannot leave history only partially deleted the way the
+// previous per-row delete loop could.
+func (r *Repository) DeleteFinished() (int64, error) {
+	res, err := r.db.Exec(`DELETE FROM orders WHERE json_extract(data, '$.status') IN ('done','declined')`)
+	if err != nil {
+		return 0, fmt.Errorf("orders: deleting finished orders: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("orders: deleting finished orders: %w", err)
+	}
+	return n, nil
 }
 
 // Delete removes the order with the given id.
@@ -259,7 +256,7 @@ func (r *Repository) Delete(id string) error {
 }
 
 // ReplaceAll is restore-only — wipes the whole table and re-inserts,
-// unlike SaveAll's upsert-only semantics, so an order that existed locally
+// rather than upserting row by row, so an order that existed locally
 // but isn't in the restored set is actually removed. Used by the backup
 // domain (see go/internal/backup/doc.go); not called by this package's own
 // handlers.

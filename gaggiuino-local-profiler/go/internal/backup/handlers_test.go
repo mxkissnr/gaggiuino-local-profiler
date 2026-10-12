@@ -279,7 +279,7 @@ func seedOrder(t *testing.T, deps Dependencies) orders.Order {
 		"note": "", "variant": nil, "notifyService": nil, "declineReason": nil,
 		"haUserId": nil, "machine": nil, "eta": nil, "beanId": nil, "shotId": nil,
 	}
-	if err := deps.OrdersRepo.SaveAll([]orders.Order{order}); err != nil {
+	if err := deps.OrdersRepo.Insert(order); err != nil {
 		t.Fatalf("seeding order: %v", err)
 	}
 	return order
