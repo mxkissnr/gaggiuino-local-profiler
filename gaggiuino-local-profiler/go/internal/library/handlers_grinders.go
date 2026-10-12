@@ -2,6 +2,7 @@ package library
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -162,11 +163,9 @@ func (h *Handlers) resetBurrs(w http.ResponseWriter, r *http.Request) {
 // its photo and its `grinder_{id}` row in the `maintenance` table, via the
 // onGrinderDelete callback SetOnGrinderDeleted wires — see that method's doc
 // comment for why this is a callback rather than a direct
-// internal/maintenance import. Best-effort: a callback error is swallowed
-// (logged nowhere further — this package has no logger dependency of its own,
-// matching every other best-effort call site here) rather than failing the
-// whole delete, since the grinder itself is already gone from the library at
-// that point and there's nothing left to roll back.
+// internal/maintenance import. Best-effort: a callback error is logged rather
+// than failing the whole delete, since the grinder itself is already gone from
+// the library at that point and there's nothing left to roll back.
 func (h *Handlers) deleteGrinder(w http.ResponseWriter, r *http.Request) {
 	id, noMatch := parseIDParam(r.PathValue("id"))
 	var imgExt string
@@ -208,7 +207,9 @@ func (h *Handlers) deleteGrinder(w http.ResponseWriter, r *http.Request) {
 	// real grinder — grinder_NaN simply isn't a key in maint either, a silent
 	// no-op there too.
 	if h.onGrinderDelete != nil {
-		_ = h.onGrinderDelete(id) // best-effort
+		if err := h.onGrinderDelete(id); err != nil {
+			log.Printf("library: grinder %d delete follow-up failed: %v", id, err)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
