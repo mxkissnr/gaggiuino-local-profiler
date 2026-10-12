@@ -2,7 +2,7 @@
 // the Library view, split out of views/library.js. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import { tHtml } from '../../i18n.js';
+import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, todayIsoDate, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
@@ -341,6 +341,27 @@ function bagDragPointerDown(e: PointerEvent): void {
   card.classList.add('dragging');
   document.addEventListener('pointermove', bagDragPointerMove);
   document.addEventListener('pointerup', bagDragPointerUp);
+  document.addEventListener('pointercancel', bagDragPointerCancel);
+}
+
+// Drops every drag listener and clears the dragging state, shared by the
+// pointerup and pointercancel end paths.
+function endBagDrag(): void {
+  document.removeEventListener('pointermove', bagDragPointerMove);
+  document.removeEventListener('pointerup', bagDragPointerUp);
+  document.removeEventListener('pointercancel', bagDragPointerCancel);
+  _dragState?.card.classList.remove('dragging');
+  _dragState = null;
+}
+
+// pointercancel fires when the browser takes the pointer back mid-drag (a
+// cancelled touch, a gesture the UA claims). Ending here abandons the drag
+// without saving and re-renders the list so the DOM returns to the saved
+// order.
+function bagDragPointerCancel(e: PointerEvent): void {
+  if (!_dragState || e.pointerId !== _dragState.pointerId) return;
+  endBagDrag();
+  library.renderBeanList();
 }
 
 function bagDragPointerMove(e: PointerEvent): void {
@@ -362,11 +383,8 @@ function bagDragPointerUp(e: PointerEvent): void {
 
 async function finishBagDrag(e: PointerEvent): Promise<void> {
   if (!_dragState || e.pointerId !== _dragState.pointerId) return;
-  const { card, list, beanId } = _dragState;
-  card.classList.remove('dragging');
-  document.removeEventListener('pointermove', bagDragPointerMove);
-  document.removeEventListener('pointerup', bagDragPointerUp);
-  _dragState = null;
+  const { list, beanId } = _dragState;
+  endBagDrag();
   // data-bag-drag-list holds exactly this bean's upcoming (non-current) bags
   // (renderBeanList only puts those in it), so this is the complete ordered
   // list reorderBags/the server require: every upcoming bag, once, in DOM
@@ -384,7 +402,14 @@ if (typeof document !== 'undefined') {
 
 export async function reorderBags(beanId: number, bagIds: number[]): Promise<void> {
   const saved = await libraryApi.reorderBeanBags(beanId, bagIds);
-  if (!saved) return;
+  if (!saved) {
+    // The reorder didn't stick: tell the user and re-render so the DOM
+    // returns to the server's (unchanged) order instead of keeping the
+    // unsaved arrangement the drag left behind.
+    window.showToast?.(t('error_generic', ''));
+    library.renderBeanList();
+    return;
+  }
   const idx = _beans().findIndex(b => b.id === beanId);
   if (idx !== -1) _beans()[idx] = saved;
   library.renderBeanList();
