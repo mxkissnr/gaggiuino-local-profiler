@@ -8,7 +8,7 @@ const mock = vi.hoisted(() => ({ blob: null as Blob | null }));
 
 vi.mock('../public-src/utils.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/utils.js')>()),
-  shareOrDownloadBlob: vi.fn(async (blob: Blob) => { mock.blob = blob; }),
+  shareOrDownloadBlob: vi.fn((blob: Blob) => { mock.blob = blob; return Promise.resolve(); }),
 }));
 
 vi.mock('../public-src/shot-curves.js', async (importOriginal) => ({
