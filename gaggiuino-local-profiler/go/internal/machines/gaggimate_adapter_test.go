@@ -198,3 +198,39 @@ func TestGaggiMateAdapter_SettingsProxyUnsupported(t *testing.T) {
 		t.Errorf("expected GetLiveSensorSnapshot to be (nil, nil) for GaggiMate, got (%v, %v)", snap, err)
 	}
 }
+
+// TestGaggiMateParseProfileList_RejectsMissingOrMalformedList pins #1610: a
+// profiles:list response with no `profiles` key, an explicit null, or a
+// value that is not a JSON array must surface an error — all three previously
+// collapsed to an empty list, which the handler then treated as a real "the
+// machine has no profiles" answer and used to prune the local cache.
+func TestGaggiMateParseProfileList_RejectsMissingOrMalformedList(t *testing.T) {
+	cases := []struct {
+		name string
+		res  map[string]any
+	}{
+		{"missing profiles key", map[string]any{}},
+		{"null profiles", map[string]any{"profiles": nil}},
+		{"non-array profiles", map[string]any{"profiles": "x"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := gaggimateParseProfileList(tc.res); err == nil {
+				t.Fatalf("gaggimateParseProfileList(%+v) returned nil error; want an error", tc.res)
+			}
+		})
+	}
+
+	// A valid array is still parsed entry by entry — one unreadable entry does
+	// not error out or empty the list.
+	list, err := gaggimateParseProfileList(map[string]any{"profiles": []any{
+		map[string]any{"id": "lever", "label": "Lever"},
+		"not-a-profile",
+	}})
+	if err != nil {
+		t.Fatalf("gaggimateParseProfileList(valid array with one bad entry): %v", err)
+	}
+	if len(list) != 1 || list[0].ID != "lever" {
+		t.Fatalf("got %+v, want the single readable entry", list)
+	}
+}
