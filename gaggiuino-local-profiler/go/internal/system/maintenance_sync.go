@@ -46,7 +46,9 @@ func (p *Poller) SetMaintenanceRepo(repo *maintenance.Repository) { p.maintenanc
 // for a machine whose adapter has no native service log (GaggiMate, older
 // Gaggiuino firmware). Every failure is logged and swallowed — a machine that
 // is unreachable or has an unexpectedly shaped log must never fail the shot
-// sync that called this, and the next cycle retries.
+// sync that called this, and the next cycle retries. The older-firmware 404 is
+// the one exception: it recurs on every cycle, so it is logged only once per
+// machine (serviceLogUnsupportedLogged).
 func (p *Poller) syncNativeMaintenance(ctx context.Context, machine *machines.Machine) {
 	if p.maintenance == nil || machine == nil {
 		return
@@ -66,8 +68,12 @@ func (p *Poller) syncNativeMaintenance(ctx context.Context, machine *machines.Ma
 	svcLog, err := fetcher.GetServiceLog(ctx, machine)
 	if err != nil {
 		if errors.Is(err, machines.ErrServiceLogUnsupported) {
-			// Older firmware (404): the machine simply has no service log.
-			log.Printf("system: maintenance (%s): machine firmware has no service log", machine.Name)
+			// Older firmware (404): the machine simply has no service log. It
+			// answers 404 on every sync, so log it once per machine per process
+			// rather than flooding the log each cycle.
+			if _, logged := p.serviceLogUnsupportedLogged.LoadOrStore(machine.ID, struct{}{}); !logged {
+				log.Printf("system: maintenance (%s): machine firmware has no service log", machine.Name)
+			}
 			return
 		}
 		log.Printf("system: maintenance (%s): fetching service log: %v", machine.Name, err)

@@ -21,6 +21,7 @@ interface MaintTaskData {
   threshold_g?: number | null;
   gramsSince?: number | null;
   machineSyncedAt?: string | number | null;
+  lastDate?: string | null;
   grinderName?: string | null;
   disabled?: boolean;
   label?: string | null;
@@ -339,6 +340,19 @@ function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null
   `;
 }
 
+// True only when a task's last done date IS the machine's own service-log
+// timestamp — i.e. a machine-recorded backflush/descale (ApplyMachineServiceLog)
+// moved it. machineSyncedAt alone can't decide this: it is advanced even when a
+// newer manual "done" wins (lastDate unchanged), and a later manual "done"
+// leaves a stale machineSyncedAt in place — so keying the badge off it alone
+// would label a manually completed task "Auto".
+export function isAutoSynced(d: MaintTaskData): boolean {
+  if (d.machineSyncedAt == null || d.lastDate == null) return false;
+  const syncedMs = typeof d.machineSyncedAt === 'number' ? d.machineSyncedAt : Date.parse(d.machineSyncedAt);
+  const lastMs = Date.parse(d.lastDate);
+  return Number.isFinite(syncedMs) && Number.isFinite(lastMs) && syncedMs === lastMs;
+}
+
 function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
   const { task, d, machineName, machineId, isGlobal, showMachineTag } = tile;
   const title = taskTitle(task, d);
@@ -406,7 +420,7 @@ function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
       <div class="maint-card-meta">
         ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
         <span class="maint-card-count">${esc(countText)}</span>
-        ${d.machineSyncedAt ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
+        ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
       </div>
       <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${esc(task)}">${tHtml('maint_tile_details')}</button>
       <div class="detail">

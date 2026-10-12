@@ -314,6 +314,13 @@ type Poller struct {
 	// cmd/server sets it — syncNativeMaintenance no-ops then.
 	maintenance *maintenance.Repository
 
+	// serviceLogUnsupportedLogged holds the machine IDs whose "firmware has no
+	// service log" case (ErrServiceLogUnsupported, a 404 on older Gaggiuino
+	// firmware) has already been logged, so the per-sync failure isn't logged
+	// on every cycle. sync.Map because several machines sync concurrently
+	// (sync_triggers.go); see syncNativeMaintenance (maintenance_sync.go).
+	serviceLogUnsupportedLogged sync.Map
+
 	// profilesRepo is the offline-profile-editor local cache/outbox, wired
 	// via SetProfilesRepo (profile_sync.go) — same rationale as shots
 	// above. nil until cmd/server sets it — every profile_sync.go function

@@ -1,8 +1,11 @@
 package system
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -122,6 +125,32 @@ func TestSyncNativeMaintenance_ServiceLogUnsupportedIsNoOp(t *testing.T) {
 		t.Fatalf("GetMaintenanceLog: %v", err)
 	} else if len(log) != 0 {
 		t.Errorf("log entries = %d, want 0", len(log))
+	}
+}
+
+// TestSyncNativeMaintenance_UnsupportedLogsOncePerMachine (#1639): an older
+// Gaggiuino firmware answers 404 on every sync cycle, so the "no service log"
+// notice must be logged only the first time each machine hits it — otherwise a
+// single machine floods the log.
+func TestSyncNativeMaintenance_UnsupportedLogsOncePerMachine(t *testing.T) {
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	fake := &fakeAdapter{
+		capabilities: machines.Capabilities{NativeMaintenanceLog: true},
+		serviceLogFn: func(context.Context, *machines.Machine) (machines.ServiceLog, error) {
+			return machines.ServiceLog{}, machines.ErrServiceLogUnsupported
+		},
+	}
+	p, _, _, m1, _ := newNativeMaintenanceFixture(t, fake)
+
+	p.syncNativeMaintenance(context.Background(), m1)
+	p.syncNativeMaintenance(context.Background(), m1)
+
+	if got := strings.Count(buf.String(), "machine firmware has no service log"); got != 1 {
+		t.Errorf("unsupported-service-log lines = %d, want 1 (once per machine); output:\n%s", got, buf.String())
 	}
 }
 
