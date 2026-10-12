@@ -61,6 +61,7 @@ interface BackupRestoreResult {
     secretsPresent?: boolean;
     secretsRestored?: boolean;
     shots?: number;
+    imagesFailed?: number;
 }
 
 let mode: 'export' | 'restore' | null = null;
@@ -427,9 +428,14 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
             if (window.showToast) window.showToast(t('backup_progress_done'));
             input.value = '';
             closeBackupModal();
-            alert(res.secretsPresent
+            const restoredMsg = res.secretsPresent
                 ? (res.secretsRestored ? t('backup_restored_with_secrets', res.shots) : t('backup_restored_secrets_failed', res.shots))
-                : t('backup_restored', res.shots));
+                : t('backup_restored', res.shots);
+            // #1602: the server counted the photos it could not write; say so
+            // instead of letting the restore look complete.
+            alert(res.imagesFailed && res.imagesFailed > 0
+                ? `${restoredMsg}\n${t('backup_restored_images_failed', res.imagesFailed)}`
+                : restoredMsg);
             // #684: a restore can touch library/machines/settings/menu/etc,
             // not just shots -- window.loadData() only ever refreshed shots,
             // leaving everything else stale until a manual reload. A full

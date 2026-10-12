@@ -460,6 +460,7 @@ const de: Partial<Translations> = {
     backup_restored:(n)=>`Wiederhergestellt: ${n} Shots.`,
     backup_restored_with_secrets:(n)=>`Wiederhergestellt: ${n} Shots (inkl. API-Token & MQTT-Login).`,
     backup_restored_secrets_failed:(n)=>`Wiederhergestellt: ${n} Shots. API-Token & MQTT-Login NICHT wiederhergestellt — falsches Passwort?`,
+    backup_restored_images_failed:(n)=>`${n} Fotos konnten nicht geschrieben werden; siehe App-Log.`,
     backup_error:(msg)=>`Fehler: ${msg}`,
     backup_error_no_sections:'Bitte mindestens einen Bereich auswählen.',
     backup_error_passphrase_required:'Bitte ein Passwort für Token & MQTT-Login eingeben.',

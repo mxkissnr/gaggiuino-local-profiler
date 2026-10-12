@@ -471,6 +471,7 @@ const es: Partial<Translations> = {
     backup_restored:(n)=>`Restaurado: ${n} shot${n!==1?'s':''}.`,
     backup_restored_with_secrets:(n)=>`Restaurado: ${n} shot${n!==1?'s':''} (con token de API e inicio de sesión MQTT).`,
     backup_restored_secrets_failed:(n)=>`Restaurado: ${n} shot${n!==1?'s':''}. Token de API e inicio de sesión MQTT NO restaurados — ¿contraseña incorrecta?`,
+    backup_restored_images_failed:(n)=>`${n} fotos no se pudieron escribir; consulta el registro de la aplicación.`,
     backup_error:(msg)=>`Error: ${msg}`,
     backup_error_no_sections:'Selecciona al menos una sección.',
     backup_error_passphrase_required:'Introduce una contraseña para el token de API y el inicio de sesión MQTT.',

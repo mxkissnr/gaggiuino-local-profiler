@@ -471,6 +471,7 @@ const nl: Partial<Translations> = {
     backup_restored:(n)=>`Hersteld: ${n} shot${n!==1?'s':''}.`,
     backup_restored_with_secrets:(n)=>`Hersteld: ${n} shot${n!==1?'s':''} (incl. API-token en MQTT-inloggegevens).`,
     backup_restored_secrets_failed:(n)=>`Hersteld: ${n} shot${n!==1?'s':''}. API-token en MQTT-inloggegevens NIET hersteld — verkeerd wachtwoord?`,
+    backup_restored_images_failed:(n)=>`${n} foto's konden niet worden geschreven; controleer het app-log.`,
     backup_error:(msg)=>`Fout: ${msg}`,
     backup_error_no_sections:'Selecteer ten minste één sectie.',
     backup_error_passphrase_required:'Voer een wachtwoord in voor het API-token en de MQTT-inloggegevens.',

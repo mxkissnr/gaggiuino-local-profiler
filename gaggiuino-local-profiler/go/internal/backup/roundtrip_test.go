@@ -710,3 +710,60 @@ func TestRestore_InvalidBase64PassphraseHeader400(t *testing.T) {
 		t.Fatalf("status = %d; want 400; body=%s", rr.Code, rr.Body.String())
 	}
 }
+
+// TestRestore_ReportsImagesThatCouldNotBeWritten (#1602): when the restore
+// queue holds two images but only one can be written to disk, the response
+// reports images = 1 (written) and imagesFailed = 1 instead of counting both
+// as restored. A directory standing in for one target path makes the write
+// fail the way a full disk or a permission error would.
+func TestRestore_ReportsImagesThatCouldNotBeWritten(t *testing.T) {
+	imgDir := useImageDir(t)
+	jpg := tinyJPEG(t, 48, 36)
+	for _, name := range []string{"1.jpg", "2.jpg"} {
+		if err := os.WriteFile(filepath.Join(imgDir, name), jpg, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h1, deps1, _ := newTestHandlers(t)
+	if err := deps1.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{
+			{"id": int64(1), "name": "Writable Bean", "stock_g": float64(100), "image": "jpg"},
+			{"id": int64(2), "name": "Unwritable Bean", "stock_g": float64(100), "image": "jpg"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", recExp.Code, recExp.Body.String())
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	// Make the second target path unwritable for the write step: replace the
+	// file with a directory so os.WriteFile fails (as it would on a full disk
+	// or a permission error). The source bytes still live in the backup zip, so
+	// pass-1 validation is unaffected.
+	if err := os.Remove(filepath.Join(imgDir, "2.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(imgDir, "2.jpg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	h2, _, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	result := decodeBody(t, rr.Body.Bytes())
+	if got, _ := result["images"].(float64); got != 1 {
+		t.Errorf("images = %v; want 1 (only the writable image)", result["images"])
+	}
+	if got, _ := result["imagesFailed"].(float64); got != 1 {
+		t.Errorf("imagesFailed = %v; want 1 (the unwritable image)", result["imagesFailed"])
+	}
+	if _, err := os.Stat(filepath.Join(imgDir, "1.jpg")); err != nil {
+		t.Errorf("image that could be written is missing: %v", err)
+	}
+}
