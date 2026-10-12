@@ -102,8 +102,22 @@ export function setAnalyticsFilter(patch: Partial<AnalyticsPageFilter>): void {
 // The profile label buildProfileChart() groups by — and the search matches.
 function _profileNameOf(s: ShotRow): string { return s.profile?.name || s.profileName || 'Unbekannt'; }
 
+// #1625: one render calls _pageShots() ~15 times and each call re-filtered the
+// whole history. Memoize on the shots array identity, the filter values and the
+// current local day — while none of them changed, the filtered list cannot
+// change, so the cached array is returned.
+let _pageShotsMemo: { shots: ShotRow[]; days: number; query: string; day: string; out: ShotRow[] } | null = null;
+
 function _pageShots(): ShotRow[] {
-  return filterAnalyticsShots(_shots(), _pageFilter, Date.now(), _profileNameOf);
+  const shots = _shots();
+  const day   = _localDayKey(new Date());
+  const memo  = _pageShotsMemo;
+  if (memo && memo.shots === shots && memo.days === _pageFilter.days && memo.query === _pageFilter.query && memo.day === day) {
+    return memo.out;
+  }
+  const out = filterAnalyticsShots(shots, _pageFilter, Date.now(), _profileNameOf);
+  _pageShotsMemo = { shots, days: _pageFilter.days, query: _pageFilter.query, day, out };
+  return out;
 }
 
 // #1496: short period label for the grey section counters, e.g. "30 days" /

@@ -554,10 +554,15 @@ export async function trashShot(id: number): Promise<void> {
     const r = await sendShotToTrash(id);
     if (!r.ok) throw new Error(await r.text());
     evictCurve(id);
+    // #1625: pick the neighbour of the trashed shot before removing it — the
+    // next newer one if there is one, otherwise the next older one. S.shots is
+    // oldest-first, so a higher index is newer; null when nothing is left.
+    const idx = S.shots.findIndex(s => s.id === id);
+    const neighbourId = idx === -1 ? null : (S.shots[idx + 1] ?? S.shots[idx - 1] ?? null)?.id ?? null;
     S.shots = S.shots.filter(s => s.id !== id);
     S.allShots = (S.allShots || []).filter(s => s.id !== id);
     if (S.primaryShotId === id) {
-      S.primaryShotId = S.shots[0]?.id || null;
+      S.primaryShotId = neighbourId;
       if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', String(S.primaryShotId));
       else localStorage.removeItem('glp_primaryShotId');
     }
@@ -1130,11 +1135,20 @@ export async function exportCSV(): Promise<void> {
 }
 
 export async function exportAllCSV(): Promise<void> {
-  // Rare, explicit user action — pull every shot's curve (bounded concurrency
-  // inside ensureCurves) before building the rows.
+  // Rare, explicit user action. Curves are pulled in bounded chunks (bounded
+  // concurrency inside ensureCurves too) so a long history never holds every
+  // curve in memory at once; the curves loaded just for this export are
+  // evicted again, the ones already cached before it started stay.
   const list = _shots();
-  await ensureCurves(list.map(s => s.id));
-  await downloadCSV(list.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))), 'glp_all_shots.csv');
+  const previouslyCached = new Set(list.filter(s => getCachedShotData(s.id)).map(s => s.id));
+  const rows: string[] = [];
+  for (let i = 0; i < list.length; i += 50) {
+    const chunk = list.slice(i, i + 50);
+    await ensureCurves(chunk.map(s => s.id));
+    rows.push(...chunk.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))));
+    for (const s of chunk) if (!previouslyCached.has(s.id)) evictCurve(s.id);
+  }
+  await downloadCSV(rows, 'glp_all_shots.csv');
 }
 
 // ── .shot export ──────────────────────────────────────────────────────────
@@ -1160,7 +1174,7 @@ export async function exportShot(): Promise<void> {
     `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
     ann.coffee       ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
     ann.grinder      ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
-    ann.grindSetting ? `grinder_setting {${(ann.grindSetting as string).replace(/[{}]/g, '')}}` : '',
+    ann.grindSetting ? `grinder_setting {${String(ann.grindSetting).replace(/[{}]/g, '')}}` : '',
     basketName       ? `basket {${basketName.replace(/[{}]/g, '')}}` : '',
     puckScreenName   ? `puck_screen {${puckScreenName.replace(/[{}]/g, '')}}` : '',
     ann.dose         ? `bean_weight ${ann.dose}` : '',
