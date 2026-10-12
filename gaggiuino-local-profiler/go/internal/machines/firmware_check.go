@@ -30,7 +30,9 @@ var releasesAPI = "https://api.github.com/repos/Zer0-bit/gaggiuino/releases"
 // host ever reaches it, and firmware_check_test.go's fake GitHub server
 // intentionally binds to 127.0.0.1, which machineHostGuardResolved would
 // reject).
-var firmwareHTTPClient = &http.Client{}
+// A Timeout bounds a GitHub that accepts the connection and then stalls,
+// without cutting off a normal lookup (well under firmwareFetchTimeout).
+var firmwareHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // firmwareCacheTTL bounds how long a successful lookup is cached —
 // unauthenticated GitHub API calls are rate-limited to 60 req/hr, so this
