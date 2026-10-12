@@ -35,17 +35,29 @@ type Event struct {
 	Data any
 }
 
+// subscriber is one open connection's delivery state: events is the channel
+// Subscribe hands back, and resync (capacity 1) is a coalesced "a data-changed
+// event was dropped for this connection" flag. A dropped snapshot is harmless
+// (the next one carries the full state), but a dropped data-changed would leave
+// that tab showing stale data until some unrelated refetch, so Publish remembers
+// it here and the connection's handler sends one whole-database data-changed as
+// soon as it can.
+type subscriber struct {
+	events chan Event
+	resync chan struct{}
+}
+
 // Hub is a minimal in-process pub/sub every open SSE connection subscribes
 // to, and any domain package publishes onto via Publish. There is no
 // listener-count cap to mirror — Go channels don't warn on subscriber count.
 type Hub struct {
 	mu   sync.Mutex
-	subs map[chan Event]struct{}
+	subs map[<-chan Event]*subscriber
 }
 
 // NewHub returns an empty Hub, ready to use.
 func NewHub() *Hub {
-	return &Hub{subs: make(map[chan Event]struct{})}
+	return &Hub{subs: make(map[<-chan Event]*subscriber)}
 }
 
 // Publish fans ev out to every current subscriber. Delivery to each
@@ -54,13 +66,25 @@ func NewHub() *Hub {
 // rather than blocking every other subscriber or the publisher. An unbounded
 // blocking send here would let one wedged HTTP connection stall event
 // delivery to every other open tab.
+//
+// A dropped snapshot is fine — the next one replaces it (see
+// coalesceLiveSnapshots) — but a dropped data-changed is not: that tab would
+// never learn it should refetch. For that event type alone, a drop arms the
+// subscriber's cap-1 resync channel so the connection's handler can send one
+// coalesced whole-database data-changed (see ServeHTTP).
 func (h *Hub) Publish(ev Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.subs {
+	for _, s := range h.subs {
 		select {
-		case ch <- ev:
+		case s.events <- ev:
 		default:
+			if ev.Type == EventDataChanged {
+				select {
+				case s.resync <- struct{}{}:
+				default:
+				}
+			}
 		}
 	}
 }
@@ -75,21 +99,36 @@ const subscriberBuffer = 16
 // unsubscribe closes the channel; callers must stop reading from it once
 // they've called unsubscribe.
 func (h *Hub) Subscribe() (<-chan Event, func()) {
-	ch := make(chan Event, subscriberBuffer)
+	s := &subscriber{
+		events: make(chan Event, subscriberBuffer),
+		resync: make(chan struct{}, 1),
+	}
 	h.mu.Lock()
-	h.subs[ch] = struct{}{}
+	h.subs[s.events] = s
 	h.mu.Unlock()
 
 	var once sync.Once
 	unsubscribe := func() {
 		once.Do(func() {
 			h.mu.Lock()
-			delete(h.subs, ch)
+			delete(h.subs, s.events)
 			h.mu.Unlock()
-			close(ch)
+			close(s.events)
 		})
 	}
-	return ch, unsubscribe
+	return s.events, unsubscribe
+}
+
+// resyncChan returns sub's coalesced-resync channel while sub is still
+// subscribed, or nil once it has unsubscribed (its handler has then already
+// returned, so the nil is never selected on).
+func (h *Hub) resyncChan(sub <-chan Event) <-chan struct{} {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if s, ok := h.subs[sub]; ok {
+		return s.resync
+	}
+	return nil
 }
 
 // Handler serves GET /api/events: same headers, same padding comment, same
@@ -102,7 +141,7 @@ type Handler struct {
 	Hub *Hub
 
 	// Prime, if set, is called once per new connection (after the padding
-	// line, before subscribing to Hub) to obtain the connect-time snapshot
+	// line and after subscribing to Hub) to obtain the connect-time snapshot
 	// events a fresh connection should see (the syncProgress-map loop,
 	// buildPreheatResponse(), buildLiveDataResponse()). The domain packages
 	// own that state; this field lets them supply it without this package
@@ -195,8 +234,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return true
 	}
 
-	// Priming runs before Subscribe, so a fresh connection's snapshots are
-	// sent before any event published after it subscribes.
+	// Subscribe before priming so an event published while the snapshots are
+	// being assembled is queued for this connection instead of being lost in
+	// the gap. The snapshot is still delivered first below; clients treat every
+	// event as "newer state", so a queued event older than the snapshot is
+	// harmless.
+	sub, unsubscribe := h.Hub.Subscribe()
+	defer unsubscribe()
+	resync := h.Hub.resyncChan(sub)
+
 	if h.Prime != nil {
 		for _, ev := range h.Prime() {
 			if !send(ev) {
@@ -204,9 +250,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	sub, unsubscribe := h.Hub.Subscribe()
-	defer unsubscribe()
 
 	pingInterval := h.PingInterval
 	if pingInterval <= 0 {
@@ -239,6 +282,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if closed {
+				return
+			}
+		case <-resync:
+			// A data-changed was dropped for this connection while it was
+			// backed up (see Publish). Send one whole-database data-changed so
+			// the tab refetches everything; no src, so no client skips it as
+			// its own write.
+			if !send(Event{Type: EventDataChanged, Data: DataChanged{Kind: KindAll}}) {
 				return
 			}
 		case <-ping.C:

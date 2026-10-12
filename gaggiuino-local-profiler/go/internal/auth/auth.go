@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -98,18 +99,41 @@ func IsTokenValid(stored, candidate string) bool {
 	return subtle.ConstantTimeCompare(a, b) == 1
 }
 
+// tokenMinLen is the length below which a hand-set token is logged as a
+// warning. A generated token is 64 hex chars; a shorter one is likely a value
+// the user set themselves, which is kept rather than replaced — replacing it
+// would lock out the HA integration and the cards that already hold it.
+const tokenMinLen = 32
+
 // LoadOrCreateToken reads the token at path if present (trimmed), or
 // generates a new 32-byte random token (hex-encoded) and persists it via an
-// atomic write (writeTokenFile below) if none exists yet.
+// atomic write (writeTokenFile below) if none exists yet. A file that exists
+// but is empty or whitespace-only is treated exactly like a missing one — a
+// blank token would otherwise leave RequireToken failing closed and answering
+// 503 to every request. A non-empty token shorter than tokenMinLen is kept
+// as-is, only logged as a warning.
 func LoadOrCreateToken(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err == nil {
-		return strings.TrimSpace(string(data)), nil
+		token := strings.TrimSpace(string(data))
+		if token == "" {
+			log.Printf("auth: token file was empty — generated a new token")
+			return writeNewToken(path)
+		}
+		if len(token) < tokenMinLen {
+			log.Printf("auth: token in %s is only %d characters; keeping it", path, len(token))
+		}
+		return token, nil
 	}
 	if !os.IsNotExist(err) {
 		return "", err
 	}
+	return writeNewToken(path)
+}
 
+// writeNewToken generates a fresh 32-byte random token (hex-encoded) and
+// persists it through writeTokenFile's atomic rename.
+func writeNewToken(path string) (string, error) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", err
