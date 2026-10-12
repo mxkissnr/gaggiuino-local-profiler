@@ -103,6 +103,16 @@ func TestBundledImageEntries(t *testing.T) {
 	if len(names) != 1 || names[0] != "1.jpg" {
 		t.Errorf("bundled entries = %v; want [1.jpg]", names)
 	}
+
+	// A nil set means the reference lookup failed: every app-named file must
+	// still be bundled, so a transient DB error never drops a photo.
+	all, _, err := bundledImageEntries(nil)
+	if err != nil {
+		t.Fatalf("bundledImageEntries(nil): %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("nil referenced bundled %d entries; want 2 (1.jpg, 99.jpg)", len(all))
+	}
 }
 
 // TestRemoveUnreferencedImages (#1525): app-named orphans are removed with
