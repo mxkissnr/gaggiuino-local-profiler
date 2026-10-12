@@ -423,7 +423,6 @@ describe('save and add bag (#1398)', () => {
   });
 });
 
-
 describe('bean roast date follows the current bag (#1606)', () => {
   it('prefills the form with the current bag roast date, not the bean-level one', () => {
     setupHome();
