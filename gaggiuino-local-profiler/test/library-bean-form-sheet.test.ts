@@ -251,6 +251,7 @@ interface LibraryModule {
   requestCloseBeanForm: () => boolean;
   discardBeanForm: () => void;
   saveBeanAddBag: () => Promise<void>;
+  saveBeanNoBag: () => Promise<void>;
   saveBean: () => Promise<void>;
   openNewBagForm: (id: number) => void;
 }
@@ -463,5 +464,26 @@ describe('bean roast date follows the current bag (#1606)', () => {
 
     const payload = mocks.saveBean.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload.roastDate).toBe('2026-02-02');
+  });
+});
+
+describe('double save guard (#1614 slice 4)', () => {
+  it('ignores a second save while the first POST is still pending', async () => {
+    setupHome();
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+
+    let release!: (bean: Bean) => void;
+    mocks.saveBean.mockImplementation(() => new Promise<Bean>(res => { release = res; }));
+
+    const first = library.saveBeanNoBag();
+    // Fired while the first request is still in flight: it must not POST again.
+    const second = library.saveBeanNoBag();
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+
+    release({ id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [] });
+    await first;
+    await second;
+
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
   });
 });
