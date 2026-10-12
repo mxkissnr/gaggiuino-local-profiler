@@ -20,9 +20,8 @@ import (
 // GET /api/backup path — the images map streams each file base64-encoded
 // straight to w, limited by referenced to the images an entry still refers
 // to (a nil set bundles every file). Peak retention is one shot + the
-// annotations accumulator
-// (bounded by annotated-shot count, not datapoints size), never the whole
-// shots table.
+// annotations accumulator (bounded by annotated-shot count, not datapoints
+// size), never the whole shots table.
 //
 // small is gathered before the caller writes any response header, so a DB
 // error there still becomes a clean 500; an error raised mid-stream here
