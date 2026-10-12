@@ -74,8 +74,7 @@ func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaul
 // both hostnameOnly and apiURLAndHostnameFor below need to handle identically.
 func normalizeHost(raw string) (*url.URL, error) {
 	withScheme := raw
-	lower := strings.ToLower(raw)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+	if !strings.Contains(raw, "://") {
 		withScheme = "http://" + raw
 	}
 	return url.Parse(withScheme)
@@ -113,7 +112,11 @@ func hasUnconfirmedLegacyMachineOptions() bool { return false }
 // and SSRF-guards the host on every call; this is pure string formatting with
 // no I/O beyond the env read below). host is the resolved default machine's
 // Host field; an empty host falls back to the MACHINE_URL env var (#764,
-// standalone Docker). Deliberately NOT read here: options.json's deprecated
+// standalone Docker). A host that still won't parse as an http(s) URL --
+// unparseable, or carrying some other scheme -- yields no machineUrl and no
+// machineHostname (nil, ""), exactly like the no-host case, rather than a
+// built-in placeholder address. Deliberately NOT read here: options.json's
+// deprecated
 // machine_host/machine_url legacy fields (#662 removed them from config.yaml's
 // schema) — same scope boundary internal/machines/registry.go's
 // EnsureDefaultMachine doc comment already draws for the read side of that same
@@ -128,8 +131,7 @@ func apiURLAndHostnameFor(host string) (*string, string) {
 	}
 	u, err := normalizeHost(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		fallback := "http://gaggia.intern/api/shots"
-		return &fallback, "gaggia.intern"
+		return nil, ""
 	}
 	full := u.Scheme + "://" + u.Host + "/api/shots"
 	return &full, u.Hostname()
