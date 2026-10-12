@@ -113,6 +113,10 @@ func TestFirmwareName_GaggiMateNeverFetches(t *testing.T) {
 // re-arms the fetch, so a machine renamed while it was away is picked up.
 func TestFirmwareName_ResetOnRecovery(t *testing.T) {
 	p, _, fake, _ := newMultiMachinePoller(t)
+	// The recovery poll starts a fire-and-forget catch-up sync; join it before
+	// the DB and temp dir are closed so it cannot write into either after
+	// teardown (#1599).
+	t.Cleanup(p.waitBackground)
 	fake.setSettings(json.RawMessage(`{"machineName":"GC-01"}`), nil)
 	pollDefault(t, p, fake)
 	if st := p.MachineStatus(1); st.FirmwareName == nil || *st.FirmwareName != "GC-01" {
