@@ -40,8 +40,8 @@ type Event struct {
 // event was dropped for this connection" flag. A dropped snapshot is harmless
 // (the next one carries the full state), but a dropped data-changed would leave
 // that tab showing stale data until some unrelated refetch, so Publish remembers
-// it here and the connection's handler sends one whole-database data-changed as
-// soon as it can.
+// it here and the connection's handler closes the stream as soon as it sees it,
+// forcing the client to reconnect and resync every kind.
 type subscriber struct {
 	events chan Event
 	resync chan struct{}
@@ -70,8 +70,8 @@ func NewHub() *Hub {
 // A dropped snapshot is fine — the next one replaces it (see
 // coalesceLiveSnapshots) — but a dropped data-changed is not: that tab would
 // never learn it should refetch. For that event type alone, a drop arms the
-// subscriber's cap-1 resync channel so the connection's handler can send one
-// coalesced whole-database data-changed (see ServeHTTP).
+// subscriber's cap-1 resync channel so the connection's handler can close the
+// stream and let the client reconnect and resync (see ServeHTTP).
 func (h *Hub) Publish(ev Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -286,12 +286,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-resync:
 			// A data-changed was dropped for this connection while it was
-			// backed up (see Publish). Send one whole-database data-changed so
-			// the tab refetches everything; no src, so no client skips it as
-			// its own write.
-			if !send(Event{Type: EventDataChanged, Data: DataChanged{Kind: KindAll}}) {
-				return
-			}
+			// backed up (see Publish). Rather than fabricate a whole-database
+			// change -- which the client applies as a page reload, discarding
+			// unsaved input -- close the stream: EventSource reconnects on its
+			// own and the client's reconnect path resyncs every kind. This is
+			// the backed-up, slow connection anyway, so dropping it is cheap.
+			return
 		case <-ping.C:
 			if _, err := fmt.Fprint(w, ":ping\n\n"); err != nil {
 				return

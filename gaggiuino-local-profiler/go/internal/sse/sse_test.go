@@ -414,12 +414,13 @@ func waitForBody(t *testing.T, gw *gatedFlusher, want string) {
 	}
 }
 
-// TestHandler_DroppedDataChangedDeliversCoalescedAll pins the fix for a dropped
+// TestHandler_DroppedDataChangedEndsStream pins the fix for a dropped
 // data-changed: when a backed-up subscriber's buffer is full, Publish cannot
-// deliver one, so the handler must send a single whole-database data-changed
-// once the subscriber drains -- otherwise that tab stays stale until some
-// unrelated refetch.
-func TestHandler_DroppedDataChangedDeliversCoalescedAll(t *testing.T) {
+// deliver one, so the handler must close the stream -- not fabricate a
+// whole-database change. The frontend applies a kind:"all" event as a page
+// reload, discarding unsaved input, whereas EventSource reconnects on its own
+// and the client's reconnect path resyncs every kind.
+func TestHandler_DroppedDataChangedEndsStream(t *testing.T) {
 	hub := NewHub()
 	h := &Handler{Hub: hub, PingInterval: time.Hour}
 	gw := newGatedFlusher()
@@ -443,17 +444,16 @@ func TestHandler_DroppedDataChangedDeliversCoalescedAll(t *testing.T) {
 	waitForBody(t, gw, `"seq":0`)
 
 	// Overflow the 16-slot buffer with snapshots (a dropped snapshot is
-	// harmless), then drop a data-changed, which must not be lost.
+	// harmless), then drop a data-changed, which the handler must react to.
 	for i := 0; i < subscriberBuffer+1; i++ {
 		hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": i + 1}})
 	}
 	hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{Kind: "library"}})
 
-	// Feed the handler enough flushes for the in-flight snapshot, the coalesced
-	// snapshot batch and the recovered data-changed.
-	flushDone := make(chan struct{})
+	// Feed the handler flushes for the in-flight snapshot and the coalesced
+	// snapshot batch; on reaching the armed resync it must return without
+	// writing another frame.
 	go func() {
-		defer close(flushDone)
 		for i := 0; i < 10; i++ {
 			select {
 			case gw.release <- struct{}{}:
@@ -462,14 +462,77 @@ func TestHandler_DroppedDataChangedDeliversCoalescedAll(t *testing.T) {
 			}
 		}
 	}()
-	time.Sleep(100 * time.Millisecond)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("handler did not close the stream after a dropped data-changed, body:\n%s", gw.body())
+	}
 
 	body := gw.body()
-	if !strings.Contains(body, "event: "+EventDataChanged+"\n") {
-		t.Fatalf("no data-changed delivered after one was dropped, body:\n%s", body)
+	if strings.Contains(body, "event: "+EventDataChanged+"\n") {
+		t.Errorf("a dropped data-changed must not be replaced with a synthetic event, body:\n%s", body)
 	}
-	if !strings.Contains(body, `"kind":"all"`) {
-		t.Errorf("recovered data-changed is not kind all, body:\n%s", body)
+	if strings.Contains(body, `"kind":"all"`) {
+		t.Errorf("handler fabricated a whole-database change (would reload the page), body:\n%s", body)
+	}
+}
+
+// TestHandler_DroppedLiveSnapshotKeepsStreamOpen pins that a dropped
+// live-snapshot does not end the stream: each snapshot carries the full state,
+// so a drop is harmless and the connection keeps serving -- only a dropped
+// data-changed closes it (see TestHandler_DroppedDataChangedEndsStream).
+func TestHandler_DroppedLiveSnapshotKeepsStreamOpen(t *testing.T) {
+	hub := NewHub()
+	h := &Handler{Hub: hub, PingInterval: time.Hour}
+	gw := newGatedFlusher()
+	ctx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+
+	done := make(chan struct{})
+	go func() { h.ServeHTTP(gw, req); close(done) }()
+
+	gw.letFlush(1)
+	waitForSubscribers(t, hub, 1)
+
+	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": 0}})
+	waitForBody(t, gw, `"seq":0`)
+
+	// Overflow the 16-slot buffer with snapshots only -- the newest (seq 16)
+	// survives coalescing, and no event arms the resync channel.
+	for i := 0; i < subscriberBuffer+1; i++ {
+		hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": i + 1}})
+	}
+
+	flushDone := make(chan struct{})
+	go func() {
+		defer close(flushDone)
+		for i := 0; i < 4; i++ {
+			select {
+			case gw.release <- struct{}{}:
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	// The handler must deliver the coalesced snapshot and keep waiting, rather
+	// than return.
+	deadline := time.After(2 * time.Second)
+	for !strings.Contains(gw.body(), `"seq":16`) {
+		select {
+		case <-done:
+			t.Fatalf("a dropped live-snapshot closed the stream; body:\n%s", gw.body())
+		case <-deadline:
+			t.Fatalf("handler never delivered the coalesced snapshot, body:\n%s", gw.body())
+		case <-time.After(2 * time.Millisecond):
+		}
+	}
+	select {
+	case <-done:
+		t.Fatal("a dropped live-snapshot closed the stream")
+	default:
 	}
 
 	cancelReq()
