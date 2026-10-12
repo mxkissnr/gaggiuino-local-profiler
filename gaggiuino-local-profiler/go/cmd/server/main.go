@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -98,8 +99,8 @@ func configFromEnv() appConfig {
 		dbPath:          getEnv("GLP_DB_PATH", db.DefaultPath),
 		tokenPath:       getEnv("GLP_TOKEN_FILE", auth.DefaultTokenFile),
 		port:            getEnv("GLP_PORT", defaultPort),
-		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond))) * time.Millisecond,
-		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax))),
+		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond), 1)) * time.Millisecond,
+		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax), 1)),
 		allowedHosts:    auth.ParseAllowedHosts(readAllowedHostsOption() + " " + os.Getenv("GLP_ALLOWED_HOSTS")),
 	}
 }
@@ -144,7 +145,14 @@ func main() {
 		log.Fatalf("listening on %s: %v", addr, err)
 	}
 
-	srv := &http.Server{Handler: handler}
+	// ReadHeaderTimeout stops a slowloris client that dribbles headers forever;
+	// IdleTimeout reaps idle keep-alive connections. ReadTimeout/WriteTimeout are
+	// deliberately unset so large backup uploads and the SSE streams can run long.
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	// Graceful shutdown: docker stop sends SIGTERM to this process directly
 	// (docker-entrypoint.sh execs it via su-exec, so there's no intermediate
@@ -620,14 +628,21 @@ func getEnv(name, def string) string {
 // getEnvNumber parses GLP_RATE_LIMIT_WINDOW_MS/GLP_RATE_LIMIT_MAX: an unset
 // env var, one that fails to parse as a number, or one that parses to 0 all
 // fall back to def, including that a literal "0" override is treated the same
-// as no override.
-func getEnvNumber(name string, def float64) float64 {
+// as no override. A value below min, or one that parses to NaN/Inf, also falls
+// back to def (with a log line naming the variable): a sub-1 GLP_RATE_LIMIT_MAX
+// truncates to 0 in ratelimit.New and panics on a divide by zero, and a
+// non-positive window would disable limiting entirely.
+func getEnvNumber(name string, def float64, min float64) float64 {
 	v, ok := os.LookupEnv(name)
 	if !ok {
 		return def
 	}
 	n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 	if err != nil || n == 0 {
+		return def
+	}
+	if math.IsNaN(n) || math.IsInf(n, 0) || n < min {
+		log.Printf("ignoring out-of-range %s=%q, using default %v", name, v, def)
 		return def
 	}
 	return n
