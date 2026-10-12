@@ -34,6 +34,9 @@ import (
 // staleAfter is how old a reading may be before it counts as stale.
 const staleAfter = 15 * time.Second
 
+// maxMQTTPayload caps a single MQTT payload we will parse; a larger retained message would otherwise be decoded in full on every delivery.
+const maxMQTTPayload = 64 << 10
+
 // mqttHostGuardTimeout bounds the SSRF guard's DNS lookup in connect()
 // (#990 code review): GetLiveSensorSnapshot/GetLiveSystemState call
 // connect() synchronously on every live-poll tick whenever no session is
@@ -110,6 +113,7 @@ type session struct {
 
 	loggedFirstSensorSnap bool
 	loggedFirstSysState   bool
+	loggedFirstOversize   bool
 	guardRejectLogged     bool
 }
 
@@ -240,6 +244,16 @@ func (c *Client) connect(conn Conn) *session {
 }
 
 func (c *Client) onMessage(conn Conn, s *session, topic string, payload []byte) {
+	if len(payload) > maxMQTTPayload {
+		s.mu.Lock()
+		first := !s.loggedFirstOversize
+		s.loggedFirstOversize = true
+		s.mu.Unlock()
+		if first {
+			log.Printf("Gaggiuino MQTT: dropped oversized %d-byte payload on %q (limit %d bytes)", len(payload), topic, maxMQTTPayload)
+		}
+		return
+	}
 	prefix := conn.prefix()
 	if topic == prefix+"/status" {
 		online := string(payload) == "online"
