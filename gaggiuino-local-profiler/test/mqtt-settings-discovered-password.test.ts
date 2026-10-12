@@ -120,7 +120,11 @@ describe('MQTT settings password field (#1431)', () => {
     els.mqttHost!.value = 'other-broker';
     await saveMqttSettings();
 
-    const body = JSON.parse(fetchSpy.mock.calls[2]?.[1]?.body as string);
+    const body = JSON.parse(fetchSpy.mock.calls[2]?.[1]?.body as string) as {
+      host?: string;
+      password?: string;
+      useDiscoveredPassword?: boolean;
+    };
     expect(body.host).toBe('other-broker');
     expect(body.useDiscoveredPassword).toBeUndefined();
     expect(body.password).toBe('');
