@@ -578,6 +578,13 @@ func (p *Poller) fetchLatestShotID(ctx context.Context, machineURL string) (*int
 	if !ok {
 		return nil, nil
 	}
+	// A bogus/corrupted id from the machine would send backfillShots looping
+	// over millions of ids (blocklisting each 404), and a native id >=
+	// MachineIDOffset would collide with another machine's global id range.
+	if id < 0 || id >= shots.MachineIDOffset {
+		log.Printf("system: sync: machine reported out-of-range lastShotId %d — ignored", id)
+		return nil, nil
+	}
 	debugLogf("/latest lastShotId=%d", id)
 	return &id, nil
 }
