@@ -710,6 +710,7 @@ func TestRestore_InvalidBase64PassphraseHeader400(t *testing.T) {
 		t.Fatalf("status = %d; want 400; body=%s", rr.Code, rr.Body.String())
 	}
 }
+
 // TestRestore_ReportsImagesThatCouldNotBeWritten (#1602): when the restore
 // queue holds two images but only one can be written to disk, the response
 // reports images = 1 (written) and imagesFailed = 1 instead of counting both
