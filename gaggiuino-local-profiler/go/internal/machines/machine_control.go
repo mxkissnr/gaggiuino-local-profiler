@@ -294,7 +294,7 @@ func (h *Handlers) controlAction(w http.ResponseWriter, r *http.Request, action 
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
