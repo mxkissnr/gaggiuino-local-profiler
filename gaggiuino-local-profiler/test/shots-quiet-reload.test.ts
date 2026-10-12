@@ -55,7 +55,7 @@ async function flushPromises(times = 10): Promise<void> {
 }
 
 function ids(): number[] {
-  return (S.allShots as ShotMeta[]).map(s => s.id);
+  return S.allShots.map(s => s.id);
 }
 
 beforeEach(() => {
