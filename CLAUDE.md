@@ -7,7 +7,7 @@ Working rules for this repo. Follow these in every session.
 - **Code, comments, commit messages, GitHub issues, PR descriptions** → always English
 - **DOCS.md, README.md** → English (primary)
 - **DOCS.de.md** → German (supplementary, always kept in sync with DOCS.md)
-- **UI strings in index.html** → translated via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL); add new keys to **all 6 language files** when adding UI text
+- **UI strings** → translated via `t()` from `public-src/i18n/{de,en,it,fr,es,nl}.ts`; add new keys to **all 6 language files** when adding UI text
 - **UI design** → every visible change follows [docs/DESIGN.md](docs/DESIGN.md) (bean-library design language, "nothing twice", desktop layout of its own).
 
 ## Workflow
@@ -139,13 +139,8 @@ consts) or touch `public-src/shared/whats-new.ts` in a feature/fix commit —
 both happen once, together, at release time (see Versioning above and the
 `glp-release-checklist` skill).
 
-At release time:
-```
-git tag v<version>
-git push origin main
-git push origin v<version>
-gh release create v<version> --title "v<version>" --notes "..."
-```
+Tagging and the GitHub release are part of the release run only (`releaser`
+agent / `glp-release-checklist` skill), never done by hand from a feature round.
 
 ## Release & documentation rules (since 2026-07-05)
 
@@ -204,7 +199,7 @@ README.md                     ← Repo root README (English)
 - `shot.annotation?.coffee` etc. — annotation fields are optional
 - `calcShotScore(shot, getShotData(shot))` returns null for test/empty shots
 - All fetch calls use relative URLs (no leading `/`) for HA ingress compatibility
-- Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
+- Chart.js is an npm dependency bundled by Vite; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the app container
 - i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.ts` — each exports a default object; `public-src/constants.ts` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
 - **Go + TypeScript only**: the repository is Go + TypeScript only — the backend is Go, and everything that runs in the browser or as build/dev tooling is TypeScript. No new `.js`/`.mjs`/`.cjs` files may be added: vendored `/vendor/` files are the only exception, enforced by `test/no-javascript-sources.test.ts`. Tooling Node runs directly is `.mts` and runs on Node's built-in type stripping (official Node ≥ 22.18; CI uses 24); `npm run lint` passes ESLint's `unstable_native_nodejs_ts_config` flag. Service workers are `.ts`, bundled to classic scripts and typed by `tsconfig.sw.json`. The SPA under `public-src/` is `.ts`; `tsconfig.json` turns on `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; every `innerHTML` assignment must take an `Html` value, never a raw string — enforced by the local ESLint rule `html-sink`.
