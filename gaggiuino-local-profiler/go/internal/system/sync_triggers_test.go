@@ -59,6 +59,12 @@ func withShortDelays(t *testing.T) {
 	t.Cleanup(func() { syncAfterBrewDelay, syncRetryDelays, syncAfterPowerOnDelay = origBrew, origRetry, origPowerOn })
 }
 
+// waitBackground blocks until every background sync goroutine started by the
+// trigger methods has returned. It exists for tests (#1599) that must not tear
+// down their DB and temp dirs while a catch-up/post-brew sync is still writing;
+// nothing in production calls it.
+func (p *Poller) waitBackground() { p.bg.Wait() }
+
 func TestScheduleSyncAfterBrew_FiresAfterDelay(t *testing.T) {
 	withShortDelays(t)
 	fake := &fakeAdapter{}

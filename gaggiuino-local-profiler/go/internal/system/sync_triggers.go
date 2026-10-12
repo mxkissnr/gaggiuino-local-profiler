@@ -87,12 +87,6 @@ func (p *Poller) goBackground(logCtx string, fn func()) {
 	})
 }
 
-// waitBackground blocks until every background sync goroutine started by the
-// trigger methods has returned. It exists for tests (#1599) that must not tear
-// down their DB and temp dirs while a catch-up/post-brew sync is still writing;
-// nothing in production calls it.
-func (p *Poller) waitBackground() { p.bg.Wait() }
-
 // scheduleSyncAfterBrew is fired from the brew-finished branch: wait 3s (the
 // machine needs a moment to persist the shot), then pull, logging the new shot
 // id(s). Single-flight is handled inside syncDefaultMachineShots
