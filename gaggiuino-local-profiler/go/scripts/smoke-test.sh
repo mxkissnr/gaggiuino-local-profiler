@@ -120,6 +120,11 @@ start_server() {
 	(
 		export GLP_DB_PATH="$dbdir/glp.db"
 		export GLP_TOKEN_FILE="$dbdir/api_token.txt"
+		# Keep every other data path (preheat state/history, options.json, the
+		# bean-images dir) inside the throwaway dir too, so a smoke run never
+		# reads or writes the host's real /data directory (#1598).
+		export GLP_DATA_DIR="$dbdir"
+		export GLP_IMAGE_DIR="$dbdir/bean-images"
 		export GLP_PORT="$port"
 		export GLP_ENABLE_ORDERS=true
 		exec "$BIN"

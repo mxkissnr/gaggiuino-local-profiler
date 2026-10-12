@@ -29,8 +29,10 @@ const distDir     = path.join(goDir, 'internal', 'webapp', 'dist');
 
 export const PORT = 8199;
 
-// Throwaway data dir — the Go server writes its SQLite DB and token file
-// here via GLP_DB_PATH / GLP_TOKEN_FILE, never into the real /data.
+// Throwaway data dir — the Go server roots every on-disk path (SQLite DB,
+// token, options, preheat state/history, images) here via GLP_DATA_DIR, never
+// into the real /data. Deleted on process exit (see the exit handler below);
+// a restored backup can leave personal data in it.
 export const tmpDataDir = mkdtempSync(path.join(tmpdir(), 'glp-e2e-'));
 
 // Throwaway image dir — the Go server reads and writes every entity photo
@@ -38,6 +40,17 @@ export const tmpDataDir = mkdtempSync(path.join(tmpdir(), 'glp-e2e-'));
 export const tmpImageDir = path.join(tmpDataDir, 'bean-images');
 
 let serverProc: ChildProcess | null = null;
+
+// Registered once at module load: on exit, stop the server if it is still
+// running and delete the throwaway data dir, which can hold a restored
+// personal backup (DB, photos, API token, MQTT login) and so must not survive
+// the run. Wrapped in try/catch because an exit handler must not throw.
+process.on('exit', () => {
+    try {
+        stopServer();
+        rmSync(tmpDataDir, { recursive: true, force: true, maxRetries: 3 });
+    } catch { /* an exit handler must not throw */ }
+});
 
 interface RestoreResult {
     ok: boolean;
@@ -99,6 +112,7 @@ export async function bootServer(): Promise<string> {
         env: {
             ...process.env,
             GLP_PORT: String(PORT),
+            GLP_DATA_DIR: tmpDataDir,
             GLP_DB_PATH: path.join(tmpDataDir, 'glp.db'),
             GLP_TOKEN_FILE: path.join(tmpDataDir, 'api_token.txt'),
             GLP_IMAGE_DIR: tmpImageDir,

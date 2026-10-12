@@ -9,10 +9,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
 )
 
-// DefaultTokenFile is the on-disk location of the generated X-GLP-Token.
-const DefaultTokenFile = "/data/api_token.txt"
+// DefaultTokenFile is the on-disk location of the generated X-GLP-Token, under
+// datadir.Root (the real data directory in production, a per-test directory
+// under `go test`). A var, not a const, so it is resolved through the data-dir
+// seam.
+var DefaultTokenFile = datadir.Path("api_token.txt")
 
 // HAIngressPrefix is the fixed prefix of the X-Ingress-Path header HA Core
 // sets when proxying a request through Ingress. It is a PREFIX, not the add-on's own path: HA Core

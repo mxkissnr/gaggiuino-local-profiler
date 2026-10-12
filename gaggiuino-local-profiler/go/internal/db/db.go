@@ -10,13 +10,17 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
+
 	_ "modernc.org/sqlite"
 )
 
-// DefaultPath is the default on-disk location of the database. Callers
-// needing an isolated database (tests, primarily) pass their own path to
-// Open instead.
-const DefaultPath = "/data/glp.db"
+// DefaultPath is the default on-disk location of the database, under
+// datadir.Root (the real data directory in production, a per-test directory
+// under `go test`). A var, not a const, so it is resolved through the data-dir
+// seam. Callers needing an isolated database (tests, primarily) pass their own
+// path to Open instead.
+var DefaultPath = datadir.Path("glp.db")
 
 // Open opens (creating if necessary) the SQLite database at path, brings it
 // to the current schema, and runs the additive migrations needed on every

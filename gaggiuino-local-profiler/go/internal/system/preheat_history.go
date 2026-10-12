@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"sync"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
 )
 
 // This file records finished preheat runs so the MCP get_preheat_history tool
@@ -33,9 +35,10 @@ const (
 	lastReadyByAttachWindowMS = 15 * 60 * 1000
 )
 
-// preheatHistoryFile mirrors PREHEAT_STATE_FILE's layout. A var, not a const,
-// so tests can point it at a temp dir (same seam as defaultOptionsFile).
-var preheatHistoryFile = "/data/preheat_history.json"
+// preheatHistoryFile mirrors PREHEAT_STATE_FILE's layout, under datadir.Root.
+// A var, not a const, so tests can point it at a temp dir (same seam as
+// defaultOptionsFile).
+var preheatHistoryFile = datadir.Path("preheat_history.json")
 
 // PreheatSample is one temperature reading inside a run. TS is seconds since
 // the run's real SwitchOnAt.

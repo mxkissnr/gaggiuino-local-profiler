@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -58,9 +59,18 @@ type versionChecker struct {
 }
 
 func newVersionChecker() *versionChecker {
+	// A test binary must not dial GitHub: every Go test that builds the system
+	// handlers (GET /api/version, and the server package's full-app tests)
+	// would otherwise make a real HTTPS request. An empty apiURL makes
+	// fetchLatestTag a no-op, so the "keep whatever's cached" path applies.
+	// Tests that need a fetch point apiURL at an httptest server themselves.
+	apiURL := "https://api.github.com/repos/mxkissnr/gaggiuino-local-profiler/releases/latest"
+	if testing.Testing() {
+		apiURL = ""
+	}
 	return &versionChecker{
 		http:     &http.Client{Timeout: 8 * time.Second},
-		apiURL:   "https://api.github.com/repos/mxkissnr/gaggiuino-local-profiler/releases/latest",
+		apiURL:   apiURL,
 		devBuild: os.Getenv("GLP_DEV_BUILD") != "",
 	}
 }
@@ -85,6 +95,11 @@ func (v *versionChecker) CheckForUpdate(ctx context.Context) VersionInfo {
 }
 
 func (v *versionChecker) fetchLatestTag(ctx context.Context) (string, bool) {
+	// No apiURL means "don't fetch at all" (a test binary, see
+	// newVersionChecker): report not-ok without issuing any request.
+	if v.apiURL == "" {
+		return "", false
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.apiURL, nil)
 	if err != nil {
 		return "", false

@@ -3,11 +3,16 @@ package orders
 import (
 	"encoding/json"
 	"os"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
 )
 
-const optionsFile = "/data/options.json"
+// optionsFile is the Supervisor-written options.json path, under datadir.Root
+// (the real data directory in production, a per-test directory under
+// `go test`). A var, not a const, so it is resolved through the data-dir seam.
+var optionsFile = datadir.Path("options.json")
 
-// isOrdersEnabled reads the enable_orders field from /data/options.json
+// isOrdersEnabled reads the enable_orders field from the options.json
 // (written by the Supervisor), falling back to the GLP_ENABLE_ORDERS env var
 // (#764, standalone Docker with no Supervisor) when the file doesn't exist
 // or doesn't parse. This is deliberately a narrow, single-field read, not a
