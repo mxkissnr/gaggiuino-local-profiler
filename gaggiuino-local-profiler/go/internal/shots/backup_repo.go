@@ -177,8 +177,15 @@ func (r *Repository) RestoreShots(in RestoreInput) error {
 		}
 	}
 
+	// ON CONFLICT DO UPDATE, never INSERT OR REPLACE (#1150): a backup that
+	// lists the same shot id twice would otherwise delete the first row and,
+	// with foreign_keys=ON, fire annotations' ON DELETE CASCADE — silently
+	// dropping the annotation the first occurrence wrote. Updating in place
+	// keeps one row and its annotation row.
 	shotStmt, err := tx.Prepare(
-		`INSERT OR REPLACE INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)`,
+		`INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,?,?,?,?)` +
+			` ON CONFLICT(id) DO UPDATE SET timestamp=excluded.timestamp, duration=excluded.duration,` +
+			` profile_name=excluded.profile_name, data=excluded.data, machine_id=excluded.machine_id`,
 	)
 	if err != nil {
 		return fmt.Errorf("shots: preparing restore insert: %w", err)
@@ -191,6 +198,7 @@ func (r *Repository) RestoreShots(in RestoreInput) error {
 	defer annStmt.Close()
 
 	restored := map[int64]bool{}
+	skippedInvalidAnnotations := 0
 	if in.Shots != nil {
 		err = in.Shots(func(s Shot) error {
 			row, err := shotInsertArgs(s)
@@ -205,6 +213,16 @@ func (r *Repository) RestoreShots(in RestoreInput) error {
 				annMap, _ := ann.(map[string]any)
 				if annMap == nil {
 					annMap = map[string]any{}
+				}
+				// A shot's embedded annotation skips the validation the separate
+				// top-level `annotations` map gets in internal/backup. Writing it
+				// raw could bring back a payload the annotation API rejects (e.g.
+				// rating 9, a 5000-char note, a string beanId), which later breaks
+				// views or makes the next edit of that shot fail validation. Drop
+				// just the bad annotation; the shot itself is still restored.
+				if issues := ValidateAnnotation(annMap); len(issues) > 0 {
+					skippedInvalidAnnotations++
+					return nil
 				}
 				b, err := json.Marshal(annMap)
 				if err != nil {
@@ -247,6 +265,9 @@ func (r *Repository) RestoreShots(in RestoreInput) error {
 	if skippedAnnotations > 0 {
 		log.Printf("shots: restore skipped %d annotation(s) for shots not in the backup", skippedAnnotations)
 	}
+	if skippedInvalidAnnotations > 0 {
+		log.Printf("shots: restore skipped %d shot annotation(s) that failed validation", skippedInvalidAnnotations)
+	}
 
 	trashStmt, err := tx.Prepare(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`)
 	if err != nil {
@@ -267,7 +288,10 @@ func (r *Repository) RestoreShots(in RestoreInput) error {
 		if _, err := tx.Exec(`DELETE FROM blocklist`); err != nil {
 			return fmt.Errorf("shots: clearing blocklist: %w", err)
 		}
-		blkStmt, err := tx.Prepare(`INSERT INTO blocklist (value) VALUES (?)`)
+		// blocklist.value is UNIQUE, so a backup that repeats a value (or
+		// bundles one already in the table) would abort the whole restore on a
+		// plain INSERT. OR IGNORE keeps the first occurrence and moves on.
+		blkStmt, err := tx.Prepare(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`)
 		if err != nil {
 			return fmt.Errorf("shots: preparing blocklist insert: %w", err)
 		}
