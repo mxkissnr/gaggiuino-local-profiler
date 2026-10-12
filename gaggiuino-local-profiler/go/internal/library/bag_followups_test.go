@@ -150,3 +150,35 @@ func TestWriteEnrichedBean_DegradesTo200WhenReadFails(t *testing.T) {
 		t.Fatalf("undecorated bean name = %v, want Test Bean", bean["name"])
 	}
 }
+
+// TestDeleteBag_SkipsSyncWhenDoseReadFails covers #1606: when the shots read
+// that feeds currentBag fails, deleteBag must leave the bean-level
+// roastDate/stock_g unchanged rather than guess the current bag from no dose
+// history and overwrite them with the wrong bag's values.
+func TestDeleteBag_SkipsSyncWhenDoseReadFails(t *testing.T) {
+	h, repo, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	seedDeletableBagBean(t, repo, sqlDB)
+	// Make the bean-level date differ from the current bag's (2026-09-10) so a
+	// skipped sync is observable: a sync would change it, a skip leaves it.
+	if err := repo.Update(func(lib *Library) error {
+		lib.Beans[0]["roastDate"] = "2026-01-01"
+		return nil
+	}); err != nil {
+		t.Fatalf("setting bean-level roast date: %v", err)
+	}
+	// Fail the shots read (GetAnnotatedDoses joins annotations) while leaving
+	// the library DB — and thus repo.Update/GetLibrary — working.
+	if _, err := sqlDB.Exec(`DROP TABLE annotations`); err != nil {
+		t.Fatalf("dropping annotations: %v", err)
+	}
+
+	rec := doJSON(t, mux, http.MethodDelete, "/api/library/bean/1/bag/104", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	bean := decodeBody(t, rec.Body.Bytes())
+	if bean["roastDate"] != "2026-01-01" {
+		t.Fatalf("bean roastDate = %v, want 2026-01-01 unchanged (sync must be skipped on a dose-read failure)", bean["roastDate"])
+	}
+}

@@ -529,12 +529,12 @@ func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 	// Best-effort read: deleteBag's currentBag use is only the bean-level
 	// roastDate/stock_g sync below, so a shots-lookup failure skips that sync
 	// rather than failing an otherwise valid delete.
-	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
-	if err != nil {
-		log.Printf("library: reading doses for current-bag sync: %v", err)
+	doseRows, doseErr := h.shotsRepo.GetAnnotatedDoses()
+	if doseErr != nil {
+		log.Printf("library: reading doses for current-bag sync: %v", doseErr)
 	}
 	var bean Entity
-	err = h.repo.Update(func(lib *Library) error {
+	err := h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !idNoMatch {
 			idx = findBeanIndex(*lib, id)
@@ -567,10 +567,14 @@ func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 		// Sync bean-level roastDate/stock_g from the bag actually being drawn
 		// from, not the array-last bag (they differ once the queue has
 		// advanced or bags are reordered). With no current bag left the
-		// bean-level fields stay unchanged.
-		if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
-			bean["roastDate"] = cur["roastDate"]
-			bean["stock_g"] = cur["stock_g"]
+		// bean-level fields stay unchanged. Skipped entirely when the dose read
+		// failed: without the dose history currentBag could resolve the wrong
+		// bag and write its date/stock into the bean.
+		if doseErr == nil {
+			if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
+				bean["roastDate"] = cur["roastDate"]
+				bean["stock_g"] = cur["stock_g"]
+			}
 		}
 		lib.Beans[idx] = bean
 		return nil
