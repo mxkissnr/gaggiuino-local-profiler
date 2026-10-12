@@ -2,13 +2,12 @@
 // wizard), same session/polling/candidate-confirm architecture, adapted for
 // tuning a machine profile's phases instead of a single grind number.
 //
-// v1 SCOPE (see ~/.claude/plans/glp-profile-dialin-phase2.md): the primary
-// tuning signal is a manual taste-symptom pick per round (sour/balanced/
-// bitter/watery/channeling), mapped to a concrete phase/field adjustment via
-// profile-dialin-convergence.js's symptom table (itself grounded in the
-// coffee-expert skill). calcShotScore is the objective secondary signal,
-// used only for convergence detection. shot.profile.phases is intentionally
-// NOT parsed here — its field shape is unverified against real hardware.
+// v1 SCOPE: the primary tuning signal is a manual taste-symptom pick per
+// round (sour/balanced/bitter/watery/channeling), mapped to a concrete
+// phase/field adjustment via profile-dialin-convergence.js's symptom table.
+// calcShotScore is the objective secondary signal, used only for convergence
+// detection. shot.profile.phases is intentionally NOT parsed here — its field
+// shape is unverified against real hardware.
 //
 // Every accepted round PUTs the updated profile straight back to the
 // machine (api/machine/profile/:id) before the next round starts waiting —
