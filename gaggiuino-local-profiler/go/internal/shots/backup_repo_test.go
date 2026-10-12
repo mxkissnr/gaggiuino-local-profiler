@@ -236,3 +236,122 @@ func TestRestoreShots_SkipsAnnotationForMissingShot(t *testing.T) {
 		t.Errorf("trash = %+v; want {10:777} (20000007 filtered out)", tm)
 	}
 }
+
+// TestRestoreShots_ValidatesEmbeddedAnnotation covers the embedded-annotation
+// gap: a shot's own `annotation` object skipped the validation the separate
+// top-level `annotations` map gets (see buildRestorePlan in internal/backup),
+// so a backup could restore an annotation the annotation API would reject.
+// The shot must still restore; only the invalid annotation is dropped, and a
+// sibling shot's valid embedded annotation must survive untouched.
+func TestRestoreShots_ValidatesEmbeddedAnnotation(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+
+	err := repo.RestoreShots(RestoreInput{
+		Shots: func(yield func(Shot) error) error {
+			if err := yield(Shot{
+				"id": float64(10), "timestamp": float64(1000), "profileName": "P",
+				"annotation": map[string]any{"rating": float64(9)}, // out of the 1..5 range
+			}); err != nil {
+				return err
+			}
+			return yield(Shot{
+				"id": float64(11), "timestamp": float64(2000), "profileName": "P",
+				"annotation": map[string]any{"coffee": "Bean X", "rating": float64(4)},
+			})
+		},
+	})
+	if err != nil {
+		t.Fatalf("RestoreShots: %v", err)
+	}
+
+	s10, _ := repo.FindByID(10)
+	if s10 == nil {
+		t.Fatal("shot 10 with the invalid embedded annotation was not restored")
+	}
+	var n int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM annotations WHERE shot_id = 10`).Scan(&n); err != nil {
+		t.Fatalf("counting annotation for shot 10: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("invalid embedded annotation for shot 10 was written (%d rows)", n)
+	}
+
+	s11, _ := repo.FindByID(11)
+	if s11 == nil {
+		t.Fatal("shot 11 not restored")
+	}
+	if ann, _ := s11["annotation"].(map[string]any); ann["coffee"] != "Bean X" {
+		t.Errorf("valid embedded annotation for shot 11 not restored: %+v", s11["annotation"])
+	}
+}
+
+// TestRestoreShots_DuplicateShotIDKeepsAnnotation covers a backup that lists
+// the same shot id twice. The shots insert must not be INSERT OR REPLACE
+// (#1150): a REPLACE deletes the first row, and foreign_keys=ON fires
+// annotations' ON DELETE CASCADE, silently dropping the annotation written
+// for the first occurrence. ON CONFLICT DO UPDATE keeps one row and its
+// annotation row.
+func TestRestoreShots_DuplicateShotIDKeepsAnnotation(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+
+	err := repo.RestoreShots(RestoreInput{
+		Shots: func(yield func(Shot) error) error {
+			for i := 0; i < 2; i++ {
+				if err := yield(Shot{
+					"id": float64(10), "timestamp": float64(1000 + i), "profileName": "P",
+					"annotation": map[string]any{"coffee": "Bean X"},
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RestoreShots: %v", err)
+	}
+
+	var shots int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM shots WHERE id = 10`).Scan(&shots); err != nil {
+		t.Fatalf("counting shots: %v", err)
+	}
+	if shots != 1 {
+		t.Fatalf("shot rows for id 10 = %d; want 1", shots)
+	}
+	s, _ := repo.FindByID(10)
+	if s == nil {
+		t.Fatal("shot 10 missing after a duplicate-id restore")
+	}
+	if ann, _ := s["annotation"].(map[string]any); ann["coffee"] != "Bean X" {
+		t.Errorf("annotation lost to the cascade on a duplicate shot id: %+v", s["annotation"])
+	}
+}
+
+// TestRestoreShots_DuplicateBlocklistEntries covers a backup whose blocklist
+// repeats a value: blocklist.value is UNIQUE, so a plain INSERT aborts the
+// whole restore. INSERT OR IGNORE keeps the first and dedupes.
+func TestRestoreShots_DuplicateBlocklistEntries(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+
+	err := repo.RestoreShots(RestoreInput{
+		Shots: func(yield func(Shot) error) error {
+			return yield(Shot{"id": float64(1), "timestamp": float64(1000), "profileName": "P"})
+		},
+		Blocklist: []string{"a", "a", "b"},
+	})
+	if err != nil {
+		t.Fatalf("RestoreShots with a duplicate blocklist entry: %v", err)
+	}
+
+	bl, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, v := range bl {
+		got[v] = true
+	}
+	if len(bl) != 2 || !got["a"] || !got["b"] {
+		t.Fatalf("blocklist = %v; want exactly {a, b}", bl)
+	}
+}
