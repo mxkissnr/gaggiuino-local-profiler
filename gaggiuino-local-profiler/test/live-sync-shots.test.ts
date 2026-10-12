@@ -225,6 +225,33 @@ describe('refreshShots (#1539 slice 4)', () => {
     expect(apiFetchSpy).toHaveBeenCalledWith(expect.stringContaining('api/shots?'));
   });
 
+  it('keeps the older shots visible on a quiet reload (refreshShots(null))', async () => {
+    // Three pages already loaded; the live-sync quiet reload only re-fetches
+    // page 1, so the older shots must stay listed until the walk re-derives the
+    // full list (#1614 slice 4). Before that fix the reload cut S.allShots back
+    // to page 1 and left it there.
+    S.allShots = [{ id: 1, timestamp: 1000 }, { id: 2, timestamp: 2000 }, { id: 3, timestamp: 3000 }];
+    let releaseWalk!: (r: Response) => void;
+    apiFetchSpy.mockImplementation((url: string) => {
+      if (url.includes('trash=1')) return Promise.resolve({ ok: false, status: 500 } as unknown as Response);
+      if (url.includes('cursor=c1')) return new Promise<Response>(res => { releaseWalk = res; });
+      // Page 1, newest-first; it no longer contains the oldest shot.
+      return Promise.resolve(jsonResponse({
+        shots: [{ id: 3, timestamp: 3000 }, { id: 2, timestamp: 2000 }], nextCursor: 'c1', hasMore: true,
+      }));
+    });
+
+    await refreshShots(null);
+
+    // Page 1 alone would drop id 1; it stays until the walk confirms it.
+    expect(S.allShots.map(s => s.id)).toEqual([1, 2, 3]);
+
+    releaseWalk(jsonResponse({ shots: [{ id: 1, timestamp: 1000 }], nextCursor: null, hasMore: false }));
+    await flushPromises();
+
+    expect(S.allShots.map(s => s.id)).toEqual([1, 2, 3]);
+  });
+
   it('reloads the list quietly when more than five ids are dirtied', async () => {
     await refreshShots(['1', '2', '3', '4', '5', '6']);
 
