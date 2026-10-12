@@ -11,9 +11,20 @@ describe('calcShotScore', () => {
     });
 
     it('returns a number between 0 and 100 for a valid annotated shot', () => {
+        // Build the per-curve object datapoint shape calcShotScore actually
+        // scores (the same one the #450 / #457 / #1538 tests below use). The old
+        // array-of-arrays fixture made calcShotScore return null, and the
+        // `if (score !== null)` guard then silently skipped every assertion.
+        const N = 30;
         const shot = {
-            datapoints: new Array(200).fill([0, 93, 9, 0]),
-            duration:   250,
+            datapoints: {
+                pressure:          new Array(N).fill(85),
+                temperature:       new Array(N).fill(905),
+                targetTemperature: new Array(N).fill(0),
+                timeInShot:        Array.from({ length: N }, (_, i) => i * 10),
+                shotWeight:        Array.from({ length: N }, (_, i) => Math.round((i / (N - 1)) * 396)),
+            },
+            duration:   300,
             annotation: {
                 coffee:       'Test Bean',
                 grindSetting: '12',
@@ -23,10 +34,9 @@ describe('calcShotScore', () => {
             },
         };
         const score = calcShotScore(shot);
-        if (score !== null) {
-            expect(score).toBeGreaterThanOrEqual(0);
-            expect(score).toBeLessThanOrEqual(100);
-        }
+        expect(score).not.toBeNull();
+        expect(score!).toBeGreaterThanOrEqual(0);
+        expect(score!).toBeLessThanOrEqual(100);
     });
 
     it('returns null when shot is null', () => {
