@@ -126,7 +126,12 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 		}
 		remoteIDs[i] = p.ID
 	}
-	if err := h.profilesRepo.PruneStaleSynced(machine.ID, remoteIDs); err != nil {
+	if len(raw) == 0 {
+		// #1610: a machine always has at least one profile, so an empty list is
+		// far more likely a broken or truncated answer than a real state. Pruning
+		// on it would delete every synced local row on one malformed response.
+		slog.Warn("skipping stale-profile prune for an empty machine profile list", "machineId", machine.ID)
+	} else if err := h.profilesRepo.PruneStaleSynced(machine.ID, remoteIDs); err != nil {
 		slog.Warn("pruning stale local profiles failed", "machineId", machine.ID, "err", err)
 	}
 	cached, err := h.profilesRepo.ListByMachine(machine.ID)

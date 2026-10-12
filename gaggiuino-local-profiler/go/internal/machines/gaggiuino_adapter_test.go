@@ -3,6 +3,9 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -271,5 +274,29 @@ func TestWSReadCountsMachineTraffic(t *testing.T) {
 	snap := counter.Snapshot(time.Now(), func(h string) (int64, bool) { return 1, h == host })
 	if len(snap) != 1 || snap[0].MachineID != 1 || snap[0].WSMessagesPerMin <= 0 {
 		t.Fatalf("expected the WebSocket response to be counted, got %+v", snap)
+	}
+}
+
+// TestGaggiuinoAdapter_ListProfiles_MalformedResponseErrors pins #1610: a
+// machine that answers GET /api/profiles/all with something that is not a
+// JSON array — a firmware bug, a proxy error page, a truncated body — must
+// surface an error, not be silently reported as an empty profile list. The
+// handler relies on that error to fall back to the local cache instead of
+// pruning every synced local row.
+func TestGaggiuinoAdapter_ListProfiles_MalformedResponseErrors(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/profiles/all" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "not json")
+	}))
+	defer srv.Close()
+
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+	if _, err := a.ListProfiles(context.Background(), testMachine(srv.URL)); err == nil {
+		t.Fatal("ListProfiles with a non-JSON body returned nil error; want an error so the handler keeps the local cache")
 	}
 }

@@ -72,7 +72,7 @@ func (a *GaggiuinoAdapter) ListProfiles(ctx context.Context, m *Machine) ([]Prof
 	}
 	var profiles []ProfileSummary
 	if err := json.Unmarshal(raw, &profiles); err != nil {
-		return []ProfileSummary{}, nil // matches `Array.isArray(r.data) ? r.data : []`
+		return nil, fmt.Errorf("gaggiuino: decoding profile list: %w", err)
 	}
 	return profiles, nil
 }
