@@ -376,7 +376,7 @@ describe('bean form sheet (#1349)', () => {
 
     expect(mocks.saveBean.mock.calls[0]?.[0]).toBeNull();
     expect(mocks.saveBean.mock.calls[0]?.[1]).toMatchObject({ name: 'New Bean' });
-    expect((S.coffeeLibrary.beans as Bean[]).some(b => b.id === 7)).toBe(true);
+    expect(S.coffeeLibrary.beans.some(b => b.id === 7)).toBe(true);
     expect(doc.body.querySelector('#beanSheet')).toBeNull();
   });
 
