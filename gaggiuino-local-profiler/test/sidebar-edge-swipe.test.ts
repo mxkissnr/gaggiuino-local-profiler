@@ -75,10 +75,12 @@ describe('edge-swipe-to-open the mobile drawer (#682)', () => {
   it('does not re-trigger while the drawer is already open', () => {
     sidebarEl.classList.add('sidebar-drawer-open');
     handleEdgeSwipeStart(touch(10));
-    // _edgeSwipeStartX should never have been armed -- confirmed by the
-    // drawer-mode class staying exactly as it already was (already open,
-    // nothing new added by this gesture).
     handleEdgeSwipeEnd(touchEnd(90));
+    // The gesture must be ignored entirely: the drawer stays open and no fresh
+    // drawer-mode/display state is applied on top of it. Asserting only the
+    // already-set open class would be true no matter what this gesture did.
     expect(sidebarEl.classList.contains('sidebar-drawer-open')).toBe(true);
+    expect(sidebarEl.classList.contains('sidebar-drawer-mode')).toBe(false);
+    expect(sidebarEl.style.display).toBeUndefined();
   });
 });
