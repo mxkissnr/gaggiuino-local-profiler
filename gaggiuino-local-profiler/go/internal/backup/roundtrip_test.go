@@ -2,6 +2,7 @@ package backup
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
@@ -623,5 +625,88 @@ func TestRestore_LegacyBackup_LeavesUIPrefsUntouched(t *testing.T) {
 	}
 	if prefs["view"] != "local-only" {
 		t.Errorf("legacy restore clobbered ui_prefs: %+v", prefs)
+	}
+}
+
+// latin1HeaderValue renders s the way a browser would place it in a header
+// value: each rune up to U+00FF becomes its single ISO-8859-1 byte, and a
+// rune above that (e.g. €) is replaced — exactly the corruption the legacy
+// X-GLP-Passphrase header suffers, since a header value can only carry
+// ISO-8859-1 bytes.
+func latin1HeaderValue(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r > 0xFF {
+			b.WriteByte('?')
+			continue
+		}
+		b.WriteByte(byte(r))
+	}
+	return b.String()
+}
+
+// TestRestore_ZipPassphraseUTF8Header (#1602): a backup protected by a
+// passphrase with umlauts and € round-trips through a zip restore only when
+// the passphrase arrives base64-encoded as its UTF-8 bytes
+// (X-GLP-Passphrase-B64). The same backup with the legacy ISO-8859-1
+// X-GLP-Passphrase header cannot decrypt the secrets — the old bug the base64
+// header fixes.
+func TestRestore_ZipPassphraseUTF8Header(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 42)
+
+	const passphrase = "Kaffeebohnenäöü€"
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", mustMarshal(t, map[string]any{"passphrase": passphrase}))
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", recExp.Code, recExp.Body.String())
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	// Standard base64 of the passphrase's UTF-8 bytes — what postRestore now
+	// sends in X-GLP-Passphrase-B64.
+	b64 := base64.StdEncoding.EncodeToString([]byte(passphrase))
+
+	h2, _, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, map[string]string{"X-GLP-Passphrase-B64": b64})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	result := decodeBody(t, rr.Body.Bytes())
+	if result["secretsPresent"] != true || result["secretsRestored"] != true {
+		t.Errorf("base64 header: secrets = %+v; want present and restored", result)
+	}
+
+	// The legacy header carries the passphrase's Latin-1 bytes, so the derived
+	// key differs from the export key and decryption fails — the secrets are
+	// present but not restored (the pre-#1602 behaviour).
+	h3, _, _ := newTestHandlersInDir(t)
+	rr = doZip(t, newMux(h3), "/api/restore", zipBytes, map[string]string{"X-GLP-Passphrase": latin1HeaderValue(passphrase)})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("legacy-header restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	result = decodeBody(t, rr.Body.Bytes())
+	if result["secretsPresent"] != true || result["secretsRestored"] != false {
+		t.Errorf("legacy header: secrets = %+v; want present but NOT restored", result)
+	}
+}
+
+// TestRestore_InvalidBase64PassphraseHeader400 (#1602): a malformed
+// X-GLP-Passphrase-B64 value is a client error, not silently ignored (which
+// would look like a wrong passphrase).
+func TestRestore_InvalidBase64PassphraseHeader400(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 1)
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d", recExp.Code)
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	h2, _, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, map[string]string{"X-GLP-Passphrase-B64": "!!!not-base64!!!"})
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d; want 400; body=%s", rr.Code, rr.Body.String())
 	}
 }

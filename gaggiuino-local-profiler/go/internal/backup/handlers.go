@@ -29,13 +29,11 @@ import (
 // This file implements the backup/restore routes (GET/POST /api/backup,
 // POST /api/restore) on Go 1.22+'s method-and-wildcard http.ServeMux.
 
-// restoreJSONBodyLimit/restoreZipBodyLimit cap the restore upload body. With
-// #959's true streaming (the body goes to a temp file, never a slice) these
-// are a zip-bomb / abuse guard on the compressed upload, no longer a memory
-// guard — kept at their current values.
+// restoreJSONBodyLimit caps the legacy self-contained JSON restore body. That
+// form decodes its inline images into memory, so it stays at its historical
+// value; the zip form's cap (restoreZipBodyLimit, below) is a var.
 const (
 	restoreJSONBodyLimit = 50 * 1024 * 1024
-	restoreZipBodyLimit  = 50 * 1024 * 1024
 	postBackupBodyLimit  = 16 * 1024 // POST /api/backup's own body is tiny (sections+passphrase).
 )
 
@@ -53,17 +51,21 @@ const (
 	perShotEstimateBytes        = 4 * 1024 // rough deflated size of one hydrated shot's JSON
 )
 
-// restoreUnzipEntryLimit/restoreUnzipTotalLimit bound how much
-// *decompressed* data the restore path will read out of a single zip
-// entry, and cumulatively across every entry it reads. restoreZipBodyLimit
-// only caps the compressed request body; without this a small,
-// highly-compressible entry (a "zip bomb") could still inflate past memory
-// as it is streamed through the JSON decoder / image validator (#901 code
-// review). Package-level vars (not consts) so tests can shrink them to a
-// few KB instead of deflating hundreds of MB per run.
+// restoreZipBodyLimit/restoreUnzipEntryLimit/restoreUnzipTotalLimit bound the
+// zip restore upload. restoreZipBodyLimit caps the *compressed* request body;
+// since the export streams every referenced image with no cap of its own and
+// #959 spools the body to a temp file (never a slice), this is no longer a
+// memory guard — only an abuse / zip-bomb guard on an authenticated route — so
+// it is deliberately generous. restoreUnzipEntryLimit/restoreUnzipTotalLimit
+// bound the *decompressed* data read out of a single zip entry, and
+// cumulatively across every entry, so a small highly-compressible entry (a "zip
+// bomb") cannot inflate past memory as it is streamed through the JSON decoder
+// / image validator (#901 code review). Package-level vars (not consts) so
+// tests can shrink them to a few KB instead of moving hundreds of MB per run.
 var (
+	restoreZipBodyLimit    int64 = 2 * 1024 * 1024 * 1024
 	restoreUnzipEntryLimit int64 = 100 * 1024 * 1024
-	restoreUnzipTotalLimit int64 = 300 * 1024 * 1024
+	restoreUnzipTotalLimit int64 = 4 * 1024 * 1024 * 1024
 )
 
 // Dependencies wires every cross-domain repository this package's export/

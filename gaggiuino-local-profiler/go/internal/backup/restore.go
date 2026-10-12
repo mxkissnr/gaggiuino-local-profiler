@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -147,7 +148,18 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 			}
 			b["sections"] = sec
 		}
-		if pass := r.Header.Get("X-GLP-Passphrase"); pass != "" {
+		if passB64 := r.Header.Get("X-GLP-Passphrase-B64"); passB64 != "" {
+			decoded, err := base64.StdEncoding.DecodeString(passB64)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "Invalid X-GLP-Passphrase-B64 header")
+				return
+			}
+			b["passphrase"] = string(decoded)
+		} else if pass := r.Header.Get("X-GLP-Passphrase"); pass != "" {
+			// Legacy header: browsers can only carry ISO-8859-1 bytes in a
+			// header value, so a non-ASCII passphrase arrives mangled (or makes
+			// fetch throw). Kept so older clients and scripts sending an ASCII
+			// passphrase keep working.
 			b["passphrase"] = pass
 		}
 	} else {

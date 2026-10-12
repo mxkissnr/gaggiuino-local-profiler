@@ -614,3 +614,53 @@ func (spaceReader) Read(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
+
+// withZipBodyLimit temporarily shrinks restoreZipBodyLimit so a test can
+// exercise the compressed-body cap with a few-KB zip instead of 2 GiB.
+// Restored via t.Cleanup so it never leaks into other tests.
+func withZipBodyLimit(t *testing.T, limit int64) {
+	t.Helper()
+	prev := restoreZipBodyLimit
+	restoreZipBodyLimit = limit
+	t.Cleanup(func() { restoreZipBodyLimit = prev })
+}
+
+// TestRestore_ZipBodyLimitEnforced (#1602): restoreZipBodyLimit is the exact
+// compressed-body cap the route enforces — a body one byte over it is
+// rejected, a body exactly at it is accepted. The limit is shrunk to the size
+// of a real exported zip so the test stays a few KB instead of 2 GiB.
+func TestRestore_ZipBodyLimitEnforced(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 42)
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d", recExp.Code)
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+	zipLen := int64(len(zipBytes))
+
+	withZipBodyLimit(t, zipLen)
+	h2, _, _ := newTestHandlersInDir(t)
+	if rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil); rr.Code != http.StatusOK {
+		t.Fatalf("at-limit restore status = %d; want 200; body=%s", rr.Code, rr.Body.String())
+	}
+
+	withZipBodyLimit(t, zipLen-1)
+	h3, _, _ := newTestHandlersInDir(t)
+	if rr := doZip(t, newMux(h3), "/api/restore", zipBytes, nil); rr.Code != http.StatusBadRequest {
+		t.Fatalf("over-limit restore status = %d; want 400; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestRestoreLimits_ProductionValues (#1602): the shipped caps must stay high
+// enough that a normal photo library restores (>= 2 GiB compressed), and the
+// decompression budget must exceed the compressed cap.
+func TestRestoreLimits_ProductionValues(t *testing.T) {
+	if restoreZipBodyLimit < 2<<30 {
+		t.Errorf("restoreZipBodyLimit = %d; want >= 2 GiB", restoreZipBodyLimit)
+	}
+	if restoreUnzipTotalLimit < restoreZipBodyLimit {
+		t.Errorf("restoreUnzipTotalLimit = %d < restoreZipBodyLimit = %d", restoreUnzipTotalLimit, restoreZipBodyLimit)
+	}
+}
