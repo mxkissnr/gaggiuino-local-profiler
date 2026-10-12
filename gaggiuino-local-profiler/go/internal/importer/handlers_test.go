@@ -258,7 +258,7 @@ func TestImportURL_DebugField(t *testing.T) {
 	if !ok {
 		t.Fatalf("_debug missing: %v", body)
 	}
-	if dbg["needsHtmlEnrich"] != true || dbg["hasOriginWrapper"] != true || dbg["hasOriginTitle"] != true || dbg["hasDetailsAccordion"] != false {
+	if dbg["hasOriginWrapper"] != true || dbg["hasOriginTitle"] != true || dbg["hasDetailsAccordion"] != false {
 		t.Errorf("_debug = %v", dbg)
 	}
 

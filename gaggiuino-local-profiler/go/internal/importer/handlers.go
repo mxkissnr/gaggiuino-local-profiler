@@ -295,14 +295,6 @@ func (h *Handlers) resolve(ctx context.Context, parsed *url.URL, raw, host strin
 }
 
 func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host, raw string, debugInfo map[string]any) (map[string]any, error) {
-	enrich := needsHTMLEnrich(bean, host)
-	system.DebugLogf("Import: needsHtmlEnrich=%v", enrich)
-	if debugInfo != nil {
-		debugInfo["needsHtmlEnrich"] = enrich
-	}
-	if !enrich {
-		return bean, nil
-	}
 	res, err := h.fetch.safeGet(ctx, raw)
 	if err != nil {
 		if isSSRFBlocked(err) {
@@ -331,7 +323,7 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 	// this field-diff (not just an explicit `?debug=1`'s debugInfo != nil)
 	// is deliberate, not an accidental widening -- it matches every other
 	// debugLogf/DebugLogf call already unconditional-when-globally-enabled
-	// in this same function (needsHtmlEnrich/HTML-fetch/JSON-fetch traces
+	// in this same function (HTML-fetch/JSON-fetch traces
 	// above and in resolve()), which likewise fire regardless of a per-request
 	// flag. The reflect.DeepEqual loop itself stays cheap in practice: a
 	// bean object is a few dozen scalar/short-slice fields at most, and
@@ -354,22 +346,6 @@ func (h *Handlers) tryHTMLEnrich(ctx context.Context, bean map[string]any, host,
 		debugInfo["enrichedFieldsChanged"] = changed
 	}
 	return enriched, nil
-}
-
-// htmlEnrichFields lists the bean fields the HTML-only enrichment pass may
-// fill.
-var htmlEnrichFields = []string{"process", "variety", "producer", "region", "altitude_m", "roastType"}
-
-// needsHTMLEnrich reports whether bean is missing fields the HTML pass could
-// fill for host.
-func needsHTMLEnrich(bean map[string]any, host string) bool {
-	for _, f := range htmlEnrichFields {
-		if beanEmpty(bean, f) {
-			return true
-		}
-	}
-	roaster, _ := bean["roaster"].(string)
-	return bean["roaster"] == nil || roaster == "" || (host != "" && strings.EqualFold(roaster, host))
 }
 
 // ── size-variant projection ────────────────────────────────────────────

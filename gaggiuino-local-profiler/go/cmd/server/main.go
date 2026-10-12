@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -551,6 +552,28 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		VersionFn: func() achievements.VersionCache {
 			latest, updateAvailable := systemHandlers.CachedVersion()
 			return achievements.VersionCache{Latest: latest, UpdateAvailable: updateAvailable}
+		},
+		// RevsFn folds sse.DataChanges.Revs() into the achievements change
+		// fingerprint: ChangeFingerprint's COUNT/MAX/LENGTH aggregates miss an
+		// edit that keeps byte counts equal (a rating 3 -> 4, an equal-length
+		// machine host change) or a photo upload, so the per-kind revision
+		// counters are the signal that still re-runs the evaluator.
+		RevsFn: func() string {
+			epoch, revs := changes.Revs()
+			kinds := make([]string, 0, len(revs))
+			for k := range revs {
+				kinds = append(kinds, k)
+			}
+			sort.Strings(kinds)
+			var b strings.Builder
+			b.WriteString(epoch)
+			for _, k := range kinds {
+				b.WriteByte(';')
+				b.WriteString(k)
+				b.WriteByte('=')
+				b.WriteString(strconv.FormatInt(revs[k], 10))
+			}
+			return b.String()
 		},
 	})
 	achievements.NewHandlers(achievementsSvc).RegisterRoutes(mux)
