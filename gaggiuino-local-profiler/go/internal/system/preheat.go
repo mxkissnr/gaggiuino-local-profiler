@@ -227,34 +227,34 @@ func (p *Poller) preheatWatchTick(ctx context.Context) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
-// maybePreheatReadyNotify sends the preheat-ready push once the machine is
-// inside its preheat window and the current run has not announced it yet. The
-// latch (pollGlobalState.preheatNotifySent) is set only after the notifier
-// reports delivery, so a failed push retries on the next tick. It is cleared
-// whenever the machine is no longer ready — the gap before every new run
-// (a switch-on or a standby wake), and the machine-off transition
-// checkAndApplyMachinePower already handles — so each run announces exactly
-// once.
+// maybePreheatReadyNotify sends the preheat-ready push once per preheat run.
+// The run is identified by the SwitchOnAt value it belongs to
+// (pollGlobalState.preheatNotifiedFor): a standby wake-up that keeps the same
+// switch-on is not announced twice, while a fresh switch-on re-arms the push.
+// The run is remembered only after the notifier reports delivery, so a failed
+// push retries on the next tick. Not-ready ticks leave the remembered run
+// untouched.
 func (p *Poller) maybePreheatReadyNotify(ctx context.Context) {
 	h := preheatReadyNotifier.Load()
 	if h == nil {
 		return
 	}
 	if ready, _ := p.PreheatInfo(); !ready {
-		p.state.mu.Lock()
-		p.state.preheatNotifySent = false
-		p.state.mu.Unlock()
+		return
+	}
+	snap := p.runtime.Get()
+	if snap.SwitchOnAt == nil {
 		return
 	}
 	p.state.mu.Lock()
-	sent := p.state.preheatNotifySent
+	notifiedFor := p.state.preheatNotifiedFor
 	p.state.mu.Unlock()
-	if sent {
+	if notifiedFor == *snap.SwitchOnAt {
 		return
 	}
 	if (*h)(ctx) {
 		p.state.mu.Lock()
-		p.state.preheatNotifySent = true
+		p.state.preheatNotifiedFor = *snap.SwitchOnAt
 		p.state.mu.Unlock()
 	}
 }

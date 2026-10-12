@@ -7,9 +7,15 @@ import (
 )
 
 // readySwitchOnAt is a switch-on time far enough in the past that the default
-// preheat window has already elapsed, so PreheatInfo reports ready.
+// preheat window has already elapsed, so PreheatInfo reports ready. Every call
+// returns a distinct value: a preheat run is identified by its switch-on, so a
+// test simulating a new run must get a new timestamp even within one
+// millisecond.
+var readySwitchOnSeq int64
+
 func readySwitchOnAt() *int64 {
-	at := time.Now().UnixMilli() - 21*60_000
+	readySwitchOnSeq++
+	at := time.Now().UnixMilli() - 21*60_000 - readySwitchOnSeq
 	return &at
 }
 
@@ -87,5 +93,45 @@ func TestPreheatReadyNotifier_RearmsAfterNewSwitchOn(t *testing.T) {
 	p.preheatWatchTick(context.Background())
 	if calls != 2 {
 		t.Fatalf("notifier not re-armed for the new run: %d calls, want 2", calls)
+	}
+}
+
+// TestPreheatReadyNotifier_StandbyWakeDoesNotRenotify pins the #1677 review
+// fix: the latch remembers the switch-on the push was sent for, so a standby
+// tick (PreheatInfo not ready) with the same switch-on does not re-arm it and
+// the wake-up is not announced twice.
+func TestPreheatReadyNotifier_StandbyWakeDoesNotRenotify(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, _ := newTestPoller(t, fake)
+
+	var calls int
+	p.SetPreheatReadyNotifier(func(context.Context) bool { calls++; return true })
+	t.Cleanup(func() { p.SetPreheatReadyNotifier(nil) })
+
+	p.runtime.SetMachineOn(true)
+	p.runtime.SetSwitchOnAt(readySwitchOnAt())
+
+	p.preheatWatchTick(context.Background())
+	if calls != 1 {
+		t.Fatalf("notifier called %d times, want 1", calls)
+	}
+
+	// Standby keeps the same switch-on: not ready, but the run stays remembered.
+	p.runtime.SetStandby(true)
+	p.preheatWatchTick(context.Background())
+	if calls != 1 {
+		t.Fatalf("notifier called %d times in standby, want still 1", calls)
+	}
+	p.runtime.SetStandby(false)
+	p.preheatWatchTick(context.Background())
+	if calls != 1 {
+		t.Fatalf("notifier called %d times after the standby wake-up, want still 1", calls)
+	}
+
+	// A fresh switch-on is a new run and notifies again.
+	p.runtime.SetSwitchOnAt(readySwitchOnAt())
+	p.preheatWatchTick(context.Background())
+	if calls != 2 {
+		t.Fatalf("notifier not re-armed for a new switch-on: %d calls, want 2", calls)
 	}
 }
