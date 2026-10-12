@@ -187,6 +187,54 @@ func decodeInlineImages(v any) map[string][]byte {
 	return out
 }
 
+// knownBundleKeys is every top-level key the restore understands: each key
+// writeBundleJSON / gatherSmallSections can export (glp_backup, version,
+// created, sections, shots, annotations, coffee_library, blocklist, trash,
+// maintenance, maintenance_log, orders, machines, achievements, kv, secrets,
+// images) plus the request-only keys the handler injects (dryRun, passphrase,
+// sections). parseBundleStream keeps every one of these in memory — they are
+// all small relative to a shots array — and skips any other key without
+// decoding it (#1601).
+var knownBundleKeys = map[string]bool{
+	"glp_backup": true, "version": true, "created": true, "sections": true,
+	"shots": true, "annotations": true, "coffee_library": true, "blocklist": true,
+	"trash": true, "maintenance": true, "maintenance_log": true, "orders": true,
+	"machines": true, "achievements": true, "kv": true, "secrets": true,
+	"images": true, "dryRun": true, "passphrase": true,
+}
+
+// skipJSONValue consumes exactly one JSON value from dec without
+// materialising it: a scalar is a single token, and an object or array is
+// walked one token at a time, tracking delimiter depth, until it is
+// balanced. The consumed value is discarded, so an unknown key holding a
+// huge value costs O(nesting depth) memory rather than O(value size) — the
+// reason json.RawMessage / Decode(&any) are not enough (#1601).
+func skipJSONValue(dec *json.Decoder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if _, ok := tok.(json.Delim); !ok {
+		return nil // string, number, bool or null
+	}
+	depth := 1
+	for depth > 0 {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{', '[':
+				depth++
+			case '}', ']':
+				depth--
+			}
+		}
+	}
+	return nil
+}
+
 // parseBundleStream streams a backup bundle JSON object: every top-level
 // key except `shots` is decoded into b (all small relative to a shots
 // array with datapoints), and each element of the `shots` array is handed
@@ -238,6 +286,16 @@ func parseBundleStream(r io.Reader, onShot func(raw json.RawMessage) error) (b m
 				}
 			}
 			if _, err := dec.Token(); err != nil { // closing ']'
+				return nil, 0, false, fmt.Errorf("invalid backup file (backup.json is not valid JSON)")
+			}
+			continue
+		}
+
+		if !knownBundleKeys[key] {
+			// #1601: a top-level key the restore never reads is skipped, not
+			// materialised — decoding it (even into json.RawMessage) would
+			// buffer a crafted multi-hundred-MiB value in memory.
+			if err := skipJSONValue(dec); err != nil {
 				return nil, 0, false, fmt.Errorf("invalid backup file (backup.json is not valid JSON)")
 			}
 			continue

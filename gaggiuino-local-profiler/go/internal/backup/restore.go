@@ -73,6 +73,14 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	isZip := strings.HasPrefix(contentType, "application/zip")
 
+	// #1601: one coarse per-IP token for the upload itself, taken before the
+	// body is spooled/unzipped/parsed — the finer dry-run/apply checks below
+	// run only after parsing, since dryRun lives inside the body.
+	if !h.rl.Allow("restore-upload:"+auth.RemoteIP(r), 30) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
+
 	tmpPath, cleanup, err := streamRestoreBodyToTemp(r.Body, isZip)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
