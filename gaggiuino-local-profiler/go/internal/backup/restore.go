@@ -208,6 +208,10 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plan := buildRestorePlan(b, images, shotCount)
+	if plan.planErr != nil {
+		writeError(w, http.StatusBadRequest, plan.planErr.Error())
+		return
+	}
 	if wantsShots {
 		plan.pending = append(plan.pending, shotPending...)
 	}
@@ -263,6 +267,11 @@ func boolToInt(b bool) int {
 
 var errBodyTooLarge = fmt.Errorf("request entity too large")
 
+// errLibraryEncode rejects a restore whose coffee library cannot be encoded
+// for storage: the library would otherwise be silently skipped while the
+// preview still promised it.
+var errLibraryEncode = fmt.Errorf("Backup coffee library could not be encoded")
+
 // cappedReadCloser adds Close (delegating to the underlying zip entry
 // reader) to a newCappedReader-wrapped stream.
 type cappedReadCloser struct {
@@ -285,6 +294,7 @@ type restorePlan struct {
 
 	sanitizedLib map[string]any // nil if not restoring a library
 	libraryJSON  []byte         // marshalled library.Library for RestoreShots; nil = don't touch
+	planErr      error          // set when the plan itself is unusable; nil = proceed
 	pending      []pendingImageWrite
 
 	// pre-validated shots-section side data, applied inside RestoreShots' tx
@@ -345,7 +355,10 @@ func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) res
 			}
 			validateRestoredLibraryImages(sanitized, images, &plan.pending)
 			plan.sanitizedLib = sanitized
-			if jb, err := json.Marshal(mapToLibrary(sanitized)); err == nil {
+			jb, err := json.Marshal(mapToLibrary(sanitized))
+			if err != nil {
+				plan.planErr = errLibraryEncode
+			} else {
 				plan.libraryJSON = jb
 			}
 		}
@@ -581,10 +594,7 @@ func machineCountForPreview(p restorePlan) int {
 	if !p.wantsMachines {
 		return 0
 	}
-	if arr, ok := p.b["machines"].([]any); ok {
-		return len(arr)
-	}
-	return 0
+	return machines.CountRestorableMachines(p.restoredMachines)
 }
 
 // sectionsPresent returns the section names for which any presence key is

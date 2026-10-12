@@ -448,3 +448,17 @@ func TestRestoreMachines_ClearsMachineProfiles(t *testing.T) {
 		t.Fatalf("machine_profiles after an all-invalid restore = %d, want 1 (untouched)", got)
 	}
 }
+
+// TestCountRestorableMachines (#1603): the dry-run preview's machine count
+// must be what RestoreMachines would actually insert — a valid entry counts,
+// while an id of 0 and an unrecognized type are skipped.
+func TestCountRestorableMachines(t *testing.T) {
+	in := []Machine{
+		{ID: 1, Name: "Kitchen", Type: "gaggiuino", Host: "kitchen.local"},
+		{ID: 0, Name: "No id", Type: "gaggiuino", Host: "no-id.local"},
+		{ID: 2, Name: "Bad type", Type: "not-a-real-type", Host: "bad.local"},
+	}
+	if got := CountRestorableMachines(in); got != 1 {
+		t.Fatalf("CountRestorableMachines = %d, want 1", got)
+	}
+}
