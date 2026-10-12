@@ -86,6 +86,89 @@ func TestOpenGuardedMQTTConnection_BlocksSSRFHost(t *testing.T) {
 	}
 }
 
+// fakePahoClient is the newPahoClient seam's stand-in: the embedded nil
+// paho.Client satisfies the rest of the interface as long as no other method
+// runs, and Connect is recorded so a test can prove connect() did — or did not
+// — start the client.
+type fakePahoClient struct {
+	paho.Client
+	connectCalls int
+}
+
+func (f *fakePahoClient) Connect() paho.Token { f.connectCalls++; return nil }
+
+func (f *fakePahoClient) Disconnect(_ uint) {}
+
+// TestConnect_EnablesConnectRetry is the #1604 regression test: without
+// SetConnectRetry(true) paho's first Connect() gives up for good when the
+// broker is unreachable, leaving MQTT dead until an app restart.
+func TestConnect_EnablesConnectRetry(t *testing.T) {
+	c := NewClient()
+	var opts *paho.ClientOptions
+	c.newPahoClient = func(o *paho.ClientOptions) paho.Client {
+		opts = o
+		return &fakePahoClient{}
+	}
+	c.connect(Conn{Host: "192.168.1.50", Port: 1883, Prefix: "gaggiuino"})
+	if opts == nil {
+		t.Fatal("connect() built no paho options")
+	}
+	if !opts.ConnectRetry {
+		t.Fatal("paho ConnectRetry is false; a broker down at startup would stay unreachable")
+	}
+}
+
+// TestConnect_IPv6BrokerURL is the #1604 regression test: an IPv6 literal must
+// be bracketed in the broker URL, or paho can't parse the address at all.
+func TestConnect_IPv6BrokerURL(t *testing.T) {
+	c := NewClient()
+	var opts *paho.ClientOptions
+	c.newPahoClient = func(o *paho.ClientOptions) paho.Client {
+		opts = o
+		return &fakePahoClient{}
+	}
+	c.connect(Conn{Host: "fd00::1", Port: 1883, Prefix: "gaggiuino"})
+	if opts == nil {
+		t.Fatal("connect() built no paho options")
+	}
+	if len(opts.Servers) != 1 || opts.Servers[0].String() != "tcp://[fd00::1]:1883" {
+		t.Fatalf("broker URL = %v, want tcp://[fd00::1]:1883", opts.Servers)
+	}
+}
+
+// TestConnect_DisconnectAllDuringConnect is the #1604 regression test:
+// DisconnectAll running while connect() is between the SSRF guard and storing
+// the client (the guard holds no session lock while it resolves DNS) must not
+// leave a started client reconnecting to the old broker forever.
+func TestConnect_DisconnectAllDuringConnect(t *testing.T) {
+	c := NewClient()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	fake := &fakePahoClient{}
+	c.newPahoClient = func(*paho.ClientOptions) paho.Client {
+		close(entered)
+		<-release
+		return fake
+	}
+
+	done := make(chan *session, 1)
+	go func() { done <- c.connect(Conn{Host: "192.168.1.50", Port: 1883, Prefix: "gaggiuino"}) }()
+	<-entered
+	c.DisconnectAll()
+	close(release)
+	s := <-done
+
+	if fake.connectCalls != 0 {
+		t.Fatalf("connect() started a client on an orphaned session (%d Connect calls)", fake.connectCalls)
+	}
+	s.mu.Lock()
+	got := s.client
+	s.mu.Unlock()
+	if got != nil {
+		t.Fatal("session kept a client after DisconnectAll")
+	}
+}
+
 // ── validation ─────────────────────────────────────────────────────────
 
 func TestParseSettings(t *testing.T) {
@@ -104,6 +187,20 @@ func TestParseSettings(t *testing.T) {
 		if _, err := parseSettings(bad); err == nil {
 			t.Errorf("expected error for %v", bad)
 		}
+	}
+}
+
+// TestParseSettings_RejectsWildcardPrefix is the #1604 regression test: a
+// prefix carrying MQTT wildcards (or a NUL) makes every subscription a
+// wildcard, and the message handler then drops every message.
+func TestParseSettings_RejectsWildcardPrefix(t *testing.T) {
+	for _, bad := range []string{"gaggiuino/#", "a/+/b", "gaggiuino\x00"} {
+		if _, err := parseSettings(map[string]any{"transport": "mqtt", "prefix": bad}); err == nil {
+			t.Errorf("expected error for prefix %q", bad)
+		}
+	}
+	if s, err := parseSettings(map[string]any{"transport": "mqtt", "prefix": "gaggiuino"}); err != nil || s.Prefix != "gaggiuino" {
+		t.Errorf("valid prefix rejected: %+v, %v", s, err)
 	}
 }
 

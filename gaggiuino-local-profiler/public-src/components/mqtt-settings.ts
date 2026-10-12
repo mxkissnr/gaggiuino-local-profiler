@@ -111,8 +111,19 @@ export async function saveMqttSettings(): Promise<void> {
       // omitting the key tells the backend to keep it. Sending "" would wipe it.
     } else if (_discovery.available && _discovery.hasPassword) {
       // #1431: the discovered password is never sent to the client, so the
-      // opt-in flag is the only way to reuse it.
-      payload.useDiscoveredPassword = true;
+      // opt-in flag is the only way to reuse it. #1604: the server only honors
+      // the flag for the discovered broker itself (400 otherwise), so only send
+      // it while the form still names that broker — a changed host would
+      // otherwise leave the user unable to point at a different no-auth broker.
+      // A missing discovered port/username means the same defaults parseSettings
+      // applies; host is compared case-insensitively (DNS names are).
+      if ((payload.host ?? '').toLowerCase() === (_discovery.host ?? '').toLowerCase() &&
+        (payload.port ?? 1883) === (_discovery.port ?? 1883) &&
+        (payload.username ?? '') === (_discovery.username ?? '')) {
+        payload.useDiscoveredPassword = true;
+      } else {
+        payload.password = '';
+      }
     } else {
       payload.password = '';
     }

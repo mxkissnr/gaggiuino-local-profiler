@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"errors"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -52,6 +53,12 @@ func parseSettings(body map[string]any) (Settings, error) {
 	if v, present := body["prefix"]; present {
 		s, ok := v.(string)
 		if !ok || utf8.RuneCountInString(s) < 1 || utf8.RuneCountInString(s) > 100 {
+			return Settings{}, errors.New("invalid prefix")
+		}
+		// A prefix becomes part of every subscribed topic, so a wildcard or a
+		// NUL would turn each subscription into a wildcard (silently matching
+		// nothing useful, dropping every message) or break the topic string.
+		if strings.ContainsAny(s, "+#") || strings.ContainsRune(s, 0) {
 			return Settings{}, errors.New("invalid prefix")
 		}
 		out.Prefix = s

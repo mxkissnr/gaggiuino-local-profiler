@@ -112,4 +112,42 @@ describe('MQTT settings password field (#1431)', () => {
     });
     expect(JSON.parse(fetchSpy.mock.calls[2]?.[1]?.body as string)).not.toHaveProperty('useDiscoveredPassword');
   });
+
+  it('drops the discovery flag when the host no longer matches the discovered broker', async () => {
+    mockLoad();
+
+    await loadMqttSettings();
+    els.mqttHost!.value = 'other-broker';
+    await saveMqttSettings();
+
+    const body = JSON.parse(fetchSpy.mock.calls[2]?.[1]?.body as string) as {
+      host?: string;
+      password?: string;
+      useDiscoveredPassword?: boolean;
+    };
+    expect(body.host).toBe('other-broker');
+    expect(body.useDiscoveredPassword).toBeUndefined();
+    expect(body.password).toBe('');
+  });
+
+  it('still sends the discovery flag when the host matches case-insensitively', async () => {
+    mockLoad();
+
+    await loadMqttSettings();
+    els.mqttHost!.value = 'CORE-MOSQUITTO';
+    await saveMqttSettings();
+
+    expect(fetchSpy).toHaveBeenNthCalledWith(3, 'api/mqtt/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transport: 'mqtt',
+        host: 'CORE-MOSQUITTO',
+        port: 1883,
+        username: 'homeassistant',
+        prefix: 'gaggiuino',
+        useDiscoveredPassword: true,
+      }),
+    });
+  });
 });

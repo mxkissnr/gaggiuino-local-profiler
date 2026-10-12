@@ -26,6 +26,11 @@ type AdapterProvider interface {
 	GetAdapter(m *machines.Machine) (machines.Adapter, error)
 }
 
+// errApplyToMachine is the fixed client-facing message for a failed
+// apply-to-machine step: the raw adapter error is logged but never echoed, so
+// it can't leak machine/adapter internals back to the caller.
+const errApplyToMachine = "applying the MQTT settings to the machine failed"
+
 // Handlers wires the MQTT routes.
 type Handlers struct {
 	repo      *Repository
@@ -170,7 +175,7 @@ func (h *Handlers) applyToMachine(w http.ResponseWriter, r *http.Request) {
 	currentRaw, err := adapter.GetSettings(r.Context(), machine, "system")
 	if err != nil {
 		log.Printf("Applying MQTT settings to machine failed: %v", err)
-		httputil.WriteError(w, http.StatusBadGateway, err.Error())
+		httputil.WriteError(w, http.StatusBadGateway, errApplyToMachine)
 		return
 	}
 	var current map[string]any
@@ -192,7 +197,7 @@ func (h *Handlers) applyToMachine(w http.ResponseWriter, r *http.Request) {
 	result, err := adapter.UpdateSettings(r.Context(), machine, "system", merged)
 	if err != nil {
 		log.Printf("Applying MQTT settings to machine failed: %v", err)
-		httputil.WriteError(w, http.StatusBadGateway, err.Error())
+		httputil.WriteError(w, http.StatusBadGateway, errApplyToMachine)
 		return
 	}
 	log.Printf("Applied broker connection to machine #%d %q's own MQTT client settings", machine.ID, machine.Name)
