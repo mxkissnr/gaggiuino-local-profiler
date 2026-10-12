@@ -471,6 +471,7 @@ const it: Partial<Translations> = {
     backup_restored:(n)=>`Ripristinato: ${n} shot.`,
     backup_restored_with_secrets:(n)=>`Ripristinato: ${n} shot (incl. token API e login MQTT).`,
     backup_restored_secrets_failed:(n)=>`Ripristinato: ${n} shot. Token API e login MQTT NON ripristinati — password errata?`,
+    backup_restored_images_failed:(n)=>`${n} foto non sono state scritte; controlla il log dell'app.`,
     backup_error:(msg)=>`Errore: ${msg}`,
     backup_error_no_sections:'Seleziona almeno una sezione.',
     backup_error_passphrase_required:'Inserisci una password per token API e login MQTT.',

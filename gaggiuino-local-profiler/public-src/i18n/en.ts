@@ -471,6 +471,7 @@ const en: Translations = {
     backup_restored:(n)=>`Restored: ${n} shots.`,
     backup_restored_with_secrets:(n)=>`Restored: ${n} shots (incl. API token & MQTT login).`,
     backup_restored_secrets_failed:(n)=>`Restored: ${n} shots. API token & MQTT login NOT restored — wrong passphrase?`,
+    backup_restored_images_failed:(n)=>`${n} photos could not be written; check the app log.`,
     backup_error:(msg)=>`Error: ${msg}`,
     backup_error_no_sections:'Please select at least one section.',
     backup_error_passphrase_required:'Please enter a passphrase for the API token & MQTT login.',

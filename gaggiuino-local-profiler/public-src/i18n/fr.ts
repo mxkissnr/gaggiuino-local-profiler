@@ -471,6 +471,7 @@ const fr: Partial<Translations> = {
     backup_restored:(n)=>`Restauré : ${n} shot${n!==1?'s':''}.`,
     backup_restored_with_secrets:(n)=>`Restauré : ${n} shot${n!==1?'s':''} (avec jeton API et identifiants MQTT).`,
     backup_restored_secrets_failed:(n)=>`Restauré : ${n} shot${n!==1?'s':''}. Jeton API et identifiants MQTT NON restaurés — mot de passe incorrect ?`,
+    backup_restored_images_failed:(n)=>`${n} photos n'ont pas pu être écrites ; consultez le journal de l'application.`,
     backup_error:(msg)=>`Erreur : ${msg}`,
     backup_error_no_sections:'Sélectionnez au moins une section.',
     backup_error_passphrase_required:'Veuillez saisir un mot de passe pour le jeton API et les identifiants MQTT.',
