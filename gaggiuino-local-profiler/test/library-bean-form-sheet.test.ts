@@ -355,12 +355,28 @@ describe('bean form sheet (#1349)', () => {
     expect(sheet?.innerHTML).toContain('Yirgacheffe Chelelektu');
   });
 
-  it('closes after creating without opening a detail sheet', () => {
+  it('creates through the form save action, then closes without a detail sheet', async () => {
     const { home, form } = setupHome();
-    library.openBeanForm();
-    library.closeBeanForm();
+    mocks.saveBean.mockResolvedValue({
+      id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [],
+    });
 
-    expect(form.parentNode).toBe(home);
+    library.openBeanForm();
+    expect(form.parentNode).not.toBe(home);
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+
+    // The form sheet header's Save is the real create submit path (#1489): with
+    // S.beanEditId null it routes to the "save without a bag" create action.
+    const saveBtn = find('lib-sheet-save');
+    expect(saveBtn).not.toBeNull();
+    saveBtn!.click();
+
+    await vi.waitFor(() => expect(mocks.saveBean).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(form.parentNode).toBe(home));
+
+    expect(mocks.saveBean.mock.calls[0]?.[0]).toBeNull();
+    expect(mocks.saveBean.mock.calls[0]?.[1]).toMatchObject({ name: 'New Bean' });
+    expect((S.coffeeLibrary.beans as Bean[]).some(b => b.id === 7)).toBe(true);
     expect(doc.body.querySelector('#beanSheet')).toBeNull();
   });
 
