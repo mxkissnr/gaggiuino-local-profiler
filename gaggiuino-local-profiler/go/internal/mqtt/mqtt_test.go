@@ -642,3 +642,30 @@ func TestRoute_ApplyToMachine_NoProxy(t *testing.T) {
 		t.Fatalf("expected 501, got %d", rec.Code)
 	}
 }
+
+// TestOnMessage_DropsOversizedPayload is the #1601 regression test: a payload
+// over maxMQTTPayload must be dropped before parsing, so a large retained
+// message on the broker can't be decoded on every delivery, while a normal
+// payload still updates the live snapshot.
+func TestOnMessage_DropsOversizedPayload(t *testing.T) {
+	c := NewClient()
+	s := &session{}
+	conn := Conn{Host: "192.168.1.50", Prefix: "gaggiuino"}
+	topic := conn.prefix() + "/sensors"
+
+	c.onMessage(conn, s, topic, []byte(`{"temperature":92.5}`))
+	normal := s.sensorSnap
+	if normal == nil || normal.Temperature != 92.5 {
+		t.Fatalf("normal payload did not update the snapshot: %+v", normal)
+	}
+
+	// Valid JSON, so without the cap it would parse and replace the snapshot.
+	big := []byte(`{"temperature":1,"pad":"` + strings.Repeat("a", 65<<10) + `"}`)
+	if len(big) <= maxMQTTPayload {
+		t.Fatalf("test payload is not oversized: %d bytes", len(big))
+	}
+	c.onMessage(conn, s, topic, big)
+	if s.sensorSnap != normal {
+		t.Fatalf("oversized payload replaced the snapshot: %+v", s.sensorSnap)
+	}
+}

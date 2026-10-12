@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -270,6 +271,27 @@ func TestMergeGaggiMateStatus(t *testing.T) {
 	}
 	if _, ok := merged["process"]; !ok {
 		t.Fatalf("clearing mutated the previous map: %+v", merged)
+	}
+}
+
+// TestMergeGaggiMateStatus_CapsKeyCount is the #1601 regression test: a device
+// (or anything on its WebSocket) sending ever-new keys must not grow the cached
+// status map without bound, while a key already present keeps updating.
+func TestMergeGaggiMateStatus_CapsKeyCount(t *testing.T) {
+	merged := map[string]any{}
+	for i := 0; i < 200; i++ {
+		merged = mergeGaggiMateStatus(merged, map[string]any{"k" + strconv.Itoa(i): i})
+	}
+	if len(merged) != maxGaggiMateStatusKeys {
+		t.Fatalf("merged map has %d keys, want %d", len(merged), maxGaggiMateStatusKeys)
+	}
+
+	merged = mergeGaggiMateStatus(merged, map[string]any{"k0": "updated"})
+	if merged["k0"] != "updated" {
+		t.Fatalf("existing key not updated after the cap: %v", merged["k0"])
+	}
+	if len(merged) != maxGaggiMateStatusKeys {
+		t.Fatalf("updating an existing key changed the key count: %d", len(merged))
 	}
 }
 
