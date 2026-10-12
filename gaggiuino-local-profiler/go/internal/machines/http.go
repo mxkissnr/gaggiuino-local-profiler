@@ -164,7 +164,7 @@ func httpGetBytes(ctx context.Context, url string, timeout time.Duration) ([]byt
 		return nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, errorSnippet(body))
+		return nil, &machineHTTPError{Status: resp.StatusCode, Body: errorSnippet(body)}
 	}
 	return body, nil
 }
@@ -194,7 +194,7 @@ func httpGetBytesCapped(ctx context.Context, url string, timeout time.Duration, 
 		return nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, errorSnippet(body))
+		return nil, &machineHTTPError{Status: resp.StatusCode, Body: errorSnippet(body)}
 	}
 	return body, nil
 }
@@ -225,7 +225,7 @@ func httpPostBytes(ctx context.Context, url string, body []byte, timeout time.Du
 		return nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("machine responded %d: %s", resp.StatusCode, errorSnippet(respBody))
+		return nil, &machineHTTPError{Status: resp.StatusCode, Body: errorSnippet(respBody)}
 	}
 	return respBody, nil
 }
@@ -239,6 +239,22 @@ func errorSnippet(body []byte) string {
 		return s[:200] + "…"
 	}
 	return s
+}
+
+// machineHTTPError is the error the three guarded HTTP helpers above return
+// for a non-2xx machine response. It carries the status code so a
+// caller can branch on a specific response (e.g. gaggiuino_adapter.go's
+// GetServiceLog treating a 404 as "this firmware has no such endpoint")
+// without matching on message text; Error() renders the identical
+// "machine responded <code>: <snippet>" string these helpers have always
+// returned.
+type machineHTTPError struct {
+	Status int
+	Body   string
+}
+
+func (e *machineHTTPError) Error() string {
+	return fmt.Sprintf("machine responded %d: %s", e.Status, e.Body)
 }
 
 // ── loose value coercion, mirroring JS's parseFloat/parseInt/!!/||null
