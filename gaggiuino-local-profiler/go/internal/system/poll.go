@@ -164,11 +164,12 @@ type pollGlobalState struct {
 
 	readyByTargetAt   *int64
 	plannedSwitchOnAt *int64
-	// preheatNotifySent is cleared here on machine-off. Nothing sets it true yet:
-	// the preheat-ready notification (doc.go's "Deliberately not implemented,"
-	// tracked as a follow-up) is not implemented, so this reset is currently a
-	// no-op every time.
-	preheatNotifySent bool
+	// preheatNotifiedFor is the switch-on time (unix ms, 0 = none) the
+	// preheat-ready push (#1671) was delivered for. Compared against the current
+	// SwitchOnAt so a standby wake-up of the same run is not announced twice,
+	// while a fresh switch-on re-arms it. Cleared on machine-off, like the run
+	// it identifies.
+	preheatNotifiedFor int64
 }
 
 // machinePollState is one machine's slice of the former default-only poll
@@ -559,7 +560,7 @@ func (p *Poller) checkAndApplyMachinePower(ctx context.Context) error {
 		log.Printf("system: machine off -- live polling paused")
 		p.stopLivePolling()
 		p.state.mu.Lock()
-		p.state.preheatNotifySent = false
+		p.state.preheatNotifiedFor = 0
 		p.state.mu.Unlock()
 	}
 	return nil

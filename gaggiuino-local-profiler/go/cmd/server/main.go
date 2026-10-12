@@ -388,6 +388,59 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	shots.SetAnnotationStockHook(func(prev, next map[string]any) error {
 		return library.ApplyAnnotationStock(libRepo, ordersRepo.GetMenu, prev, next)
 	})
+	// baristaNotify sends an automatic notification through the configured
+	// barista device. It is off when the per-notification toggle is explicitly
+	// false or no baristaNotifyService is set (an absent toggle counts as on);
+	// it reports whether the push was delivered so a caller can retry or latch
+	// on it. Errors are logged here, never returned to an HTTP client.
+	baristaNotify := func(ctx context.Context, toggleKey, title, body, tag string) bool {
+		settings, err := ordersRepo.GetSettings()
+		if err != nil {
+			log.Printf("main: reading orders settings for %s: %v", toggleKey, err)
+			return false
+		}
+		if v, ok := settings[toggleKey].(bool); ok && !v {
+			return false
+		}
+		svc, _ := settings["baristaNotifyService"].(string)
+		if svc == "" {
+			return false
+		}
+		if err := haClient.SendNotify(ctx, svc, title, body, tag); err != nil {
+			log.Printf("main: %s notification failed: %v", toggleKey, err)
+			return false
+		}
+		return true
+	}
+	// #1671: annotating a shot can drop its bean below the low-stock threshold;
+	// the check runs off the annotation-saved hook (fire-and-forget, never
+	// blocking the save) and is gated on notify_low_stock/baristaNotifyService.
+	shots.SetAnnotationSavedHook(func(shotID int64) {
+		ctx := context.Background()
+		ann, err := shotsRepo.GetAnnotation(shotID)
+		if err != nil {
+			log.Printf("main: low-stock: reading annotation for shot %d: %v", shotID, err)
+			return
+		}
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			log.Printf("main: low-stock: reading library: %v", err)
+			return
+		}
+		beanID := library.ResolveLowStockBeanID(shots.Shot{"annotation": ann}, lib.Beans)
+		if beanID == 0 {
+			return
+		}
+		if err := library.CheckLowStock(libRepo, shotsRepo.GetAnnotatedDoses, beanID, func(name string, remainingG int64) bool {
+			lang := haClient.GetHaLanguage(ctx)
+			return baristaNotify(ctx, "notify_low_stock",
+				ha.NotifyText(lang, "low_stock_title"),
+				ha.NotifyText(lang, "low_stock_body", name, remainingG),
+				fmt.Sprintf("glp_low_stock_%d", beanID))
+		}); err != nil {
+			log.Printf("main: low-stock notification for shot %d failed: %v", shotID, err)
+		}
+	})
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
 	ordersHandlers.RegisterRoutes(mux)
 
@@ -419,6 +472,17 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// POST /api/sync's manual shot-history pull loop persists through
 	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)
+	// #1671: the machine finished preheating -> one push to the barista device
+	// per preheat run, gated on notify_preheat_ready/baristaNotifyService. The
+	// callback returns whether the push was delivered, so an HA failure is
+	// retried on the next preheat-watch tick rather than swallowed.
+	poller.SetPreheatReadyNotifier(func(ctx context.Context) bool {
+		lang := haClient.GetHaLanguage(ctx)
+		return baristaNotify(ctx, "notify_preheat_ready",
+			ha.NotifyText(lang, "preheat_title"),
+			ha.NotifyText(lang, "preheat_body"),
+			"glp_preheat_ready")
+	})
 	// Offline profile editor (2026-09-09): pushes locally-saved profile
 	// edits to the machine on reconnect/after a brew/periodically — see
 	// go/internal/system/profile_sync.go.
