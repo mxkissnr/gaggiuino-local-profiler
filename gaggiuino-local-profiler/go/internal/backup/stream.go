@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
@@ -19,7 +18,9 @@ import (
 // array streams one hydrated shot at a time from
 // shots.Repository.ForEachShotForBackup, and — only for the legacy
 // GET /api/backup path — the images map streams each file base64-encoded
-// straight to w. Peak retention is one shot + the annotations accumulator
+// straight to w, limited by referenced to the images an entry still refers
+// to (a nil set bundles every file). Peak retention is one shot + the
+// annotations accumulator
 // (bounded by annotated-shot count, not datapoints size), never the whole
 // shots table.
 //
@@ -31,7 +32,7 @@ import (
 // sec == nil means a full export (every key present). A scoped export
 // follows sectionBundleKeys' selection exactly: an out-of-scope key is
 // absent, not empty.
-func (d Dependencies) writeBundleJSON(w io.Writer, small map[string]any, sec sections, inlineImages bool) error {
+func (d Dependencies) writeBundleJSON(w io.Writer, small map[string]any, sec sections, inlineImages bool, referenced map[string]struct{}) error {
 	bw := bufio.NewWriterSize(w, 32*1024)
 
 	shotsInScope := sec == nil || sec.has("shots")
@@ -149,11 +150,9 @@ func (d Dependencies) writeBundleJSON(w io.Writer, small map[string]any, sec sec
 		openKey("images")
 		bw.WriteByte('{')
 		firstImg := true
-		if entries, err := os.ReadDir(imageDir); err == nil {
+		entries, _, err := bundledImageEntries(referenced)
+		if err == nil {
 			for _, entry := range entries {
-				if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
-					continue // thumbnails are regenerated on restore, not bundled
-				}
 				f, err := os.Open(filepath.Join(imageDir, entry.Name()))
 				if err != nil {
 					continue // best-effort — one unreadable file must not fail the export

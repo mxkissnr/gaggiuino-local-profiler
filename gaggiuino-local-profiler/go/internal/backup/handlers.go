@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
@@ -185,10 +184,21 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+
+	// #1525/#1602: the legacy JSON export bundles only image files an entry
+	// still refers to, exactly like the zip export. A lookup failure falls
+	// back to bundling every image (a superset) rather than risk dropping a
+	// referenced photo.
+	referenced, err := referencedImageNames(h.deps.LibRepo, h.deps.ShotsRepo)
+	if err != nil {
+		log.Printf("backup: building referenced image set: %v (bundling all images)", err)
+		referenced = nil
+	}
+
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="glp-backup-%s.json"`, backupTimestamp()))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := h.deps.writeBundleJSON(w, small, nil, true); err != nil {
+	if err := h.deps.writeBundleJSON(w, small, nil, true, referenced); err != nil {
 		log.Printf("backup: streaming legacy JSON export failed mid-response: %v", err)
 		return
 	}
@@ -261,7 +271,7 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 		log.Printf("backup: creating backup.json zip entry: %v", err)
 		return
 	}
-	if err := h.deps.writeBundleJSON(jw, small, sec, false); err != nil {
+	if err := h.deps.writeBundleJSON(jw, small, sec, false, referenced); err != nil {
 		log.Printf("backup: streaming backup.json failed mid-response: %v", err)
 		return
 	}
@@ -280,9 +290,9 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 // backupSizeEstimate computes the X-GLP-Backup-Estimate value for a given
 // section scope. It is stat-only: it counts shot rows and sums the on-disk
 // size of the image files streamImagesIntoZip would bundle, without opening
-// a single image or hydrating a single shot. The image filter mirrors
-// streamImagesIntoZip exactly (skip directories and *.thumb.* files, and —
-// per referenced — skip app-named files no entry refers to). A
+// a single image or hydrating a single shot. It walks the images through the
+// same bundledImageEntries filter streamImagesIntoZip and the inline JSON
+// export use, so the estimate can never diverge from what is streamed. A
 // missing/unreadable image directory is treated as "no images" rather than
 // an error; only a DB failure counting shots propagates (still pre-header,
 // so a clean 500).
@@ -299,17 +309,11 @@ func (h *Handlers) backupSizeEstimate(sec sections, referenced map[string]struct
 	}
 	est += int64(n) * perShotEstimateBytes
 
-	entries, err := os.ReadDir(imageDir)
+	entries, _, err := bundledImageEntries(referenced)
 	if err != nil {
 		return est, nil
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
-			continue
-		}
-		if !imageBundled(entry.Name(), referenced) {
-			continue
-		}
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -326,19 +330,11 @@ func (h *Handlers) backupSizeEstimate(sec sections, referenced map[string]struct
 // Best-effort per file: one unreadable file must not abort the archive. The
 // count of skipped app-named orphans is logged once.
 func streamImagesIntoZip(zw *zip.Writer, referenced map[string]struct{}) {
-	entries, err := os.ReadDir(imageDir)
+	entries, skipped, err := bundledImageEntries(referenced)
 	if err != nil {
 		return
 	}
-	skipped := 0
 	for _, entry := range entries {
-		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
-			continue // thumbnails are regenerated on restore, not bundled
-		}
-		if !imageBundled(entry.Name(), referenced) {
-			skipped++
-			continue
-		}
 		f, err := os.Open(filepath.Join(imageDir, entry.Name()))
 		if err != nil {
 			continue
