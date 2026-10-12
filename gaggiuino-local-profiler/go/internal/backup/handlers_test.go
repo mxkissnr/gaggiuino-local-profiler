@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
@@ -429,7 +430,7 @@ func TestRestore_RoundTrip_ToFreshInstall(t *testing.T) {
 	mux1 := newMux(h1)
 	seedShot(t, deps1, 42)
 	seedOrder(t, deps1)
-	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "test note", "gaggiuino.local", 5, 1); err != nil {
+	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "test note", "gaggiuino.local", 5, 1, time.Now()); err != nil {
 		t.Fatalf("seeding maintenance log: %v", err)
 	}
 	if err := deps1.LibRepo.SaveLibrary(library.Library{
@@ -746,4 +747,100 @@ func TestApplyKVSettings_NormalizesMenuAndSettings(t *testing.T) {
 	if _, present := s["notify_low_stock"]; present {
 		t.Errorf("non-bool toggle survived restore: %#v", s)
 	}
+}
+
+// TestKnownBundleKeys_CoversEveryExportedKey (#1601) is the guard that a
+// future exporter key can never be silently dropped by restore's unknown-key
+// skip: every top-level key the export writes must be in knownBundleKeys. It
+// checks both the full legacy JSON export (which extra-carries `images`) and
+// a scoped zip export (which extra-carries `sections`).
+func TestKnownBundleKeys_CoversEveryExportedKey(t *testing.T) {
+	useImageDir(t)
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seedShot(t, deps, 1)
+	seedOrder(t, deps)
+
+	check := func(label string, b map[string]any) {
+		t.Helper()
+		if len(b) == 0 {
+			t.Fatalf("%s: exported bundle has no top-level keys", label)
+		}
+		for k := range b {
+			if !knownBundleKeys[k] {
+				t.Errorf("%s: exported key %q is not in knownBundleKeys — restore would silently drop it", label, k)
+			}
+		}
+	}
+
+	rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("full export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var full map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &full); err != nil {
+		t.Fatalf("decoding full export: %v", err)
+	}
+	check("full legacy JSON export", full)
+	if _, ok := full["images"]; !ok {
+		t.Errorf("full legacy JSON export should carry `images`")
+	}
+
+	rec = doJSON(t, mux, http.MethodPost, "/api/backup", mustMarshal(t, map[string]any{"sections": []string{"shots"}}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("scoped export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zr, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatalf("zip.NewReader: %v", err)
+	}
+	scoped := readBackupJSON(t, zr)
+	check("scoped zip export", scoped)
+	if _, ok := scoped["sections"]; !ok {
+		t.Errorf("scoped zip export should carry `sections`")
+	}
+}
+
+// TestRestoreUpload_RateLimitedBeforeBodyRead (#1601): the coarse
+// restore-upload:<ip> token is taken before the body is spooled, so the 31st
+// upload from one IP within the window is answered 429 without the request
+// body ever being read.
+func TestRestoreUpload_RateLimitedBeforeBodyRead(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	// 30 uploads exhaust the coarse bucket. The bodies are deliberately
+	// unparseable (a 400) so they never reach the finer post-parse limit.
+	for i := 0; i < 30; i++ {
+		rec := doJSON(t, mux, http.MethodPost, "/api/restore", []byte("not-json"))
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("upload %d answered 429 before the coarse limit was exhausted", i+1)
+		}
+	}
+
+	body := &failIfReadBody{t: t}
+	r := httptest.NewRequest(http.MethodPost, "/api/restore", body)
+	r.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, r)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("31st upload status = %d, want 429; body=%s", rec.Code, rec.Body.String())
+	}
+	if body.read {
+		t.Errorf("the handler read the request body before rejecting the over-limit upload")
+	}
+}
+
+// failIfReadBody fails the test if its Read is ever called — proving a
+// rejected request never had its body touched.
+type failIfReadBody struct {
+	t    *testing.T
+	read bool
+}
+
+func (b *failIfReadBody) Read([]byte) (int, error) {
+	b.read = true
+	b.t.Errorf("request body read on a request that should have been rejected before reading")
+	return 0, io.EOF
 }

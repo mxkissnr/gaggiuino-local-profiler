@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -57,7 +58,7 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedOrder(t, deps1)
-	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "rt note", "gaggiuino.local", 5, 1); err != nil {
+	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "rt note", "gaggiuino.local", 5, 1, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := deps1.LibRepo.SaveLibrary(library.Library{

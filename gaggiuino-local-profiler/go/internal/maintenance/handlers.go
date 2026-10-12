@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -248,8 +249,15 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 	if t == nil {
 		t = Task{}
 	}
+	// delta collects only the keys this request actually changes. SaveTask
+	// merges it onto the stored row, so writing one task can neither clobber a
+	// concurrent edit to another nor freeze GetMaintenance's defaults into the
+	// DB. The in-memory t/maint copy below still drives the returned stats.
+	delta := Task{}
 	if v, present := body["threshold_shots"]; present {
-		t["threshold_shots"] = clampThreshold(v, 1, 10000)
+		c := clampThreshold(v, 1, 10000)
+		t["threshold_shots"] = c
+		delta["threshold_shots"] = c
 	}
 	if v, present := body["threshold_days"]; present {
 		// Custom tasks are user-defined and may legitimately track something
@@ -262,7 +270,9 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 		if isCustomTask(task) {
 			max = 3650
 		}
-		t["threshold_days"] = clampThreshold(v, 1, max)
+		c := clampThreshold(v, 1, max)
+		t["threshold_days"] = c
+		delta["threshold_days"] = c
 	}
 	if v, present := body["disabled"]; present {
 		if b, ok := v.(bool); ok {
@@ -271,6 +281,7 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 			} else {
 				delete(t, "disabled")
 			}
+			delta["disabled"] = b
 		}
 	}
 	if isCustomTask(task) {
@@ -279,17 +290,20 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 				s = strings.TrimSpace(s)
 				if s != "" && len(s) <= 100 {
 					t["label"] = s
+					delta["label"] = s
 				}
 			}
 		}
 	}
 	if strings.HasPrefix(task, "grinder_") {
 		if v, present := body["threshold_g"]; present {
-			t["threshold_g"] = clampThreshold(v, 1, 100000)
+			c := clampThreshold(v, 1, 100000)
+			t["threshold_g"] = c
+			delta["threshold_g"] = c
 		}
 	}
 	maint[task] = t
-	if err := h.repo.SaveMaintenance(maint, machineID); err != nil {
+	if err := h.repo.SaveTask(machineID, task, delta); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -361,16 +375,28 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid task")
 		return
 	}
+	// An explicit date back-dates the entry: it means that day at 12:00 UTC.
+	// A malformed or future date (later than today UTC) is rejected. No date
+	// means "now".
+	at := time.Now()
 	date, _ := body["date"].(string)
-	if date != "" && !dateRe.MatchString(date) {
-		writeError(w, http.StatusBadRequest, "Invalid date")
-		return
+	if date != "" {
+		if !dateRe.MatchString(date) || date > time.Now().UTC().Format("2006-01-02") {
+			writeError(w, http.StatusBadRequest, "Invalid date")
+			return
+		}
+		parsed, err := time.Parse("2006-01-02", date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid date")
+			return
+		}
+		at = parsed.Add(12 * time.Hour)
 	}
 	notes, _ := body["notes"].(string)
 	if runes := []rune(notes); len(runes) > 500 {
 		notes = string(runes[:500])
 	}
-	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), ShotCountFor(h.shotsRepo, task, machineID), machineID)
+	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), ShotCountFor(h.shotsRepo, task, machineID), machineID, at)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -385,24 +411,13 @@ func (h *Handlers) deleteLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid id")
 		return
 	}
-	log, err := h.repo.GetMaintenanceLog(0)
+	deleted, err := h.repo.DeleteMaintenanceLog(id)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	found := false
-	for _, e := range log {
-		if e.ID == id {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if deleted == 0 {
 		writeError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	if err := h.repo.DeleteMaintenanceLog(id); err != nil {
-		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -445,7 +460,7 @@ func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
 		"threshold_shots": clampThreshold(body["threshold_shots"], 1, 10000),
 		"threshold_days":  clampThreshold(body["threshold_days"], 1, 3650),
 	}
-	if err := h.repo.SaveCustomTask(machineID, key, task); err != nil {
+	if err := h.repo.SaveTask(machineID, key, task); err != nil {
 		internalError(w, err)
 		return
 	}
