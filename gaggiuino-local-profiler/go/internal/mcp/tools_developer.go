@@ -292,7 +292,7 @@ func pressureNoteReason(note string) string {
 	case shots.PressureNoteProfile:
 		return "shot never reached 5 bar; pressure scored against the profile's own target"
 	case shots.PressureNoteOmitted:
-		return "shot never reached 5 bar and the profile has no pressure phase, so pressure was left out"
+		return "shot never reached 5 bar and no pressure target is known for it, so pressure was left out"
 	default:
 		return ""
 	}

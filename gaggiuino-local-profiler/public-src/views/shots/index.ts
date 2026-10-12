@@ -821,15 +821,17 @@ export async function updateView(): Promise<void> {
     // #457: compact hint icon when the score was weighed against the bean's
     // own brewTempC/brewRatio recommendation (#450) rather than the generic
     // fallback band — native title tooltip, no new permanent header text.
-    const beanTargetHint: Html = shotUsedBeanTarget(shotA)
-      ? html`<span class="verdict-bean-target-hint" title="${tHtml('verdict_bean_target_hint')}">${TARGET_ICON_SVG}</span>` : html``;
-    // #1538: the same hint treatment when a sub-5-bar shot's pressure was
-    // scored against the profile's own target (or left out entirely) rather
-    // than the fixed band.
+    // #1538/#1628: a sub-5-bar shot's pressure scored against the profile's
+    // own target (or left out) shares the same icon — one icon, every
+    // applicable reason in its tooltip, never two identical icons side by side.
     const pressureNote = shotPressureNote(shotA, rawA);
-    const pressureHint: Html = pressureNote
-      ? html`<span class="verdict-bean-target-hint" title="${tHtml(pressureNote === 'profile' ? 'verdict_pressure_profile_hint' : 'verdict_pressure_omitted_hint')}">${TARGET_ICON_SVG}</span>` : html``;
-    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${beanTargetHint}${pressureHint}`;
+    const hintTitles = [
+      shotUsedBeanTarget(shotA) ? t('verdict_bean_target_hint') : '',
+      pressureNote ? t(pressureNote === 'profile' ? 'verdict_pressure_profile_hint' : 'verdict_pressure_omitted_hint') : '',
+    ].filter(Boolean);
+    const scoreHint: Html = hintTitles.length
+      ? html`<span class="verdict-bean-target-hint" title="${esc(hintTitles.join('\n'))}">${TARGET_ICON_SVG}</span>` : html``;
+    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${scoreHint}`;
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process-zone pressure card, so repeating them here was pure duplication.

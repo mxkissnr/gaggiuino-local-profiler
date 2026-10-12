@@ -92,7 +92,7 @@ const es: Partial<Translations> = {
     verdict_no_data:'Aún no hay datos suficientes para un veredicto.',
     verdict_bean_target_hint:'Puntuado según el objetivo de preparación propio de este café',
     verdict_pressure_profile_hint:'Puntuado según el objetivo de presión propio de este perfil',
-    verdict_pressure_omitted_hint:'Presión no puntuada: este shot nunca alcanzó 5 bar y el perfil no tiene fase de presión',
+    verdict_pressure_omitted_hint:'Presión no puntuada: este shot nunca alcanzó 5 bar y no se conoce ningún objetivo de presión',
     tab_time:`${CLOCK_ICON_SVG} Tiempo`, tab_pq:'Curva P·Q',
     btn_fullscreen_close:`${CLOSE_ICON_SVG} Cerrar`, btn_fullscreen_tooltip:'Pantalla completa',
     btn_compare_tooltip:'Seleccionar como shot de comparación (B). Consejo: haz clic en el nombre para Shot A.', btn_delete_tooltip:'Eliminar shot',
