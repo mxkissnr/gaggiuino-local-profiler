@@ -39,6 +39,10 @@ let _formHomeNext: Node | null = null;
 let _formReturnBeanId: number | null = null;
 let _beanFormDirty = false;
 let _beanFormDirtyBound = false;
+// The roast date the form was prefilled with (the current bag's, see
+// openBeanForm). saveBeanInternal compares against it so an edit that leaves
+// the field untouched sends no roastDate at all (#1606).
+let _beanFormPrefilledRoastDate = '';
 
 function _rememberFormHome(): void {
   const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
@@ -260,14 +264,20 @@ export function openBeanForm(bean?: BeanRow | null): void {
   const extraRecipes = document.getElementById('beanFormExtraRecipes');
   if (extraRecipes) { extraRecipes.style.display = 'none'; extraRecipes.innerHTML = html``; }
   _state()._urlImportExtraRecipes = null;
+  // #1606: the form's roast date is the current bag's, not the bean-level
+  // field — once the queue has advanced through doses the bean-level date is
+  // the old bag's, and saving a pure name edit would write it back over the
+  // new current bag's. Fall back to the bean-level date when the current bag
+  // has none.
+  const activeEditBag = bean ? classifyBeanBags(bean).current?.bg : null;
+  _beanFormPrefilledRoastDate = toIsoDateInput(activeEditBag?.roastDate || bean?.roastDate);
   _field('beanFormName').value      = bean?.name      || '';
   _field('beanFormRoaster').value   = bean?.roaster   || '';
-  _field('beanFormRoastDate').value = toIsoDateInput(bean?.roastDate);
+  _field('beanFormRoastDate').value = _beanFormPrefilledRoastDate;
   _field('beanFormNotes').value     = bean?.notes     || '';
   // Stock and batch number are bag-only now (see classifyBeanBags/
   // renderBagCard's own "Bestand anpassen"/bag-dialog fields) — neither
   // field exists on the bean form at all.
-  const activeEditBag = bean ? classifyBeanBags(bean).current?.bg : null;
   _field('beanFormDecaf').checked   = !!bean?.decaf;
   populateOriginSelect();
   bindOriginInput();
@@ -410,6 +420,14 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes,
   };
+  // #1606: on an edit, send roastDate only when the user actually changed it.
+  // The prefill is the current bag's date, so re-sending the unchanged field
+  // would overwrite the current bag's roast date with the (possibly stale)
+  // bean-level one once the queue has advanced past it. Creating a bean still
+  // sends it.
+  if (S.beanEditId != null && roastDate === _beanFormPrefilledRoastDate) {
+    delete payload.roastDate;
+  }
   if (!S.beanEditId && S._urlImportSource) {
     payload.source     = S._urlImportSource;
     payload.importedAt = S._urlImportedAt;
