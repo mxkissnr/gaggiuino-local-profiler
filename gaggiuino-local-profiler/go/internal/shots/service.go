@@ -267,13 +267,6 @@ func StartTrashPurge(ctx context.Context, svc *Service, interval time.Duration) 
 	}()
 }
 
-// AppendToBlocklist atomically adds a single value to the blocklist — see
-// Repository.AppendToBlocklist's doc comment for why the sync path uses this
-// instead of a GetBlocklist+SaveBlocklist read-modify-write.
-func (s *Service) AppendToBlocklist(value string) error {
-	return s.repo.AppendToBlocklist(value)
-}
-
 // ComputeScoreDetail scores shot against its own library bean's
 // brewTempC/brewRatio target when one is installed (see SetBeanSource),
 // falling back to the generic fixed bands when no bean resolves or no source
