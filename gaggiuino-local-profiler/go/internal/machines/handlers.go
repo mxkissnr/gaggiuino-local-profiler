@@ -234,19 +234,21 @@ func readRawJSONBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 }
 
 // queryMachineID reads the machineId query parameter, the repeated read
-// every route in this package does before calling registry.ResolveMachine —
-// nil means "not given at all", matching ResolveMachine's own
-// nil-vs-absent distinction.
-func queryMachineID(r *http.Request) *int64 {
+// every route in this package does before calling registry.ResolveMachine.
+// The id is nil when no machineId was given at all, matching
+// ResolveMachine's own nil-vs-absent distinction. valid is false when a value
+// was given but could not be parsed, so a mutating route can reject it
+// instead of silently falling back to the default machine.
+func queryMachineID(r *http.Request) (id *int64, valid bool) {
 	raw := r.URL.Query().Get("machineId")
 	if raw == "" {
-		return nil
+		return nil, true
 	}
 	n, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		return nil
+		return nil, false
 	}
-	return &n
+	return &n, true
 }
 
 // pathID64 parses the {id} path wildcard as an int64.

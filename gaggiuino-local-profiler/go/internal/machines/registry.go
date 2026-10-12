@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -508,10 +509,19 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	return len(valid), nil
 }
 
+// ErrUnknownMachine is returned by ResolveMachine when an explicit machineId
+// names no registered machine -- distinct from "no machineId given", which
+// still resolves to the default machine.
+var ErrUnknownMachine = errors.New("machines: unknown machine")
+
 // ResolveMachine (#679) returns an explicit machineId if it names a known
 // machine, otherwise the default machine. rawId == nil means "no machineId
 // given at all" (query/body param absent), matching every existing call
-// site's convention.
+// site's convention; an explicit id that names no machine is not silently
+// treated as "not given" -- it returns ErrUnknownMachine, so a mutating
+// caller can reject it instead of acting on a different machine than the one
+// asked for. Callers that want the old lenient fallback (GET routes) handle
+// that sentinel themselves.
 func (r *Registry) ResolveMachine(rawID *int64) (*Machine, error) {
 	if err := r.EnsureDefaultMachine(); err != nil {
 		return nil, err
@@ -524,6 +534,7 @@ func (r *Registry) ResolveMachine(rawID *int64) (*Machine, error) {
 		if m != nil {
 			return m, nil
 		}
+		return nil, ErrUnknownMachine
 	}
 	return r.GetDefaultMachine()
 }

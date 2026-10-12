@@ -2,6 +2,7 @@ package machines
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -266,14 +267,12 @@ func TestResolveMachine(t *testing.T) {
 		t.Fatalf("ResolveMachine(second.ID) = %+v, want id %d", resolved, second.ID)
 	}
 
-	// Unknown id -> falls back to the default machine.
+	// Unknown id -> ErrUnknownMachine, not a silent fallback to the default
+	// machine (#1605): only an ABSENT machineId means "the default machine",
+	// so a mutating caller can tell an explicit-but-wrong id apart from no id.
 	unknown := int64(999)
-	resolved, err = reg.ResolveMachine(&unknown)
-	if err != nil {
-		t.Fatalf("ResolveMachine(999): %v", err)
-	}
-	if !resolved.IsDefault {
-		t.Fatalf("ResolveMachine(999) = %+v, want the default machine (fallback)", resolved)
+	if _, err := reg.ResolveMachine(&unknown); !errors.Is(err, ErrUnknownMachine) {
+		t.Fatalf("ResolveMachine(999) err = %v, want ErrUnknownMachine", err)
 	}
 }
 
