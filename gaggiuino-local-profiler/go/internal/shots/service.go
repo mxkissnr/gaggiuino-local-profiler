@@ -161,26 +161,36 @@ func SetAnnotationStockHook(fn func(prev, next map[string]any) error) {
 }
 
 // PatchAnnotation merges patch into the shot's stored annotation (#1273):
-// every remaining top-level key of patch overwrites the stored value, a key
-// present as JSON null or "" clears the field, and keys absent from patch
-// are kept. Server-owned keys are ignored. The merged result is validated
-// before it is written; an invalid merge returns *AnnotationValidationError
-// and leaves the stored annotation untouched. Returns the saved annotation.
-// The installed annotation stock hook (see SetAnnotationStockHook) runs once
-// the merge is saved, in the same locked save.
+// every remaining top-level key of patch whose value is neither JSON null nor
+// "" is set on the stored annotation, a key present as JSON null or "" is
+// deleted, and keys absent from patch are kept. Server-owned keys are ignored.
+// Only the keys the patch actually sets are validated, so an older stored
+// value the current rules no longer accept (an over-long notes, an
+// out-of-range rating) cannot block an unrelated edit. The patched keys are
+// validated before the write; an invalid patch returns
+// *AnnotationValidationError and leaves the stored annotation untouched.
+// Returns the saved annotation. The installed annotation stock hook (see
+// SetAnnotationStockHook) runs once the merge is saved, in the same locked
+// save.
 func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[string]any, error) {
 	var after func(prev, next map[string]any) error
 	if h := annotationStockHook.Load(); h != nil {
 		after = *h
 	}
 	return s.repo.updateAnnotation(shotID, func(ann map[string]any) error {
+		applied := make(map[string]any, len(patch))
 		for k, v := range patch {
 			if serverOwnedAnnotationKeys[k] {
 				continue
 			}
+			if v == nil || v == "" {
+				delete(ann, k)
+				continue
+			}
 			ann[k] = v
+			applied[k] = v
 		}
-		if issues := ValidateAnnotation(ann); len(issues) > 0 {
+		if issues := ValidateAnnotation(applied); len(issues) > 0 {
 			return &AnnotationValidationError{Issues: issues}
 		}
 		return nil
