@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -128,6 +129,13 @@ func bundledImageEntries(referenced map[string]struct{}) ([]os.DirEntry, int, er
 	return bundled, skipped, nil
 }
 
+// orphanGracePeriod is how long an unreferenced app-named image must have
+// existed before removeUnreferencedImages deletes it. An upload writes the
+// image before saving the entry row that refers to it, so a sweep running in
+// that window would otherwise delete a just-uploaded photo; skipping fresh
+// files closes that race.
+var orphanGracePeriod = 10 * time.Minute
+
 // removeUnreferencedImages deletes every app-named image file in dir that no
 // entry refers to, together with its ".thumb." sibling: a name whose full
 // image is not in referenced is removed whether it is the full image itself
@@ -154,6 +162,9 @@ func removeUnreferencedImages(dir string, referenced map[string]struct{}, logf f
 		info, err := entry.Info()
 		if err != nil {
 			continue
+		}
+		if time.Since(info.ModTime()) < orphanGracePeriod {
+			continue // possibly an upload in flight — its entry row may not be saved yet
 		}
 		if err := os.Remove(filepath.Join(dir, name)); err != nil {
 			if !os.IsNotExist(err) {

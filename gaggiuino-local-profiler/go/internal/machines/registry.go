@@ -342,33 +342,24 @@ func (r *Registry) DeleteMachine(id int64, onHostEvicted func(host string)) (boo
 	return true, nil
 }
 
-// RestoreMachines (#901) wipes and re-inserts the whole `machines` table
-// from a backup's `machines` array, validating each entry the same way
-// MachineInput.validate does for a live POST/PUT, then enforcing exactly
-// one is_default row (lowest id wins on a tie/absence). Returns the count
-// of entries actually restored (out of len(in)) — an invalid entry (bad id,
-// or a field that fails validation) is skipped, not fatal to the rest of
-// the restore.
-//
-// Deliberately NOT done here (see go/internal/machines/doc.go for the
-// full rationale): evicting the live session for every host that existed
-// before the restore (this package's own live WS sessions reconnect/fail
-// naturally against a host that no longer resolves to any machine, rather
-// than being torn down immediately) and reconciling a restored machine's
-// stale host/switchEntity back to the current legacy add-on options.json
-// (that facade doesn't exist yet, see internal/orders/options.go for the
-// same options.json-facade gap noted elsewhere).
-func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
-	type validated struct {
-		id              int64
-		name, typ, host string
-		switchEntity    *string
-		theme           *string
-		hasWaterSensor  bool
-		isDefault       bool
-		enabled         bool
-		createdAt       int64
-	}
+// validated is one restore-usable machine, decoded from a backup entry by
+// restorableMachines.
+type validated struct {
+	id              int64
+	name, typ, host string
+	switchEntity    *string
+	theme           *string
+	hasWaterSensor  bool
+	isDefault       bool
+	enabled         bool
+	createdAt       int64
+}
+
+// restorableMachines applies RestoreMachines' per-entry rules to a backup's
+// `machines` array: an entry with a non-positive id, a field that fails
+// MachineInput.validate (the same check a live POST/PUT uses), or an
+// unencodable theme is skipped rather than restored.
+func restorableMachines(in []Machine) []validated {
 	valid := make([]validated, 0, len(in))
 	for _, m := range in {
 		if m.ID <= 0 {
@@ -395,6 +386,34 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 			enabled: m.Enabled, createdAt: createdAt,
 		})
 	}
+	return valid
+}
+
+// CountRestorableMachines returns how many entries of a backup's `machines`
+// array RestoreMachines would actually insert. The restore preview reports
+// this so it can never promise machines the restore would skip.
+func CountRestorableMachines(in []Machine) int {
+	return len(restorableMachines(in))
+}
+
+// RestoreMachines (#901) wipes and re-inserts the whole `machines` table
+// from a backup's `machines` array, validating each entry the same way
+// MachineInput.validate does for a live POST/PUT, then enforcing exactly
+// one is_default row (lowest id wins on a tie/absence). Returns the count
+// of entries actually restored (out of len(in)) — an invalid entry (bad id,
+// or a field that fails validation) is skipped, not fatal to the rest of
+// the restore.
+//
+// Deliberately NOT done here (see go/internal/machines/doc.go for the
+// full rationale): evicting the live session for every host that existed
+// before the restore (this package's own live WS sessions reconnect/fail
+// naturally against a host that no longer resolves to any machine, rather
+// than being torn down immediately) and reconciling a restored machine's
+// stale host/switchEntity back to the current legacy add-on options.json
+// (that facade doesn't exist yet, see internal/orders/options.go for the
+// same options.json-facade gap noted elsewhere).
+func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
+	valid := restorableMachines(in)
 
 	// #901 code review: a backup whose `machines` section is entirely
 	// unusable (every entry fails validate()) must leave the existing

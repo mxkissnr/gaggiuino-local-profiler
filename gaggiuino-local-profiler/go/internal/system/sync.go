@@ -214,6 +214,8 @@ func (p *Poller) backfillShots(
 		if !keep {
 			continue
 		}
+		// Annotations are app-owned; a machine payload must never replace them.
+		delete(shot, "annotation")
 		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
 			return true, uerr
 		}
