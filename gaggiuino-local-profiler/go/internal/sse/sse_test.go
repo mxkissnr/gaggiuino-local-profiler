@@ -400,6 +400,21 @@ func waitForSubscribers(t *testing.T, hub *Hub, want int) {
 	}
 }
 
+// waitForBody blocks until the gated writer's body contains want, failing the
+// test if it never does -- used to know the handler has committed to a send and
+// is about to block in its gated Flush.
+func waitForBody(t *testing.T, gw *gatedFlusher, want string) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for !strings.Contains(gw.body(), want) {
+		select {
+		case <-deadline:
+			t.Fatalf("gated writer never wrote %q, body:\n%s", want, gw.body())
+		case <-time.After(2 * time.Millisecond):
+		}
+	}
+}
+
 // TestHandler_DroppedDataChangedDeliversCoalescedAll pins the fix for a dropped
 // data-changed: when a backed-up subscriber's buffer is full, Publish cannot
 // deliver one, so the handler must send a single whole-database data-changed
@@ -423,7 +438,10 @@ func TestHandler_DroppedDataChangedDeliversCoalescedAll(t *testing.T) {
 	// A single snapshot is delivered immediately; the handler then blocks in
 	// Flush, so every event published next piles up on the subscriber channel.
 	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": 0}})
-	time.Sleep(20 * time.Millisecond)
+	// Wait until the handler has written that frame and is about to block in its
+	// gated Flush, so the burst below piles up on the channel instead of being
+	// drained.
+	waitForBody(t, gw, `"seq":0`)
 
 	// Overflow the 16-slot buffer with snapshots (a dropped snapshot is
 	// harmless), then drop a data-changed, which must not be lost.
