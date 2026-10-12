@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -71,9 +72,9 @@ func (c *Client) enabled() bool { return c.token != "" }
 func (c *Client) Enabled() bool { return c.enabled() }
 
 // SendNotify posts to HA's notify.<service> service call. Best-effort —
-// logs (via the returned error, which call sites treat as
-// non-critical/fire-and-forget) rather than failing the caller's HTTP
-// response.
+// a failure is logged here (once, for every call site) and also returned, so
+// a caller that ignores the error still leaves a trace rather than failing
+// the caller's HTTP response.
 func (c *Client) SendNotify(ctx context.Context, service, title, message, tag string) error {
 	if !c.enabled() || service == "" {
 		return nil
@@ -93,6 +94,9 @@ func (c *Client) SendNotify(ctx context.Context, service, title, message, tag st
 		},
 	}
 	_, err := c.post(ctx, "/services/"+domain+"/"+svcName, body)
+	if err != nil {
+		log.Printf("ha: notify %s failed: %v", service, err)
+	}
 	return err
 }
 
