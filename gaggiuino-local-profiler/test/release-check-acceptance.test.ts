@@ -110,4 +110,42 @@ describe('checkAcceptanceProtocol (#1241)', () => {
         const doc = protocol('pass', { evidence: 'reachable at 8.8.8.8, version 3.2.0' });
         expect(checkAcceptanceProtocol(doc, VERSION)).toEqual([]);
     });
+
+    it('flags the 10.0.0.0/8 and 172.16.0.0/12 ranges', () => {
+        const ten = checkAcceptanceProtocol(protocol('pass', { evidence: 'at 10.0.0.5' }), VERSION);
+        expect(ten).toHaveLength(1);
+        expect(ten[0]).toContain('10.0.0.5');
+
+        const mid = checkAcceptanceProtocol(protocol('pass', { evidence: 'at 172.20.1.1' }), VERSION);
+        expect(mid).toHaveLength(1);
+        expect(mid[0]).toContain('172.20.1.1');
+    });
+
+    it('flags the CGNAT 100.64.0.0/10 range (Tailscale)', () => {
+        const failures = checkAcceptanceProtocol(
+            protocol('pass', { evidence: 'box reachable at 100.100.1.1' }),
+            VERSION
+        );
+        expect(failures).toHaveLength(1);
+        expect(failures[0]).toContain('100.100.1.1');
+    });
+
+    it('flags an IPv6 unique-local address (fc00::/7)', () => {
+        const failures = checkAcceptanceProtocol(
+            protocol('pass', { evidence: 'reachable at fd12:3456::1' }),
+            VERSION
+        );
+        expect(failures).toHaveLength(1);
+        expect(failures[0]).toContain('fd12:3456::1');
+    });
+
+    it('does not flag addresses just outside the private ranges', () => {
+        const doc = protocol('pass', { evidence: 'at 172.32.0.1 and 100.128.0.1' });
+        expect(checkAcceptanceProtocol(doc, VERSION)).toEqual([]);
+    });
+
+    it('does not flag a public IPv6 address', () => {
+        const doc = protocol('pass', { evidence: 'resolver 2001:4860:4860::8888' });
+        expect(checkAcceptanceProtocol(doc, VERSION)).toEqual([]);
+    });
 });
