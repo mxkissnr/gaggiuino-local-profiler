@@ -61,21 +61,35 @@ interface StatusPayload {
 // annotation/focus guards and never clobbers in-progress text.
 let knownShotCount: number | null = null;
 
-// #734 review: updateStatus() can be triggered from three independent places
-// (the 30s setInterval, applyActiveMachineChange() on a machine switch, and
-// #733's visibilitychange refocus handler) with no ordering guarantee between
-// them, so a plain in-flight guard keeps overlapping calls from each running
-// a redundant fetch+render in the same tick.
+// #734 review / #1605: updateStatus() can be triggered from three independent
+// places (the 30s setInterval, applyActiveMachineChange() on a machine switch,
+// and #733's visibilitychange refocus handler) with no ordering guarantee
+// between them. Overlapping calls must not each run a redundant fetch+render
+// in the same tick, but they must also not be silently dropped: a scoped call
+// that arrives while the unscoped poll is in flight used to vanish, leaving
+// the switched-to machine showing the previous machine's status until the next
+// tick. So while a call is in flight, the latest requested machine id is
+// remembered and exactly one rerun is started when the in-flight call finishes
+// (several calls during one flight collapse into that single rerun).
 let _statusUpdateInFlight = false;
+let _pendingMachineId: string | number | null | undefined;
+let _rerunPending = false;
 
 // #464: an explicit machineId scopes the status-dot/hostname fields below to
-// that machine (see go/internal/system's /api/status). 'all'/null/undefined
-// fall back to the unscoped call (default machine), mirroring the same
-// convention views/live.js and views/maintenance.js already use for the
-// 'all' switcher value — so single-machine installs and the unparameterized
-// 30s poll are unaffected.
+// that machine (see go/internal/system's /api/status). #1605: an argument-less
+// call now means "the machine the app is showing" — it resolves to
+// S.activeMachineId instead of the default machine, so the start-up call and
+// the 30s poll can no longer overwrite a selected non-default machine's status
+// with the default machine's (#464 regression). 'all'/null keep the unscoped
+// call, mirroring the same convention views/live.js and views/maintenance.js
+// already use for the 'all' switcher value.
 export async function updateStatus(machineId?: string | number | null): Promise<void> {
-  if (_statusUpdateInFlight) return;
+  if (machineId === undefined) machineId = S.activeMachineId;
+  if (_statusUpdateInFlight) {
+    _pendingMachineId = machineId;
+    _rerunPending = true;
+    return;
+  }
   _statusUpdateInFlight = true;
   try {
     const [statusRes, switchRes] = await Promise.all([
@@ -219,8 +233,18 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     if (switchRes?.ok) updatePowerButton(await switchRes.json() as SwitchPayload);
     else updatePowerButton({ configured: false });
   } catch { /* ignore */ }
-  // Single-flight guard (#734): the reset below runs on every path, and last-writer-wins is fine -- the guard only needs to be false again once no call is in flight.
-  finally { _statusUpdateInFlight = false; }
+  // Single-flight guard (#734/#1605): the reset below runs on every path. If a
+  // call arrived while this one was in flight, rerun exactly once with the last
+  // machine id it asked for.
+  finally {
+    _statusUpdateInFlight = false;
+    if (_rerunPending) {
+      _rerunPending = false;
+      const rerunMachineId = _pendingMachineId;
+      _pendingMachineId = undefined;
+      void updateStatus(rerunMachineId);
+    }
+  }
 }
 
 // #722: the devToolsCard button's click handler -- deliberately goes through

@@ -8,6 +8,7 @@ import {
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
+import { getDefaultMachineId } from '../components/machines-settings.js';
 
 // One task's status block as GET /api/maintenance serves it (flat for a
 // single machine, nested under machines[]/global for the fleet view).
@@ -136,14 +137,16 @@ export function setMaintScope(scope: string): void {
 }
 
 // Write routes (done/threshold) always need one concrete machine — 'all'
-// scope has no single target, so falls back to the first registered machine
-// (irrelevant for global tasks anyway: the backend always redirects
-// waterfilter/grinder_* writes to the shared sentinel machine regardless of
-// which machineId is passed).
+// scope has no single target, so it falls back to the default machine (#1605:
+// the manual log entry made in the all-machines view must land on the default
+// machine, not merely the first registered one, which can differ when the
+// machine list is ordered differently). Global tasks are unaffected: the
+// backend always redirects waterfilter/grinder_* writes to the shared sentinel
+// machine regardless of which machineId is passed.
 function _writeMachineId(explicit?: string | number | null): string | number {
   if (explicit !== undefined && explicit !== null && explicit !== '') return explicit;
   const scope = _effectiveScope();
-  return scope === 'all' ? (S.machines?.[0]?.id ?? 1) : scope;
+  return scope === 'all' ? (getDefaultMachineId() ?? S.machines?.[0]?.id ?? 1) : scope;
 }
 
 // ── Data normalization ──────────────────────────────────────────────────────

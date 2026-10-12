@@ -64,6 +64,10 @@ interface FakeResponse { ok: boolean; json: () => Promise<unknown> }
 
 const { updateStatus } = await import('../public-src/components/status.js');
 
+// Lets the rerun that updateStatus() starts (fire-and-forget) finish before an
+// assertion reads the recorded fetch calls.
+const flush = (): Promise<void> => new Promise(res => setTimeout(res, 0));
+
 describe('updateStatus() single-flight guard (#734)', () => {
   let doc: ReturnType<typeof makeFakeDocument>;
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -78,23 +82,63 @@ describe('updateStatus() single-flight guard (#734)', () => {
     _store.clear();
   });
 
-  it('a second call while one is already in flight is a no-op, not a duplicate poll', async () => {
-    let resolveFetch!: (value: FakeResponse) => void;
-    const pending = new Promise<FakeResponse>(res => { resolveFetch = res; });
+  // #1605: a call that lands while another is in flight is no longer dropped.
+  // It is remembered and rerun exactly once, with the requested machine id, as
+  // soon as the in-flight call finishes -- otherwise a machine switch made
+  // during the 30s poll left the switched-to machine showing stale status.
+  it('reruns a scoped call made while another is in flight, for the requested machine', async () => {
+    let resolveFirst!: (value: FakeResponse) => void;
+    const firstPending = new Promise<FakeResponse>(res => { resolveFirst = res; });
+    const statusUrls: string[] = [];
+    let statusCall = 0;
     fetchMock = vi.fn((url: string | URL) => {
-      if (String(url).startsWith('api/status')) return pending;
+      if (String(url).startsWith('api/status')) {
+        statusUrls.push(String(url));
+        statusCall += 1;
+        if (statusCall === 1) return firstPending;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z' }) });
+      }
+      return Promise.resolve({ ok: false });
+    });
+    g.fetch = fetchMock;
+
+    const first = updateStatus();   // unscoped poll, in flight
+    const second = updateStatus(7); // fires while `first` is still awaiting the fetch above
+
+    resolveFirst({ ok: true, json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z' }) });
+    await Promise.all([first, second]);
+    await flush();
+
+    // Exactly one rerun, for the machine the dropped call asked for.
+    expect(statusUrls).toEqual(['api/status', 'api/status?machineId=7']);
+  });
+
+  it('collapses several calls during one flight into a single rerun with the last machine id', async () => {
+    let resolveFirst!: (value: FakeResponse) => void;
+    const firstPending = new Promise<FakeResponse>(res => { resolveFirst = res; });
+    const statusUrls: string[] = [];
+    let statusCall = 0;
+    fetchMock = vi.fn((url: string | URL) => {
+      if (String(url).startsWith('api/status')) {
+        statusUrls.push(String(url));
+        statusCall += 1;
+        if (statusCall === 1) return firstPending;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z' }) });
+      }
       return Promise.resolve({ ok: false });
     });
     g.fetch = fetchMock;
 
     const first = updateStatus();
-    const second = updateStatus(); // fires while `first` is still awaiting the fetch above
+    const second = updateStatus(2);
+    const third = updateStatus(7);
+    const fourth = updateStatus(9);
 
-    resolveFetch({ ok: true, json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z' }) });
-    await Promise.all([first, second]);
+    resolveFirst({ ok: true, json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z' }) });
+    await Promise.all([first, second, third, fourth]);
+    await flush();
 
-    // Only the first call's fetch actually ran -- the second returned immediately.
-    expect(fetchMock.mock.calls.filter((c: unknown[]) => String(c[0]).startsWith('api/status')).length).toBe(1);
+    expect(statusUrls).toEqual(['api/status', 'api/status?machineId=9']);
   });
 
   // #1614: a newly-finished shot seen on the status poll must refetch the shots
