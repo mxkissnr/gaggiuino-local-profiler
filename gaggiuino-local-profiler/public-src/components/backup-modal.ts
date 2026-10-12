@@ -68,6 +68,10 @@ let mode: 'export' | 'restore' | null = null;
 let restoreBundle: Record<string, unknown> | null = null;    // legacy .json restore: the parsed bundle
 let restoreZipBytes: ArrayBuffer | null = null;  // .zip restore: the raw file bytes -- mutually exclusive with restoreBundle
 let previewDebounce: ReturnType<typeof setTimeout> | null = null;
+// Bumped by every preview request and whenever the modal closes, so a slower
+// earlier dry-run cannot overwrite the preview of a later checkbox/passphrase
+// state (or paint into a modal that was closed meanwhile).
+let _previewSeq = 0;
 
 // Enter in the passphrase/confirm-passphrase input has no default browser
 // behavior to fall back on here -- the modal is deliberately not a <form>
@@ -184,6 +188,10 @@ function closeBackupModal(): void {
     mode = null;
     restoreBundle = null;
     restoreZipBytes = null;
+    // Any dry-run still in flight belongs to the modal being closed; bumping
+    // the sequence makes its response a no-op instead of painting a stale
+    // preview (or one into a later re-opened modal).
+    _previewSeq++;
     if (previewDebounce != null) clearTimeout(previewDebounce);
     // A passphrase typed in one open of the modal must never survive into
     // the next -- otherwise a cancelled/completed export leaves its
@@ -224,12 +232,17 @@ function renderSectionCheckboxes(presentSections: Set<string> | null): void {
 // out of sync with what actually gets applied.
 async function refreshRestorePreview(): Promise<void> {
     if (mode !== 'restore' || (!restoreBundle && !restoreZipBytes)) return;
+    const seq = ++_previewSeq;
     const { preview } = els();
     const sections = checkedSections();
     const passphrase = els().secretsCb.checked ? els().passInput.value : undefined;
     try {
         const r = await postRestore({ bundle: restoreBundle ?? undefined, zipBytes: restoreZipBytes, sections, passphrase, dryRun: true });
+        // A newer preview started, or the modal left restore mode (closed and
+        // possibly reopened): this answer is stale, leave the preview alone.
+        if (seq !== _previewSeq || mode !== 'restore') return;
         const body = await r.json() as { preview?: BackupPreview };
+        if (seq !== _previewSeq || mode !== 'restore') return;
         if (!r.ok || !body.preview) { preview.textContent = ''; return; }
         const p = body.preview;
         const lines: Html[] = [];
@@ -245,7 +258,7 @@ async function refreshRestorePreview(): Promise<void> {
                 : tHtml('backup_preview_secrets_none'));
         }
         preview.innerHTML = joinHtml(lines.map(l => html`<div>${l}</div>`));
-    } catch { preview.textContent = ''; }
+    } catch { if (seq === _previewSeq && mode === 'restore') preview.textContent = ''; }
 }
 
 function scheduleRestorePreview(): void {

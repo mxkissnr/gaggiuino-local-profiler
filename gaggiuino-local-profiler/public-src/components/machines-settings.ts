@@ -57,8 +57,16 @@ let _selectedTheme: ThemeSelection | null = null;
 // category, as last fetched by loadReleaseChannel() -- kept so
 // _saveReleaseChannel() can post the whole object back with only
 // releaseChannel changed (see that function's own comment for why a full
-// round trip, not a bare {releaseChannel} partial).
+// round trip, not a bare {releaseChannel} partial). Null while a fetch is in
+// flight or after a failed one.
 let _machineSystemSettings: Record<string, unknown> | null = null;
+// The machine id those settings belong to. _saveReleaseChannel() refuses to
+// post when it does not match the machine being saved (or is null), so a fast
+// switch from machine A to machine B can never write A's settings under B.
+let _machineSystemSettingsMachineId: number | null = null;
+// Bumped on every loadReleaseChannel() call so an in-flight response for a
+// machine the form no longer shows is dropped instead of filling its fields.
+let _releaseChannelReqSeq = 0;
 
 (function restoreActiveMachine() {
   // #1375: the selection now lives in the shared ui_prefs store (key
@@ -533,11 +541,18 @@ export function onMachineTypeChange(): void {
 async function loadReleaseChannel(machineId: number): Promise<void> {
   const select = document.getElementById('machineFormReleaseChannel') as HTMLSelectElement | null;
   if (!select) return;
+  const seq = ++_releaseChannelReqSeq;
+  _machineSystemSettings = null;
+  _machineSystemSettingsMachineId = null;
   try {
     const settings = await machinesApi.getMachineSettings(machineId, 'system');
+    // The form may have been switched to another machine (or closed) while
+    // this was in flight; a later call bumped the counter, so drop the answer.
+    if (seq !== _releaseChannelReqSeq) return;
     if (!settings) return;
     const sys = settings as Record<string, unknown>;
     _machineSystemSettings = sys;
+    _machineSystemSettingsMachineId = machineId;
     const ch = Number(sys.releaseChannel);
     select.value = [0, 1, 2].includes(ch) ? String(ch) : '0';
   } catch { /* offline/unreachable -- leave the select at its default */ }
@@ -552,8 +567,12 @@ async function _saveReleaseChannel(machineId: string | number): Promise<void> {
   const row = document.getElementById('machineReleaseChannelRow');
   const select = document.getElementById('machineFormReleaseChannel') as HTMLSelectElement | null;
   if (!row || !select || row.style.display === 'none') return;
+  // Post only the settings fetched for the machine actually being saved --
+  // after a fast form switch the held object (or null) belongs to another
+  // machine, and posting it would overwrite that machine's channel here.
+  if (!_machineSystemSettings || _machineSystemSettingsMachineId !== Number(machineId)) return;
   const channel = parseInt(select.value, 10);
-  const payload = { ...(_machineSystemSettings || {}), machineId: Number(machineId), releaseChannel: channel };
+  const payload = { ..._machineSystemSettings, machineId: Number(machineId), releaseChannel: channel };
   try {
     await machinesApi.saveMachineSettings('system', payload);
   } catch { /* best-effort -- the main machine record already saved either way */ }
