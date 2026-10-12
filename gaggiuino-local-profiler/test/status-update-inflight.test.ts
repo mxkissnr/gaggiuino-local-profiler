@@ -20,6 +20,19 @@ g.localStorage = {
 g.navigator ??= { language: 'en-US' };
 g.window ??= globalThis;
 
+// updateMachineBanner()/updateLegacyMachineOptionsBanner() read sessionStorage
+// before the shot-count block, so it must exist or the outer try swallows the
+// reference error and the shot-count branch never runs.
+g.sessionStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+
+// status.js routes a rising shotCount through live-sync's markDirty; mock the
+// module so the shot-count branch can be asserted without the scheduler.
+const liveMock = vi.hoisted(() => ({ markDirty: vi.fn(), noteServerRevs: vi.fn() }));
+vi.mock('../public-src/live-sync.js', () => ({
+  markDirty: liveMock.markDirty,
+  noteServerRevs: liveMock.noteServerRevs,
+}));
+
 interface FakeElement {
   className: string;
   textContent: string;
@@ -56,6 +69,8 @@ describe('updateStatus() single-flight guard (#734)', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    liveMock.markDirty.mockReset();
+    liveMock.noteServerRevs.mockReset();
     doc = makeFakeDocument();
     ['statusDot', 'railStatusDot', 'syncTime', 'machineSubtitle', 'railMachineName',
      'glpVersionBadge', 'btnOrders', 'bnOrders', 'powerBtn', 'btnLive'].forEach(id => doc._preRegister(id));
@@ -80,5 +95,27 @@ describe('updateStatus() single-flight guard (#734)', () => {
 
     // Only the first call's fetch actually ran -- the second returned immediately.
     expect(fetchMock.mock.calls.filter((c: unknown[]) => String(c[0]).startsWith('api/status')).length).toBe(1);
+  });
+
+  // #1614: a newly-finished shot seen on the status poll must refetch the shots
+  // list through live-sync's `shots` kind (markDirty), not by calling
+  // window.loadData() directly -- the direct call bypassed the annotation/focus
+  // guards and could clobber in-progress text.
+  it('routes a rising shotCount through live-sync, not a direct reload', async () => {
+    let call = 0;
+    fetchMock = vi.fn((url: string | URL) => {
+      if (String(url).startsWith('api/status')) {
+        call += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ shotCount: call === 1 ? 5 : 6 }) });
+      }
+      return Promise.resolve({ ok: false });
+    });
+    g.fetch = fetchMock;
+
+    await updateStatus(); // baseline: records the first shot count
+    expect(liveMock.markDirty).not.toHaveBeenCalled();
+
+    await updateStatus(); // the count rose -> refetch the shots list via live-sync
+    expect(liveMock.markDirty).toHaveBeenCalledWith('shots', null);
   });
 });

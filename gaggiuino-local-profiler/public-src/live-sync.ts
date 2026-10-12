@@ -113,7 +113,8 @@ const TEXT_INPUT_TYPES = new Set([
   'date', 'time', 'datetime-local', '',
 ]);
 
-function _focusBlocked(): boolean {
+/** True while the focused element is a text-entry field (see TEXT_INPUT_TYPES). */
+export function textEntryFocused(): boolean {
   if (typeof document === 'undefined') return false;
   const el = document.activeElement as HTMLElement | null;
   if (!el) return false;
@@ -163,7 +164,7 @@ function _overlayOpen(): boolean {
  * every kind.
  */
 export function reloadBlocked(): boolean {
-  return _focusBlocked() || _overlayOpen();
+  return textEntryFocused() || _overlayOpen();
 }
 
 function _schedule(kind: SyncKind, delay = DEBOUNCE_MS): void {
@@ -227,7 +228,7 @@ async function _drain(kind: SyncKind): Promise<void> {
   if (_running.has(kind)) return;
   const handler = _handlers[kind];
   if (!handler) { _dirty.delete(kind); return; }
-  if (_isHidden() || _focusBlocked()) return;
+  if (_isHidden() || textEntryFocused()) return;
   if (handler.canRun && !handler.canRun()) { _schedule(kind, CANRUN_RETRY_MS); return; }
   const current = _dirty.get(kind);
   const ids = current === null || current === undefined ? null : [...current];

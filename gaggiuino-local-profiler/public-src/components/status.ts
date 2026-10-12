@@ -8,7 +8,7 @@ import {
   importDevDb as importDevDbRequest,
 } from '../api/system.js';
 import { shareOrDownloadBlob, syncInstallId } from '../utils.js';
-import { noteServerRevs } from '../live-sync.js';
+import { markDirty, noteServerRevs } from '../live-sync.js';
 import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
 import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
@@ -56,7 +56,9 @@ interface StatusPayload {
 // Tracks the server-side shot count as of the last status poll, so the periodic
 // poll below can detect a newly-finished shot even when the user isn't on the
 // shots view (and thus never got the live.js post-brew loadData() trigger) —
-// see #296.
+// see #296. A rise marks the `shots` kind dirty through live-sync instead of
+// calling window.loadData() directly, so the refresh goes through the
+// annotation/focus guards and never clobbers in-progress text.
 let knownShotCount: number | null = null;
 
 // #734 review: updateStatus() can be triggered from three independent places
@@ -97,8 +99,8 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // very first status poll after boot -- see syncInstallId()'s own comment.
     syncInstallId(s.installId);
     if (typeof s.shotCount === 'number') {
-      if (knownShotCount !== null && s.shotCount > knownShotCount && window.loadData) {
-        void window.loadData();
+      if (knownShotCount !== null && s.shotCount > knownShotCount) {
+        markDirty('shots', null);
       }
       knownShotCount = s.shotCount;
     }
