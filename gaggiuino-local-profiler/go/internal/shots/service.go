@@ -215,9 +215,12 @@ func (s *Service) RestoreShot(id int64) error {
 	return s.repo.RestoreFromTrash(id)
 }
 
-// PermanentDelete deletes the shot and its annotation permanently.
+// PermanentDelete deletes the shot and its annotation permanently, adding its
+// id to the blocklist in the same transaction (Repository.DeleteAndBlocklist)
+// so a sync racing the delete can never re-import the shot in the window where
+// the row is gone but the blocklist entry is not yet written (#1609).
 func (s *Service) PermanentDelete(id int64) error {
-	return s.repo.DeleteByID(id)
+	return s.repo.DeleteAndBlocklist(id)
 }
 
 // PurgeExpiredTrash permanently deletes every shot whose trash entry is older
@@ -265,8 +268,8 @@ func StartTrashPurge(ctx context.Context, svc *Service, interval time.Duration) 
 }
 
 // AppendToBlocklist atomically adds a single value to the blocklist — see
-// Repository.AppendToBlocklist's doc comment for why the delete handler
-// uses this instead of a GetBlocklist+SaveBlocklist read-modify-write.
+// Repository.AppendToBlocklist's doc comment for why the sync path uses this
+// instead of a GetBlocklist+SaveBlocklist read-modify-write.
 func (s *Service) AppendToBlocklist(value string) error {
 	return s.repo.AppendToBlocklist(value)
 }
