@@ -147,6 +147,10 @@ func (h *Handlers) postPreheatReadyBy(w http.ResponseWriter, r *http.Request) {
 		v := int64(n)
 		targetAt = &v
 	}
+	if targetAt != nil && readyByExpired(*targetAt, time.Now()) {
+		writeError(w, http.StatusBadRequest, "targetAt must not be in the past")
+		return
+	}
 	if targetAt != nil {
 		entity := h.poller.defaultSwitchEntity()
 		if !h.poller.ha.Enabled() || entity == "" {

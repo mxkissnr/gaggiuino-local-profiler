@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -87,6 +89,48 @@ func TestPostPreheatReadyBy_NullClears(t *testing.T) {
 	p.state.mu.Unlock()
 	if readyBy != nil {
 		t.Errorf("readyByTargetAt = %v, want nil after clearing", *readyBy)
+	}
+}
+
+// TestPostPreheatReadyBy_RejectsExpiredTargetAt pins #1611: a targetAt already
+// past the grace window is rejected up front and stores nothing, while a future
+// target is still accepted.
+func TestPostPreheatReadyBy_RejectsExpiredTargetAt(t *testing.T) {
+	useTempPreheatStateFile(t)
+	fake := &fakeAdapter{}
+	sqlDB := newTestDB(t)
+	haSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer haSrv.Close()
+	t.Setenv("SUPERVISOR_TOKEN", "")
+	t.Setenv("GLP_HA_URL", haSrv.URL)
+	t.Setenv("GLP_HA_TOKEN", "test-token")
+	haClient := ha.NewClientFromEnv()
+	p := newTestPollerWithHA(t, fake, sqlDB, haClient, "switch.machine")
+	demo := NewDemoService(sqlDB, shots.NewRepository(sqlDB), library.NewRepository(sqlDB))
+	mux := newSystemMux(NewHandlers(p, demo, testAPIToken))
+
+	past := time.Now().UnixMilli() - 60*60_000
+	rec := doPost(mux, "/api/preheat/ready-by", fmt.Sprintf(`{"targetAt":%d}`, past))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("past target status = %d, want 400, body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeMap(t, rec.Body.Bytes())
+	if body["error"] != "targetAt must not be in the past" {
+		t.Errorf("error = %v, want 'targetAt must not be in the past'", body["error"])
+	}
+	p.state.mu.Lock()
+	stored := p.state.readyByTargetAt
+	p.state.mu.Unlock()
+	if stored != nil {
+		t.Errorf("readyByTargetAt = %v, want nil (a rejected target stores nothing)", *stored)
+	}
+
+	future := time.Now().UnixMilli() + 60*60_000
+	rec = doPost(mux, "/api/preheat/ready-by", fmt.Sprintf(`{"targetAt":%d}`, future))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("future target status = %d, want 200, body=%s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -2,13 +2,59 @@ package system
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 )
+
+// useTempPreheatStateFile points preheatStateFile at a throwaway file (restored
+// on cleanup), the same seam newPreheatHistoryPoller uses for the preheat
+// history file.
+func useTempPreheatStateFile(t *testing.T) {
+	t.Helper()
+	orig := preheatStateFile
+	preheatStateFile = filepath.Join(t.TempDir(), "preheat_state.json")
+	t.Cleanup(func() { preheatStateFile = orig })
+}
+
+// writePreheatStateFile writes s verbatim to the (temporary) preheat state
+// file, mimicking what a previous run left on disk.
+func writePreheatStateFile(t *testing.T, s preheatStateFileShape) {
+	t.Helper()
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("marshal preheat state: %v", err)
+	}
+	if err := os.WriteFile(preheatStateFile, b, 0o644); err != nil {
+		t.Fatalf("write preheat state: %v", err)
+	}
+}
+
+// newPreheatStatePollerWithHA wires a poller around a fake HA server and a
+// throwaway preheat state file, so loadPreheatState/checkReadyByPreheat can be
+// driven deterministically. The returned counter reports how many HA service
+// calls the fake server received.
+func newPreheatStatePollerWithHA(t *testing.T, fake *fakeAdapter) (*Poller, *int) {
+	t.Helper()
+	useTempPreheatStateFile(t)
+	calls := 0
+	haSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(haSrv.Close)
+	t.Setenv("SUPERVISOR_TOKEN", "")
+	t.Setenv("GLP_HA_URL", haSrv.URL)
+	t.Setenv("GLP_HA_TOKEN", "test-token")
+	haClient := ha.NewClientFromEnv()
+	return newTestPollerWithHA(t, fake, newTestDB(t), haClient, "switch.machine"), &calls
+}
 
 // markLivePollingActive flags live polling as running without spawning the
 // ticker goroutine, so applyStandbyTransition tests stay deterministic while
@@ -385,5 +431,76 @@ func TestApplyStandbyTransition_RunWithSamplesFinalised(t *testing.T) {
 	}
 	if len(runs[0].Samples) != 1 {
 		t.Errorf("samples = %d, want the 1 recorded sample kept", len(runs[0].Samples))
+	}
+}
+
+// TestLoadPreheatState_DropsStaleReadyByTarget pins #1611: a ready-by target
+// that passed while the app was offline (here 2h ago) is discarded on load, and
+// the tick after does not switch the machine on.
+func TestLoadPreheatState_DropsStaleReadyByTarget(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, calls := newPreheatStatePollerWithHA(t, fake)
+
+	past := time.Now().UnixMilli() - 2*60*60_000
+	writePreheatStateFile(t, preheatStateFileShape{
+		ReadyByTargetAt:   &past,
+		PlannedSwitchOnAt: &past,
+	})
+	p.loadPreheatState()
+
+	status := p.PreheatStatus()
+	if status.ReadyByTargetAt != nil || status.PlannedSwitchOnAt != nil {
+		t.Fatalf("stale ready-by pair restored: %v / %v", status.ReadyByTargetAt, status.PlannedSwitchOnAt)
+	}
+	p.checkReadyByPreheat(context.Background())
+	if *calls != 0 {
+		t.Errorf("HA service calls = %d, want 0 for a stale target", *calls)
+	}
+}
+
+// TestLoadPreheatState_KeepsReadyByTargetWithinGrace pins the legitimate case
+// that must keep working: a target only 3 minutes in the past (within
+// readyByGrace) is restored, and the tick still switches the machine on late.
+func TestLoadPreheatState_KeepsReadyByTargetWithinGrace(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, calls := newPreheatStatePollerWithHA(t, fake)
+
+	target := time.Now().UnixMilli() - 3*60_000
+	planned := time.Now().UnixMilli() - 10*60_000 // planned switch-on long past
+	writePreheatStateFile(t, preheatStateFileShape{
+		ReadyByTargetAt:   &target,
+		PlannedSwitchOnAt: &planned,
+	})
+	p.loadPreheatState()
+
+	if status := p.PreheatStatus(); status.ReadyByTargetAt == nil {
+		t.Fatal("a target within the grace window should have been restored")
+	}
+	p.checkReadyByPreheat(context.Background())
+	if *calls != 1 {
+		t.Errorf("HA service calls = %d, want exactly 1 for a within-grace target", *calls)
+	}
+}
+
+// TestCheckReadyByPreheat_ClearsTargetExpiredWhileRunning pins #1611's runtime
+// path: a pair that turns stale while the app is up is cleared with no HA call.
+func TestCheckReadyByPreheat_ClearsTargetExpiredWhileRunning(t *testing.T) {
+	fake := &fakeAdapter{}
+	p, calls := newPreheatStatePollerWithHA(t, fake)
+
+	target := time.Now().UnixMilli() - 60*60_000
+	planned := target - int64(loadPreheatMinutes())*60_000
+	p.state.mu.Lock()
+	p.state.readyByTargetAt = &target
+	p.state.plannedSwitchOnAt = &planned
+	p.state.mu.Unlock()
+
+	p.checkReadyByPreheat(context.Background())
+
+	if *calls != 0 {
+		t.Errorf("HA service calls = %d, want 0 for an expired target", *calls)
+	}
+	if status := p.PreheatStatus(); status.ReadyByTargetAt != nil || status.PlannedSwitchOnAt != nil {
+		t.Errorf("expired pair not cleared: %v / %v", status.ReadyByTargetAt, status.PlannedSwitchOnAt)
 	}
 }

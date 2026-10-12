@@ -17,6 +17,12 @@ const (
 	// rather than resuming a preheat session from days ago.
 	preheatStateTTL = 24 * time.Hour
 
+	// readyByGrace is how far past its target a ready-by time may be before it
+	// counts as stale: a target more than this far in the past is dropped
+	// without switching the machine on. The window also absorbs the clock skew
+	// between a browser's targetAt and the host's clock.
+	readyByGrace = 5 * time.Minute
+
 	// warmTempMin/warmOffMaxDur are isStillWarm()'s "still hot enough to
 	// skip a fresh preheat" heuristic.
 	warmTempMin   = 80.0
@@ -39,9 +45,6 @@ const (
 	// two 30s background tasks: HA reachability checks and preheat watching.
 	backgroundHaCheckInterval = 30 * time.Second
 	preheatWatchInterval      = 30 * time.Second
-
-	// preheatStateFile is where the preheat session state is persisted.
-	preheatStateFile = "/data/preheat_state.json"
 )
 
 // defaultOptionsFile is a var, not a const, so
@@ -49,3 +52,8 @@ const (
 // `/data/options.json` (same testing-seam pattern as
 // internal/backup/handlers.go's restoreUnzipEntryLimit).
 var defaultOptionsFile = "/data/options.json"
+
+// preheatStateFile is where the preheat session state is persisted. A var, not
+// a const, so tests can point it at a temp file (same seam as
+// defaultOptionsFile / preheatHistoryFile).
+var preheatStateFile = "/data/preheat_state.json"
