@@ -301,6 +301,17 @@ export function isAiCoAuthor(name: string): boolean {
     return !NON_AI_COAUTHOR_PATTERNS.some(re => re.test(name));
 }
 
+// A commit body can carry more than one Co-Authored-By trailer (e.g. a squash
+// merge combining a human's and an AI's lines, or an AI-orchestrator plus the
+// model it ran) — return the first one that classifies as an AI model, not just
+// the first trailer line. Git and GitHub both write the trailer as
+// `Co-authored-by:`, so the match is case-insensitive; otherwise every
+// AI-assisted commit counted as human (#1597).
+export function aiModelInChunk(chunk: string): string | undefined {
+    const coAuthors = [...chunk.matchAll(/Co-Authored-By:\s*([^<\n]+)</gi)].map(m => m[1]!.trim());
+    return coAuthors.find(isAiCoAuthor);
+}
+
 // #1100: billing-type classification for the cost section. Claude is the maintainer's
 // flat-rate Claude Pro subscription (CLAUDE_PRO_MONTHLY_USD above); every
 // other model is billed by usage through its own API and has no flat
@@ -439,12 +450,7 @@ function statsForRepo(repo: RepoSpec): RepoStats | null {
         const ins = parseInt((chunk.match(/(\d+) insertion/) || [])[1] || '0', 10);
         const del = parseInt((chunk.match(/(\d+) deletion/) || [])[1] || '0', 10);
         totalLines += ins + del;
-        // A commit can carry more than one Co-Authored-By trailer (e.g. a
-        // squash merge combining a human's and an AI's lines, or an
-        // AI-orchestrator plus the model it ran) — take the first one that
-        // classifies as an AI model, not just the first trailer line.
-        const coAuthors = [...chunk.matchAll(/Co-Authored-By:\s*([^<\n]+)</g)].map(m => m[1]!.trim());
-        const model = coAuthors.find(isAiCoAuthor);
+        const model = aiModelInChunk(chunk);
         if (!model) continue;
         aiCommits++;
         aiLines += ins + del;
@@ -456,7 +462,7 @@ function statsForRepo(repo: RepoSpec): RepoStats | null {
         // report each session's real API cost, plumbed into commits via this
         // (or a similar) trailer. Once that data exists, this sums it per
         // model instead of leaving api-billed costs untracked below.
-        const costMatch = chunk.match(/Co-Authored-Cost-Usd:\s*([0-9.]+)/);
+        const costMatch = chunk.match(/Co-Authored-Cost-Usd:\s*([0-9.]+)/i);
         const costUsd = costMatch ? parseFloat(costMatch[1]!) : undefined;
         if (costUsd !== undefined) {
             modelCostUsd[model] = (modelCostUsd[model] || 0) + costUsd;
