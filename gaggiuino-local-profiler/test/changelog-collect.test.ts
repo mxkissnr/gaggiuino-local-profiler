@@ -101,4 +101,17 @@ describe('collectChangelog (#1421)', () => {
 
         expect(collectChangelog(changelog, [])).toBe(changelog);
     });
+
+    // #1597: bulletsOf() used to keep only `- ` lines, so a wrapped sentence
+    // or a nested item under a bullet vanished when the fragment was folded
+    // into CHANGELOG.md. The continuation line must stay directly under it.
+    it('keeps an indented continuation line directly under its bullet (#1597)', () => {
+        const changelog = ['## [Unreleased]', '', release].join('\n');
+
+        const out = collectChangelog(changelog, [
+            fragment('1597.fixed.md', '- **First.** text\n  continued line\n- Second'),
+        ]);
+
+        expect(out).toContain('### Fixed\n- **First.** text\n  continued line\n- Second');
+    });
 });
