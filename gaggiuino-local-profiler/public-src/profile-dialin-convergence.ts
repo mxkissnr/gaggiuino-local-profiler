@@ -233,8 +233,12 @@ function _stepFor(candidate: ResolvedCandidate, roundHistory: unknown): number {
 }
 
 function _round(value: number, unit: string): number {
-  const precision = unit === 'ms' ? 100 : unit === 'ratio' ? 0.1 : 0.1;
-  return Math.round(value / precision) * precision;
+  const isMs = unit === 'ms';
+  const precision = isMs ? 100 : 0.1;
+  // toFixed() trims the binary-float noise that Math.round(v / p) * p leaves
+  // behind (e.g. 9.200000000000001) before the value is stored/shown.
+  const decimals = isMs ? 0 : 1;
+  return Number((Math.round(value / precision) * precision).toFixed(decimals));
 }
 
 function _computeAdjustment(candidate: ResolvedCandidate, roundHistory: unknown): ComputedAdjustment {
