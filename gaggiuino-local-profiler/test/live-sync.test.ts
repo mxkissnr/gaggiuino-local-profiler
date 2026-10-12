@@ -1065,7 +1065,7 @@ describe('live-sync handler map (#1539)', () => {
   it('drops the addressed photo keys before reloading on library-image', async () => {
     const order: string[] = [];
     handlerLoaders.invalidateImageKeys.mockImplementation(() => { order.push('invalidate'); });
-    handlerLoaders.loadLibrary.mockImplementation(async () => { order.push('load'); });
+    handlerLoaders.loadLibrary.mockImplementation(() => { order.push('load'); });
 
     await make()['library-image']!.run(['bean:1', 'grinder:2']);
 

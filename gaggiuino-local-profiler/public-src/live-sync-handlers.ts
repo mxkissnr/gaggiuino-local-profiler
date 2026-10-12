@@ -15,11 +15,12 @@ import { loadMachineProfileList } from './views/library-profile-editor.js';
 import { reloadBlocked, type LiveSyncHandlers } from './live-sync.js';
 
 // The functions the handler map needs that are still local to main.ts; every
-// other loader is imported from its own module above.
+// other loader is imported from its own module above. Declared as properties
+// (not methods) so they can be passed by reference without a `this` binding.
 export interface LiveSyncHandlerDeps {
-  loadSettingsState(): Promise<void>;
-  applyServerUiPrefs(includeMachine?: boolean, keepShelfQuery?: boolean): void;
-  maintenanceCanRefetch(): boolean;
+  loadSettingsState: () => Promise<void>;
+  applyServerUiPrefs: (includeMachine?: boolean, keepShelfQuery?: boolean) => void;
+  maintenanceCanRefetch: () => boolean;
 }
 
 export function createLiveSyncHandlers(deps: LiveSyncHandlerDeps): LiveSyncHandlers {
