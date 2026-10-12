@@ -137,3 +137,131 @@ func TestPurgeExpiredTrash_RemovesPhotoAndThumbnail(t *testing.T) {
 		}
 	}
 }
+
+// TestDeleteAndBlocklist_RemovesRowsAndBlocklists covers #1609's delete path:
+// the shot, its annotation and its trash entry are gone and its id is in the
+// blocklist, all from the one Repository call the delete handler now makes.
+func TestDeleteAndBlocklist_RemovesRowsAndBlocklists(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60",
+		map[string]any{"datapoints": []any{}}, map[string]any{"dose": 18.0})
+	if _, err := sqlDB.Exec(`INSERT INTO trash (shot_id, deleted_at) VALUES (?, ?)`, 1, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("trashing shot 1: %v", err)
+	}
+
+	if err := repo.DeleteAndBlocklist(1); err != nil {
+		t.Fatalf("DeleteAndBlocklist: %v", err)
+	}
+
+	for _, q := range []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{"shot row", `SELECT COUNT(*) FROM shots WHERE id = 1`, 0},
+		{"annotation", `SELECT COUNT(*) FROM annotations WHERE shot_id = 1`, 0},
+		{"trash", `SELECT COUNT(*) FROM trash WHERE shot_id = 1`, 0},
+		{"blocklist entry", `SELECT COUNT(*) FROM blocklist WHERE value = '1'`, 1},
+	} {
+		if got := countRows(t, sqlDB, q.query); got != q.want {
+			t.Fatalf("%s count = %d, want %d", q.name, got, q.want)
+		}
+	}
+}
+
+// TestDeleteAndBlocklist_AtomicWhenBlocklistWriteFails proves the delete and
+// the blocklist insert share one transaction (#1609): with the blocklist table
+// missing the call errors and the shot row must survive, so a sync can never
+// see the shot gone without the blocklist entry that is meant to hide it.
+func TestDeleteAndBlocklist_AtomicWhenBlocklistWriteFails(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60", map[string]any{"datapoints": []any{}}, nil)
+	if _, err := sqlDB.Exec(`DROP TABLE blocklist`); err != nil {
+		t.Fatalf("dropping blocklist table: %v", err)
+	}
+
+	if err := repo.DeleteAndBlocklist(1); err == nil {
+		t.Fatal("DeleteAndBlocklist succeeded without a blocklist table; want an error")
+	}
+	if got := countRows(t, sqlDB, `SELECT COUNT(*) FROM shots WHERE id = 1`); got != 1 {
+		t.Fatalf("shot row count = %d, want 1 (the failed blocklist write must roll the delete back)", got)
+	}
+}
+
+// TestPurgeExpiredTrash_SkipsRestoredShot covers #1609's purge race: of two
+// expired trash entries, the one whose trash row was removed (RestoreFromTrash
+// — exactly what the user's restore does) must be left alone while the other is
+// purged and blocklisted.
+func TestPurgeExpiredTrash_SkipsRestoredShot(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	now := time.Now()
+
+	for i := int64(1); i <= 2; i++ {
+		insertShot(t, sqlDB, i, i*1000, nil, "Espresso",
+			map[string]any{"datapoints": []any{}}, nil)
+	}
+	expired := now.Add(-31 * 24 * time.Hour).UnixMilli()
+	for i := int64(1); i <= 2; i++ {
+		if _, err := sqlDB.Exec(`INSERT INTO trash (shot_id, deleted_at) VALUES (?, ?)`, i, expired); err != nil {
+			t.Fatalf("trashing shot %d: %v", i, err)
+		}
+	}
+	// The user restores shot 2 after the purge would have read it as a candidate.
+	if err := repo.RestoreFromTrash(2); err != nil {
+		t.Fatalf("RestoreFromTrash: %v", err)
+	}
+
+	purged, err := repo.PurgeExpiredTrash(now)
+	if err != nil {
+		t.Fatalf("PurgeExpiredTrash: %v", err)
+	}
+	if len(purged) != 1 || purged[0].ID != 1 {
+		t.Fatalf("PurgeExpiredTrash = %v, want [1]", purged)
+	}
+	if got := countRows(t, sqlDB, `SELECT COUNT(*) FROM shots WHERE id = 2`); got != 1 {
+		t.Fatalf("restored shot 2 row count = %d, want 1", got)
+	}
+	blocklist, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatalf("GetBlocklist: %v", err)
+	}
+	if len(blocklist) != 1 || blocklist[0] != "1" {
+		t.Fatalf("blocklist = %v, want [1] (the restored shot must not be blocklisted)", blocklist)
+	}
+}
+
+// TestUpsert_InvalidatesScoreCacheOnResync covers #1609's stale-score case: a
+// re-synced shot keeps the same id, timestamp and data length while its
+// duration changes, so Upsert must drop the cached score instead of letting the
+// page query's fingerprint keep matching and serve the old one.
+func TestUpsert_InvalidatesScoreCacheOnResync(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60",
+		map[string]any{"datapoints": bigDatapoints(40)},
+		map[string]any{"dose": 18.0})
+
+	// First read backfills shot_score_cache for shot 1.
+	if _, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0); err != nil {
+		t.Fatalf("FindPageExcludingTrash: %v", err)
+	}
+	if got := countRows(t, sqlDB, `SELECT COUNT(*) FROM shot_score_cache WHERE shot_id = 1`); got != 1 {
+		t.Fatalf("cache rows after the first page read = %d, want 1", got)
+	}
+
+	// Re-sync: same id/timestamp/data length, changed duration.
+	if err := repo.Upsert(Shot{
+		"id":         int64(1),
+		"timestamp":  int64(1000),
+		"duration":   int64(999),
+		"datapoints": bigDatapoints(40),
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	if got := countRows(t, sqlDB, `SELECT COUNT(*) FROM shot_score_cache WHERE shot_id = 1`); got != 0 {
+		t.Fatalf("cache rows right after Upsert = %d, want 0 (Upsert must invalidate the stale score)", got)
+	}
+}

@@ -371,6 +371,12 @@ func (r *Repository) Upsert(shot Shot) error {
 	); err != nil {
 		return fmt.Errorf("shots: upserting shot %d: %w", row.id, err)
 	}
+	// A re-synced shot can keep the same data length and timestamp while its
+	// values (or duration) change — the SQL fingerprint the page query
+	// recomputes would then still match, so drop the cached score outright
+	// rather than let it serve the old one (#1609). Same reason saveAnnotation
+	// invalidates on an annotation write.
+	r.InvalidateScoreCache(row.id)
 	if ann, ok := shot["annotation"]; ok {
 		annMap, _ := ann.(map[string]any)
 		if annMap == nil {
@@ -678,27 +684,62 @@ func (r *Repository) RestoreFromTrash(shotID int64) error {
 }
 
 // DeleteByID deletes annotations, then trash, then the shot row itself, inside
-// one transaction.
+// one transaction. It deliberately leaves the blocklist alone — the demo
+// cleanup in internal/system/demo.go relies on that; the user-facing delete
+// path uses DeleteAndBlocklist instead.
 func (r *Repository) DeleteByID(shotID int64) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return fmt.Errorf("shots: starting delete tx for shot %d: %w", shotID, err)
 	}
-	if _, err := tx.Exec(`DELETE FROM annotations WHERE shot_id = ?`, shotID); err != nil {
+	if err := deleteShotTx(tx, shotID); err != nil {
 		tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("shots: committing delete of shot %d: %w", shotID, err)
+	}
+	return nil
+}
+
+// deleteShotTx drops a shot's annotation, trash entry, shot row and score
+// cache in the statement order DeleteByID has always used. It runs inside the
+// caller's transaction so a plain delete and a delete-and-blocklist share one
+// code path; the caller owns the commit/rollback.
+func deleteShotTx(tx *sql.Tx, shotID int64) error {
+	if _, err := tx.Exec(`DELETE FROM annotations WHERE shot_id = ?`, shotID); err != nil {
 		return fmt.Errorf("shots: deleting annotation for shot %d: %w", shotID, err)
 	}
 	if _, err := tx.Exec(`DELETE FROM trash WHERE shot_id = ?`, shotID); err != nil {
-		tx.Rollback()
 		return fmt.Errorf("shots: deleting trash entry for shot %d: %w", shotID, err)
 	}
 	if _, err := tx.Exec(`DELETE FROM shots WHERE id = ?`, shotID); err != nil {
-		tx.Rollback()
 		return fmt.Errorf("shots: deleting shot %d: %w", shotID, err)
 	}
 	if _, err := tx.Exec(`DELETE FROM shot_score_cache WHERE shot_id = ?`, shotID); err != nil {
-		tx.Rollback()
 		return fmt.Errorf("shots: deleting score cache for shot %d: %w", shotID, err)
+	}
+	return nil
+}
+
+// DeleteAndBlocklist permanently deletes the shot (annotation, trash entry,
+// score cache and row) and adds its id to the blocklist in ONE transaction, so
+// a machine sync running against the same DB can never observe the in-between
+// state — shot gone, blocklist not yet written — and re-import it from the
+// machine, and a failed blocklist write never reports success for a half-done
+// delete (#1609). DeleteByID stays blocklist-free on purpose (demo cleanup).
+func (r *Repository) DeleteAndBlocklist(shotID int64) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("shots: starting delete tx for shot %d: %w", shotID, err)
+	}
+	if err := deleteShotTx(tx, shotID); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, strconv.FormatInt(shotID, 10)); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("shots: blocklisting deleted shot %d: %w", shotID, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("shots: committing delete of shot %d: %w", shotID, err)
@@ -816,26 +857,41 @@ type PurgedShot struct {
 // deleted_at is in milliseconds (MoveToTrash stamps time.Now().UnixMilli), so
 // the cutoff is a strict `<` against now's epoch-millis minus trashTTL.
 //
+// The candidate SELECT runs inside that same transaction and each row's trash
+// entry is then deleted conditionally, in the same transaction, before its
+// shot is purged (#1609): a shot the user restored (RestoreFromTrash removed
+// its trash row) after the SELECT no longer matches the conditional DELETE, so
+// it affects 0 rows and the shot is skipped instead of being purged and
+// blocklisted out from under the restore.
+//
 // Each purged id is deliberately blocklisted (#1159) so the next sync does not
 // resume below it and re-import the shot from the machine. Image files are not
 // deleted here — the caller (internal/shots' Service.PurgeExpiredTrash) uses
 // the returned extension to delete each photo and its thumbnail, since this
 // package has no image directory. shot_score_cache is likewise cleared
-// (DeleteByID does this, and a purge would otherwise leave orphaned cache rows
-// behind).
+// (deleteShotTx does this, and a purge would otherwise leave orphaned cache
+// rows behind).
 func (r *Repository) PurgeExpiredTrash(now time.Time) ([]PurgedShot, error) {
 	cutoff := now.UnixMilli() - trashTTL.Milliseconds()
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("shots: starting trash purge tx: %w", err)
+	}
 	// LEFT JOIN so a trash entry whose shot row already vanished is still
 	// purged (and blocklisted) exactly as before; its image extension is then
-	// simply absent.
-	rows, err := r.db.Query(
+	// simply absent. Read every candidate into a slice and close rows before
+	// the deletes below: the cursor and the writes share one connection, so
+	// running them while it is open would deadlock SQLite.
+	rows, err := tx.Query(
 		`SELECT t.shot_id, json_extract(s.data, '$.image') FROM trash t LEFT JOIN shots s ON s.id = t.shot_id WHERE t.deleted_at < ?`,
 		cutoff,
 	)
 	if err != nil {
+		tx.Rollback()
 		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
 	}
-	var purged []PurgedShot
+	var candidates []PurgedShot
 	for rows.Next() {
 		var (
 			p   PurgedShot
@@ -843,37 +899,40 @@ func (r *Repository) PurgeExpiredTrash(now time.Time) ([]PurgedShot, error) {
 		)
 		if err := rows.Scan(&p.ID, &ext); err != nil {
 			rows.Close()
+			tx.Rollback()
 			return nil, fmt.Errorf("shots: scanning expired trash row: %w", err)
 		}
 		if ext.Valid {
 			p.Ext = ext.String
 		}
-		purged = append(purged, p)
+		candidates = append(candidates, p)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
+		tx.Rollback()
 		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
 	}
-	if len(purged) == 0 {
-		return nil, nil
-	}
 
-	tx, err := r.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("shots: starting trash purge tx: %w", err)
-	}
-	for _, p := range purged {
-		// Same order as DeleteByID.
-		for _, stmt := range []string{
-			`DELETE FROM annotations WHERE shot_id = ?`,
-			`DELETE FROM trash WHERE shot_id = ?`,
-			`DELETE FROM shots WHERE id = ?`,
-			`DELETE FROM shot_score_cache WHERE shot_id = ?`,
-		} {
-			if _, err := tx.Exec(stmt, p.ID); err != nil {
-				tx.Rollback()
-				return nil, fmt.Errorf("shots: purging shot %d (%s): %w", p.ID, stmt, err)
-			}
+	var purged []PurgedShot
+	for _, p := range candidates {
+		// Conditional delete first: a shot restored after the SELECT above has
+		// no trash row left, so this affects 0 rows and the purge skips it.
+		res, err := tx.Exec(`DELETE FROM trash WHERE shot_id = ? AND deleted_at < ?`, p.ID, cutoff)
+		if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("shots: purging trash entry for shot %d: %w", p.ID, err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("shots: purging trash entry for shot %d: %w", p.ID, err)
+		}
+		if n == 0 {
+			continue
+		}
+		if err := deleteShotTx(tx, p.ID); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("shots: purging shot %d: %w", p.ID, err)
 		}
 		// Blocklist the id so a later sync does not resume below it and
 		// re-import the shot (same statement as AppendToBlocklist;
@@ -882,6 +941,7 @@ func (r *Repository) PurgeExpiredTrash(now time.Time) ([]PurgedShot, error) {
 			tx.Rollback()
 			return nil, fmt.Errorf("shots: blocklisting purged shot %d: %w", p.ID, err)
 		}
+		purged = append(purged, p)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("shots: committing trash purge: %w", err)
@@ -938,13 +998,15 @@ func (r *Repository) SaveBlocklist(list []string) error {
 
 // AppendToBlocklist atomically adds a single value to the blocklist without
 // the read-then-replace round trip SaveBlocklist requires for a single-id add.
-// The handlers run concurrently: two overlapping
-// DELETE /api/shots/{id}/delete requests can each read the same blocklist
+// Its callers run concurrently (today the sync path, internal/system/sync.go):
+// two overlapping callers can each read the same blocklist
 // snapshot via GetBlocklist, append their own id, and then SaveBlocklist —
 // whose DELETE+re-INSERT replaces the whole table — so the second write
-// silently drops the first request's id (#901). blocklist.value has a UNIQUE
+// silently drops the first caller's id (#901). blocklist.value has a UNIQUE
 // constraint (see internal/db/db.go), so INSERT OR IGNORE is a single atomic
-// statement with no read step and therefore no lost-update window.
+// statement with no read step and therefore no lost-update window. The
+// user-facing delete handler no longer needs this: it blocklists inside the
+// same transaction that deletes the shot (#1609, Repository.DeleteAndBlocklist).
 func (r *Repository) AppendToBlocklist(value string) error {
 	if _, err := r.db.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, value); err != nil {
 		return fmt.Errorf("shots: appending blocklist entry %q: %w", value, err)

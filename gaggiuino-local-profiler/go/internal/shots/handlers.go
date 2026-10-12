@@ -518,12 +518,12 @@ func (h *Handlers) restore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// delete serves POST /api/shots/{id}/delete: permanently deletes and adds the
-// id to the blocklist so a later re-import/re-sync never resurrects it. The
-// blocklist add goes through AppendToBlocklist's atomic INSERT OR IGNORE
-// rather than a GetBlocklist+SaveBlocklist read-modify-write — see
-// Repository.AppendToBlocklist's doc comment for why the latter loses updates
-// under concurrent deletes (#901).
+// delete serves POST /api/shots/{id}/delete: permanently deletes the shot and
+// adds its id to the blocklist so a later re-import/re-sync never resurrects
+// it. The delete and the blocklist insert run in one transaction
+// (Service.PermanentDelete → Repository.DeleteAndBlocklist, #1609), so a sync
+// running in between can neither see the shot gone-but-not-blocklisted and
+// re-import it nor observe a blocklist entry for a shot that is still there.
 func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -544,13 +544,10 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #1525: the shot row is gone, so its stored photo and thumbnail are now
-	// orphaned — remove them here rather than waiting for the startup sweep.
+	// orphaned — remove them here, only after the delete+blocklist transaction
+	// committed, rather than waiting for the startup sweep.
 	if ext := shot.imageExt(); ext != "" {
 		img.Delete(h.imageDir, id, ext, "shot-")
-	}
-	if err := h.service.AppendToBlocklist(strconv.FormatInt(id, 10)); err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
-		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
