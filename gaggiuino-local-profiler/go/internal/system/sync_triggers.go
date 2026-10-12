@@ -89,13 +89,23 @@ func (p *Poller) scheduleSyncAfterBrew() {
 		case <-ctx.Done():
 			return
 		}
-		prevMax, _ := p.shots.MaxNativeShotID(1)
+		// Compare against the registry's default machine, not a hard-coded
+		// machine 1: syncOnce pulls the default machine's shots, so comparing
+		// against a fixed id would report the wrong "caught up" shot (or none)
+		// as soon as the default machine is not #1.
+		defaultID, haveDefault := p.defaultMachineID()
+		prevMax := int64(0)
+		if haveDefault {
+			prevMax, _ = p.shots.MaxNativeShotID(defaultID)
+		}
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: post-brew sync failed: %v", err)
 			return
 		}
-		if newMax, _ := p.shots.MaxNativeShotID(1); newMax > prevMax {
-			log.Printf("system: post-brew sync: caught up to new shot #%d", newMax)
+		if haveDefault {
+			if newMax, _ := p.shots.MaxNativeShotID(defaultID); newMax > prevMax {
+				log.Printf("system: post-brew sync: caught up to new shot #%d", newMax)
+			}
 		}
 		// A shot just finished syncing, so the machine is definitely
 		// reachable right now — cheap opportunity to also flush any

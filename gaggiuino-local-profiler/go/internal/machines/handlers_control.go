@@ -46,9 +46,30 @@ func (h *Handlers) registerControlRoutes(mux *http.ServeMux) {
 }
 
 // resolveWithAdapter performs the repeated resolve-machine + get-adapter
-// pair every route in this file (and handlers_profiles.go) opens with.
-func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, machineID *int64) (*Machine, Adapter, bool) {
+// pair every route in this file (and handlers_profiles.go, machine_control.go)
+// opens with. valid is false when a machineId was given but could not be
+// parsed (see queryMachineID); an explicit id that names no machine is
+// ErrUnknownMachine. Both are rejected on mutating requests -- only GET keeps
+// the old lenient "fall back to the default machine" behavior, because the
+// frontend still sends machineId=all to some GET routes.
+func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, r *http.Request, machineID *int64, valid bool) (*Machine, Adapter, bool) {
+	lenient := r.Method == http.MethodGet
+	if !valid {
+		if !lenient {
+			writeError(w, http.StatusBadRequest, "Invalid machineId")
+			return nil, nil, false
+		}
+		machineID = nil
+	}
 	machine, err := h.registry.ResolveMachine(machineID)
+	if errors.Is(err, ErrUnknownMachine) {
+		if lenient {
+			machine, err = h.registry.GetDefaultMachine()
+		} else {
+			writeError(w, http.StatusNotFound, "Unknown machine")
+			return nil, nil, false
+		}
+	}
 	if err != nil {
 		internalError(w, err)
 		return nil, nil, false
@@ -62,7 +83,8 @@ func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, machineID *int64) (
 }
 
 func (h *Handlers) getSettings(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -98,7 +120,7 @@ func (h *Handlers) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -122,7 +144,7 @@ func (h *Handlers) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.Unmarshal(rawBody, &body) // best-effort: only used to resolve the machine
 
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -200,7 +222,7 @@ func (h *Handlers) setOperationMode(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -225,7 +247,7 @@ func (h *Handlers) tare(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -247,7 +269,7 @@ func (h *Handlers) serviceTest(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -272,7 +294,7 @@ func (h *Handlers) saveActiveProfile(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -287,7 +309,8 @@ func (h *Handlers) saveActiveProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) firmwareProgress(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -311,7 +334,7 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -401,7 +424,8 @@ var errMachineOffline = errors.New("machine known offline")
 
 // firmwareVersion serves GET /api/machine/firmware/version (#620).
 func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -512,7 +536,8 @@ func nullOr(s *string) any {
 // system-state pushes from the machine's persistent WebSocket session
 // (live.go) — null until the first push arrives.
 func (h *Handlers) machineLive(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}

@@ -54,7 +54,8 @@ func (h *Handlers) registerProfileRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -162,7 +163,7 @@ func (h *Handlers) setMachineProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "option or id required")
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -229,7 +230,8 @@ func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "invalid profile id")
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -315,7 +317,7 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 		MachineID *int64 `json:"machineId"`
 	}
 	_ = json.Unmarshal(rawBody, &mid)
-	machine, adapter, ok := h.resolveWithAdapter(w, mid.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, mid.MachineID, true)
 	if !ok {
 		return
 	}
@@ -404,7 +406,7 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 		MachineID *int64 `json:"machineId"`
 	}
 	_ = json.Unmarshal(rawBody, &mid)
-	machine, adapter, ok := h.resolveWithAdapter(w, mid.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, mid.MachineID, true)
 	if !ok {
 		return
 	}
@@ -561,10 +563,11 @@ func (h *Handlers) deleteMachineProfile(w http.ResponseWriter, r *http.Request) 
 		_ = json.Unmarshal(raw, &body)
 	}
 	machineID := body.MachineID
+	valid := true
 	if machineID == nil {
-		machineID = queryMachineID(r)
+		machineID, valid = queryMachineID(r)
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, machineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
