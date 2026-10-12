@@ -358,8 +358,11 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
   }
 
   const evald = await _evalShot(_shots().find(sh => sh.id === shotId) || shot);
+  // _parseGrindNum already returns a finite number or null, so fall back to
+  // 0 only when there is no usable setting (never send NaN).
+  const grindNum = _parseGrindNum(s.pendingGrind);
   s.reviewRound = {
-    grindSetting: _parseGrindNum(s.pendingGrind) ?? parseFloat(s.pendingGrind as string) ?? 0,
+    grindSetting: grindNum !== null && Number.isFinite(grindNum) ? grindNum : 0,
     shotId, score: evald.score, seconds: evald.secs, ratio: evald.ratio, channeling: evald.channeling,
   };
   s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound]);

@@ -6,7 +6,7 @@ import {
   addCustomMaintenanceTask, deleteCustomMaintenanceTask,
 } from '../api/maintenance.js';
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
-import { esc, html, joinHtml } from '../utils.js';
+import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 
@@ -679,8 +679,8 @@ export function openMaintLogForm(): void {
     opt.value = task; opt.textContent = label;
     sel.appendChild(opt);
   }
-  // Set date to today
-  const today = new Date().toISOString().split('T')[0] ?? '';
+  // Set date to today (local, not UTC — see todayIsoDate)
+  const today = todayIsoDate();
   (document.getElementById('maintLogDate') as HTMLInputElement).value = today;
   (document.getElementById('maintLogDate') as HTMLInputElement).max   = today;
   (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value = '';
