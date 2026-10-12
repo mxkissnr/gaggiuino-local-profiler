@@ -59,6 +59,9 @@ interface ProfileDialinSession extends Record<string, unknown> {
   id: number;
   startedAt: number;
   profileId: string | number;
+  // The machine the dial-in was started for; null/undefined means "no explicit
+  // machine" ('all'/none selected), so the backend targets the default machine.
+  machineId?: number | null;
   profileName: string;
   profile: DialinProfile;
   rounds: ProfileDialinRound[];
@@ -80,6 +83,19 @@ function _session(): ProfileDialinSession | null {
 
 function _shots(): ProfileDialinShotRow[] {
   return S.shots;
+}
+
+// The active machine as a concrete numeric id, or null when none is selected
+// ('all'/null). A dial-in then sends no machineId and the backend targets the
+// default machine, exactly as before this capture existed (#1605).
+function _concreteMachineId(): number | null {
+  const id: unknown = S.activeMachineId;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  if (typeof id === 'string' && id !== 'all' && id.trim() !== '') {
+    const n = Number(id);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }
 
 function _persist(): void {
@@ -112,13 +128,14 @@ function _overrideHasValue(): boolean {
 
 // profile: the full profile object as returned by GET /api/machine/profile/:id
 // (must include a real `id` — dial-in PUTs updates back to that id).
-export function openProfileDialinWizard(profile: DialinProfile | null | undefined): void {
+export function openProfileDialinWizard(profile: DialinProfile | null | undefined, machineId?: number | null): void {
   if (!profile?.id) return;
   if (!S.profileDialinSession || S.profileDialinSession.status !== 'active' || S.profileDialinSession.profileId !== profile.id) {
     S.profileDialinSession = {
       id: Date.now(),
       startedAt: Date.now(),
       profileId: profile.id,
+      machineId: machineId ?? null,
       profileName: profile.name || '',
       profile,
       rounds: [],
@@ -142,9 +159,10 @@ export function openProfileDialinWizard(profile: DialinProfile | null | undefine
 // (the list only holds {id, name}) before opening, since dial-in needs the
 // real phases to compute suggestions against.
 export async function startProfileDialinFromList(id: string | number): Promise<void> {
-  const profile = await machinesApi.getMachineProfile(id);
+  const machineId = _concreteMachineId();
+  const profile = await machinesApi.getMachineProfile(id, machineId ?? undefined);
   if (!profile) { window.showToast?.(t('profile_load_error')); return; }
-  openProfileDialinWizard(profile);
+  openProfileDialinWizard(profile, machineId);
 }
 
 export function closeProfileDialinWizard(): void {
@@ -191,7 +209,11 @@ export function profileDialinToggleSymptom(symptom: string | undefined): void {
 async function _sendUpdatedProfile(s: ProfileDialinSession, nextProfile: DialinProfile): Promise<boolean> {
   const token = (s._profileReqToken || 0) + 1;
   s._profileReqToken = token;
-  const r = await machinesApi.saveMachineProfile(s.profileId, nextProfile);
+  // Target the machine the session was opened for, not whatever is active now
+  // (#1605). With none captured, send no machineId so the backend uses the
+  // default machine.
+  const requestBody = s.machineId != null ? { ...nextProfile, machineId: s.machineId } : nextProfile;
+  const r = await machinesApi.saveMachineProfile(s.profileId, requestBody);
   if (!r.ok) {
     const body = await r.json().catch(() => ({})) as { error?: string };
     window.showToast?.(t('profile_send_error') + (body.error ? `: ${body.error}` : ''));

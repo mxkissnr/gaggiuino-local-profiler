@@ -60,12 +60,29 @@ let _currentPhaseIdx = 0; // active phase for pro editor
 let _saving = false;
 let _chart: Chart | null = null;
 let _inputsBound = false; // guards against accumulating body change-listeners across renders
+// The machine the editor was opened for, captured at open so a topbar machine
+// switch mid-edit cannot retarget the save (#1605). null = no explicit machine
+// ('all'/none selected), so the save sends no machineId and the backend uses
+// the default machine.
+let _editorMachineId: number | null = null;
+
+// The active machine as a concrete numeric id, or null when none is selected
+// ('all'/null).
+function _concreteMachineId(): number | null {
+  const id: unknown = S.activeMachineId;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  if (typeof id === 'string' && id !== 'all' && id.trim() !== '') {
+    const n = Number(id);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
 
 // ── Entry points ──────────────────────────────────────────────────────────
 
 export async function openGaggiMateProfileEditor(id: string): Promise<void> {
-  const machineId = S.activeMachineId ?? '';
-  const profile = await machinesApi.getMachineProfile(id, machineId);
+  _editorMachineId = _concreteMachineId();
+  const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
   if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
   _openEditor(profile);
 }
@@ -75,13 +92,14 @@ export async function openGaggiMateProfileEditor(id: string): Promise<void> {
 // PUTting over the original, label suffixed so it's never confused with
 // its source in the list.
 export async function duplicateGaggiMateProfile(id: string): Promise<void> {
-  const machineId = S.activeMachineId ?? '';
-  const profile = await machinesApi.getMachineProfile(id, machineId);
+  _editorMachineId = _concreteMachineId();
+  const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
   if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
   _openEditor({ ...profile, id: undefined, label: `${profile.label ?? ''}${t('profile_duplicate_suffix')}` });
 }
 
 export function openNewGaggiMateProfile(): void {
+  _editorMachineId = _concreteMachineId();
   _openEditor({
     label: t('gm_new_profile_label'),
     description: '',
@@ -98,6 +116,7 @@ export function closeGaggiMateEditor(): void {
   _profile = null;
   _saving = false;
   _inputsBound = false;
+  _editorMachineId = null;
   if (_chart) { _chart.destroy(); _chart = null; }
 }
 
@@ -108,8 +127,8 @@ export async function saveGaggiMateProfile(): Promise<void> {
   _saving = true;
   _render();
 
-  const machineId = S.activeMachineId;
-  const body = { ..._profile, machineId };
+  const machineId = _editorMachineId;
+  const body = machineId != null ? { ..._profile, machineId } : { ..._profile };
 
   try {
     const r = await machinesApi.saveMachineProfile(_profile.id ?? null, body);
@@ -125,7 +144,7 @@ export async function saveGaggiMateProfile(): Promise<void> {
     // rework). Only a real validation/unsupported error (400/501, handled
     // above) is still a hard failure here.
     const savedBody: unknown = await r.json().catch(() => null);
-    invalidateGmPhaseCache(machineId as number);
+    if (machineId != null) invalidateGmPhaseCache(machineId);
     closeGaggiMateEditor();
     await loadMachineProfileList();
     const syncStatus = (savedBody as { syncStatus?: string } | null)?.syncStatus;
