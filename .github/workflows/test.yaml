@@ -205,6 +205,8 @@ jobs:
       # Coverage is reported, not gated (#1560); a threshold follows once two
       # releases show a stable baseline.
       - name: go test -race
+        # bash = -eo pipefail, so a failing test fails the step despite tee (#1595).
+        shell: bash
         run: go test ./... -race -coverprofile=coverage.out | tee test.out
 
       - name: Coverage summary
