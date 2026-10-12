@@ -276,8 +276,17 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
   // fetch; S.shots (what every existing view already reads) becomes the
   // machine-filtered projection, re-derived whenever the active machine
   // changes (see applyActiveMachineChange() in components/machines-settings.js).
-  S.allShots = fetched;
-  S.shots = filterShotsByMachine(fetched, S.activeMachineId);
+  //
+  // A quiet reload re-fetches only the newest pages, so it would briefly drop
+  // every older shot the sidebar already shows. Keep the already-loaded entries
+  // older than this page's oldest id appended for now; the walk below drops the
+  // ones the fresh pages no longer contain once it finishes (#1614 slice 4).
+  const oldestFetchedId = fetched[0]?.id;
+  const olderEntries = opts?.quiet && oldestFetchedId != null
+    ? (S.allShots as ShotRow[]).filter(s => Number(s.id) < Number(oldestFetchedId))
+    : [];
+  S.allShots = [...olderEntries, ...fetched];
+  S.shots = filterShotsByMachine(S.allShots, S.activeMachineId);
   renderSidebar();
   void loadTrashData();
 
@@ -310,9 +319,11 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
   updateMachineBanner();
 
   // Background: pull every remaining page of shot metadata so S.allShots
-  // holds the full history for analytics / dial-in wizards / per-machine
-  // counts / findPreviousShot, without blocking first paint.
-  void loadAllShotMeta(token, S.shotsPageCursor);
+  // holds the full history for analytics / dial-in wizard / per-machine
+  // counts / findPreviousShot, without blocking first paint. A quiet reload
+  // that kept older entries uses replaceOlder so the walk commits the full
+  // fresh list once instead of prepending page by page.
+  void loadAllShotMeta(token, S.shotsPageCursor, { replaceOlder: olderEntries.length > 0, fetched });
 }
 
 // #1539 slice 4: refetch the shots a live-sync `shot`/`shots` event dirtied and
@@ -382,21 +393,42 @@ export async function refreshShots(ids: string[] | null): Promise<void> {
 // driven entirely by the local `cursor` (never re-read from S across an
 // await), and every S write takes its value from the just-fetched page, so
 // there is no read-then-write race on S.
-let _metaWalkActive = false;
+// Walk ownership is keyed by that same token rather than a single boolean: a
+// walk for the SAME token is already running (the no-op guard below), but a
+// walk for an OLDER token is already exiting on its own token check, so a newer
+// loadData() (or a live-sync quiet reload) starts its own walk instead of
+// returning early and leaving the list cut to page 1 (#1614 slice 4). null when
+// no walk is running.
+let _metaWalkToken: number | null = null;
 
 // True while the shots list is being (re)loaded: a loadData() request is in
 // flight, or loadAllShotMeta() is still walking older pages. The live-sync
 // `shots` handler's canRun defers a reload until this clears, so a quiet
 // reload cannot cut S.allShots back to the first page mid-walk.
 export function shotsLoadInProgress(): boolean {
-  return _loadDataInFlight || _metaWalkActive;
+  return _loadDataInFlight || _metaWalkToken !== null;
 }
 
-export async function loadAllShotMeta(token: number, startCursor: string | null): Promise<void> {
-  if (_metaWalkActive) return;
-  _metaWalkActive = true;
+// `replaceOlder` is the quiet-reload mode: the caller already painted
+// [...older entries, ...page 1] optimistically, so this walk collects the
+// remaining pages locally and commits [...collected, ...fetched] only once it
+// finishes, dropping any older shot the fresh pages no longer contain and
+// letting a superseded walk write nothing. Non-quiet loads (and loadMoreShots)
+// keep the per-page prepend instead.
+export async function loadAllShotMeta(
+  token: number,
+  startCursor: string | null,
+  opts?: { replaceOlder?: boolean; fetched?: ShotRow[] },
+): Promise<void> {
+  if (_metaWalkToken === token) return;
+  _metaWalkToken = token;
+  const replaceOlder = !!opts?.replaceOlder;
+  const fetched = opts?.fetched ?? [];
+  const collected: ShotRow[] = [];
   let cursor = startCursor;
-  let done = false;
+  // With replaceOlder and no cursor there are no pages to walk, yet the
+  // optimistic older entries still have to be dropped: treat the walk as done.
+  let done = replaceOlder && !startCursor;
   // #969: per-page state (S.allShots/S.shots/S.shotsPageCursor/S.shotsHasMore)
   // still updates every page — cheap. Only the DOM rebuild is throttled;
   // renderedSinceStart tracks whether the trailing render below has anything
@@ -414,31 +446,46 @@ export async function loadAllShotMeta(token: number, startCursor: string | null)
       if (page.error != null) break;
 
       // Each page is newest-first and older than everything already loaded —
-      // reverse it to oldest-first and prepend.
-      const merged = [...[...(page.shots || [])].reverse(), ...S.allShots];
+      // reverse it to oldest-first.
+      const older = [...(page.shots || [])].reverse();
       cursor = page.hasMore ? (page.nextCursor ?? null) : null;
       done = !page.hasMore;
-      S.allShots        = merged;
-      S.shots           = filterShotsByMachine(merged, S.activeMachineId);
-      S.shotsPageCursor = cursor;
-      S.shotsHasMore    = !!page.hasMore;
-      renderedSinceStart = true;
-      const now = Date.now();
-      if (now - lastRenderAt >= RENDER_THROTTLE_MS) {
-        renderSidebar();
-        lastRenderAt = now;
+      if (replaceOlder) {
+        collected.unshift(...older);
+      } else {
+        const merged = [...older, ...S.allShots];
+        S.allShots        = merged;
+        S.shots           = filterShotsByMachine(merged, S.activeMachineId);
+        S.shotsPageCursor = cursor;
+        S.shotsHasMore    = !!page.hasMore;
+        renderedSinceStart = true;
+        const now = Date.now();
+        if (now - lastRenderAt >= RENDER_THROTTLE_MS) {
+          renderSidebar();
+          lastRenderAt = now;
+        }
       }
     }
     if (token === _loadDataReqToken && done) {
-      S.shotsHasMore   = false;
+      if (replaceOlder) {
+        const merged = [...collected, ...fetched];
+        S.allShots        = merged;
+        S.shots           = filterShotsByMachine(merged, S.activeMachineId);
+        S.shotsPageCursor = cursor;
+        S.shotsHasMore    = false;
+        renderedSinceStart = true;
+      } else {
+        S.shotsHasMore = false;
+      }
       S.allShotsLoaded = true;
       // Analytics gates its builders on S.allShotsLoaded — let it re-run now
       // that the full history is in memory.
       window.onAllShotMetaLoaded?.();
     }
   } finally {
-    // single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
-    _metaWalkActive = false;
+    // Release ownership only if this walk still holds it; a newer walk that
+    // took over (different token) clears its own.
+    if (_metaWalkToken === token) _metaWalkToken = null;
     // #969: a trailing render covers both the throttle window swallowing the
     // final page's paint, and the loop exiting early (superseded token or a
     // fetch error) after it already mutated S.allShots/S.shots — but only
