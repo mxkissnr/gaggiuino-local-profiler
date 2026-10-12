@@ -3,6 +3,7 @@ package orders
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -583,5 +584,70 @@ func TestDeleteHistory_OnlyRemovesCompleted(t *testing.T) {
 	}
 	if arr[0]["id"] != pending["id"] {
 		t.Errorf("remaining order = %+v; want the pending one", arr[0])
+	}
+}
+
+// TestNormalizeMenuItem pins the shared menu normaliser the API and the
+// backup restore both go through: a non-array variants value becomes an empty
+// array (so the Orders view/kiosk/order card can iterate it safely), a long
+// name is trimmed to 200 runes, a nameless item is rejected and unknown keys
+// are dropped.
+func TestNormalizeMenuItem(t *testing.T) {
+	item, ok := NormalizeMenuItem(map[string]any{
+		"id": "m_1", "name": "Latte", "variants": "x", "bogus": true,
+	})
+	if !ok {
+		t.Fatal("NormalizeMenuItem returned false for a named item")
+	}
+	variants, isArr := item["variants"].([]any)
+	if !isArr || len(variants) != 0 {
+		t.Errorf("variants = %#v; want an empty array", item["variants"])
+	}
+	if item["id"] != "m_1" {
+		t.Errorf("id = %v; want the kept id", item["id"])
+	}
+	if _, present := item["bogus"]; present {
+		t.Errorf("unknown key survived normalisation: %#v", item)
+	}
+
+	item, ok = NormalizeMenuItem(map[string]any{"name": strings.Repeat("a", 300)})
+	if !ok {
+		t.Fatal("NormalizeMenuItem returned false for a long name")
+	}
+	if got := item["name"].(string); len([]rune(got)) != 200 {
+		t.Errorf("long name length = %d; want 200", len([]rune(got)))
+	}
+
+	if _, ok := NormalizeMenuItem(map[string]any{"emoji": "☕"}); ok {
+		t.Error("NormalizeMenuItem should reject an item with no name")
+	}
+}
+
+// TestNormalizeSettings pins the shared settings normaliser: only notify.*
+// recipients survive, non-bool notify_* toggles are dropped and unknown keys
+// never make it through (a restore must not inject arbitrary settings).
+func TestNormalizeSettings(t *testing.T) {
+	s := NormalizeSettings(map[string]any{
+		"enabled":             true,
+		"broadcastRecipients": []any{"notify.phone", "bogus"},
+		"notify_low_stock":    "yes",
+		"notify_new_order":    true,
+		"bogus":               "x",
+	})
+	recipients, _ := s["broadcastRecipients"].([]any)
+	if len(recipients) != 1 || recipients[0] != "notify.phone" {
+		t.Errorf("broadcastRecipients = %#v; want just notify.phone", recipients)
+	}
+	if _, present := s["notify_low_stock"]; present {
+		t.Errorf("non-bool toggle should be dropped: %#v", s)
+	}
+	if s["notify_new_order"] != true {
+		t.Errorf("bool toggle = %v; want true", s["notify_new_order"])
+	}
+	if _, present := s["bogus"]; present {
+		t.Errorf("unknown key should be dropped: %#v", s)
+	}
+	if s["enabled"] != true {
+		t.Errorf("enabled = %v; want true", s["enabled"])
 	}
 }

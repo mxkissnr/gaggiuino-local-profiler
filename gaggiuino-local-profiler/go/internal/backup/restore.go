@@ -685,17 +685,29 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 	d := h.deps
 	if arr, ok := kv["menu"].([]any); ok {
 		menu := make([]orders.MenuItem, 0, len(arr))
+		skipped := 0
 		for _, v := range arr {
-			if m, ok := v.(map[string]any); ok {
-				menu = append(menu, orders.MenuItem(m))
+			m, ok := v.(map[string]any)
+			if !ok {
+				skipped++
+				continue
 			}
+			item, ok := orders.NormalizeMenuItem(m)
+			if !ok {
+				skipped++
+				continue
+			}
+			menu = append(menu, item)
+		}
+		if skipped > 0 {
+			log.Printf("backup: restore skipped %d invalid menu item(s)", skipped)
 		}
 		if err := d.OrdersRepo.SaveMenu(menu); err != nil {
 			return err
 		}
 	}
 	if s, ok := kv["orders_settings"].(map[string]any); ok {
-		if err := d.OrdersRepo.SaveSettings(orders.Settings(s)); err != nil {
+		if err := d.OrdersRepo.SaveSettings(orders.NormalizeSettings(s)); err != nil {
 			return err
 		}
 	}
