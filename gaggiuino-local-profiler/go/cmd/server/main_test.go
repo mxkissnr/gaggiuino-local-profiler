@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"syscall"
 	"testing"
 	"time"
 
@@ -116,5 +119,80 @@ func TestRequireKnownHostOnBuiltHandler(t *testing.T) {
 	handler.ServeHTTP(recKnown, reqKnown)
 	if recKnown.Code == http.StatusMisdirectedRequest {
 		t.Fatalf("Host: 127.0.0.1:8099 -> 421, want a non-421 response")
+	}
+}
+
+// TestServeUntilStoppedWaitsForInFlightRequest pins the shutdown contract: a
+// request already in flight when shutdown is triggered must finish, and
+// serveUntilStopped must not return until it has -- returning on Serve's early
+// http.ErrServerClosed would let main's deferred sqlDB.Close() run under it.
+func TestServeUntilStoppedWaitsForInFlightRequest(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(handlerStarted)
+		time.Sleep(300 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("done"))
+	})
+
+	baseCtx, cancelBase := context.WithCancel(context.Background())
+	defer cancelBase()
+	srv := &http.Server{
+		Handler:     handler,
+		BaseContext: func(net.Listener) context.Context { return baseCtx },
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	stop := make(chan os.Signal, 1)
+	serveErr := make(chan error, 1)
+	start := time.Now()
+	go func() { serveErr <- serveUntilStopped(srv, ln, stop, cancelBase) }()
+
+	respCh := make(chan *http.Response, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := http.Get("http://" + ln.Addr().String() + "/")
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}()
+
+	// Trigger shutdown only once the request is actually being handled, so it
+	// is genuinely in flight when the drain starts.
+	select {
+	case <-handlerStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("request never reached the handler")
+	}
+	stop <- syscall.SIGTERM
+
+	select {
+	case err := <-serveErr:
+		if err != http.ErrServerClosed {
+			t.Fatalf("serveUntilStopped = %v, want http.ErrServerClosed", err)
+		}
+		if elapsed := time.Since(start); elapsed < 300*time.Millisecond {
+			t.Fatalf("serveUntilStopped returned after %v, before the 300ms handler finished", elapsed)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("serveUntilStopped did not return after shutdown")
+	}
+
+	select {
+	case resp := <-respCh:
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("in-flight request status = %d, want 200", resp.StatusCode)
+		}
+	case err := <-errCh:
+		t.Fatalf("in-flight request failed: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("no response for the in-flight request")
 	}
 }

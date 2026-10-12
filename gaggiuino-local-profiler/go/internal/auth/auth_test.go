@@ -585,3 +585,43 @@ func TestRequireKnownHost_AllowedHostPasses(t *testing.T) {
 		t.Fatalf("expected an allowed host to pass, got %d (nextCalled=%v)", rec.Code, nextCalled)
 	}
 }
+
+func TestLoadOrCreateToken_EmptyFileGeneratesNewToken(t *testing.T) {
+	for _, content := range []string{"", " \n\t\n  "} {
+		path := filepath.Join(t.TempDir(), "api_token.txt")
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("seeding empty token file: %v", err)
+		}
+		token, err := LoadOrCreateToken(path)
+		if err != nil {
+			t.Fatalf("LoadOrCreateToken: %v", err)
+		}
+		if len(token) != 64 {
+			t.Fatalf("token = %q (len %d), want a 64-char generated token", token, len(token))
+		}
+		if _, err := hex.DecodeString(token); err != nil {
+			t.Fatalf("generated token is not valid hex: %v", err)
+		}
+		written, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading back token file: %v", err)
+		}
+		if got := strings.TrimSpace(string(written)); got != token {
+			t.Errorf("token file = %q, want the generated token %q", got, token)
+		}
+	}
+}
+
+func TestLoadOrCreateToken_KeepsShortToken(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "api_token.txt")
+	if err := os.WriteFile(path, []byte("short-10ch"), 0o644); err != nil {
+		t.Fatalf("seeding short token file: %v", err)
+	}
+	token, err := LoadOrCreateToken(path)
+	if err != nil {
+		t.Fatalf("LoadOrCreateToken: %v", err)
+	}
+	if token != "short-10ch" {
+		t.Fatalf("token = %q, want the 10-char file value kept unchanged", token)
+	}
+}
