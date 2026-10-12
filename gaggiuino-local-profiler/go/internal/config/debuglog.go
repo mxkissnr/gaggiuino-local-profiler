@@ -11,12 +11,15 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
 )
 
-// OptionsFile is the Supervisor-written options.json path -- a var, not a
-// const, so tests can point it at a temp file, mirroring
-// internal/system's own defaultOptionsFile (constants.go).
-var OptionsFile = "/data/options.json"
+// OptionsFile is the Supervisor-written options.json path, under datadir.Root
+// (the real data directory in production, a per-test directory under
+// `go test`) -- a var, not a const, so tests can point it at a temp file,
+// mirroring internal/system's own defaultOptionsFile (constants.go).
+var OptionsFile = datadir.Path("options.json")
 
 // debugLoggingCache caches IsDebugLoggingEnabled()'s parsed result, keyed
 // on options.json's mtime -- the same pattern internal/system/options.go's

@@ -1,6 +1,10 @@
 package system
 
-import "time"
+import (
+	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
+)
 
 const (
 	// tempHistoryMax is the max number of rolling history entries (1 per
@@ -39,13 +43,16 @@ const (
 	// two 30s background tasks: HA reachability checks and preheat watching.
 	backgroundHaCheckInterval = 30 * time.Second
 	preheatWatchInterval      = 30 * time.Second
-
-	// preheatStateFile is where the preheat session state is persisted.
-	preheatStateFile = "/data/preheat_state.json"
 )
+
+// preheatStateFile is where the preheat session state is persisted, under
+// datadir.Root (the real data directory in production, a per-test directory
+// under `go test`). A var, not a const, so it is resolved through the data-dir
+// seam.
+var preheatStateFile = datadir.Path("preheat_state.json")
 
 // defaultOptionsFile is a var, not a const, so
 // options_test.go can point it at a throwaway file instead of the real
-// `/data/options.json` (same testing-seam pattern as
+// options.json under the data directory (same testing-seam pattern as
 // internal/backup/handlers.go's restoreUnzipEntryLimit).
-var defaultOptionsFile = "/data/options.json"
+var defaultOptionsFile = datadir.Path("options.json")
