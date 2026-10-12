@@ -228,17 +228,22 @@ func (p *Poller) preheatWatchTick(ctx context.Context) {
 }
 
 // maybePreheatReadyNotify sends the preheat-ready push once the machine is
-// inside its preheat window and the current run has not announced it yet.
-// The latch (pollGlobalState.preheatNotifySent) is set only after the
-// notifier reports delivery, so a failed push retries on the next tick, and
-// it is cleared on the machine-off transition
-// (checkAndApplyMachinePower), so a later switch-on announces again.
+// inside its preheat window and the current run has not announced it yet. The
+// latch (pollGlobalState.preheatNotifySent) is set only after the notifier
+// reports delivery, so a failed push retries on the next tick. It is cleared
+// whenever the machine is no longer ready — the gap before every new run
+// (a switch-on or a standby wake), and the machine-off transition
+// checkAndApplyMachinePower already handles — so each run announces exactly
+// once.
 func (p *Poller) maybePreheatReadyNotify(ctx context.Context) {
 	h := preheatReadyNotifier.Load()
 	if h == nil {
 		return
 	}
 	if ready, _ := p.PreheatInfo(); !ready {
+		p.state.mu.Lock()
+		p.state.preheatNotifySent = false
+		p.state.mu.Unlock()
 		return
 	}
 	p.state.mu.Lock()

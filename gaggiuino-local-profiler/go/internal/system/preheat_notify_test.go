@@ -2,9 +2,6 @@ package system
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -61,17 +58,8 @@ func TestPreheatReadyNotifier_RetriesUntilDelivered(t *testing.T) {
 }
 
 func TestPreheatReadyNotifier_RearmsAfterNewSwitchOn(t *testing.T) {
-	var switchState atomic.Value
-	switchState.Store("on")
-	haClient := fakeHA(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/states/switch.machine" {
-			_ = json.NewEncoder(w).Encode(map[string]string{"state": switchState.Load().(string)})
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	})
 	fake := &fakeAdapter{}
-	p := newTestPollerWithHA(t, fake, newTestDB(t), haClient, "switch.machine")
+	p, _ := newTestPoller(t, fake)
 
 	var calls int
 	p.SetPreheatReadyNotifier(func(context.Context) bool { calls++; return true })
@@ -88,16 +76,16 @@ func TestPreheatReadyNotifier_RearmsAfterNewSwitchOn(t *testing.T) {
 		t.Fatalf("notifier called %d times after the first run, want still 1", calls)
 	}
 
-	// Switching the machine off clears the one-per-run latch (see
-	// checkAndApplyMachinePower); a fresh ready cycle then notifies again.
-	switchState.Store("off")
-	if err := p.checkAndApplyMachinePower(context.Background()); err != nil {
-		t.Fatalf("checkAndApplyMachinePower: %v", err)
+	// The run ends (no switch-on time -> not ready): the one-per-run latch is
+	// cleared, so a fresh ready cycle notifies again.
+	p.runtime.SetSwitchOnAt(nil)
+	p.preheatWatchTick(context.Background())
+	if calls != 1 {
+		t.Fatalf("notifier called %d times outside a preheat run, want still 1", calls)
 	}
-	p.runtime.SetMachineOn(true)
 	p.runtime.SetSwitchOnAt(readySwitchOnAt())
 	p.preheatWatchTick(context.Background())
 	if calls != 2 {
-		t.Fatalf("notifier not re-armed after a new switch-on: %d calls, want 2", calls)
+		t.Fatalf("notifier not re-armed for the new run: %d calls, want 2", calls)
 	}
 }
