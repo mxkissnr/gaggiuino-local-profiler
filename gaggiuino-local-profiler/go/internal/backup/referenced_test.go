@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -125,6 +126,12 @@ func TestRemoveUnreferencedImages(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, name), bytes.Repeat([]byte{0x7f}, n), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		// Age past orphanGracePeriod so the sweep treats these as established
+		// orphans, not fresh uploads (see the grace-period test below).
+		old := time.Now().Add(-11 * time.Minute)
+		if err := os.Chtimes(filepath.Join(dir, name), old, old); err != nil {
+			t.Fatal(err)
+		}
 	}
 	// 1.jpg / 1.thumb.jpg are referenced; the rest are orphans or foreign.
 	write("1.jpg", 10)
@@ -159,8 +166,13 @@ func TestRemoveUnreferencedImages(t *testing.T) {
 // bean still refers to survives while an app-named orphan is deleted.
 func TestCleanupOrphanedImages_BuildsSetFromDB(t *testing.T) {
 	dir := t.TempDir()
+	old := time.Now().Add(-11 * time.Minute)
 	for _, name := range []string{"1.jpg", "1.thumb.jpg", "2.jpg"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte{0x01}, 0o644); err != nil {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte{0x01}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, old, old); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -200,5 +212,34 @@ func TestCleanupOrphanedImages_ReferenceLookupFailureRemovesNothing(t *testing.T
 
 	if _, err := os.Stat(filepath.Join(dir, "2.jpg")); err != nil {
 		t.Errorf("a failed reference lookup must remove nothing, but 2.jpg is gone: %v", err)
+	}
+}
+
+// TestRemoveUnreferencedImages_GracePeriod (#1603): an unreferenced app-named
+// image written just now is kept, because an upload writes the file before the
+// entry row that refers to it is saved; the same file aged past
+// orphanGracePeriod is removed.
+func TestRemoveUnreferencedImages_GracePeriod(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "2.jpg")
+	if err := os.WriteFile(path, []byte{0x01}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if removed, _ := removeUnreferencedImages(dir, map[string]struct{}{}, t.Logf); removed != 0 {
+		t.Fatalf("removed = %d, want 0 (a fresh orphan is inside the grace period)", removed)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("fresh orphan must be kept: %v", err)
+	}
+
+	old := time.Now().Add(-11 * time.Minute)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if removed, _ := removeUnreferencedImages(dir, map[string]struct{}{}, t.Logf); removed != 1 {
+		t.Fatalf("removed = %d, want 1 (an expired orphan must be removed)", removed)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expired orphan must be removed (err=%v)", err)
 	}
 }
