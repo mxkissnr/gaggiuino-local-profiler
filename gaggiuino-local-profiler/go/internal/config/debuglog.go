@@ -1,8 +1,8 @@
-// Package config holds narrow, dependency-free options.json helpers that
-// more than one internal package needs to share (#977 follow-up code
-// review, round 4). It intentionally imports nothing from this repo, so
-// any package can depend on it without creating a cycle -- see
-// IsDebugLoggingEnabled's doc comment for the specific cycle this was
+// Package config holds narrow options.json helpers that more than one internal
+// package needs to share (#977 follow-up code review, round 4). It depends on
+// nothing but the standard library and internal/datadir (itself standard
+// library only), so any package can depend on it without creating a cycle --
+// see IsDebugLoggingEnabled's doc comment for the specific cycle this was
 // extracted to break.
 package config
 
