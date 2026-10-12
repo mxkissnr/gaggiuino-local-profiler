@@ -184,6 +184,21 @@ export interface RestoreRequestOptions {
 }
 
 /**
+ * Standard base64 of a passphrase's UTF-8 bytes for the X-GLP-Passphrase-B64
+ * header. A header value can only carry ISO-8859-1 bytes, so a non-ASCII
+ * passphrase (umlauts, €, …) would otherwise arrive mangled or make the
+ * request itself throw; TextEncoder + btoa over the byte string is used
+ * instead of Uint8Array.prototype.toBase64, which older HA companion-app
+ * webviews lack.
+ */
+function passphraseToBase64(passphrase: string): string {
+  const bytes = new TextEncoder().encode(passphrase);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
+}
+
+/**
  * POST /api/restore — preview (dryRun) or apply a restore. A zip upload with
  * a progress callback goes through apiUpload (XHR) and is adapted to the
  * Response-like facade; everything else uses apiFetch. Header building for
@@ -195,7 +210,7 @@ export function postRestore({
   if (zipBytes) {
     const headers: Record<string, string> = { 'Content-Type': 'application/zip' };
     if (sections !== undefined) headers['X-GLP-Sections'] = JSON.stringify(sections);
-    if (passphrase !== undefined) headers['X-GLP-Passphrase'] = passphrase;
+    if (passphrase !== undefined) headers['X-GLP-Passphrase-B64'] = passphraseToBase64(passphrase);
     if (dryRun) headers['X-GLP-Dry-Run'] = 'true';
     if (onProgress) {
       return apiUpload('api/restore', { method: 'POST', headers, body: zipBytes, onProgress })
