@@ -78,7 +78,7 @@ function putBody(): Record<string, unknown> {
   const puts = (fetchSpy.mock.calls as unknown as [string, RequestInit][])
     .filter(c => c[1]?.method === 'PUT');
   expect(puts).toHaveLength(1);
-  return JSON.parse(puts[0]!.body as string) as Record<string, unknown>;
+  return JSON.parse(puts[0]![1].body as string) as Record<string, unknown>;
 }
 
 describe('profile editors capture the machine they were opened for (#1605)', () => {
