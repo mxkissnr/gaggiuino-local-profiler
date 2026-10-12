@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -24,13 +25,17 @@ import (
 // "lever", "adapt"), but a numeric id is accepted the same way
 // ProfileSummary.UnmarshalJSON accepts one.
 func gaggimateParseProfileList(res map[string]any) ([]ProfileSummary, error) {
-	raw, err := json.Marshal(res["profiles"])
+	rawProfiles, ok := res["profiles"]
+	if !ok || rawProfiles == nil {
+		return nil, fmt.Errorf("gaggimate: profile list response carries no profiles")
+	}
+	raw, err := json.Marshal(rawProfiles)
 	if err != nil {
-		return []ProfileSummary{}, nil
+		return nil, fmt.Errorf("gaggimate: encoding profile list: %w", err)
 	}
 	var entries []json.RawMessage
 	if err := json.Unmarshal(raw, &entries); err != nil {
-		return []ProfileSummary{}, nil
+		return nil, fmt.Errorf("gaggimate: profile list is not an array: %w", err)
 	}
 	out := make([]ProfileSummary, 0, len(entries))
 	for _, entry := range entries {
