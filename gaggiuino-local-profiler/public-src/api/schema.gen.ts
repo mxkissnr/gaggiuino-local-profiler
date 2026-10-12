@@ -7063,6 +7063,10 @@ export interface paths {
                             ok?: boolean;
                             /** @description Number of shots restored (real restore only) */
                             shots?: number;
+                            /** @description Number of backup images actually written to disk */
+                            images?: number;
+                            /** @description Number of backup images that could not be written (see the app log) */
+                            imagesFailed?: number;
                             /** @description Whether the file had a `secrets` block and it was in the requested sections */
                             secretsPresent?: boolean;
                             /** @description Whether the given passphrase actually decrypted it */

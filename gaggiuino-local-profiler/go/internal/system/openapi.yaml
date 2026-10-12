@@ -3589,6 +3589,8 @@ paths:
                 properties:
                   ok:     { type: boolean }
                   shots:  { type: integer, description: Number of shots restored (real restore only) }
+                  images:       { type: integer, description: Number of backup images actually written to disk }
+                  imagesFailed: { type: integer, description: Number of backup images that could not be written (see the app log) }
                   secretsPresent:  { type: boolean, description: Whether the file had a `secrets` block and it was in the requested sections }
                   secretsRestored: { type: boolean, description: Whether the given passphrase actually decrypted it }
                   dryRun: { type: boolean }
