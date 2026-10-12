@@ -349,7 +349,7 @@ function argValue(argv: readonly string[], name: string): string | undefined {
 }
 
 function isMain(): boolean {
-    return import.meta.url === `file://${process.argv[1] ?? ''}`;
+    return import.meta.main;
 }
 
 if (isMain()) {
