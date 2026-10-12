@@ -33,7 +33,7 @@ vi.mock('../public-src/api/shots.js', () => ({
 // the SSE brew-start assertion can count how many times the auto-apply ran
 // without a real curve fetch (the live chart is never initialised here, so
 // _applyRefDatasets no-ops).
-const getShotCurveMock = vi.fn(() => Promise.resolve({}));
+const getShotCurveMock = vi.fn((..._args: unknown[]) => Promise.resolve({}));
 vi.mock('../public-src/shot-curves.js', () => ({
   getShotCurve: (...args: unknown[]) => getShotCurveMock(...args) as unknown,
 }));
