@@ -8,24 +8,21 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
-// This file implements the preheat state machine. Deliberately NOT
-// implemented: the barista "preheat ready" HA push notification, gated by
-// orders settings' notify_preheat_ready/baristaNotifyService and its localized
-// text — wiring it would need a read dependency on internal/orders' settings
-// (Repository.GetSettings), and internal/orders already depends on this
-// package's runtime snapshot for its own shop-open/closed broadcast (see
-// internal/orders/doc.go and handlers.go's SetPreheatInfoProvider). Importing
-// internal/orders from here would close that into a package cycle; the
-// orders->system direction is wired via a callback specifically to avoid it,
-// and doing the same symmetrically for this one extra notification is left as
-// a follow-up rather than adding a second callback plumbing pass. The ready-by
-// auto turn-on, self-contained (only needs registry + ha.Client), IS
-// implemented below.
+// This file implements the preheat state machine. The barista "preheat
+// ready" HA push notification (#145, restored in Go for #1671) is sent
+// through the callback installed by SetPreheatReadyNotifier: reading the
+// orders settings (Repository.GetSettings) from here would close a package
+// cycle with internal/orders (which already depends on this package's
+// runtime snapshot for its own shop-open/closed broadcast — see
+// internal/orders/doc.go and handlers.go's SetPreheatInfoProvider), so
+// cmd/server injects the callback instead. The ready-by auto turn-on,
+// self-contained (only needs registry + ha.Client), IS implemented below.
 
 // PreheatStatus is openapi.yaml's PreheatStatus schema — GET /api/preheat and
 // POST /api/preheat/ready-by's shared response shape, built by the single
@@ -202,11 +199,59 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	p.clearReadyByTarget()
 }
 
-// preheatWatchTick is the 30s interval body, minus the preheat-ready
-// notification (see this file's header comment).
+// preheatReadyNotifier is the process-wide callback that delivers the
+// preheat-ready push (#1671), installed by cmd/server through
+// SetPreheatReadyNotifier. A package-level pointer (the same pattern as
+// internal/shots' annotation hooks) keeps internal/system free of an
+// internal/orders import; there is one Poller per process, so a single slot
+// is enough.
+var preheatReadyNotifier atomic.Pointer[func(ctx context.Context) bool]
+
+// SetPreheatReadyNotifier installs the preheat-ready notification callback.
+// Passing nil removes it. The callback returns whether the push was
+// delivered; preheatWatchTick latches the one-per-run flag only when it
+// returns true, so a failed push is retried on the next tick.
+func (p *Poller) SetPreheatReadyNotifier(fn func(ctx context.Context) bool) {
+	if fn == nil {
+		preheatReadyNotifier.Store(nil)
+		return
+	}
+	preheatReadyNotifier.Store(&fn)
+}
+
+// preheatWatchTick is the 30s interval body: the ready-by auto turn-on, the
+// one-time preheat-ready notification, then the preheat-update SSE push.
 func (p *Poller) preheatWatchTick(ctx context.Context) {
 	p.checkReadyByPreheat(ctx)
+	p.maybePreheatReadyNotify(ctx)
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+}
+
+// maybePreheatReadyNotify sends the preheat-ready push once the machine is
+// inside its preheat window and the current run has not announced it yet.
+// The latch (pollGlobalState.preheatNotifySent) is set only after the
+// notifier reports delivery, so a failed push retries on the next tick, and
+// it is cleared on the machine-off transition
+// (checkAndApplyMachinePower), so a later switch-on announces again.
+func (p *Poller) maybePreheatReadyNotify(ctx context.Context) {
+	h := preheatReadyNotifier.Load()
+	if h == nil {
+		return
+	}
+	if ready, _ := p.PreheatInfo(); !ready {
+		return
+	}
+	p.state.mu.Lock()
+	sent := p.state.preheatNotifySent
+	p.state.mu.Unlock()
+	if sent {
+		return
+	}
+	if (*h)(ctx) {
+		p.state.mu.Lock()
+		p.state.preheatNotifySent = true
+		p.state.mu.Unlock()
+	}
 }
 
 // preheatStateFileShape is the exact JSON preheat_state.json holds —
