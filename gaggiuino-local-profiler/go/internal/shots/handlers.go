@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
@@ -427,6 +428,24 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	w.Write(png)
 }
 
+// annotationSavedHook is the process-wide "a shot's annotation was just
+// saved" callback. cmd/server installs it through SetAnnotationSavedHook to
+// run the fire-and-forget low-stock notification, which needs
+// internal/library and cannot live in this package.
+var annotationSavedHook atomic.Pointer[func(shotID int64)]
+
+// SetAnnotationSavedHook installs the process-wide post-annotate hook,
+// given the saved shot's id. Passing nil removes it. annotate runs it in its
+// own goroutine (via httputil.SafeGo) so it never blocks or fails the
+// response; see annotate's doc comment.
+func SetAnnotationSavedHook(fn func(shotID int64)) {
+	if fn == nil {
+		annotationSavedHook.Store(nil)
+		return
+	}
+	annotationSavedHook.Store(&fn)
+}
+
 // annotate serves POST /api/shots/{id}/annotate. Body validation runs before
 // id parsing — see this file's header comment for why that order matters. The
 // body is then *merged* into the stored annotation (Service.PatchAnnotation,
@@ -451,10 +470,12 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 // by the error handling, not a 4xx — see handlers_test.go's
 // TestAnnotate_NonexistentShotFailsOnForeignKey.
 //
-// The fire-and-forget low-stock notification is NOT sent here: it needs
-// internal/library (bean resolution, bag stock, HA-notify settings), which is
-// still a placeholder. Wire it in once that lands — until then, annotating a
-// shot in the Go server never sends a low-stock notification.
+// The fire-and-forget low-stock notification runs through the installed
+// annotation-saved hook (SetAnnotationSavedHook, #1671): once the save above
+// succeeds, the hook is handed the shot id on its own goroutine and there
+// checks the shot's bean against the library, sending the "bean running low"
+// push via HA when it crosses the threshold. It never blocks this response,
+// and a failure is logged there — never surfaced here.
 func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSONBody(w, r)
 	if !ok {
@@ -484,6 +505,9 @@ func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 		score = h.service.ComputeScore(shot)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "annotation": ann, "score": score})
+	if hook := annotationSavedHook.Load(); hook != nil {
+		httputil.SafeGo("shots: low-stock notification", func() { (*hook)(id) })
+	}
 }
 
 // trash serves POST /api/shots/{id}/trash.
