@@ -154,49 +154,14 @@ func valueOrDefault(t Task, key string, def any) any {
 	return def
 }
 
-// SaveMaintenance routes global tasks (waterfilter/grinder_*) to the shared
-// sentinel machine_id regardless of the requested machineID.
-func (r *Repository) SaveMaintenance(data map[string]Task, machineID int64) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("maintenance: starting save tx: %w", err)
-	}
-	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO maintenance (machine_id, key, data) VALUES (?,?,?)`)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("maintenance: preparing save: %w", err)
-	}
-	defer stmt.Close()
-	for key, val := range data {
-		target := machineID
-		if isGlobalMaintenanceTask(key) {
-			target = globalMaintenanceMachineID
-		}
-		b, err := json.Marshal(val)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("maintenance: encoding %s: %w", key, err)
-		}
-		if _, err := stmt.Exec(target, key, string(b)); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("maintenance: saving %s: %w", key, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("maintenance: committing save: %w", err)
-	}
-	return nil
-}
-
 // SaveTask writes exactly one (machine_id, key) row, leaving every other row
-// untouched. Unlike SaveMaintenance, which rewrites every task from one
-// caller's snapshot, this cannot clobber a concurrent edit to a *different*
-// task. t carries only the keys this change sets and the stored row is the
-// merge base (read for this one task, not the defaults-merged map), so
+// untouched, so it cannot clobber a concurrent edit to a *different* task.
+// t carries only the keys this change sets and the stored row is the merge
+// base (read for this one task, not the defaults-merged map), so
 // GetMaintenance's defaults are never frozen into the DB as if the user had
 // set them. Global tasks (waterfilter/grinder_*) route to the shared sentinel
-// machine_id exactly as SaveMaintenance does; the table's unique key is
-// (machine_id, key), so the upsert targets it directly.
+// machine_id; the table's unique key is (machine_id, key), so the upsert
+// targets it directly.
 func (r *Repository) SaveTask(machineID int64, key string, t Task) error {
 	target := machineID
 	if isGlobalMaintenanceTask(key) {

@@ -63,9 +63,9 @@ func TestComputeMaintenanceStats_FutureLastDate_DaysSinceIsMinusTwo(t *testing.T
 
 // TestSaveTask_ConcurrentDifferentTasksBothSurvive (#1608): two writers share
 // one stale snapshot; one changes backflush's threshold, then another marks
-// descaling done. Per-task writes must leave both changes intact — the old
-// whole-map SaveMaintenance would have rewritten backflush from the second
-// caller's stale copy, dropping the threshold change.
+// descaling done. Per-task writes must leave both changes intact — a whole-map
+// save would have rewritten backflush from the second caller's stale copy,
+// dropping the threshold change.
 func TestSaveTask_ConcurrentDifferentTasksBothSurvive(t *testing.T) {
 	_, repo, libRepo, sqlDB := newTestHandlers(t)
 	shotsRepo := shots.NewRepository(sqlDB)
