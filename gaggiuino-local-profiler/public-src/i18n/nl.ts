@@ -92,7 +92,7 @@ const nl: Partial<Translations> = {
     verdict_no_data:'Nog niet genoeg gegevens voor een oordeel.',
     verdict_bean_target_hint:'Beoordeeld op basis van het eigen zettarget van deze boon',
     verdict_pressure_profile_hint:'Beoordeeld op basis van het eigen drukdoel van dit profiel',
-    verdict_pressure_omitted_hint:'Druk niet beoordeeld — deze shot bereikte nooit 5 bar en het profiel heeft geen drukfase',
+    verdict_pressure_omitted_hint:'Druk niet beoordeeld — deze shot bereikte nooit 5 bar en er is geen drukdoel bekend',
     tab_time:`${CLOCK_ICON_SVG} Tijd`, tab_pq:'P·Q Curve',
     btn_fullscreen_close:`${CLOSE_ICON_SVG} Sluiten`, btn_fullscreen_tooltip:'Volledig scherm',
     btn_compare_tooltip:'Selecteer als vergelijkingsshot (B). Tip: klik op de naam voor Shot A.', btn_delete_tooltip:'Shot verwijderen',
