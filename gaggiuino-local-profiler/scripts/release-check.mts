@@ -615,9 +615,14 @@ export function scanSourceLeaks(files: { path: string; content: string }[]): str
     for (const file of files) {
         const lines = file.content.split('\n');
         for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]!;
             for (const { type, matches } of patterns) {
-                if (matches(lines[i]!)) {
-                    failures.push(`Check 8 (source leaks): ${file.path}:${i + 1} references a ${type}`);
+                // First match wins: patterns can overlap on one line (e.g. a
+                // notes path also contains the plans-path substring), so
+                // reporting the first avoids duplicate messages for one leak.
+                if (matches(line)) {
+                    failures.push(`Check 8 (source leaks): ${file.path}:${i + 1} matches the ${type} pattern`);
+                    break;
                 }
             }
         }
