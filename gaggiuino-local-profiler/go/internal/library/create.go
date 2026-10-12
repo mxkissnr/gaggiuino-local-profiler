@@ -1,6 +1,10 @@
 package library
 
-import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+import (
+	"strings"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+)
 
 // This file extracts the read-validate-save entity-creation logic each
 // create handler (handlers_beans.go's createBean et al.) already had
@@ -27,6 +31,53 @@ import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 // used to define an identical type independently; both now share one.
 type ValidationError = httputil.ValidationError
 
+// beanFields applies the user-editable bean field sanitizers shared by the
+// create and restore paths (#1603), so a freshly created bean and a restored
+// one can never drift: CreateBean builds its entity from these (plus id,
+// stock_g, decaf, bags and the source/importedAt/sourceUrl keys) and
+// SanitizeBeanFields re-runs them over a restored bean. Restore applies its
+// own `name` fallback on top, so this returns the plain trimMax value.
+func beanFields(body Entity) Entity {
+	origins := sanitizeOrigins(body["origins"])
+	if len(origins) == 0 {
+		if code := sanitizeOrigin(body["origin"]); code != "" {
+			origins = []any{Entity{"code": code}}
+		}
+	}
+	origin := ""
+	if len(origins) > 0 {
+		if m, ok := origins[0].(Entity); ok {
+			origin, _ = m["code"].(string)
+		}
+	}
+	return Entity{
+		"name":          trimMax(body["name"], 200),
+		"roaster":       trimMax(body["roaster"], 200),
+		"roastDate":     trimMax(body["roastDate"], 10),
+		"notes":         trimMax(body["notes"], 1000),
+		"origin":        origin,
+		"origins":       origins,
+		"variety":       trimMax(body["variety"], 200),
+		"species":       sanitizeSpecies(body["species"]),
+		"category":      sanitizeCategory(body["category"]),
+		"process":       trimMax(body["process"], 200),
+		"flavors":       sanitizeFlavors(body["flavors"]),
+		"roastType":     sanitizeRoastType(body["roastType"]),
+		"region":        trimMax(body["region"], 200),
+		"altitude_m":    sanitizeAltitude(body["altitude_m"]),
+		"importer":      trimMax(body["importer"], 200),
+		"harvest":       trimMax(body["harvest"], 50),
+		"price_eur":     sanitizePrice(body["price_eur"]),
+		"producer":      trimMax(body["producer"], 200),
+		"certification": trimMax(body["certification"], 200),
+		"brewTempC":     sanitizeBrewTemp(body["brewTempC"]),
+		"brewRatio":     trimMax(body["brewRatio"], 20),
+		"brewTimeS":     sanitizeBrewTime(body["brewTimeS"]),
+		"brewNotes":     trimMax(body["brewNotes"], 300),
+		"enabled":       sanitizeEnabled(body["enabled"]),
+	}
+}
+
 // CreateBean builds POST /api/library/bean's entity-construction body
 // (handlers_beans.go's createBean), minus that handler's own
 // rate-limit/JSON-decode steps. imageDir is only used for the
@@ -43,42 +94,14 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library
 	}
 
 	stockG := floatOrNilFalsy(body["stock_g"])
-	origins := sanitizeOrigins(body["origins"])
-	if len(origins) == 0 {
-		if code := sanitizeOrigin(body["origin"]); code != "" {
-			origins = []any{Entity{"code": code}}
-		}
-	}
 	roastDate := trimMax(body["roastDate"], 10)
 	batchNumber := trimMax(body["batchNumber"], 50)
 
-	origin := ""
-	if len(origins) > 0 {
-		if m, ok := origins[0].(Entity); ok {
-			origin, _ = m["code"].(string)
-		}
-	}
-
 	id := newID()
-	bean := Entity{
-		"id": id, "name": trimMax(body["name"], 200), "roaster": trimMax(body["roaster"], 200),
-		"roastDate": roastDate, "notes": trimMax(body["notes"], 1000),
-		"origin": origin, "origins": origins,
-		"variety": trimMax(body["variety"], 200), "species": sanitizeSpecies(body["species"]),
-		"category": sanitizeCategory(body["category"]), "process": trimMax(body["process"], 200),
-		"flavors":    sanitizeFlavors(body["flavors"]),
-		"roastType":  sanitizeRoastType(body["roastType"]),
-		"region":     trimMax(body["region"], 200),
-		"altitude_m": sanitizeAltitude(body["altitude_m"]),
-		"importer":   trimMax(body["importer"], 200), "harvest": trimMax(body["harvest"], 50),
-		"price_eur": sanitizePrice(body["price_eur"]),
-		"producer":  trimMax(body["producer"], 200), "certification": trimMax(body["certification"], 200),
-		"brewTempC": sanitizeBrewTemp(body["brewTempC"]), "brewRatio": trimMax(body["brewRatio"], 20),
-		"brewTimeS": sanitizeBrewTime(body["brewTimeS"]), "brewNotes": trimMax(body["brewNotes"], 300),
-		"stock_g": stockG,
-		"decaf":   boolOf(body["decaf"]),
-		"enabled": sanitizeEnabled(body["enabled"]),
-	}
+	bean := beanFields(body)
+	bean["id"] = id
+	bean["stock_g"] = stockG
+	bean["decaf"] = boolOf(body["decaf"])
 	if stockG != nil || roastDate != "" || batchNumber != "" {
 		bean["bags"] = []any{Entity{
 			"id": reserveID(id + 1), "roastDate": roastDate, "stock_g": stockG,
@@ -114,6 +137,7 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library
 
 	// Fire-and-forget region -> map-coordinates geocode — a no-op unless
 	// cmd/server wired GeocodeHook and region is non-empty.
+	origin, _ := bean["origin"].(string)
 	maybeGeocode(id, trimMax(body["region"], 200), origin)
 
 	return bean, saved, nil
@@ -211,12 +235,10 @@ func CreateMilk(repo *Repository, body Entity) (Entity, Library, error) {
 	if trimMax(body["name"], 100) == "" {
 		return nil, Library{}, &ValidationError{Message: "name required"}
 	}
-	// `emoji?.trim() || '🥛'` — no length cap on create (unlike the
-	// restore-path sanitizeMilkFields, which isn't called here).
-	emoji := trimMax(body["emoji"], 1<<30)
-	if emoji == "" {
-		emoji = "🥛"
-	}
+	// `emoji?.trim() || '🥛'` with the shared milk-emoji rule (#1603): at
+	// most 8 runes and no markup metacharacters, so a multi-code-point
+	// flag/ZWJ emoji survives instead of being cut at a fixed width.
+	emoji := sanitizeMilkEmoji(body["emoji"])
 	milk := Entity{
 		"id": newID(), "name": trimMax(body["name"], 100),
 		"emoji": emoji, "stockMl": floatOrZero(body["stockMl"]), "updatedAt": newID(),
@@ -260,4 +282,17 @@ func CreateRecipe(repo *Repository, body Entity) (Entity, Library, error) {
 		return nil, Library{}, err
 	}
 	return recipe, saved, nil
+}
+
+// sanitizeMilkEmoji validates raw as a short emoji, mirroring
+// internal/orders' sanitizeEmoji (trim, at most 8 runes, no markup
+// metacharacters) but falling back to the milk-carton default. Reused by
+// CreateMilk, UpdateMilk and SanitizeMilkFields so all three agree (#1603).
+func sanitizeMilkEmoji(raw any) string {
+	s, _ := raw.(string)
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" || len([]rune(trimmed)) > 8 || strings.ContainsAny(trimmed, "<>&\"'") {
+		return "🥛"
+	}
+	return trimmed
 }

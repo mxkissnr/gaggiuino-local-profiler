@@ -548,6 +548,47 @@ func validateBagFloatField(body Entity, key string) (any, bool) {
 	return f, true
 }
 
+// bagEditedFields are the keys updateBag rewrites on a bag; sanitizeBag drops
+// them from the copied bag before re-deriving each from the raw value, so the
+// "keep every other key unchanged" rule is expressed once.
+var bagEditedFields = map[string]bool{
+	"roastDate": true, "stock_g": true, "price_eur": true,
+	"batchNumber": true, "sortOrder": true, "frozenPortions": true,
+}
+
+// sanitizeBag re-applies updateBag's field rules to a single bag restored
+// from a backup (#1603), so a crafted backup can't smuggle in a bag the edit
+// route would reject. ok is false for a non-object entry, which the caller
+// drops; structural keys (id, openedAt, emptiedAt, ...) are kept as-is.
+// Unlike updateBag, a future roastDate is kept rather than 400'd (restore
+// enforces length, not the client clock) and stock_g/price_eur that fail
+// validateBagFloatField become nil instead of aborting the restore.
+func sanitizeBag(raw any) (Entity, bool) {
+	bag, ok := raw.(Entity)
+	if !ok {
+		return nil, false
+	}
+	out := Entity{}
+	for k, v := range bag {
+		if !bagEditedFields[k] {
+			out[k] = v
+		}
+	}
+	stockG, _ := validateBagFloatField(bag, "stock_g")
+	priceEur, _ := validateBagFloatField(bag, "price_eur")
+	sortOrder, sortOK := jsParseIntLoose(bag["sortOrder"])
+	if !sortOK {
+		sortOrder = effectiveSortOrder(bag)
+	}
+	out["roastDate"] = trimMax(bag["roastDate"], 10)
+	out["stock_g"] = stockG
+	out["price_eur"] = priceEur
+	out["batchNumber"] = trimMax(bag["batchNumber"], 50)
+	out["sortOrder"] = sortOrder
+	out["frozenPortions"] = sanitizeFrozenPortions(bag["frozenPortions"])
+	return out, true
+}
+
 // validateBagRoastDate implements the updateBag roastDate gate: a date
 // parseable as YYYY-MM-DD that's more than a day in the future almost
 // certainly means a client clock/timezone bug rather than an intentional
