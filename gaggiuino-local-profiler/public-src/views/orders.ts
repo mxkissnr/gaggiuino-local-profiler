@@ -10,7 +10,7 @@ import {
 } from '../api/orders.js';
 import type {
   MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats,
-  OrdersSettings, OrdersSettingsUpdate, QueueEta,
+  OrdersSettings, QueueEta,
 } from '../api/types.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
@@ -672,7 +672,7 @@ export async function saveNotifyToggles(): Promise<void> {
   list.querySelectorAll<HTMLInputElement>('[data-notify-key]').forEach(cb => {
     body[cb.dataset.notifyKey as string] = cb.checked;
   });
-  const r = await postOrdersSettings(body as OrdersSettingsUpdate);
+  const r = await postOrdersSettings(body);
   if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('ordersTypesSaveBtn');
   if (btn) {
