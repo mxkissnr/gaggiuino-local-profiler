@@ -369,7 +369,7 @@ describe('bean form sheet (#1349)', () => {
     // S.beanEditId null it routes to the "save without a bag" create action.
     const saveBtn = find('lib-sheet-save');
     expect(saveBtn).not.toBeNull();
-    saveBtn!.click();
+    saveBtn!.dispatch('click');
 
     await vi.waitFor(() => expect(mocks.saveBean).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(form.parentNode).toBe(home));
