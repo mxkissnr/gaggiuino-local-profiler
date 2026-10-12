@@ -856,3 +856,62 @@ func TestMachineKnownOffline(t *testing.T) {
 		})
 	}
 }
+
+// TestBrewAccumulator_CapsAtMaxLiveAccumPoints is the #1601 regression test: a
+// machine stuck reporting "brewing" must not grow the accumulator (and the
+// per-tick deep copy + broadcast of it) without bound. Every series stops at
+// exactly maxLiveAccumPoints.
+func TestBrewAccumulator_CapsAtMaxLiveAccumPoints(t *testing.T) {
+	fake := &fakeAdapter{}
+	fake.setStatus(okStatus(t, `{}`, 93, 94, 9, 5, true, "Test Profile", 1), nil)
+	p, _ := newTestPoller(t, fake)
+
+	for i := 0; i < maxLiveAccumPoints+10; i++ {
+		p.pollViaGaggiuinoStatus(context.Background())
+	}
+
+	dp := p.LiveData().Datapoints
+	if dp == nil {
+		t.Fatal("expected the brew accumulator to still be live")
+	}
+	for name, series := range map[string][]int{
+		"timeInShot":        dp.TimeInShot,
+		"pressure":          dp.Pressure,
+		"temperature":       dp.Temperature,
+		"shotWeight":        dp.ShotWeight,
+		"weightFlow":        dp.WeightFlow,
+		"pumpFlow":          dp.PumpFlow,
+		"targetTemperature": dp.TargetTemperature,
+	} {
+		if len(series) != maxLiveAccumPoints {
+			t.Errorf("%s series length = %d, want exactly %d", name, len(series), maxLiveAccumPoints)
+		}
+	}
+}
+
+// TestSteamAccumulator_CapsAtMaxLiveAccumPoints is the #1601 mode-accumulator
+// counterpart: a forgotten steam session caps its series the same way.
+func TestSteamAccumulator_CapsAtMaxLiveAccumPoints(t *testing.T) {
+	fake := &fakeAdapter{}
+	fake.setStatus(okStatus(t, `{}`, 130, 135, 1.5, 0, false, "Espresso", 1), nil)
+	fake.setLive(&proto.SensorStateSnapshotDto{Temperature: 130, SteamActive: true}, nil)
+	p, _ := newTestPoller(t, fake)
+
+	for i := 0; i < maxLiveAccumPoints+10; i++ {
+		p.pollViaGaggiuinoStatus(context.Background())
+	}
+
+	ld := p.LiveData()
+	if !ld.IsSteaming || ld.SteamDatapoints == nil {
+		t.Fatal("expected the steam accumulator to still be live")
+	}
+	for name, series := range map[string][]int{
+		"timeInMode":  ld.SteamDatapoints.TimeInMode,
+		"pressure":    ld.SteamDatapoints.Pressure,
+		"temperature": ld.SteamDatapoints.Temperature,
+	} {
+		if len(series) != maxLiveAccumPoints {
+			t.Errorf("%s series length = %d, want exactly %d", name, len(series), maxLiveAccumPoints)
+		}
+	}
+}
