@@ -82,6 +82,9 @@ func (s *Service) maybeEvaluate() error {
 		return err
 	}
 	fp += " v=" + versionFingerprint(s.deps.VersionFn)
+	if s.deps.RevsFn != nil {
+		fp += " r=" + s.deps.RevsFn()
+	}
 
 	s.evalMu.Lock()
 	defer s.evalMu.Unlock()

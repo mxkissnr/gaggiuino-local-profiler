@@ -37,7 +37,11 @@ type Event struct {
 
 // Deps are the cross-domain repositories buildContext reads. VersionFn
 // returns the last-known GitHub-release check result without triggering a
-// fetch; cmd/server wires it to internal/system's cached checker.
+// fetch; cmd/server wires it to internal/system's cached checker. RevsFn, when
+// set, returns the current data-change revision digest (sse.DataChanges.Revs()
+// formatted by cmd/server); maybeEvaluate folds it into the change fingerprint
+// so a mutation the aggregate fingerprint cannot see — an equal-length rating
+// edit or a photo upload — still re-runs the evaluator.
 type Deps struct {
 	Shots       *shots.Repository
 	Library     *library.Repository
@@ -45,6 +49,7 @@ type Deps struct {
 	Maintenance *maintenance.Repository
 	Registry    *machines.Registry
 	VersionFn   func() VersionCache
+	RevsFn      func() string
 }
 
 // Context is the read snapshot built by buildContext.
