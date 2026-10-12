@@ -350,7 +350,10 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 		if !isNum || math.IsInf(frozenAt, 0) {
 			frozenAt = float64(newID())
 		}
-		candidate := Entity{"frozenAt": frozenAt, "portionCount": body["portionCount"], "portionWeight_g": body["portionWeight_g"]}
+		// A fresh server-side id (rather than letting sanitizeFrozenPortions fall
+		// back to frozenAt) keeps two freezes with the same timestamp from sharing
+		// an id, which would make thaw/adjust hit the wrong batch.
+		candidate := Entity{"id": newID(), "frozenAt": frozenAt, "portionCount": body["portionCount"], "portionWeight_g": body["portionWeight_g"]}
 		portions := sanitizeFrozenPortions([]any{candidate})
 		if len(portions) == 0 {
 			return errPortionFieldsRequired
@@ -523,8 +526,15 @@ func (h *Handlers) adjustFrozenPortion(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 	id, idNoMatch := parseIDParam(r.PathValue("id"))
 	bagID, bagNoMatch := parseIDParam(r.PathValue("bagId"))
+	// Best-effort read: deleteBag's currentBag use is only the bean-level
+	// roastDate/stock_g sync below, so a shots-lookup failure skips that sync
+	// rather than failing an otherwise valid delete.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		log.Printf("library: reading doses for current-bag sync: %v", err)
+	}
 	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
+	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !idNoMatch {
 			idx = findBeanIndex(*lib, id)
@@ -537,19 +547,31 @@ func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 		if len(bags) <= 1 {
 			return errCannotDeleteLastBag
 		}
+		// An unknown (or malformed) bagId removes nothing: 404 rather than a
+		// silent 200 that leaves the bean untouched.
+		found := false
 		filtered := make([]any, 0, len(bags))
 		for _, b := range bags {
 			bag, _ := b.(Entity)
 			bgID, ok := idOf(bag, "id")
 			if !bagNoMatch && ok && bgID == bagID {
+				found = true
 				continue
 			}
 			filtered = append(filtered, b)
 		}
+		if !found {
+			return errNotFound
+		}
 		bean["bags"] = filtered
-		last, _ := filtered[len(filtered)-1].(Entity)
-		bean["roastDate"] = last["roastDate"]
-		bean["stock_g"] = last["stock_g"]
+		// Sync bean-level roastDate/stock_g from the bag actually being drawn
+		// from, not the array-last bag (they differ once the queue has
+		// advanced or bags are reordered). With no current bag left the
+		// bean-level fields stay unchanged.
+		if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
+			bean["roastDate"] = cur["roastDate"]
+			bean["stock_g"] = cur["stock_g"]
+		}
 		lib.Beans[idx] = bean
 		return nil
 	})
@@ -941,17 +963,21 @@ func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
 // endpoint gives the frontend a self-consistent view without it having to
 // replay doseRows client-side. allBeans is needed for the same
 // beanId-first/name-fallback dose matching ComputeBeanRemaining already
-// uses. Falls back to the undecorated bean on a shots-lookup error rather
-// than failing the whole request — the mutation itself already succeeded.
+// uses. On a library- or shots-lookup error it logs and answers 200 with the
+// undecorated bean rather than failing the whole request — the mutation
+// itself already succeeded, so a 500 here would only make the client retry a
+// change it already made.
 func (h *Handlers) writeEnrichedBean(w http.ResponseWriter, bean Entity) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
-		internalError(w, err)
+		log.Printf("library: reading library to decorate bean response: %v", err)
+		writeJSON(w, http.StatusOK, bean)
 		return
 	}
 	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
 	if err != nil {
-		internalError(w, err)
+		log.Printf("library: reading doses to decorate bean response: %v", err)
+		writeJSON(w, http.StatusOK, bean)
 		return
 	}
 	writeJSON(w, http.StatusOK, decorateBeanStatus(bean, doseRows, lib.Beans))
