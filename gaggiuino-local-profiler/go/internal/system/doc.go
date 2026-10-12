@@ -86,17 +86,21 @@
 //     machine is pulled over the same /api/shots REST surface as the default
 //     one, a GaggiMate through its history adapter — so the default machine's
 //     own retry/backoff stays the only thing driven by a sync result. Still
-//     not implemented are syncNativeMaintenance() (#578), syncProgress,
-//     syncRetryCount (the backoff is tracked locally in runScheduledSync, not
-//     exposed), and the backgroundHaCheck `if (!cachedMachineVersion)
-//     fetchMachineVersion()` fallback: pollViaGaggiuinoStatus already
-//     opportunistically captures each machine's cached version from its
+//     not implemented are syncProgress, syncRetryCount (the backoff is tracked
+//     locally in runScheduledSync, not exposed), and the backgroundHaCheck
+//     `if (!cachedMachineVersion) fetchMachineVersion()` fallback: pollViaGaggiuinoStatus
+//     already opportunistically captures each machine's cached version from its
 //     successful status polls and shot syncs, and drops it again on an
 //     unreachable->reachable transition (#1197/#1201); fetchMachineVersion is
 //     only a fallback path for when polling itself isn't running, e.g. switch
 //     off. GET /api/status's syncRetryCount field is consequently always 0 —
 //     it describes exactly this unimplemented piece of the engine — see
 //     handlers.go's getStatus doc comment.
+//
+//     syncNativeMaintenance() (#578) is no longer in that list: #1639
+//     re-implements it. Slice 1 adds the pieces — the Gaggiuino adapter's
+//     GetServiceLog and the maintenance service's ApplyMachineServiceLog —
+//     and the sync loop that calls them follows in slice 2.
 //   - The rolling-window debug-log connectivity summary
 //     (recordConnectivity/summarizeConnectivity) — pure logging diagnostics,
 //     not part of any response contract.
