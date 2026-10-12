@@ -238,7 +238,11 @@ func TestToSysState(t *testing.T) {
 
 func TestTransport_Eligibility(t *testing.T) {
 	repo, _ := testRepo(t)
-	tr := NewTransport(NewClient(), repo)
+	c := NewClient()
+	// The MQTT-active branch below would otherwise have SystemState drive the
+	// real paho client to dial 192.168.1.50; the fake keeps the test offline.
+	c.newPahoClient = func(*paho.ClientOptions) paho.Client { return &fakePahoClient{} }
+	tr := NewTransport(c, repo)
 
 	// websocket default -> not MQTT
 	if _, ok := tr.SensorSnapshot(true); ok {

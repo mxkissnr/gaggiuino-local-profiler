@@ -91,9 +91,9 @@ func TestPostPreheatReadyBy_NullClears(t *testing.T) {
 }
 
 // TestGetVersion_ReturnsCurrent exercises GET /api/version against no
-// network access (the GitHub fetch will fail in this sandboxed test — the
-// contract must still degrade to {current, latest: null, update_available:
-// false, release_url}, never an error response).
+// network access (a test binary's checker never fetches — the contract must
+// still degrade to {current, latest: null, update_available: false,
+// release_url}, never an error response).
 func TestGetVersion_ReturnsCurrent(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
 	rec := doGet(mux, "/api/version")
