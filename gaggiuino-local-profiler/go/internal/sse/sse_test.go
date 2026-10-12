@@ -379,7 +379,6 @@ func TestHandler_SlowConsumerGetsOnlyLatestSnapshot(t *testing.T) {
 	}
 }
 
-
 // waitForSubscribers blocks until hub has exactly want subscribers, failing the
 // test if that never happens.
 func waitForSubscribers(t *testing.T, hub *Hub, want int) {
@@ -488,7 +487,7 @@ func TestHandler_DroppedDataChangedDeliversCoalescedAll(t *testing.T) {
 func TestHandler_EventPublishedDuringPrimeIsNotLost(t *testing.T) {
 	hub := NewHub()
 	handler := &Handler{
-		Hub:   hub,
+		Hub: hub,
 		Prime: func() []Event {
 			hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"from": "prime"}})
 			return nil
