@@ -377,7 +377,8 @@ export function renderOrderCard(o: Order, ctx: string): Html {
 export async function acceptOrder(id: string): Promise<void> {
   const etaCustom = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
   const eta = etaCustom ? (parseInt(etaCustom.value) || S._ordersEtaSelected[_idKey(id)] || 5) : (S._ordersEtaSelected[_idKey(id)] || 5);
-  await postOrderAccept(id, eta);
+  const r = await postOrderAccept(id, eta);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 
@@ -389,13 +390,15 @@ export function toggleDeclineRow(id: string): void {
 export async function submitDecline(id: string): Promise<void> {
   const input  = document.getElementById(`declineReason_${id}`) as HTMLInputElement | null;
   const reason = input ? input.value.trim() : '';
-  await postOrderDecline(id, reason);
+  const r = await postOrderDecline(id, reason);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   delete S._ordersDeclineOpen[_idKey(id)];
   void loadOrdersView();
 }
 
 export async function completeOrder(id: string): Promise<void> {
-  await postOrderComplete(id);
+  const r = await postOrderComplete(id);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 
@@ -537,13 +540,15 @@ export function renderOrdersStats(stats: OrderStats | null | undefined): void {
 }
 
 export async function deleteOrder(id: string): Promise<void> {
-  await deleteOrderById(id);
+  const r = await deleteOrderById(id);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 
 export async function clearOrderHistory(): Promise<void> {
   if (!confirm(t('orders_confirm_clear_history'))) return;
-  await deleteOrderHistory();
+  const r = await deleteOrderHistory();
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 

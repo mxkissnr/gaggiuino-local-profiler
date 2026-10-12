@@ -67,14 +67,14 @@ beforeEach(() => {
 
 describe('loadNotifySettingsCard', () => {
   it('checks both boxes when the settings blob has no explicit false (undefined == on, #603 convention)', async () => {
-    fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ enabled: true }) } as unknown as Response);
+    fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve({ enabled: true }) } as unknown as Response);
     await loadNotifySettingsCard();
     expect(list!.querySelector('[data-notify-key="notify_preheat_ready"]').checked).toBe(true);
     expect(list!.querySelector('[data-notify-key="notify_low_stock"]').checked).toBe(true);
   });
 
   it('unchecks a box whose key is explicitly false in the settings blob', async () => {
-    fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ enabled: true, notify_low_stock: false }) } as unknown as Response);
+    fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve({ enabled: true, notify_low_stock: false }) } as unknown as Response);
     await loadNotifySettingsCard();
     expect(list!.querySelector('[data-notify-key="notify_preheat_ready"]').checked).toBe(true);
     expect(list!.querySelector('[data-notify-key="notify_low_stock"]').checked).toBe(false);

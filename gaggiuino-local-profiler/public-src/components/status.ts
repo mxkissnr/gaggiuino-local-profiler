@@ -365,9 +365,14 @@ export async function triggerSync(): Promise<void> {
   const btn = document.getElementById('syncBtn') as HTMLButtonElement;
   btn.disabled = true;
   btn.textContent = '↻ …';
+  // On a 429 the button keeps the server's "please wait" message and stays
+  // disabled until the existing 3s timeout resets it; without this flag the
+  // finally block below would wipe that message in the same tick.
+  let rateLimited = false;
   try {
     const r = await triggerSyncRequest();
     if (r.status === 429) {
+      rateLimited = true;
       const d = await r.json() as { error?: string };
       btn.textContent = d.error || t('please_wait');
       setTimeout(() => { btn.textContent = t('btn_sync'); btn.disabled = false; }, 3000);
@@ -377,7 +382,9 @@ export async function triggerSync(): Promise<void> {
     if (window.loadData) await window.loadData();
     await updateStatus();
   } finally {
-    btn.disabled = false;
-    btn.textContent = t('btn_sync');
+    if (!rateLimited) {
+      btn.disabled = false;
+      btn.textContent = t('btn_sync');
+    }
   }
 }
