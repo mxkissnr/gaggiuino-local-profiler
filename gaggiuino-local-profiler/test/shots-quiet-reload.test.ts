@@ -117,12 +117,12 @@ describe('quiet reload keeps older shots (#1614 slice 4)', () => {
     expect(c1Resolvers.length).toBe(2); // the second walk owns its own fetch
 
     // The superseded walk gets its page but must write nothing.
-    c1Resolvers[0](page([shot(3), shot(2)], 'c2', true));
+    c1Resolvers[0]!(page([shot(3), shot(2)], 'c2', true));
     await flushPromises();
     expect(ids()).toEqual([4, 5]);
 
     // The live walk continues to the end and marks the list fully loaded.
-    c1Resolvers[1](page([shot(3), shot(2)], 'c2', true));
+    c1Resolvers[1]!(page([shot(3), shot(2)], 'c2', true));
     await flushPromises();
     expect(ids()).toEqual([1, 2, 3, 4, 5]);
     expect(S.allShotsLoaded).toBe(true);

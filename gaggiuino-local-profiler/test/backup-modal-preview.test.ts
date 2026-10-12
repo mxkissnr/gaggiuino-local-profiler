@@ -117,12 +117,12 @@ describe('restore preview sequencing (#1614 slice 4)', () => {
     expect(resolvers.length).toBe(2);
 
     // The newer preview resolves first...
-    resolvers[1](jsonResponse({ preview: { shots: 222 } }));
+    resolvers[1]!(jsonResponse({ preview: { shots: 222 } }));
     await flushPromises();
     expect(doc.getElementById('backupPreview').innerHTML).toContain('222');
 
     // ...and the older one landing last must be dropped.
-    resolvers[0](jsonResponse({ preview: { shots: 111 } }));
+    resolvers[0]!(jsonResponse({ preview: { shots: 111 } }));
     await flushPromises();
     expect(doc.getElementById('backupPreview').innerHTML).toContain('222');
     expect(doc.getElementById('backupPreview').innerHTML).not.toContain('111');
@@ -134,7 +134,7 @@ describe('restore preview sequencing (#1614 slice 4)', () => {
     expect(resolvers.length).toBe(1);
 
     closeBackupModal();
-    resolvers[0](jsonResponse({ preview: { shots: 111 } }));
+    resolvers[0]!(jsonResponse({ preview: { shots: 111 } }));
     await flushPromises();
 
     expect(doc.getElementById('backupPreview').innerHTML).not.toContain('111');
