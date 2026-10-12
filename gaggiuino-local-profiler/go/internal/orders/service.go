@@ -306,10 +306,6 @@ type PlaceOrderInput struct {
 
 // PlaceOrder builds and persists a new pending order.
 func (s *Service) PlaceOrder(in PlaceOrderInput) (Order, error) {
-	active, err := s.repo.FindActive()
-	if err != nil {
-		return nil, err
-	}
 	machineID, err := s.resolveMachineID(in.Machine)
 	if err != nil {
 		return nil, err
@@ -339,8 +335,7 @@ func (s *Service) PlaceOrder(in PlaceOrderInput) (Order, error) {
 		order["beanId"] = nil
 	}
 
-	active = append(active, order)
-	if err := s.repo.SaveAll(active); err != nil {
+	if err := s.repo.Insert(order); err != nil {
 		return nil, err
 	}
 	return order, nil
@@ -370,7 +365,7 @@ func truncate(s string, max int) string {
 
 // AcceptOrder reads and writes only this one order row (#901 code review)
 // rather than
-// FindActive()+SaveAll()'s whole-queue read-modify-write, which scaled
+// the old whole-queue read-modify-write, which scaled
 // every accept/complete/decline with the total size of the active queue.
 func (s *Service) AcceptOrder(id string, rawEta any) (Order, error) {
 	order, err := s.repo.FindActiveByID(id)
