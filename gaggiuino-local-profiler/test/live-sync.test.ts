@@ -910,26 +910,12 @@ describe('library handler keeps an open bean-sheet form (#1539)', () => {
   });
 });
 
-// #1539 slice 3: reloadBlocked() decides whether the `all` handler may reload. It
-// must see every surface that would lose user work: a bottom sheet, a native
-// <dialog>, and the shared modal overlay selector (each overlay only when it is
-// actually shown, since the guided-maint ones ship hidden by default).
-describe('live-sync reloadBlocked overlays (#1539)', () => {
-  it('blocks while a bottom sheet is open', async () => {
-    const { live } = await loadLive();
-    doc.body.classList.add('lib-sheet-open');
-    expect(live.reloadBlocked()).toBe(true);
-    doc.body.classList.remove('lib-sheet-open');
-    expect(live.reloadBlocked()).toBe(false);
-  });
-
-  it('blocks while a dialog is open', async () => {
-    const { live } = await loadLive();
-    doc.querySelector = () => ({ tagName: 'DIALOG' });
-    expect(live.reloadBlocked()).toBe(true);
-  });
-
-  it('checks the shared overlay selector and each overlay visibility', async () => {
+// #1539 slice 3: the `all` handler blocks a reload behind the shared modal
+// overlay selector (the bottom-sheet, native-dialog and focus cases are covered
+// by the reload-guard tests above). Pin the exact selector the production code
+// queries, and that an overlay's own visibility decides it.
+describe('live-sync reloadBlocked overlay selector (#1539)', () => {
+  it('queries the shared overlay selector and honours the overlay display', async () => {
     const { live } = await loadLive();
     const seen: string[] = [];
     let overlays: { style: { display: string } }[] = [];
@@ -940,13 +926,8 @@ describe('live-sync reloadBlocked overlays (#1539)', () => {
 
     overlays = [{ style: { display: 'block' } }];
     expect(live.reloadBlocked()).toBe(true);
-    expect(seen).toContain('.guided-maint-overlay, #backupModal.open, #scanModal.open');
-  });
 
-  it('does not block on a focused non-text control', async () => {
-    const { live } = await loadLive();
-    doc.activeElement = checkboxEl();
-    expect(live.reloadBlocked()).toBe(false);
+    expect(seen).toContain('.guided-maint-overlay, #backupModal.open, #scanModal.open');
   });
 });
 
