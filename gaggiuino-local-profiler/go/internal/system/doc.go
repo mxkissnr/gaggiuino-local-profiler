@@ -101,15 +101,18 @@
 //     re-implements it. Slice 1 adds the pieces — the Gaggiuino adapter's
 //     GetServiceLog and the maintenance service's ApplyMachineServiceLog —
 //     and the sync loop that calls them follows in slice 2.
+//
 //   - The rolling-window debug-log connectivity summary
 //     (recordConnectivity/summarizeConnectivity) — pure logging diagnostics,
 //     not part of any response contract.
+//
 //   - The MQTT live-transport branch — already out of scope per
 //     internal/machines/doc.go; this package's poll.go calls
 //     machines.Adapter.GetLiveSensorSnapshot/GetLiveSystemState directly,
 //     which is always the WS-backed cache (GaggiuinoAdapter), matching the
 //     behavior for every install that hasn't opted into the MQTT Settings
 //     toggle.
+//
 //   - The barista "preheat ready" HA push (_checkPreheatNotify), gated by
 //     orders settings' notify_preheat_ready/baristaNotifyService plus its
 //     localized text — see preheat.go's header comment: wiring it needs a read
@@ -118,6 +121,7 @@
 //     the reverse dependency too would need a second round of callback
 //     plumbing. Still a follow-up (GET/POST /api/switch itself is
 //     implemented).
+//
 //   - The write side of reconciling a legacy machine_host/switch_entity
 //     add-on option into the registry (adoptOptionChanges) — GET /api/status's
 //     legacyMachineOptionsPending field is consequently a documented
