@@ -95,7 +95,7 @@ export type NotifyMapping = components['schemas']['NotifyMapping'];
  * (and skips the shop-open/closed broadcast). Each saver therefore sends just
  * the fields it owns instead of round-tripping the whole settings blob.
  */
-export type OrdersSettingsUpdate = OrdersSettings & { enabled?: boolean };
+export type OrdersSettingsUpdate = OrdersSettings;
 
 /** One entry of GET /api/orders/queue-eta's `positions` map. */
 export type QueuePosition = components['schemas']['QueuePosition'];
