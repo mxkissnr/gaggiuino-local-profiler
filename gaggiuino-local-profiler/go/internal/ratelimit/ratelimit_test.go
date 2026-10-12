@@ -182,3 +182,31 @@ func TestBucketKey(t *testing.T) {
 		})
 	}
 }
+
+func TestNewGuardsInvalidWindowAndMax(t *testing.T) {
+	// A max below 1 used to divide by zero in rate.Every (a startup panic); a
+	// non-positive window used to make rate.Every return rate.Inf, silently
+	// disabling the limit. Both must be clamped and still limit.
+
+	t.Run("max below one is clamped and still limits", func(t *testing.T) {
+		l := New(time.Minute, 0)
+		if !l.Allow("10.1.1.1") {
+			t.Fatal("first request should be allowed")
+		}
+		if l.Allow("10.1.1.1") {
+			t.Fatal("second request should be refused once the clamped burst of 1 is spent")
+		}
+	})
+
+	t.Run("non-positive window falls back to the default and still limits", func(t *testing.T) {
+		l := New(0, 10)
+		for i := 0; i < 10; i++ {
+			if !l.Allow("10.1.1.2") {
+				t.Fatalf("request %d should be allowed within the burst", i+1)
+			}
+		}
+		if l.Allow("10.1.1.2") {
+			t.Fatal("request beyond the burst should be refused")
+		}
+	})
+}
