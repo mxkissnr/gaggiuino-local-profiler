@@ -115,6 +115,8 @@ jobs:
         env:
           BASE_REF: ${{ inputs.base }}
           HEAD_REF: ${{ inputs.head }}
+        # pipefail: a failing compare must fail the step despite tee (#1595).
+        shell: bash
         run: |
           {
             echo "## Performance: \`$BASE_REF\` vs \`$HEAD_REF\`"

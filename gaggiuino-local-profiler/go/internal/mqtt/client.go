@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -100,6 +101,7 @@ type session struct {
 	mu           sync.Mutex
 	client       paho.Client
 	connecting   bool
+	closed       bool
 	sensorSnap   *proto.SensorStateSnapshotDto
 	sensorSnapAt time.Time
 	sysState     *proto.SystemStateDto
@@ -108,6 +110,7 @@ type session struct {
 
 	loggedFirstSensorSnap bool
 	loggedFirstSysState   bool
+	guardRejectLogged     bool
 }
 
 // Client is the module-level session map plus connect/disconnect, as a
@@ -145,7 +148,7 @@ func (c *Client) getSession(conn Conn) *session {
 func (c *Client) connect(conn Conn) *session {
 	s := c.getSession(conn)
 	s.mu.Lock()
-	if s.client != nil || s.connecting || conn.Host == "" {
+	if s.closed || s.client != nil || s.connecting || conn.Host == "" {
 		s.mu.Unlock()
 		return s
 	}
@@ -167,18 +170,23 @@ func (c *Client) connect(conn Conn) *session {
 	err := machines.AssertMachineHost(guardCtx, conn.Host)
 	cancel()
 	if err != nil {
-		log.Printf("Gaggiuino MQTT: broker host %q rejected by SSRF guard: %v", conn.Host, err)
 		s.mu.Lock()
+		if !s.guardRejectLogged {
+			s.guardRejectLogged = true
+			log.Printf("Gaggiuino MQTT: broker host %q rejected by SSRF guard: %v", conn.Host, err)
+		}
 		s.connecting = false
 		s.mu.Unlock()
 		return s
 	}
 
 	prefix := conn.prefix()
+	brokerAddr := net.JoinHostPort(conn.Host, strconv.Itoa(conn.port()))
 	opts := paho.NewClientOptions().
-		AddBroker(fmt.Sprintf("tcp://%s:%d", conn.Host, conn.port())).
+		AddBroker("tcp://" + brokerAddr).
 		SetConnectTimeout(10 * time.Second).
 		SetAutoReconnect(true).
+		SetConnectRetry(true).
 		SetConnectRetryInterval(3 * time.Second).
 		SetKeepAlive(30 * time.Second).
 		SetCustomOpenConnectionFn(openGuardedMQTTConnection)
@@ -194,7 +202,7 @@ func (c *Client) connect(conn Conn) *session {
 		s.loggedFirstSensorSnap = false
 		s.loggedFirstSysState = false
 		s.mu.Unlock()
-		log.Printf("Gaggiuino MQTT connected (%s:%d, prefix %q)", conn.Host, conn.port(), prefix)
+		log.Printf("Gaggiuino MQTT connected (%s, prefix %q)", brokerAddr, prefix)
 		topics := map[string]byte{
 			prefix + "/sensors": 0, prefix + "/system": 0, prefix + "/status": 0,
 			prefix + "/shot": 0, prefix + "/profile/active": 0, prefix + "/maintenance": 0, prefix + "/notification": 0,
@@ -211,14 +219,22 @@ func (c *Client) connect(conn Conn) *session {
 		avail := false
 		s.available = &avail
 		s.mu.Unlock()
-		log.Printf("Gaggiuino MQTT connection lost (%s:%d): %v", conn.Host, conn.port(), err)
+		log.Printf("Gaggiuino MQTT connection lost (%s): %v", brokerAddr, err)
 	})
 
 	client := c.newPahoClient(opts)
 	s.mu.Lock()
+	if s.closed {
+		// DisconnectAll ran while the guard resolved DNS, so this session is
+		// orphaned: storing and starting the client here would leave it
+		// reconnecting to the old broker with the old credentials forever.
+		s.connecting = false
+		s.mu.Unlock()
+		return s
+	}
 	s.client = client
 	s.mu.Unlock()
-	client.Connect() // async; SetAutoReconnect + retry handle failures
+	client.Connect() // async; SetAutoReconnect + SetConnectRetry handle failures
 
 	return s
 }
@@ -300,6 +316,7 @@ func (c *Client) DisconnectAll() {
 	c.mu.Unlock()
 	for _, s := range sessions {
 		s.mu.Lock()
+		s.closed = true
 		client := s.client
 		s.client = nil
 		s.mu.Unlock()
