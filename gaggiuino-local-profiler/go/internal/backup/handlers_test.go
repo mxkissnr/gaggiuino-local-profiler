@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
@@ -429,7 +430,7 @@ func TestRestore_RoundTrip_ToFreshInstall(t *testing.T) {
 	mux1 := newMux(h1)
 	seedShot(t, deps1, 42)
 	seedOrder(t, deps1)
-	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "test note", "gaggiuino.local", 5, 1); err != nil {
+	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "test note", "gaggiuino.local", 5, 1, time.Now()); err != nil {
 		t.Fatalf("seeding maintenance log: %v", err)
 	}
 	if err := deps1.LibRepo.SaveLibrary(library.Library{

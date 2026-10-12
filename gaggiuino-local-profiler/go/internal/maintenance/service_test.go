@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -57,5 +58,65 @@ func TestComputeMaintenanceStats_FutureLastDate_DaysSinceIsMinusTwo(t *testing.T
 	}
 	if daysSince != -2 {
 		t.Errorf("daysSince = %d, want -2 (Math.floor(-1.5), not Go's truncating -1)", daysSince)
+	}
+}
+
+// TestSaveTask_ConcurrentDifferentTasksBothSurvive (#1608): two writers share
+// one stale snapshot; one changes backflush's threshold, then another marks
+// descaling done. Per-task writes must leave both changes intact — the old
+// whole-map SaveMaintenance would have rewritten backflush from the second
+// caller's stale copy, dropping the threshold change.
+func TestSaveTask_ConcurrentDifferentTasksBothSurvive(t *testing.T) {
+	_, repo, libRepo, sqlDB := newTestHandlers(t)
+	shotsRepo := shots.NewRepository(sqlDB)
+	registry := machines.NewRegistry(sqlDB)
+
+	before, err := repo.GetMaintenance(1)
+	if err != nil {
+		t.Fatalf("GetMaintenance: %v", err)
+	}
+	if v, _ := jsPositiveInt(before["backflush"]["threshold_shots"]); v != 20 {
+		t.Fatalf("precondition: backflush default threshold_shots = %v; want 20", before["backflush"]["threshold_shots"])
+	}
+
+	if err := repo.SaveTask(1, "backflush", Task{"threshold_shots": int64(99)}); err != nil {
+		t.Fatalf("SaveTask(backflush): %v", err)
+	}
+	if _, err := MarkTaskDone(repo, shotsRepo, libRepo, registry, "descaling", "", 1); err != nil {
+		t.Fatalf("MarkTaskDone(descaling): %v", err)
+	}
+
+	got, err := repo.GetMaintenance(1)
+	if err != nil {
+		t.Fatalf("GetMaintenance after writes: %v", err)
+	}
+	if v, _ := jsPositiveInt(got["backflush"]["threshold_shots"]); v != 99 {
+		t.Errorf("backflush threshold_shots = %v; want 99 (survived the descaling write)", got["backflush"]["threshold_shots"])
+	}
+	if got["descaling"]["lastDate"] == nil {
+		t.Errorf("descaling lastDate = nil; want a date set by MarkTaskDone")
+	}
+}
+
+// TestMarkTaskDone_DoesNotFreezeOtherTasksDefaults (#1608): marking one task
+// done must write only that task's row — GetMaintenance's defaults for the
+// other tasks must not be persisted as if the user had set them.
+func TestMarkTaskDone_DoesNotFreezeOtherTasksDefaults(t *testing.T) {
+	_, repo, libRepo, sqlDB := newTestHandlers(t)
+	shotsRepo := shots.NewRepository(sqlDB)
+	registry := machines.NewRegistry(sqlDB)
+
+	if _, err := MarkTaskDone(repo, shotsRepo, libRepo, registry, "backflush", "", 1); err != nil {
+		t.Fatalf("MarkTaskDone(backflush): %v", err)
+	}
+
+	rows, err := repo.GetAllMaintenanceRaw()
+	if err != nil {
+		t.Fatalf("GetAllMaintenanceRaw: %v", err)
+	}
+	for _, row := range rows {
+		if row.Key == "descaling" {
+			t.Fatalf("MarkTaskDone(backflush) wrote a descaling row: %s", row.Data)
+		}
 	}
 }

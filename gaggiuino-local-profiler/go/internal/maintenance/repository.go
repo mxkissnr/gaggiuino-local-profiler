@@ -3,6 +3,7 @@ package maintenance
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -123,21 +124,6 @@ func (r *Repository) GetMaintenance(machineID int64) (map[string]Task, error) {
 	return result, nil
 }
 
-// SaveCustomTask creates or updates a single custom maintenance task.
-func (r *Repository) SaveCustomTask(machineID int64, key string, task Task) error {
-	b, err := json.Marshal(task)
-	if err != nil {
-		return fmt.Errorf("maintenance: encoding custom task %s: %w", key, err)
-	}
-	if _, err := r.db.Exec(
-		`INSERT OR REPLACE INTO maintenance (machine_id, key, data) VALUES (?,?,?)`,
-		machineID, key, string(b),
-	); err != nil {
-		return fmt.Errorf("maintenance: saving custom task %s: %w", key, err)
-	}
-	return nil
-}
-
 // DeleteCustomTask removes a custom_* task row from the maintenance table.
 func (r *Repository) DeleteCustomTask(machineID int64, key string) error {
 	if _, err := r.db.Exec(
@@ -198,6 +184,50 @@ func (r *Repository) SaveMaintenance(data map[string]Task, machineID int64) erro
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("maintenance: committing save: %w", err)
+	}
+	return nil
+}
+
+// SaveTask writes exactly one (machine_id, key) row, leaving every other row
+// untouched. Unlike SaveMaintenance, which rewrites every task from one
+// caller's snapshot, this cannot clobber a concurrent edit to a *different*
+// task. t carries only the keys this change sets and the stored row is the
+// merge base (read for this one task, not the defaults-merged map), so
+// GetMaintenance's defaults are never frozen into the DB as if the user had
+// set them. Global tasks (waterfilter/grinder_*) route to the shared sentinel
+// machine_id exactly as SaveMaintenance does; the table's unique key is
+// (machine_id, key), so the upsert targets it directly.
+func (r *Repository) SaveTask(machineID int64, key string, t Task) error {
+	target := machineID
+	if isGlobalMaintenanceTask(key) {
+		target = globalMaintenanceMachineID
+	}
+	base := Task{}
+	var data string
+	err := r.db.QueryRow(
+		`SELECT data FROM maintenance WHERE machine_id = ? AND key = ?`, target, key,
+	).Scan(&data)
+	switch {
+	case err == nil:
+		_ = json.Unmarshal([]byte(data), &base)
+	case errors.Is(err, sql.ErrNoRows):
+		// No stored row yet: the change is the whole row.
+	default:
+		return fmt.Errorf("maintenance: reading stored task %s: %w", key, err)
+	}
+	for k, v := range t {
+		base[k] = v
+	}
+	b, err := json.Marshal(base)
+	if err != nil {
+		return fmt.Errorf("maintenance: encoding task %s: %w", key, err)
+	}
+	if _, err := r.db.Exec(
+		`INSERT INTO maintenance (machine_id, key, data) VALUES (?,?,?)
+		 ON CONFLICT(machine_id, key) DO UPDATE SET data = excluded.data`,
+		target, key, string(b),
+	); err != nil {
+		return fmt.Errorf("maintenance: saving task %s: %w", key, err)
 	}
 	return nil
 }
@@ -301,10 +331,12 @@ func (r *Repository) GetMaintenanceLog(machineID int64) ([]LogEntry, error) {
 	return out, rows.Err()
 }
 
-// AddMaintenanceLogEntry appends a log entry. lastLogID is a monotonic-id
+// AddMaintenanceLogEntry appends a log entry dated at `at` (ts/date come from
+// it; callers logging "now" pass time.Now()). lastLogID is a monotonic-id
 // guard (#578): the current millisecond alone collides when this is called
-// more than once in the same millisecond.
-func (r *Repository) AddMaintenanceLogEntry(task, notes, machine string, shotCount, machineID int64) (LogEntry, error) {
+// more than once in the same millisecond. The id stays a now-based monotonic
+// value regardless of `at`, so back-dating an entry never reorders the log.
+func (r *Repository) AddMaintenanceLogEntry(task, notes, machine string, shotCount, machineID int64, at time.Time) (LogEntry, error) {
 	now := time.Now()
 	id := now.UnixMilli()
 	for {
@@ -317,7 +349,7 @@ func (r *Repository) AddMaintenanceLogEntry(task, notes, machine string, shotCou
 		}
 	}
 	entry := LogEntry{
-		ID: id, TS: now.Unix(), Date: now.UTC().Format("2006-01-02"),
+		ID: id, TS: at.Unix(), Date: at.UTC().Format("2006-01-02"),
 		Task: task, Machine: machine, ShotCountAtTime: shotCount, Notes: notes, MachineID: machineID,
 	}
 	if _, err := r.db.Exec(
@@ -334,12 +366,19 @@ func (r *Repository) AddMaintenanceLogEntry(task, notes, machine string, shotCou
 	return entry, nil
 }
 
-// DeleteMaintenanceLog removes a log entry by id.
-func (r *Repository) DeleteMaintenanceLog(id int64) error {
-	if _, err := r.db.Exec(`DELETE FROM maintenance_log WHERE id = ?`, id); err != nil {
-		return fmt.Errorf("maintenance: deleting log entry %d: %w", id, err)
+// DeleteMaintenanceLog removes a log entry by id and reports how many rows it
+// deleted, so a caller can 404 on an unknown id without loading the whole log
+// just to check existence.
+func (r *Repository) DeleteMaintenanceLog(id int64) (int64, error) {
+	res, err := r.db.Exec(`DELETE FROM maintenance_log WHERE id = ?`, id)
+	if err != nil {
+		return 0, fmt.Errorf("maintenance: deleting log entry %d: %w", id, err)
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("maintenance: deleting log entry %d: %w", id, err)
+	}
+	return n, nil
 }
 
 // DeleteGrinderTask removes a grinder's `grinder_{id}` row from the
