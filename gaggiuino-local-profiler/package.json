@@ -10,7 +10,7 @@
     "coverage:ratchet": "COVERAGE_RATCHET=1 vitest run --coverage",
     "test:e2e": "node --test --test-force-exit test/e2e/*.test.mts",
     "lint": "eslint --flag unstable_native_nodejs_ts_config .",
-    "typecheck": "node --max-old-space-size=1024 node_modules/typescript/bin/tsc --noEmit && node --max-old-space-size=1024 node_modules/typescript/bin/tsc --noEmit -p tsconfig.sw.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "types:api": "openapi-typescript go/internal/system/openapi.yaml -o public-src/api/schema.gen.ts",
     "release:check": "node scripts/release-check.mts",
     "changelog:collect": "node scripts/changelog-collect.mts",

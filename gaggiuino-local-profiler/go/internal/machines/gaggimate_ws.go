@@ -96,6 +96,32 @@ func gaggimateRequest(ctx context.Context, baseURL, reqType string, payload map[
 	}
 }
 
+// maxGaggiMateStatusKeys bounds the merged status map so a device sending ever-new keys can't grow it without limit.
+const maxGaggiMateStatusKeys = 128
+
+// mergeGaggiMateStatus merges one evt:status frame onto a previous status map
+// and returns a NEW map. Since firmware v1.9.0 frames are partial: a key that
+// is absent keeps its previous value, a key sent as JSON null clears it. The
+// previous map is never mutated because Status() hands the cached map to
+// callers that read it after the session lock is released.
+func mergeGaggiMateStatus(prev, frame map[string]any) map[string]any {
+	merged := make(map[string]any, len(prev)+len(frame))
+	for k, v := range prev {
+		merged[k] = v
+	}
+	for k, v := range frame {
+		if v == nil {
+			delete(merged, k)
+			continue
+		}
+		if _, exists := merged[k]; !exists && len(merged) >= maxGaggiMateStatusKeys {
+			continue
+		}
+		merged[k] = v
+	}
+	return merged
+}
+
 // gaggimateWaitForStatus connects and merges evt:status broadcasts
 // (unsolicited telemetry, not a request/response) until at least one live
 // reading (ct) has arrived, then resolves with the merged fields. On firmware
