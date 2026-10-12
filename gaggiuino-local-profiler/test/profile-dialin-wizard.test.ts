@@ -14,7 +14,7 @@ g.navigator    ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
-const { profileDialinOverride, openProfileDialinWizard, closeProfileDialinWizard }
+const { profileDialinOverride, openProfileDialinWizard, closeProfileDialinWizard, startProfileDialinFromList }
   = await import('../public-src/views/profile-dialin-wizard.js');
 
 // _sendUpdatedProfile isn't exported — drive the race through
@@ -149,5 +149,73 @@ describe('profile dial-in poll holds back while the override input has a value',
       closeProfileDialinWizard();
       vi.useRealTimers();
     }
+  });
+});
+
+// #1605: a dial-in started from the profile list must target the machine the
+// list was showing (the active machine) — both the profile GET and every round
+// PUT — even if the active machine changes mid-session.
+describe('profile dial-in captures the machine it was started for (#1605)', () => {
+  function dialinDocument(overrideValue: string): Record<string, unknown> {
+    const input = { value: overrideValue };
+    const modal = { classList: { add: () => {}, remove: () => {} }, style: {} as Record<string, string> };
+    return {
+      // #pdwBody absent -> renderProfileDialinWizard() bails on the first lookup.
+      getElementById: (id: string) => {
+        if (id === 'pdwOverrideInput') return input;
+        if (id === 'profileDialinWizardModal') return modal;
+        return undefined;
+      },
+      querySelectorAll: () => [],
+    };
+  }
+
+  // The two requests the wizard makes against the machine: GET the full profile
+  // (startProfileDialinFromList), then PUT one round's adjustment
+  // (profileDialinOverride, which calls the unexported _sendUpdatedProfile).
+  async function startAndSendOneRound(): Promise<void> {
+    g.document = dialinDocument('94');
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ id: 42, name: 'Turbo', waterTemperature: 92, phases: [] }),
+    } as unknown as Response);
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response);
+
+    await startProfileDialinFromList(42);
+    S.profileDialinSession!.reviewRound = {
+      shotId: 1, score: 70,
+      suggestion: {
+        type: 'adjust', phaseIndex: null, field: 'waterTemperature',
+        oldValue: 92, unit: 'C', reason: 'test_reason',
+      },
+    };
+    await profileDialinOverride();
+    closeProfileDialinWizard();
+  }
+
+  beforeEach(() => {
+    fetchSpy.mockReset();
+    S.profileDialinSession = null;
+  });
+
+  it('carries machineId on the profile GET and the round PUT when a machine is active', async () => {
+    S.activeMachineId = 2;
+    await startAndSendOneRound();
+
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toBe('api/machine/profile/42?machineId=2');
+    const put = fetchSpy.mock.calls[1];
+    expect(String(put?.[0])).toBe('api/machine/profile/42');
+    const body = JSON.parse((put?.[1] as RequestInit).body as string) as { machineId?: number };
+    expect(body.machineId).toBe(2);
+  });
+
+  it("carries no machineId when the active machine is 'all'", async () => {
+    S.activeMachineId = 'all';
+    await startAndSendOneRound();
+
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toBe('api/machine/profile/42');
+    const put = fetchSpy.mock.calls[1];
+    const body = JSON.parse((put?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect('machineId' in body).toBe(false);
   });
 });
