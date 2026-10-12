@@ -163,25 +163,22 @@ func (r *ProfilesRepository) GetByRemoteID(machineID int64, remoteID string) (*P
 // called for every profile returned by a successful live list/get/create/
 // update, so the local cache never goes stale while the machine is
 // reachable. A row already marked dirty/pending_* by a not-yet-pushed local
-// edit is left untouched (the live copy doesn't get to silently clobber an
-// offline edit still waiting to sync — that edit's own push, once it
-// succeeds, is what calls MarkSynced instead).
+// edit is left untouched: the guard is a `WHERE machine_profiles.sync_status
+// = ?` on the DO UPDATE, so a conflicting non-synced row is skipped in the
+// same atomic statement rather than after a separate (and racy) read (the
+// live copy doesn't get to silently clobber an offline edit still waiting to
+// sync — that edit's own push, once it succeeds, is what calls MarkSynced
+// instead).
 func (r *ProfilesRepository) UpsertSynced(machineID int64, remoteID, name string, data json.RawMessage, utility bool) error {
-	existing, err := r.GetByRemoteID(machineID, remoteID)
-	if err != nil {
-		return err
-	}
-	if existing != nil && existing.SyncStatus != ProfileSyncSynced {
-		return nil
-	}
 	now := time.Now().UnixMilli()
-	_, err = r.db.Exec(`INSERT INTO machine_profiles
+	_, err := r.db.Exec(`INSERT INTO machine_profiles
 			(machine_id, remote_id, name, data, utility, sync_status, last_sync_error, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
 		ON CONFLICT(machine_id, remote_id) WHERE remote_id IS NOT NULL DO UPDATE SET
 			name = excluded.name, data = excluded.data, utility = excluded.utility,
-			sync_status = excluded.sync_status, last_sync_error = NULL, updated_at = excluded.updated_at`,
-		machineID, remoteID, name, string(data), utility, ProfileSyncSynced, now, now)
+			sync_status = excluded.sync_status, last_sync_error = NULL, updated_at = excluded.updated_at
+		WHERE machine_profiles.sync_status = ?`,
+		machineID, remoteID, name, string(data), utility, ProfileSyncSynced, now, now, ProfileSyncSynced)
 	if err != nil {
 		return fmt.Errorf("machines: upserting synced profile: %w", err)
 	}
@@ -196,23 +193,18 @@ func (r *ProfilesRepository) UpsertSynced(machineID int64, remoteID, name string
 // gets an empty `{}` placeholder body — it becomes complete the first time
 // someone opens it (getMachineProfile's live-success path calls
 // UpsertSynced with the real body then). Same dirty-row protection as
-// UpsertSynced: a local edit still waiting to push is left alone.
+// UpsertSynced, enforced in SQL: a local edit still waiting to push is left
+// alone by the DO UPDATE's `WHERE machine_profiles.sync_status = ?`.
 func (r *ProfilesRepository) UpsertListSummary(machineID int64, remoteID, name string, utility bool) error {
-	existing, err := r.GetByRemoteID(machineID, remoteID)
-	if err != nil {
-		return err
-	}
-	if existing != nil && existing.SyncStatus != ProfileSyncSynced {
-		return nil
-	}
 	now := time.Now().UnixMilli()
-	_, err = r.db.Exec(`INSERT INTO machine_profiles
+	_, err := r.db.Exec(`INSERT INTO machine_profiles
 			(machine_id, remote_id, name, data, utility, sync_status, last_sync_error, created_at, updated_at)
 		VALUES (?, ?, ?, '{}', ?, ?, NULL, ?, ?)
 		ON CONFLICT(machine_id, remote_id) WHERE remote_id IS NOT NULL DO UPDATE SET
 			name = excluded.name, utility = excluded.utility, sync_status = excluded.sync_status,
-			last_sync_error = NULL, updated_at = excluded.updated_at`,
-		machineID, remoteID, name, utility, ProfileSyncSynced, now, now)
+			last_sync_error = NULL, updated_at = excluded.updated_at
+		WHERE machine_profiles.sync_status = ?`,
+		machineID, remoteID, name, utility, ProfileSyncSynced, now, now, ProfileSyncSynced)
 	if err != nil {
 		return fmt.Errorf("machines: upserting profile list summary: %w", err)
 	}
