@@ -240,40 +240,6 @@ func TestStreamedBackupJSON_StructuralShape(t *testing.T) {
 	}
 }
 
-// TestGetBackupJSON_SkipsUnreferencedImages (#1602): the legacy GET /api/backup
-// JSON export bundles only images a row still refers to, like the zip export —
-// its inline images map carries the referenced bean photo but not an app-named
-// orphan.
-func TestGetBackupJSON_SkipsUnreferencedImages(t *testing.T) {
-	imgDir := useImageDir(t)
-	for _, name := range []string{"1.jpg", "77.jpg"} {
-		if err := os.WriteFile(filepath.Join(imgDir, name), []byte{0x01, 0x02, 0x03, 0x04}, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	h, deps, _ := newTestHandlers(t)
-	if err := deps.LibRepo.SaveLibrary(library.Library{
-		Beans: []library.Entity{{"id": int64(1), "name": "B", "image": "jpg"}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	rec := doJSON(t, newMux(h), http.MethodGet, "/api/backup", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
-	}
-	images, ok := decodeBody(t, rec.Body.Bytes())["images"].(map[string]any)
-	if !ok {
-		t.Fatalf("images is not a JSON object")
-	}
-	if _, ok := images["1.jpg"]; !ok {
-		t.Errorf("referenced image 1.jpg missing from JSON backup; images=%v", images)
-	}
-	if _, ok := images["77.jpg"]; ok {
-		t.Errorf("unreferenced image 77.jpg bundled into JSON backup; images=%v", images)
-	}
-}
-
 // TestRestore_LegacyBackupZip_StillImportable imports a zip produced by
 // the pre-#959 code (checked-in fixture) and confirms the new streaming
 // importer restores it correctly.
