@@ -537,10 +537,12 @@ export function checkAcceptanceProtocol(markdown: string, version: string | null
     }
 
     // Public-content leak check, one failure per finding type, quoting the
-    // match. Only the private ranges are listed (a public address is fine),
-    // and a bare version number like 3.2.0 matches none of these.
+    // match. Only the private ranges are listed (a public address is fine):
+    // RFC1918 IPv4 plus the CGNAT block Tailscale hands out and IPv6 ULA
+    // (fc00::/7), and a bare version number like 3.2.0 matches none of these.
     const leakPatterns = [
-        { type: 'private IPv4 address', re: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/ },
+        { type: 'private IPv4 address', re: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3})\b/ },
+        { type: 'private IPv6 address', re: /\b(?:fc|fd)[0-9a-f]{2}(?::[0-9a-f]{0,4}){2,}\b/i },
         { type: '.local/.lan hostname', re: /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:local|lan)\b/i },
         { type: 'JWT-like string', re: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/ },
         { type: 'GitHub token', re: /\b(?:ghp_|gho_|ghs_|ghu_|ghr_|github_pat_)[A-Za-z0-9_]+/ },

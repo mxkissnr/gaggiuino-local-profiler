@@ -158,8 +158,10 @@ class FakeElement implements ClassHost {
     return this.context;
   }
 
-  toBlob(callback: (blob: unknown) => void): void {
-    callback(null);
+  toBlob(callback: (blob: unknown) => void, type?: string): void {
+    // A real canvas yields a PNG here; handing back null would make the Apply
+    // test below vacuous, since finishApply(null) closes with null.
+    callback(new Blob(['sticker'], { type: type ?? 'image/png' }));
   }
 
   focus(): void {
@@ -649,6 +651,23 @@ describe('openStickerEditor overlay', () => {
     await expect(promise).resolves.toBeNull();
     expect(doc.body.children.length).toBe(0);
     expect(resetCutoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves with a PNG blob when Apply is pressed', async () => {
+    const { overlay, promise } = await openReady();
+
+    vi.useFakeTimers();
+    try {
+      node(overlay, '.sticker-apply').click();
+      // finishApply peels for PEEL_MS (450 ms) before closing with the blob.
+      vi.advanceTimersByTime(450);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const blob = await promise;
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob?.type).toBe('image/png');
   });
 
   it('renders a progress bar that is hidden once the cut-out is ready', async () => {
