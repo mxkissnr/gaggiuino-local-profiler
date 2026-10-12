@@ -143,10 +143,29 @@ func (p *Poller) SetReadyByTarget(targetAt *int64) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
+// readyByExpired reports whether a ready-by target is more than readyByGrace
+// in the past — i.e. so stale it must be dropped rather than acted on.
+func readyByExpired(targetAt int64, now time.Time) bool {
+	return now.UnixMilli() > targetAt+readyByGrace.Milliseconds()
+}
+
+// clearReadyByTarget drops a pending ready-by pair, persists the cleared state
+// and pushes the preheat update to open pages. Shared by the two places a
+// target is consumed: after a switch-on, and when a target turns out stale.
+func (p *Poller) clearReadyByTarget() {
+	p.state.mu.Lock()
+	p.state.readyByTargetAt = nil
+	p.state.plannedSwitchOnAt = nil
+	p.state.mu.Unlock()
+	p.savePreheatState()
+	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+}
+
 // checkReadyByPreheat is one-shot: it fires the switch on once the planned
 // time is reached, then clears the target so it never re-fires, cleared
 // regardless of whether the HA call succeeds (a persistently unreachable HA
-// instance shouldn't be hammered every 30s tick).
+// instance shouldn't be hammered every 30s tick). A target that went stale
+// while the app was running is cleared without switching on.
 func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	p.state.mu.Lock()
 	readyByTargetAt := p.state.readyByTargetAt
@@ -158,7 +177,13 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	if p.runtime.Get().MachineOn {
 		return
 	}
-	if time.Now().UnixMilli() < *plannedSwitchOnAt {
+	now := time.Now()
+	if now.UnixMilli() < *plannedSwitchOnAt {
+		return
+	}
+	if readyByExpired(*readyByTargetAt, now) {
+		log.Printf("system: discarded stale ready-by target from %s", time.UnixMilli(*readyByTargetAt).Format(time.RFC3339))
+		p.clearReadyByTarget()
 		return
 	}
 	if entity := p.defaultSwitchEntity(); entity != "" {
@@ -172,12 +197,7 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	// about to start can attribute the ready-by target to itself
 	// (preheat_history.go's lastReadyBy).
 	p.rememberLastReadyBy(readyByTargetAt, plannedSwitchOnAt)
-	p.state.mu.Lock()
-	p.state.readyByTargetAt = nil
-	p.state.plannedSwitchOnAt = nil
-	p.state.mu.Unlock()
-	p.savePreheatState()
-	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+	p.clearReadyByTarget()
 }
 
 // preheatWatchTick is the 30s interval body, minus the preheat-ready
@@ -222,7 +242,9 @@ func (p *Poller) savePreheatState() {
 
 // loadPreheatState, called once from Start(): restores switchOnAt/switchOffAt
 // (only if within preheatStateTTL of now — no reviving a preheat session from
-// days ago) and any pending ready-by target.
+// days ago) and any pending ready-by target, dropping a target that is already
+// stale so an app that was down across the target time never switches the
+// machine on late.
 func (p *Poller) loadPreheatState() {
 	data, err := os.ReadFile(preheatStateFile)
 	if err != nil {
@@ -241,10 +263,17 @@ func (p *Poller) loadPreheatState() {
 		p.runtime.SetSwitchOffAt(s.SwitchOffAt)
 	}
 	if s.ReadyByTargetAt != nil && s.PlannedSwitchOnAt != nil {
-		p.state.mu.Lock()
-		p.state.readyByTargetAt = s.ReadyByTargetAt
-		p.state.plannedSwitchOnAt = s.PlannedSwitchOnAt
-		p.state.mu.Unlock()
+		if readyByExpired(*s.ReadyByTargetAt, time.Now()) {
+			log.Printf("system: discarded stale ready-by target from %s", time.UnixMilli(*s.ReadyByTargetAt).Format(time.RFC3339))
+			// The in-memory pair is left nil; persist that so the stale target
+			// is not reconsidered on the next restart.
+			p.savePreheatState()
+		} else {
+			p.state.mu.Lock()
+			p.state.readyByTargetAt = s.ReadyByTargetAt
+			p.state.plannedSwitchOnAt = s.PlannedSwitchOnAt
+			p.state.mu.Unlock()
+		}
 	}
 	if snap := p.runtime.Get(); snap.SwitchOnAt != nil {
 		log.Printf("system: preheat state restored: started %d min ago", (now-*snap.SwitchOnAt)/60000)
