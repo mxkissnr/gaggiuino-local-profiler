@@ -1145,10 +1145,8 @@ export async function exportAllCSV(): Promise<void> {
   for (let i = 0; i < list.length; i += 50) {
     const chunk = list.slice(i, i + 50);
     await ensureCurves(chunk.map(s => s.id));
-    for (const s of chunk) {
-      rows.push(shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({})));
-      if (!previouslyCached.has(s.id)) evictCurve(s.id);
-    }
+    rows.push(...chunk.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))));
+    for (const s of chunk) if (!previouslyCached.has(s.id)) evictCurve(s.id);
   }
   await downloadCSV(rows, 'glp_all_shots.csv');
 }
