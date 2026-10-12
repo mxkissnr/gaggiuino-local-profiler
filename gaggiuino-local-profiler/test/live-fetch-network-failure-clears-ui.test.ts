@@ -7,13 +7,14 @@
 // msg.machineReachable === false branch already produces. Same
 // apiFetch-mocking/fake-document harness as
 // test/live-stream-sse-fallback-gating.test.ts.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge the sibling live tests use).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
 
 const apiFetchMock = vi.fn();
 vi.mock('../public-src/api/transport.js', () => ({
@@ -79,5 +80,40 @@ describe('fetchLiveData() catch block on a network-level failure (#913)', () => 
     expect(doc.getElementById('liveIdleTemp').textContent).toBe('–');
     expect(doc.getElementById('liveIdlePressure').textContent).toBe('–');
     expect(doc.getElementById('live-status-badge').className).toContain('unreachable');
+  });
+});
+
+// #1613: fetchLiveData()'s catch routes a network-level blip through
+// handleLiveData({ machineReachable: false, datapoints: {} }). That payload has
+// no isLive, so the brew-start/brew-end transitions moved into
+// handleLiveTransitions must ignore it -- otherwise a blip during a brew would
+// clear S.liveWasLive and schedule the 4s-delayed brew-end draft apply.
+describe('network failure during a brew does not run the live transitions (#1613)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    apiFetchMock.mockReset();
+    g.document = makeFakeDocument();
+    S.activeMachineId = null;
+    S.machines = [];
+    S.currentLang = 'en';
+    S.livePollInterval = null;
+    S.liveWasLive = true; // a brew is in progress
+    S.liveLastSeq = 7;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('leaves S.liveWasLive set and schedules no brew-end draft apply', async () => {
+    const loadData = vi.fn(() => Promise.resolve());
+    window.loadData = loadData;
+    apiFetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await fetchLiveData();
+
+    expect(S.liveWasLive).toBe(true);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(loadData).not.toHaveBeenCalled();
   });
 });
