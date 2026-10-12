@@ -251,6 +251,7 @@ interface LibraryModule {
   requestCloseBeanForm: () => boolean;
   discardBeanForm: () => void;
   saveBeanAddBag: () => Promise<void>;
+  saveBean: () => Promise<void>;
   openNewBagForm: (id: number) => void;
 }
 
@@ -260,6 +261,7 @@ interface Bean {
   roaster: string;
   bags: unknown[];
   flavors: string[];
+  roastDate?: string;
 }
 
 interface StateLike {
@@ -421,3 +423,46 @@ describe('save and add bag (#1398)', () => {
   });
 });
 
+
+describe('bean roast date follows the current bag (#1606)', () => {
+  it('prefills the form with the current bag roast date, not the bean-level one', () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastDate = '2025-12-31';
+    library.openBeanForm(bean);
+
+    expect(doc.getElementById('beanFormRoastDate')!.value).toBe('2026-01-01');
+  });
+
+  it('editing without touching the roast date sends no roastDate', async () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastDate = '2025-12-31';
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Renamed', roaster: 'Kaffee Braun', bags: bean.bags,
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+
+    await library.saveBean();
+
+    const payload = mocks.saveBean.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect('roastDate' in payload).toBe(false);
+  });
+
+  it('editing the roast date sends the new value', async () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastDate = '2025-12-31';
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bean.bags,
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormRoastDate')!.value = '2026-02-02';
+
+    await library.saveBean();
+
+    const payload = mocks.saveBean.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.roastDate).toBe('2026-02-02');
+  });
+});
