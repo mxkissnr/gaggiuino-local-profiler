@@ -3,7 +3,7 @@
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml, toIsoDateInput } from '../../utils.js';
+import { esc, html, joinHtml, toIsoDateInput, localMidnightMs } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { WRENCH_ICON_SVG } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
@@ -199,7 +199,7 @@ export async function saveGrinder(): Promise<void> {
     const sinceRaw = _input('grinderFormZeroPointSince').value.trim();
     if (zpRaw !== '') {
       const zeroPoint = parseFloat(zpRaw);
-      const sinceMs   = sinceRaw ? new Date(sinceRaw).getTime() : 0;
+      const sinceMs   = sinceRaw ? localMidnightMs(sinceRaw) : 0;
       // For "now" inserts (sinceMs=0) the backend deduplicates on value;
       // for retroactive inserts we always send (dedup is on exact since+value pair).
       const isRetroactive = sinceMs > 0;
