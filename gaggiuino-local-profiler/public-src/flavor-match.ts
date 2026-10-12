@@ -24,6 +24,7 @@ interface IndexEntry {
 
 let _index: IndexEntry[] | null = null; // [{ id, norms: string[] }]
 let _byId: Map<string, FlavorNode> | null = null; // id -> node
+let _aliasByNorm: Map<string, string> | null = null; // normalizeFlavor(key) -> node id
 
 function buildIndex(): void {
   if (_index) return;
@@ -38,6 +39,16 @@ function buildIndex(): void {
   FLAVOR_WHEEL.forEach(walk);
   _index = index;
   _byId = byId;
+
+  // Lookup keys are normalised the same way the input is, so a key that still
+  // carries umlauts ('geröstete mandel') matches its diacritics-stripped input
+  // ('gerostete mandel'). The alias table itself is not edited.
+  const aliasByNorm = new Map<string, string>();
+  for (const [key, id] of Object.entries(FLAVOR_ALIASES)) {
+    const norm = normalizeFlavor(key);
+    if (norm && !aliasByNorm.has(norm)) aliasByNorm.set(norm, id);
+  }
+  _aliasByNorm = aliasByNorm;
 }
 
 // isBoundaryMatch: `needle` occurs in `haystack` with non-letter chars (or
@@ -67,7 +78,7 @@ export function matchFlavors(flavors: unknown): { matched: Set<string>; unmatche
     const exact = _index!.find(e => e.norms.includes(norm));
     if (exact) { matched.add(exact.id); continue; }
 
-    const aliasId = FLAVOR_ALIASES[norm];
+    const aliasId = _aliasByNorm!.get(norm);
     if (aliasId && _byId!.has(aliasId)) { matched.add(aliasId); continue; }
 
     const contained = _index!.find(e => e.norms.some(n => boundaryContains(norm, n)));

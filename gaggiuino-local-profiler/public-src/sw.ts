@@ -65,8 +65,13 @@ sw.addEventListener('fetch', (event) => {
     event.respondWith(
         fetch(request)
             .then(res => {
-                const copy = res.clone();
-                void caches.open(SHELL_CACHE).then(c => c.put(request, copy));
+                // Only a healthy same-origin response belongs in the shell cache:
+                // an error page (e.g. a 502 while the app restarts) must never be
+                // stored and then served back offline.
+                if (res.ok && res.type === 'basic') {
+                    const copy = res.clone();
+                    void caches.open(SHELL_CACHE).then(c => c.put(request, copy));
+                }
                 return res;
             })
             .catch(async () => (await caches.match(request)) ?? Response.error())

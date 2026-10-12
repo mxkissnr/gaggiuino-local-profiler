@@ -650,18 +650,33 @@ function buildEditor(
     resolve(result);
   }
 
+  // Shows the failure line without changing any editor state. Used by both the
+  // fatal fail() below and a single failed smart tap, which must leave the
+  // mask (current) and undo stack (history) intact so earlier edits survive.
+  function showFailureLine(err: unknown): void {
+    if (err !== undefined) console.error(err);
+    workingLine.textContent = t(failureMessageKey(err));
+    workingLine.classList.add('sticker-failed');
+    workingLine.style.display = '';
+  }
+
+  function clearFailureLine(): void {
+    if (!workingLine.classList.contains('sticker-failed')) return;
+    workingLine.classList.remove('sticker-failed');
+    workingLine.textContent = '';
+    workingLine.style.display = 'none';
+  }
+
   function fail(err?: unknown): void {
     if (closed) {
       resetCutout();
       return;
     }
-    if (err !== undefined) console.error(err);
+    showFailureLine(err);
     working = false;
     busy = false;
     stopProgressTimer();
     progress.style.display = 'none';
-    workingLine.textContent = t(failureMessageKey(err));
-    workingLine.classList.add('sticker-failed');
     tools.style.display = 'none';
     modeGroup.style.display = 'none';
     cancelBtn.style.display = 'none';
@@ -703,6 +718,7 @@ function buildEditor(
 
   function paintAt(clientX: number, clientY: number): void {
     if (!current) return;
+    clearFailureLine();
     showOriginal = false;
     const point = toImagePoint(clientX, clientY);
     current = paintBrush(current, workW, workH, point.x, point.y, brushSize / 2, mode === 'add' ? 1 : 0);
@@ -711,6 +727,7 @@ function buildEditor(
 
   async function handleTap(clientX: number, clientY: number): Promise<void> {
     if (working || busy) return;
+    clearFailureLine();
     busy = true;
     showOriginal = false;
     refreshControls();
@@ -734,7 +751,15 @@ function buildEditor(
       history.push(current);
       draw();
     } catch (err) {
-      fail(err);
+      // A single failed smart tap must not tear the editor down: current and
+      // history are left exactly as they were, so the edits made so far
+      // survive and the user can just tap again. Only the initial automatic
+      // cut-out is fatal (see the fail() call at the end of this function).
+      if (closed) {
+        resetCutout();
+        return;
+      }
+      showFailureLine(err);
     } finally {
       marker.remove();
       busy = false;
@@ -747,6 +772,7 @@ function buildEditor(
     if (working || busy) return;
     const previous = history.undo();
     if (!previous) return;
+    clearFailureLine();
     current = previous;
     refreshControls();
     draw();

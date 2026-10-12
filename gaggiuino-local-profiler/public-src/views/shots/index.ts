@@ -1174,7 +1174,7 @@ export async function exportShot(): Promise<void> {
     `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
     ann.coffee       ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
     ann.grinder      ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
-    ann.grindSetting ? `grinder_setting {${String(ann.grindSetting).replace(/[{}]/g, '')}}` : '',
+    ann.grindSetting != null && ann.grindSetting !== '' ? `grinder_setting {${String(ann.grindSetting).replace(/[{}]/g, '')}}` : '',
     basketName       ? `basket {${basketName.replace(/[{}]/g, '')}}` : '',
     puckScreenName   ? `puck_screen {${puckScreenName.replace(/[{}]/g, '')}}` : '',
     ann.dose         ? `bean_weight ${ann.dose}` : '',
