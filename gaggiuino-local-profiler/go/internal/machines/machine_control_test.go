@@ -540,15 +540,18 @@ func TestBrewConfirm_ClearedByLeavingBrewMode(t *testing.T) {
 }
 
 func TestBrewConfirm_ClearedByReconnect(t *testing.T) {
+	origDelay := liveReconnectDelay.set(20 * time.Millisecond)
+	t.Cleanup(func() { liveReconnectDelay.set(origDelay) })
 	fake, a, m := newWarmControlAdapter(t)
 
 	fake.push(brewConfirmFrame())
 	waitControl(t, a, m, func(s ControlState) bool { return s.BrewConfirm != nil })
 
 	fake.dropConn()
-	// The live client reconnects after liveReconnectDelay; a new connection
-	// resets the session's status and drops the pending confirmation.
-	waitUntil(t, 6*time.Second, func() bool {
+	// The live client reconnects after liveReconnectDelay (shortened above); a
+	// new connection resets the session's status and drops the pending
+	// confirmation.
+	waitUntil(t, time.Second, func() bool {
 		s, ok := a.ControlState(m)
 		return ok && s.BrewConfirm == nil
 	})
