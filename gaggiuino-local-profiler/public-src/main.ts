@@ -58,7 +58,7 @@ import { switchMode, goToShot } from './components/mode.js';
 import { initTopbarNavFade } from './components/topbar-nav-fade.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
 
-import { getShotData, calcShotScore, loadData, refreshShots, shotsLoadInProgress, annotationBusy,
+import { getShotData, calcShotScore, loadData,
          loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
          renderAnnotationPanel, renderStars, quickClone, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
@@ -90,8 +90,7 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, s
          renderMaintenanceDashboard, maintStatusLabel,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
-         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
-         refreshMaintenanceView } from './views/maintenance.js';
+         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask } from './views/maintenance.js';
 import { loadAchievementsView } from './views/achievements.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from './components/flavor-wheel.js';
 import { highlightSheetFlavor } from './components/flavor-mini-wheel.js';
@@ -103,7 +102,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          acceptOrder, toggleDeclineRow, submitDecline, completeOrder,
          deleteOrder, clearOrderHistory,
          loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients, saveBaristaNotify,
-         ordersDraftOpen, _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
+         _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, resetShelfPrefs, renderGrinderList,
          openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
