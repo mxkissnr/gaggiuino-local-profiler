@@ -214,10 +214,56 @@ func TestSettings_GetPost(t *testing.T) {
 	}
 }
 
-func TestSettings_PostRequiresEnabledBoolean(t *testing.T) {
+// TestSettings_PostPartialKeepsEnabled: omitting `enabled` from the POST body
+// keeps whatever is stored (both true and false) and still applies the other
+// fields sent — the fix for #1614, where every unrelated save had to
+// round-trip `enabled` and could reopen the shop when its read failed.
+func TestSettings_PostPartialKeepsEnabled(t *testing.T) {
+	h, repo, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	// The default stored enabled is true; a save that omits it must keep it.
+	rec := doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{
+		"notify_low_stock": false,
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	saved := decodeBody(t, rec.Body.Bytes())
+	if saved["enabled"] != true {
+		t.Errorf("enabled after partial post = %v; want the stored true", saved["enabled"])
+	}
+	if saved["notify_low_stock"] != false {
+		t.Errorf("notify_low_stock = %v; want false", saved["notify_low_stock"])
+	}
+
+	// A stored false must survive a partial save just the same.
+	if err := repo.SaveSettings(Settings{"enabled": false}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	rec = doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{
+		"notify_new_order": true,
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	saved = decodeBody(t, rec.Body.Bytes())
+	if saved["enabled"] != false {
+		t.Errorf("enabled after partial post = %v; want the stored false", saved["enabled"])
+	}
+	if saved["notify_new_order"] != true {
+		t.Errorf("notify_new_order = %v; want true", saved["notify_new_order"])
+	}
+}
+
+// TestSettings_PostNonBooleanEnabled: `enabled` is optional, but when present
+// it must still be a real boolean.
+func TestSettings_PostNonBooleanEnabled(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
-	rec := doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{}))
+	rec := doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{
+		"enabled": "yes",
+	}))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d; want 400", rec.Code)
 	}

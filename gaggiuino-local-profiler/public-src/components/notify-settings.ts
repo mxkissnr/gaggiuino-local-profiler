@@ -39,13 +39,13 @@ export async function loadNotifySettingsCard(): Promise<void> {
 export async function saveNotifySettings(): Promise<void> {
   const list = document.getElementById('notifySettingsList');
   if (!list) return;
-  const settings: OrdersSettings = await getOrdersSettings().catch(() => ({}));
-  const body: OrdersSettingsUpdate = { enabled: settings.enabled ?? true };
+  const body: OrdersSettingsUpdate = {};
   list.querySelectorAll<HTMLInputElement>('[data-notify-key]').forEach(cb => {
     const key = cb.dataset.notifyKey as NotifyKey;
     body[key] = cb.checked;
   });
-  await postOrdersSettings(body);
+  const r = await postOrdersSettings(body);
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('notifySettingsSaveBtn');
   if (btn) {
     btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_types_saved')}`;

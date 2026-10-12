@@ -2555,9 +2555,11 @@ paths:
       tags: [Orders]
       summary: Enable or disable the orders feature, and configure notification toggles/recipients
       description: >
-        Toggling `enabled` broadcasts a shop-open/shop-closed notification to
-        `broadcastRecipients` (filtered to devices currently home, when HA
-        person data is available), unless `notify_shop_state` is false.
+        `enabled` is optional; omitting it keeps the stored value and skips the
+        shop-open/shop-closed broadcast. When present, a change in `enabled`
+        broadcasts a shop-open/shop-closed notification to `broadcastRecipients`
+        (filtered to devices currently home, when HA person data is available),
+        unless `notify_shop_state` is false.
       requestBody:
         required: true
         content:
@@ -2565,7 +2567,7 @@ paths:
             schema: { $ref: '#/components/schemas/OrdersSettings' }
       responses:
         "200": { description: Updated settings, content: { application/json: { schema: { $ref: '#/components/schemas/OrdersSettings' } } } }
-        "400": { description: enabled (boolean) required }
+        "400": { description: enabled must be a boolean }
 
   /api/orders/notify-services:
     get:
