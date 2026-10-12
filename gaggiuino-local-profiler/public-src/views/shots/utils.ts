@@ -1,5 +1,5 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints, isoToGerman } from '../../utils.js';
+import { mapShotDatapoints, isoToGerman, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 import type { PressureNote } from '../../shared/score.js';
@@ -56,22 +56,13 @@ function _parseDMY(str: string | null | undefined): number {
 // #456: resolves a shot/annotation to its library bean, preferring the
 // stable beanId link over the free-text coffee name — mirrors
 // LibraryService.resolveBeanForAnnotation on the backend, and the same
-// underlying rule as library.js's renderBeanList consumption totals: when
-// beanId resolves to a bean, it's trusted exclusively; only when it's
-// absent, or points at nothing currently in the library, does this fall
-// back to a name match (recovering a delete+reimport under the same name,
-// and covering annotations that predate beanId).
+// underlying rule as library.js's renderBeanList consumption totals. The
+// matching itself lives in utils.js (the pure helper module, so a caller that
+// passes the bean list explicitly need not pull this state-backed module in);
+// this wrapper only supplies the current library as the default list.
 export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): BeanRecord | null {
-  const ann = annotation as ShotAnnotationLike | null | undefined;
   const list = (Array.isArray(beans) ? beans : S.coffeeLibrary?.beans || []) as BeanRecord[];
-  if (ann?.beanId != null) {
-    const byId = list.find(b => b.id === ann.beanId);
-    if (byId) return byId;
-  }
-  const name = ann?.coffee;
-  if (!name) return null;
-  const key = String(name).toLowerCase();
-  return list.find(b => String(b.name || '').toLowerCase() === key) || null;
+  return _resolveBeanForAnnotation(annotation, list) as BeanRecord | null;
 }
 
 export function _roastDateFromLibrary(
