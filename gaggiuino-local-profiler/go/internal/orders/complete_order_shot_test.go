@@ -58,8 +58,8 @@ func completeOrderAt(t *testing.T, svc *Service, repo *Repository, acceptedMs in
 	}
 	if acceptedMs != 0 {
 		order["acceptedAt"] = acceptedMs
-		if err := repo.SaveAll([]Order{order}); err != nil {
-			t.Fatalf("SaveAll order with acceptedAt: %v", err)
+		if err := repo.UpdateFields(order["id"].(string), map[string]any{"acceptedAt": acceptedMs}); err != nil {
+			t.Fatalf("stamping acceptedAt: %v", err)
 		}
 	}
 	done, err := svc.CompleteOrder(order["id"].(string))

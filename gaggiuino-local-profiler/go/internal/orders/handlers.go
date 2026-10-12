@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -234,8 +235,8 @@ func toStringAny(v any) any {
 
 // milkMlOrNil parses the menu item's milk amount. External callers (Home
 // Assistant templates, for instance) often send the amount as a JSON string,
-// which a float64-only type assertion would drop silently; an unparseable
-// value — and an explicit 0 — collapses to nil.
+// which a float64-only type assertion would drop silently; a non-positive,
+// NaN or infinite value — and an unparseable one — collapses to nil.
 func milkMlOrNil(v any) any {
 	var f float64
 	switch t := v.(type) {
@@ -250,7 +251,7 @@ func milkMlOrNil(v any) any {
 	default:
 		return nil
 	}
-	if f == 0 || f != f { // 0 and NaN both collapse to null
+	if f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) { // 0, negative, NaN and ±Inf all collapse to null
 		return nil
 	}
 	return f
@@ -287,6 +288,7 @@ func (h *Handlers) postMenu(w http.ResponseWriter, r *http.Request) {
 		"emoji": sanitizeEmoji(body["emoji"], "☕"), "createdAt": time.Now().UnixMilli(), "trending": false,
 		"variants": stringSliceMax(body["variants"], 50),
 		"useBeans": boolOf(body["useBeans"]), "useMilks": boolOf(body["useMilks"]),
+		"milkMl": milkMlOrNil(body["milkMl"]),
 	}
 	menu = append(menu, item)
 	if err := h.repo.SaveMenu(menu); err != nil {
@@ -1071,20 +1073,9 @@ func (h *Handlers) decline(w http.ResponseWriter, r *http.Request) {
 // ── History delete ───────────────────────────────────────────────────────
 
 func (h *Handlers) deleteHistory(w http.ResponseWriter, r *http.Request) {
-	all, err := h.repo.FindAll()
-	if err != nil {
+	if _, err := h.repo.DeleteFinished(); err != nil {
 		internalError(w, err)
 		return
-	}
-	for _, o := range all {
-		status, _ := o["status"].(string)
-		if status == "done" || status == "declined" {
-			id, _ := o["id"].(string)
-			if err := h.repo.Delete(id); err != nil {
-				internalError(w, err)
-				return
-			}
-		}
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
