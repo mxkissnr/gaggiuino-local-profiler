@@ -77,8 +77,11 @@ export function renderRecipeList(): void {
       : html``;
     const linkedShots = _shots().filter(s => s.annotation?.recipeId === r.id);
     const shotCount   = linkedShots.length;
-    const avgScore    = shotCount > 0
-      ? (linkedShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / shotCount).toFixed(1)
+    // #1625: only scored shots count towards the average — an unscored shot is
+    // not a 0 and must not drag it down. The badge still shows every linked shot.
+    const scoredShots = linkedShots.filter(s => typeof s.score === 'number' && Number.isFinite(s.score));
+    const avgScore    = scoredShots.length > 0
+      ? (scoredShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / scoredShots.length).toFixed(1)
       : null;
     const shotsBadge  = shotCount > 0
       ? html`<span class="lib-recipe-shots-badge">${esc(shotCount)} Shot${shotCount !== 1 ? html`s` : html``}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
