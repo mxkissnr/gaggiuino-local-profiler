@@ -20,11 +20,15 @@ import (
 // by default; a var so a test can redirect it.
 var restoreTempDir = os.TempDir
 
-// streamRestoreBodyToTemp copies the request body to a temp file, bounded
-// by the compressed-body limit (a zip-bomb / abuse guard, see
-// restoreZipBodyLimit's doc). Returns the temp path and a cleanup func;
-// the caller re-opens the file for random access (zip) or a fresh stream
-// (legacy JSON).
+// streamRestoreBodyToTemp copies the request body to a temp file, bounded by
+// the compressed-body limit. For a zip that is restoreZipBodyLimit (#1602: a
+// generous abuse guard, not a memory cap — the body never lands in a slice
+// and POST /api/backup streams every image with no cap of its own); for the
+// legacy JSON form it stays the historical restoreJSONBodyLimit, since that
+// form decodes its inline images into memory. Both limits are package-level
+// vars (restoreZipBodyLimit in handlers.go) so tests can shrink them. Returns
+// the temp path and a cleanup func; the caller re-opens the file for random
+// access (zip) or a fresh stream (legacy JSON).
 func streamRestoreBodyToTemp(body io.Reader, isZip bool) (string, func(), error) {
 	limit := int64(restoreJSONBodyLimit)
 	pattern := "glp-restore-*.json"
