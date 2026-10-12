@@ -3,7 +3,10 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -171,6 +174,75 @@ func (a *GaggiuinoAdapter) Capabilities() Capabilities {
 		ProfileEdit: true, BrewStart: false, Preheat: &t, Volumetric: &t, History: true,
 		NativeMaintenanceLog: true, SettingsProxy: true,
 	}
+}
+
+// ── #1639 machine-native service log ────────────────────────────────────
+
+// ServiceLog is the Gaggiuino firmware's own service log (#578) — the
+// machine-side counterpart to GLP's maintenance tracking, re-implemented in
+// #1639. Only the two timestamps GLP also tracks are modeled; a zero time
+// means the machine has never recorded that service (the firmware sends
+// 0 for "never"). The machine's `shotsSince*` counters are deliberately
+// ignored: GLP keeps computing those from its own shot history.
+type ServiceLog struct {
+	LastDescale   time.Time
+	LastBackflush time.Time
+}
+
+// ErrServiceLogUnsupported reports that the machine's firmware has no
+// /api/maintenance endpoint (HTTP 404 — an older build): callers should treat
+// machine-native maintenance sync as unavailable on this machine rather than
+// as a transport failure.
+var ErrServiceLogUnsupported = errors.New("machine firmware has no service log")
+
+// GetServiceLog reads the machine's native service log (#1639), via the same
+// guarded machine HTTP helper GetSettings uses. A 404 (older firmware) maps
+// to ErrServiceLogUnsupported.
+func (a *GaggiuinoAdapter) GetServiceLog(ctx context.Context, m *Machine) (ServiceLog, error) {
+	baseURL, err := BaseURLFor(ctx, m)
+	if err != nil {
+		return ServiceLog{}, err
+	}
+	raw, err := httpGetBytes(ctx, baseURL+"/api/maintenance", 5*time.Second)
+	if err != nil {
+		var httpErr *machineHTTPError
+		if errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound {
+			return ServiceLog{}, ErrServiceLogUnsupported
+		}
+		return ServiceLog{}, err
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return ServiceLog{}, fmt.Errorf("gaggiuino: decoding service log: %w", err)
+	}
+	return ServiceLog{
+		LastDescale:   epochSecondsToTime(obj["lastDescaleTimestamp"]),
+		LastBackflush: epochSecondsToTime(obj["lastBackflushTimestamp"]),
+	}, nil
+}
+
+// epochSecondsToTime converts one of the service log's epoch-second
+// timestamp fields to a UTC time.Time, returning the zero time for 0 (never),
+// a missing field, or any non-numeric value.
+func epochSecondsToTime(v any) time.Time {
+	var sec int64
+	switch t := v.(type) {
+	case float64:
+		if t <= 0 || t > float64(math.MaxInt64) {
+			return time.Time{}
+		}
+		sec = int64(t)
+	case int64:
+		sec = t
+	case int:
+		sec = int64(t)
+	default:
+		return time.Time{}
+	}
+	if sec <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(sec, 0).UTC()
 }
 
 // ── #597 settings/control proxy ─────────────────────────────────────────

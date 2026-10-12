@@ -80,6 +80,17 @@ type fakeAdapter struct {
 	updateProfileFn func(context.Context, *machines.Machine, machines.ProfileInput) (machines.ProfileSummary, error)
 	deleteProfileFn func(context.Context, *machines.Machine, string) ([]machines.ProfileSummary, error)
 	listProfilesFn  func(context.Context, *machines.Machine) ([]machines.ProfileSummary, error)
+
+	// capabilities is what Capabilities() reports; the zero value (all false)
+	// keeps every test that doesn't opt in unchanged. maintenance_sync_test.go
+	// sets NativeMaintenanceLog to exercise the #1639 sync.
+	capabilities machines.Capabilities
+
+	// serviceLogFn, when set, backs GetServiceLog (#1639); nil means this fake
+	// has no native service log — GetServiceLog returns
+	// machines.ErrServiceLogUnsupported, like Gaggiuino firmware without the
+	// /api/maintenance endpoint.
+	serviceLogFn func(context.Context, *machines.Machine) (machines.ServiceLog, error)
 }
 
 var _ machines.Adapter = (*fakeAdapter)(nil)
@@ -151,7 +162,25 @@ func (f *fakeAdapter) DeleteProfile(ctx context.Context, m *machines.Machine, id
 func (f *fakeAdapter) SelectProfile(context.Context, *machines.Machine, string) error {
 	return f.notImplemented("SelectProfile")
 }
-func (f *fakeAdapter) Capabilities() machines.Capabilities { return machines.Capabilities{} }
+func (f *fakeAdapter) Capabilities() machines.Capabilities {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.capabilities
+}
+
+// GetServiceLog backs the #1639 native-service-log sync. It is a real opt-in
+// method (not the notImplemented panic) so the sync's adapter type-assertion
+// succeeds; with no serviceLogFn it reports "unsupported", the same sentinel
+// an old Gaggiuino firmware produces.
+func (f *fakeAdapter) GetServiceLog(ctx context.Context, m *machines.Machine) (machines.ServiceLog, error) {
+	f.mu.Lock()
+	fn := f.serviceLogFn
+	f.mu.Unlock()
+	if fn == nil {
+		return machines.ServiceLog{}, machines.ErrServiceLogUnsupported
+	}
+	return fn(ctx, m)
+}
 func (f *fakeAdapter) GetSettings(ctx context.Context, m *machines.Machine, category string) (json.RawMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

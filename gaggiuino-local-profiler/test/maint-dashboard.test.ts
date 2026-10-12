@@ -9,6 +9,7 @@ let _normalizeMaintTiles: MaintView['_normalizeMaintTiles'];
 let _pickNextDueTile: MaintView['_pickNextDueTile'];
 let _partitionTiles: MaintView['_partitionTiles'];
 let _maintLogTaskOptions: MaintView['_maintLogTaskOptions'];
+let isAutoSynced: MaintView['isAutoSynced'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -19,7 +20,7 @@ beforeAll(async () => {
     value: { language: 'en' },
     configurable: true, writable: true,
   });
-  ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions } = await import('../public-src/views/maintenance.js'));
+  ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions, isAutoSynced } = await import('../public-src/views/maintenance.js'));
 });
 
 interface MaintTaskFixture {
@@ -38,6 +39,7 @@ interface MaintTaskOverrides {
   threshold_g?: number | null;
   gramsSince?: number | null;
   machineSyncedAt?: string | number | null;
+  lastDate?: string | null;
   grinderName?: string | null;
   disabled?: boolean;
   label?: string | null;
@@ -155,5 +157,31 @@ describe('_maintLogTaskOptions', () => {
     ] as unknown as MaintTileFixture[];
     const options = _maintLogTaskOptions(tiles);
     expect(options).toHaveLength(1);
+  });
+});
+
+// #1639: the "Auto" badge must appear only when a task's last done date IS the
+// machine's own service-log timestamp — not merely whenever machineSyncedAt is
+// set. ApplyMachineServiceLog advances machineSyncedAt even when a newer manual
+// "done" wins (lastDate unchanged), and a later manual "done" leaves a stale
+// machineSyncedAt in place, so a non-null machineSyncedAt is not enough.
+type MaintTaskArg = Parameters<MaintView['isAutoSynced']>[0];
+describe('isAutoSynced (#1639)', () => {
+  it('is true when the last done date is the machine timestamp', () => {
+    const at = '2026-10-01T08:30:00.000Z';
+    const d = task('ok', { machineSyncedAt: Date.parse(at), lastDate: at }) as unknown as MaintTaskArg;
+    expect(isAutoSynced(d)).toBe(true);
+  });
+
+  it('is false when machineSyncedAt is older than a newer manual done', () => {
+    const synced = '2026-09-01T08:30:00.000Z';
+    const manual = '2026-10-01T08:30:00.000Z';
+    const d = task('ok', { machineSyncedAt: Date.parse(synced), lastDate: manual }) as unknown as MaintTaskArg;
+    expect(isAutoSynced(d)).toBe(false);
+  });
+
+  it('is false when the task has no machine sync at all', () => {
+    const d = task('ok', { lastDate: '2026-10-01T08:30:00.000Z' }) as unknown as MaintTaskArg;
+    expect(isAutoSynced(d)).toBe(false);
   });
 });

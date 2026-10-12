@@ -54,6 +54,58 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 	return ComputeMaintenanceStats(shotsRepo, maint, machineID)
 }
 
+// ApplyMachineServiceLog applies one machine-recorded service event (#1639) to
+// a maintenance task: task must be "descaling" or "backflush", and at is the
+// machine's own timestamp for that event. The task's machineSyncedAt guards
+// against applying the same event twice: a zero at, or one no newer than the
+// last synced machine time, is a no-op. Otherwise machineSyncedAt is always
+// advanced to at, and lastDate (plus one back-dated log entry) is moved to at
+// only when that is later than the stored lastDate — so a newer manual "done"
+// is never overwritten and lastDate never moves backwards. Returns whether
+// the task was marked done.
+func ApplyMachineServiceLog(repo *Repository, shotsRepo *shots.Repository, registry *machines.Registry, machineID int64, task string, at time.Time) (bool, error) {
+	if task != "descaling" && task != "backflush" {
+		return false, ErrUnknownTask
+	}
+	if at.IsZero() {
+		return false, nil
+	}
+	at = at.UTC()
+	atMs := at.UnixMilli()
+
+	maint, err := repo.GetMaintenance(machineID)
+	if err != nil {
+		return false, err
+	}
+	t := maint[task]
+	if t == nil {
+		t = Task{}
+	}
+	if synced, ok := jsPositiveInt(t["machineSyncedAt"]); ok && atMs <= synced {
+		return false, nil
+	}
+
+	save := Task{"machineSyncedAt": atMs}
+	marked := false
+	if lastDate, _ := t["lastDate"].(string); lastDate == "" {
+		marked = true
+	} else if lastTs, err := parseJSDate(lastDate); err != nil || atMs > lastTs {
+		marked = true
+	}
+	if marked {
+		save["lastDate"] = at.Format("2006-01-02T15:04:05.000Z")
+	}
+	if err := repo.SaveTask(machineID, task, save); err != nil {
+		return false, err
+	}
+	if marked {
+		if _, err := repo.AddMaintenanceLogEntry(task, "Auto-synced from machine", machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, at); err != nil {
+			return false, err
+		}
+	}
+	return marked, nil
+}
+
 // Stat is one task's computed maintenance-due state — Task's fields plus
 // daysSince/shotsSince/pct/status, mirroring
 // `{ ...task, daysSince, shotsSince, pct, status }`.
