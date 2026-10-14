@@ -46,7 +46,7 @@ func (h *Handlers) registerScanRoute(mux *http.ServeMux) {
 // scanBarcode handles GET /api/library/scan/:barcode.
 func (h *Handlers) scanBarcode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if !h.limiter.allow("scan:"+auth.RemoteIP(r), 20) {
+	if !h.limiter.Allow("scan:"+auth.RemoteIP(r), 20) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited")
 		return
 	}

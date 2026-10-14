@@ -9,6 +9,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -31,7 +32,7 @@ type Handlers struct {
 	repo            *Repository
 	shotsRepo       *shots.Repository
 	imageDir        string
-	limiter         *rateLimiter
+	limiter         *ratelimit.KeyedLimiter
 	onGrinderDelete func(grinderID int64) error
 
 	// onBeanRestocked runs after a new bag has been added to a bean
@@ -85,7 +86,7 @@ func (h *Handlers) notifyBeanRestocked(wasEmpty bool) {
 // written under DefaultImageDir; tests override the unexported imageDir
 // field to point at a throwaway directory instead (see helpers_test.go).
 func NewHandlers(repo *Repository, shotsRepo *shots.Repository) *Handlers {
-	return &Handlers{repo: repo, shotsRepo: shotsRepo, imageDir: DefaultImageDir, limiter: newRateLimiter()}
+	return &Handlers{repo: repo, shotsRepo: shotsRepo, imageDir: DefaultImageDir, limiter: ratelimit.NewKeyed()}
 }
 
 // RegisterRoutes registers every /api/library/* route onto mux.
@@ -224,7 +225,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
 // rateLimitCreate applies the `lib:<ip>`-keyed guard every library
 // create-endpoint (bean/grinder/basket/milk/puckscreen/recipe) opens with.
 func (h *Handlers) rateLimitCreate(w http.ResponseWriter, r *http.Request) bool {
-	if h.limiter.allow("lib:"+auth.RemoteIP(r), 30) {
+	if h.limiter.Allow("lib:"+auth.RemoteIP(r), 30) {
 		return true
 	}
 	writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
@@ -247,7 +248,7 @@ const imageRateLimitPerMin = 30
 // scoped to its own `image:<ip>` key so image uploads don't share a budget
 // with entity creates.
 func (h *Handlers) rateLimitImage(w http.ResponseWriter, r *http.Request) bool {
-	if h.limiter.allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
+	if h.limiter.Allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
 		return true
 	}
 	writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
