@@ -5,7 +5,7 @@ import { getMenu }                        from '../../api/system.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import type { AnnotateResult, ShotDefaults } from '../../api/types.js';
-import { esc, germanToIso, html, joinHtml } from '../../utils.js';
+import { esc, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
 import { suggestGrindDoseForBean } from './grind.js';
@@ -598,17 +598,7 @@ export function updateDegassing(val: string | null | undefined): void {
   const tracker = document.getElementById('degassingTracker') as HTMLElement;
   const fill    = document.getElementById('degassingFill') as HTMLElement;
   const label   = document.getElementById('degassingLabel') as HTMLElement;
-  const parseDMY = (s: string | null | undefined): Date | null => {
-    if (!s) return null;
-    const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
-    if (!m) return null;
-    const [, dayRaw, monthRaw, yearRaw] = m;
-    if (dayRaw === undefined || monthRaw === undefined || yearRaw === undefined) return null;
-    const y = yearRaw.length === 2 ? 2000 + parseInt(yearRaw) : parseInt(yearRaw);
-    const d = new Date(y, parseInt(monthRaw) - 1, parseInt(dayRaw));
-    return isNaN(d.getTime()) ? null : d;
-  };
-  const date = parseDMY(val);
+  const date = parseRoastDate(val);
   if (!date) { tracker.style.display = 'none'; return; }
   const days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
