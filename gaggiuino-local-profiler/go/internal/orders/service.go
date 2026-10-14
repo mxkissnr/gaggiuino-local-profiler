@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/jsnum"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -156,32 +157,8 @@ func beanIDOf(b library.Entity) (int64, bool) {
 	return 0, false
 }
 
-// jsParseIntAny handles both a JSON-decoded number (float64) and a string
-// query/body value: callers pass either shape depending on whether the value
-// came from a body field or a query param.
-func jsParseIntAny(v any) (int64, bool) {
-	switch t := v.(type) {
-	case nil:
-		return 0, false
-	case string:
-		if t == "" {
-			return 0, false
-		}
-		n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
-		if err != nil {
-			return 0, false
-		}
-		return n, true
-	case float64:
-		return int64(t), true
-	case int64:
-		return t, true
-	case int:
-		return int64(t), true
-	default:
-		return 0, false
-	}
-}
+// jsParseIntAny mirrors JS's parseInt over a body/query value; see jsnum.ParseIntAny.
+var jsParseIntAny = jsnum.ParseIntAny
 
 // QueueEta is the shape ComputeQueueEta returns.
 type QueueEta struct {

@@ -13,6 +13,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/jsnum"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 )
 
@@ -113,39 +114,8 @@ func withScore(shot Shot, detail ScoreDetail) Shot {
 
 // ── id parsing ──────────────────────────────────────────────────────────
 
-// jsParseInt parses like parseInt(s, 10): skip leading whitespace, an optional
-// sign, then consume as many leading decimal digits as present ("123abc" ->
-// 123, ok); no digits at all (after whitespace/sign) is not ok ("abc").
-// strconv.ParseInt/Atoi are both stricter — they reject any trailing garbage
-// outright — which would diverge from what a shot-id param like "123abc" is
-// expected to yield.
-func jsParseInt(s string) (int64, bool) {
-	i, n := 0, len(s)
-	for i < n {
-		switch s[i] {
-		case ' ', '\t', '\n', '\r', '\v', '\f':
-			i++
-			continue
-		}
-		break
-	}
-	start := i
-	if i < n && (s[i] == '+' || s[i] == '-') {
-		i++
-	}
-	digitsStart := i
-	for i < n && s[i] >= '0' && s[i] <= '9' {
-		i++
-	}
-	if i == digitsStart {
-		return 0, false
-	}
-	v, err := strconv.ParseInt(s[start:i], 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return v, true
-}
+// jsParseInt mirrors JS's parseInt(s, 10); see jsnum.ParseInt.
+var jsParseInt = jsnum.ParseInt
 
 // parseID accepts a real shot id (1..MaxShotID) or a demo-seed shot id (the
 // tight demoIDBase..demoIDMax band, which sits far above MaxShotID — see
