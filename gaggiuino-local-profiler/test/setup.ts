@@ -1,3 +1,5 @@
+import { afterEach, vi } from 'vitest';
+
 // Vitest setup — runs once per test file before the file's own code.
 //
 // Node 24 ships a built-in `navigator` global (it did not exist in Node 22),
@@ -19,4 +21,12 @@ Object.defineProperty(globalThis, 'navigator', {
     },
     configurable: true,
     writable: true,
+});
+
+// Several tests call vi.useFakeTimers() without a try/finally, so a failing
+// assertion there would otherwise leave the fake clock installed for the rest
+// of the file and make later tests flaky. Hand the real clock back between
+// every test, whatever the previous one did.
+afterEach(() => {
+    vi.useRealTimers();
 });
