@@ -129,8 +129,10 @@ ENV GLP_MODELS_DIR=/data/cutout-models
 # also runs standalone without an explicit `-v` — matching the HA add-on's
 # real usage, where Supervisor always provides the mount, but keeping local
 # `docker run` (and go/scripts/smoke-test.sh in docker mode) simple.
-# docker-entrypoint.sh still re-fixes ownership every start for the real
-# bind-mount case, whose host-side UID isn't known at build time.
+# docker-entrypoint.sh still fixes /data ownership at start for the real
+# bind-mount case, whose host-side UID isn't known at build time -- but only
+# when something under it isn't already owned by glp, so an already-correct
+# mount costs no inode writes.
 RUN apk add --no-cache wget ca-certificates su-exec \
     && adduser -D -H -u 1000 glp \
     && mkdir -p /data \
