@@ -10,12 +10,16 @@ import (
 // preheat window has already elapsed, so PreheatInfo reports ready. Every call
 // returns a distinct value: a preheat run is identified by its switch-on, so a
 // test simulating a new run must get a new timestamp even within one
-// millisecond.
-var readySwitchOnSeq int64
+// millisecond. The base is fixed once: subtracting a counter from a fresh
+// time.Now() collides whenever the clock advances by exactly one step too.
+var (
+	readySwitchOnBase = time.Now().UnixMilli() - 21*60_000
+	readySwitchOnSeq  int64
+)
 
 func readySwitchOnAt() *int64 {
 	readySwitchOnSeq++
-	at := time.Now().UnixMilli() - 21*60_000 - readySwitchOnSeq
+	at := readySwitchOnBase - readySwitchOnSeq
 	return &at
 }
 
