@@ -52,6 +52,32 @@ func TestReaderVarintTruncated(t *testing.T) {
 	}
 }
 
+func TestReaderBool(t *testing.T) {
+	for _, c := range []struct {
+		in   []byte
+		want bool
+	}{
+		{[]byte{0x00}, false},
+		{[]byte{0x01}, true},
+	} {
+		r := newReader(c.in)
+		got, err := r.bool()
+		if err != nil {
+			t.Fatalf("bool(% x): unexpected error: %v", c.in, err)
+		}
+		if got != c.want {
+			t.Errorf("bool(% x) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+func TestReaderBoolTruncated(t *testing.T) {
+	r := newReader([]byte{0x80}) // continuation bit set on the only byte, then EOF
+	if _, err := r.bool(); err == nil {
+		t.Error("expected an error decoding a truncated varint, got nil")
+	}
+}
+
 func TestTagRoundTrip(t *testing.T) {
 	w := &writer{}
 	w.tag(6, wireLen)

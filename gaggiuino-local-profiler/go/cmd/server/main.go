@@ -581,23 +581,21 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// read-only library/status/analytics tools get their dependencies.
 	mcpRepo := mcp.NewRepository(sqlDB)
 	mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
-		Shots:           shots.NewService(shotsRepo),
-		ShotsRepo:       shotsRepo,
-		Library:         libRepo,
-		Maintenance:     maintenanceRepo,
-		Registry:        registry,
-		Poller:          poller,
-		Logs:            cfg.logs,
-		Sync:            poller,
-		Preheat:         poller,
-		Recorder:        recorder,
-		Machines:        machineCounter,
-		DBPath:          dbPath,
-		Version:         system.Version(),
-		RateLimitWindow: rateLimitWindow,
-		RateLimitMax:    rateLimitMax,
-		Settings:        mcpRepo,
-		OnDataChanged:   func(k, id string) { changes.Publish(k, id, "") },
+		Shots:         shots.NewService(shotsRepo),
+		ShotsRepo:     shotsRepo,
+		Library:       libRepo,
+		Maintenance:   maintenanceRepo,
+		Registry:      registry,
+		Poller:        poller,
+		Logs:          cfg.logs,
+		Sync:          poller,
+		Preheat:       poller,
+		Recorder:      recorder,
+		Machines:      machineCounter,
+		DBPath:        dbPath,
+		Version:       system.Version(),
+		Settings:      mcpRepo,
+		OnDataChanged: func(k, id string) { changes.Publish(k, id, "") },
 	}))
 	mcp.NewSettingsHandlers(mcpRepo).RegisterRoutes(mux)
 

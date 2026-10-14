@@ -236,11 +236,9 @@ func (m *PhaseDto) Unmarshal(b []byte) error {
 			}
 			m.Name = string(b)
 		case 7:
-			v, err := r.varint()
-			if err != nil {
+			if m.Skip, err = r.bool(); err != nil {
 				return err
 			}
-			m.Skip = v != 0
 		default:
 			if err := r.skip(wt); err != nil {
 				return err
@@ -292,17 +290,13 @@ func (m *GlobalStopConditionsDto) Unmarshal(b []byte) error {
 				return err
 			}
 		case 4:
-			v, err := r.varint()
-			if err != nil {
+			if m.SwitchToManualPressureCtrl, err = r.bool(); err != nil {
 				return err
 			}
-			m.SwitchToManualPressureCtrl = v != 0
 		case 5:
-			v, err := r.varint()
-			if err != nil {
+			if m.SwitchToManuaFlowCtrl, err = r.bool(); err != nil {
 				return err
 			}
-			m.SwitchToManuaFlowCtrl = v != 0
 		default:
 			if err := r.skip(wt); err != nil {
 				return err
@@ -734,11 +728,9 @@ func (m *UpdateSystemStateCommandDto) Unmarshal(b []byte) error {
 			}
 			m.OperationMode = OperationMode(int32(v))
 		case 2:
-			v, err := r.varint()
-			if err != nil {
+			if m.TarePending, err = r.bool(); err != nil {
 				return err
 			}
-			m.TarePending = v != 0
 		default:
 			if err := r.skip(wt); err != nil {
 				return err
@@ -868,23 +860,17 @@ func (m *SensorStateSnapshotDto) Unmarshal(b []byte) error {
 		}
 		switch field {
 		case 1:
-			v, err := r.varint()
-			if err != nil {
+			if m.BrewActive, err = r.bool(); err != nil {
 				return err
 			}
-			m.BrewActive = v != 0
 		case 2:
-			v, err := r.varint()
-			if err != nil {
+			if m.SteamActive, err = r.bool(); err != nil {
 				return err
 			}
-			m.SteamActive = v != 0
 		case 3:
-			v, err := r.varint()
-			if err != nil {
+			if m.HotWaterSwitchState, err = r.bool(); err != nil {
 				return err
 			}
-			m.HotWaterSwitchState = v != 0
 		case 4:
 			if m.Temperature, err = r.float(); err != nil {
 				return err
@@ -916,149 +902,101 @@ func (m *SensorStateSnapshotDto) Unmarshal(b []byte) error {
 			}
 			m.WaterLevel = uint32(v)
 		case 11:
-			v, err := r.varint()
-			if err != nil {
+			if m.BoilerState, err = r.bool(); err != nil {
 				return err
 			}
-			m.BoilerState = v != 0
 		case 12:
-			v, err := r.varint()
-			if err != nil {
+			if m.BrewSwitchActive, err = r.bool(); err != nil {
 				return err
 			}
-			m.BrewSwitchActive = v != 0
 		case 13:
-			v, err := r.varint()
-			if err != nil {
+			if m.ValveState, err = r.bool(); err != nil {
 				return err
 			}
-			m.ValveState = v != 0
 		case 14:
-			v, err := r.varint()
-			if err != nil {
+			if m.SteamValveState, err = r.bool(); err != nil {
 				return err
 			}
-			m.SteamValveState = v != 0
 		case 15:
-			v, err := r.varint()
-			if err != nil {
+			if m.ValveBState, err = r.bool(); err != nil {
 				return err
 			}
-			m.ValveBState = v != 0
 		case 16:
-			v, err := r.varint()
-			if err != nil {
+			if m.SteamBoilerRelayState, err = r.bool(); err != nil {
 				return err
 			}
-			m.SteamBoilerRelayState = v != 0
 		case 17:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinBrewLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinBrewLevel = v != 0
 		case 18:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinSteamLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinSteamLevel = v != 0
 		case 19:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinWaterLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinWaterLevel = v != 0
 		case 20:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinRelayLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinRelayLevel = v != 0
 		case 21:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinValveLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinValveLevel = v != 0
 		case 22:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinValveBLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinValveBLevel = v != 0
 		case 23:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinRelayValveBLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinRelayValveBLevel = v != 0
 		case 24:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinSteamValveRelayLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinSteamValveRelayLevel = v != 0
 		case 25:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinSteamBoilerRelayLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinSteamBoilerRelayLevel = v != 0
 		case 26:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinZcLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinZcLevel = v != 0
 		case 27:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinDimmerLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinDimmerLevel = v != 0
 		case 28:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinThermoCsLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinThermoCsLevel = v != 0
 		case 29:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinThermoClkLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinThermoClkLevel = v != 0
 		case 30:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinThermoDoLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinThermoDoLevel = v != 0
 		case 31:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinThermoDiLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinThermoDiLevel = v != 0
 		case 32:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinHx711SckLevel, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinHx711SckLevel = v != 0
 		case 33:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinHx711Dout1Level, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinHx711Dout1Level = v != 0
 		case 34:
-			v, err := r.varint()
-			if err != nil {
+			if m.PinHx711Dout2Level, err = r.bool(); err != nil {
 				return err
 			}
-			m.PinHx711Dout2Level = v != 0
 		default:
 			if err := r.skip(wt); err != nil {
 				return err
@@ -1114,29 +1052,21 @@ func (m *SystemStateDto) Unmarshal(b []byte) error {
 		}
 		switch field {
 		case 1:
-			v, err := r.varint()
-			if err != nil {
+			if m.StartupInitFinished, err = r.bool(); err != nil {
 				return err
 			}
-			m.StartupInitFinished = v != 0
 		case 2:
-			v, err := r.varint()
-			if err != nil {
+			if m.TofReady, err = r.bool(); err != nil {
 				return err
 			}
-			m.TofReady = v != 0
 		case 3:
-			v, err := r.varint()
-			if err != nil {
+			if m.IsSteamForgottenON, err = r.bool(); err != nil {
 				return err
 			}
-			m.IsSteamForgottenON = v != 0
 		case 4:
-			v, err := r.varint()
-			if err != nil {
+			if m.ScalesPresent, err = r.bool(); err != nil {
 				return err
 			}
-			m.ScalesPresent = v != 0
 		case 5:
 			v, err := r.varint()
 			if err != nil {
@@ -1156,11 +1086,9 @@ func (m *SystemStateDto) Unmarshal(b []byte) error {
 			}
 			m.CoreVersion = string(b)
 		case 8:
-			v, err := r.varint()
-			if err != nil {
+			if m.TarePending, err = r.bool(); err != nil {
 				return err
 			}
-			m.TarePending = v != 0
 		case 9:
 			b, err := r.bytes()
 			if err != nil {
@@ -1168,17 +1096,13 @@ func (m *SystemStateDto) Unmarshal(b []byte) error {
 			}
 			m.CoreType = string(b)
 		case 10:
-			v, err := r.varint()
-			if err != nil {
+			if m.ThermocoupleFaulted, err = r.bool(); err != nil {
 				return err
 			}
-			m.ThermocoupleFaulted = v != 0
 		case 11:
-			v, err := r.varint()
-			if err != nil {
+			if m.PressureSensorFaulted, err = r.bool(); err != nil {
 				return err
 			}
-			m.PressureSensorFaulted = v != 0
 		case 12:
 			b, err := r.bytes()
 			if err != nil {
@@ -1192,11 +1116,9 @@ func (m *SystemStateDto) Unmarshal(b []byte) error {
 			}
 			m.PressureSensorFaultReason = string(b)
 		case 14:
-			v, err := r.varint()
-			if err != nil {
+			if m.PcbV2, err = r.bool(); err != nil {
 				return err
 			}
-			m.PcbV2 = v != 0
 		default:
 			if err := r.skip(wt); err != nil {
 				return err

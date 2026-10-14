@@ -200,6 +200,11 @@ func (r *reader) float() (float64, error) {
 	return v, nil
 }
 
+func (r *reader) bool() (bool, error) {
+	v, err := r.varint()
+	return v != 0, err
+}
+
 // skip discards one field's value for a wire type this package's schema
 // doesn't otherwise use in that position (an unrecognized field number).
 func (r *reader) skip(wireType int) error {
