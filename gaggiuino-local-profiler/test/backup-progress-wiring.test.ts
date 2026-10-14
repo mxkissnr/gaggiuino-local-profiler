@@ -59,17 +59,12 @@ class FakeEl {
   onchange: (() => void) | null = null;
   oninput: (() => void) | null = null;
   onclick: (() => void) | null = null;
-  private readonly doc: FakeDoc;
   readonly classList = {
     add: (_name: string): void => {},
     remove: (_name: string): void => {},
     contains: (_name: string): boolean => false,
     toggle: (_name: string, _on?: boolean): boolean => false,
   };
-
-  constructor(doc: FakeDoc) {
-    this.doc = doc;
-  }
 
   addEventListener(_type: string, _fn: (...args: unknown[]) => void): void { /* module-load wiring only */ }
   removeEventListener(_type: string, _fn: (...args: unknown[]) => void): void { /* no-op */ }
@@ -78,12 +73,12 @@ class FakeEl {
   removeAttribute(_name: string): void { /* no-op */ }
   remove(): void { /* no-op */ }
   focus(): void { /* no-op */ }
-  querySelector(_selector: string): FakeEl { return this.doc.createElement(); }
+  querySelector(_selector: string): FakeEl { return new FakeEl(); }
   querySelectorAll(): FakeEl[] { return []; }
 }
 
-function makeElement(doc: FakeDoc, init: Partial<FakeEl> = {}): FakeEl {
-  return Object.assign(new FakeEl(doc), init);
+function makeElement(init: Partial<FakeEl> = {}): FakeEl {
+  return Object.assign(new FakeEl(), init);
 }
 
 function makeDocument(): FakeDoc {
@@ -93,13 +88,12 @@ function makeDocument(): FakeDoc {
     els,
     bySelector,
     checkboxes: [],
-    body: null as unknown as FakeEl,
-    createElement: () => new FakeEl(doc),
-    getElementById: (id: string) => (els[id] ??= makeElement(doc, { id })),
-    querySelector: (selector: string) => bySelector[selector] ?? new FakeEl(doc),
+    body: new FakeEl(),
+    createElement: () => new FakeEl(),
+    getElementById: (id: string) => (els[id] ??= makeElement({ id })),
+    querySelector: (selector: string) => bySelector[selector] ?? new FakeEl(),
     querySelectorAll: (selector: string) => (selector === '.backup-section-cb' ? doc.checkboxes : []),
   };
-  doc.body = new FakeEl(doc);
   return doc;
 }
 
@@ -208,7 +202,7 @@ describe('backup-modal.ts progress wiring (#960)', () => {
 
 describe('status.ts Dev Tools progress wiring (#960)', () => {
   it('exportDevDb disables the button, shows the transfer label, then restores it', async () => {
-    const btn = makeElement(doc, { textContent: 'Export DB', disabled: false });
+    const btn = makeElement({ textContent: 'Export DB', disabled: false });
     doc.els['devExportDbBtn'] = btn;
     let onProgress: ((received: number, total: number | null) => void) | undefined;
     let resolveBlob: (v: ApiFetchToBlobResult) => void = () => {};
@@ -231,8 +225,8 @@ describe('status.ts Dev Tools progress wiring (#960)', () => {
   });
 
   it('importDevDb disables the card label while uploading, then restores it', async () => {
-    const input = makeElement(doc, { disabled: false });
-    const label = makeElement(doc, { textContent: 'Import DB', disabled: false });
+    const input = makeElement({ disabled: false });
+    const label = makeElement({ textContent: 'Import DB', disabled: false });
     doc.els['devImportDbInput'] = input;
     doc.bySelector['#devToolsCard label span[data-i18n="settings_devtools_import_db"]'] = label;
     let resolveUpload: (v: ApiUploadResult) => void = () => {};
