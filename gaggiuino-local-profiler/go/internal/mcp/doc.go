@@ -10,7 +10,8 @@
 // with the same X-GLP-Token header every other /api/* route uses; the
 // static-asset GET bypass deliberately does NOT apply. Requests carrying a
 // foreign Origin header are rejected (DNS-rebinding protection, MCP spec
-// MUST), and tool calls share internal/ratelimit's defaults.
+// MUST), and tool calls count against the app-wide rate limiter that already
+// wraps every /api/* route.
 //
 // GET/POST /api/mcp/settings (handlers.go) read and write those toggles, so
 // enabling the server or changing its tool set takes effect on the next

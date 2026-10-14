@@ -13,7 +13,6 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -84,12 +83,6 @@ type Deps struct {
 	// Version is the app version reported as the MCP server identity; mirrors
 	// GET /api/version (internal/system.Version). Empty falls back to "dev".
 	Version string
-	// RateLimitWindow and RateLimitMax mirror the app-level limiter's
-	// configuration (GLP_RATE_LIMIT_WINDOW_MS/_MAX); zero falls back to
-	// internal/ratelimit's defaults. The mux-wide limiter already covers
-	// /api/mcp, so this only matters when the operator has raised the limit.
-	RateLimitWindow time.Duration
-	RateLimitMax    int
 	// Settings supplies the MCP toggles that apply right now: the app-stored
 	// kv row 'mcp_settings' (#1288), with the dev-build rule already applied
 	// (Settings.Effective). Read per request, so enabling MCP or flipping the
@@ -136,12 +129,13 @@ type MachineTrafficSource interface {
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
-// server, an Origin (DNS-rebinding) check, and a rate limiter sharing the
-// REST API's defaults. The settings source is consulted per request, so a
-// disabled server answers 404 (exactly like an unmounted route) and a
-// newly-enabled one works without rebuilding the process. One SDK server is
-// cached per (allowWrite, allowDeveloperTools) combination — at most four —
-// and built lazily.
+// server and an Origin (DNS-rebinding) check. The endpoint has no limiter of
+// its own — mounted on the same mux as every other /api/* route, its requests
+// count against the app-wide rate limiter. The settings source is consulted
+// per request, so a disabled server answers 404 (exactly like an unmounted
+// route) and a newly-enabled one works without rebuilding the process. One SDK
+// server is cached per (allowWrite, allowDeveloperTools) combination — at most
+// four — and built lazily.
 func NewHandler(deps Deps) http.Handler {
 	opts := &mcpsdk.StreamableHTTPOptions{
 		Stateless:    true,
@@ -149,16 +143,7 @@ func NewHandler(deps Deps) http.Handler {
 	}
 	endpoint := &mcpEndpoint{deps: deps}
 	sdk := mcpsdk.NewStreamableHTTPHandler(endpoint.serverFor, opts)
-	window := deps.RateLimitWindow
-	if window <= 0 {
-		window = ratelimit.DefaultWindow
-	}
-	max := deps.RateLimitMax
-	if max <= 0 {
-		max = ratelimit.DefaultMax
-	}
-	limiter := ratelimit.New(window, max)
-	return sameOrigin(limiter.Middleware(endpoint.gate(sdk)))
+	return sameOrigin(endpoint.gate(sdk))
 }
 
 // mcpEndpoint gates the SDK handler on the current settings and caches one SDK

@@ -594,8 +594,6 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		Machines:        machineCounter,
 		DBPath:          dbPath,
 		Version:         system.Version(),
-		RateLimitWindow: rateLimitWindow,
-		RateLimitMax:    rateLimitMax,
 		Settings:        mcpRepo,
 		OnDataChanged:   func(k, id string) { changes.Publish(k, id, "") },
 	}))
