@@ -68,6 +68,18 @@ func AssertHostResolved(ctx context.Context, hostname string, blocked func(net.I
 	}
 	addrs, err := lookupIPAddr(ctx, bare)
 	if err != nil {
+		// A *net.DNSError's text includes the resolver's address
+		// ("lookup host on <resolver>:53: no such host"). That address is
+		// not about the user's machine, only adds noise to the message,
+		// and trips the demo-fixtures personal-data leak check (#1691),
+		// so wrap a copy with Server cleared. %w keeps the type intact
+		// for errors.As callers.
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) {
+			sanitized := *dnsErr
+			sanitized.Server = ""
+			err = &sanitized
+		}
 		return nil, fmt.Errorf("could not resolve host: %s: %w", bare, err)
 	}
 	if len(addrs) == 0 {
