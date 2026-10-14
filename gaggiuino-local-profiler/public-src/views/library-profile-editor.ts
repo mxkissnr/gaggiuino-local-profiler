@@ -9,7 +9,7 @@
 // renumbers all remaining rows/ids/data-idx after a removal, same as
 // removeRecipeStep().
 import Chart from 'chart.js/auto';
-import { S } from '../state/index.js';
+import { S, concreteActiveMachineId } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
@@ -84,18 +84,6 @@ let _profileListReqToken = 0;
 // machine ('all'/none selected), so the save sends no machineId and the
 // backend uses the default machine.
 let _formMachineId: number | null = null;
-
-// The active machine as a concrete numeric id, or null when none is selected
-// ('all'/null).
-function _concreteMachineId(): number | null {
-  const id: unknown = S.activeMachineId;
-  if (typeof id === 'number' && Number.isFinite(id)) return id;
-  if (typeof id === 'string' && id !== 'all' && id.trim() !== '') {
-    const n = Number(id);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
 
 // Kept as its own (non-async) function so the read of S.activeMachineId
 // happens in a separate code path from loadMachineProfileList's own —
@@ -176,7 +164,7 @@ export async function deleteMachineProfile(id: string): Promise<void> {
 
 // ── Editor modal ──────────────────────────────────────────────────────
 export function openProfileForm(profile?: MachineProfile | null, beanId?: string | number | null): void {
-  _formMachineId      = _concreteMachineId();
+  _formMachineId      = concreteActiveMachineId();
   S.profileEditId     = (profile?.id ?? null) as number | null;
   S.profileEditBeanId = (beanId ?? null) as number | null;
   (document.getElementById('profileFormName') as HTMLInputElement).value       = profile?.name ?? '';
