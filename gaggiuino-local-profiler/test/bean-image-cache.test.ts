@@ -26,7 +26,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   fetchMock.mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob(['photo'])) });
   vi.stubGlobal('fetch', fetchMock);
-  g.URL = { createObjectURL: vi.fn(() => 'blob:fake') };
+  vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:fake') });
   S.glpToken = '';
 });
 

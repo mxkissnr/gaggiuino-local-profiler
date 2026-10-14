@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // library.js's import chain touches state.js/i18n.js, which read
 // localStorage/navigator at module load time — stub the minimum browser
@@ -39,6 +39,12 @@ function fakeDocument(): FakeDocument {
 }
 
 const DAY = 86400000;
+// #1600: pin the clock at local noon well away from any DST switch. The
+// dates below are whole 24 h offsets from "now" but are compared against
+// local calendar midnights, so a 23/25 h DST day would shift a computed age
+// by one and flake the assertion on a few days of the year.
+const NOW = new Date(2026, 5, 15, 12, 0, 0);
+const NOW_MS = NOW.getTime();
 
 // #856: a frozen portion's own paused age (frozenPortionAgeDays) was only
 // ever surfaced as a tooltip — nothing on screen distinguished it from a
@@ -46,6 +52,8 @@ const DAY = 86400000;
 // a visible badge, reusing the bag-level fresh-badge classes/color tiers.
 describe('renderBeanList (#856 frozen-portion age badge)', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     S.shots = [];
   });
 
@@ -53,7 +61,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
     const { beanListUI, document } = fakeDocument();
     g.document = document;
 
-    const now = Date.now();
+    const now = NOW_MS;
     S.coffeeLibrary = {
       beans: [{
         id: 1,
@@ -89,7 +97,7 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
     const { beanListUI, document } = fakeDocument();
     g.document = document;
 
-    const now = Date.now();
+    const now = NOW_MS;
     S.coffeeLibrary = {
       beans: [{
         id: 2,
