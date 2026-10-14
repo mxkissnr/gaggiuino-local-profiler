@@ -39,21 +39,8 @@ export function joinHtml(parts: readonly Html[]): Html {
 // TT.MM.JJJJ placeholder) and YYYY-MM-DD (ISO, bags & imports). Returns whole
 // days since roast, or null when unparseable / implausible (>2 years).
 export function roastAgeDays(str: string | null | undefined, nowMs: number = Date.now()): number | null {
-  if (!str || typeof str !== 'string') return null;
-  let d: Date | null = null;
-  let m = str.trim().match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
-  if (m) {
-    const [, dd = '', dm = '', dy = ''] = m;
-    const y = dy.length === 2 ? 2000 + parseInt(dy) : parseInt(dy);
-    d = new Date(y, parseInt(dm) - 1, parseInt(dd));
-  } else {
-    m = str.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const [, yy = '', mm = '', dd = ''] = m;
-      d = new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd));
-    }
-  }
-  if (!d || isNaN(d.getTime())) return null;
+  const d = parseRoastDate(str);
+  if (!d) return null;
   const days = Math.floor((nowMs - d.getTime()) / 86400000);
   return days >= 0 && days <= 730 ? days : null;
 }
@@ -477,14 +464,27 @@ export function germanToIso(s: string | null | undefined): string | null {
   return `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
 }
 
-export function parseDMY(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
-  if (!m) return null;
-  const [, dd = '', mm = '', yy = ''] = m;
-  const y = yy.length === 2 ? 2000 + parseInt(yy) : parseInt(yy);
-  const d = new Date(y, parseInt(mm) - 1, parseInt(dd));
-  return isNaN(d.getTime()) ? null : d;
+// One parser for both roast-date formats the app stores and accepts: ISO
+// `YYYY-MM-DD...` (bags, imports) or typed DMY `D.M.YY` / `DD.MM.YYYY` with
+// `.`, `-` or `/` separators (a two-digit year means 20YY). Returns local
+// midnight, or null when the input is empty/unparseable/invalid.
+export function parseRoastDate(s: string | null | undefined): Date | null {
+  if (!s || typeof s !== 'string') return null;
+  const str = s.trim();
+  let m = str.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
+  if (m) {
+    const [, dd = '', mm = '', yy = ''] = m;
+    const y = yy.length === 2 ? 2000 + parseInt(yy) : parseInt(yy);
+    const d = new Date(y, parseInt(mm) - 1, parseInt(dd));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const [, yy = '', mm = '', dd = ''] = m;
+    const d = new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
 
 // ── Day-separator grouping (#412, hybrid grouping #426) ─────────────────
