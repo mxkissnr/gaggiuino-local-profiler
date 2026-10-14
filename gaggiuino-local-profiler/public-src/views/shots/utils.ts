@@ -1,5 +1,5 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints, isoToGerman, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
+import { mapShotDatapoints, parseRoastDate, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 import type { PressureNote } from '../../shared/score.js';
@@ -39,19 +39,6 @@ type BeanRecord = {
 };
 
 // ── Bean age ───────────────────────────────────────────────────────────────
-
-// Roast dates reach us as the server's ISO storage format (`YYYY-MM-DD`,
-// see validateBagRoastDate in go/internal/library/handlers_beans.go) or as
-// the German `DD.MM.YYYY` typed by hand. isoToGerman turns the former into
-// the latter and passes the latter through untouched, so one split covers
-// both; anything else falls through to NaN.
-function _parseDMY(str: string | null | undefined): number {
-  if (!str) return NaN;
-  const p = isoToGerman(str).split('.');
-  if (p.length !== 3) return NaN;
-  const [day = '', month = '', year = ''] = p;
-  return new Date(+year, +month - 1, +day).getTime();
-}
 
 // #456: resolves a shot/annotation to its library bean, preferring the
 // stable beanId link over the free-text coffee name — mirrors
@@ -102,9 +89,9 @@ export function calcBeanAgeAtShot(
       .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
     if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
   }
-  const roastMs = _parseDMY(roastDateStr);
-  if (isNaN(roastMs)) return null;
-  const days = Math.round((shotMs - roastMs) / 86400000);
+  const roastDate = parseRoastDate(roastDateStr);
+  if (!roastDate) return null;
+  const days = Math.round((shotMs - roastDate.getTime()) / 86400000);
   return days >= 0 && days <= 730 ? days : null;
 }
 
