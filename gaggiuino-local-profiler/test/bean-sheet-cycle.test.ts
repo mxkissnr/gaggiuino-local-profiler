@@ -82,8 +82,9 @@ describe('bean sheet / library import cycle (#1479)', () => {
     const { S } = await import('../public-src/state/index.js');
     S.coffeeLibrary = {
       beans: [{ id: 7, name: 'Bean A', roaster: 'Roaster', enabled: true, bags: [], image: null }],
+      grinders: [],
       recipes: [], milks: [], baskets: [], puckScreens: [],
-    } as unknown as typeof S.coffeeLibrary;
+    };
 
     // renderBeanSheet dereferences libraryView.loadBeanThumbnails() at call
     // time; if the namespace were an undefined module-level alias this throws.

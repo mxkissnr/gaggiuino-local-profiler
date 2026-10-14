@@ -273,13 +273,13 @@ describe('api/system.ts transfer transport (#1110)', () => {
     transport.apiUpload.mockResolvedValue(uploadResult({}));
     await systemModule.exportDevDb(() => {});
     await systemModule.importDevDb(new ArrayBuffer(4), () => {});
-    expect(transport.apiFetchToBlob).toHaveBeenCalledWith(
-      'api/debug/export-db',
-      expect.objectContaining({ onProgress: expect.any(Function) }),
-    );
-    expect(transport.apiUpload).toHaveBeenCalledWith(
-      'api/debug/import-db',
-      expect.objectContaining({ onProgress: expect.any(Function) }),
-    );
+
+    const blobCall = transport.apiFetchToBlob.mock.calls.at(-1);
+    expect(blobCall?.[0]).toBe('api/debug/export-db');
+    expect(typeof blobCall?.[1]?.onProgress).toBe('function');
+
+    const uploadCall = transport.apiUpload.mock.calls.at(-1);
+    expect(uploadCall?.[0]).toBe('api/debug/import-db');
+    expect(typeof uploadCall?.[1]?.onProgress).toBe('function');
   });
 });

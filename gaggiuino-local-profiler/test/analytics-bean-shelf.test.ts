@@ -193,8 +193,12 @@ describe('bean shelf renders its own thumbnails (#1467)', () => {
       duration: 280,
       score: 88,
       annotation: { coffee: 'Bean A', beanId: 7 },
-    }] as unknown as typeof S.shots;
-    S.coffeeLibrary = { beans: [{ id: 7, name: 'Bean A', image: 'photo.jpg' }] } as unknown as typeof S.coffeeLibrary;
+    }];
+    S.coffeeLibrary = {
+      beans: [{ id: 7, name: 'Bean A', image: 'photo.jpg' }],
+      grinders: [],
+      recipes: [], milks: [], baskets: [], puckScreens: [],
+    };
 
     const { buildBeanShelf } = await import('../public-src/views/analytics.js');
 
