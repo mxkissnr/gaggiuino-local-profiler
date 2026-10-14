@@ -173,13 +173,6 @@ describe('bean shelf renders its own thumbnails (#1467)', () => {
     const img = { dataset: { beanId: '7' }, src: '' };
     const beanShelf = { innerHTML: '' };
     const count = { textContent: '' };
-    Object.defineProperty(globalThis, 'document', {
-      value: {
-        getElementById: (id: string) => (id === 'beanShelf' ? beanShelf : id === 'beanShelfCount' ? count : null),
-        querySelectorAll: (selector: string) => (selector.includes('.lib-shelf-img') ? [img] : []),
-      },
-      configurable: true, writable: true,
-    });
     Object.defineProperty(globalThis, 'window', {
       value: { calcShotScore: (s: { score?: number }) => s.score ?? null, getShotData: () => ({}) },
       configurable: true, writable: true,
@@ -201,6 +194,22 @@ describe('bean shelf renders its own thumbnails (#1467)', () => {
     };
 
     const { buildBeanShelf } = await import('../public-src/views/analytics.js');
+
+    // Installed only after the import chain has run: views/library/bags.ts wires a
+    // document-level pointerdown handler behind a `typeof document !== 'undefined'`
+    // guard at import time, so leave document undefined during import (as the
+    // sibling harness does) and provide it for the render itself.
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        getElementById: (id: string) => (id === 'beanShelf' ? beanShelf : id === 'beanShelfCount' ? count : null),
+        querySelectorAll: (selector: string) => (selector.includes('.lib-shelf-img') ? [img] : []),
+        querySelector: (): null => null,
+        addEventListener: (): void => {},
+        removeEventListener: (): void => {},
+        documentElement: { lang: 'en' },
+      },
+      configurable: true, writable: true,
+    });
 
     expect(() => buildBeanShelf()).not.toThrow();
     await flushPromises();
