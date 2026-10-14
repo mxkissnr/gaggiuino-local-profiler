@@ -477,14 +477,17 @@ func brewLineValue(lines []string, key string) string {
 }
 
 var (
-	recipeDetailsRe = regexp.MustCompile(`(?i)recipe\s*details`)
-	bulletPrefixRe  = regexp.MustCompile(`^[•*\s]+`)
-	brewTempLineRe  = regexp.MustCompile(`(?i)^brew\s*temperature\s*:`)
-	brewTimeLineRe  = regexp.MustCompile(`(?i)^brew\s*time\s*:`)
-	brewRatioLineRe = regexp.MustCompile(`(?i)^brew\s*ratio\s*:`)
-	celsiusRangeRe  = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*[°º]C\s*[-–]\s*(\d+(?:\.\d+)?)\s*[°º]C`)
-	brewGuideRe     = regexp.MustCompile(`(?i)brew\s*guide`)
-	sentenceEndRe   = regexp.MustCompile(`[.!?]$`)
+	recipeDetailsRe  = regexp.MustCompile(`(?i)recipe\s*details`)
+	bulletPrefixRe   = regexp.MustCompile(`^[•*\s]+`)
+	brewTempLineRe   = regexp.MustCompile(`(?i)^brew\s*temperature\s*:`)
+	brewTimeLineRe   = regexp.MustCompile(`(?i)^brew\s*time\s*:`)
+	brewRatioLineRe  = regexp.MustCompile(`(?i)^brew\s*ratio\s*:`)
+	celsiusRangeRe   = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*[°º]C\s*[-–]\s*(\d+(?:\.\d+)?)\s*[°º]C`)
+	brewGuideRe      = regexp.MustCompile(`(?i)brew\s*guide`)
+	sentenceEndRe    = regexp.MustCompile(`[.!?]$`)
+	wordRe           = regexp.MustCompile(`[\p{L}\p{N}_]\S*`)
+	logoHomeSuffixRe = regexp.MustCompile(`(?i)\s*[-–—]\s*Home\s*$`)
+	leadingFloatRe   = regexp.MustCompile(`^\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?`)
 )
 
 func extractBulletRecipeDetails(doc *goquery.Document) map[string]any {
@@ -717,7 +720,7 @@ func shopNameFromLogoAlt(doc *goquery.Document) string {
 	if !ok {
 		return ""
 	}
-	cleaned := strings.TrimSpace(regexp.MustCompile(`(?i)\s*[-–—]\s*Home\s*$`).ReplaceAllString(alt, ""))
+	cleaned := strings.TrimSpace(logoHomeSuffixRe.ReplaceAllString(alt, ""))
 	return cleaned
 }
 
@@ -870,7 +873,7 @@ func jsParseFloat(v any) (float64, bool) {
 	case int:
 		return float64(t), true
 	case string:
-		m := regexp.MustCompile(`^\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?`).FindString(t)
+		m := leadingFloatRe.FindString(t)
 		if m == "" {
 			return 0, false
 		}
@@ -935,7 +938,7 @@ func ternAny(cond bool, ifTrue func() any, ifFalse any) any {
 }
 
 func titleCaseWords(s string) string {
-	return regexp.MustCompile(`\w\S*`).ReplaceAllStringFunc(s, func(w string) string {
+	return wordRe.ReplaceAllStringFunc(s, func(w string) string {
 		r := []rune(w)
 		return strings.ToUpper(string(r[0])) + strings.ToLower(string(r[1:]))
 	})

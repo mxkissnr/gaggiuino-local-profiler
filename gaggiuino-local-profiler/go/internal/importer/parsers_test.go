@@ -133,6 +133,23 @@ func TestShopifyJSONURL(t *testing.T) {
 	}
 }
 
+func TestTitleCaseWords(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"äpfel", "Äpfel"},
+		{"über reife beeren", "Über Reife Beeren"},
+		{"dark CHOCOLATE", "Dark Chocolate"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := titleCaseWords(tc.in); got != tc.want {
+			t.Errorf("titleCaseWords(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func assertField(t *testing.T, m map[string]any, key string, want any) {
 	t.Helper()
 	if m[key] != want {
