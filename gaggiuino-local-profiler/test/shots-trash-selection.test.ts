@@ -20,7 +20,6 @@ vi.mock('../public-src/api/shots.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/api/shots.js')>()),
   sendShotToTrash: vi.fn(() => Promise.resolve({ ok: true, text: () => Promise.resolve('') } as Response)),
   listShots: vi.fn(() => Promise.resolve({ ok: false, status: 500 } as Response)),
-  listShotsDump: vi.fn(() => Promise.resolve({ ok: false, status: 500 } as Response)),
 }));
 
 const g = globalThis as unknown as Record<string, unknown>;

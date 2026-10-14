@@ -26,23 +26,14 @@ export interface ListShotsParams {
  * GET /api/shots — one page of shot METADATA (no `datapoints`), newest-first.
  * Body: `{ shots: HydratedShot[]; nextCursor: string | null; hasMore: boolean }`.
  *
- * Returns the raw Response because the caller keys the pre-#957 Node-backend
- * fallback off a 404 and reports the failing status through the page state.
+ * Returns the raw Response because the caller reports the failing status
+ * through the page state.
  */
 export function listShots({ limit, cursor, trash = false }: ListShotsParams): Promise<Response> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
   if (trash) params.set('trash', '1');
   return apiFetch(`api/shots?${params}`);
-}
-
-/**
- * GET /shots.json — the full dump (timestamp-ASC, `datapoints` inline) the
- * frozen Node backend still serves. Body: `HydratedShot[]`. Only reached when
- * {@link listShots} answers 404.
- */
-export function listShotsDump({ trash = false }: { trash?: boolean } = {}): Promise<Response> {
-  return apiFetch(trash ? 'shots.json?trash=1' : 'shots.json');
 }
 
 /**
