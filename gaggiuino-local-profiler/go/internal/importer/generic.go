@@ -8,6 +8,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/jsnum"
 )
 
 // This file holds the generic Shopify product-JSON parser, the JSON-LD and
@@ -487,7 +489,6 @@ var (
 	sentenceEndRe    = regexp.MustCompile(`[.!?]$`)
 	wordRe           = regexp.MustCompile(`[\p{L}\p{N}_]\S*`)
 	logoHomeSuffixRe = regexp.MustCompile(`(?i)\s*[-–—]\s*Home\s*$`)
-	leadingFloatRe   = regexp.MustCompile(`^\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?`)
 )
 
 func extractBulletRecipeDetails(doc *goquery.Document) map[string]any {
@@ -866,25 +867,8 @@ func findDuplicateBean(name, roaster, sourceURL string, beans []map[string]any) 
 
 // ── small util ─────────────────────────────────────────────────────────
 
-func jsParseFloat(v any) (float64, bool) {
-	switch t := v.(type) {
-	case float64:
-		return t, true
-	case int:
-		return float64(t), true
-	case string:
-		m := leadingFloatRe.FindString(t)
-		if m == "" {
-			return 0, false
-		}
-		f, err := strconv.ParseFloat(strings.TrimSpace(m), 64)
-		if err != nil {
-			return 0, false
-		}
-		return f, true
-	}
-	return 0, false
-}
+// jsParseFloat mirrors JS's parseFloat(v); see jsnum.ParseFloat.
+var jsParseFloat = jsnum.ParseFloat
 
 func sliceRunes(s string, n int) string {
 	r := []rune(s)

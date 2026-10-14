@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/jsnum"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -386,22 +387,8 @@ func clampThreshold(v any, lo, hi int64) any {
 	return n
 }
 
-func jsParseIntAny(v any) (int64, bool) {
-	switch t := v.(type) {
-	case float64:
-		return int64(t), true
-	case int64:
-		return t, true
-	case string:
-		n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
-		if err != nil {
-			return 0, false
-		}
-		return n, true
-	default:
-		return 0, false
-	}
-}
+// jsParseIntAny mirrors JS's parseInt over a body/query value; see jsnum.ParseIntAny.
+var jsParseIntAny = jsnum.ParseIntAny
 
 func (h *Handlers) getLog(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("machineId")
