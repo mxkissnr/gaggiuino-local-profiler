@@ -2,7 +2,7 @@
 // truth; _render() rebuilds #gmEditorBody from it on every change.
 import Chart from 'chart.js/auto';
 import type { ChartConfiguration } from 'chart.js';
-import { S } from '../state/index.js';
+import { concreteActiveMachineId } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
 import type { MachineProfile } from '../api/types.js';
@@ -66,22 +66,10 @@ let _inputsBound = false; // guards against accumulating body change-listeners a
 // the default machine.
 let _editorMachineId: number | null = null;
 
-// The active machine as a concrete numeric id, or null when none is selected
-// ('all'/null).
-function _concreteMachineId(): number | null {
-  const id: unknown = S.activeMachineId;
-  if (typeof id === 'number' && Number.isFinite(id)) return id;
-  if (typeof id === 'string' && id !== 'all' && id.trim() !== '') {
-    const n = Number(id);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
-
 // ── Entry points ──────────────────────────────────────────────────────────
 
 export async function openGaggiMateProfileEditor(id: string): Promise<void> {
-  _editorMachineId = _concreteMachineId();
+  _editorMachineId = concreteActiveMachineId();
   const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
   if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
   _openEditor(profile);
@@ -92,14 +80,14 @@ export async function openGaggiMateProfileEditor(id: string): Promise<void> {
 // PUTting over the original, label suffixed so it's never confused with
 // its source in the list.
 export async function duplicateGaggiMateProfile(id: string): Promise<void> {
-  _editorMachineId = _concreteMachineId();
+  _editorMachineId = concreteActiveMachineId();
   const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
   if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
   _openEditor({ ...profile, id: undefined, label: `${profile.label ?? ''}${t('profile_duplicate_suffix')}` });
 }
 
 export function openNewGaggiMateProfile(): void {
-  _editorMachineId = _concreteMachineId();
+  _editorMachineId = concreteActiveMachineId();
   _openEditor({
     label: t('gm_new_profile_label'),
     description: '',

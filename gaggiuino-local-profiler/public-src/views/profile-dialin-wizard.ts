@@ -13,7 +13,7 @@
 // machine (api/machine/profile/:id) before the next round starts waiting —
 // there's no separate "save" step, the machine is always in sync with the
 // session's current profile.
-import { S }             from '../state/index.js';
+import { S, concreteActiveMachineId } from '../state/index.js';
 import { t, tHtml }        from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
 import { esc, html, joinHtml, scoreColor } from '../utils.js';
@@ -84,19 +84,6 @@ function _shots(): ProfileDialinShotRow[] {
   return S.shots;
 }
 
-// The active machine as a concrete numeric id, or null when none is selected
-// ('all'/null). A dial-in then sends no machineId and the backend targets the
-// default machine, exactly as before this capture existed (#1605).
-function _concreteMachineId(): number | null {
-  const id: unknown = S.activeMachineId;
-  if (typeof id === 'number' && Number.isFinite(id)) return id;
-  if (typeof id === 'string' && id !== 'all' && id.trim() !== '') {
-    const n = Number(id);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
-
 function _persist(): void {
   if (S.profileDialinSession) localStorage.setItem('glp_profile_dialin_session', JSON.stringify(S.profileDialinSession));
   else localStorage.removeItem('glp_profile_dialin_session');
@@ -158,7 +145,7 @@ export function openProfileDialinWizard(profile: DialinProfile | null | undefine
 // (the list only holds {id, name}) before opening, since dial-in needs the
 // real phases to compute suggestions against.
 export async function startProfileDialinFromList(id: string | number): Promise<void> {
-  const machineId = _concreteMachineId();
+  const machineId = concreteActiveMachineId();
   const profile = await machinesApi.getMachineProfile(id, machineId ?? undefined);
   if (!profile) { window.showToast?.(t('profile_load_error')); return; }
   openProfileDialinWizard(profile, machineId);

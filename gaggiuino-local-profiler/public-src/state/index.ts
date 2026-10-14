@@ -338,3 +338,15 @@ export function filterShotsByMachine<T extends { machineId?: number | null }>(
   if (activeMachineId == null || activeMachineId === 'all') return shots;
   return shots.filter(s => (s.machineId ?? 1) === activeMachineId);
 }
+
+// The machine id an editor or wizard acts on, null when "all machines" is
+// selected or nothing is loaded.
+export function concreteActiveMachineId(): number | null {
+  const id: unknown = S.activeMachineId;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  if (typeof id === 'string' && id !== 'all' && id.trim() !== '') {
+    const n = Number(id);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
