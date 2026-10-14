@@ -3,7 +3,7 @@ import { S, filterShotsByMachine }                            from '../../state/
 import * as chartRegistry                                     from '../../state/charts.js';
 import { t, tHtml }                                           from '../../i18n.js';
 import { isApiPortBlocked }                                   from '../../api/transport.js';
-import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard, getShot } from '../../api/shots.js';
+import { listShots, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard, getShot } from '../../api/shots.js';
 import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges, buildRecordedGmPhaseRanges, exitReasonKey } from '../../constants.js';
 import {
@@ -15,7 +15,7 @@ import { renderSidebar, updateSidebarHighlighting } from '../../components/sideb
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
 import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
-import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel, annotationBusy }              from './annotation.js';
 import { markDirty }                                          from '../../live-sync.js';
@@ -68,7 +68,7 @@ interface ShotRow extends ShotMeta {
 }
 
 // fetchShotsPage()'s normalised page: either a page of rows, or a transport
-// error code the callers surface (#957's Node-backend 404 fallback included).
+// error code the callers surface.
 interface ShotsPage { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean; error?: number }
 
 type GmPhaseRanges = ReturnType<typeof buildGmPhaseRanges>;
@@ -184,32 +184,10 @@ const SHOTS_PAGE_LIMIT = 60;
 // work. Rebuild at most once per this interval during the walk instead.
 const RENDER_THROTTLE_MS = 400;
 
-// #957: GET /api/shots is Go-only. The shared frontend also runs against the
-// (frozen, bugfix-only) Node backend during the migration, which serves the
-// old full /shots.json dump and no paginated route — so on a 404 we fall
-// back to that dump, seeding the curve cache from the datapoints it carries
-// so the lazy per-shot loader is a pure cache hit there. `trash` toggles the
-// trashed list on either backend. Returns a normalised page:
+// `trash` toggles the trashed list. Returns a normalised page:
 // { shots: <newest-first, metadata-only>, nextCursor, hasMore }.
 async function fetchShotsPage({ cursor = null, trash = false }: { cursor?: string | null; trash?: boolean } = {}): Promise<ShotsPage> {
   const r = await listShots({ limit: SHOTS_PAGE_LIMIT, cursor, trash });
-  if (r.status === 404) {
-    const fb = await listShotsDump({ trash });
-    if (!fb.ok) return { error: fb.status };
-    const dump = await fb.json() as unknown;     // full ASC array, datapoints inline
-    const shots = (Array.isArray(dump) ? dump : []) as ShotRow[];
-    for (const s of shots) {
-      if (s && s.datapoints) {
-        // Seed the curve cache so the lazy per-shot loader is a pure cache
-        // hit on Node. The row keeps its datapoints (Node's existing shape),
-        // so the metadata-only readers just ignore the extra key.
-        primeCurve(s.id, s.datapoints);
-        s.hasChartData = (s.datapoints.timeInShot?.length || s.datapoints.pressure?.length || 0) > 0;
-      }
-    }
-    shots.reverse();                            // normalise to newest-first
-    return { shots, nextCursor: null, hasMore: false };
-  }
   if (!r.ok) return { error: r.status };
   const page = await r.json() as { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean };
   return { shots: page.shots || [], nextCursor: page.nextCursor ?? null, hasMore: !!page.hasMore };
@@ -506,8 +484,7 @@ export async function loadMoreShots(): Promise<void> {
 
 export async function loadTrashData(): Promise<void> {
   try {
-    // The trash TTL is 30 days, so a single page is plenty in practice. On
-    // the Node backend this falls back to shots.json?trash=1 (#957).
+    // The trash TTL is 30 days, so a single page is plenty in practice.
     const page = await fetchShotsPage({ trash: true });
     if (page.error != null) return;
     S.trashedShots = page.shots || [];
