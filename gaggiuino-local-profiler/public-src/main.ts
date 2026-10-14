@@ -40,8 +40,8 @@ import { initToken, apiFetch } from './api/transport.js';
 import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
-import { initLiveSync, handleDataChanged, resyncAll, reloadBlocked } from './live-sync.js';
-import { invalidateImageKeys } from './bean-image.js';
+import { initLiveSync, handleDataChanged, resyncAll } from './live-sync.js';
+import { createLiveSyncHandlers } from './live-sync-handlers.js';
 import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
@@ -58,7 +58,7 @@ import { switchMode, goToShot } from './components/mode.js';
 import { initTopbarNavFade } from './components/topbar-nav-fade.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
 
-import { getShotData, calcShotScore, loadData, refreshShots, shotsLoadInProgress, annotationBusy,
+import { getShotData, calcShotScore, loadData,
          loadTrashData, renderTrash, toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
          renderAnnotationPanel, renderStars, quickClone, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
@@ -90,8 +90,7 @@ import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, s
          renderMaintenanceDashboard, maintStatusLabel,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
-         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
-         refreshMaintenanceView } from './views/maintenance.js';
+         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask } from './views/maintenance.js';
 import { loadAchievementsView } from './views/achievements.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from './components/flavor-wheel.js';
 import { highlightSheetFlavor } from './components/flavor-mini-wheel.js';
@@ -103,7 +102,7 @@ import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled
          acceptOrder, toggleDeclineRow, submitDecline, completeOrder,
          deleteOrder, clearOrderHistory,
          loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients, saveBaristaNotify,
-         ordersDraftOpen, _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
+         _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
 
 import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, resetShelfPrefs, renderGrinderList,
          openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
@@ -1231,80 +1230,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // #1539 slice 3: react to the server's data-changed pushes. Registered
     // before the stream opens so no early event is missed.
     onEvent(EVENTS.DATA_CHANGED, handleDataChanged);
-    initLiveSync({
-      library: {
-        // A library change is usually a stock change derived from a shot, which
-        // does not touch the photos, so the cache is left alone here.
-        run: async () => { await loadLibrary(); },
-      },
-      'library-image': {
-        // An image write addresses its cache key (bean:<id>, grinder:<id>, ...),
-        // so drop those entries (null drops every library photo) and reload the
-        // library once.
-        run: async ids => { invalidateImageKeys(ids); await loadLibrary(); },
-      },
-      shot: {
-        // One shot's own write (annotation or photo). refreshShots() patches the
-        // loaded row in place; the library refetch an annotation also triggers is
-        // handled by the `library` kind the server publishes alongside it.
-        // Deferred, not dropped, while this page is saving an edit or (re)loading
-        // the list -- the scheduler retries once the guard clears.
-        canRun: () => !annotationBusy() && !shotsLoadInProgress(),
-        run: ids => refreshShots(ids),
-      },
-      shots: {
-        // A shot-list change (trash/restore/delete). No single id to patch, so
-        // the whole list is re-fetched quietly, deferred on the same guards.
-        canRun: () => !annotationBusy() && !shotsLoadInProgress(),
-        run: () => refreshShots(null),
-      },
-      orders: {
-        // Deferred, not dropped, while the orders view holds uncommitted text
-        // (a focused field or an open decline row); the scheduler retries once
-        // it clears.
-        canRun: () => !ordersDraftOpen(),
-        run: async () => {
-          await Promise.all([loadDrinkMenu(), S.currentMode === 'orders' ? loadOrdersView() : undefined]);
-        },
-      },
-      maintenance: {
-        // refreshMaintenanceView() restores the card the user had expanded, so
-        // the refetch no longer needs to be held back while one is open.
-        run: async () => { if (S.currentMode === 'maintenance') await refreshMaintenanceView(); },
-        canRun: () => _maintenanceCanRefetch(),
-      },
-      'ui-prefs': {
-        run: async () => {
-          const changed = await loadUiPrefsFromServer();
-          if (changed) applyServerUiPrefs(false, true);
-        },
-      },
-      profiles: {
-        // The machine's profile list changed on the server — a profile write,
-        // or the profile-sync sweep publishing the kind. loadMachineProfileList()
-        // re-renders the list and its autocomplete from the current state.
-        run: () => loadMachineProfileList(),
-      },
-      settings: {
-        // The shot defaults, machine registry and broker/MCP/control options.
-        // Held back while the user is on the Settings page so a remote change
-        // never re-renders a form mid-edit; the scheduler retries it once the
-        // page is left.
-        canRun: () => S.currentMode !== 'settings',
-        run: loadSettingsState,
-      },
-      all: {
-        // A whole-database change (restore, DB import, demo seed/end): reload
-        // through the live-sync pipeline, so it honours the focus and
-        // hidden-tab guards like any other run.
-        run: () => { location.reload(); },
-        // ...but a reload discards more than focus alone protects: an open
-        // bottom sheet or dialog (e.g. the bean form) must hold it back too,
-        // even after focus has left its fields. The scheduler retries until
-        // the sheet closes.
-        canRun: () => !reloadBlocked(),
-      },
-    });
+    // #1539 slice 3: the per-kind refetch handlers live in live-sync-handlers.ts
+    // so tests can drive the real map; the three main-local helpers the map needs
+    // are passed in here.
+    initLiveSync(createLiveSyncHandlers({
+      loadSettingsState,
+      applyServerUiPrefs,
+      maintenanceCanRefetch: _maintenanceCanRefetch,
+    }));
     // #1539 slice 3: recover refetches that failed or were missed while
     // offline -- a browser online event or an SSE reconnect resyncs every kind.
     connectEvents(() => {}, resyncAll);

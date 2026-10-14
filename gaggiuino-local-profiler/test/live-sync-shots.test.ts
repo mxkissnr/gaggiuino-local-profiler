@@ -49,6 +49,10 @@ const apiFetchSpy = vi.spyOn(transport, 'apiFetch');
 const { refreshShots, loadData, shotsLoadInProgress } = await import('../public-src/views/shots/index.js');
 const { annotationBusy, scheduleAutoSave, flushAutoSave } = await import('../public-src/views/shots/annotation.js');
 const { initLiveSync, handleDataChanged, resyncAll } = await import('../public-src/live-sync.js');
+// Imported at module load, before any test installs its fake `document`: the
+// handler map pulls in views/library.js, whose bags.ts registers a pointerdown
+// listener at load only when `document` exists.
+const { createLiveSyncHandlers } = await import('../public-src/live-sync-handlers.js');
 
 // The nodes loadData() writes to and the fields the annotation save reads; a
 // generic element is created on first getElementById so both paths are served.
@@ -365,8 +369,12 @@ describe('live-sync deferral and resync (#1539 slice 4)', () => {
         return Promise.resolve(jsonResponse({}));
       });
 
-      // Mirrors main.ts's `shot` registration.
-      initLiveSync({ shot: { canRun: () => !annotationBusy(), run: ids => refreshShots(ids) } });
+      // The real `shot` handler from the map main.ts wires, not a copy.
+      initLiveSync(createLiveSyncHandlers({
+        loadSettingsState: vi.fn<() => Promise<void>>(),
+        applyServerUiPrefs: vi.fn<(includeMachine?: boolean, keepShelfQuery?: boolean) => void>(),
+        maintenanceCanRefetch: () => true,
+      }));
 
       scheduleAutoSave();
       expect(annotationBusy()).toBe(true);
