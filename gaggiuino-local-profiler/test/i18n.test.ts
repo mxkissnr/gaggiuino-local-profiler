@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -10,6 +10,21 @@ import fr from '../public-src/i18n/fr.js';
 import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
 import { LOCALE_MAP, localeFor } from '../public-src/constants.js';
+
+// setLang() runs applyTranslations() (which touches document) and then re-renders
+// the active view through window.* hooks. Stub those browser globals so the
+// behaviour test can drive the real setLang() the same way index.ts does.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+g.window ??= g;
+g.document = {
+  documentElement: { lang: 'de' },
+  getElementById: (): null => null,
+  querySelectorAll: (): unknown[] => [],
+};
+const { S } = await import('../public-src/state/index.js');
+const { setLang } = await import('../public-src/i18n.js');
 
 // localeFor()'s declared parameter is `string`, but the app feeds it a
 // possibly-unset S.currentLang; this test pins the runtime tolerance for
@@ -151,6 +166,12 @@ describe('index.html i18n wiring', () => {
     });
 });
 
+// The shot detail view wires its phase tags, compare title and profile fallback
+// through t(); rendering updateView() needs a full Chart.js + curve-fetch + ~40
+// element harness (see test/shots-load-data-race.test.ts, which deliberately
+// avoids it), so this stays a source guard — the escape hatch the issue allows
+// for a disproportionate harness. The language-switch re-render below is its
+// behavioural half.
 describe('shot detail view i18n wiring', () => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(__dirname, '../public-src/views/shots/index.ts'), 'utf8');
@@ -171,15 +192,26 @@ describe('shot detail view i18n wiring', () => {
 });
 
 describe('setLang() re-renders the open shot view', () => {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const src = readFileSync(join(__dirname, '../public-src/i18n.ts'), 'utf8');
-
+    // Regression guard: the Chart.js legend, grind advice and phase tags are only
+    // rebuilt when the shot detail re-renders — applyTranslations()'s DOM scan can't
+    // reach canvas-drawn text, so a language switch used to leave them stuck in
+    // whatever language was active when the shot was first opened.
     it('calls window.updateView() when switching language while on the shots view', () => {
-        // Regression guard: the Chart.js legend, grind advice and phase tags are only
-        // rebuilt when the shot detail re-renders — applyTranslations()'s DOM scan can't
-        // reach canvas-drawn text, so a language switch used to leave them stuck in
-        // whatever language was active when the shot was first opened.
-        expect(src).toMatch(/currentMode === 'shots'.*window\.updateView/);
+        const updateView = vi.fn();
+        g.updateView = updateView;
+        S.currentMode = 'shots';
+        setLang('en');
+        expect(S.currentLang).toBe('en');
+        expect(updateView).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call window.updateView() when another view is active', () => {
+        const updateView = vi.fn();
+        g.updateView = updateView;
+        g.initAnalytics = vi.fn();
+        S.currentMode = 'analytics';
+        setLang('de');
+        expect(updateView).not.toHaveBeenCalled();
     });
 });
 
