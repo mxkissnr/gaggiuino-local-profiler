@@ -284,7 +284,7 @@ describe('calcShotScore — 0.0 °C thermocouple dropouts (#1688)', () => {
             ...clean,
             datapoints: {
                 ...clean.datapoints,
-                temperature: clean.datapoints.temperature.map((v, i) => (i % 7 === 3 ? 0 : v)),
+                temperature: clean.datapoints.temperature.map((v: number, i: number) => (i % 7 === 3 ? 0 : v)),
             },
         };
         expect(calcShotScore(dropouts)).toBe(calcShotScore(clean));
