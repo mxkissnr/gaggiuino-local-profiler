@@ -7,6 +7,7 @@ package config
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"strconv"
 	"sync"
@@ -217,4 +218,14 @@ func positiveEnvInt(name string, def int) int {
 // is missing or doesn't parse. Thin wrapper over Options()'s shared cache.
 func IsDebugLoggingEnabled() bool {
 	return Options().DebugLogging
+}
+
+// DebugLogf logs one line with a "[debug] " prefix, but only when debug logging
+// is on. internal/importer and internal/system both route their debug traces
+// through this helper (#1622 slice 12), so neither needs the other's package --
+// nor its own copy of the prefix+gate -- just to trace a fetch or a poll tick.
+func DebugLogf(format string, args ...any) {
+	if IsDebugLoggingEnabled() {
+		log.Printf("[debug] "+format, args...)
+	}
 }

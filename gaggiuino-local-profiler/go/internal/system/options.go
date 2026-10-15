@@ -1,8 +1,6 @@
 package system
 
 import (
-	"log"
-
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 )
 
@@ -52,31 +50,11 @@ func loadSyncIntervalMinutes() int {
 	return config.Options().SyncIntervalMinutes
 }
 
-// isDebugLoggingEnabled delegates to internal/config's shared, mtime-cached
-// implementation (#977 follow-up code review, round 4) rather than
-// bundling debug_logging into this package's options reads --
-// internal/machines needs the identical check and can't import this
-// package (see internal/config.IsDebugLoggingEnabled's doc comment for the
-// cycle this was extracted to break), so both packages now share one
-// implementation instead of keeping independent copies.
-func isDebugLoggingEnabled() bool {
-	return config.IsDebugLoggingEnabled()
-}
-
-// debugLogf logs with a "[debug]" prefix, but only when
-// isDebugLoggingEnabled(). See sync.go/poll.go for the call sites this backs.
+// debugLogf logs with a "[debug]" prefix, but only when debug logging is on --
+// it delegates to internal/config.DebugLogf (#1622 slice 12) now that
+// internal/importer calls that directly instead of this package's exported
+// wrapper, so the prefix+gate lives in exactly one place. See sync.go/poll.go
+// for the call sites this backs.
 func debugLogf(format string, args ...any) {
-	if isDebugLoggingEnabled() {
-		log.Printf("[debug] "+format, args...)
-	}
+	config.DebugLogf(format, args...)
 }
-
-// IsDebugLoggingEnabled/DebugLogf are isDebugLoggingEnabled/debugLogf exposed
-// for internal/importer's HTML/JSON fetch traces (#977 follow-up code review):
-// internal/system<->internal/importer has no import cycle (unlike
-// internal/machines, which is imported BY internal/system -- see
-// internal/config.IsDebugLoggingEnabled's doc comment for how that cycle is
-// broken instead), so importer just calls straight through to this package's
-// own wrapper around the shared internal/config implementation.
-func IsDebugLoggingEnabled() bool          { return isDebugLoggingEnabled() }
-func DebugLogf(format string, args ...any) { debugLogf(format, args...) }
