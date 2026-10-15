@@ -800,7 +800,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	// (internal/machines/gaggiuino_adapter.go for a Gaggiuino default), so this
 	// traces the poll tick itself rather than the literal request line. Calling
 	// debugLogf directly is safe here despite firing every single pollInterval
-	// tick (1s): its isDebugLoggingEnabled() check goes through internal/config's
+	// tick (1s): its config.IsDebugLoggingEnabled() check goes through internal/config's
 	// shared cache, which now carries its own TTL sized for exactly this hot path
 	// (#977 follow-up code review, round 5 -- see
 	// internal/config/debuglog.go's debugLoggingCache doc comment), so this no
