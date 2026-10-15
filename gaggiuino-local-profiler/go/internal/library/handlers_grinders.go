@@ -51,7 +51,7 @@ func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	grinder, _, found, err := UpdateGrinder(h.repo, id, body)
+	grinder, found, err := UpdateGrinder(h.repo, id, body)
 	if err != nil {
 		internalError(w, err)
 		return

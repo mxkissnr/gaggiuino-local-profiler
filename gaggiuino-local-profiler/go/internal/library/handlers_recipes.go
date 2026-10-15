@@ -82,7 +82,7 @@ func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	recipe, _, found, err := UpdateRecipe(h.repo, id, body)
+	recipe, found, err := UpdateRecipe(h.repo, id, body)
 	if err != nil {
 		internalError(w, err)
 		return

@@ -67,7 +67,7 @@ func (h *Handlers) updateMilk(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	milk, _, found, err := UpdateMilk(h.repo, id, body)
+	milk, found, err := UpdateMilk(h.repo, id, body)
 	if err != nil {
 		internalError(w, err)
 		return
