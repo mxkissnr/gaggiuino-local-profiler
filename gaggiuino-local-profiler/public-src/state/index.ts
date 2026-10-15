@@ -122,7 +122,6 @@ export interface MachinesSlice {
   activeMachineId: number | 'all' | null;
   machineProfiles: MachineProfileRow[];
   machineProfilesStale: boolean;
-  legacyMachineOptionsPending: boolean; // #662
 }
 
 export interface UiSlice {
@@ -259,7 +258,6 @@ export const S: AppState = {
   _ordersDeclineOpen: {},
   _ordersStatsOpen: false,
   machineReachable: null,
-  legacyMachineOptionsPending: false, // #662
   // #735: SSE push connection state -- null = "not yet known" (treated the
   // same as false by consumers until proven true), true once EventSource
   // has successfully opened at least once, false once fallback detection

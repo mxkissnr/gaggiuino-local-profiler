@@ -9,7 +9,7 @@ import {
 } from '../api/system.js';
 import { shareOrDownloadBlob, syncInstallId } from '../utils.js';
 import { markDirty, noteServerRevs } from '../live-sync.js';
-import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
+import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './onboarding.js';
 import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
 import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
@@ -46,7 +46,6 @@ interface StatusPayload {
   devBuild?: string | null;
   ordersFeature?: boolean;
   isDemo?: boolean;
-  legacyMachineOptionsPending?: boolean;
   // #1539 slice 2/3: the SSE data-change tracker's epoch and per-kind
   // revisions, so a reconnecting client can tell which kinds it missed.
   dataEpoch?: string;
@@ -103,7 +102,6 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // DOM lookups or JSON parsing further below) can never leave them stuck in a stale
     // state — see #288.
     updateMachineBanner(s);
-    updateLegacyMachineOptionsBanner(s);
     updateOnboardingPanel();
     // #1539 slice 3: feed the server's data-change epoch/revisions to the
     // live-sync tracker, so a reconnect (or a missed SSE event) shows up as a
