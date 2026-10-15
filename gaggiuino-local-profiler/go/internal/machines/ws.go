@@ -78,7 +78,7 @@ func gaggiuinoWSURL(baseURL string) (string, error) {
 
 // wsConnect centralizes the connect-with-timeout preamble every short-lived
 // WS call in this package (wsSendAndWait/wsSendCommand here, plus
-// gaggimateRequest/gaggimateWaitForStatus in gaggimate_ws.go) would otherwise
+// gaggimateWaitForStatus in gaggimate_ws.go) would otherwise
 // repeat verbatim: derive a timeout-bounded ctx, build the WS URL via urlFor,
 // and dial it (#901 code review). Returns the derived ctx — callers must use
 // it for Write/Read, not the ctx they passed in — and a cancel func the

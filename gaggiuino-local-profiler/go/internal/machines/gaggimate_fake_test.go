@@ -77,17 +77,16 @@ func (f *fakeGaggiMateMachine) handleWS(w http.ResponseWriter, r *http.Request) 
 
 func (f *fakeGaggiMateMachine) respond(ctx context.Context, conn *websocket.Conn, req map[string]any) {
 	tp, _ := req["tp"].(string)
-	// #342, live-verified against real firmware (see gaggimate_ws.go's doc
-	// comment): the machine echoes `rid` back as a JSON *string*, even
+	// #342, live-verified against real firmware (see gaggimate_live.go's
+	// gaggimateRID): the machine echoes `rid` back as a JSON *string*, even
 	// though the client sends it as a number — reproduced here rather than
-	// echoing the number straight back, since that's what
-	// gaggimateRequest()'s type-tolerant comparison is specifically built
-	// to handle. json.Unmarshal decodes the incoming numeric rid into a
-	// float64 (encoding/json's default for JSON numbers into `any`); %.0f
-	// renders its integer digits without Go's %v scientific-notation
-	// switch (which triggers even for ordinary 9-digit magnitudes — the
-	// bug this fake's earlier plain-number echo exposed in the first
-	// place, see ws.go's comparison).
+	// echoing the number straight back, since that's what the live client's
+	// type-tolerant rid comparison is specifically built to handle.
+	// json.Unmarshal decodes the incoming numeric rid into a float64
+	// (encoding/json's default for JSON numbers into `any`); %.0f renders
+	// its integer digits without Go's %v scientific-notation switch (which
+	// triggers even for ordinary 9-digit magnitudes — the bug this fake's
+	// earlier plain-number echo exposed in the first place).
 	rid := fmt.Sprintf("%.0f", req["rid"])
 	send := func(resType string, extra map[string]any) {
 		frame := map[string]any{"tp": resType, "rid": rid}
