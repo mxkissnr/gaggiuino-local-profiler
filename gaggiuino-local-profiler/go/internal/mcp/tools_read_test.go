@@ -210,8 +210,10 @@ func TestListBeansReportsCurrentBagsRoastDate(t *testing.T) {
 	shotsRepo := shots.NewRepository(sqlDB)
 	libRepo := library.NewRepository(sqlDB)
 
-	// Two doses exhaust the queue's first bag and partly consume the second,
-	// so the second bag — not the array-last third one — is the current bag.
+	// The bean tracks stock only per bag (no bean-level stock_g), like the
+	// canonical three-bag shape, so the doses must still be loaded. Two doses
+	// exhaust the queue's first bag and partly consume the second, so the second
+	// bag — not the array-last third one — is the current bag.
 	for i, dose := range []float64{250, 100} {
 		id := int64(i + 1)
 		if err := shotsRepo.Upsert(shots.Shot{"id": id, "timestamp": id}); err != nil {
@@ -227,7 +229,7 @@ func TestListBeansReportsCurrentBagsRoastDate(t *testing.T) {
 		t.Fatalf("GetLibrary: %v", err)
 	}
 	lib.Beans = []library.Entity{{
-		"id": int64(1), "name": "Test Bean", "enabled": true, "stock_g": float64(750),
+		"id": int64(1), "name": "Test Bean", "enabled": true,
 		"bags": []any{
 			library.Entity{"id": int64(101), "stock_g": float64(250), "sortOrder": int64(0), "openedAt": int64(1000), "roastDate": "2026-01-01"},
 			library.Entity{"id": int64(102), "stock_g": float64(250), "sortOrder": int64(1), "openedAt": int64(2000), "roastDate": "2026-09-10"},

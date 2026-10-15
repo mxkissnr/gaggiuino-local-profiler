@@ -499,9 +499,22 @@ func beanMatchesQuery(bean library.Entity, query string) bool {
 	return false
 }
 
+// tracksStock reports whether the bean has any stock to track -- bean-level
+// stock_g, or any bag's own stock_g. Both the remaining-stock maths and the
+// current-bag simulation need the annotated doses, so either shape means this
+// page's beans need them loaded.
 func tracksStock(bean library.Entity) bool {
-	v, ok := entityFloat(bean, "stock_g")
-	return ok && v > 0
+	if v, ok := entityFloat(bean, "stock_g"); ok && v > 0 {
+		return true
+	}
+	bags, _ := bean["bags"].([]any)
+	for _, raw := range bags {
+		bag, _ := raw.(map[string]any)
+		if v, ok := entityFloat(bag, "stock_g"); ok && v > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func daysSinceDate(date string, now time.Time) (int, bool) {
