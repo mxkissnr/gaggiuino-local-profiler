@@ -45,8 +45,7 @@ export function updateApiPortClosedBanner(): void {
     position: 'fixed', left: '0', right: '0', zIndex: '9995',
     top: `${devBannerHeight()
       + (document.getElementById('glpUpdateBanner')?.offsetHeight || 0)
-      + (document.getElementById('glpOnboardingBanner')?.offsetHeight || 0)
-      + (document.getElementById('glpLegacyMachineOptionsBanner')?.offsetHeight || 0)}px`,
+      + (document.getElementById('glpOnboardingBanner')?.offsetHeight || 0)}px`,
     // #814: was a hardcoded dark surface + light text, so these banners
   // stayed dark-on-dark chips on a light page. --raised/--gray-200 are the
   // themed equivalents of exactly those two values.
