@@ -61,9 +61,3 @@ const (
 // under `go test`). A var, not a const, so it is resolved through the data-dir
 // seam.
 var preheatStateFile = datadir.Path("preheat_state.json")
-
-// defaultOptionsFile is a var, not a const, so
-// options_test.go can point it at a throwaway file instead of the real
-// options.json under the data directory (same testing-seam pattern as
-// internal/backup/handlers.go's restoreUnzipEntryLimit).
-var defaultOptionsFile = datadir.Path("options.json")

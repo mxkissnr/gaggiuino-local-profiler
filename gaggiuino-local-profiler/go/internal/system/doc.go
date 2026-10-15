@@ -41,10 +41,9 @@
 //	             GET /api/status reads.
 //	preheat.go   buildPreheatResponse, SetReadyByTarget,
 //	             checkReadyByPreheat, save/load preheat_state.json.
-//	options.go   loadPreheatMinutes() — a narrow options.json read, same
-//	             pattern as internal/orders/options.go's isOrdersEnabled();
-//	             also isApiPortExposed()/loadSyncIntervalMinutes()/its own
-//	             isOrdersEnabled() duplicate, all GET /api/status fields.
+//	options.go   loadPreheatMinutes()/isApiPortExposed()/loadSyncIntervalMinutes()/
+//	             isOrdersEnabled() — all thin wrappers over internal/config's
+//	             one shared options.json reader (#1622 slice 8).
 //	status.go    GET /api/status's pure-logic pieces —
 //	             statusMachine/buildStatusMachines (the `machines` array),
 //	             apiURLAndHostnameFor/hostnameOnly (machineUrl/
