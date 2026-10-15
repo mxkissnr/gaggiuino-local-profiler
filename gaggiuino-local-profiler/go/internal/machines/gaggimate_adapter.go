@@ -43,11 +43,7 @@ func (a *GaggiMateAdapter) GetStatus(ctx context.Context, m *Machine) (Status, e
 	if err != nil {
 		return Status{}, err
 	}
-	var evt map[string]any
-	var ok bool
-	if a.live != nil {
-		evt, ok = a.live.Status(baseURL)
-	}
+	evt, ok := a.live.Status(baseURL)
 	if !ok {
 		// No fresh cached frame yet (session still warming up, or the
 		// machine just went unreachable) — one short-lived wait, exactly
@@ -126,14 +122,11 @@ func (a *GaggiMateAdapter) ListProfiles(ctx context.Context, m *Machine) ([]Prof
 	if err != nil {
 		return nil, err
 	}
-	if a.live != nil {
-		res, err := a.live.Request(ctx, baseURL, "req:profiles:list", nil)
-		if err != nil {
-			return nil, err
-		}
-		return gaggimateParseProfileList(res)
+	res, err := a.live.Request(ctx, baseURL, "req:profiles:list", nil)
+	if err != nil {
+		return nil, err
 	}
-	return gaggimateListProfiles(ctx, baseURL)
+	return gaggimateParseProfileList(res)
 }
 
 func (a *GaggiMateAdapter) GetProfile(ctx context.Context, m *Machine, id string) (json.RawMessage, error) {
@@ -141,14 +134,11 @@ func (a *GaggiMateAdapter) GetProfile(ctx context.Context, m *Machine, id string
 	if err != nil {
 		return nil, err
 	}
-	if a.live != nil {
-		res, err := a.live.Request(ctx, baseURL, "req:profiles:load", map[string]any{"id": id})
-		if err != nil {
-			return nil, err
-		}
-		return gaggimateParseProfile(res)
+	res, err := a.live.Request(ctx, baseURL, "req:profiles:load", map[string]any{"id": id})
+	if err != nil {
+		return nil, err
 	}
-	return gaggimateLoadProfile(ctx, baseURL, id)
+	return gaggimateParseProfile(res)
 }
 
 // CreateProfile/UpdateProfile forward profile.RawBody (the raw request JSON
@@ -162,18 +152,15 @@ func (a *GaggiMateAdapter) CreateProfile(ctx context.Context, m *Machine, profil
 	if err != nil {
 		return ProfileSummary{}, err
 	}
-	if a.live != nil {
-		var decoded any
-		if err := json.Unmarshal(profile.RawBody, &decoded); err != nil {
-			return ProfileSummary{}, err
-		}
-		res, err := a.live.Request(ctx, baseURL, "req:profiles:save", map[string]any{"profile": decoded})
-		if err != nil {
-			return ProfileSummary{}, err
-		}
-		return gaggimateParseProfileSave(res)
+	var decoded any
+	if err := json.Unmarshal(profile.RawBody, &decoded); err != nil {
+		return ProfileSummary{}, err
 	}
-	return gaggimateSaveProfile(ctx, baseURL, profile.RawBody)
+	res, err := a.live.Request(ctx, baseURL, "req:profiles:save", map[string]any{"profile": decoded})
+	if err != nil {
+		return ProfileSummary{}, err
+	}
+	return gaggimateParseProfileSave(res)
 }
 
 func (a *GaggiMateAdapter) UpdateProfile(ctx context.Context, m *Machine, profile ProfileInput) (ProfileSummary, error) {
@@ -181,18 +168,15 @@ func (a *GaggiMateAdapter) UpdateProfile(ctx context.Context, m *Machine, profil
 	if err != nil {
 		return ProfileSummary{}, err
 	}
-	if a.live != nil {
-		var decoded any
-		if err := json.Unmarshal(profile.RawBody, &decoded); err != nil {
-			return ProfileSummary{}, err
-		}
-		res, err := a.live.Request(ctx, baseURL, "req:profiles:save", map[string]any{"profile": decoded})
-		if err != nil {
-			return ProfileSummary{}, err
-		}
-		return gaggimateParseProfileSave(res)
+	var decoded any
+	if err := json.Unmarshal(profile.RawBody, &decoded); err != nil {
+		return ProfileSummary{}, err
 	}
-	return gaggimateSaveProfile(ctx, baseURL, profile.RawBody)
+	res, err := a.live.Request(ctx, baseURL, "req:profiles:save", map[string]any{"profile": decoded})
+	if err != nil {
+		return ProfileSummary{}, err
+	}
+	return gaggimateParseProfileSave(res)
 }
 
 func (a *GaggiMateAdapter) DeleteProfile(ctx context.Context, m *Machine, id string) ([]ProfileSummary, error) {
@@ -200,20 +184,14 @@ func (a *GaggiMateAdapter) DeleteProfile(ctx context.Context, m *Machine, id str
 	if err != nil {
 		return nil, err
 	}
-	if a.live != nil {
-		if _, err := a.live.Request(ctx, baseURL, "req:profiles:delete", map[string]any{"id": id}); err != nil {
-			return nil, err
-		}
-		res, err := a.live.Request(ctx, baseURL, "req:profiles:list", nil)
-		if err != nil {
-			return nil, err
-		}
-		return gaggimateParseProfileList(res)
-	}
-	if err := gaggimateDeleteProfile(ctx, baseURL, id); err != nil {
+	if _, err := a.live.Request(ctx, baseURL, "req:profiles:delete", map[string]any{"id": id}); err != nil {
 		return nil, err
 	}
-	return gaggimateListProfiles(ctx, baseURL)
+	res, err := a.live.Request(ctx, baseURL, "req:profiles:list", nil)
+	if err != nil {
+		return nil, err
+	}
+	return gaggimateParseProfileList(res)
 }
 
 func (a *GaggiMateAdapter) SelectProfile(ctx context.Context, m *Machine, id string) error {
@@ -221,11 +199,8 @@ func (a *GaggiMateAdapter) SelectProfile(ctx context.Context, m *Machine, id str
 	if err != nil {
 		return err
 	}
-	if a.live != nil {
-		_, err := a.live.Request(ctx, baseURL, "req:profiles:select", map[string]any{"id": id})
-		return err
-	}
-	return gaggimateSelectProfile(ctx, baseURL, id)
+	_, err = a.live.Request(ctx, baseURL, "req:profiles:select", map[string]any{"id": id})
+	return err
 }
 
 func (a *GaggiMateAdapter) Capabilities() Capabilities {
