@@ -147,7 +147,13 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): ScoreDetailResult {
     }
   }
 
-  const tVals = (d.temperature || []).map(v => v / 10);
+  // #1688: a failed thermocouple read is stored as exactly 0 (there is no
+  // per-sample validity flag), so an isolated dropout would otherwise swing
+  // stddev and the mean by tens of degrees. A brew path cannot change by
+  // 90 C in one sample interval, so drop exact zeros before scoring. With
+  // fewer than 6 valid samples left, the temperature part is left out (the
+  // same > 5 gate, now applied to the cleaned series).
+  const tVals = (d.temperature || []).map(v => v / 10).filter(v => v !== 0);
   if (tVals.length > 5) {
     const sd = _stddev(tVals) || 0;
     const stab = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72

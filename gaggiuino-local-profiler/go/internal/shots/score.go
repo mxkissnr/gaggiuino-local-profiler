@@ -304,7 +304,10 @@ func tempStabilityDev(v any) *float64 {
 	var sum float64
 	var count int
 	for i := 0; i < n; i++ {
-		if target[i] == 0 {
+		// #1688: skip a failed thermocouple read (stored as exactly 0) as well
+		// as a missing target sample, so a dropout is not counted as a ~90 C
+		// deviation and the metric matches the score's cleaned series.
+		if target[i] == 0 || temp[i] == 0 {
 			continue
 		}
 		d := temp[i] - target[i]
@@ -582,7 +585,18 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		pressureNote = PressureNoteOmitted
 	}
 
-	tVals := divAll(ss.temperature, 10)
+	// #1688: a failed thermocouple read is stored as exactly 0 (there is no
+	// per-sample validity flag), so an isolated dropout would otherwise swing
+	// stddev and the mean by tens of degrees. A brew path cannot change by
+	// 90 C in one sample interval, so drop exact zeros before scoring. With
+	// fewer than 6 valid samples left, the temperature part is left out (the
+	// same > 5 gate, now applied to the cleaned series).
+	var tVals []float64
+	for _, v := range divAll(ss.temperature, 10) {
+		if v != 0 {
+			tVals = append(tVals, v)
+		}
+	}
 	if len(tVals) > 5 {
 		sd := stddev(tVals)
 		var stab float64
