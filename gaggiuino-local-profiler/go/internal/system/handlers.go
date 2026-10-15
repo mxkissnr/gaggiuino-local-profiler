@@ -380,22 +380,22 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]any{
-		"shotCount":                   shotCount,
-		"lastSync":                    nullableStr(syncInfo.LastSync),
-		"machineVersion":              info.CachedMachineVersion,
-		"syncInterval":                loadSyncIntervalMinutes(),
-		"haConnected":                 h.poller.ha.Enabled(),
-		"glpVersion":                  glpVersion,
-		"ordersFeature":               isOrdersEnabled(),
-		"exposeApiPort":               isApiPortExposed(),
-		"machineReachable":            machineReachable,
-		"lastMachineSuccess":          info.LastMachineSuccess,
-		"machineOn":                   snap.MachineOn,
-		"machineOnSince":              snap.SwitchOnAt,
-		"installId":                   installID,
-		"dataEpoch":                   dataEpoch,
-		"dataRevs":                    dataRevs,
-		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
+		"shotCount":          shotCount,
+		"lastSync":           nullableStr(syncInfo.LastSync),
+		"machineVersion":     info.CachedMachineVersion,
+		"syncInterval":       loadSyncIntervalMinutes(),
+		"haConnected":        h.poller.ha.Enabled(),
+		"glpVersion":         glpVersion,
+		"ordersFeature":      isOrdersEnabled(),
+		"exposeApiPort":      isApiPortExposed(),
+		"machineReachable":   machineReachable,
+		"lastMachineSuccess": info.LastMachineSuccess,
+		"machineOn":          snap.MachineOn,
+		"machineOnSince":     snap.SwitchOnAt,
+		"installId":          installID,
+		"dataEpoch":          dataEpoch,
+		"dataRevs":           dataRevs,
+		"machines":           buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
 	}
 	if devBuild := os.Getenv("GLP_DEV_BUILD"); devBuild != "" {
 		resp["devBuild"] = devBuild
