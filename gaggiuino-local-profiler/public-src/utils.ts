@@ -562,16 +562,21 @@ export function groupShotsByDay<T extends { timestamp: number }>(
 }
 
 // ── Score helpers ─────────────────────────────────────────────────────────
-// scoreClass keeps the 3-tier scale (#397) the .score-* CSS classes are built
-// on: green >= 90, yellow >= 70, red below.
-export function scoreClass(n: number): string {
-  return n >= 90 ? 'score-great' : n >= 70 ? 'score-ok' : 'score-bad';
-}
-
 // #1622: the one five-step score scale, shared by every view and the Go share
 // card (card_palette.go). The thresholds live here so nothing else hard-codes
 // them: >=88 great, >=75 good, >=60 ok, >=45 low, below bad.
 export const SCORE_STEPS = { great: 88, good: 75, ok: 60, low: 45 } as const;
+
+// The same five steps as CSS classes (#1622), so a score is coloured by the
+// .score-* rules in style.css instead of a per-view threshold. Kept in
+// lockstep with scoreColor() below by reading SCORE_STEPS.
+export function scoreClass(n: number): string {
+  return n >= SCORE_STEPS.great ? 'score-great'
+       : n >= SCORE_STEPS.good  ? 'score-good'
+       : n >= SCORE_STEPS.ok    ? 'score-ok'
+       : n >= SCORE_STEPS.low   ? 'score-low'
+       : 'score-bad';
+}
 
 // Returns a CSS custom-property reference so callers stay theme-aware
 // (accent/light-dark) instead of a hardcoded hex.
