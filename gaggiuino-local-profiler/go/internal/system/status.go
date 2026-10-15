@@ -92,20 +92,6 @@ func hostnameOnly(rawHost string) string {
 	return u.Hostname()
 }
 
-// hasUnconfirmedLegacyMachineOptions always returns false and is a stub: the
-// endpoint uses it to show a Settings-UI banner nudging the user to
-// re-confirm a legacy machine_host/switch_entity add-on option that hasn't yet
-// been reconciled into the registry. The real implementation depends on a kv
-// "options.json value as of the last adoption pass" tracking table (the write
-// side of that reconciliation) that this package hasn't built —
-// internal/machines/registry.go's EnsureDefaultMachine doc comment already
-// draws the identical scope boundary for the read side of the same
-// deprecation. Always false here: never shows the nag banner, the safe
-// default — a false negative (missing a legacy option that genuinely needs
-// re-confirming) costs nothing but the banner not appearing; there is no
-// false-positive failure mode since this never returns true.
-func hasUnconfirmedLegacyMachineOptions() bool { return false }
-
 // apiURLAndHostnameFor computes GET /api/status's authenticated-only
 // machineUrl/machineHostname fields — display-only values, never used to
 // actually reach the machine (that's machines.BaseURLFor, which re-validates
