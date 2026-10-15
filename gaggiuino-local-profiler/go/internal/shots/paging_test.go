@@ -289,6 +289,20 @@ func TestTempStabilityDev_MeanAbsDeviationOverTen(t *testing.T) {
 	}
 }
 
+// #1688: an isolated thermocouple dropout reads as exactly 0 and must not be
+// counted as a ~93 C deviation from the target.
+func TestTempStabilityDev_IgnoresZeroTemperatureSamples(t *testing.T) {
+	dp := map[string]any{
+		"temperature":       []any{930.0, 0.0, 935.0, 0.0, 940.0},
+		"targetTemperature": []any{930.0, 930.0, 930.0, 930.0, 930.0},
+	}
+	got := tempStabilityDev(map[string]any(dp))
+	// deviations 0, 0.5, 1.0 -> mean 0.5, the two 0.0 samples are skipped.
+	if got == nil || *got < 0.49 || *got > 0.51 {
+		t.Fatalf("tempStabilityDev = %v, want ~0.5 (zero-temperature samples skipped)", got)
+	}
+}
+
 // ── GET /api/shots handler ────────────────────────────────────────────
 
 func TestListShotsPage_EnvelopeAndSlimRows(t *testing.T) {

@@ -152,6 +152,21 @@ describe('_computeMachineComparison (#394)', () => {
     expect(rows.find(r => r.name === 'Gaggiuino')?.avgStability).toBe(0.5);
   });
 
+  it('ignores 0.0 °C dropout samples in the stability fallback (#1688)', () => {
+    const shots = [
+      shot({
+        machineId: 1,
+        datapoints: {
+          temperature:       [930, 0, 935, 0, 940], // isolated dropouts to 0.0 °C
+          targetTemperature: [930, 930, 930, 930, 930],
+        },
+      }),
+    ];
+    const rows = _computeMachineComparison(shots, machines);
+    // deviations 0, 0.5, 1.0 -> mean 0.5, the two 0.0 samples are dropped.
+    expect(rows.find(r => r.name === 'Gaggiuino')?.avgStability).toBe(0.5);
+  });
+
   it('returns null stability/duration/score for a machine with no shots', () => {
     const shots = [shot({ machineId: 1, score: 80 })];
     const rows = _computeMachineComparison(shots, machines);

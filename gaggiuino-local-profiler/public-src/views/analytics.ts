@@ -2663,7 +2663,10 @@ function _tempStability(shot: ShotRow): number | null {
   let sum = 0, count = 0;
   for (let i = 0; i < n; i++) {
     const t = temp[i], tg = target[i];
-    if (t == null || tg == null || tg === 0) continue;
+    // #1688: skip a failed thermocouple read (stored as exactly 0) as well as
+    // a missing target sample, so a dropout is not counted as a ~90 C
+    // deviation and this fallback matches the server's tempStabilityDev.
+    if (t == null || tg == null || tg === 0 || t === 0) continue;
     sum += Math.abs(t - tg) / 10; // both datapoints ×10-scaled per GLP convention
     count++;
   }
