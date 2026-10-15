@@ -179,7 +179,7 @@ func buildPalette(accent, theme string) palette {
 		star:          pair[0],
 		starDim:       gray[700],
 		ok:            sem["ok"], good: sem["good"], warn: sem["warn"],
-		low:           sem["low"], err: sem["err"],
+		low: sem["low"], err: sem["err"],
 	}
 }
 
