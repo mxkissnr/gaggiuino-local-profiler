@@ -82,7 +82,7 @@
 //     machine is pulled over the same /api/shots REST surface as the default
 //     one, a GaggiMate through its history adapter — so the default machine's
 //     own retry/backoff stays the only thing driven by a sync result. Still
-//     not implemented are syncProgress, and the backgroundHaCheck
+//     not implemented are syncProgress and the backgroundHaCheck
 //     `if (!cachedMachineVersion) fetchMachineVersion()` fallback: pollViaGaggiuinoStatus
 //     already opportunistically captures each machine's cached version from its
 //     successful status polls and shot syncs, and drops it again on an
