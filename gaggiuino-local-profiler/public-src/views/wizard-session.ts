@@ -112,9 +112,10 @@ export interface WizardScoredRound {
 }
 
 export function bestRound<TRound extends WizardScoredRound>(rounds: readonly TRound[] | null | undefined): TRound | null {
-  return [...(rounds || [])]
+  const best = [...(rounds || [])]
     .filter(r => r.score != null)
-    .sort((a, b) => (b.score as number) - (a.score as number))[0] || null;
+    .sort((a, b) => (b.score as number) - (a.score as number))[0];
+  return best ?? null;
 }
 
 // The chip strip differs only in its label expression (grind number vs taste
