@@ -197,6 +197,59 @@ func findBean(beans []any, name string) map[string]any {
 	return nil
 }
 
+// TestListBeansReportsCurrentBagsRoastDate covers #1622: list_beans derives the
+// roast date from the bag actually being drawn from — the bag queue's current
+// bag — not simply the array-last bag.
+func TestListBeansReportsCurrentBagsRoastDate(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "glp.db")
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("db.Open: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	shotsRepo := shots.NewRepository(sqlDB)
+	libRepo := library.NewRepository(sqlDB)
+
+	// Two doses exhaust the queue's first bag and partly consume the second,
+	// so the second bag — not the array-last third one — is the current bag.
+	for i, dose := range []float64{250, 100} {
+		id := int64(i + 1)
+		if err := shotsRepo.Upsert(shots.Shot{"id": id, "timestamp": id}); err != nil {
+			t.Fatalf("Upsert shot %d: %v", id, err)
+		}
+		if err := shotsRepo.SaveAnnotation(id, map[string]any{"coffee": "Test Bean", "beanId": int64(1), "dose": dose}); err != nil {
+			t.Fatalf("SaveAnnotation shot %d: %v", id, err)
+		}
+	}
+
+	lib, err := libRepo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = []library.Entity{{
+		"id": int64(1), "name": "Test Bean", "enabled": true, "stock_g": float64(750),
+		"bags": []any{
+			library.Entity{"id": int64(101), "stock_g": float64(250), "sortOrder": int64(0), "openedAt": int64(1000), "roastDate": "2026-01-01"},
+			library.Entity{"id": int64(102), "stock_g": float64(250), "sortOrder": int64(1), "openedAt": int64(2000), "roastDate": "2026-09-10"},
+			library.Entity{"id": int64(103), "stock_g": float64(250), "sortOrder": int64(2), "openedAt": int64(3000), "roastDate": "2026-12-31"},
+		},
+	}}
+	if err := libRepo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+
+	out, err := listBeans(Deps{Library: libRepo, ShotsRepo: shotsRepo}, listBeansInput{})
+	if err != nil {
+		t.Fatalf("listBeans: %v", err)
+	}
+	if len(out.Beans) != 1 {
+		t.Fatalf("listBeans returned %d beans, want 1", len(out.Beans))
+	}
+	if got := out.Beans[0].RoastDate; got != "2026-09-10" {
+		t.Fatalf("roast_date = %q, want 2026-09-10 (the current bag 102's, not the last bag 103's 2026-12-31)", got)
+	}
+}
+
 func TestGetLibrarySection(t *testing.T) {
 	ts, libRepo, _, _ := newReadServer(t, fakePoller{})
 	lib, err := libRepo.GetLibrary()
