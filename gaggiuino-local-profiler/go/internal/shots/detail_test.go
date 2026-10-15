@@ -18,7 +18,7 @@ func TestAvgActive(t *testing.T) {
 func TestDetectPhases(t *testing.T) {
 	times := []float64{0, 1, 5, 10, 15, 20, 25, 28}
 	pressures := []float64{0, 2, 8.5, 9, 9.2, 9, 8.8, 7}
-	pre, ext, ok := detectPhases(times, pressures)
+	pre, ext, endIdx, ok := detectPhases(times, pressures)
 	if !ok {
 		t.Fatal("expected phases to be detected")
 	}
@@ -28,20 +28,103 @@ func TestDetectPhases(t *testing.T) {
 	if ext != 23 {
 		t.Errorf("extraction = %v, want 23", ext)
 	}
+	if endIdx != 2 || times[endIdx] != pre {
+		t.Errorf("endIdx = %d (times[endIdx] = %v), want 2 (%v)", endIdx, times[endIdx], pre)
+	}
 
 	// Fewer than 5 pressure samples: never detected.
-	if _, _, ok := detectPhases(times[:3], pressures[:3]); ok {
+	if _, _, _, ok := detectPhases(times[:3], pressures[:3]); ok {
 		t.Error("expected <5 pressure samples to never detect phases")
 	}
 
 	// Pressure never crosses the 3.5 bar threshold: no phases.
-	if _, _, ok := detectPhases(times, []float64{0, 1, 2, 2, 3, 3, 3, 3}); ok {
+	if _, _, _, ok := detectPhases(times, []float64{0, 1, 2, 2, 3, 3, 3, 3}); ok {
 		t.Error("expected a curve that never crosses 3.5 bar to have no phases")
 	}
 
 	// Threshold crossed before 1s in: preinfusion would be <1.5s, rejected.
-	if _, _, ok := detectPhases([]float64{0, 0.5, 0.8, 1, 1.5, 2}, []float64{0, 4, 5, 5, 5, 5}); ok {
+	if _, _, _, ok := detectPhases([]float64{0, 0.5, 0.8, 1, 1.5, 2}, []float64{0, 4, 5, 5, 5, 5}); ok {
 		t.Error("expected an immediate-pressure curve (no real preinfusion) to have no phases")
+	}
+}
+
+
+// TestShotYield pins the one yield rule the share card and ComputeShotMetrics
+// now share: annotated totalWeight, else annotated yield (each only when > 0),
+// else the maximum scale-weight sample.
+func TestShotYield(t *testing.T) {
+	cases := []struct {
+		name   string
+		shot   Shot
+		want   float64
+		wantOK bool
+	}{
+		{
+			name: "annotation totalWeight wins over yield and scale weight",
+			shot: Shot{
+				"datapoints": map[string]any{"shotWeight": []any{100.0, 90.0}},
+				"annotation": map[string]any{"totalWeight": 41.5, "yield": 38.0},
+			},
+			want: 41.5, wantOK: true,
+		},
+		{
+			name: "annotation yield used when totalWeight absent",
+			shot: Shot{
+				"datapoints": map[string]any{"shotWeight": []any{100.0, 90.0}},
+				"annotation": map[string]any{"yield": 37.5},
+			},
+			want: 37.5, wantOK: true,
+		},
+		{
+			name: "maximum scale-weight sample when no annotation",
+			shot: Shot{
+				"datapoints": map[string]any{"shotWeight": []any{100.0, 360.0, 250.0}},
+				"annotation": map[string]any{},
+			},
+			want: 36.0, wantOK: true,
+		},
+		{
+			name: "weight series used when shotWeight absent",
+			shot: Shot{
+				"datapoints": map[string]any{"weight": []any{200.0, 330.0}},
+				"annotation": map[string]any{},
+			},
+			want: 33.0, wantOK: true,
+		},
+		{
+			name: "zero annotation ignored, falls back to scale weight",
+			shot: Shot{
+				"datapoints": map[string]any{"shotWeight": []any{100.0, 400.0}},
+				"annotation": map[string]any{"totalWeight": 0.0, "yield": 0.0},
+			},
+			want: 40.0, wantOK: true,
+		},
+		{
+			name: "negative annotation ignored",
+			shot: Shot{
+				"datapoints": map[string]any{"shotWeight": []any{100.0, 400.0}},
+				"annotation": map[string]any{"totalWeight": -5.0},
+			},
+			want: 40.0, wantOK: true,
+		},
+		{
+			name: "no usable data",
+			shot: Shot{},
+			want: 0, wantOK: false,
+		},
+		{
+			name: "nil shot",
+			shot: nil,
+			want: 0, wantOK: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := shotYield(tc.shot)
+			if ok != tc.wantOK || got != tc.want {
+				t.Errorf("shotYield = (%v, %v), want (%v, %v)", got, ok, tc.want, tc.wantOK)
+			}
+		})
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -211,29 +212,22 @@ func (r *Repository) GetAnnotation(shotID int64) (map[string]any, error) {
 // older shot. sinceSec == 0 means no time filter. ok is false when there is no
 // matching shot.
 func (r *Repository) GetLatestID(machineID, sinceSec int64) (id int64, ok bool, err error) {
-	var row *sql.Row
+	// Only literal SQL fragments (never caller input) are concatenated; the
+	// machineID/sinceSec values ride along as bound args.
+	var conds []string
+	var args []any
 	if machineID != 0 {
-		if sinceSec > 0 {
-			row = r.db.QueryRow(
-				`SELECT id FROM shots WHERE machine_id = ? AND timestamp >= ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-				machineID, sinceSec,
-			)
-		} else {
-			row = r.db.QueryRow(
-				`SELECT id FROM shots WHERE machine_id = ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-				machineID,
-			)
-		}
-	} else if sinceSec > 0 {
-		row = r.db.QueryRow(
-			`SELECT id FROM shots WHERE timestamp >= ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-			sinceSec,
-		)
-	} else {
-		row = r.db.QueryRow(
-			`SELECT id FROM shots WHERE id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-		)
+		conds = append(conds, "machine_id = ?")
+		args = append(args, machineID)
 	}
+	if sinceSec > 0 {
+		conds = append(conds, "timestamp >= ?")
+		args = append(args, sinceSec)
+	}
+	conds = append(conds, "id NOT IN (SELECT shot_id FROM trash)")
+	query := "SELECT id FROM shots WHERE " + strings.Join(conds, " AND ") +
+		" ORDER BY timestamp DESC, id DESC LIMIT 1"
+	row := r.db.QueryRow(query, args...)
 	if err := row.Scan(&id); err == sql.ErrNoRows {
 		return 0, false, nil
 	} else if err != nil {
