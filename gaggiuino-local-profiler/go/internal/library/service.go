@@ -77,6 +77,13 @@ func parseJSDate(s string) (ms int64, ok bool) {
 	return 0, false
 }
 
+// ParseJSDate is parseJSDate's exported entry point for internal/mcp's library
+// tools, so the assistant shares the library's date parsing instead of keeping
+// its own copy.
+func ParseJSDate(s string) (ms int64, ok bool) {
+	return parseJSDate(s)
+}
+
 // ComputeGrinderWearStats returns shots/grams ground on this grinder since
 // its last burr swap (or purchase), matched by annotated grinder name,
 // case-insensitive. shotsRepo is internal/shots' Repository — the shots
