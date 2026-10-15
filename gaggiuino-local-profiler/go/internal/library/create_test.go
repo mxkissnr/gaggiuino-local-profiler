@@ -33,7 +33,7 @@ func TestCreateAndUpdate_ConcurrentWritersLoseNothing(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, _, err := CreateGrinder(repo, Entity{"name": name}); err != nil {
+			if _, err := CreateGrinder(repo, Entity{"name": name}); err != nil {
 				errs <- err
 			}
 		}()

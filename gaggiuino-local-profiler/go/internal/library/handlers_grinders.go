@@ -30,7 +30,7 @@ func (h *Handlers) createGrinder(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	grinder, _, err := CreateGrinder(h.repo, body)
+	grinder, err := CreateGrinder(h.repo, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {
