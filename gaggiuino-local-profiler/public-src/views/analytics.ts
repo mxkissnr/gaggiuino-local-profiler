@@ -477,9 +477,18 @@ export function computeCalendarStats(
 // already does for its own colors.
 const _mutedTickColor = () =>
   (getComputedStyle(document.documentElement).getPropertyValue('--gray-600') || '#52525b').trim() || '#52525b';
-const _bgColor = (sc: number | null): string => sc == null ? 'rgba(63,63,70,.5)'
-  : sc >= 88 ? 'rgba(34,197,94,.7)' : sc >= 75 ? 'rgba(132,204,22,.7)'
-  : sc >= 60 ? 'rgba(234,179,8,.7)'  : sc >= 45 ? 'rgba(249,115,22,.7)' : 'rgba(239,68,68,.7)';
+// #1622: the shared five-step score scale (scoreColor(), utils.js) resolved
+// to a value Chart.js can paint. Fallbacks are the dark-theme token values,
+// used only before the stylesheet has applied.
+const _SCORE_FALLBACK: Record<string, string> = {
+  '--ok': '#5cb98a', '--score-good': '#a7c25c', '--warn': '#d3a03f',
+  '--score-low': '#e0913f', '--err': '#e0705f', '--gray-600': '#93989c',
+};
+function _scoreChartColor(sc: number | null): string {
+  const token = scoreColor(sc);
+  const name = token.startsWith('var(') ? token.slice(4, -1) : '';
+  return themeColor(name, _SCORE_FALLBACK[name] ?? '');
+}
 
 // ── Verdict header (#1467) ────────────────────────────────────────────────
 // Replaces the old one-line "Übersicht" card: a plain-language verdict on the
@@ -736,7 +745,7 @@ export function buildTimeOfDay() {
     type: 'bar',
     data: {
       labels: hours.map((_, i) => String(i).padStart(2, '0') + ':00'),
-      datasets: [{ data: hours.map(h => h.count), backgroundColor: hours.map(h => _bgColor(avgSc(h))), borderRadius: 3, borderSkipped: false }]
+      datasets: [{ data: hours.map(h => h.count), backgroundColor: hours.map(h => _withAlpha(_scoreChartColor(avgSc(h)), 0.7)), borderRadius: 3, borderSkipped: false }]
     },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false },
@@ -752,16 +761,6 @@ export function buildTimeOfDay() {
       }
     }
   } satisfies ChartConfiguration<'bar'>));
-}
-
-// Resolved point colour on the shared score scale: scoreColor() names the
-// theme token (--ok / --warn / --err) and themeColor() resolves it to a value
-// Chart.js can paint. Fallbacks match the tokens' light-theme hexes.
-function _trendPointColor(sc: number): string {
-  const token = scoreColor(sc);
-  const name = token.startsWith('var(') ? token.slice(4, -1) : '';
-  const fallback = sc >= 90 ? '#5cb98a' : sc >= 70 ? '#d3a03f' : '#e0705f';
-  return themeColor(name, fallback);
 }
 
 // Y-axis floor for the score trend: 5 below the lowest shown score, rounded
@@ -985,7 +984,7 @@ export function buildTrendChart() {
 
   // 7 and 30 days keep the per-shot line from #1467.
   const labels    = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
-  const pointColors = scoreData.map(_trendPointColor);
+  const pointColors = scoreData.map(_scoreChartColor);
   const pointRadii  = scoreData.map((sc, i) => (i === scoreData.length - 1 ? 6 : 4) + (sc >= 100 ? 1 : 0));
 
   chartRegistry.set('trendChart', new Chart(ctx, {
@@ -995,7 +994,7 @@ export function buildTrendChart() {
       datasets: [
         { label: 'Score', data: scoreData, borderColor: themeColor('--gray-600', '#52525b'),
           pointBackgroundColor: pointColors,
-          pointBorderColor: scoreData.map(sc => sc >= 100 ? '#f3e1c0' : _trendPointColor(sc)),
+          pointBorderColor: scoreData.map(sc => sc >= 100 ? '#f3e1c0' : _scoreChartColor(sc)),
           pointBorderWidth: scoreData.map(sc => sc >= 100 ? 2 : 1),
           pointRadius: pointRadii, pointHoverRadius: 7, pointStyle: 'circle',
           fill: false, tension: 0.3, cubicInterpolationMode: 'monotone', order: 2 },
@@ -2202,15 +2201,12 @@ export function buildProfileChart() {
 
   wrap.style.height = Math.max(120, entries.length * 36 + 20) + 'px';
 
-  const bgColor = (sc: number): string => sc >= 88 ? 'rgba(34,197,94,.7)' : sc >= 75 ? 'rgba(132,204,22,.7)'
-                     : sc >= 60 ? 'rgba(234,179,8,.7)'  : sc >= 45 ? 'rgba(249,115,22,.7)' : 'rgba(239,68,68,.7)';
-
   chartRegistry.set('profileBarChart', new Chart(ctx, {
     type: 'bar',
     data: {
       labels:   entries.map(e => e.name.length > 20 ? e.name.slice(0, 19) + '…' : e.name),
       datasets: [{ label: 'Ø Score', data: entries.map(e => e.avgScore),
-                   backgroundColor: entries.map(e => bgColor(e.avgScore)), borderRadius: 4 }]
+                   backgroundColor: entries.map(e => _withAlpha(_scoreChartColor(e.avgScore), 0.7)), borderRadius: 4 }]
     },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,

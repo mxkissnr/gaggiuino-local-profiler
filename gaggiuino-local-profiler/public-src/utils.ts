@@ -562,18 +562,26 @@ export function groupShotsByDay<T extends { timestamp: number }>(
 }
 
 // ── Score helpers ─────────────────────────────────────────────────────────
-// Unified 3-tier scale (#397): green >= 90, yellow >= 70, red below — the
-// single source of truth for shot-score coloring across sidebar, shot
-// detail, analytics, and the dial-in wizards. No per-view thresholds.
+// scoreClass keeps the 3-tier scale (#397) the .score-* CSS classes are built
+// on: green >= 90, yellow >= 70, red below.
 export function scoreClass(n: number): string {
   return n >= 90 ? 'score-great' : n >= 70 ? 'score-ok' : 'score-bad';
 }
+
+// #1622: the one five-step score scale, shared by every view and the Go share
+// card (card_palette.go). The thresholds live here so nothing else hard-codes
+// them: >=88 great, >=75 good, >=60 ok, >=45 low, below bad.
+export const SCORE_STEPS = { great: 88, good: 75, ok: 60, low: 45 } as const;
 
 // Returns a CSS custom-property reference so callers stay theme-aware
 // (accent/light-dark) instead of a hardcoded hex.
 export function scoreColor(sc: number | null | undefined): string {
   if (sc == null) return 'var(--gray-600)';
-  return sc >= 90 ? 'var(--ok)' : sc >= 70 ? 'var(--warn)' : 'var(--err)';
+  return sc >= SCORE_STEPS.great ? 'var(--ok)'
+       : sc >= SCORE_STEPS.good  ? 'var(--score-good)'
+       : sc >= SCORE_STEPS.ok    ? 'var(--warn)'
+       : sc >= SCORE_STEPS.low   ? 'var(--score-low)'
+       : 'var(--err)';
 }
 
 // Signed delta formatting for the same-profile auto-compare chips (#402):
