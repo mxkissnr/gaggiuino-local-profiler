@@ -262,3 +262,42 @@ describe('detectChanneling (#1622 single detector)', () => {
         expect(detectChanneling([0], [70, 63.5, 60, 55, 50])).toBe(false);
     });
 });
+
+// #1688: a failed thermocouple read arrives as exactly 0 °C; a stable series
+// with isolated dropouts must score the same as the shot without them.
+describe('calcShotScore — 0.0 °C thermocouple dropouts (#1688)', () => {
+    const N = 30;
+    const clean = {
+        datapoints: {
+            pressure:          new Array(N).fill(85),
+            temperature:       new Array(N).fill(930), // steady 93.0 °C
+            targetTemperature: new Array(N).fill(0),   // none recorded -> generic band
+            timeInShot:        Array.from({ length: N }, (_, i) => i * 10),
+            shotWeight:        Array.from({ length: N }, (_, i) => Math.round((i / (N - 1)) * 450)),
+        },
+        duration: 300, // 30 s -> top duration band
+        annotation: { dose: 18 },
+    };
+
+    it('scores a stable series with isolated 0.0 samples like the same shot without them', () => {
+        const dropouts = {
+            ...clean,
+            datapoints: {
+                ...clean.datapoints,
+                temperature: clean.datapoints.temperature.map((v, i) => (i % 7 === 3 ? 0 : v)),
+            },
+        };
+        expect(calcShotScore(dropouts)).toBe(calcShotScore(clean));
+    });
+
+    it('leaves the temperature part out once fewer than 6 samples survive', () => {
+        const sparse = {
+            ...clean,
+            datapoints: {
+                ...clean.datapoints, // 5 non-zero samples -> temperature dropped
+                temperature: [930, 0, 0, 930, 0, 930, 0, 930, 0, 930],
+            },
+        };
+        expect(calcShotScore(sparse)).toBe(calcShotScore(clean));
+    });
+});

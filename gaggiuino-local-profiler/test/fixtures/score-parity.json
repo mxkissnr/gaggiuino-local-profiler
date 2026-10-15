@@ -202,5 +202,37 @@
       }
     },
     "expected": 96
+  },
+  {
+    "name": "temperature dropouts",
+    "shot": {
+      "datapoints": {
+        "pressure": [80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        "temperature": [930, 930, 930, 0, 930, 930, 0, 930, 930, 930],
+        "timeInShot": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
+        "shotWeight": [0, 450]
+      },
+      "duration": 300,
+      "annotation": {
+        "dose": 18
+      }
+    },
+    "expected": 100
+  },
+  {
+    "name": "temperature dropouts leave too few valid samples",
+    "shot": {
+      "datapoints": {
+        "pressure": [80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        "temperature": [930, 0, 0, 930, 0, 930, 0, 930, 0, 930],
+        "timeInShot": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
+        "shotWeight": [0, 450]
+      },
+      "duration": 300,
+      "annotation": {
+        "dose": 18
+      }
+    },
+    "expected": 100
   }
 ]

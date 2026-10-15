@@ -431,3 +431,30 @@ func TestCalcShotScoreDetail_GateIsAnyPressureCurve(t *testing.T) {
 		t.Error("4 sub-5-bar samples should score, got nil")
 	}
 }
+
+// #1688: a failed thermocouple read is stored as exactly 0, so a stable series
+// with isolated zero samples must still score the temperature part full marks.
+func TestCalcShotScoreDetail_TemperatureDropoutsIgnored(t *testing.T) {
+	shot := fullScoreShot(300)
+	shot["datapoints"].(map[string]any)["temperature"] = mkPoints(900, 0, 900, 900, 0, 900, 900, 900, 0, 900)
+	detail := CalcShotScoreDetail(shot, nil)
+	if detail.Score == nil || *detail.Score != 100 {
+		t.Fatalf("score = %v, want 100", detail.Score)
+	}
+	if temp := componentByName(t, detail.Components, "temperature"); temp.Score != 100 {
+		t.Errorf("temperature component = %d, want 100", temp.Score)
+	}
+}
+
+// #1688: once the zero dropouts are dropped, fewer than 6 valid temperature
+// samples remain, so the temperature part is left out (the existing > 5 gate).
+func TestCalcShotScoreDetail_TemperatureOmittedWhenTooManyDropouts(t *testing.T) {
+	shot := fullScoreShot(300)
+	shot["datapoints"].(map[string]any)["temperature"] = mkPoints(900, 0, 0, 900, 0, 900, 0, 900, 0, 900)
+	detail := CalcShotScoreDetail(shot, nil)
+	for _, c := range detail.Components {
+		if c.Name == "temperature" {
+			t.Fatalf("expected no temperature component, got %+v", c)
+		}
+	}
+}
