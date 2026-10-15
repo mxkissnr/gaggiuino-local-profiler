@@ -72,16 +72,10 @@ func TestTrashMap(t *testing.T) {
 	insertShot(t, sqlDB, 2, 2000, &dur, "V60", nil, nil)
 	insertShot(t, sqlDB, 3, 3000, &dur, "V60", nil, nil)
 
-	if err := repo.SetTrashEntry(1, 111); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.SetTrashEntry(3, 333); err != nil {
-		t.Fatal(err)
-	}
+	insertTrashEntry(t, sqlDB, 1, 111)
+	insertTrashEntry(t, sqlDB, 3, 333)
 	// Orphan trash row (no shots row) must be excluded by the JOIN.
-	if err := repo.SetTrashEntry(999, 999); err != nil {
-		t.Fatal(err)
-	}
+	insertTrashEntry(t, sqlDB, 999, 999)
 
 	m, err := repo.TrashMap()
 	if err != nil {

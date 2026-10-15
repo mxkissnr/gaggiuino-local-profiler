@@ -69,15 +69,15 @@ func TestFindTrashed_SkipsOrphanTrashEntry(t *testing.T) {
 	}
 }
 
-// ── AppendToBlocklist (#901 finding 1: was a GetBlocklist+SaveBlocklist
-// read-modify-write, racy under concurrent deletes) ────────────────────
+// ── AppendToBlocklist (#901 finding 1: was a GetBlocklist + whole-list
+// rewrite, racy under concurrent deletes) ────────────────────
 
 // TestDelete_ConcurrentDeletesAllLandInBlocklist reproduces the race
 // against the actual HTTP path: N goroutines each permanently delete a
 // distinct shot concurrently. Before the fix, the delete handler's
-// GetBlocklist-then-SaveBlocklist round trip let two overlapping requests
-// each read the same blocklist snapshot and then have the later
-// SaveBlocklist (a blanket DELETE+re-INSERT) clobber the earlier one's
+// GetBlocklist-then-rewrite round trip let two overlapping requests each
+// read the same blocklist snapshot and then have the later whole-list write
+// (a blanket DELETE+re-INSERT) clobber the earlier one's
 // addition, silently dropping an id that had already been permanently
 // deleted. AppendToBlocklist's single INSERT OR IGNORE has no read step, so
 // every concurrent delete's id must end up present exactly once.

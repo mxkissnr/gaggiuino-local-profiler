@@ -295,15 +295,6 @@ export const S: AppState = {
   setupWizardStep: 'welcome',
 };
 
-// Per-machine values must be keyed by machine id, never held as a single
-// scalar. Bug precedent: one shared scalar let machine A's value show up for
-// machine B (#730/#732 machine accent colour, #742/#743 sync-progress toast).
-// The correct reference implementations already exist — per-machine Maps in
-// components/status.js and components/machines-settings.js — and stay where
-// they are for now: adopting this alias for the remaining call sites is
-// package A4/A5 work, not A2b.
-export type PerMachine<T> = ReadonlyMap<number, T>;
-
 // ── Reactive pub/sub ──────────────────────────────────────────────────────
 // Lightweight wrapper: setState() mutates S and notifies subscribers for
 // that key. Direct S mutations (S.shots = [...]) continue to work as before

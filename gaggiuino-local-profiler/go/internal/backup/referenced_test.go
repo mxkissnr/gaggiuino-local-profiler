@@ -29,7 +29,7 @@ func TestBackup_BundlesReferencedImagesOnly(t *testing.T) {
 		write(name)
 	}
 
-	h, deps, _ := newTestHandlers(t)
+	h, deps, sqlDB := newTestHandlers(t)
 	if err := deps.LibRepo.SaveLibrary(library.Library{
 		Beans: []library.Entity{{"id": int64(1), "name": "B", "image": "jpg"}},
 	}); err != nil {
@@ -47,9 +47,7 @@ func TestBackup_BundlesReferencedImagesOnly(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := deps.ShotsRepo.SetTrashEntry(43, 1234567); err != nil {
-		t.Fatal(err)
-	}
+	insertTrashEntry(t, sqlDB, 43, 1234567)
 
 	rec := doJSON(t, newMux(h), http.MethodPost, "/api/backup", nil)
 	if rec.Code != http.StatusOK {
