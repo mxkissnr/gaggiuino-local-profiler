@@ -103,7 +103,7 @@ func TestBeanFields_CreateRestoreParity(t *testing.T) {
 		"brewTimeS": 150, "brewNotes": "tasty", "enabled": true,
 	}
 
-	created, _, err := CreateBean(repo, t.TempDir(), body)
+	created, err := CreateBean(repo, t.TempDir(), body)
 	if err != nil {
 		t.Fatalf("CreateBean: %v", err)
 	}

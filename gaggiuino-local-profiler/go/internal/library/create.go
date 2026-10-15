@@ -9,21 +9,23 @@ import (
 // This file extracts the read-validate-save entity-creation logic each
 // create handler (handlers_beans.go's createBean et al.) already had
 // inlined into its own http.ResponseWriter-bound handler, into plain
-// functions taking a decoded body and returning (Entity, Library, error)
-// — the same "same service method, not new logic" discipline
+// functions taking a decoded body and returning the created entity and an
+// error (some also return the just-saved Library) — the same "same
+// service method, not new logic" discipline
 // ToggleBeanActive/MarkTaskDone already established for this package's
 // other web/REST-shared actions. Each REST handler below is now a thin
 // wrapper: decode + rate-limit + call + map a *ValidationError to its
 // existing 400 response. Keeping the validation and Library-save logic in
 // these functions keeps it out of the HTTP layer.
 //
-// Every Create* function also returns the just-saved Library (the same
-// value SaveLibrary was called with, containing the new entity) alongside
-// the created entity itself — the same convention ToggleBeanActive already
-// established (service.go) — so a caller that needs the full list
-// right after a create can build it straight from the returned Library
+// The Create* functions whose caller needs the full list right after a
+// create also return the just-saved Library (the same value SaveLibrary was
+// called with, containing the new entity) alongside the created entity —
+// the same convention ToggleBeanActive already established (service.go) —
+// so such a caller can build the list straight from the returned Library
 // instead of issuing a second, redundant repo.GetLibrary() read (#901 code
-// review finding #3).
+// review finding #3). CreateBean, CreateGrinder and CreateBasket return only
+// (Entity, error): no caller ever read that Library copy.
 
 // ValidationError carries the 400 message a Create* function's caller
 // should surface. Aliased to httputil.ValidationError (#901 code review
@@ -85,12 +87,12 @@ func beanFields(body Entity) Entity {
 // that function's own doc comment) — a plain "name + roaster" form
 // submission never sets it, so that goroutine simply never launches for
 // such a caller.
-func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library, error) {
+func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, error) {
 	// `!name || typeof name !== 'string' || !name.trim()` — trimMax already
 	// collapses "not a string" and "blank after trim" to "", so a single
 	// check on the trimmed result covers every branch.
 	if trimMax(body["name"], 200) == "" {
-		return nil, Library{}, &ValidationError{Message: "name required"}
+		return nil, &ValidationError{Message: "name required"}
 	}
 
 	stockG := floatOrNilFalsy(body["stock_g"])
@@ -120,13 +122,11 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library
 		bean["sourceUrl"] = safeURL(body["sourceUrl"])
 	}
 
-	var saved Library
 	if err := repo.Update(func(lib *Library) error {
 		lib.Beans = append(lib.Beans, bean)
-		saved = *lib
 		return nil
 	}); err != nil {
-		return nil, Library{}, err
+		return nil, err
 	}
 
 	// Fire-and-forget image download — see service.go's SetBeanImage doc
@@ -140,14 +140,14 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, Library
 	origin, _ := bean["origin"].(string)
 	maybeGeocode(id, trimMax(body["region"], 200), origin)
 
-	return bean, saved, nil
+	return bean, nil
 }
 
 // CreateGrinder builds POST /api/library/grinder's entity-construction
 // body (handlers_grinders.go's createGrinder).
-func CreateGrinder(repo *Repository, body Entity) (Entity, Library, error) {
+func CreateGrinder(repo *Repository, body Entity) (Entity, error) {
 	if trimMax(body["name"], 200) == "" {
-		return nil, Library{}, &ValidationError{Message: "name required"}
+		return nil, &ValidationError{Message: "name required"}
 	}
 	purchaseDate := trimMax(body["purchaseDate"], 10)
 	burrsResetAt := trimMax(body["burrsResetAt"], 10)
@@ -159,31 +159,29 @@ func CreateGrinder(repo *Repository, body Entity) (Entity, Library, error) {
 		"burrType": trimMax(body["burrType"], 200), "purchaseDate": purchaseDate,
 		"burrsResetAt": burrsResetAt,
 	}
-	var saved Library
 	if err := repo.Update(func(lib *Library) error {
 		lib.Grinders = append(lib.Grinders, grinder)
-		saved = *lib
 		return nil
 	}); err != nil {
-		return nil, Library{}, err
+		return nil, err
 	}
-	return grinder, saved, nil
+	return grinder, nil
 }
 
 // CreateBasket builds POST /api/library/basket's entity-construction body
 // (handlers_baskets.go's createBasket), including its wallType/shape enum
 // validation.
-func CreateBasket(repo *Repository, body Entity) (Entity, Library, error) {
+func CreateBasket(repo *Repository, body Entity) (Entity, error) {
 	if trimMax(body["name"], 200) == "" {
-		return nil, Library{}, &ValidationError{Message: "name required"}
+		return nil, &ValidationError{Message: "name required"}
 	}
 	wallType, _, wallTypeOK := enumStringField(body, "wallType", basketWallTypes)
 	if !wallTypeOK {
-		return nil, Library{}, &ValidationError{Message: "invalid wallType"}
+		return nil, &ValidationError{Message: "invalid wallType"}
 	}
 	shape, _, shapeOK := enumStringField(body, "shape", basketShapes)
 	if !shapeOK {
-		return nil, Library{}, &ValidationError{Message: "invalid shape"}
+		return nil, &ValidationError{Message: "invalid shape"}
 	}
 	basket := Entity{
 		"id": newID(), "name": trimMax(body["name"], 200), "doseCapacity": trimMax(body["doseCapacity"], 50),
@@ -191,15 +189,13 @@ func CreateBasket(repo *Repository, body Entity) (Entity, Library, error) {
 		"holeCount": trimMax(body["holeCount"], 50), "notes": trimMax(body["notes"], 1000),
 		"updatedAt": newID(),
 	}
-	var saved Library
 	if err := repo.Update(func(lib *Library) error {
 		lib.Baskets = append(lib.Baskets, basket)
-		saved = *lib
 		return nil
 	}); err != nil {
-		return nil, Library{}, err
+		return nil, err
 	}
-	return basket, saved, nil
+	return basket, nil
 }
 
 // CreatePuckScreen builds POST /api/library/puckscreen's entity-construction

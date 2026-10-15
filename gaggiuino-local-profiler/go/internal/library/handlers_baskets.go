@@ -41,7 +41,7 @@ func (h *Handlers) createBasket(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	basket, _, err := CreateBasket(h.repo, body)
+	basket, err := CreateBasket(h.repo, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {
