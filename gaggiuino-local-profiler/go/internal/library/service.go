@@ -199,7 +199,7 @@ func UpsertKnownGrindSetting(lib *Library, beanID int64, grinder, grindSetting s
 // issuing their own extra GetLibrary call.
 func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, found bool, err error) {
 	err = repo.Update(func(l *Library) error {
-		idx := findBeanIndex(*l, id)
+		idx := findEntityIndex(l.Beans, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -248,7 +248,7 @@ func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL stri
 	}
 	storedExt := ""
 	err := repo.Update(func(lib *Library) error {
-		idx := findBeanIndex(*lib, beanID)
+		idx := findEntityIndex(lib.Beans, beanID)
 		if idx == -1 {
 			return ErrSkipSave // bean deleted before the download finished
 		}

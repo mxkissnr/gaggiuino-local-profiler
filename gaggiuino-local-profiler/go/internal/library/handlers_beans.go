@@ -9,20 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
 // This file implements the bean endpoints.
-
-func findBeanIndex(lib Library, id int64) int {
-	for i, b := range lib.Beans {
-		if bid, ok := idOf(b, "id"); ok && bid == id {
-			return i
-		}
-	}
-	return -1
-}
 
 // createBean handles POST /api/library/bean — a thin wrapper around
 // CreateBean (create.go).
@@ -122,7 +112,7 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -232,7 +222,7 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -334,7 +324,7 @@ func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
 	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -419,7 +409,7 @@ func (h *Handlers) thawPortion(w http.ResponseWriter, r *http.Request) {
 	err := h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -467,7 +457,7 @@ func (h *Handlers) adjustFrozenPortion(w http.ResponseWriter, r *http.Request) {
 	err := h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -537,7 +527,7 @@ func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
 	err := h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !idNoMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -688,7 +678,7 @@ func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !idNoMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -762,43 +752,7 @@ func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
 
 // deleteBean handles POST /api/library/bean/:id/delete.
 func (h *Handlers) deleteBean(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	var imgExt string
-	// The image file removal below is filesystem I/O: it must not run while
-	// Update holds the library write lock, so the closure only records the
-	// extension and the handler deletes the file once Update returns.
-	err := h.repo.Update(func(lib *Library) error {
-		if !noMatch {
-			if idx := findBeanIndex(*lib, id); idx != -1 {
-				if ext, _ := lib.Beans[idx]["image"].(string); ext != "" {
-					imgExt = ext
-				}
-			}
-		}
-		filtered := make([]Entity, 0, len(lib.Beans))
-		removed := false
-		for _, b := range lib.Beans {
-			bid, ok := idOf(b, "id")
-			if !noMatch && ok && bid == id {
-				removed = true
-				continue
-			}
-			filtered = append(filtered, b)
-		}
-		if !removed {
-			return ErrSkipSave
-		}
-		lib.Beans = filtered
-		return nil
-	})
-	if err != nil && !errors.Is(err, ErrSkipSave) {
-		internalError(w, err)
-		return
-	}
-	if imgExt != "" {
-		img.Delete(h.imageDir, id, imgExt, "")
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	h.deleteEntity(w, r, beanKind, nil)
 }
 
 // toggleBeanActive handles POST /api/library/bean/:id/toggle-active (#578).
@@ -888,77 +842,15 @@ func formatJSNumber(f float64) string {
 
 // getBeanImage handles GET /api/library/bean/:id/image.
 func (h *Handlers) getBeanImage(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	ext := ""
-	if !noMatch {
-		if idx := findBeanIndex(lib, id); idx != -1 {
-			ext, _ = lib.Beans[idx]["image"].(string)
-		}
-	}
-	h.serveImage(w, r, ext, "", id)
+	h.getEntityImage(w, r, beanKind)
 }
 
 // postBeanImage handles POST /api/library/bean/:id/image (manual upload
 // fallback — no URL fetch, no SSRF surface, unlike bean creation's imageUrl
-// field).
+// field). Beans answer with the enriched bean, so they pass writeEnrichedBean
+// as the success responder.
 func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
-	if !h.rateLimitImage(w, r) {
-		return
-	}
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	// Existence is decided before the upload is read/validated or any file is
-	// written: an unknown id 404s even when the image is also invalid, and no
-	// orphan file is ever written (matching dev's ordering).
-	exists, err := h.entityExists(id, noMatch, findBeanIndex)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	if !exists {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	data, contentType, ok := readUploadedImage(w, r)
-	if !ok {
-		return
-	}
-	ext, ok := img.Save(h.imageDir, "", id, data, contentType, img.ModeUpload)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "unsupported image")
-		return
-	}
-	var bean Entity
-	var oldExt string
-	err = h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !noMatch {
-			idx = findBeanIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		bean = lib.Beans[idx]
-		oldExt, _ = bean["image"].(string)
-		bean["image"] = ext
-		lib.Beans[idx] = bean
-		return nil
-	})
-	if err != nil {
-		// The entity was deleted between the existence check and the write;
-		// the just-saved file has no owner, so drop it.
-		img.Delete(h.imageDir, id, ext, "")
-		writeUpdateError(w, err)
-		return
-	}
-	if oldExt != "" && oldExt != ext {
-		img.Delete(h.imageDir, id, oldExt, "")
-	}
-	h.writeEnrichedBean(w, bean)
+	h.postEntityImage(w, r, beanKind, h.writeEnrichedBean)
 }
 
 // writeEnrichedBean attaches computed bag-queue status (consumedG/

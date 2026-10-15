@@ -26,7 +26,7 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 	var bean Entity
 	regionChanged := false
 	err := repo.Update(func(lib *Library) error {
-		idx := findBeanIndex(*lib, id)
+		idx := findEntityIndex(lib.Beans, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -180,7 +180,7 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var grinder Entity
 	err := repo.Update(func(lib *Library) error {
-		idx := findGrinderIndex(*lib, id)
+		idx := findEntityIndex(lib.Grinders, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -221,7 +221,7 @@ func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error
 func UpdateBasket(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var basket Entity
 	err := repo.Update(func(lib *Library) error {
-		idx := findBasketIndex(*lib, id)
+		idx := findEntityIndex(lib.Baskets, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -274,7 +274,7 @@ func UpdateBasket(repo *Repository, id int64, body Entity) (Entity, bool, error)
 func UpdatePuckScreen(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var puckScreen Entity
 	err := repo.Update(func(lib *Library) error {
-		idx := findPuckScreenIndex(*lib, id)
+		idx := findEntityIndex(lib.PuckScreens, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -317,7 +317,7 @@ func UpdatePuckScreen(repo *Repository, id int64, body Entity) (Entity, bool, er
 func UpdateMilk(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var milk Entity
 	err := repo.Update(func(lib *Library) error {
-		idx := findMilkIndex(*lib, id)
+		idx := findEntityIndex(lib.Milks, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -351,7 +351,7 @@ func UpdateMilk(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 func UpdateRecipe(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var recipe Entity
 	err := repo.Update(func(lib *Library) error {
-		idx := findRecipeIndex(*lib, id)
+		idx := findEntityIndex(lib.Recipes, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}

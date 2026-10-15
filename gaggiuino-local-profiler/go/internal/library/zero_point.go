@@ -73,7 +73,7 @@ func SetGrinderZeroPoint(repo *Repository, id int64, zeroPoint float64, since in
 	}
 	var grinder Entity
 	err := repo.Update(func(lib *Library) error {
-		idx := findGrinderIndex(*lib, id)
+		idx := findEntityIndex(lib.Grinders, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -142,7 +142,7 @@ func SetGrinderZeroPoint(repo *Repository, id int64, zeroPoint float64, since in
 func DeleteGrinderZeroPointEntry(repo *Repository, id int64, since int64) (Entity, bool, error) {
 	var grinder Entity
 	err := repo.Update(func(lib *Library) error {
-		idx := findGrinderIndex(*lib, id)
+		idx := findEntityIndex(lib.Grinders, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
