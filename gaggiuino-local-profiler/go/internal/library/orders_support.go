@@ -549,3 +549,10 @@ func currentBag(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) 
 	}
 	return nil
 }
+
+// CurrentBag is currentBag's exported entry point for internal/mcp's library
+// tools, so the assistant's list_beans/get_library report the same current bag
+// the app does.
+func CurrentBag(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) Entity {
+	return currentBag(bean, doseRows, allBeans)
+}
