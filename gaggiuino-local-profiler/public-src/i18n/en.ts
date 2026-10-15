@@ -676,7 +676,6 @@ const en: Translations = {
     share_card_tooltip:'Export/share shot as a PNG card',
     onboarding_banner_msg:(host)=>`Gaggiuino at ${host} is not reachable — check the machine host under Settings → Machines`,
     onboarding_wiki_link:'Setup help',
-    legacy_machine_options_banner_msg:'Machine host/switch entity are no longer configured via the app options — please confirm or update them under Settings → Machines.',
     onboarding_step1:'Set the machine host under Settings → Machines',
     onboarding_step2:'Make sure the Gaggiuino controller is on the same network',
     onboarding_demo_btn:'Load demo data',

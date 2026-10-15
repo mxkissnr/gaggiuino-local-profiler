@@ -675,7 +675,6 @@ const it: Partial<Translations> = {
     card_fmt_story:'Storia (9:16)',
     share_card_tooltip:'Esporta/condividi lo shot come card PNG',
     onboarding_banner_msg:(host)=>`Gaggiuino su ${host} non raggiungibile — controlla l'host macchina in Impostazioni → Macchine`,
-    legacy_machine_options_banner_msg:'Host macchina/entità interruttore non si configurano più tramite le opzioni dell\'app — conferma o aggiorna in Impostazioni → Macchine.',
     onboarding_wiki_link:'Guida alla configurazione',
     onboarding_step1:"Imposta l'host macchina in Impostazioni → Macchine",
     onboarding_step2:'Assicurati che il controller Gaggiuino sia sulla stessa rete',

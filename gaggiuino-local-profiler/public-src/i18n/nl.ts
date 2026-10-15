@@ -675,7 +675,6 @@ const nl: Partial<Translations> = {
     card_fmt_story:'Verhaal (9:16)',
     share_card_tooltip:'Shot exporteren/delen als PNG-kaart',
     onboarding_banner_msg:(host)=>`Gaggiuino op ${host} niet bereikbaar — controleer het machine-host onder Instellingen → Machines`,
-    legacy_machine_options_banner_msg:'Machine-host/schakelaar-entiteit worden niet meer via de app-opties geconfigureerd — bevestig of pas dit aan onder Instellingen → Machines.',
     onboarding_wiki_link:'Hulp bij installatie',
     onboarding_step1:'Stel het machine-host in onder Instellingen → Machines',
     onboarding_step2:'Zorg dat de Gaggiuino controller op hetzelfde netwerk zit',
