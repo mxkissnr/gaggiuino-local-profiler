@@ -51,7 +51,9 @@ export function set(name: ChartName, chart: Chart | null): Chart | null {
 export function chartBaseOptions(): {
   responsive: boolean;
   maintainAspectRatio: boolean;
-  animation: boolean;
+  // Literal false, not boolean: Chart.js types animation as `false | AnimationSpec`,
+  // so a widened boolean would not be assignable to the chart options.
+  animation: false;
 } {
   return { responsive: true, maintainAspectRatio: false, animation: false };
 }
