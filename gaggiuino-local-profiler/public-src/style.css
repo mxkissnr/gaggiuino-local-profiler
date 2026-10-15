@@ -974,8 +974,9 @@
         .verdict-bean-target-hint { display: inline-flex; margin-left: 2px; color: var(--gray-500); cursor: help; }
 
         /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
-           Score delta reuses the unified score-scale classes (score-great/-ok/-bad,
-           #397); process-metric deltas (no quality judgment) stay neutral gray. */
+           Score delta reuses the unified score-scale classes (#1622,
+           score-great/-good/-ok/-low/-bad); process-metric deltas (no quality
+           judgment) stay neutral gray. */
         .delta-chip {
             display: inline-block;
             font-size: var(--fs-1);
@@ -988,7 +989,9 @@
             color: var(--gray-400);
         }
         .delta-chip.score-great { background: rgba(34,197,94,.15); color: var(--ok); }
+        .delta-chip.score-good  { background: rgba(167,194,92,.15); color: var(--score-good); }
         .delta-chip.score-ok    { background: rgba(234,179,8,.15); color: var(--warn); }
+        .delta-chip.score-low   { background: rgba(224,145,63,.15); color: var(--score-low); }
         .delta-chip.score-bad   { background: rgba(239,68,68,.12); color: var(--err); }
         /* #816: inline after the verdict line, not stacked block below it —
            the old boxed layout needed the stack, the plain line doesn't. */
@@ -2369,11 +2372,15 @@
         /* ── Temp stability / meta badge ── */
         .meta-badge { font-size: var(--fs-1); color: var(--gray-500); margin-left: var(--sp-1); font-weight: normal; }
 
-        /* #397: unified 3-tier score scale — green >=90 / yellow >=70 / red
-           below, identical to .ss-* (sidebar) and the score-ring conic-gradient
-           (#398 verdict header). No per-view thresholds. */
+        /* #1622: the one five-step score scale (SCORE_STEPS, utils.ts) as CSS
+           classes — each step names the matching token, exactly like scoreColor()
+           and the Go share card, so the same score is coloured the same in the
+           sidebar, the tables, a chart and the verdict header. No per-view
+           thresholds. */
         .score-great { color: var(--ok); }
+        .score-good  { color: var(--score-good); }
         .score-ok    { color: var(--warn); }
+        .score-low   { color: var(--score-low); }
         .score-bad   { color: var(--err); }
 
         /* ── Trash section ── */
