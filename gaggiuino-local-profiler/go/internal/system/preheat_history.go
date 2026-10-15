@@ -37,7 +37,7 @@ const (
 
 // preheatHistoryFile mirrors PREHEAT_STATE_FILE's layout, under datadir.Root.
 // A var, not a const, so tests can point it at a temp dir (same seam as
-// defaultOptionsFile).
+// config.OptionsFile).
 var preheatHistoryFile = datadir.Path("preheat_history.json")
 
 // PreheatSample is one temperature reading inside a run. TS is seconds since

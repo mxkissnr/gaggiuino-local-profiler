@@ -279,12 +279,11 @@ func TestGetToken_IngressGetsHigherRateLimit(t *testing.T) {
 // is always false here) is rejected with 403 once expose_api_port is
 // explicitly false.
 func TestGetToken_DirectPortDeniedWhenExposeApiPortFalse(t *testing.T) {
-	resetPreheatMinutesCacheForTest(t)
 	path := filepath.Join(t.TempDir(), "options.json")
 	if err := os.WriteFile(path, []byte(`{"expose_api_port":false}`), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	defaultOptionsFile = path
+	pointOptionsAt(t, path)
 
 	_, mux, _ := newFullTestHandlers(t)
 	rec := doGet(mux, "/api/token")
