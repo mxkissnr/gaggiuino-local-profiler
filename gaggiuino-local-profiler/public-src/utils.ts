@@ -69,15 +69,27 @@ export function toIsoDateInput(str: string | null | undefined): string {
   return '';
 }
 
-// A timestamp's date as YYYY-MM-DD in local time (not UTC —
+// A Date's calendar day as YYYY-MM-DD in local time (not UTC —
 // Date#toISOString() would roll over a day early/late depending on the
 // user's timezone).
+export function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// The same key in UTC. Kept separate on purpose: analytics steps over serial
+// UTC day numbers, so its synthetic dates must not shift with the local zone.
+export function utcDateKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+// A Date's local calendar month as YYYY-MM (the sidebar's month-group keys).
+export function localMonthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// A timestamp's date as YYYY-MM-DD in local time.
 export function localIsoDate(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  return `${y}-${mo}-${da}`;
+  return localDateKey(new Date(ms));
 }
 
 // Today's local date — used as both the default value and the `max` of
@@ -520,24 +532,22 @@ export function groupShotsByDay<T extends { timestamp: number }>(
   formatRecent: (date: Date) => string,
   formatOlder: (date: Date) => string,
 ): ShotGroup<T>[] {
-  const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-  const today = dayKey(now);
+  const today = localDateKey(now);
   const yesterdayDate = new Date(now);
   yesterdayDate.setDate(now.getDate() - 1);
-  const yesterday = dayKey(yesterdayDate);
+  const yesterday = localDateKey(yesterdayDate);
   const todayStart = startOfDay(now);
 
   const groups: ShotGroup<T>[] = [];
   let current: ShotGroup<T> | null = null;
   (shots || []).forEach(shot => {
     const d = new Date(shot.timestamp * 1000);
-    const dKey = dayKey(d);
+    const dKey = localDateKey(d);
     const daysAgo = Math.round((todayStart.getTime() - startOfDay(d).getTime()) / 86400000);
     const isRecent = daysAgo < RECENT_WINDOW_DAYS;
-    const key = isRecent ? dKey : monthKey(d);
+    const key = isRecent ? dKey : localMonthKey(d);
     if (!current || current.key !== key) {
       const label = dKey === today ? todayLabel
         : dKey === yesterday ? yesterdayLabel

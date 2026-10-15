@@ -3,7 +3,7 @@ import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, HOME_COUNTRY_NUM } from '../constants.js';
-import { esc, html, joinHtml, scoreClass, scoreColor, chartColors, themeColor, onThemeChange } from '../utils.js';
+import { esc, html, joinHtml, localDateKey, utcDateKey, scoreClass, scoreColor, chartColors, themeColor, onThemeChange } from '../utils.js';
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
@@ -111,7 +111,7 @@ let _pageShotsMemo: { shots: ShotRow[]; days: number; query: string; day: string
 
 function _pageShots(): ShotRow[] {
   const shots = _shots();
-  const day   = _localDayKey(new Date());
+  const day   = localDateKey(new Date());
   const memo  = _pageShotsMemo;
   if (memo && memo.shots === shots && memo.days === _pageFilter.days && memo.query === _pageFilter.query && memo.day === day) {
     return memo.out;
@@ -387,12 +387,10 @@ export function rebuildAnalyticsPage(): void {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-// Day keys are built from LOCAL calendar fields — toISOString() is UTC and
-// shifts a late-evening shot into the next day (#1467).
-function _localDayKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function _dayKeyOf(tsSeconds: number): string { return _localDayKey(new Date(tsSeconds * 1000)); }
+// Day keys come from the shared helpers. The local one is deliberate (not
+// toISOString(), which is UTC and shifts a late-evening shot into the next
+// day, #1467); _keyFromNum below works in UTC on purpose.
+function _dayKeyOf(tsSeconds: number): string { return localDateKey(new Date(tsSeconds * 1000)); }
 function _dateFromKey(key: string): Date {
   const [y, m, d] = key.split('-');
   return new Date(Number(y), Number(m) - 1, Number(d));
@@ -404,8 +402,7 @@ function _dayKeyNum(key: string): number {
   return Math.floor(Date.UTC(Number(y), Number(m) - 1, Number(d)) / 86400000);
 }
 function _keyFromNum(n: number): string {
-  const d = new Date(n * 86400000);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  return utcDateKey(new Date(n * 86400000));
 }
 function _fmtCalendarDay(key: string, locale: string): string {
   return _dateFromKey(key).toLocaleDateString(locale, { day: 'numeric', month: 'long' });
@@ -455,7 +452,7 @@ export function computeCalendarStats(
     longest = { len: bestLen, start: _keyFromNum(bestStart), end: _keyFromNum(bestEnd) };
   }
 
-  const todayNum = _dayKeyNum(_localDayKey(new Date(nowMs)));
+  const todayNum = _dayKeyNum(localDateKey(new Date(nowMs)));
   let cursor: number | null = counts.has(_keyFromNum(todayNum)) ? todayNum
     : counts.has(_keyFromNum(todayNum - 1)) ? todayNum - 1
     : null;
@@ -1263,7 +1260,7 @@ export function _renderCalendar() {
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayKey = _localDayKey(today);
+  const todayKey = localDateKey(today);
 
   // Range: Monday on/before the later of (first shot, today - 364 days) to the
   // Sunday of the current week.
@@ -1289,7 +1286,7 @@ export function _renderCalendar() {
   while (cur <= end) {
     const week: CalDay[] = [];
     for (let d = 0; d < 7; d++) {
-      const key = _localDayKey(cur);
+      const key = localDateKey(cur);
       const agg = dayMap.get(key);
       const count = agg ? agg.count : 0;
       const avg = agg && agg.scores.length ? Math.round(agg.scores.reduce((a, b) => a + b, 0) / agg.scores.length) : null;

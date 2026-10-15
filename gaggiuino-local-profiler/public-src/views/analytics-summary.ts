@@ -1,4 +1,5 @@
 import type { ShotMeta } from '../state/index.js';
+import { localDateKey } from '../utils.js';
 
 // Same metadata-only shot view as views/analytics.ts's ShotRow: only the
 // annotation id/name and the profile name are read, scores come from the
@@ -12,16 +13,6 @@ export interface SummaryShot extends ShotMeta {
     beanId?: number | null | undefined;
     coffee?: string | null | undefined;
   } | null;
-}
-
-function _pad2(n: number): string {
-  return n < 10 ? `0${n}` : String(n);
-}
-
-// Local calendar date. toISOString() is UTC and shifts a late-evening shot
-// into the next day.
-function _localKey(d: Date): string {
-  return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`;
 }
 
 const DAY_MS = 86400000;
@@ -68,9 +59,9 @@ export interface SummaryLine {
 function _currentStreak(activeDays: Set<string>, nowMs: number): number {
   const cursor = new Date(nowMs);
   cursor.setHours(0, 0, 0, 0);
-  if (!activeDays.has(_localKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  if (!activeDays.has(localDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
   let streak = 0;
-  while (activeDays.has(_localKey(cursor))) {
+  while (activeDays.has(localDateKey(cursor))) {
     streak++;
     cursor.setDate(cursor.getDate() - 1);
     cursor.setHours(0, 0, 0, 0);
@@ -103,7 +94,7 @@ export function summaryLine(
 
   for (const s of shots) {
     const ms = s.timestamp * 1000;
-    activeDays.add(_localKey(new Date(ms)));
+    activeDays.add(localDateKey(new Date(ms)));
     if (ms > nowMs) continue;
     if (startWindow !== null && ms < startWindow) continue;
     shotsWindow++;
