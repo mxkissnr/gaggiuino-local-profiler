@@ -103,7 +103,8 @@ const VARIANTS = {
 };
 
 const TEXT_ROLES    = ['--gray-100', '--gray-200', '--gray-300', '--gray-400',
-                       '--gray-500', '--gray-600', '--ok', '--warn', '--err'];
+                       '--gray-500', '--gray-600', '--ok', '--score-good', '--warn',
+                       '--score-low', '--err'];
 const SURFACE_ROLES = ['--gray-950', '--gray-900', '--gray-800', '--raised'];
 const AA = 4.5;
 
@@ -143,7 +144,7 @@ describe('design token contrast (#811)', () => {
   // these tokens as text ON a surface, never as a surface UNDER text, and
   // white-on-fill measured 2.37:1 in the dark theme before --on-fill existed.
   describe('text on a semantic fill (--on-fill)', () => {
-    const FILL_ROLES = ['--ok', '--warn', '--err', '--gray-600'];
+    const FILL_ROLES = ['--ok', '--score-good', '--warn', '--score-low', '--err', '--gray-600'];
     for (const [name, tokens] of Object.entries(VARIANTS)) {
       it(`${name}: --on-fill is readable on every semantic fill`, () => {
         expect(tokens['--on-fill'], `${name} has no --on-fill`).toBeDefined();

@@ -2,7 +2,7 @@ import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
-import { SLIDERS_ICON_SVG, TARGET_ICON_SVG, SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG } from '../../icons.js';
+import { SLIDERS_ICON_SVG, TARGET_ICON_SVG, SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../../components/flavor-mini-wheel.js';
 import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, settleSheetOut } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
@@ -19,7 +19,6 @@ import * as libraryView from '../library.js';
 // Zero-length round-capped strokes render the dots (the shared `.rail-icon`
 // rule is stroke-only, so filled circles would vanish).
 const ICON_SHOT_LOG = `<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h.01M5 12h.01M5 17.5h.01"/><path d="M9 6.5h11M9 12h11M9 17.5h11"/></svg>` as Html;
-const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
 const ICON_QR = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z"/></svg>` as Html;
 
 // Bean ids with an in-flight toggle-active request — disables the archive /

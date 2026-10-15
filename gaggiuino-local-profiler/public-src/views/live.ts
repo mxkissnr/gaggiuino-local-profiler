@@ -314,12 +314,10 @@ export function initLiveChart(): void {
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      ...chartRegistry.chartBaseOptions(),
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
+        legend: { labels: chartRegistry.chartLegendLabels(C.text) },
         tooltip: { callbacks: { title: (ctx: { parsed: { x: number } }[]) => t('chart_time', formatTimeLabel(ctx[0]?.parsed.x ?? 0)) } }
       },
       scales: {

@@ -1,6 +1,7 @@
 import type { ShotMeta } from '../state/index.js';
 import { TRANSLATIONS } from '../constants.js';
 import type { Translations } from '../i18n.js';
+import { localDateKey } from '../utils.js';
 
 // "Did you know?" facts (#1467, slice 6a). Pure and DOM-free, like
 // analytics-summary.ts: computeFacts() takes the metadata-only shot rows and
@@ -74,10 +75,6 @@ function _percentile(values: number[], p: number): number {
   const loV = s[lo] ?? 0;
   const hiV = s[hi] ?? loV;
   return loV + (hiV - loV) * (pos - lo);
-}
-
-function _localDayKey(d: Date): string {
-  return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`;
 }
 
 function _timeStr(tsSeconds: number): string {
@@ -194,7 +191,7 @@ export function computeFacts(
     });
     const groups = new Map<string, FactShot[]>();
     for (const s of nightShots) {
-      const key = _localDayKey(new Date((s.timestamp - NIGHT_GROUP_SHIFT_SECONDS) * 1000));
+      const key = localDateKey(new Date((s.timestamp - NIGHT_GROUP_SHIFT_SECONDS) * 1000));
       const list = groups.get(key);
       if (list) list.push(s);
       else groups.set(key, [s]);

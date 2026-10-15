@@ -15,6 +15,7 @@ import { saveBeanKnownGrind } from '../api/library.js';
 import { annotateShot }          from '../api/shots.js';
 import type { ShotAnnotationInput } from '../api/types.js';
 import { esc, html, joinHtml, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
+import { parseBrewRatio } from '../shared/score.js';
 import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
@@ -25,7 +26,7 @@ import { normalizeGrindToNow } from '../grind-zero.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
 import type { DialinSuggestion } from '../dialin-convergence.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
-import { textEntryFocused }       from '../live-sync.js';
+import { bestRound, checkForCandidate, createWizardSession, renderChips } from './wizard-session.js';
 
 // state/index.ts types the session as Record<string, unknown> and shot rows
 // as metadata-only ShotMeta; these aliases name the fields this wizard
@@ -82,42 +83,12 @@ interface DialinPrefill {
   recipeId?: number | null;
 }
 
-const POLL_MS = 3000;
-let _pollTimer: ReturnType<typeof setInterval> | null = null;
-
-function _session(): DialinSession | null {
-  return S.dialinSession as DialinSession | null;
-}
-
-function _shots(): DialinShotRow[] {
-  return S.shots;
-}
-
-function _persist(): void {
-  if (S.dialinSession) localStorage.setItem('glp_dialin_session', JSON.stringify(S.dialinSession));
-  else localStorage.removeItem('glp_dialin_session');
-}
-
-function _startPoll(): void {
-  _stopPoll();
-  _pollTimer = setInterval(() => {
-    if (!S.dialinSession || S.dialinSession.status !== 'active') return;
-    if (textEntryFocused() || _overrideHasValue()) return;
-    renderDialinWizard();
-  }, POLL_MS);
-}
-
-function _stopPoll(): void {
-  if (_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = null;
-}
-
-// A manual override value the user has typed but not yet committed: the poll
-// must not re-render the wizard over it.
-function _overrideHasValue(): boolean {
-  const input = document.getElementById('dwOverrideInput') as HTMLInputElement | null;
-  return input !== null && input.value !== '';
-}
+const wizard = createWizardSession<DialinSession, DialinShotRow>({
+  stateKey: 'dialinSession',
+  storageKey: 'glp_dialin_session',
+  overrideInputId: 'dwOverrideInput',
+  onTick: renderDialinWizard,
+});
 
 // ── Open / close ────────────────────────────────────────────────────────
 
@@ -138,7 +109,9 @@ export function openDialinWizard(prefill: DialinPrefill = {}): void {
       beanId,
       grinder: prefill.grinderName || (bean?.knownGrindSettings as { grinder?: string }[] | undefined)?.[0]?.grinder || '',
       dose: prefill.dose ?? '',
-      targetRatio: bean?.brewRatio ? _parseRatio(bean.brewRatio as string | number | null | undefined) : 2,
+      // `|| 2` (not `?? 2`): the shared parser yields 0 for "1:0", which is
+      // not a usable target — keep the old fallback to 2 for non-positive ratios.
+      targetRatio: bean?.brewRatio ? parseBrewRatio(bean.brewRatio as string | number | null | undefined) || 2 : 2,
       recipeId: prefill.recipeId ?? null,
       startGrind: startGrind ?? '',
       rounds: [],
@@ -148,13 +121,13 @@ export function openDialinWizard(prefill: DialinPrefill = {}): void {
       awaitingShotSince: null,
       status: 'setup',
     };
-    _persist();
+    wizard.persist();
   }
   const modal = document.getElementById('dialinWizardModal') as HTMLElement;
   modal.classList.add('open');
   modal.style.display = 'flex';
   renderDialinWizard();
-  _startPoll();
+  wizard.startPoll();
 }
 
 // Bean-card entry point (library.js's start-dialin-from-bean button) —
@@ -174,13 +147,7 @@ export function closeDialinWizard(): void {
   const modal = document.getElementById('dialinWizardModal') as HTMLElement;
   modal.classList.remove('open');
   modal.style.display = 'none';
-  _stopPoll();
-}
-
-function _parseRatio(brewRatio: string | number | null | undefined): number {
-  const m = String(brewRatio || '').trim().match(/^1\s*:\s*([\d.]+)$/);
-  const n = m ? parseFloat(m[1] ?? '') : NaN;
-  return Number.isFinite(n) && n > 0 ? n : 2;
+  wizard.stopPoll();
 }
 
 // Starting-grind heuristic (plan §1): best historical (grinder, grind)
@@ -188,7 +155,7 @@ function _parseRatio(brewRatio: string | number | null | undefined): number {
 // else the most recent shot on this grinder, else empty.
 function _suggestStartGrind(beanName: string | undefined, grinderName: string | undefined, beanId: number | null): number | null {
   if (beanName) {
-    const combos = calcBestGrindCombosForBean(beanName, _shots(), beanId);
+    const combos = calcBestGrindCombosForBean(beanName, wizard.shots(), beanId);
     if (combos?.length) {
       const matched = grinderName
         ? combos.find(c => c.grinder.toLowerCase() === grinderName.toLowerCase())
@@ -205,7 +172,7 @@ function _suggestStartGrind(beanName: string | undefined, grinderName: string | 
     if (known) return _parseGrindNum(known.grindSetting);
   }
   if (grinderName) {
-    const last = [..._shots()]
+    const last = [...wizard.shots()]
       .filter(s => (s.annotation?.grinder || '').toLowerCase() === grinderName.toLowerCase())
       .sort((a, b) => (b.timestamp as number) - (a.timestamp as number))[0];
     const raw = _parseGrindNum(last?.annotation?.grindSetting);
@@ -234,7 +201,7 @@ async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channelin
 // to the next round" — both mean "lock in the current grind and start
 // waiting for a shot".
 export function dialinAcceptNext(): void {
-  const s = _session();
+  const s = wizard.session();
   if (!s) return;
 
   if (s.status === 'setup') {
@@ -265,7 +232,7 @@ export function dialinAcceptNext(): void {
     if (!s.bean || !s.pendingGrind) return;
     s.status = 'active';
     s.awaitingShotSince = Math.floor(Date.now() / 1000);
-    _persist();
+    wizard.persist();
     renderDialinWizard();
     return;
   }
@@ -277,18 +244,18 @@ export function dialinAcceptNext(): void {
   s.candidateShotId = null;
   if (isConverged(s.rounds)) {
     s.status = 'converged';
-    _persist();
+    wizard.persist();
     renderDialinWizard();
     return;
   }
   s.pendingGrind = suggestion.nextGrind ?? s.pendingGrind;
   s.awaitingShotSince = Math.floor(Date.now() / 1000);
-  _persist();
+  wizard.persist();
   renderDialinWizard();
 }
 
 export function dialinOverride(): void {
-  const s = _session();
+  const s = wizard.session();
   if (!s || !s.reviewRound) return;
   const input = document.getElementById('dwOverrideInput') as HTMLInputElement | null;
   const val = input?.value.trim();
@@ -298,17 +265,17 @@ export function dialinOverride(): void {
   s.candidateShotId = null;
   s.pendingGrind = val;
   s.awaitingShotSince = Math.floor(Date.now() / 1000);
-  _persist();
+  wizard.persist();
   renderDialinWizard();
 }
 
 export function dialinEnd(): void {
-  const s = _session();
+  const s = wizard.session();
   if (!s) return;
   if (s.reviewRound) { s.rounds.push(s.reviewRound); s.reviewRound = null; }
   s.status = 'ended';
   s.candidateShotId = null;
-  _persist();
+  wizard.persist();
   renderDialinWizard();
 }
 
@@ -316,19 +283,19 @@ export function dialinEnd(): void {
 // '0' dismisses it (Max sometimes pulls shots for guests mid-session — no
 // silent auto-matching, see plan).
 export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promise<void> {
-  const s = _session();
+  const s = wizard.session();
   if (!s || s.status !== 'active') return;
 
   if (!isMatch) {
     s.dismissedShotIds = s.dismissedShotIds || [];
     s.dismissedShotIds.push(shotId);
     s.candidateShotId = null;
-    _persist();
+    wizard.persist();
     renderDialinWizard();
     return;
   }
 
-  const shot = _shots().find(sh => sh.id === shotId);
+  const shot = wizard.shots().find(sh => sh.id === shotId);
   if (!shot) return;
 
   const payload: ShotAnnotationInput = {
@@ -340,7 +307,7 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     // the wizard passes straight through (#1103).
     const r = await annotateShot(shotId, payload);
     if (r.ok) {
-      const rows = _shots();
+      const rows = wizard.shots();
       const idx = rows.findIndex(sh => sh.id === shotId);
       if (idx !== -1) {
         const row = rows[idx];
@@ -357,7 +324,7 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     window.showToast?.(t('error_generic', ''));
   }
 
-  const evald = await _evalShot(_shots().find(sh => sh.id === shotId) || shot);
+  const evald = await _evalShot(wizard.shots().find(sh => sh.id === shotId) || shot);
   // _parseGrindNum already returns a finite number or null, so fall back to
   // 0 only when there is no usable setting (never send NaN).
   const grindNum = _parseGrindNum(s.pendingGrind);
@@ -367,17 +334,17 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
   };
   s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound]);
   s.candidateShotId = null;
-  _persist();
+  wizard.persist();
   renderDialinWizard();
 }
 
 export async function dialinSaveKnownGrind(): Promise<void> {
-  const s = _session();
+  const s = wizard.session();
   if (!s) return;
   const bean = s.beanId != null
     ? S.coffeeLibrary?.beans?.find(b => b.id === s.beanId)
     : S.coffeeLibrary?.beans?.find(b => b.name === s.bean);
-  const best = _bestRound(s.rounds);
+  const best = bestRound(s.rounds);
   if (!bean || !best) return;
   // saveBeanKnownGrind's grindSetting accepts the round's numeric value too,
   // so the wire body stays identical to the untyped .js.
@@ -394,16 +361,10 @@ export function dialinClose(): void {
   closeDialinWizard();
 }
 
-function _bestRound(rounds: DialinReviewRound[]): DialinReviewRound | null {
-  return [...(rounds || [])]
-    .filter(r => r.score != null)
-    .sort((a, b) => (b.score as number) - (a.score as number))[0] || null;
-}
-
 // ── Rendering ────────────────────────────────────────────────────────────
 
 export function renderDialinWizard(): void {
-  const s = _session();
+  const s = wizard.session();
   const body = document.getElementById('dwBody');
   if (!body) return;
   if (!s) { body.innerHTML = html``; return; }
@@ -414,7 +375,7 @@ export function renderDialinWizard(): void {
   if (s.status === 'converged' || s.status === 'ended') { body.innerHTML = _renderSummary(s); return; }
 
   // active
-  if (!s.candidateShotId && !s.reviewRound) _checkForCandidate(s);
+  if (!s.candidateShotId && !s.reviewRound) checkForCandidate(s, wizard.shots());
   // #957: the candidate's mini-chart needs its curve — fetch it, then
   // re-render so the thumbnail fills in (it shows a placeholder until then).
   if (s.candidateShotId && window.getRawCurve && !window.getRawCurve(s.candidateShotId)) {
@@ -425,16 +386,6 @@ export function renderDialinWizard(): void {
   }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   body.innerHTML = _renderRound(s);
-}
-
-function _checkForCandidate(s: DialinSession): void {
-  if (!s.awaitingShotSince) return;
-  const dismissed = new Set(s.dismissedShotIds || []);
-  const already   = new Set((s.rounds || []).map(r => r.shotId));
-  const candidate = [..._shots()]
-    .filter(sh => !sh._trashed && (sh.timestamp as number) >= s.awaitingShotSince! && !dismissed.has(sh.id as number) && !already.has(sh.id as number))
-    .sort((a, b) => (a.timestamp as number) - (b.timestamp as number))[0];
-  if (candidate) s.candidateShotId = candidate.id as number;
 }
 
 // #322: grinder field is a select of library grinders (matching lib.grinders)
@@ -499,7 +450,7 @@ function _renderSetup(s: DialinSession): Html {
 
 function _renderRound(s: DialinSession): Html {
   const roundNum = s.rounds.length + 1;
-  const chips = _renderChips(s.rounds);
+  const chips = renderChips(s.rounds, r => esc(String(r.grindSetting)));
 
   if (s.reviewRound) {
     const rr  = s.reviewRound;
@@ -526,7 +477,7 @@ function _renderRound(s: DialinSession): Html {
     </div>`;
   }
 
-  const candidate = s.candidateShotId ? _shots().find(sh => sh.id === s.candidateShotId) : null;
+  const candidate = s.candidateShotId ? wizard.shots().find(sh => sh.id === s.candidateShotId) : null;
 
   return html`<div class="dw-round">
     <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
@@ -546,7 +497,7 @@ function _renderRound(s: DialinSession): Html {
 }
 
 function _renderSummary(s: DialinSession): Html {
-  const best = _bestRound(s.rounds);
+  const best = bestRound(s.rounds);
   const title = s.status === 'converged' ? tHtml('dialin_wizard_converged_title') : tHtml('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length
     ? t(calcNextGrindSuggestion(s.rounds).reason) : '';
@@ -562,13 +513,7 @@ function _renderSummary(s: DialinSession): Html {
       ${best ? html`<button class="lib-btn-sm" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
       <button class="lib-btn-sm" data-action="dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
-    ${_renderChips(s.rounds)}
+    ${renderChips(s.rounds, r => esc(String(r.grindSetting)))}
   </div>`;
 }
 
-function _renderChips(rounds: DialinReviewRound[]): Html {
-  if (!rounds?.length) return html``;
-  return html`<div class="dw-chip-strip">${joinHtml(rounds.map(r =>
-    html`<div class="dw-chip" style="border-color:${esc(scoreColor(r.score))}">${esc(String(r.grindSetting))} → ${esc(r.score ?? '–')}</div>`
-  ))}</div>`;
-}

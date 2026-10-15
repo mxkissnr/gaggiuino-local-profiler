@@ -191,3 +191,28 @@ func TestInstallCodeFor_StableAndWellFormed(t *testing.T) {
 		t.Error("distinct UUIDs collided")
 	}
 }
+
+// TestCardAndDetailShareYieldAndPhases pins the one rule the share card and
+// ComputeShotMetrics share: for the same fixture shot both must report the
+// same yield and the same preinfusion duration. It reads the card's own
+// figures (what svg() draws from), so it fails again if the card ever
+// re-derives yield or the phase split on its own.
+func TestCardAndDetailShareYieldAndPhases(t *testing.T) {
+	shot := Shot(cardShotData())
+	m := ComputeShotMetrics(shot)
+	fig := newCardModel(shot, nil, "square", "", "dark", cardDeps{}).figures(
+		DatapointsMap(shot))
+
+	if !m.HasYield || !fig.hasYield {
+		t.Fatalf("expected a yield from both card (%v) and detail (%v)", fig.hasYield, m.HasYield)
+	}
+	if fig.yield != m.YieldG {
+		t.Errorf("yield: card = %v, detail = %v", fig.yield, m.YieldG)
+	}
+	if !m.HasPhases || !fig.hasPhases {
+		t.Fatalf("expected phases from both card (%v) and detail (%v)", fig.hasPhases, m.HasPhases)
+	}
+	if fig.preinfusion != m.PreinfusionSecs {
+		t.Errorf("preinfusion: card = %v, detail = %v", fig.preinfusion, m.PreinfusionSecs)
+	}
+}

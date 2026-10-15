@@ -185,16 +185,28 @@ func lastPositive(vals []float64) (float64, bool) {
 	return 0, false
 }
 
-func detectPreinfusionEnd(pressure []float64) (int, bool) {
-	if len(pressure) < 10 {
-		return 0, false
-	}
-	for i := 5; i < len(pressure)-5; i++ {
-		if pressure[i] >= 5.0 && pressure[i+1] >= 5.0 && pressure[i+2] >= 5.0 {
-			return i, true
-		}
-	}
-	return 0, false
+// cardFigures is the share card's shot-derived summary — the figures it
+// shares with the shot detail view. Resolving them through the same helpers
+// (shotYield, detectPhases) is what keeps the two views from drifting: svg()
+// draws from this struct and the card/detail parity test reads it directly.
+type cardFigures struct {
+	yield       float64
+	hasYield    bool
+	preinfusion float64
+	preEndIdx   int
+	hasPhases   bool
+}
+
+// figures resolves the yield and the preinfusion/extraction boundary from the
+// shot's own datapoints/annotation. preEndIdx is a sample index into the
+// pressure series — the card's x axis is index-based, so the tint and labels
+// need the index, not the seconds.
+func (c *cardModel) figures(dp map[string]any) cardFigures {
+	var f cardFigures
+	f.yield, f.hasYield = shotYield(c.shot)
+	f.preinfusion, _, f.preEndIdx, f.hasPhases = detectPhases(
+		tenthsSeries(dp, "timeInShot"), tenthsSeries(dp, "pressure"))
+	return f
 }
 
 // ── the card itself ────────────────────────────────────────────────────
@@ -203,6 +215,7 @@ func (c *cardModel) svg() string {
 	p := c.pal
 	dp := c.datapoints()
 	ann := c.annotation()
+	fig := c.figures(dp)
 
 	pressure := tenthsSeries(dp, "pressure")
 	flow := tenthsSeries(dp, "pumpFlow")
@@ -239,14 +252,8 @@ func (c *cardModel) svg() string {
 		dose = &r
 	}
 	var yieldG *float64
-	if v, ok := numField(ann, "totalWeight"); ok {
-		r := math.Round(v*10) / 10
-		yieldG = &r
-	} else if v, ok := numField(ann, "yield"); ok {
-		r := math.Round(v*10) / 10
-		yieldG = &r
-	} else if len(weight) > 0 {
-		r := math.Round(weight[len(weight)-1]*10) / 10
+	if fig.hasYield {
+		r := math.Round(fig.yield*10) / 10
 		yieldG = &r
 	}
 	ratio := ""
@@ -278,7 +285,7 @@ func (c *cardModel) svg() string {
 		installCode = c.deps.installCode()
 	}
 
-	preEnd, hasPre := detectPreinfusionEnd(pressure)
+	preEnd, hasPre := fig.preEndIdx, fig.hasPhases
 
 	var s svgBuf
 	s.printf(`<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s">`,

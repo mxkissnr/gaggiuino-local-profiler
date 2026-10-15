@@ -69,15 +69,27 @@ export function toIsoDateInput(str: string | null | undefined): string {
   return '';
 }
 
-// A timestamp's date as YYYY-MM-DD in local time (not UTC —
+// A Date's calendar day as YYYY-MM-DD in local time (not UTC —
 // Date#toISOString() would roll over a day early/late depending on the
 // user's timezone).
+export function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// The same key in UTC. Kept separate on purpose: analytics steps over serial
+// UTC day numbers, so its synthetic dates must not shift with the local zone.
+export function utcDateKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+// A Date's local calendar month as YYYY-MM (the sidebar's month-group keys).
+export function localMonthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// A timestamp's date as YYYY-MM-DD in local time.
 export function localIsoDate(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  return `${y}-${mo}-${da}`;
+  return localDateKey(new Date(ms));
 }
 
 // Today's local date — used as both the default value and the `max` of
@@ -520,24 +532,22 @@ export function groupShotsByDay<T extends { timestamp: number }>(
   formatRecent: (date: Date) => string,
   formatOlder: (date: Date) => string,
 ): ShotGroup<T>[] {
-  const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-  const today = dayKey(now);
+  const today = localDateKey(now);
   const yesterdayDate = new Date(now);
   yesterdayDate.setDate(now.getDate() - 1);
-  const yesterday = dayKey(yesterdayDate);
+  const yesterday = localDateKey(yesterdayDate);
   const todayStart = startOfDay(now);
 
   const groups: ShotGroup<T>[] = [];
   let current: ShotGroup<T> | null = null;
   (shots || []).forEach(shot => {
     const d = new Date(shot.timestamp * 1000);
-    const dKey = dayKey(d);
+    const dKey = localDateKey(d);
     const daysAgo = Math.round((todayStart.getTime() - startOfDay(d).getTime()) / 86400000);
     const isRecent = daysAgo < RECENT_WINDOW_DAYS;
-    const key = isRecent ? dKey : monthKey(d);
+    const key = isRecent ? dKey : localMonthKey(d);
     if (!current || current.key !== key) {
       const label = dKey === today ? todayLabel
         : dKey === yesterday ? yesterdayLabel
@@ -552,18 +562,26 @@ export function groupShotsByDay<T extends { timestamp: number }>(
 }
 
 // ── Score helpers ─────────────────────────────────────────────────────────
-// Unified 3-tier scale (#397): green >= 90, yellow >= 70, red below — the
-// single source of truth for shot-score coloring across sidebar, shot
-// detail, analytics, and the dial-in wizards. No per-view thresholds.
+// scoreClass keeps the 3-tier scale (#397) the .score-* CSS classes are built
+// on: green >= 90, yellow >= 70, red below.
 export function scoreClass(n: number): string {
   return n >= 90 ? 'score-great' : n >= 70 ? 'score-ok' : 'score-bad';
 }
+
+// #1622: the one five-step score scale, shared by every view and the Go share
+// card (card_palette.go). The thresholds live here so nothing else hard-codes
+// them: >=88 great, >=75 good, >=60 ok, >=45 low, below bad.
+export const SCORE_STEPS = { great: 88, good: 75, ok: 60, low: 45 } as const;
 
 // Returns a CSS custom-property reference so callers stay theme-aware
 // (accent/light-dark) instead of a hardcoded hex.
 export function scoreColor(sc: number | null | undefined): string {
   if (sc == null) return 'var(--gray-600)';
-  return sc >= 90 ? 'var(--ok)' : sc >= 70 ? 'var(--warn)' : 'var(--err)';
+  return sc >= SCORE_STEPS.great ? 'var(--ok)'
+       : sc >= SCORE_STEPS.good  ? 'var(--score-good)'
+       : sc >= SCORE_STEPS.ok    ? 'var(--warn)'
+       : sc >= SCORE_STEPS.low   ? 'var(--score-low)'
+       : 'var(--err)';
 }
 
 // Signed delta formatting for the same-profile auto-compare chips (#402):

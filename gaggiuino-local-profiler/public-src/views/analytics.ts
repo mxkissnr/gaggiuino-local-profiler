@@ -3,7 +3,7 @@ import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, HOME_COUNTRY_NUM } from '../constants.js';
-import { esc, html, joinHtml, scoreClass, scoreColor, chartColors, themeColor, onThemeChange } from '../utils.js';
+import { esc, html, joinHtml, localDateKey, utcDateKey, scoreClass, scoreColor, chartColors, themeColor, onThemeChange } from '../utils.js';
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
@@ -111,7 +111,7 @@ let _pageShotsMemo: { shots: ShotRow[]; days: number; query: string; day: string
 
 function _pageShots(): ShotRow[] {
   const shots = _shots();
-  const day   = _localDayKey(new Date());
+  const day   = localDateKey(new Date());
   const memo  = _pageShotsMemo;
   if (memo && memo.shots === shots && memo.days === _pageFilter.days && memo.query === _pageFilter.query && memo.day === day) {
     return memo.out;
@@ -387,12 +387,10 @@ export function rebuildAnalyticsPage(): void {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-// Day keys are built from LOCAL calendar fields — toISOString() is UTC and
-// shifts a late-evening shot into the next day (#1467).
-function _localDayKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function _dayKeyOf(tsSeconds: number): string { return _localDayKey(new Date(tsSeconds * 1000)); }
+// Day keys come from the shared helpers. The local one is deliberate (not
+// toISOString(), which is UTC and shifts a late-evening shot into the next
+// day, #1467); _keyFromNum below works in UTC on purpose.
+function _dayKeyOf(tsSeconds: number): string { return localDateKey(new Date(tsSeconds * 1000)); }
 function _dateFromKey(key: string): Date {
   const [y, m, d] = key.split('-');
   return new Date(Number(y), Number(m) - 1, Number(d));
@@ -404,8 +402,7 @@ function _dayKeyNum(key: string): number {
   return Math.floor(Date.UTC(Number(y), Number(m) - 1, Number(d)) / 86400000);
 }
 function _keyFromNum(n: number): string {
-  const d = new Date(n * 86400000);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  return utcDateKey(new Date(n * 86400000));
 }
 function _fmtCalendarDay(key: string, locale: string): string {
   return _dateFromKey(key).toLocaleDateString(locale, { day: 'numeric', month: 'long' });
@@ -455,7 +452,7 @@ export function computeCalendarStats(
     longest = { len: bestLen, start: _keyFromNum(bestStart), end: _keyFromNum(bestEnd) };
   }
 
-  const todayNum = _dayKeyNum(_localDayKey(new Date(nowMs)));
+  const todayNum = _dayKeyNum(localDateKey(new Date(nowMs)));
   let cursor: number | null = counts.has(_keyFromNum(todayNum)) ? todayNum
     : counts.has(_keyFromNum(todayNum - 1)) ? todayNum - 1
     : null;
@@ -480,9 +477,18 @@ export function computeCalendarStats(
 // already does for its own colors.
 const _mutedTickColor = () =>
   (getComputedStyle(document.documentElement).getPropertyValue('--gray-600') || '#52525b').trim() || '#52525b';
-const _bgColor = (sc: number | null): string => sc == null ? 'rgba(63,63,70,.5)'
-  : sc >= 88 ? 'rgba(34,197,94,.7)' : sc >= 75 ? 'rgba(132,204,22,.7)'
-  : sc >= 60 ? 'rgba(234,179,8,.7)'  : sc >= 45 ? 'rgba(249,115,22,.7)' : 'rgba(239,68,68,.7)';
+// #1622: the shared five-step score scale (scoreColor(), utils.js) resolved
+// to a value Chart.js can paint. Fallbacks are the dark-theme token values,
+// used only before the stylesheet has applied.
+const _SCORE_FALLBACK: Record<string, string> = {
+  '--ok': '#5cb98a', '--score-good': '#a7c25c', '--warn': '#d3a03f',
+  '--score-low': '#e0913f', '--err': '#e0705f', '--gray-600': '#93989c',
+};
+function _scoreChartColor(sc: number | null): string {
+  const token = scoreColor(sc);
+  const name = token.startsWith('var(') ? token.slice(4, -1) : '';
+  return themeColor(name, _SCORE_FALLBACK[name] ?? '');
+}
 
 // ── Verdict header (#1467) ────────────────────────────────────────────────
 // Replaces the old one-line "Übersicht" card: a plain-language verdict on the
@@ -739,7 +745,7 @@ export function buildTimeOfDay() {
     type: 'bar',
     data: {
       labels: hours.map((_, i) => String(i).padStart(2, '0') + ':00'),
-      datasets: [{ data: hours.map(h => h.count), backgroundColor: hours.map(h => _bgColor(avgSc(h))), borderRadius: 3, borderSkipped: false }]
+      datasets: [{ data: hours.map(h => h.count), backgroundColor: hours.map(h => _withAlpha(_scoreChartColor(avgSc(h)), 0.7)), borderRadius: 3, borderSkipped: false }]
     },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false },
@@ -755,16 +761,6 @@ export function buildTimeOfDay() {
       }
     }
   } satisfies ChartConfiguration<'bar'>));
-}
-
-// Resolved point colour on the shared score scale: scoreColor() names the
-// theme token (--ok / --warn / --err) and themeColor() resolves it to a value
-// Chart.js can paint. Fallbacks match the tokens' light-theme hexes.
-function _trendPointColor(sc: number): string {
-  const token = scoreColor(sc);
-  const name = token.startsWith('var(') ? token.slice(4, -1) : '';
-  const fallback = sc >= 90 ? '#5cb98a' : sc >= 70 ? '#d3a03f' : '#e0705f';
-  return themeColor(name, fallback);
 }
 
 // Y-axis floor for the score trend: 5 below the lowest shown score, rounded
@@ -988,7 +984,7 @@ export function buildTrendChart() {
 
   // 7 and 30 days keep the per-shot line from #1467.
   const labels    = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
-  const pointColors = scoreData.map(_trendPointColor);
+  const pointColors = scoreData.map(_scoreChartColor);
   const pointRadii  = scoreData.map((sc, i) => (i === scoreData.length - 1 ? 6 : 4) + (sc >= 100 ? 1 : 0));
 
   chartRegistry.set('trendChart', new Chart(ctx, {
@@ -998,7 +994,7 @@ export function buildTrendChart() {
       datasets: [
         { label: 'Score', data: scoreData, borderColor: themeColor('--gray-600', '#52525b'),
           pointBackgroundColor: pointColors,
-          pointBorderColor: scoreData.map(sc => sc >= 100 ? '#f3e1c0' : _trendPointColor(sc)),
+          pointBorderColor: scoreData.map(sc => sc >= 100 ? '#f3e1c0' : _scoreChartColor(sc)),
           pointBorderWidth: scoreData.map(sc => sc >= 100 ? 2 : 1),
           pointRadius: pointRadii, pointHoverRadius: 7, pointStyle: 'circle',
           fill: false, tension: 0.3, cubicInterpolationMode: 'monotone', order: 2 },
@@ -1263,7 +1259,7 @@ export function _renderCalendar() {
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayKey = _localDayKey(today);
+  const todayKey = localDateKey(today);
 
   // Range: Monday on/before the later of (first shot, today - 364 days) to the
   // Sunday of the current week.
@@ -1289,7 +1285,7 @@ export function _renderCalendar() {
   while (cur <= end) {
     const week: CalDay[] = [];
     for (let d = 0; d < 7; d++) {
-      const key = _localDayKey(cur);
+      const key = localDateKey(cur);
       const agg = dayMap.get(key);
       const count = agg ? agg.count : 0;
       const avg = agg && agg.scores.length ? Math.round(agg.scores.reduce((a, b) => a + b, 0) / agg.scores.length) : null;
@@ -2205,15 +2201,12 @@ export function buildProfileChart() {
 
   wrap.style.height = Math.max(120, entries.length * 36 + 20) + 'px';
 
-  const bgColor = (sc: number): string => sc >= 88 ? 'rgba(34,197,94,.7)' : sc >= 75 ? 'rgba(132,204,22,.7)'
-                     : sc >= 60 ? 'rgba(234,179,8,.7)'  : sc >= 45 ? 'rgba(249,115,22,.7)' : 'rgba(239,68,68,.7)';
-
   chartRegistry.set('profileBarChart', new Chart(ctx, {
     type: 'bar',
     data: {
       labels:   entries.map(e => e.name.length > 20 ? e.name.slice(0, 19) + '…' : e.name),
       datasets: [{ label: 'Ø Score', data: entries.map(e => e.avgScore),
-                   backgroundColor: entries.map(e => bgColor(e.avgScore)), borderRadius: 4 }]
+                   backgroundColor: entries.map(e => _withAlpha(_scoreChartColor(e.avgScore), 0.7)), borderRadius: 4 }]
     },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
