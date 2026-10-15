@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -19,13 +21,14 @@ import (
 // newTestHandlers opens a throwaway on-disk SQLite DB (same fixture
 // pattern as shots/library's own helpers_test.go) and wires it into a
 // fresh orders Handlers, plus every cross-domain repository it needs.
-// Also sets GLP_ENABLE_ORDERS=true and clears any real /data/options.json
-// interference — see options.go's isOrdersEnabled() — so every handler
-// test below runs with the orders feature on unless a test explicitly
-// unsets it.
+// Also sets GLP_ENABLE_ORDERS=true and points the shared
+// internal/config.OptionsFile seam at a fresh, absent path — see
+// options.go's isOrdersEnabled() — so every handler test below runs with
+// the orders feature on unless a test explicitly disables it.
 func newTestHandlers(t *testing.T) (*Handlers, *Repository, *sql.DB) {
 	t.Helper()
 	t.Setenv("GLP_ENABLE_ORDERS", "true")
+	pointOptionsAt(t, "")
 	dbPath := filepath.Join(t.TempDir(), "glp.db")
 	sqlDB, err := db.Open(dbPath)
 	if err != nil {
@@ -41,6 +44,26 @@ func newTestHandlers(t *testing.T) (*Handlers, *Repository, *sql.DB) {
 
 	h := NewHandlers(repo, shotsRepo, libRepo, registry, haClient)
 	return h, repo, sqlDB
+}
+
+// pointOptionsAt points internal/config's shared OptionsFile at a fresh,
+// per-test path and restores it on cleanup. A fresh path (rather than
+// rewriting one file) busts config.Options' path-keyed cache, so one test's
+// enable_orders value can never leak into the next via the cache's TTL fast
+// path. content == "" leaves the file absent, so config.Options falls back to
+// GLP_ENABLE_ORDERS exactly as production does before the Supervisor has
+// written an options.json.
+func pointOptionsAt(t *testing.T, content string) {
+	t.Helper()
+	orig := config.OptionsFile
+	path := filepath.Join(t.TempDir(), "options.json")
+	if content != "" {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile options.json: %v", err)
+		}
+	}
+	config.OptionsFile = path
+	t.Cleanup(func() { config.OptionsFile = orig })
 }
 
 func newMux(h *Handlers) *http.ServeMux {

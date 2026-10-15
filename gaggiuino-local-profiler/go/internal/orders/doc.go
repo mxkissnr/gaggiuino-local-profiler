@@ -23,10 +23,10 @@
 //
 // File layout:
 //
-//	options.go     isOrdersEnabled() — a narrow, single-field read of
-//	                /data/options.json (see its own doc comment for why
-//	                this reads that one field itself rather than going
-//	                through the system domain's options.json facade)
+//	options.go     isOrdersEnabled() — options.json's enable_orders via
+//	                internal/config's shared Options() reader (see its own
+//	                doc comment for why it reads that one field rather than
+//	                going through the system domain's options.json facade)
 //	repository.go   the `orders` table plus the menu/orders_settings/
 //	                notify_mapping kv keys
 //	service.go      resolveMachineId/resolveBeanId/computeQueueEta/

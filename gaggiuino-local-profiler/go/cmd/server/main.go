@@ -22,7 +22,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -102,27 +101,8 @@ func configFromEnv() appConfig {
 		port:            getEnv("GLP_PORT", defaultPort),
 		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond), 1)) * time.Millisecond,
 		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax), 1)),
-		allowedHosts:    auth.ParseAllowedHosts(readAllowedHostsOption() + " " + os.Getenv("GLP_ALLOWED_HOSTS")),
+		allowedHosts:    auth.ParseAllowedHosts(config.Options().AllowedHosts + " " + os.Getenv("GLP_ALLOWED_HOSTS")),
 	}
-}
-
-// readAllowedHostsOption reads options.json's allowed_hosts string (the
-// Supervisor-written add-on option, see config.yaml). A missing file,
-// unparseable JSON or an absent key all yield "" — the same
-// fail-open-to-empty behaviour the other option readers rely on, so an
-// install with no extra hosts behaves exactly as before #1430.
-func readAllowedHostsOption() string {
-	data, err := os.ReadFile(config.OptionsFile)
-	if err != nil {
-		return ""
-	}
-	var opts struct {
-		AllowedHosts string `json:"allowed_hosts"`
-	}
-	if err := json.Unmarshal(data, &opts); err != nil {
-		return ""
-	}
-	return opts.AllowedHosts
 }
 
 func main() {

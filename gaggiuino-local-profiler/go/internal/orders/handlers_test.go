@@ -9,10 +9,13 @@ import (
 
 // TestOrdersDisabled_404 verifies the isOrdersEnabled gate: every
 // /api/orders* route 404s when the feature is off, matching the guard the
-// router applies to the whole subtree.
+// router applies to the whole subtree. Orders is disabled through the shared
+// internal/config seam (a real enable_orders:false for a fresh path, which
+// also busts config.Options' path-keyed cache) rather than the env fallback,
+// so the result does not depend on test order.
 func TestOrdersDisabled_404(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
-	t.Setenv("GLP_ENABLE_ORDERS", "false")
+	pointOptionsAt(t, `{"enable_orders":false}`)
 	mux := newMux(h)
 	rec := doJSON(t, mux, http.MethodGet, "/api/orders", nil)
 	if rec.Code != http.StatusNotFound {
