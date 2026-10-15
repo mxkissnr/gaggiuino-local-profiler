@@ -52,7 +52,7 @@ func CheckLowStock(repo *Repository, doses func() ([]shots.AnnotatedDose, error)
 	if err != nil {
 		return err
 	}
-	idx := findBeanIndex(lib, beanID)
+	idx := findEntityIndex(lib.Beans, beanID)
 	if idx == -1 {
 		return nil
 	}
@@ -74,7 +74,7 @@ func CheckLowStock(repo *Repository, doses func() ([]shots.AnnotatedDose, error)
 		return nil
 	}
 	err = repo.Update(func(l *Library) error {
-		bi := findBeanIndex(*l, beanID)
+		bi := findEntityIndex(l.Beans, beanID)
 		if bi == -1 {
 			return ErrSkipSave
 		}

@@ -3,22 +3,11 @@ package library
 import (
 	"errors"
 	"net/http"
-
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // This file implements the puckscreen endpoints (#635).
 
 var puckScreenThicknesses = map[string]bool{"very-thin": true, "thin": true, "medium": true, "thick": true}
-
-func findPuckScreenIndex(lib Library, id int64) int {
-	for i, p := range lib.PuckScreens {
-		if pid, ok := idOf(p, "id"); ok && pid == id {
-			return i
-		}
-	}
-	return -1
-}
 
 // listPuckScreens serves GET /api/library/puckscreens.
 func (h *Handlers) listPuckScreens(w http.ResponseWriter, r *http.Request) {
@@ -80,114 +69,15 @@ func (h *Handlers) updatePuckScreen(w http.ResponseWriter, r *http.Request) {
 
 // deletePuckScreen handles DELETE /api/library/puckscreen/:id.
 func (h *Handlers) deletePuckScreen(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	var imgExt string
-	// The image file removal below is filesystem I/O: it must not run while
-	// Update holds the library write lock, so the closure only records the
-	// extension and the handler deletes the file once Update returns.
-	err := h.repo.Update(func(lib *Library) error {
-		if !noMatch {
-			if idx := findPuckScreenIndex(*lib, id); idx != -1 {
-				if ext, _ := lib.PuckScreens[idx]["image"].(string); ext != "" {
-					imgExt = ext
-				}
-			}
-		}
-		filtered := make([]Entity, 0, len(lib.PuckScreens))
-		removed := false
-		for _, p := range lib.PuckScreens {
-			pid, ok := idOf(p, "id")
-			if !noMatch && ok && pid == id {
-				removed = true
-				continue
-			}
-			filtered = append(filtered, p)
-		}
-		if !removed {
-			return ErrSkipSave
-		}
-		lib.PuckScreens = filtered
-		return nil
-	})
-	if err != nil && !errors.Is(err, ErrSkipSave) {
-		internalError(w, err)
-		return
-	}
-	if imgExt != "" {
-		img.Delete(h.imageDir, id, imgExt, "puckscreen-")
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	h.deleteEntity(w, r, puckScreenKind, nil)
 }
 
 // getPuckScreenImage handles GET /api/library/puckscreen/:id/image.
 func (h *Handlers) getPuckScreenImage(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	ext := ""
-	if !noMatch {
-		if idx := findPuckScreenIndex(lib, id); idx != -1 {
-			ext, _ = lib.PuckScreens[idx]["image"].(string)
-		}
-	}
-	h.serveImage(w, r, ext, "puckscreen-", id)
+	h.getEntityImage(w, r, puckScreenKind)
 }
 
 // postPuckScreenImage handles POST /api/library/puckscreen/:id/image.
 func (h *Handlers) postPuckScreenImage(w http.ResponseWriter, r *http.Request) {
-	if !h.rateLimitImage(w, r) {
-		return
-	}
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	// Existence is decided before the upload is read/validated or any file is
-	// written: an unknown id 404s even when the image is also invalid, and no
-	// orphan file is ever written (matching dev's ordering).
-	exists, err := h.entityExists(id, noMatch, findPuckScreenIndex)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	if !exists {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	data, contentType, ok := readUploadedImage(w, r)
-	if !ok {
-		return
-	}
-	ext, ok := img.Save(h.imageDir, "puckscreen-", id, data, contentType, img.ModeUpload)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "unsupported image")
-		return
-	}
-	var puckScreen Entity
-	var oldExt string
-	err = h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !noMatch {
-			idx = findPuckScreenIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		puckScreen = lib.PuckScreens[idx]
-		oldExt, _ = puckScreen["image"].(string)
-		puckScreen["image"] = ext
-		lib.PuckScreens[idx] = puckScreen
-		return nil
-	})
-	if err != nil {
-		// The entity was deleted between the existence check and the write;
-		// the just-saved file has no owner, so drop it.
-		img.Delete(h.imageDir, id, ext, "puckscreen-")
-		writeUpdateError(w, err)
-		return
-	}
-	if oldExt != "" && oldExt != ext {
-		img.Delete(h.imageDir, id, oldExt, "puckscreen-")
-	}
-	writeJSON(w, http.StatusOK, puckScreen)
+	h.postEntityImage(w, r, puckScreenKind, writeEntityJSON)
 }
