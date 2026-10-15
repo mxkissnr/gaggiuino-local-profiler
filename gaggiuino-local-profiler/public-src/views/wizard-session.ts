@@ -16,7 +16,7 @@ import type { Html } from '../utils.js';
 
 const POLL_MS = 3000;
 
-export interface WizardSessionConfig<TSession extends Record<string, unknown>> {
+export interface WizardSessionConfig {
   // Which slot on S holds the session; both are typed Record<string, unknown>
   // in state/index.ts and narrowed by the caller's TSession.
   stateKey: 'dialinSession' | 'profileDialinSession';
@@ -37,7 +37,7 @@ export interface WizardSession<TSession, TShot> {
 }
 
 export function createWizardSession<TSession extends Record<string, unknown>, TShot>(
-  { stateKey, storageKey, overrideInputId, onTick }: WizardSessionConfig<TSession>,
+  { stateKey, storageKey, overrideInputId, onTick }: WizardSessionConfig,
 ): WizardSession<TSession, TShot> {
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
