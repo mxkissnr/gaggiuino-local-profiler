@@ -255,7 +255,7 @@ func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots
 		RoastLevel: entityStr(bean, "roastType"),
 		Active:     entityActive(bean),
 	}
-	if roastDate := beanRoastDate(bean); roastDate != "" {
+	if roastDate := beanRoastDate(bean, doseRows, allBeans); roastDate != "" {
 		out.RoastDate = roastDate
 		if days, ok := daysSinceDate(roastDate, now); ok {
 			out.DaysSinceRoast = &days
@@ -264,7 +264,7 @@ func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots
 	if remaining, ok := library.ComputeBeanRemaining(bean, doseRows, allBeans); ok {
 		out.RemainingG = &remaining
 	}
-	if grams, count, ok := frozenPortionTotals(bean); ok {
+	if grams, count, ok := frozenPortionTotals(bean, doseRows, allBeans); ok {
 		out.FrozenPortionsG = &grams
 		out.FrozenPortionsCount = &count
 	}
@@ -364,7 +364,7 @@ func toGrinderInfo(g library.Entity, allShots []shots.Shot) grinderInfo {
 		PurchaseDate: entityStr(g, "purchaseDate"),
 		BurrsResetAt: entityStr(g, "burrsResetAt"),
 	}
-	if zp, ok := grinderZeroPoint(g); ok {
+	if zp, ok := library.CurrentGrinderZeroPoint(g); ok {
 		out.ZeroPoint = &zp
 	}
 	// allShots is nil when the section wasn't requested or the shots service
@@ -408,35 +408,8 @@ func toRecipeInfo(r library.Entity) recipeInfo {
 	return out
 }
 
-// grinderZeroPoint reads the most recently activated zero point from the
-// grinder's zeroPointHistory, mirroring library.currentGrinderZeroPoint
-// (unexported there).
-func grinderZeroPoint(g library.Entity) (float64, bool) {
-	raw, _ := g["zeroPointHistory"].([]any)
-	var (
-		best      float64
-		bestSince int64 = -1
-		found     bool
-	)
-	for _, item := range raw {
-		m, _ := item.(map[string]any)
-		if m == nil {
-			continue
-		}
-		zp, ok := entityFloat(m, "zeroPoint")
-		if !ok {
-			continue
-		}
-		since, _ := entityInt(m, "since")
-		if !found || since >= bestSince {
-			best, bestSince, found = zp, since, true
-		}
-	}
-	return best, found
-}
-
-func frozenPortionTotals(bean library.Entity) (grams float64, count int64, ok bool) {
-	bag := activeBagOf(bean)
+func frozenPortionTotals(bean library.Entity, doseRows []shots.AnnotatedDose, allBeans []library.Entity) (grams float64, count int64, ok bool) {
+	bag := library.CurrentBag(bean, doseRows, allBeans)
 	if bag == nil {
 		return 0, 0, false
 	}
@@ -508,8 +481,8 @@ func grindSettingString(v any) string {
 	}
 }
 
-func beanRoastDate(bean library.Entity) string {
-	if bag := activeBagOf(bean); bag != nil {
+func beanRoastDate(bean library.Entity, doseRows []shots.AnnotatedDose, allBeans []library.Entity) string {
+	if bag := library.CurrentBag(bean, doseRows, allBeans); bag != nil {
 		if v := entityStr(bag, "roastDate"); v != "" {
 			return v
 		}
@@ -532,14 +505,11 @@ func tracksStock(bean library.Entity) bool {
 }
 
 func daysSinceDate(date string, now time.Time) (int, bool) {
-	t, err := time.Parse("2006-01-02", date)
-	if err != nil {
-		t, err = time.Parse(time.RFC3339, date)
-		if err != nil {
-			return 0, false
-		}
+	ms, ok := library.ParseJSDate(date)
+	if !ok {
+		return 0, false
 	}
-	days := int(now.Sub(t).Hours() / 24)
+	days := int(now.Sub(time.UnixMilli(ms)).Hours() / 24)
 	if days < 0 {
 		days = 0
 	}
@@ -632,13 +602,4 @@ func entityActive(e library.Entity) bool {
 	default:
 		return true
 	}
-}
-
-func activeBagOf(bean library.Entity) library.Entity {
-	bags, _ := bean["bags"].([]any)
-	if len(bags) == 0 {
-		return nil
-	}
-	m, _ := bags[len(bags)-1].(map[string]any)
-	return m
 }
