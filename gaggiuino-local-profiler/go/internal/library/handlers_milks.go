@@ -46,7 +46,7 @@ func (h *Handlers) createMilk(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	milk, _, err := CreateMilk(h.repo, body)
+	milk, err := CreateMilk(h.repo, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {
