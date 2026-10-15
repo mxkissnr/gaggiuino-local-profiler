@@ -469,4 +469,3 @@ func TestOptions_SystemFieldsCacheUntilFileChanges(t *testing.T) {
 		t.Fatalf("mtime bumped: got %+v, want orders=false port=true sync=99", got)
 	}
 }
-
