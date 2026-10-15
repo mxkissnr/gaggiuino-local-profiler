@@ -112,7 +112,7 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) bool {
 		log.Printf("library: geocodeBean: reading library for bean %d: %v", beanID, err)
 		return false
 	}
-	idx := findBeanIndex(lib, beanID)
+	idx := findEntityIndex(lib.Beans, beanID)
 	if idx == -1 {
 		return false
 	}
@@ -132,7 +132,7 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) bool {
 
 	var name string
 	err = g.repo.Update(func(fresh *Library) error {
-		fi := findBeanIndex(*fresh, beanID)
+		fi := findEntityIndex(fresh.Beans, beanID)
 		if fi == -1 {
 			return ErrSkipSave
 		}

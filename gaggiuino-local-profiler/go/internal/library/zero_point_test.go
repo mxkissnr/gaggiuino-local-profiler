@@ -58,7 +58,7 @@ func TestSetGrinderZeroPoint_HandlerAppendsHistoryAndIsIdempotentForTheSameValue
 	if err != nil {
 		t.Fatalf("GetLibrary: %v", err)
 	}
-	idx := findGrinderIndex(lib, id)
+	idx := findEntityIndex(lib.Grinders, id)
 	if idx == -1 {
 		t.Fatalf("grinder not found after save")
 	}

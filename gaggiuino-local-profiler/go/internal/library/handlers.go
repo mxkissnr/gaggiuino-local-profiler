@@ -198,9 +198,9 @@ func writeUpdateError(w http.ResponseWriter, err error) {
 // writing the uploaded file, so an unknown id still 404s — and no file is
 // written — before any image validation, matching dev's original ordering.
 // GetLibrary is always called first (even for an unparseable id), so a
-// broken DB outranks the not-found response exactly as before; find is the
-// kind's findXIndex.
-func (h *Handlers) entityExists(id int64, noMatch bool, find func(Library, int64) int) (bool, error) {
+// broken DB outranks the not-found response exactly as before; k selects the
+// collection to search.
+func (h *Handlers) entityExists(id int64, noMatch bool, k entityKind) (bool, error) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
 		return false, err
@@ -208,7 +208,7 @@ func (h *Handlers) entityExists(id int64, noMatch bool, find func(Library, int64
 	if noMatch {
 		return false, nil
 	}
-	return find(lib, id) != -1, nil
+	return findEntityIndex(*k.list(&lib), id) != -1, nil
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {

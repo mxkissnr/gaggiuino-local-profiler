@@ -7,15 +7,6 @@ import (
 
 // This file implements the milk endpoints.
 
-func findMilkIndex(lib Library, id int64) int {
-	for i, m := range lib.Milks {
-		if mid, ok := idOf(m, "id"); ok && mid == id {
-			return i
-		}
-	}
-	return -1
-}
-
 // listMilks serves GET /api/library/milks — a lightweight
 // id/name/emoji/stockMl projection, defaulting emoji to the milk-carton
 // emoji when unset.
@@ -81,29 +72,7 @@ func (h *Handlers) updateMilk(w http.ResponseWriter, r *http.Request) {
 
 // deleteMilk handles DELETE /api/library/milk/:id.
 func (h *Handlers) deleteMilk(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	err := h.repo.Update(func(lib *Library) error {
-		filtered := make([]Entity, 0, len(lib.Milks))
-		removed := false
-		for _, m := range lib.Milks {
-			mid, ok := idOf(m, "id")
-			if !noMatch && ok && mid == id {
-				removed = true
-				continue
-			}
-			filtered = append(filtered, m)
-		}
-		if !removed {
-			return ErrSkipSave
-		}
-		lib.Milks = filtered
-		return nil
-	})
-	if err != nil && !errors.Is(err, ErrSkipSave) {
-		internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	h.deleteEntity(w, r, milkKind, nil)
 }
 
 // deductMilk handles POST /api/library/milk/:id/deduct.
@@ -122,7 +91,7 @@ func (h *Handlers) deductMilk(w http.ResponseWriter, r *http.Request) {
 	err := h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findMilkIndex(*lib, id)
+			idx = findEntityIndex(lib.Milks, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -165,7 +134,7 @@ func (h *Handlers) restockMilk(w http.ResponseWriter, r *http.Request) {
 	err := h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findMilkIndex(*lib, id)
+			idx = findEntityIndex(lib.Milks, id)
 		}
 		if idx == -1 {
 			return errNotFound

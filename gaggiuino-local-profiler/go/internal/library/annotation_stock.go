@@ -109,7 +109,7 @@ func drinkMilkMl(menu []Entity, drinkType string) float64 {
 // addMilkStock applies deltaMl to the milk's stock, floored at 0, and stamps
 // updatedAt. It reports false when no milk has that id.
 func addMilkStock(lib *Library, id int64, deltaMl float64) bool {
-	idx := findMilkIndex(*lib, id)
+	idx := findEntityIndex(lib.Milks, id)
 	if idx == -1 {
 		return false
 	}
