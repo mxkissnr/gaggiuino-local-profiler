@@ -8,6 +8,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,12 +17,11 @@ import (
 
 // OptionsFile is the Supervisor-written options.json path, under datadir.Root
 // (the real data directory in production, a per-test directory under
-// `go test`) -- a var, not a const, so tests can point it at a temp file,
-// mirroring internal/system's own defaultOptionsFile (constants.go).
+// `go test`) -- a var, not a const, so tests can point it at a temp file.
 var OptionsFile = datadir.Path("options.json")
 
 // options is the slice of options.json's fields more than one internal package
-// reads through this one shared reader (#1622 slice 6). The type is
+// reads through this one shared reader (#1622 slices 6 and 8). The type is
 // deliberately unexported -- callers only ever do config.Options().DebugLogging
 // and friends, reading the exported fields off the returned value, so the type
 // itself never needs a name outside this package.
@@ -29,20 +29,26 @@ type options struct {
 	DebugLogging bool
 	AllowedHosts string
 	EnableOrders bool
+	// The three fields below were internal/system's own reads (preheat_time,
+	// expose_api_port, sync_interval) until #1622 slice 8 folded them in here
+	// too, so their semantics mirror system/options.go's loaders exactly.
+	PreheatMinutes      int
+	APIPortExposed      bool
+	SyncIntervalMinutes int
 }
 
 // optionsCache caches Options()'s parsed result, keyed on options.json's
-// mtime -- the same pattern internal/system/options.go's
-// preheatMinutesCache/statusOptionsCache use, for the same reason: this file
-// is only ever rewritten by a rare Configuration-UI edit, not something worth
-// a fresh os.ReadFile+json.Unmarshal on every call.
+// mtime -- the same pattern the hand-rolled readers this replaced used, for the
+// same reason: this file is only ever rewritten by a rare Configuration-UI
+// edit, not something worth a fresh os.ReadFile+json.Unmarshal on every call.
 //
 // checked/cacheTTL add a second layer on top of the mtime check (#977
 // follow-up code review, round 5): this is the ONE shared options cache now --
 // it used to be several independent hand-rolled readers (the debug_logging
 // mtime+TTL cache this replaced, plus uncached reads in cmd/server for
-// allowed_hosts and in internal/orders for enable_orders). A poll tick or a
-// historical backfill of many shots can call this far more often than
+// allowed_hosts and in internal/orders for enable_orders, plus
+// internal/system's own preheatMinutesCache/statusOptionsCache). A poll tick or
+// a historical backfill of many shots can call this far more often than
 // options.json could plausibly change, so within cacheTTL of the last check
 // this skips the os.Stat entirely and just returns the cached value; the
 // fields here are manual Configuration-UI toggles, not something that needs
@@ -69,15 +75,19 @@ var optionsCache struct {
 const cacheTTL = 5 * time.Second
 
 // Options returns the options.json fields more than one internal package needs
-// -- debug_logging, allowed_hosts and enable_orders -- from one read+parse of
-// OptionsFile, cached by mtime.
+// -- debug_logging, allowed_hosts and enable_orders, plus (since #1622 slice 8)
+// internal/system's preheat_time, expose_api_port and sync_interval -- from one
+// read+parse of OptionsFile, cached by mtime.
 //
 // Fallbacks match each field's original per-package reader exactly: a missing
-// or unparseable options.json falls back to the environment for the two
-// booleans (GLP_DEBUG_LOGGING / GLP_ENABLE_ORDERS, #764 standalone Docker with
-// no Supervisor) and to "" for allowed_hosts (the caller appends
-// GLP_ALLOWED_HOSTS itself); a present-but-valid file yields its own values,
-// with an absent key read as false/"".
+// or unparseable options.json falls back to the environment (#764 standalone
+// Docker with no Supervisor) -- GLP_DEBUG_LOGGING/GLP_ENABLE_ORDERS as the
+// literal "true", GLP_PREHEAT_TIME/GLP_SYNC_INTERVAL as a positive int (else
+// 20/5) and GLP_EXPOSE_API_PORT as anything but "false" -- and allowed_hosts is
+// "" (the caller appends GLP_ALLOWED_HOSTS itself). A present-but-valid file
+// yields its own values, with an absent key read as false/""/true:
+// expose_api_port keeps internal/system's opposite default (a valid file that
+// simply omits the key -- an install predating #803 -- must resolve to true).
 //
 // Lives in this standalone leaf package rather than internal/system, because
 // internal/machines needs debug_logging too (registry.go's
@@ -120,26 +130,63 @@ func Options() options {
 
 // parseOptionsFile does Options()'s actual read+parse+fallback chain -- split
 // out so Options itself only holds the cache-check/cache-store logic, matching
-// internal/system/options.go's own parsePreheatMinutesFile/parseStatusOptionsFile
-// split.
+// how the per-package readers this replaced (internal/system/options.go's
+// parsePreheatMinutesFile/parseStatusOptionsFile) were split.
 func parseOptionsFile() options {
 	data, err := os.ReadFile(OptionsFile)
 	if err != nil {
 		return optionsFromEnv()
 	}
+	// The two numeric fields decode through json.RawMessage, not json.Number:
+	// internal/system parsed preheat_time and sync_interval in two separate
+	// structs, so a malformed value in one never failed the other's read. A
+	// single merged struct with plain json.Number would turn, say, a bad
+	// preheat_time into a whole-file parse failure and change that behaviour;
+	// positiveIntOrDefault keeps the leniency. ExposeAPIPort stays a *bool (its
+	// absent-vs-false distinction is load-bearing, see below).
 	var raw struct {
-		DebugLogging bool   `json:"debug_logging"`
-		AllowedHosts string `json:"allowed_hosts"`
-		EnableOrders bool   `json:"enable_orders"`
+		DebugLogging  bool            `json:"debug_logging"`
+		AllowedHosts  string          `json:"allowed_hosts"`
+		EnableOrders  bool            `json:"enable_orders"`
+		PreheatTime   json.RawMessage `json:"preheat_time"`
+		ExposeAPIPort *bool           `json:"expose_api_port"`
+		SyncInterval  json.RawMessage `json:"sync_interval"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return optionsFromEnv()
 	}
-	return options{
-		DebugLogging: raw.DebugLogging,
-		AllowedHosts: raw.AllowedHosts,
-		EnableOrders: raw.EnableOrders,
+	// key absent from an otherwise-valid options.json -- undefined !== false
+	apiPortExposed := true
+	if raw.ExposeAPIPort != nil {
+		apiPortExposed = *raw.ExposeAPIPort
 	}
+	return options{
+		DebugLogging:        raw.DebugLogging,
+		AllowedHosts:        raw.AllowedHosts,
+		EnableOrders:        raw.EnableOrders,
+		PreheatMinutes:      positiveIntOrDefault(raw.PreheatTime, 20),
+		APIPortExposed:      apiPortExposed,
+		SyncIntervalMinutes: positiveIntOrDefault(raw.SyncInterval, 5),
+	}
+}
+
+// positiveIntOrDefault returns a raw JSON field's value when it is a positive
+// integer, else def -- internal/system's "positive int, else 20/5" rule for
+// preheat_time and sync_interval. An absent or malformed field is just the
+// default; it never fails the caller.
+func positiveIntOrDefault(raw json.RawMessage, def int) int {
+	if len(raw) == 0 {
+		return def
+	}
+	var n json.Number
+	if err := json.Unmarshal(raw, &n); err != nil {
+		return def
+	}
+	v, err := n.Int64()
+	if err != nil || v <= 0 {
+		return def
+	}
+	return int(v)
 }
 
 // optionsFromEnv is parseOptionsFile's whole-file-missing/unparseable fallback
@@ -147,9 +194,22 @@ func parseOptionsFile() options {
 // used. allowed_hosts has no env fallback here -- it is "" either way.
 func optionsFromEnv() options {
 	return options{
-		DebugLogging: os.Getenv("GLP_DEBUG_LOGGING") == "true",
-		EnableOrders: os.Getenv("GLP_ENABLE_ORDERS") == "true",
+		DebugLogging:        os.Getenv("GLP_DEBUG_LOGGING") == "true",
+		EnableOrders:        os.Getenv("GLP_ENABLE_ORDERS") == "true",
+		PreheatMinutes:      positiveEnvInt("GLP_PREHEAT_TIME", 20),
+		APIPortExposed:      os.Getenv("GLP_EXPOSE_API_PORT") != "false",
+		SyncIntervalMinutes: positiveEnvInt("GLP_SYNC_INTERVAL", 5),
 	}
+}
+
+// positiveEnvInt returns name's value when it parses as a positive integer,
+// else def -- internal/system's env fallback rule for
+// GLP_PREHEAT_TIME/GLP_SYNC_INTERVAL.
+func positiveEnvInt(name string, def int) int {
+	if n, err := strconv.Atoi(os.Getenv(name)); err == nil && n > 0 {
+		return n
+	}
+	return def
 }
 
 // IsDebugLoggingEnabled reports whether debug logging is on: off by default,
