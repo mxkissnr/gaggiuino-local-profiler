@@ -61,7 +61,7 @@ func (h *Handlers) updatePuckScreen(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	puckScreen, _, found, err := UpdatePuckScreen(h.repo, id, body)
+	puckScreen, found, err := UpdatePuckScreen(h.repo, id, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {

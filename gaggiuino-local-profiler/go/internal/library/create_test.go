@@ -43,7 +43,7 @@ func TestCreateAndUpdate_ConcurrentWritersLoseNothing(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, _, found, err := UpdateBean(repo, 1, Entity{"notes": note}, nil); err != nil {
+			if _, found, err := UpdateBean(repo, 1, Entity{"notes": note}, nil); err != nil {
 				errs <- err
 			} else if !found {
 				errs <- fmt.Errorf("bean not found")

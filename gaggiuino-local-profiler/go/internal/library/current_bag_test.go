@@ -213,7 +213,7 @@ func TestUpdateBean_WritesIntoCurrentBag(t *testing.T) {
 		t.Fatalf("seeding bean: %v", err)
 	}
 
-	updated, _, found, err := UpdateBean(repo, 1, Entity{"roastDate": "2026-09-01"}, threeBagDoses())
+	updated, found, err := UpdateBean(repo, 1, Entity{"roastDate": "2026-09-01"}, threeBagDoses())
 	if err != nil {
 		t.Fatalf("UpdateBean: %v", err)
 	}

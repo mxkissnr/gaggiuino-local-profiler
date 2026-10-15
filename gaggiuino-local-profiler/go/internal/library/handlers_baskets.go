@@ -62,7 +62,7 @@ func (h *Handlers) updateBasket(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	basket, _, found, err := UpdateBasket(h.repo, id, body)
+	basket, found, err := UpdateBasket(h.repo, id, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {

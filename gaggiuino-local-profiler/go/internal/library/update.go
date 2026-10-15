@@ -13,17 +13,17 @@ import (
 // itself" reuse convention CreateBean et al. (create.go) already established
 // for POST, applied to PUT.
 //
-// Every UpdateX returns (updated entity, current Library, found, error):
-// found is false when id doesn't match any entity of that kind (including
-// id==0, the noMatch case callers pass through unchanged — see
-// parseIDParam's own doc comment on why 0 never collides with a real id).
+// Every UpdateX returns (updated entity, found, error): found is false when
+// id doesn't match any entity of that kind (including id==0, the noMatch
+// case callers pass through unchanged — see parseIDParam's own doc comment
+// on why 0 never collides with a real id). No UpdateX function returns a
+// Library: no caller ever read one.
 
 // UpdateBean applies a partial update to bean id, mirroring
 // PUT /api/library/bean/:id's own field-by-field patch semantics: omitted
 // fields keep their current value.
-func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.AnnotatedDose) (Entity, Library, bool, error) {
+func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.AnnotatedDose) (Entity, bool, error) {
 	var bean Entity
-	var saved Library
 	regionChanged := false
 	err := repo.Update(func(lib *Library) error {
 		idx := findBeanIndex(*lib, id)
@@ -159,28 +159,26 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 		}
 
 		lib.Beans[idx] = bean
-		saved = *lib
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return nil, Library{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, Library{}, false, err
+		return nil, false, err
 	}
 	if regionChanged {
 		region, _ := bean["region"].(string)
 		origin, _ := bean["origin"].(string)
 		maybeGeocode(id, region, origin)
 	}
-	return bean, saved, true, nil
+	return bean, true, nil
 }
 
 // UpdateGrinder applies a partial update to grinder id, mirroring
 // PUT /api/library/grinder/:id.
-func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, Library, bool, error) {
+func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var grinder Entity
-	var saved Library
 	err := repo.Update(func(lib *Library) error {
 		idx := findGrinderIndex(*lib, id)
 		if idx == -1 {
@@ -205,25 +203,23 @@ func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, Library, bo
 			grinder["burrsResetAt"] = v
 		}
 		lib.Grinders[idx] = grinder
-		saved = *lib
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return nil, Library{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, Library{}, false, err
+		return nil, false, err
 	}
-	return grinder, saved, true, nil
+	return grinder, true, nil
 }
 
 // UpdateBasket applies a partial update to basket id (PUT
 // /api/library/basket/:id), including its wallType/shape enum validation
 // (an invalid value is reported via the bool return going false with a nil
 // error — see ErrInvalidField).
-func UpdateBasket(repo *Repository, id int64, body Entity) (Entity, Library, bool, error) {
+func UpdateBasket(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var basket Entity
-	var saved Library
 	err := repo.Update(func(lib *Library) error {
 		idx := findBasketIndex(*lib, id)
 		if idx == -1 {
@@ -262,23 +258,21 @@ func UpdateBasket(repo *Repository, id int64, body Entity) (Entity, Library, boo
 		}
 		basket["updatedAt"] = newID()
 		lib.Baskets[idx] = basket
-		saved = *lib
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return nil, Library{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, Library{}, false, err
+		return nil, false, err
 	}
-	return basket, saved, true, nil
+	return basket, true, nil
 }
 
 // UpdatePuckScreen applies a partial update to puck screen id, mirroring
 // PUT /api/library/puckscreen/:id.
-func UpdatePuckScreen(repo *Repository, id int64, body Entity) (Entity, Library, bool, error) {
+func UpdatePuckScreen(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var puckScreen Entity
-	var saved Library
 	err := repo.Update(func(lib *Library) error {
 		idx := findPuckScreenIndex(*lib, id)
 		if idx == -1 {
@@ -307,23 +301,21 @@ func UpdatePuckScreen(repo *Repository, id int64, body Entity) (Entity, Library,
 		}
 		puckScreen["updatedAt"] = newID()
 		lib.PuckScreens[idx] = puckScreen
-		saved = *lib
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return nil, Library{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, Library{}, false, err
+		return nil, false, err
 	}
-	return puckScreen, saved, true, nil
+	return puckScreen, true, nil
 }
 
 // UpdateMilk applies a partial update to milk id, mirroring
 // PUT /api/library/milk/:id.
-func UpdateMilk(repo *Repository, id int64, body Entity) (Entity, Library, bool, error) {
+func UpdateMilk(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var milk Entity
-	var saved Library
 	err := repo.Update(func(lib *Library) error {
 		idx := findMilkIndex(*lib, id)
 		if idx == -1 {
@@ -343,23 +335,21 @@ func UpdateMilk(repo *Repository, id int64, body Entity) (Entity, Library, bool,
 		}
 		milk["updatedAt"] = newID()
 		lib.Milks[idx] = milk
-		saved = *lib
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return nil, Library{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, Library{}, false, err
+		return nil, false, err
 	}
-	return milk, saved, true, nil
+	return milk, true, nil
 }
 
 // UpdateRecipe applies a partial update to recipe id, mirroring
 // PUT /api/library/recipe/:id.
-func UpdateRecipe(repo *Repository, id int64, body Entity) (Entity, Library, bool, error) {
+func UpdateRecipe(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var recipe Entity
-	var saved Library
 	err := repo.Update(func(lib *Library) error {
 		idx := findRecipeIndex(*lib, id)
 		if idx == -1 {
@@ -414,14 +404,13 @@ func UpdateRecipe(repo *Repository, id int64, body Entity) (Entity, Library, boo
 			recipe["beanName"] = v
 		}
 		lib.Recipes[idx] = recipe
-		saved = *lib
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return nil, Library{}, false, nil
+		return nil, false, nil
 	}
 	if err != nil {
-		return nil, Library{}, false, err
+		return nil, false, err
 	}
-	return recipe, saved, true, nil
+	return recipe, true, nil
 }

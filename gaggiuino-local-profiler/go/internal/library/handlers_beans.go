@@ -64,7 +64,7 @@ func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	bean, _, found, err := UpdateBean(h.repo, id, body, doseRows)
+	bean, found, err := UpdateBean(h.repo, id, body, doseRows)
 	if err != nil {
 		internalError(w, err)
 		return
