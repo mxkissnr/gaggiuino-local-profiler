@@ -185,5 +185,22 @@
       }
     },
     "expected": null
+  },
+  {
+    "name": "extraction yield from TDS",
+    "shot": {
+      "datapoints": {
+        "pressure": [80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        "temperature": [900, 900, 900, 900, 900, 900, 900, 900, 900, 900],
+        "timeInShot": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
+        "shotWeight": [0, 450]
+      },
+      "duration": 300,
+      "annotation": {
+        "dose": 18,
+        "tds": 9.4
+      }
+    },
+    "expected": 96
   }
 ]
