@@ -78,7 +78,13 @@
                introduced; they are fixed here because the values were being
                touched anyway. */
             --ok:     #5cb98a;
+            /* #1622: the two in-between steps of the one five-step
+               score scale (>=88 --ok, >=75 --score-good, >=60 --warn,
+               >=45 --score-low, else --err). Both themes define them,
+               like --ok/--warn/--err above and below. */
+            --score-good: #a7c25c;
             --warn:   #d3a03f;
+            --score-low: #e0913f;
             --err:    #e0705f;
             /* --ice: the frozen-bean line and any ice accent; a cool
                blue that stays legible as small text on both themes
@@ -154,7 +160,9 @@
                light surface — a pre-existing failure the gray-scale audit in
                #397 never covered, because it only checked the grays. */
             --ok:     #2f7350;
+            --score-good: #4f6b1e;
             --warn:   #7d5510;
+            --score-low: #92451b;
             --err:    #a83526;
             --ice:    #1f6d95;
             --on-fill: #fff;

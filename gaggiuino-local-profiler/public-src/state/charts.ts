@@ -38,3 +38,31 @@ export function set(name: ChartName, chart: Chart | null): Chart | null {
   S[name] = chart;
   return chart;
 }
+
+// ── Shared Chart.js option fragments (#1622) ──────────────────────────────
+// Blocks that were byte-for-byte identical between the shot charts
+// (views/shots/charts.ts) and the live chart (views/live.ts). The value is
+// resolved per render (#814), so the theme colour is passed in, never baked
+// into a module constant. Anything that differs per chart (tooltips, scales,
+// legend layout) stays local to its view.
+
+/** The base options every shot chart repeats: fill the container, no
+ *  animation. Callers spread this and add their own plugins/scales. */
+export function chartBaseOptions(): {
+  responsive: boolean;
+  maintainAspectRatio: boolean;
+  // Literal false, not boolean: Chart.js types animation as `false | AnimationSpec`,
+  // so a widened boolean would not be assignable to the chart options.
+  animation: false;
+} {
+  return { responsive: true, maintainAspectRatio: false, animation: false };
+}
+
+/** The theme-resolved legend label style shared by the P·Q, fullscreen and
+ *  live charts (`textColor` is `chartColors().text`). */
+export function chartLegendLabels(textColor: string): {
+  color: string;
+  font: { family: string };
+} {
+  return { color: textColor, font: { family: 'Figtree' } };
+}

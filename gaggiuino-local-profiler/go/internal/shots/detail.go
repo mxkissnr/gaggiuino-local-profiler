@@ -13,10 +13,11 @@ package shots
 // of labor as ScoreDetail: this package computes the numbers, the
 // caller decides display formatting/units.
 //
-// Yield/Ratio/EY reuse CalcShotScoreDetail's own "final weight = max of the
-// weight series" convention (not calcBrewRatio's "last sample" convention)
-// so a shot's Metrics-Grid ratio always matches the ratio
-// CalcShotScoreDetail itself scored against.
+// Yield/Ratio/EY come from the shared shotYield rule (annotated totalWeight,
+// else annotated yield, else the maximum scale-weight sample) — the same rule
+// the share card uses. CalcShotScoreDetail (score.go) deliberately still
+// scores ratio/EY off the maximum scale weight alone, keeping parity with
+// public-src/shared/score.ts; see score.go.
 type ShotMetrics struct {
 	HasDose bool
 	DoseG   float64
@@ -64,13 +65,16 @@ func avgActive(vals []float64, threshold float64) (float64, bool) {
 }
 
 // detectPhases splits (times, pressures) into preinfusion/extraction, found as
-// the first sample at least 1s in where pressure crosses 3.5 bar.
-func detectPhases(times, pressures []float64) (preinfusion, extraction float64, ok bool) {
+// the first sample at least 1s in where pressure crosses 3.5 bar. endIdx is
+// that sample's index (times[endIdx] == preinfusion) so a caller drawing on an
+// index-based x axis — the share card — can place the phase boundary without
+// re-deriving it.
+func detectPhases(times, pressures []float64) (preinfusion, extraction float64, endIdx int, ok bool) {
 	if len(times) == 0 || len(pressures) < 5 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	const thresh = 3.5
-	endIdx := -1
+	endIdx = -1
 	for i := 0; i < len(pressures); i++ {
 		if i >= len(times) {
 			continue
@@ -81,14 +85,48 @@ func detectPhases(times, pressures []float64) (preinfusion, extraction float64, 
 		}
 	}
 	if endIdx <= 0 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	preinfusion = times[endIdx]
 	if preinfusion < 1.5 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	extraction = times[len(times)-1] - preinfusion
-	return preinfusion, extraction, true
+	return preinfusion, extraction, endIdx, true
+}
+
+// shotYield is the single yield rule shared by the share card and
+// ComputeShotMetrics: the shot's annotated totalWeight, else its annotated
+// yield (each only when > 0), else the maximum scale-weight sample — shotWeight
+// falling back to weight, with the same truthiness quirk CalcShotScoreDetail
+// (score.go) and public-src/shared/score.ts apply. score.go itself still scores
+// ratio/EY off the maximum scale weight alone, a deliberate divergence kept in
+// parity with the frontend scorer.
+func shotYield(shot Shot) (float64, bool) {
+	if shot == nil {
+		return 0, false
+	}
+	ann := toMap(shot["annotation"])
+	for _, key := range [...]string{"totalWeight", "yield"} {
+		if v, ok := toFloat(ann[key]); ok && v > 0 {
+			return v, true
+		}
+	}
+	d := DatapointsMap(shot)
+	// wArr replicates the `d.shotWeight || d.weight || []` truthiness quirk
+	// — see scoreSeries.weight's doc comment in score.go.
+	var wRaw any
+	if v, ok := d["shotWeight"]; ok && v != nil {
+		wRaw = v
+	} else if v, ok := d["weight"]; ok && v != nil {
+		wRaw = v
+	}
+	if wArr := floatSlice(wRaw); len(wArr) > 0 {
+		if maxW := maxOf(divAll(wArr, 10)); maxW > 0 {
+			return maxW, true
+		}
+	}
+	return 0, false
 }
 
 // ComputeShotMetrics derives the dose/yield/ratio/EY/duration/phase metrics
@@ -115,7 +153,7 @@ func ComputeShotMetrics(shot Shot) ShotMetrics {
 		m.DurationSecs = durationRaw / 10
 	}
 
-	if pre, ext, ok := detectPhases(times, pressures); ok {
+	if pre, ext, _, ok := detectPhases(times, pressures); ok {
 		m.PreinfusionSecs = pre
 		m.ExtractionSecs = ext
 		m.HasPhases = true
@@ -128,20 +166,9 @@ func ComputeShotMetrics(shot Shot) ShotMetrics {
 		m.HasDose = true
 	}
 
-	// wArr replicates the `d.shotWeight || d.weight || []` truthiness quirk
-	// — see CalcShotScoreDetail's own comment on the identical pattern in
-	// score.go.
-	var wRaw any
-	if v, ok := d["shotWeight"]; ok && v != nil {
-		wRaw = v
-	} else if v, ok := d["weight"]; ok && v != nil {
-		wRaw = v
-	}
-	if wArr := floatSlice(wRaw); len(wArr) > 0 {
-		if finalW := maxOf(divAll(wArr, 10)); finalW > 0 {
-			m.YieldG = finalW
-			m.HasYield = true
-		}
+	if y, ok := shotYield(shot); ok {
+		m.YieldG = y
+		m.HasYield = true
 	}
 
 	if m.HasDose && m.HasYield && m.DoseG > 0 {

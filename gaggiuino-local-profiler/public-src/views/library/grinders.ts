@@ -5,7 +5,7 @@ import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml, toIsoDateInput, localMidnightMs } from '../../utils.js';
 import type { Html } from '../../utils.js';
-import { WRENCH_ICON_SVG } from '../../icons.js';
+import { WRENCH_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
@@ -19,7 +19,6 @@ import * as libraryView from '../library.js';
 const library = libraryView;
 
 const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
 // Static burr-type suggestions for the grinder form (moved out of the old
 // <datalist> markup in index.html).

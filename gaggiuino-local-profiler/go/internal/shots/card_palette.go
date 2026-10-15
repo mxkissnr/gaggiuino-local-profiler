@@ -28,7 +28,7 @@ type palette struct {
 	accentFrom, accentTo          string
 	accentTintRGB                 string // "r,g,b" — wrap as rgba(<rgb>,<a>)
 	star, starDim                 string
-	ok, warn, err                 string
+	ok, good, warn, low, err      string
 }
 
 func (p palette) accentTint(alpha string) string {
@@ -57,12 +57,13 @@ var grayScales = map[string]map[int]string{
 	"light-crema": {200: "#2a1b0f", 400: "#55442f", 500: "#5f4c38", 700: "#d4b48c", 800: "#ead5b5", 900: "#f3e4ce", 950: "#fbf3e7"},
 }
 
-// semanticColors holds the semantic ok/warn/err colours per theme.
+// semanticColors holds the five-step semantic score colours per theme: the
+// ok/warn/err roles plus the good/low steps between them (#1622).
 var semanticColors = map[string]map[string]string{
-	"dark":        {"ok": "#5cb98a", "warn": "#d3a03f", "err": "#e0705f"},
-	"dark-crema":  {"ok": "#5cb98a", "warn": "#d3a03f", "err": "#e17363"},
-	"light":       {"ok": "#2f7350", "warn": "#7d5510", "err": "#a83526"},
-	"light-crema": {"ok": "#0d622c", "warn": "#7a4a05", "err": "#a71b1b"},
+	"dark":        {"ok": "#5cb98a", "good": "#a7c25c", "warn": "#d3a03f", "low": "#e0913f", "err": "#e0705f"},
+	"dark-crema":  {"ok": "#5cb98a", "good": "#a7c25c", "warn": "#d3a03f", "low": "#e0913f", "err": "#e17363"},
+	"light":       {"ok": "#2f7350", "good": "#4f6b1e", "warn": "#7d5510", "low": "#92451b", "err": "#a83526"},
+	"light-crema": {"ok": "#0d622c", "good": "#43601a", "warn": "#7a4a05", "low": "#8a4016", "err": "#a71b1b"},
 }
 
 func hexToRGB(hex string) (r, g, b int) {
@@ -177,21 +178,30 @@ func buildPalette(accent, theme string) palette {
 		accentTintRGB: fmt.Sprintf("%d,%d,%d", ar, ag, ab),
 		star:          pair[0],
 		starDim:       gray[700],
-		ok:            sem["ok"], warn: sem["warn"], err: sem["err"],
+		ok:            sem["ok"], good: sem["good"], warn: sem["warn"],
+		low: sem["low"], err: sem["err"],
 	}
 }
 
-// scoreColor maps score to the palette's ok/warn/err colour: ok >=90 /
-// warn >=70 / err below. A nil score is textMute.
+// scoreSteps is the five-step score scale, mirroring SCORE_STEPS in
+// public-src/utils.ts: ok >=88 / good >=75 / warn >=60 / low >=45 / err below.
+var scoreSteps = [...]int{88, 75, 60, 45}
+
+// scoreColor maps score to the palette's five-step score colour. A nil score
+// is textMute.
 func scoreColor(score *int, p palette) string {
 	if score == nil {
 		return p.textMute
 	}
 	switch {
-	case *score >= 90:
+	case *score >= scoreSteps[0]:
 		return p.ok
-	case *score >= 70:
+	case *score >= scoreSteps[1]:
+		return p.good
+	case *score >= scoreSteps[2]:
 		return p.warn
+	case *score >= scoreSteps[3]:
+		return p.low
 	default:
 		return p.err
 	}
