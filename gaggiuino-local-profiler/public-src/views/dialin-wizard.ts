@@ -15,6 +15,7 @@ import { saveBeanKnownGrind } from '../api/library.js';
 import { annotateShot }          from '../api/shots.js';
 import type { ShotAnnotationInput } from '../api/types.js';
 import { esc, html, joinHtml, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
+import { parseBrewRatio } from '../shared/score.js';
 import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
@@ -138,7 +139,9 @@ export function openDialinWizard(prefill: DialinPrefill = {}): void {
       beanId,
       grinder: prefill.grinderName || (bean?.knownGrindSettings as { grinder?: string }[] | undefined)?.[0]?.grinder || '',
       dose: prefill.dose ?? '',
-      targetRatio: bean?.brewRatio ? _parseRatio(bean.brewRatio as string | number | null | undefined) : 2,
+      // `|| 2` (not `?? 2`): the shared parser yields 0 for "1:0", which is
+      // not a usable target — keep the old fallback to 2 for non-positive ratios.
+      targetRatio: bean?.brewRatio ? parseBrewRatio(bean.brewRatio as string | number | null | undefined) || 2 : 2,
       recipeId: prefill.recipeId ?? null,
       startGrind: startGrind ?? '',
       rounds: [],
@@ -175,12 +178,6 @@ export function closeDialinWizard(): void {
   modal.classList.remove('open');
   modal.style.display = 'none';
   _stopPoll();
-}
-
-function _parseRatio(brewRatio: string | number | null | undefined): number {
-  const m = String(brewRatio || '').trim().match(/^1\s*:\s*([\d.]+)$/);
-  const n = m ? parseFloat(m[1] ?? '') : NaN;
-  return Number.isFinite(n) && n > 0 ? n : 2;
 }
 
 // Starting-grind heuristic (plan §1): best historical (grinder, grind)

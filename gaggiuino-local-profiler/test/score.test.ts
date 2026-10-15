@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calcShotScore, calcShotScoreDetail } from '../public-src/shared/score.js';
+import { calcShotScore, calcShotScoreDetail, parseBrewRatio } from '../public-src/shared/score.js';
+import { detectChanneling } from '../public-src/utils.js';
 
 describe('calcShotScore', () => {
     it('returns null for a shot with no datapoints', () => {
@@ -209,5 +210,55 @@ describe('calcShotScoreDetail — sub-5-bar pressure (#1538)', () => {
     it('needs at least 4 samples above 0 to score at all', () => {
         expect(calcShotScoreDetail({ datapoints: { pressure: [40, 40, 40] } }).score).toBeNull();
         expect(calcShotScoreDetail({ datapoints: { pressure: [40, 40, 40, 40] }, duration: 300 }).score).not.toBeNull();
+    });
+});
+
+// #1622: the profile-suggestion and dial-in-wizard copies of the ratio parser
+// disagreed with this one (which mirrors Go's parseBrewRatioTarget). They now
+// delegate here; pin the inputs where they used to differ so a future
+// "cleanup" cannot silently change the chosen behaviour.
+describe('parseBrewRatio (#1622 single parser)', () => {
+    it('parses the canonical 1:<number> forms', () => {
+        expect(parseBrewRatio('1:2')).toBe(2);
+        expect(parseBrewRatio('1 : 2.5')).toBe(2.5);
+        expect(parseBrewRatio(' 1:2 ')).toBe(2);
+        expect(parseBrewRatio('1:2.50')).toBe(2.5);
+    });
+
+    it('accepts a zero right-hand side, unlike the removed copies', () => {
+        expect(parseBrewRatio('1:0')).toBe(0);    // old copies: null / 2
+        expect(parseBrewRatio('1:0.0')).toBe(0);  // old copies: null / 2
+        expect(parseBrewRatio('1:00')).toBe(0);   // old copies: null / 2
+    });
+
+    it('rejects malformed numbers the old permissive regex accepted', () => {
+        expect(parseBrewRatio('1:2.')).toBeNull();     // old copies: 2
+        expect(parseBrewRatio('1:.5')).toBeNull();     // old copies: 0.5
+        expect(parseBrewRatio('1:5.')).toBeNull();     // old copies: 5
+        expect(parseBrewRatio('1:2.5.6')).toBeNull();  // old copies: 2.5
+        expect(parseBrewRatio('1:2..3')).toBeNull();   // old copies: 2
+    });
+
+    it('rejects anything that is not 1:<number>', () => {
+        for (const bad of ['', 'not a ratio', '2:1', '1:', 'ratio 1:2', '1,2']) {
+            expect(parseBrewRatio(bad)).toBeNull();
+        }
+        expect(parseBrewRatio(undefined)).toBeNull();
+        expect(parseBrewRatio(null)).toBeNull();
+        expect(parseBrewRatio(2.5)).toBeNull();
+    });
+});
+
+// #1622: shared/score.ts now scores channeling through this single detector.
+// Pinned because the removed private copy lacked the out-of-range guard and
+// could false-positive when the time axis is shorter than the pressure axis.
+describe('detectChanneling (#1622 single detector)', () => {
+    it('flags a >1.5 bar drop over a 0-3 s step once pressure is above 5 bar', () => {
+        expect(detectChanneling([0, 1, 2, 3, 4], [50, 60, 70, 66, 65])).toBe(true);
+    });
+
+    it('ignores out-of-range time samples instead of false-positiving', () => {
+        // 70 -> 63.5 bar is a 6.5 bar drop, but there is no time sample there.
+        expect(detectChanneling([0], [70, 63.5, 60, 55, 50])).toBe(false);
     });
 });

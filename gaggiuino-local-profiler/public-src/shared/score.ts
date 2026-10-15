@@ -4,6 +4,7 @@
 // round-trip. Pure function — no DOM deps. Inputs are the raw shot object
 // (×10 integer curves).
 
+import { detectChanneling } from '../utils.js';
 import type { ShotDatapoints } from '../utils.js';
 
 /**
@@ -41,24 +42,13 @@ function _stddev(vals: number[]): number {
   return Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length);
 }
 
-function _detectChanneling(times: number[], pressures: number[]): boolean {
-  if (!times || !times.length || pressures.length < 5) return false;
-  for (let i = 1; i < pressures.length; i++) {
-    const prev = pressures[i - 1];
-    const cur = pressures[i];
-    if (prev === undefined || cur === undefined) continue;
-    if (prev < 5) continue;
-    const dt = (times[i] ?? NaN) - (times[i - 1] ?? NaN);
-    if (dt <= 0 || dt > 3) continue;
-    if (prev - cur > 1.5) return true;
-  }
-  return false;
-}
-
 // "1:2.4" -> 2.4 — the bean form's own brewRatio convention (see
 // sanitize-bean.js). Anything that doesn't match (empty, freeform notes,
 // old data predating the field) yields null so callers fall back cleanly.
-function _parseBrewRatioTarget(brewRatio: string | number | null | undefined): number | null {
+// This is the single brew-ratio parser (#1622): it must stay in parity with
+// Go's parseBrewRatioTarget (go/internal/shots/score.go), so the profile
+// suggestion and dial-in wizard reuse it rather than carrying their own.
+export function parseBrewRatio(brewRatio: string | number | null | undefined): number | null {
   if (!brewRatio) return null;
   const m = String(brewRatio).match(/^\s*1\s*:\s*(\d+(?:\.\d+)?)\s*$/);
   const captured = m?.[1];
@@ -201,7 +191,7 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): ScoreDetailResult {
     const r = finalW / ann.dose;
     // Bean's own brewRatio recommendation (#450) replaces the generic
     // 1.8–2.5 band as the target when set.
-    const beanRatioTarget = beanRec ? _parseBrewRatioTarget(beanRec.brewRatio as string | number | undefined) : null;
+    const beanRatioTarget = beanRec ? parseBrewRatio(beanRec.brewRatio as string | number | undefined) : null;
     if (beanRatioTarget != null) {
       const dev = Math.abs(r - beanRatioTarget);
       s = dev <= 0.35 ? 100 : dev <= 0.75 ? 75 : Math.max(15, 75 - (dev - 0.75) * 30);
@@ -226,7 +216,9 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): ScoreDetailResult {
   }
 
   const times = (d.timeInShot || []).map(v => v / 10);
-  scores.push(_detectChanneling(times, p) ? 20 : 100); weights.push(15);
+  // Channeling uses the shared utils.detectChanneling — the one copy that
+  // matches Go's sample-skipping on out-of-range times (#1622).
+  scores.push(detectChanneling(times, p) ? 20 : 100); weights.push(15);
 
   const tw = weights.reduce((a, b) => a + b, 0);
   const score = tw ? Math.round(scores.reduce((acc, v, i) => acc + v * (weights[i] ?? 0), 0) / tw) : null;
