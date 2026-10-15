@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -288,6 +290,40 @@ func TestIsDebugLoggingEnabled_DelegatesToOptions(t *testing.T) {
 	writeOptionsFileAt(t, path, `{"debug_logging":false}`, base.Add(time.Second))
 	if IsDebugLoggingEnabled() {
 		t.Error("debug_logging:false: IsDebugLoggingEnabled() = true, want false")
+	}
+}
+
+// TestDebugLogf_GatedByDebugLogging pins internal/config.DebugLogf's two
+// behaviours (#1622 slice 12): with debug_logging on it writes one line carrying
+// the "[debug] " prefix, and with it off it stays silent. internal/importer and
+// internal/system now route their debug traces through it, so this one test
+// covers the gate both of them relied on.
+func TestDebugLogf_GatedByDebugLogging(t *testing.T) {
+	resetOptionsCacheForTest(t)
+	path := filepath.Join(t.TempDir(), "options.json")
+	OptionsFile = path
+
+	var buf bytes.Buffer
+	origOut := log.Writer()
+	origFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(origOut)
+		log.SetFlags(origFlags)
+	})
+
+	writeOptionsFileAt(t, path, `{"debug_logging":false}`, time.Now())
+	DebugLogf("hidden %d", 1)
+	if got := buf.String(); got != "" {
+		t.Fatalf("debug_logging:false: DebugLogf wrote %q, want nothing", got)
+	}
+
+	expireOptionsCacheTTLForTest(t)
+	writeOptionsFileAt(t, path, `{"debug_logging":true}`, time.Now().Add(time.Second))
+	DebugLogf("visible %d", 2)
+	if got, want := buf.String(), "[debug] visible 2\n"; got != want {
+		t.Fatalf("debug_logging:true: DebugLogf wrote %q, want %q", got, want)
 	}
 }
 

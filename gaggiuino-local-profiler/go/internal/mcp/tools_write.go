@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"strconv"
 	"strings"
 
@@ -339,21 +338,8 @@ func formatValidationIssues(issues []shots.ValidationIssue) string {
 	return strings.Join(parts, "; ")
 }
 
-// annotationRating reads a stored annotation value as a 1-5 rating, rejecting
-// out-of-range and fractional numbers the same way the read tools do.
+// annotationRating reads a stored annotation value as a 1-5 rating through the
+// same ratingValue parser the read tools use (#1622 slice 12).
 func annotationRating(ann map[string]any) (int, bool) {
-	switch v := ann["rating"].(type) {
-	case float64:
-		if !(v >= 1 && v <= 5) || v != math.Trunc(v) {
-			return 0, false
-		}
-		return int(v), true
-	case int:
-		if v < 1 || v > 5 {
-			return 0, false
-		}
-		return v, true
-	default:
-		return 0, false
-	}
+	return ratingValue(ann["rating"])
 }
