@@ -650,7 +650,6 @@ const de: Partial<Translations> = {
     share_card_tooltip:'Shot als PNG-Karte exportieren / teilen',
     onboarding_banner_msg:(host)=>`Gaggiuino unter ${host} nicht erreichbar — Maschinen-Host unter Einstellungen → Maschinen prüfen`,
     onboarding_wiki_link:'Einrichtungshilfe',
-    legacy_machine_options_banner_msg:'Maschinen-Host/Schalter-Entity werden nicht mehr über die App-Optionen konfiguriert — bitte unter Einstellungen → Maschinen bestätigen oder anpassen.',
     onboarding_step1:'Maschinen-Host unter Einstellungen → Maschinen setzen',
     onboarding_step2:'Sicherstellen, dass die Gaggiuino-Maschine im gleichen Netzwerk erreichbar ist',
     onboarding_demo_btn:'Demo-Daten laden',

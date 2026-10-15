@@ -154,7 +154,7 @@ func gaggiMateControlFirmware(v string) bool {
 // flush state. ok is false when there is no connected session, the cached
 // status is stale, or the firmware is older than v1.9.0.
 func (a *GaggiMateAdapter) ControlState(m *Machine) (ControlState, bool) {
-	if a.live == nil || m == nil {
+	if m == nil {
 		return ControlState{}, false
 	}
 	baseURL, ok := normalizeBaseURL(m.Host)

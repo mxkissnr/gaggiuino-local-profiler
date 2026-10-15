@@ -3,6 +3,7 @@ package shots
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -74,6 +75,30 @@ func insertShot(t testing.TB, sqlDB *sql.DB, id, timestamp int64, duration *int6
 			t.Fatalf("inserting annotation for shot %d: %v", id, err)
 		}
 	}
+}
+
+// insertTrashEntry writes a trash row directly, bypassing MoveToTrash so a
+// test can pin an explicit deleted_at instead of time.Now().
+func insertTrashEntry(t testing.TB, sqlDB *sql.DB, shotID, deletedAt int64) {
+	t.Helper()
+	if _, err := sqlDB.Exec(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`, shotID, deletedAt); err != nil {
+		t.Fatalf("inserting trash entry for shot %d: %v", shotID, err)
+	}
+}
+
+// trashEntry reads a shot's deleted_at straight from the trash table, so an
+// assertion can still see an orphan row with no matching shots row.
+func trashEntry(t testing.TB, sqlDB *sql.DB, shotID int64) (int64, bool) {
+	t.Helper()
+	var deletedAt int64
+	err := sqlDB.QueryRow(`SELECT deleted_at FROM trash WHERE shot_id = ?`, shotID).Scan(&deletedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false
+	}
+	if err != nil {
+		t.Fatalf("reading trash entry for shot %d: %v", shotID, err)
+	}
+	return deletedAt, true
 }
 
 func decodeBody(t testing.TB, body []byte) map[string]any {

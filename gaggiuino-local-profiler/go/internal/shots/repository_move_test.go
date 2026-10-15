@@ -53,14 +53,10 @@ func TestMoveMisfiledShot_MovesRowAndChildren(t *testing.T) {
 	if ann["dose"] == nil {
 		t.Fatalf("annotation lost in move: %+v", ann)
 	}
-	if _, ok, err := repo.GetTrashEntry(20_000_005); err != nil {
-		t.Fatalf("GetTrashEntry(20000005): %v", err)
-	} else if !ok {
+	if _, ok := trashEntry(t, sqlDB, 20_000_005); !ok {
 		t.Fatalf("trash entry not re-keyed to 20000005")
 	}
-	if _, ok, err := repo.GetTrashEntry(5); err != nil {
-		t.Fatalf("GetTrashEntry(5): %v", err)
-	} else if ok {
+	if _, ok := trashEntry(t, sqlDB, 5); ok {
 		t.Fatalf("old trash entry for 5 still present")
 	}
 

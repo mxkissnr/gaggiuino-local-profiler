@@ -675,7 +675,6 @@ const fr: Partial<Translations> = {
     card_fmt_story:'Story (9:16)',
     share_card_tooltip:'Exporter/partager le shot en carte PNG',
     onboarding_banner_msg:(host)=>`Gaggiuino sur ${host} injoignable — vérifiez l'hôte de la machine dans Paramètres → Machines`,
-    legacy_machine_options_banner_msg:'L\'hôte machine/l\'entité interrupteur ne se configurent plus via les options de l\'application — merci de confirmer ou modifier dans Paramètres → Machines.',
     onboarding_wiki_link:'Aide à la configuration',
     onboarding_step1:"Définir l'hôte de la machine dans Paramètres → Machines",
     onboarding_step2:'Vérifier que le contrôleur Gaggiuino est sur le même réseau',

@@ -537,7 +537,6 @@ components:
       properties:
         shotCount:          { type: integer }
         lastSync:            { type: string, format: date-time, nullable: true }
-        syncRetryCount:      { type: integer, description: "Current retry attempt (0 = normal schedule, 1–3 = backing off)" }
         machineVersion:      { type: string, nullable: true }
         syncInterval:        { type: integer, description: Minutes }
         haConnected:         { type: boolean }
@@ -549,7 +548,6 @@ components:
         lastMachineSuccess:  { type: integer, nullable: true, description: Unix ms of the last successful poll of the default machine }
         machineOn:           { type: boolean, nullable: true, description: Default machine's tracked power-switch state }
         machineOnSince:      { type: integer, nullable: true, description: Unix ms the default machine last switched on }
-        legacyMachineOptionsPending: { type: boolean, description: "True while the default machine still has an unconfirmed legacy machine_host/switch_entity add-on option (#662)" }
         installId:           { type: string, description: "Stable per-database identity (#751) — changes only when glp.db is freshly (re)created" }
         dataEpoch:           { type: string, description: "Server data-revision epoch (#1539); changes when the process restarts and resets dataRevs, telling a client to drop the revisions it has seen" }
         dataRevs:

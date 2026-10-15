@@ -14,12 +14,11 @@ import (
 // Repository is the SQL DB access for shots, annotations and the related
 // trash/blocklist tables. It grew with the domains that needed it: the
 // machineId-scoped variants, FindAll, GetAnnotatedDoses, GetAnnotation,
-// GetLatestID, GetTrashEntry, SetTrashEntry, WipeAll and Upsert serve the
-// orders/maintenance/backup domains, and Count (#901) serves GET /api/status's
-// shotCount. Deliberately still absent are the import/sync-path helpers (bulk
-// upsert, max-id, all-annotations and machine-id reads) — no HTTP route
-// reaches them yet; add them alongside the sync/import domain that calls
-// them.
+// GetLatestID and Upsert serve the orders/maintenance/backup domains, and
+// Count (#901) serves GET /api/status's shotCount. Deliberately still absent
+// are the import/sync-path helpers (bulk upsert, max-id, all-annotations and
+// machine-id reads) — no HTTP route reaches them yet; add them alongside the
+// sync/import domain that calls them.
 type Repository struct {
 	db *sql.DB
 }
@@ -290,50 +289,6 @@ func (r *Repository) Count() (int, error) {
 		return 0, fmt.Errorf("shots: counting: %w", err)
 	}
 	return n, nil
-}
-
-// GetTrashEntry returns a single trash row's deleted_at, or (0, false) if the
-// shot isn't trashed. Used by the backup export, which needs a per-shot
-// timestamp rather than FindTrashed's full hydrated rows.
-func (r *Repository) GetTrashEntry(shotID int64) (deletedAt int64, ok bool, err error) {
-	err = r.db.QueryRow(`SELECT deleted_at FROM trash WHERE shot_id = ?`, shotID).Scan(&deletedAt)
-	if err == sql.ErrNoRows {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, fmt.Errorf("shots: reading trash entry for shot %d: %w", shotID, err)
-	}
-	return deletedAt, true, nil
-}
-
-// SetTrashEntry is the restore-only counterpart to MoveToTrash: it takes the
-// deletedAt timestamp from the backup instead of always stamping time.Now(),
-// so a restored trash entry keeps its original deletion time rather than
-// resetting the 30-day TTL clock.
-func (r *Repository) SetTrashEntry(shotID, deletedAt int64) error {
-	if _, err := r.db.Exec(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`, shotID, deletedAt); err != nil {
-		return fmt.Errorf("shots: setting trash entry for shot %d: %w", shotID, err)
-	}
-	return nil
-}
-
-// WipeAll deletes every shot, annotation and trash row. Used only by the
-// backup domain's restore path, which replaces the whole shots table.
-func (r *Repository) WipeAll() error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("shots: starting wipe tx: %w", err)
-	}
-	for _, stmt := range []string{`DELETE FROM annotations`, `DELETE FROM trash`, `DELETE FROM shot_score_cache`, `DELETE FROM shots`} {
-		if _, err := tx.Exec(stmt); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("shots: wiping (%s): %w", stmt, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("shots: committing wipe: %w", err)
-	}
-	return nil
 }
 
 // Upsert writes the shots row (and, if the shot object carries an `annotation`
@@ -972,45 +927,16 @@ func (r *Repository) GetBlocklist() ([]string, error) {
 	return out, rows.Err()
 }
 
-// SaveBlocklist replaces the entire table contents inside one transaction.
-func (r *Repository) SaveBlocklist(list []string) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("shots: starting blocklist save tx: %w", err)
-	}
-	if _, err := tx.Exec(`DELETE FROM blocklist`); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: clearing blocklist: %w", err)
-	}
-	stmt, err := tx.Prepare(`INSERT INTO blocklist (value) VALUES (?)`)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: preparing blocklist insert: %w", err)
-	}
-	defer stmt.Close()
-	for _, v := range list {
-		if _, err := stmt.Exec(v); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("shots: inserting blocklist entry %q: %w", v, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("shots: committing blocklist save: %w", err)
-	}
-	return nil
-}
-
-// AppendToBlocklist atomically adds a single value to the blocklist without
-// the read-then-replace round trip SaveBlocklist requires for a single-id add.
-// Its callers run concurrently (today the sync path, internal/system/sync.go):
-// two overlapping callers can each read the same blocklist
-// snapshot via GetBlocklist, append their own id, and then SaveBlocklist —
-// whose DELETE+re-INSERT replaces the whole table — so the second write
-// silently drops the first caller's id (#901). blocklist.value has a UNIQUE
-// constraint (see internal/db/db.go), so INSERT OR IGNORE is a single atomic
-// statement with no read step and therefore no lost-update window. The
-// user-facing delete handler no longer needs this: it blocklists inside the
-// same transaction that deletes the shot (#1609, Repository.DeleteAndBlocklist).
+// AppendToBlocklist atomically adds a single value to the blocklist. Its
+// callers run concurrently (today the sync path, internal/system/sync.go):
+// a read-then-replace round trip (GetBlocklist, append locally, write the
+// whole list back) lets two overlapping callers each write a snapshot taken
+// before the other's insert, so the second write silently drops the first
+// caller's id (#901). blocklist.value has a UNIQUE constraint (see
+// internal/db/db.go), so INSERT OR IGNORE is a single atomic statement with no
+// read step and therefore no lost-update window. The user-facing delete
+// handler no longer needs this: it blocklists inside the same transaction that
+// deletes the shot (#1609, Repository.DeleteAndBlocklist).
 func (r *Repository) AppendToBlocklist(value string) error {
 	if _, err := r.db.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, value); err != nil {
 		return fmt.Errorf("shots: appending blocklist entry %q: %w", value, err)

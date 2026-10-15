@@ -277,11 +277,7 @@ func (h *Handlers) getToken(w http.ResponseWriter, r *http.Request) {
 //
 // lastSync/lastSyncError come from POST /api/sync's manual pull loop (sync.go),
 // so GET /api/status reports real values once a sync has run (null until
-// then). syncRetryCount stays permanently 0 — the automatic retry/backoff
-// scheduler (scheduleNextSync) is still not implemented, there being no
-// automatic sync loop for it to hang off; it's present in the response
-// (matching openapi.yaml's Status schema) so a client parsing it doesn't
-// break.
+// then).
 //
 // #1201, follow-up on PR #1221: GET /api/status's `machines[]` array now
 // reports each machine's own reachable/firmwareVersion (buildStatusMachines,
@@ -384,24 +380,22 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]any{
-		"shotCount":                   shotCount,
-		"lastSync":                    nullableStr(syncInfo.LastSync),
-		"syncRetryCount":              0,
-		"machineVersion":              info.CachedMachineVersion,
-		"syncInterval":                loadSyncIntervalMinutes(),
-		"haConnected":                 h.poller.ha.Enabled(),
-		"glpVersion":                  glpVersion,
-		"ordersFeature":               isOrdersEnabled(),
-		"exposeApiPort":               isApiPortExposed(),
-		"machineReachable":            machineReachable,
-		"lastMachineSuccess":          info.LastMachineSuccess,
-		"machineOn":                   snap.MachineOn,
-		"machineOnSince":              snap.SwitchOnAt,
-		"legacyMachineOptionsPending": hasUnconfirmedLegacyMachineOptions(),
-		"installId":                   installID,
-		"dataEpoch":                   dataEpoch,
-		"dataRevs":                    dataRevs,
-		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
+		"shotCount":          shotCount,
+		"lastSync":           nullableStr(syncInfo.LastSync),
+		"machineVersion":     info.CachedMachineVersion,
+		"syncInterval":       loadSyncIntervalMinutes(),
+		"haConnected":        h.poller.ha.Enabled(),
+		"glpVersion":         glpVersion,
+		"ordersFeature":      isOrdersEnabled(),
+		"exposeApiPort":      isApiPortExposed(),
+		"machineReachable":   machineReachable,
+		"lastMachineSuccess": info.LastMachineSuccess,
+		"machineOn":          snap.MachineOn,
+		"machineOnSince":     snap.SwitchOnAt,
+		"installId":          installID,
+		"dataEpoch":          dataEpoch,
+		"dataRevs":           dataRevs,
+		"machines":           buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
 	}
 	if devBuild := os.Getenv("GLP_DEV_BUILD"); devBuild != "" {
 		resp["devBuild"] = devBuild

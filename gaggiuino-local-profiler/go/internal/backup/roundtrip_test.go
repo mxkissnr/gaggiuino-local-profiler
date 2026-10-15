@@ -75,14 +75,12 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h1, deps1, _ := newTestHandlers(t)
+	h1, deps1, sqlDB := newTestHandlers(t)
 	mux1 := newMux(h1)
 
 	seedShot(t, deps1, 42)
 	seedShot(t, deps1, 43)
-	if err := deps1.ShotsRepo.SetTrashEntry(43, 1234567); err != nil {
-		t.Fatal(err)
-	}
+	insertTrashEntry(t, sqlDB, 43, 1234567)
 	seedOrder(t, deps1)
 	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "rt note", "gaggiuino.local", 5, 1, time.Now()); err != nil {
 		t.Fatal(err)
@@ -92,7 +90,7 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := deps1.ShotsRepo.SaveBlocklist([]string{"77"}); err != nil {
+	if err := deps1.ShotsRepo.AppendToBlocklist("77"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -246,7 +244,7 @@ func TestStreamedBackupJSON_StructuralShape(t *testing.T) {
 	mux := newMux(h)
 	seedShot(t, deps, 1)
 	seedOrder(t, deps)
-	if err := deps.ShotsRepo.SaveBlocklist([]string{"5"}); err != nil {
+	if err := deps.ShotsRepo.AppendToBlocklist("5"); err != nil {
 		t.Fatal(err)
 	}
 

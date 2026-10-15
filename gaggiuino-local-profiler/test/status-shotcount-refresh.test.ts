@@ -22,7 +22,7 @@ g.localStorage = {
   setItem: (k: string, v: unknown) => { _store.set(k, String(v)); },
   removeItem: (k: string) => { _store.delete(k); },
 };
-// updateMachineBanner()/updateLegacyMachineOptionsBanner() read sessionStorage
+// updateMachineBanner() reads sessionStorage
 // before the shot-count block, so it must exist or the outer try swallows the
 // reference error and the shot-count branch never runs.
 g.sessionStorage = {

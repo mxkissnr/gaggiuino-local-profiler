@@ -13,8 +13,7 @@ import (
 // that never materialises the whole shots table, a lightweight trash
 // id->timestamp map, and RestoreShots — the single-transaction structured
 // shots restore (wipe + upserts + annotations + trash + blocklist +
-// library) that replaces backup.applyRestore's WipeAll + per-shot Upsert
-// loop.
+// library) that replaces backup.applyRestore's per-shot Upsert loop.
 
 // backupShotBatch is ForEachShotForBackup's default page size — how many
 // hydrated shots the keyset scan pulls per round trip. Small enough that a

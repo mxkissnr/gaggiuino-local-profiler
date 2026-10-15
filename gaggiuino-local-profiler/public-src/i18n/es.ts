@@ -675,7 +675,6 @@ const es: Partial<Translations> = {
     card_fmt_story:'Historia (9:16)',
     share_card_tooltip:'Exportar/compartir el shot como tarjeta PNG',
     onboarding_banner_msg:(host)=>`No se puede conectar con Gaggiuino en ${host} — revisa el host de la máquina en Ajustes → Máquinas`,
-    legacy_machine_options_banner_msg:'El host de la máquina/la entidad de interruptor ya no se configuran mediante las opciones de la app — confírmalos o actualízalos en Ajustes → Máquinas.',
     onboarding_wiki_link:'Ayuda de configuración',
     onboarding_step1:'Configura el host de la máquina en Ajustes → Máquinas',
     onboarding_step2:'Asegúrate de que el controlador Gaggiuino esté en la misma red',

@@ -21,8 +21,7 @@
 // poll's first call, so both are load-bearing for real clients. See
 // handlers.go's getToken/getStatus doc comments for exactly which fields those
 // two report. GET /api/status's lastSync/lastSyncError come from POST
-// /api/sync's manual pull loop (sync.go); syncRetryCount stays permanently 0
-// because there is no automatic retry/backoff scheduler for it to hang off.
+// /api/sync's manual pull loop (sync.go).
 //
 // The H2 debug-only GET /api/debug/machine lives in internal/debug alongside
 // export-db/import-db.
@@ -47,9 +46,7 @@
 //	status.go    GET /api/status's pure-logic pieces —
 //	             statusMachine/buildStatusMachines (the `machines` array),
 //	             apiURLAndHostnameFor/hostnameOnly (machineUrl/
-//	             machineHostname string formatting), and
-//	             hasUnconfirmedLegacyMachineOptions (a documented stub —
-//	             see its own doc comment for why).
+//	             machineHostname string formatting).
 //	version.go   GET /api/version's GitHub-release check.
 //	demo.go      POST /api/demo/{seed,end}.
 //	handlers.go  the REST surface for everything above.
@@ -85,16 +82,13 @@
 //     machine is pulled over the same /api/shots REST surface as the default
 //     one, a GaggiMate through its history adapter — so the default machine's
 //     own retry/backoff stays the only thing driven by a sync result. Still
-//     not implemented are syncProgress, syncRetryCount (the backoff is tracked
-//     locally in runScheduledSync, not exposed), and the backgroundHaCheck
+//     not implemented are syncProgress and the backgroundHaCheck
 //     `if (!cachedMachineVersion) fetchMachineVersion()` fallback: pollViaGaggiuinoStatus
 //     already opportunistically captures each machine's cached version from its
 //     successful status polls and shot syncs, and drops it again on an
 //     unreachable->reachable transition (#1197/#1201); fetchMachineVersion is
 //     only a fallback path for when polling itself isn't running, e.g. switch
-//     off. GET /api/status's syncRetryCount field is consequently always 0 —
-//     it describes exactly this unimplemented piece of the engine — see
-//     handlers.go's getStatus doc comment.
+//     off.
 //
 //     syncNativeMaintenance() (#578) is no longer in that list: #1639
 //     re-implements it. The Gaggiuino adapter's GetServiceLog and the
@@ -123,11 +117,9 @@
 //     implemented).
 //
 //   - The write side of reconciling a legacy machine_host/switch_entity
-//     add-on option into the registry (adoptOptionChanges) — GET /api/status's
-//     legacyMachineOptionsPending field is consequently a documented
-//     always-false stub; see status.go's hasUnconfirmedLegacyMachineOptions
-//     doc comment for why implementing the read side alone isn't meaningful
-//     without it.
+//     add-on option into the registry (adoptOptionChanges); its read side
+//     (GET /api/status's legacyMachineOptionsPending) was removed as dead
+//     code (#1621).
 //
 // # internal/orders' shop-broadcast
 //

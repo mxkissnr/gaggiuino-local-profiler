@@ -7736,8 +7736,6 @@ export interface components {
             shotCount?: number;
             /** Format: date-time */
             lastSync?: string | null;
-            /** @description Current retry attempt (0 = normal schedule, 1–3 = backing off) */
-            syncRetryCount?: number;
             machineVersion?: string | null;
             /** @description Minutes */
             syncInterval?: number;
@@ -7755,8 +7753,6 @@ export interface components {
             machineOn?: boolean | null;
             /** @description Unix ms the default machine last switched on */
             machineOnSince?: number | null;
-            /** @description True while the default machine still has an unconfirmed legacy machine_host/switch_entity add-on option (#662) */
-            legacyMachineOptionsPending?: boolean;
             /** @description Stable per-database identity (#751) — changes only when glp.db is freshly (re)created */
             installId?: string;
             /** @description Server data-revision epoch (#1539); changes when the process restarts and resets dataRevs, telling a client to drop the revisions it has seen */

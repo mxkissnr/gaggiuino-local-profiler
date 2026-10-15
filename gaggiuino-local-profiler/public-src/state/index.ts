@@ -122,7 +122,6 @@ export interface MachinesSlice {
   activeMachineId: number | 'all' | null;
   machineProfiles: MachineProfileRow[];
   machineProfilesStale: boolean;
-  legacyMachineOptionsPending: boolean; // #662
 }
 
 export interface UiSlice {
@@ -259,7 +258,6 @@ export const S: AppState = {
   _ordersDeclineOpen: {},
   _ordersStatsOpen: false,
   machineReachable: null,
-  legacyMachineOptionsPending: false, // #662
   // #735: SSE push connection state -- null = "not yet known" (treated the
   // same as false by consumers until proven true), true once EventSource
   // has successfully opened at least once, false once fallback detection
@@ -296,15 +294,6 @@ export const S: AppState = {
   setupWizardOpen: false,
   setupWizardStep: 'welcome',
 };
-
-// Per-machine values must be keyed by machine id, never held as a single
-// scalar. Bug precedent: one shared scalar let machine A's value show up for
-// machine B (#730/#732 machine accent colour, #742/#743 sync-progress toast).
-// The correct reference implementations already exist — per-machine Maps in
-// components/status.js and components/machines-settings.js — and stay where
-// they are for now: adopting this alias for the remaining call sites is
-// package A4/A5 work, not A2b.
-export type PerMachine<T> = ReadonlyMap<number, T>;
 
 // ── Reactive pub/sub ──────────────────────────────────────────────────────
 // Lightweight wrapper: setState() mutates S and notifies subscribers for

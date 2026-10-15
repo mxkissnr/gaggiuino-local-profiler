@@ -41,9 +41,6 @@ import (
 // Deliberately still NOT implemented here (see doc.go's "Deliberately not
 // implemented"):
 //
-//   - syncRetryCount — the scheduled loop (sync_triggers.go) retries with
-//     backoff but tracks it locally, so GET /api/status's syncRetryCount
-//     stays 0.
 //   - syncProgress — the backfill still runs, but nothing tracks or streams
 //     its progress, so there is no progress bar.
 

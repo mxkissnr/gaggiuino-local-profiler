@@ -150,7 +150,6 @@ export type CoffeeLibrary = components['schemas']['Library'];
 // ── Machines (go/internal/machines) ──────────────────────────────────────
 
 export type Machine = components['schemas']['Machine'];
-export type MachineInput = components['schemas']['MachineInput'];
 
 /**
  * A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries it.
