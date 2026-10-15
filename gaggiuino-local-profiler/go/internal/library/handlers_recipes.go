@@ -61,7 +61,7 @@ func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	recipe, _, err := CreateRecipe(h.repo, body)
+	recipe, err := CreateRecipe(h.repo, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {

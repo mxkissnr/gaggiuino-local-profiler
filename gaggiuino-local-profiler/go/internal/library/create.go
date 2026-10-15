@@ -10,22 +10,13 @@ import (
 // create handler (handlers_beans.go's createBean et al.) already had
 // inlined into its own http.ResponseWriter-bound handler, into plain
 // functions taking a decoded body and returning the created entity and an
-// error (some also return the just-saved Library) — the same "same
-// service method, not new logic" discipline
+// error — the same "same service method, not new logic" discipline
 // ToggleBeanActive/MarkTaskDone already established for this package's
 // other web/REST-shared actions. Each REST handler below is now a thin
 // wrapper: decode + rate-limit + call + map a *ValidationError to its
 // existing 400 response. Keeping the validation and Library-save logic in
-// these functions keeps it out of the HTTP layer.
-//
-// The Create* functions whose caller needs the full list right after a
-// create also return the just-saved Library (the same value SaveLibrary was
-// called with, containing the new entity) alongside the created entity —
-// the same convention ToggleBeanActive already established (service.go) —
-// so such a caller can build the list straight from the returned Library
-// instead of issuing a second, redundant repo.GetLibrary() read (#901 code
-// review finding #3). CreateBean, CreateGrinder and CreateBasket return only
-// (Entity, error): no caller ever read that Library copy.
+// these functions keeps it out of the HTTP layer. No Create* function
+// returns a Library: no caller ever read one (#901 code review finding #3).
 
 // ValidationError carries the 400 message a Create* function's caller
 // should surface. Aliased to httputil.ValidationError (#901 code review
@@ -201,35 +192,33 @@ func CreateBasket(repo *Repository, body Entity) (Entity, error) {
 // CreatePuckScreen builds POST /api/library/puckscreen's entity-construction
 // body (handlers_puckscreens.go's createPuckScreen), including its
 // thickness enum validation.
-func CreatePuckScreen(repo *Repository, body Entity) (Entity, Library, error) {
+func CreatePuckScreen(repo *Repository, body Entity) (Entity, error) {
 	if trimMax(body["name"], 200) == "" {
-		return nil, Library{}, &ValidationError{Message: "name required"}
+		return nil, &ValidationError{Message: "name required"}
 	}
 	thickness, _, thicknessOK := enumStringField(body, "thickness", puckScreenThicknesses)
 	if !thicknessOK {
-		return nil, Library{}, &ValidationError{Message: "invalid thickness"}
+		return nil, &ValidationError{Message: "invalid thickness"}
 	}
 	puckScreen := Entity{
 		"id": newID(), "name": trimMax(body["name"], 200), "thickness": thickness,
 		"material": trimMax(body["material"], 200), "notes": trimMax(body["notes"], 1000),
 		"updatedAt": newID(),
 	}
-	var saved Library
 	if err := repo.Update(func(lib *Library) error {
 		lib.PuckScreens = append(lib.PuckScreens, puckScreen)
-		saved = *lib
 		return nil
 	}); err != nil {
-		return nil, Library{}, err
+		return nil, err
 	}
-	return puckScreen, saved, nil
+	return puckScreen, nil
 }
 
 // CreateMilk builds POST /api/library/milk's entity-construction body
 // (handlers_milks.go's createMilk).
-func CreateMilk(repo *Repository, body Entity) (Entity, Library, error) {
+func CreateMilk(repo *Repository, body Entity) (Entity, error) {
 	if trimMax(body["name"], 100) == "" {
-		return nil, Library{}, &ValidationError{Message: "name required"}
+		return nil, &ValidationError{Message: "name required"}
 	}
 	// `emoji?.trim() || '🥛'` with the shared milk-emoji rule (#1603): at
 	// most 8 runes and no markup metacharacters, so a multi-code-point
@@ -239,22 +228,20 @@ func CreateMilk(repo *Repository, body Entity) (Entity, Library, error) {
 		"id": newID(), "name": trimMax(body["name"], 100),
 		"emoji": emoji, "stockMl": floatOrZero(body["stockMl"]), "updatedAt": newID(),
 	}
-	var saved Library
 	if err := repo.Update(func(lib *Library) error {
 		lib.Milks = append(lib.Milks, milk)
-		saved = *lib
 		return nil
 	}); err != nil {
-		return nil, Library{}, err
+		return nil, err
 	}
-	return milk, saved, nil
+	return milk, nil
 }
 
 // CreateRecipe builds POST /api/library/recipe's entity-construction body
 // (handlers_recipes.go's createRecipe).
-func CreateRecipe(repo *Repository, body Entity) (Entity, Library, error) {
+func CreateRecipe(repo *Repository, body Entity) (Entity, error) {
 	if trimMax(body["name"], 200) == "" {
-		return nil, Library{}, &ValidationError{Message: "name required"}
+		return nil, &ValidationError{Message: "name required"}
 	}
 	recipe := Entity{
 		"id": newID(), "name": trimMax(body["name"], 200),
@@ -269,15 +256,13 @@ func CreateRecipe(repo *Repository, body Entity) (Entity, Library, error) {
 		"notes":     trimMax(body["notes"], 1000), "profileName": trimMax(body["profileName"], 200),
 		"beanName": trimMax(body["beanName"], 200),
 	}
-	var saved Library
 	if err := repo.Update(func(lib *Library) error {
 		lib.Recipes = append(lib.Recipes, recipe)
-		saved = *lib
 		return nil
 	}); err != nil {
-		return nil, Library{}, err
+		return nil, err
 	}
-	return recipe, saved, nil
+	return recipe, nil
 }
 
 // sanitizeMilkEmoji validates raw as a short emoji, mirroring
