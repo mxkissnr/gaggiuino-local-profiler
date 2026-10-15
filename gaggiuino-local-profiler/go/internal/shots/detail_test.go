@@ -48,7 +48,6 @@ func TestDetectPhases(t *testing.T) {
 	}
 }
 
-
 // TestShotYield pins the one yield rule the share card and ComputeShotMetrics
 // now share: annotated totalWeight, else annotated yield (each only when > 0),
 // else the maximum scale-weight sample.

@@ -67,7 +67,7 @@ func avgActive(vals []float64, threshold float64) (float64, bool) {
 // detectPhases splits (times, pressures) into preinfusion/extraction, found as
 // the first sample at least 1s in where pressure crosses 3.5 bar. endIdx is
 // that sample's index (times[endIdx] == preinfusion) so a caller drawing on an
-// index-based x axis -- the share card -- can place the phase boundary without
+// index-based x axis — the share card — can place the phase boundary without
 // re-deriving it.
 func detectPhases(times, pressures []float64) (preinfusion, extraction float64, endIdx int, ok bool) {
 	if len(times) == 0 || len(pressures) < 5 {
