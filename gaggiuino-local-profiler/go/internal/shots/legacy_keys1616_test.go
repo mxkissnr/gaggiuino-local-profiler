@@ -129,3 +129,23 @@ func TestTimestampsMatchHydratedShots(t *testing.T) {
 		}
 	}
 }
+
+// TestForgetLegacyKeyProbe (#1616): after the memo is dropped, a light read
+// probes again and sees a legacy key written behind its back (as a DB file
+// replaced under the open handle would bring).
+func TestForgetLegacyKeyProbe(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	if _, err := sqlDB.Exec(`INSERT INTO shots (id, timestamp, data, machine_id) VALUES (1, 1000, '{}', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if ts, _, err := repo.lightColumnsSQL(); err != nil || ts != "s.timestamp" {
+		t.Fatalf("clean database: ts = %q, err = %v", ts, err)
+	}
+	if _, err := sqlDB.Exec(`UPDATE shots SET data = '{"timestamp":5}' WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	ForgetLegacyKeyProbe(sqlDB)
+	if ts, _, err := repo.lightColumnsSQL(); err != nil || ts != hydratedTimestampSQL {
+		t.Fatalf("after ForgetLegacyKeyProbe: ts = %q, err = %v; want the per-row expression", ts, err)
+	}
+}

@@ -243,6 +243,15 @@ func (r *Repository) legacyKeys() (legacyKeys, error) {
 	return k, nil
 }
 
+// ForgetLegacyKeyProbe drops db's legacy-key memo so the next light read
+// probes the data blobs again. Called when the database file is replaced
+// underneath the open handle (the debug DB import, #1616): until the
+// required restart, new pooled connections can already read the imported
+// file, which may come from an older app version.
+func ForgetLegacyKeyProbe(db *sql.DB) {
+	legacyBlobKeys.Delete(db)
+}
+
 // lightColumnsSQL returns the SQL expressions (over aliases s and a) for a
 // hydrated shot's int64 timestamp and its annotation JSON text.
 func (r *Repository) lightColumnsSQL() (ts, ann string, err error) {

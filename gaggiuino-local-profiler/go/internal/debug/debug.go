@@ -57,6 +57,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	_ "modernc.org/sqlite"
 )
 
@@ -280,6 +281,11 @@ func (h *Handlers) importDB(w http.ResponseWriter, r *http.Request) {
 		if _, statErr := os.Stat(sidecar); statErr == nil {
 			_ = os.Remove(sidecar)
 		}
+	}
+	// The light shot reads memoise which legacy keys the data blobs carry;
+	// the imported file may differ, so make them probe again.
+	if db, ok := h.db.(*sql.DB); ok {
+		shots.ForgetLegacyKeyProbe(db)
 	}
 
 	log.Printf("debug: DB import: replaced glp.db (%d bytes, previous version backed up to %s) -- restart required to load it", written, backupPath)
