@@ -71,9 +71,11 @@ export function t(key: string, ...args: unknown[]): string {
 }
 
 // t() for markup contexts: dictionary entries are bundled at build time and
-// may carry trusted markup (icon SVGs), so the result is Html. Arguments are
-// still the caller's responsibility, esc() them.
-export function tHtml(key: string, ...args: unknown[]): Html {
+// may carry trusted markup (icon SVGs), so the result is Html. #1626: the
+// arguments land in that markup unescaped, so they must be numbers or Html
+// already — a string goes through esc() at the call site, which the type
+// enforces.
+export function tHtml(key: string, ...args: (Html | number | null | undefined)[]): Html {
   return t(key, ...args) as Html; // static dictionaries, never user data
 }
 

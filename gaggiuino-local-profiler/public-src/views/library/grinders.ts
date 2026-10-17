@@ -85,7 +85,7 @@ export function renderGrinderList(): void {
         ${g.notes ? html`<div class="lib-item-sub">${esc(g.notes)}</div>` : html``}
         ${zeroPoint != null ? html`<div class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : html``}
         ${g.wear ? html`<div class="lib-item-sub lib-grinder-wear">
-          <span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
+          <span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, esc(formatWearGrams(g.wear.gramsSinceBurrs)))}</span>
           <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${esc(g.id)}">${tHtml('lib_grinder_reset_burrs')}</button>
         </div>` : html``}
       </div>
