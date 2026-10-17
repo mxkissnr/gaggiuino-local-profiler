@@ -122,7 +122,7 @@ together, in one commit:
 
 `test/version-sync.test.ts` fails if any of the latter three drift from
 `config.yaml`; `scripts/release-check.mts` check 1 does the same.
-(`go/internal/library/geo.go`'s `geoUserAgent` carries the version too — cosmetic, bump it along but it isn't gated.)
+(The geocoder's User-Agent is derived from `system.Version()` — nothing to bump there.)
 
 ## Commits
 

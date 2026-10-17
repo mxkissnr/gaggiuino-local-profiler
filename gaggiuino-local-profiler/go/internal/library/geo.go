@@ -35,11 +35,15 @@ const (
 	geoMinIntervalMS = 1100
 	geoCacheKey      = "geocode_cache"
 	geoCacheMax      = 500
-	// Cosmetic — Nominatim only needs a stable identifying User-Agent, not
-	// an exact version. Meant to be bumped by hand at release time, but not
-	// checked by any test, so it can lag behind config.yaml's version.
-	geoUserAgent = "GLP/3.2.0 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
 )
+
+// geoUserAgent builds the identifying User-Agent Nominatim's usage policy
+// asks for from the build version (the value GET /api/version reports,
+// passed in by cmd/server — internal/system imports this package, so it
+// cannot be read from there directly).
+func geoUserAgent(version string) string {
+	return "GLP/" + version + " (https://github.com/mxkissnr/gaggiuino-local-profiler)"
+}
 
 // Location is the { lat, lon, label } result shape stored on bean.location
 // and read by the origin-map view.
@@ -60,9 +64,10 @@ type geoCacheEntry struct {
 // timestamp as a struct so cmd/server owns one instance, the same pattern
 // internal/system's Poller / ha.Client use.
 type Geocoder struct {
-	repo   *Repository
-	http   *http.Client
-	apiURL string // overridable in tests
+	repo      *Repository
+	http      *http.Client
+	apiURL    string // overridable in tests
+	userAgent string
 
 	mu          sync.Mutex // serializes requests + guards lastRequestAt
 	lastRequest time.Time
@@ -73,12 +78,14 @@ type Geocoder struct {
 }
 
 // NewGeocoder wires the library Repository (kv-table cache access) into a
-// Geocoder pointed at the real Nominatim endpoint.
-func NewGeocoder(repo *Repository) *Geocoder {
+// Geocoder pointed at the real Nominatim endpoint. version is the GLP build
+// version, sent in the User-Agent.
+func NewGeocoder(repo *Repository, version string) *Geocoder {
 	return &Geocoder{
 		repo:       repo,
 		http:       &http.Client{Timeout: 8 * time.Second},
 		apiURL:     nominatimURL,
+		userAgent:  geoUserAgent(version),
 		assertHost: assertPublicHost,
 	}
 }
@@ -233,7 +240,7 @@ func (g *Geocoder) request(ctx context.Context, query, region string) (*Location
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", geoUserAgent)
+	req.Header.Set("User-Agent", g.userAgent)
 
 	resp, err := g.http.Do(req)
 	if err != nil {
