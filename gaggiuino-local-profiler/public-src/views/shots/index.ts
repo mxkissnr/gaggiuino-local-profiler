@@ -3,19 +3,19 @@ import { S, filterShotsByMachine }                            from '../../state/
 import * as chartRegistry                                     from '../../state/charts.js';
 import { t, tHtml }                                           from '../../i18n.js';
 import { isApiPortBlocked }                                   from '../../api/transport.js';
-import { listShots, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard, getShot } from '../../api/shots.js';
+import { listShots, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShot } from '../../api/shots.js';
 import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges, buildRecordedGmPhaseRanges, exitReasonKey } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
-  stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
+  stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
   chartColors, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
 import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
-import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
+import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel, annotationBusy }              from './annotation.js';
 import { markDirty }                                          from '../../live-sync.js';
@@ -24,48 +24,13 @@ import { updateMachineBanner, updateOnboardingPanel }          from '../../compo
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
 import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
-import type { ShotMeta } from '../../state/index.js';
-import type { ShotDatapoints, ShotSeries, Html } from '../../utils.js';
+import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
+import { _shots }                                             from './shared.js';
+import type { ShotRow }                                       from './shared.js';
 
-// state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
-// an index signature); this view reads the annotation/curve fields, so these
-// local aliases name them — same pattern as views/shots/utils.ts and
-// views/shots/annotation.ts.
-interface ShotAnnotationData {
-  rating?: number | null;
-  coffee?: string | null;
-  beanId?: number | null;
-  basketId?: number | null;
-  puckScreenId?: number | null;
-  grinder?: string | null;
-  grindSetting?: string | number | null;
-  dose?: number | null;
-  tds?: number | null;
-  notes?: string | null;
-  drinkType?: string | null;
-  milkType?: number | string | null;
-  recipeId?: number | null;
-  frozenPortionId?: number | null;
-  roastDate?: string | null;
-  beanAgeDays?: number | null;
-  orderedBy?: { customer?: string; item?: string; variant?: string; note?: string } | null;
-}
-
-interface ShotRow extends ShotMeta {
-  profileName?: string | null;
-  profile?: { name?: string | null; phases?: unknown[]; [key: string]: unknown } | null;
-  nativeId?: number | null;
-  duration?: number | null;
-  score?: number | null;
-  image?: string | null;
-  glpFirmwareVersion?: string | null;
-  trashedAt?: number;
-  hasChartData?: boolean;
-  usedBeanTarget?: boolean;
-  datapoints?: ShotDatapoints;
-  annotation?: ShotAnnotationData | null;
-}
+export { _equipmentName } from './shared.js';
+export { exportAllCSV, exportCSV, exportProfile, exportShot, shareCard } from './export.js';
 
 // fetchShotsPage()'s normalised page: either a page of rows, or a transport
 // error code the callers surface.
@@ -98,22 +63,11 @@ let _loadDataInFlight = false;
 // Invalidated by invalidateGmPhaseCache() after a profile save.
 const _gmPhaseCache = new Map<string, GmPhaseRanges>();
 
-// state/index.ts types shot rows as metadata-only ShotMeta; this view reads the
-// annotation/curve/profile fields, so the row arrays are re-typed once here
-// instead of at every read (same convention as views/shots/annotation.ts).
-function _shots(): ShotRow[] { return S.shots; }
-
 // getElementById() returns HTMLElement|null and every id in this view is a
 // static element from index.html, so it is asserted once here rather than at
 // each of the ~40 lookups (the genuinely optional elements — trash section,
 // shot photo, fw badge — still keep their own `if (el)` guards).
 const _el = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
-
-// CoffeeLibrary (state/index.ts) only declares beans/grinders; loadLibrary()
-// adds the basket/puck-screen collections this file reads for export labels.
-function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, unknown>[] | undefined {
-  return S.coffeeLibrary[name];
-}
 
 export function invalidateGmPhaseCache(machineId: number): void {
   const prefix = `${machineId}:`;
@@ -157,17 +111,6 @@ async function _loadGmPhases(shotA: ShotRow, token: number): Promise<GmPhaseRang
   }
   if (gmPhases) _gmPhaseCache.set(cacheKey, gmPhases); // only cache a hit — don't stick a transient failure
   return gmPhases;
-}
-
-// #635: baskets/puck screens are pure ID-based library selections (see
-// annotation.js's _renderBasketSelect/_renderPuckScreenSelect) — this
-// resolves an annotation's basketId/puckScreenId to the current library
-// entry's name for display/export, the same way ann.coffee already carries
-// the bean's name directly (no lookup needed there since beans store the
-// name on the annotation itself).
-export function _equipmentName(list: Record<string, unknown>[] | null | undefined, id: number | null | undefined): string | null {
-  if (id == null) return null;
-  return ((list || []).find(e => e.id === id)?.name as string | undefined) || null;
 }
 
 // #957: GET /api/shots is keyset-paginated and metadata-only (no curve
@@ -1063,230 +1006,3 @@ export async function updateView(): Promise<void> {
     });
   }
 }
-
-// ── CSV Export ────────────────────────────────────────────────────────────
-
-// d is the mapped XY curve bundle for this shot (from the curve cache) — the
-// caller fetches it via getShotCurve() first, since list rows no longer carry
-// datapoints (#957).
-function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
-  const ann    = shot.annotation || {};
-  const avgP   = avgActive(d.pressure.map(p => p.y), 1.5);
-  const finalW = max(d.weight.map(p => p.y));
-  const avgT   = avg(d.temp.map(p => p.y));
-  const secs   = ((shot.duration || 0) / 10).toFixed(1);
-  const ratio  = (ann.dose && finalW) ? `1:${(finalW / ann.dose).toFixed(1)}` : '';
-  const date   = new Date(shot.timestamp * 1000).toLocaleString(localeFor(S.currentLang));
-  return [
-    shot.id, date,
-    shot.profile?.name || shot.profileName || '',
-    secs,
-    avgP   != null ? avgP.toFixed(2)   : '',
-    finalW != null ? finalW.toFixed(1) : '',
-    ann.dose || '', ratio,
-    avgT   != null ? avgT.toFixed(1)   : '',
-    ann.rating || '', ann.coffee || '', ann.grinder || '',
-    ann.grindSetting || '',
-    _equipmentName(_libCollection('baskets'), ann.basketId) || '',
-    _equipmentName(_libCollection('puckScreens'), ann.puckScreenId) || '',
-    (ann.notes || '').replace(/\n/g, ' ')
-  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-}
-
-async function downloadCSV(rows: string[], filename: string): Promise<void> {
-  const header = ['Shot ID','Date','Profile','Duration (s)','Avg Pressure (bar)','Max Weight (g)',
-                  'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting',
-                  'Basket','Puck Screen','Notes'];
-  const csv  = [header.join(','), ...rows].join('\r\n');
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-  await shareOrDownloadBlob(blob, filename, { title: t('export_csv_title') });
-}
-
-export async function exportCSV(): Promise<void> {
-  const shot = _shots().find(s => s.id === S.primaryShotId);
-  if (!shot) return;
-  await getShotCurve(shot.id);
-  const date    = new Date(shot.timestamp * 1000).toISOString().slice(0, 10);
-  const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi, '_');
-  await downloadCSV([shotToCSVRow(shot, getCachedShotData(shot.id) || mapShotDatapoints({}))], `glp_shot_${date}_${profile}.csv`);
-}
-
-export async function exportAllCSV(): Promise<void> {
-  // Rare, explicit user action. Curves are pulled in bounded chunks (bounded
-  // concurrency inside ensureCurves too) so a long history never holds every
-  // curve in memory at once; the curves loaded just for this export are
-  // evicted again, the ones already cached before it started stay.
-  const list = _shots();
-  const previouslyCached = new Set(list.filter(s => getCachedShotData(s.id)).map(s => s.id));
-  const rows: string[] = [];
-  for (let i = 0; i < list.length; i += 50) {
-    const chunk = list.slice(i, i + 50);
-    await ensureCurves(chunk.map(s => s.id));
-    rows.push(...chunk.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))));
-    for (const s of chunk) if (!previouslyCached.has(s.id)) evictCurve(s.id);
-  }
-  await downloadCSV(rows, 'glp_all_shots.csv');
-}
-
-// ── .shot export ──────────────────────────────────────────────────────────
-
-export async function exportShot(): Promise<void> {
-  const shot = _shots().find(s => s.id === S.primaryShotId);
-  if (!shot) return;
-  const d   = await getShotCurve(shot.id);
-  const ann = shot.annotation || {};
-  const timeArr = d.timeInShot || [];
-
-  const tcl = (arr: unknown[] | null | undefined): string => arr?.length ? `{${arr.map(v => ((v as number) / 10).toFixed(2)).join(' ')}}` : '{}';
-
-  const finalWeight = d.shotWeight || d.weight || [];
-  const lastW = finalWeight.length ? ((finalWeight.at(-1) ?? 0) / 10).toFixed(1) : '0.0';
-  const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
-  const basketName     = _equipmentName(_libCollection('baskets'), ann.basketId);
-  const puckScreenName = _equipmentName(_libCollection('puckScreens'), ann.puckScreenId);
-
-  const lines = [
-    `clock ${shot.timestamp}`,
-    `date ${date}`,
-    `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
-    ann.coffee       ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
-    ann.grinder      ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
-    ann.grindSetting != null && ann.grindSetting !== '' ? `grinder_setting {${String(ann.grindSetting).replace(/[{}]/g, '')}}` : '',
-    basketName       ? `basket {${basketName.replace(/[{}]/g, '')}}` : '',
-    puckScreenName   ? `puck_screen {${puckScreenName.replace(/[{}]/g, '')}}` : '',
-    ann.dose         ? `bean_weight ${ann.dose}` : '',
-    ann.notes        ? `espresso_notes {${ann.notes.replace(/[{}]/g, '')}}` : '',
-    `espresso_elapsed ${tcl(timeArr)}`,
-    `espresso_pressure ${tcl(d.pressure)}`,
-    `espresso_flow ${tcl(d.pumpFlow)}`,
-    `espresso_weight ${tcl(d.shotWeight || d.weight)}`,
-    `espresso_flow_weight ${tcl(d.weightFlow)}`,
-    `espresso_temperature_goal ${tcl(d.targetTemperature)}`,
-    `espresso_temperature_mix ${tcl(d.temperature)}`,
-    `espresso_water_dispensed ${lastW}`,
-  ].filter(Boolean).join('\n');
-
-  await _downloadJSON_blob(lines, `shot_${shot.id}_${date.slice(0, 10)}.shot`, 'text/plain;charset=utf-8;');
-}
-
-// ── Profile export ────────────────────────────────────────────────────────
-
-export async function exportProfile(): Promise<void> {
-  const shot = _shots().find(s => s.id === S.primaryShotId);
-  if (!shot) return;
-
-  const profile = shot.profile;
-  if (profile && Array.isArray(profile.phases) && profile.phases.length > 0) {
-    const out = JSON.parse(JSON.stringify(profile)) as { recipe?: Record<string, number>; name?: string } & Record<string, unknown>;
-    const ann = shot.annotation || {};
-    if (!out.recipe) out.recipe = {};
-    if (ann.dose) out.recipe.coffeeIn = parseFloat(String(ann.dose));
-    if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(String(ann.dose)) * 2;
-    if (out.recipe.coffeeIn && out.recipe.coffeeOut)
-      out.recipe.ratio = Math.round(Number(out.recipe.coffeeOut) / Number(out.recipe.coffeeIn) * 100) / 100;
-    await _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_-]/gi, '_') + '.json');
-    return;
-  }
-
-  const d    = await getShotCurve(shot.id);
-  const rawT = d.timeInShot     || [];
-  const rawTP = d.targetPressure || [];
-
-  if (rawT.length === 0 || rawTP.length === 0) {
-    alert(t('profile_export_no_data'));
-    return;
-  }
-
-  const times  = rawT.map(v => v / 10);
-  const tPress = rawTP.map(v => v / 10);
-  const totalMs = Math.round((times.at(-1) ?? NaN) * 1000);
-  const ann     = shot.annotation || {};
-
-  const PREINF_THRESHOLD = 6;
-  let preinfEndIdx = tPress.findIndex(p => p >= PREINF_THRESHOLD);
-  if (preinfEndIdx < 0) preinfEndIdx = 0;
-  const preinfMs = preinfEndIdx > 0 ? Math.round((times[preinfEndIdx] ?? NaN) * 1000) : 0;
-
-  const phases = [];
-  if (preinfMs > 500) {
-    const preinfTarget = Math.round(Math.max(...tPress.slice(0, preinfEndIdx)) * 10) / 10 || 4;
-    phases.push({
-      type: 0,
-      target: { start: 0, end: preinfTarget, curve: 1, time: preinfMs },
-      restriction: 0,
-      stopConditions: { time: preinfMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: 0 }
-    });
-  }
-
-  const extractionSlice = tPress.slice(preinfEndIdx || 0);
-  const avgExtraction   = extractionSlice.length
-    ? Math.round(extractionSlice.reduce((a, b) => a + b, 0) / extractionSlice.length * 10) / 10
-    : 9;
-  const extractionMs = totalMs - preinfMs;
-  const yieldG = ann.dose ? parseFloat(String(ann.dose)) * 2 : 36;
-
-  phases.push({
-    type: 0,
-    target: { start: avgExtraction, end: avgExtraction, curve: 0, time: extractionMs },
-    restriction: 0,
-    stopConditions: { time: extractionMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: yieldG }
-  });
-
-  const out = {
-    id: shot.id,
-    name: shot.profileName || `Shot ${shot.id}`,
-    phases,
-    globalStopConditions: { time: 0, weight: yieldG, waterPumped: 0 },
-    recipe: {
-      coffeeIn:  ann.dose ? parseFloat(String(ann.dose)) : 18,
-      coffeeOut: yieldG,
-      ratio:     ann.dose ? Math.round(yieldG / parseFloat(String(ann.dose)) * 100) / 100 : 2
-    }
-  };
-  await _downloadJSON(out, (out.name).replace(/[^a-z0-9_-]/gi, '_') + '.json');
-}
-
-async function _downloadJSON(obj: unknown, filename: string): Promise<void> {
-  await _downloadJSON_blob(JSON.stringify(obj, null, 2), filename, 'application/json');
-}
-
-async function _downloadJSON_blob(content: string, filename: string, mime: string): Promise<void> {
-  const blob = new Blob([content], { type: mime });
-  await shareOrDownloadBlob(blob, filename, { title: filename });
-}
-
-// ── Share card ────────────────────────────────────────────────────────────
-
-export async function shareCard(format = 'square'): Promise<void> {
-  const shotId = S.primaryShotId;
-  if (!shotId) return;
-  try {
-    // #462: the card should visually match whatever accent/theme the user
-    // is actually looking at, not a hardcoded snapshot — same attributes
-    // main.js applies to <html> (dataset.accent/dataset.theme), same
-    // defaults ('amber-americano'/'dark', see applyTheme()/_savedAccent in
-    // main.js). #1019: dataset.accent no longer drives any CSS itself (the
-    // [data-accent] rules it used to key are retired), but is still set on
-    // every setAccentTheme() call purely so this stays in sync with the
-    // user's actual Farbschema pick.
-    const accent = document.documentElement.dataset.accent || 'amber-americano';
-    const theme  = document.documentElement.dataset.theme  || 'dark';
-    const r = await getShotCard(shotId, { format, accent, theme });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({})) as { error?: string };
-      throw new Error(err.error || r.statusText);
-    }
-    const blob     = await r.blob();
-    const filename = `glp-shot-${shotId}-${format}.png`;
-    await shareOrDownloadBlob(blob, filename, { title: t('share_card_title'), fallbackOnError: false });
-  } catch (e) {
-    if ((e as Error).name !== 'AbortError') alert(t('error_generic', (e as Error).message));
-  }
-}
-
-// ── Backup / Restore ──────────────────────────────────────────────────────
-
-// Backup export/restore is a modal flow (section picker, passphrase for the
-// encrypted API-token/MQTT block, a dry-run preview before anything is
-// written) — see public-src/components/backup-modal.js, wired directly from
-// main.js's event listeners rather than through this file.
