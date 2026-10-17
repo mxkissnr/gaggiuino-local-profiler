@@ -1,4 +1,5 @@
 import { S } from '../state/index.js';
+import { safeLocalStorage } from '../storage.js';
 
 // #1539: a random per-page id sent as X-GLP-Client so the server can attach it
 // to the data-changed event a write produced (DataChanged.src) and this page
@@ -26,7 +27,7 @@ export function lastWriteAt(): number | null {
 export async function initToken(): Promise<void> {
   // Migration for pre-#522 installs: the token used to be cached in
   // localStorage under this key. Idempotent no-op once the key is gone.
-  localStorage.removeItem('glp_token');
+  safeLocalStorage.removeItem('glp_token');
   try {
     // /api/token answers any caller that can reach the port by default (#533),
     // so a fresh token is normally available on every load — no need to
@@ -51,16 +52,26 @@ export async function initToken(): Promise<void> {
   } catch { /* ignore */ }
 }
 
+// #1615: a caller's headers as a plain record, whichever HeadersInit form
+// they came in. Spreading a Headers instance (or an entries array) into an
+// object literal silently drops its entries; a plain object passes through
+// unchanged, names and all.
+function _headerRecord(init: HeadersInit | undefined): Record<string, string> {
+  if (init instanceof Headers) return Object.fromEntries(init.entries());
+  if (Array.isArray(init)) return Object.fromEntries(init);
+  return { ...init };
+}
+
 export async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
   // #1539: identify this page on writes only (GET/HEAD are not data changes),
   // so the server can tag the resulting data-changed event with our id and we
-  // skip the echo. Same header-spread pattern as the token below.
+  // skip the echo. Same header merge as the token below.
   const method = (opts.method ?? 'GET').toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') {
     _lastWriteAt = Date.now();
-    opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Client': CLIENT_ID } };
+    opts = { ...opts, headers: { ..._headerRecord(opts.headers), 'X-GLP-Client': CLIENT_ID } };
   }
-  if (S.glpToken) opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Token': S.glpToken } };
+  if (S.glpToken) opts = { ...opts, headers: { ..._headerRecord(opts.headers), 'X-GLP-Token': S.glpToken } };
   return fetch(url, opts);
 }
 
@@ -155,6 +166,9 @@ export function apiUpload(
       text: xhr.responseText,
     });
     xhr.onerror = () => reject(new Error('network error'));
+    // #1615: an aborted request (e.g. the page navigating away) fires neither
+    // onload nor onerror, so without this the promise never settled.
+    xhr.onabort = () => reject(new Error('upload aborted'));
     xhr.send(body);
   });
 }

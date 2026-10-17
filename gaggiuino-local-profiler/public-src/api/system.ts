@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, jsonBody } from './fetch.js';
 import { apiFetchToBlob, apiUpload } from './transport.js';
 import type { ApiFetchToBlobResult, ApiUploadResult } from './transport.js';
 import type { UiPrefs } from './types.js';
@@ -18,10 +18,6 @@ import type { UiPrefs } from './types.js';
 // The progress-aware transfers go through api/transport.ts's
 // apiFetchToBlob/apiUpload, which is why the URL/header building for them
 // lives here rather than in the components.
-
-function _json(body: unknown): RequestInit {
-  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
 
 // ── Status / power / sync ────────────────────────────────────────────────
 
@@ -71,11 +67,6 @@ export function getVersion(): Promise<Response> {
   return apiFetch('api/version');
 }
 
-/** GET /api/menu — the drink-menu entries the annotation panel's pills read. */
-export function getMenu(): Promise<Response> {
-  return apiFetch('api/menu');
-}
-
 /** GET /api/achievements?lang=... — the badge catalogue, localized. */
 export function getAchievements(lang: string): Promise<Response> {
   return apiFetch(`api/achievements?lang=${encodeURIComponent(lang)}`);
@@ -95,7 +86,7 @@ export function getImportSettings(): Promise<Response> {
 
 /** POST /api/import/settings — save provider toggles / custom domains (a partial body is deliberate). */
 export function saveImportSettings(payload: unknown): Promise<Response> {
-  return apiFetch('api/import/settings', _json(payload));
+  return apiFetch('api/import/settings', jsonBody(payload));
 }
 
 // ── Shared UI preferences (#1375) ────────────────────────────────────────

@@ -5,6 +5,7 @@ import { seedDemoData, endDemoData } from '../api/system.js';
 import { devBannerHeight } from './dev-banner.js';
 import { themeColor } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
+import { safeSessionStorage } from '../storage.js';
 
 const DISMISS_KEY = 'glp_onboarding_banner_dismissed';
 
@@ -25,7 +26,7 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
   if (status) S.machineReachable = status.machineReachable ?? null;
 
   const existing = document.getElementById('glpOnboardingBanner');
-  const shouldShow = S.shots.length === 0 && S.machineReachable === false && !sessionStorage.getItem(DISMISS_KEY);
+  const shouldShow = S.shots.length === 0 && S.machineReachable === false && !safeSessionStorage.getItem(DISMISS_KEY);
 
   if (!shouldShow) {
     existing?.remove();
@@ -62,7 +63,7 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
   closeBtn.innerHTML = CLOSE_ICON_SVG;
   Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7'), padding: '0 2px' });
   closeBtn.addEventListener('click', () => {
-    sessionStorage.setItem(DISMISS_KEY, '1');
+    safeSessionStorage.setItem(DISMISS_KEY, '1');
     banner.remove();
   });
 

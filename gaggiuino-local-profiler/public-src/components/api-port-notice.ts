@@ -14,6 +14,7 @@ import { devBannerHeight } from './dev-banner.js';
 import { themeColor, html } from '../utils.js';
 import type { Html } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
+import { safeSessionStorage } from '../storage.js';
 
 const DISMISS_KEY = 'glp_api_port_closed_banner_dismissed';
 
@@ -31,7 +32,7 @@ export function apiPortClosedHtml(): Html {
 // soon as /api/status (which stays public precisely for this) answers.
 export function updateApiPortClosedBanner(): void {
   const existing = document.getElementById('glpApiPortClosedBanner');
-  const shouldShow = isApiPortBlocked() && !sessionStorage.getItem(DISMISS_KEY);
+  const shouldShow = isApiPortBlocked() && !safeSessionStorage.getItem(DISMISS_KEY);
 
   if (!shouldShow) {
     existing?.remove();
@@ -72,7 +73,7 @@ export function updateApiPortClosedBanner(): void {
   closeBtn.innerHTML = CLOSE_ICON_SVG;
   Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7'), padding: '0 2px' });
   closeBtn.addEventListener('click', () => {
-    sessionStorage.setItem(DISMISS_KEY, '1');
+    safeSessionStorage.setItem(DISMISS_KEY, '1');
     banner.remove();
   });
 

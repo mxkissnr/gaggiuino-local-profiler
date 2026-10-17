@@ -3,6 +3,7 @@ import { TRANSLATIONS } from './constants.js';
 import { STAR_ICON_SVG } from './icons.js';
 import { html } from './utils.js';
 import type { Html } from './utils.js';
+import { safeLocalStorage } from './storage.js';
 
 // Cross-module entry points main.js wires onto `window` (kept off direct
 // imports to avoid circular deps); declared so the calls below stay typed.
@@ -79,7 +80,7 @@ export function tHtml(key: string, ...args: unknown[]): Html {
 export function setLang(lang: string): void {
   if (!TRANSLATIONS[lang]) return;
   S.currentLang = lang;
-  localStorage.setItem('glp_lang', lang);
+  safeLocalStorage.setItem('glp_lang', lang);
   applyTranslations();
   // Lazy imports to avoid circular deps — call via window assignments set in main.js
   if (window.renderSidebar) window.renderSidebar();

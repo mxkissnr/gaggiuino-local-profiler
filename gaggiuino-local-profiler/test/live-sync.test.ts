@@ -783,13 +783,14 @@ describe('bean-image invalidation (#1539)', () => {
 });
 
 // #1539 slice 3: the handler map is behavioural-tested further down; what is
-// left here is main.ts's boot order -- the data-changed listener is registered
+// left here is the boot order (boot/data.ts since #1615 moved the data boot
+// chain out of main.ts) -- the data-changed listener is registered
 // before the SSE stream opens, and an online event or an SSE reconnect resyncs.
 // There is no seam for these two short of booting the whole SPA, so they stay as
 // the file's only source-text check.
 describe('live-sync boot order (#1539)', () => {
   it('registers the data-changed handler before opening the SSE stream', () => {
-    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    const src = readFileSync(new URL('../public-src/boot/data.ts', import.meta.url), 'utf8');
     const on = src.indexOf('onEvent(EVENTS.DATA_CHANGED, handleDataChanged)');
     const connect = src.indexOf('connectEvents(() => {}, resyncAll)');
     expect(on).toBeGreaterThan(-1);
@@ -798,7 +799,7 @@ describe('live-sync boot order (#1539)', () => {
   });
 
   it('resyncs after coming online and after an SSE reconnect', () => {
-    const src = readFileSync(new URL('../public-src/main.ts', import.meta.url), 'utf8');
+    const src = readFileSync(new URL('../public-src/boot/data.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/addEventListener\('online', resyncAll\)/);
     expect(src).toMatch(/connectEvents\(\(\) => \{\}, resyncAll\)/);
   });

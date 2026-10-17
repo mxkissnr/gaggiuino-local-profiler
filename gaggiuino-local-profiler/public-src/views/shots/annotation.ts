@@ -1,7 +1,7 @@
 import { S }                              from '../../state/index.js';
 import type { LibraryRow, ShotMeta } from '../../state/index.js';
 import { t, tHtml }                       from '../../i18n.js';
-import { getMenu }                        from '../../api/system.js';
+import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import type { AnnotateResult, ShotDefaults } from '../../api/types.js';
@@ -253,8 +253,7 @@ export function flushAutoSave(): void {
 
 export async function loadDrinkMenu(): Promise<void> {
   try {
-    const r = await getMenu();
-    if (r.ok) S.drinkMenu = await r.json() as LibraryRow[];
+    S.drinkMenu = await getMenu();
   } catch { /* non-critical */ }
 }
 

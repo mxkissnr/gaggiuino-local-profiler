@@ -107,7 +107,11 @@ export function deleteOrderHistory(): Promise<Response> {
 
 // ── Menu ─────────────────────────────────────────────────────────────────
 
-/** GET /api/menu — the public, deliberately-ungated menu the kiosk page reads. */
+/**
+ * GET /api/menu — the public, deliberately-ungated drink menu: the kiosk page
+ * and the annotation panel's drink pills both read it. Rejects on a non-ok
+ * status (apiFetchJson); both callers catch that.
+ */
 export function getMenu(): Promise<MenuItem[]> {
   return apiFetchJson<MenuItem[]>('api/menu');
 }

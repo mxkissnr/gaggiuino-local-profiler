@@ -22,6 +22,7 @@ import { html, COMPLETED_KEY } from '../utils.js';
 import type { Html } from '../utils.js';
 import { openMachineForm } from '../components/machines-settings.js';
 import { loadDemoData } from '../components/onboarding.js';
+import { safeLocalStorage } from '../storage.js';
 
 // Captured once, the first time the wizard ever reaches the connect step —
 // #machineFormCard's original position in the Settings "Machines" card, so
@@ -39,7 +40,7 @@ let _formOrigNextSibling: Node | null = null;
 // GET /api/machines, so a real fresh install's S.machines is never actually
 // empty by the time the frontend checks it.
 export function shouldOpenSetupWizard(machines: MachineRecord[] | null | undefined): boolean {
-  return (machines || []).every(m => !m?.host) && !localStorage.getItem(COMPLETED_KEY);
+  return (machines || []).every(m => !m?.host) && !safeLocalStorage.getItem(COMPLETED_KEY);
 }
 
 // #750: syncInstallId() now lives in public-src/utils.js —
@@ -62,7 +63,7 @@ export function openSetupWizard(): void {
 // launch; only closing from the done step marks it complete.
 export function closeSetupWizard(): void {
   if (S.setupWizardStep === 'done') {
-    try { localStorage.setItem(COMPLETED_KEY, '1'); } catch { /* ignore */ }
+    safeLocalStorage.setItem(COMPLETED_KEY, '1');
   }
   S.setupWizardOpen = false;
   _leaveConnectStep();

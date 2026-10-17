@@ -12,6 +12,7 @@ import { esc, html, joinHtml } from './utils.js';
 import type { Html } from './utils.js';
 import { initToken } from './api/transport.js';
 import { etaText, isEinkMode, toggleVariantSelection, variantOrderField } from './kiosk-helpers.js';
+import { safeLocalStorage } from './storage.js';
 
 // The ordering kiosk (#1267): a second, tablet-facing page that shares the
 // app's design system, languages and theme. It is a typed port of the older
@@ -330,11 +331,7 @@ function wireStaticControls(): void {
 
 // The stored theme, or 'auto' when it is unset or storage is unavailable.
 function storedTheme(): string {
-  try {
-    return localStorage.getItem(THEME_STORAGE_KEY) || 'auto';
-  } catch {
-    return 'auto';
-  }
+  return safeLocalStorage.getItem(THEME_STORAGE_KEY) || 'auto';
 }
 
 async function bootstrap(): Promise<void> {

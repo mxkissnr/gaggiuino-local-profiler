@@ -38,3 +38,15 @@ export async function apiFetchJson<T>(url: string, opts: RequestInit = {}): Prom
   }
   return (await r.json()) as T;
 }
+
+// The request options for a JSON body, POST unless another method is given
+// (#1615: this used to be copied into five domain modules).
+export function jsonBody(body: unknown, method = 'POST'): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+// The parsed body of an ok response as T, or null for a non-ok one: the
+// "null on a non-ok response" convention the domain clients share.
+export async function jsonOrNull<T>(r: Response): Promise<T | null> {
+  return r.ok ? ((await r.json()) as T) : null;
+}

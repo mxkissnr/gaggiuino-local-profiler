@@ -18,6 +18,7 @@ import { machineWarningLabel, renderMachineControl } from '../components/machine
 import { localeFor } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
+import { safeLocalStorage } from '../storage.js';
 
 // GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
 // view reads off the poll payload. Named locally rather than reusing
@@ -237,7 +238,7 @@ export function renderLiveShotSetupPanel(): void {
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsReset')?.addEventListener('click', () => {
-    localStorage.removeItem(_liveSetupStorageKey());
+    safeLocalStorage.removeItem(_liveSetupStorageKey());
     renderLiveShotSetupPanel();
   });
 }

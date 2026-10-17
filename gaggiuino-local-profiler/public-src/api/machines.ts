@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, jsonBody, jsonOrNull } from './fetch.js';
 import type {
   FirmwareProgress, FirmwareVersion, Machine, MachineControlSettings, MachineProfile, MachineProfileList,
   MachineSaveInput, MachineSystemSettings,
@@ -19,19 +19,11 @@ import type {
 // unchanged; the rest parse their body into the domain type and resolve to
 // null on a non-ok response, matching api/shots.ts.
 
-function _json(method: string, body: unknown): RequestInit {
-  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
-
-async function _jsonOrNull<T>(r: Response): Promise<T | null> {
-  return r.ok ? ((await r.json()) as T) : null;
-}
-
 // ── Machine registry ─────────────────────────────────────────────────────
 
 /** GET /api/machines — every registered machine. Null on a non-ok response. */
 export async function listMachines(): Promise<Machine[] | null> {
-  return _jsonOrNull<Machine[]>(await apiFetch('api/machines'));
+  return jsonOrNull<Machine[]>(await apiFetch('api/machines'));
 }
 
 /**
@@ -48,7 +40,7 @@ export function saveMachine(
 ): Promise<Response> {
   const base = id ? `api/machines/${id}` : 'api/machines';
   const url = triggerSync ? base : `${base}?sync=0`;
-  return apiFetch(url, _json(id ? 'PUT' : 'POST', payload));
+  return apiFetch(url, jsonBody(payload, id ? 'PUT' : 'POST'));
 }
 
 /** POST /api/machines/{id}/test — connection test; the caller reads `{ reachable }` off the raw Response. */
@@ -76,7 +68,7 @@ export async function getMachineSettings(
   machineId: string | number,
   category: string,
 ): Promise<MachineSystemSettings | null> {
-  return _jsonOrNull<MachineSystemSettings>(
+  return jsonOrNull<MachineSystemSettings>(
     await apiFetch(`api/machine/settings?machineId=${machineId}&category=${category}`),
   );
 }
@@ -87,19 +79,19 @@ export async function getMachineSettings(
  * awaits the result, so the raw Response is enough.
  */
 export function saveMachineSettings(category: string, payload: unknown): Promise<Response> {
-  return apiFetch(`api/machine/settings/${category}`, _json('POST', payload));
+  return apiFetch(`api/machine/settings/${category}`, jsonBody(payload));
 }
 
 // ── Firmware OTA (#1044) ─────────────────────────────────────────────────
 
 /** GET /api/machine/firmware/version?machineId=... — installed/latest version info. Null on a non-ok. */
 export async function getFirmwareVersion(machineId: string | number): Promise<FirmwareVersion | null> {
-  return _jsonOrNull<FirmwareVersion>(await apiFetch(`api/machine/firmware/version?machineId=${machineId}`));
+  return jsonOrNull<FirmwareVersion>(await apiFetch(`api/machine/firmware/version?machineId=${machineId}`));
 }
 
 /** POST /api/machine/firmware/update — trigger the machine's OTA update. Raw Response (the caller reads the error body on a non-ok). */
 export function triggerFirmwareUpdate(machineId: string | number): Promise<Response> {
-  return apiFetch('api/machine/firmware/update', _json('POST', { machineId: Number(machineId) }));
+  return apiFetch('api/machine/firmware/update', jsonBody({ machineId: Number(machineId) }));
 }
 
 /** GET /api/machine/firmware/progress?machineId=... — poll update progress. Null on a non-ok or an unparseable body (treated as a transient failure by the poller). */
@@ -116,7 +108,7 @@ export async function getFirmwareProgress(machineId: string | number): Promise<F
  * the raw machine options array and `stale` marks a cached/offline answer.
  */
 export async function listMachineProfiles(machineId: string | number): Promise<MachineProfileList | null> {
-  return _jsonOrNull<MachineProfileList>(await apiFetch(`api/machine/profiles?machineId=${machineId}`));
+  return jsonOrNull<MachineProfileList>(await apiFetch(`api/machine/profiles?machineId=${machineId}`));
 }
 
 /**
@@ -131,7 +123,7 @@ export async function getMachineProfile(
   const url = machineId === undefined
     ? `api/machine/profile/${id}`
     : `api/machine/profile/${id}?machineId=${machineId}`;
-  return _jsonOrNull<MachineProfile>(await apiFetch(url));
+  return jsonOrNull<MachineProfile>(await apiFetch(url));
 }
 
 /**
@@ -165,7 +157,7 @@ export function fetchMachineProfileResponse(
  */
 export function saveMachineProfile(id: string | number | null, body: unknown): Promise<Response> {
   const url = id != null ? `api/machine/profile/${id}` : 'api/machine/profile';
-  return apiFetch(url, _json(id != null ? 'PUT' : 'POST', body));
+  return apiFetch(url, jsonBody(body, id != null ? 'PUT' : 'POST'));
 }
 
 /** DELETE /api/machine/profile/{id}?machineId=... — delete a profile; raw Response so the caller distinguishes the failure. */
@@ -180,30 +172,30 @@ export function deleteMachineProfile(id: string | number, machineId: string | nu
  * (flush, brew confirmation). Null on a non-ok response.
  */
 export async function getMachineControlSettings(): Promise<MachineControlSettings | null> {
-  return _jsonOrNull<MachineControlSettings>(await apiFetch('api/machine/control/settings'));
+  return jsonOrNull<MachineControlSettings>(await apiFetch('api/machine/control/settings'));
 }
 
 /** POST /api/machine/control/settings — set the opt-in toggle; raw Response so the caller reads the error body. */
 export function saveMachineControlSettings(enabled: boolean): Promise<Response> {
-  return apiFetch('api/machine/control/settings', _json('POST', { enabled }));
+  return apiFetch('api/machine/control/settings', jsonBody({ enabled }));
 }
 
 /** POST /api/machine/flush/start — start a flush on the machine; raw Response so the caller reads the error body. */
 export function startFlush(machineId: number): Promise<Response> {
-  return apiFetch('api/machine/flush/start', _json('POST', { machineId }));
+  return apiFetch('api/machine/flush/start', jsonBody({ machineId }));
 }
 
 /** POST /api/machine/flush/stop — end a hold-to-flush; raw Response so the caller reads the error body. */
 export function stopFlush(machineId: number): Promise<Response> {
-  return apiFetch('api/machine/flush/stop', _json('POST', { machineId }));
+  return apiFetch('api/machine/flush/stop', jsonBody({ machineId }));
 }
 
 /** POST /api/machine/brew-confirm/confirm — accept the pending brew confirmation; raw Response. */
 export function confirmBrew(machineId: number): Promise<Response> {
-  return apiFetch('api/machine/brew-confirm/confirm', _json('POST', { machineId }));
+  return apiFetch('api/machine/brew-confirm/confirm', jsonBody({ machineId }));
 }
 
 /** POST /api/machine/brew-confirm/cancel — decline the pending brew confirmation for every UI; raw Response. */
 export function cancelBrewConfirm(machineId: number): Promise<Response> {
-  return apiFetch('api/machine/brew-confirm/cancel', _json('POST', { machineId }));
+  return apiFetch('api/machine/brew-confirm/cancel', jsonBody({ machineId }));
 }

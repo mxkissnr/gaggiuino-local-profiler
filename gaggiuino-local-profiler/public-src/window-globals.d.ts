@@ -15,7 +15,6 @@ interface Window {
   closeFlavorWheel?: () => void;
   connectLiveStream?: () => void;
   disconnectLiveStream?: () => void;
-  updateFlapCounter?: (count: number) => void;
   trashShot?: (id: number) => void;
   selectShot?: (id: number) => void;
   startOrdersPolling?: () => void;

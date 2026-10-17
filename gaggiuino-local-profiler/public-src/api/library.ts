@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, jsonBody, jsonOrNull } from './fetch.js';
 import type {
   AdjustFrozenPortionInput, BagUpdateInput, Basket, Bean, CoffeeLibrary, FreezePortionsInput,
   Grinder, Milk, NewBagInput, PuckScreen, Recipe, ReorderBagsInput, ThawPortionInput,
@@ -16,14 +16,6 @@ import type {
 // domain type and keep the error semantics of the call they replaced — a null
 // on a non-ok response, matching api/shots.ts.
 
-function _json(method: string, body: unknown): RequestInit {
-  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
-
-async function _jsonOrNull<T>(r: Response): Promise<T | null> {
-  return r.ok ? ((await r.json()) as T) : null;
-}
-
 // ── Whole library ────────────────────────────────────────────────────────
 
 /**
@@ -32,7 +24,7 @@ async function _jsonOrNull<T>(r: Response): Promise<T | null> {
  * whatever it already has in S.coffeeLibrary.
  */
 export async function getLibrary(): Promise<CoffeeLibrary | null> {
-  return _jsonOrNull<CoffeeLibrary>(await apiFetch('api/library'));
+  return jsonOrNull<CoffeeLibrary>(await apiFetch('api/library'));
 }
 
 // ── Beans ────────────────────────────────────────────────────────────────
@@ -44,42 +36,42 @@ export async function getLibrary(): Promise<CoffeeLibrary | null> {
  */
 export async function saveBean(id: number | null, payload: unknown): Promise<Bean | null> {
   const url = id != null ? `api/library/bean/${id}` : 'api/library/bean';
-  return _jsonOrNull<Bean>(await apiFetch(url, _json(id != null ? 'PUT' : 'POST', payload)));
+  return jsonOrNull<Bean>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/bean/{id}/new-bag — append a bag to the bean. */
 export async function addBeanBag(id: number, payload: NewBagInput): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/new-bag`, _json('POST', payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/new-bag`, jsonBody(payload)));
 }
 
 /** DELETE /api/library/bean/{beanId}/bag/{bagId} — drop one bag; returns the updated bean. */
 export async function deleteBeanBag(beanId: number, bagId: number): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, { method: 'DELETE' }));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, { method: 'DELETE' }));
 }
 
 /** PUT /api/library/bean/{beanId}/bag/{bagId} — edit a bag's mutable fields (full-replace; sortOrder optional/partial). */
 export async function updateBeanBag(beanId: number, bagId: number, payload: BagUpdateInput): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, _json('PUT', payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, jsonBody(payload, 'PUT')));
 }
 
 /** POST /api/library/bean/{id}/reorder-bags — bulk-reassign queue order for upcoming bags. */
 export async function reorderBeanBags(id: number, bagIds: ReorderBagsInput['bagIds']): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/reorder-bags`, _json('POST', { bagIds })));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/reorder-bags`, jsonBody({ bagIds })));
 }
 
 /** POST /api/library/bean/{id}/freeze-portions — split part of the active bag into dated frozen portions. */
 export async function freezeBeanPortions(id: number, payload: FreezePortionsInput): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/freeze-portions`, _json('POST', payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/freeze-portions`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{beanId}/thaw-portion — thaw one portion of a frozen batch. */
 export async function thawBeanPortion(beanId: number, payload: ThawPortionInput): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/thaw-portion`, _json('POST', payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/thaw-portion`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{beanId}/adjust-frozen-portion — correct a frozen-portion entry after the fact. */
 export async function adjustFrozenPortion(beanId: number, payload: AdjustFrozenPortionInput): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/adjust-frozen-portion`, _json('POST', payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/adjust-frozen-portion`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{id}/known-grind — remember a (grinder, grindSetting) pair. */
@@ -87,12 +79,12 @@ export async function saveBeanKnownGrind(
   id: number,
   payload: { grinder?: string; grindSetting?: string | number },
 ): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/known-grind`, _json('POST', payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/known-grind`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{id}/toggle-active — manual override for the order card's bean picker (#578). */
 export async function toggleBeanActive(id: number): Promise<Bean | null> {
-  return _jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/toggle-active`, { method: 'POST' }));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/toggle-active`, { method: 'POST' }));
 }
 
 /** POST /api/library/bean/{id}/delete — permanently delete a bean. */
@@ -110,12 +102,12 @@ export function uploadBeanImage(id: number, blob: Blob): Promise<Response> {
 /** POST/PUT /api/library/grinder[/{id}] — create (`id` null) or update a grinder. */
 export async function saveGrinder(id: number | null, payload: unknown): Promise<Grinder | null> {
   const url = id != null ? `api/library/grinder/${id}` : 'api/library/grinder';
-  return _jsonOrNull<Grinder>(await apiFetch(url, _json(id != null ? 'PUT' : 'POST', payload)));
+  return jsonOrNull<Grinder>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/grinder/{id}/reset-burrs — start a fresh burr-wear counting window. */
 export async function resetGrinderBurrs(id: number): Promise<Grinder | null> {
-  return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/reset-burrs`, { method: 'POST' }));
+  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/reset-burrs`, { method: 'POST' }));
 }
 
 /**
@@ -125,12 +117,12 @@ export async function resetGrinderBurrs(id: number): Promise<Grinder | null> {
 export async function setGrinderZeroPoint(id: number, zeroPoint: number, since?: number): Promise<Grinder | null> {
   const body: { zeroPoint: number; since?: number } = { zeroPoint };
   if (since) body.since = since;
-  return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point`, _json('PUT', body)));
+  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point`, jsonBody(body, 'PUT')));
 }
 
 /** DELETE /api/library/grinder/{id}/zero-point/{since} — remove one history entry. */
 export async function deleteGrinderZeroPoint(id: number, since: number): Promise<Grinder | null> {
-  return _jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point/${since}`, { method: 'DELETE' }));
+  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point/${since}`, { method: 'DELETE' }));
 }
 
 /** POST /api/library/grinder/{id}/image — upload a (cropped) grinder photo; raw Response. */
@@ -148,7 +140,7 @@ export function deleteGrinderPermanently(id: number): Promise<Response> {
 /** POST/PUT /api/library/recipe[/{id}] — create (`id` null) or update a recipe. */
 export async function saveRecipe(id: number | null, payload: unknown): Promise<Recipe | null> {
   const url = id != null ? `api/library/recipe/${id}` : 'api/library/recipe';
-  return _jsonOrNull<Recipe>(await apiFetch(url, _json(id != null ? 'PUT' : 'POST', payload)));
+  return jsonOrNull<Recipe>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/recipe/{id}/delete — permanently delete a recipe. */
@@ -160,17 +152,17 @@ export function deleteRecipePermanently(id: number): Promise<Response> {
 
 /** GET /api/library/milks — just the milk list (the annotation panel's pill source). */
 export async function listMilks(): Promise<Milk[] | null> {
-  return _jsonOrNull<Milk[]>(await apiFetch('api/library/milks'));
+  return jsonOrNull<Milk[]>(await apiFetch('api/library/milks'));
 }
 
 /** POST /api/library/milk — create a milk. */
 export async function createMilk(payload: unknown): Promise<Milk | null> {
-  return _jsonOrNull<Milk>(await apiFetch('api/library/milk', _json('POST', payload)));
+  return jsonOrNull<Milk>(await apiFetch('api/library/milk', jsonBody(payload)));
 }
 
 /** POST /api/library/milk/{id}/restock — add `ml` to the milk's stock. */
 export async function restockMilk(id: number, ml: number): Promise<Milk | null> {
-  return _jsonOrNull<Milk>(await apiFetch(`api/library/milk/${id}/restock`, _json('POST', { ml })));
+  return jsonOrNull<Milk>(await apiFetch(`api/library/milk/${id}/restock`, jsonBody({ ml })));
 }
 
 /** DELETE /api/library/milk/{id} — permanently delete a milk. */
@@ -183,7 +175,7 @@ export function deleteMilkById(id: number): Promise<Response> {
 /** POST/PUT /api/library/basket[/{id}] — create (`id` null) or update a basket. */
 export async function saveBasket(id: number | null, payload: unknown): Promise<Basket | null> {
   const url = id != null ? `api/library/basket/${id}` : 'api/library/basket';
-  return _jsonOrNull<Basket>(await apiFetch(url, _json(id != null ? 'PUT' : 'POST', payload)));
+  return jsonOrNull<Basket>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/basket/{id}/image — upload a (cropped) basket photo; raw Response. */
@@ -201,7 +193,7 @@ export function deleteBasketById(id: number): Promise<Response> {
 /** POST/PUT /api/library/puckscreen[/{id}] — create (`id` null) or update a puck screen. */
 export async function savePuckScreen(id: number | null, payload: unknown): Promise<PuckScreen | null> {
   const url = id != null ? `api/library/puckscreen/${id}` : 'api/library/puckscreen';
-  return _jsonOrNull<PuckScreen>(await apiFetch(url, _json(id != null ? 'PUT' : 'POST', payload)));
+  return jsonOrNull<PuckScreen>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/puckscreen/{id}/image — upload a (cropped) puck-screen photo; raw Response. */

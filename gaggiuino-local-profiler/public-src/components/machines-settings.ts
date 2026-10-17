@@ -20,6 +20,7 @@ import { esc as escapeHtml, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import type { MachineRecord } from '../state/index.js';
 import type { FirmwareVersion, MachineSaveInput } from '../api/types.js';
+import { safeLocalStorage } from '../storage.js';
 
 // The edit form's theme selection (a preset key, or custom {a,b} stops), the
 // theme preset shape resolveTheme()/getThemePreset() hand back, and the
@@ -73,14 +74,12 @@ let _releaseChannelReqSeq = 0;
   // machine.active); read the old per-device key once and migrate it up.
   let stored = getUiPref<number | 'all'>('machine.active');
   if (stored === undefined) {
-    try {
-      const legacy = localStorage.getItem('glp_active_machine');
-      if (legacy) {
-        stored = legacy === 'all' ? 'all' : parseInt(legacy, 10);
-        setUiPref('machine.active', stored);
-      }
-      localStorage.removeItem('glp_active_machine');
-    } catch { /* ignore */ }
+    const legacy = safeLocalStorage.getItem('glp_active_machine');
+    if (legacy) {
+      stored = legacy === 'all' ? 'all' : parseInt(legacy, 10);
+      setUiPref('machine.active', stored);
+    }
+    safeLocalStorage.removeItem('glp_active_machine');
   }
   if (stored !== undefined) S.activeMachineId = stored;
 })();
@@ -227,7 +226,7 @@ export function applyActiveMachineAccentTheme(): void {
   // getThemePreset('amber-americano') is a hardcoded, always-present
   // THEME_PRESETS entry, so this chain always resolves — there is no
   // "no accent at all" case left to handle.
-  const savedKey = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  const savedKey = migrateLegacyAccent(safeLocalStorage.getItem('glp_accent_theme')) || 'amber-americano';
   const resolved = (machineTheme || getThemePreset(savedKey) || getThemePreset('amber-americano')) as ThemePreset;
   const rgbA = hexToRgb(resolved.a);
   const rgbB = hexToRgb(resolved.b);
@@ -445,7 +444,7 @@ function renderThemeSwatches(): void {
 export function renderAccentSwatches(): void {
   const wrap = document.getElementById('accentSwatches');
   if (!wrap) return;
-  const current = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  const current = migrateLegacyAccent(safeLocalStorage.getItem('glp_accent_theme')) || 'amber-americano';
   wrap.innerHTML = joinHtml(THEME_PRESETS.map(p => html`<button type="button" class="accent-swatch${current === p.key ? html` active` : html``}" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? html`background-color:${escapeHtml(p.a)}` : html`background-image:linear-gradient(135deg,${escapeHtml(p.a)},${escapeHtml(p.b)})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`));
   wrap.querySelectorAll<HTMLElement>('[data-preset-key]').forEach(btn => {
     // setAccentTheme is assigned onto window in main.js (Object.assign).

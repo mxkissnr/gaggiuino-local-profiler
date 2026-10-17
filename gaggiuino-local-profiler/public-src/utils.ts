@@ -1,5 +1,6 @@
 import type { Chart } from 'chart.js';
 import type { RecordedPhaseTransition } from './constants.js';
+import { safeLocalStorage } from './storage.js';
 
 // #1547: this module holds pure helpers and renders no <input>/<select>/<textarea>,
 // so there is no form field here to give an accessible name.
@@ -302,11 +303,9 @@ export const INSTALL_ID_KEY = 'glp_install_id';
 
 export function syncInstallId(installId?: string | null): void {
   if (!installId) return;
-  const stored = localStorage.getItem(INSTALL_ID_KEY);
-  if (stored !== installId) {
-    try { localStorage.removeItem(COMPLETED_KEY); } catch { /* ignore */ }
-  }
-  try { localStorage.setItem(INSTALL_ID_KEY, installId); } catch { /* ignore */ }
+  const stored = safeLocalStorage.getItem(INSTALL_ID_KEY);
+  if (stored !== installId) safeLocalStorage.removeItem(COMPLETED_KEY);
+  safeLocalStorage.setItem(INSTALL_ID_KEY, installId);
 }
 
 // ── Math helpers ──────────────────────────────────────────────────────────
