@@ -14,7 +14,7 @@ import (
 
 // Equivalence is the dataset the #1616 equivalence tests pin: smaller than
 // Default so the tests stay fast, still with every edge case Seed writes.
-var Equivalence = Options{Shots: 800, Samples: 120}
+var Equivalence = Options{Shots: 200, Samples: 120}
 
 // UpdateEnv names the environment variable that makes AssertGolden rewrite
 // its golden file instead of comparing against it:

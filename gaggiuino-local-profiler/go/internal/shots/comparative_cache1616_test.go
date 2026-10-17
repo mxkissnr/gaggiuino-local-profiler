@@ -18,7 +18,7 @@ func TestComparativeAdvice_MatchesFullHistoryComputation(t *testing.T) {
 		t.Helper()
 		n := 0
 		for i, id := range env.info.ShotIDs {
-			if i%23 != 0 {
+			if i%3 != 0 {
 				continue
 			}
 			shot, err := env.svc.GetByID(id)

@@ -1,386 +1,112 @@
 {
   "1": null,
-  "107": null,
-  "115": {
+  "101": null,
+  "104": {
     "Type": "coarser",
     "Icon": "📊",
-    "Text": "4 comparable shots: grind 17 → score 81 — grind coarser",
-    "SampleCount": 4,
-    "BestGrindSetting": 17,
-    "BestScore": 81
-  },
-  "123": null,
-  "131": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 13.5 → score 79 — grind finer",
+    "Text": "1 comparable shots: grind 17.5 → score 79 — grind coarser",
     "SampleCount": 1,
-    "BestGrindSetting": 13.5,
+    "BestGrindSetting": 17.5,
     "BestScore": 79
   },
-  "139": null,
-  "147": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 17 → score 75 — grind coarser",
-    "SampleCount": 2,
-    "BestGrindSetting": 17,
-    "BestScore": 75
-  },
-  "155": null,
-  "163": {
+  "107": null,
+  "109": null,
+  "112": null,
+  "115": {
     "Type": "finer",
     "Icon": "📊",
-    "Text": "2 comparable shots: grind 14 → score 75 — grind finer",
-    "SampleCount": 2,
-    "BestGrindSetting": 14,
-    "BestScore": 75
+    "Text": "1 comparable shots: grind 9.5 → score 73 — grind finer",
+    "SampleCount": 1,
+    "BestGrindSetting": 9.5,
+    "BestScore": 73
   },
+  "12": {
+    "Type": "finer",
+    "Icon": "📊",
+    "Text": "1 comparable shots: grind 12.5 → score 79 — grind finer",
+    "SampleCount": 1,
+    "BestGrindSetting": 12.5,
+    "BestScore": 79
+  },
+  "120": null,
+  "123": null,
+  "126": null,
+  "128": null,
+  "131": null,
+  "134": null,
+  "136": null,
+  "139": null,
+  "142": null,
+  "147": null,
+  "15": null,
+  "150": null,
+  "153": null,
+  "155": null,
+  "158": null,
+  "161": null,
+  "163": null,
+  "166": null,
+  "169": null,
+  "174": null,
+  "177": null,
+  "179": null,
   "18": null,
   "180": null,
-  "188": null,
-  "196": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 9 → score 73 — grind finer",
-    "SampleCount": 2,
-    "BestGrindSetting": 9,
-    "BestScore": 73
-  },
+  "20": null,
   "20000001": null,
+  "20000004": null,
+  "20000007": null,
   "20000010": null,
+  "20000013": null,
+  "20000016": null,
   "20000019": null,
-  "20000028": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 13 → score 79 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 13,
-    "BestScore": 79
-  },
-  "20000037": null,
-  "20000046": null,
-  "20000055": null,
-  "20000064": null,
-  "20000073": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 8 → score 75 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 8,
-    "BestScore": 75
-  },
-  "204": null,
-  "212": null,
-  "220": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 16.5 → score 80 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 16.5,
-    "BestScore": 80
-  },
-  "228": null,
-  "236": null,
-  "244": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "5 comparable shots: grind 9 → score 76 — grind finer",
-    "SampleCount": 5,
-    "BestGrindSetting": 9,
-    "BestScore": 76
-  },
+  "23": null,
   "26": null,
-  "261": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 14 → score 76 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 14,
-    "BestScore": 76
-  },
-  "269": null,
-  "277": null,
-  "285": null,
-  "293": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "3 comparable shots: grind 17.5 → score 80 — grind coarser",
-    "SampleCount": 3,
-    "BestGrindSetting": 17.5,
-    "BestScore": 80
-  },
-  "301": null,
-  "309": {
+  "28": null,
+  "31": null,
+  "34": null,
+  "39": {
     "Type": "finer",
     "Icon": "📊",
-    "Text": "1 comparable shots: grind 16 → score 75 — grind finer",
+    "Text": "1 comparable shots: grind 8.5 → score 80 — grind finer",
     "SampleCount": 1,
-    "BestGrindSetting": 16,
-    "BestScore": 75
-  },
-  "317": null,
-  "325": null,
-  "34": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 9 → score 70 — grind finer",
-    "SampleCount": 2,
-    "BestGrindSetting": 9,
-    "BestScore": 70
-  },
-  "342": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 11.5 → score 84 — grind finer",
-    "SampleCount": 2,
-    "BestGrindSetting": 11.5,
-    "BestScore": 84
-  },
-  "350": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 8 → score 79 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 8,
-    "BestScore": 79
-  },
-  "358": null,
-  "366": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 13 → score 74 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 13,
-    "BestScore": 74
-  },
-  "374": {
-    "Type": "ok",
-    "Icon": "📊",
-    "Text": "3 comparable shots confirm your grind setting (avg score 81)",
-    "SampleCount": 3,
-    "BestGrindSetting": 11,
-    "BestScore": 81
-  },
-  "382": null,
-  "390": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 8 → score 80 — grind finer",
-    "SampleCount": 2,
-    "BestGrindSetting": 8,
-    "BestScore": 80
-  },
-  "398": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 15 → score 79 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 15,
-    "BestScore": 79
-  },
-  "406": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 13.5 → score 80 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 13.5,
-    "BestScore": 80
-  },
-  "42": null,
-  "423": null,
-  "431": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 8 → score 76 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 8,
-    "BestScore": 76
-  },
-  "439": null,
-  "447": null,
-  "455": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 17 → score 75 — grind coarser",
-    "SampleCount": 2,
-    "BestGrindSetting": 17,
-    "BestScore": 75
-  },
-  "463": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 14 → score 74 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 14,
-    "BestScore": 74
-  },
-  "471": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 14 → score 75 — grind coarser",
-    "SampleCount": 2,
-    "BestGrindSetting": 14,
-    "BestScore": 75
-  },
-  "479": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 17 → score 79 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 17,
-    "BestScore": 79
-  },
-  "487": {
-    "Type": "ok",
-    "Icon": "📊",
-    "Text": "3 comparable shots confirm your grind setting (avg score 73)",
-    "SampleCount": 3,
-    "BestGrindSetting": 11,
-    "BestScore": 73
-  },
-  "50": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "5 comparable shots: grind 13 → score 76 — grind coarser",
-    "SampleCount": 5,
-    "BestGrindSetting": 13,
-    "BestScore": 76
-  },
-  "504": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "5 comparable shots: grind 16.5 → score 82 — grind coarser",
-    "SampleCount": 5,
-    "BestGrindSetting": 16.5,
-    "BestScore": 82
-  },
-  "512": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 16 → score 80 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 16,
-    "BestScore": 80
-  },
-  "520": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 8 → score 75 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 8,
-    "BestScore": 75
-  },
-  "528": null,
-  "536": null,
-  "544": null,
-  "552": null,
-  "560": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 9 → score 81 — grind finer",
-    "SampleCount": 1,
-    "BestGrindSetting": 9,
-    "BestScore": 81
-  },
-  "568": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "3 comparable shots: grind 14 → score 79 — grind coarser",
-    "SampleCount": 3,
-    "BestGrindSetting": 14,
-    "BestScore": 79
-  },
-  "58": null,
-  "585": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 15 → score 79 — grind coarser",
-    "SampleCount": 2,
-    "BestGrindSetting": 15,
-    "BestScore": 79
-  },
-  "593": null,
-  "601": {
-    "Type": "ok",
-    "Icon": "📊",
-    "Text": "2 comparable shots confirm your grind setting (avg score 80)",
-    "SampleCount": 2,
-    "BestGrindSetting": 15.5,
-    "BestScore": 80
-  },
-  "609": null,
-  "617": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 8 → score 79 — grind finer",
-    "SampleCount": 2,
-    "BestGrindSetting": 8,
-    "BestScore": 79
-  },
-  "625": null,
-  "633": null,
-  "641": {
-    "Type": "ok",
-    "Icon": "📊",
-    "Text": "1 comparable shots confirm your grind setting (avg score 80)",
-    "SampleCount": 1,
-    "BestGrindSetting": 8,
-    "BestScore": 80
-  },
-  "649": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "3 comparable shots: grind 9 → score 75 — grind finer",
-    "SampleCount": 3,
-    "BestGrindSetting": 9,
-    "BestScore": 75
-  },
-  "66": null,
-  "666": null,
-  "674": null,
-  "682": null,
-  "690": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 14 → score 72 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 14,
-    "BestScore": 72
-  },
-  "698": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "2 comparable shots: grind 14 → score 74 — grind coarser",
-    "SampleCount": 2,
-    "BestGrindSetting": 14,
-    "BestScore": 74
-  },
-  "706": {
-    "Type": "coarser",
-    "Icon": "📊",
-    "Text": "1 comparable shots: grind 16 → score 73 — grind coarser",
-    "SampleCount": 1,
-    "BestGrindSetting": 16,
-    "BestScore": 73
-  },
-  "714": null,
-  "720": {
-    "Type": "finer",
-    "Icon": "📊",
-    "Text": "3 comparable shots: grind 8.5 → score 76 — grind finer",
-    "SampleCount": 3,
     "BestGrindSetting": 8.5,
-    "BestScore": 76
+    "BestScore": 80
   },
-  "74": {
+  "4": null,
+  "42": null,
+  "45": {
+    "Type": "coarser",
+    "Icon": "📊",
+    "Text": "1 comparable shots: grind 17 → score 71 — grind coarser",
+    "SampleCount": 1,
+    "BestGrindSetting": 17,
+    "BestScore": 71
+  },
+  "47": null,
+  "50": null,
+  "53": null,
+  "55": null,
+  "58": null,
+  "61": null,
+  "66": {
     "Type": "finer",
     "Icon": "📊",
-    "Text": "1 comparable shots: grind 11 → score 73 — grind finer",
+    "Text": "1 comparable shots: grind 9 → score 76 — grind finer",
     "SampleCount": 1,
-    "BestGrindSetting": 11,
-    "BestScore": 73
+    "BestGrindSetting": 9,
+    "BestScore": 76
   },
+  "69": null,
+  "7": null,
+  "72": null,
+  "74": null,
+  "77": null,
+  "80": null,
   "82": null,
+  "85": null,
+  "88": null,
+  "93": null,
+  "96": null,
   "99": null
 }

@@ -6,23 +6,23 @@
         "name": "Niche Zero",
         "burr_type": "conical",
         "purchase_date": "2021-01-01",
-        "shots_since_burrs": 194,
-        "grams_since_burrs": 3038.7
+        "shots_since_burrs": 54,
+        "grams_since_burrs": 828.9
       },
       {
         "id": 102,
         "name": "Mühle Pro",
         "burr_type": "flat",
         "burrs_reset_at": "2024-03-01T10:00:00.000Z",
-        "shots_since_burrs": 106,
-        "grams_since_burrs": 1682.7
+        "shots_since_burrs": 32,
+        "grams_since_burrs": 490.3
       },
       {
         "id": 103,
         "name": "DF64",
         "burrs_reset_at": "2025-06-15",
-        "shots_since_burrs": 18,
-        "grams_since_burrs": 283.6
+        "shots_since_burrs": 13,
+        "grams_since_burrs": 225.2
       },
       {
         "id": 104,
@@ -65,23 +65,23 @@
         "name": "Niche Zero",
         "burr_type": "conical",
         "purchase_date": "2021-01-01",
-        "shots_since_burrs": 194,
-        "grams_since_burrs": 3038.7
+        "shots_since_burrs": 54,
+        "grams_since_burrs": 828.9
       },
       {
         "id": 102,
         "name": "Mühle Pro",
         "burr_type": "flat",
         "burrs_reset_at": "2024-03-01T10:00:00.000Z",
-        "shots_since_burrs": 106,
-        "grams_since_burrs": 1682.7
+        "shots_since_burrs": 32,
+        "grams_since_burrs": 490.3
       },
       {
         "id": 103,
         "name": "DF64",
         "burrs_reset_at": "2025-06-15",
-        "shots_since_burrs": 18,
-        "grams_since_burrs": 283.6
+        "shots_since_burrs": 13,
+        "grams_since_burrs": 225.2
       },
       {
         "id": 104,

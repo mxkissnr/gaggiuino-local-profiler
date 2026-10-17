@@ -6,8 +6,8 @@
       "name": "Niche Zero",
       "purchaseDate": "2021-01-01",
       "wear": {
-        "gramsSinceBurrs": 3038.7,
-        "shotsSinceBurrs": 194
+        "gramsSinceBurrs": 828.9,
+        "shotsSinceBurrs": 54
       }
     },
     {
@@ -16,8 +16,8 @@
       "id": 102,
       "name": "Mühle Pro",
       "wear": {
-        "gramsSinceBurrs": 1682.7,
-        "shotsSinceBurrs": 106
+        "gramsSinceBurrs": 490.3,
+        "shotsSinceBurrs": 32
       },
       "zeroPoints": [
         {
@@ -31,8 +31,8 @@
       "id": 103,
       "name": "DF64",
       "wear": {
-        "gramsSinceBurrs": 283.6,
-        "shotsSinceBurrs": 18
+        "gramsSinceBurrs": 225.2,
+        "shotsSinceBurrs": 13
       }
     },
     {
@@ -50,24 +50,24 @@
       "grinder": {
         "name": "Niche Zero"
       },
-      "shotsSinceBurrs": 194,
-      "gramsSinceBurrs": 3038.7
+      "shotsSinceBurrs": 54,
+      "gramsSinceBurrs": 828.9
     },
     {
       "grinder": {
         "burrsResetAt": "2025-03-04T05:06:07.890Z",
         "name": "niche zero"
       },
-      "shotsSinceBurrs": 59,
-      "gramsSinceBurrs": 850.2
+      "shotsSinceBurrs": 34,
+      "gramsSinceBurrs": 510
     },
     {
       "grinder": {
         "burrsResetAt": "2023-01-01",
         "name": "mühle pro"
       },
-      "shotsSinceBurrs": 147,
-      "gramsSinceBurrs": 2302.9
+      "shotsSinceBurrs": 37,
+      "gramsSinceBurrs": 583.3
     },
     {
       "grinder": {
@@ -88,8 +88,8 @@
       "grinder": {
         "name": ""
       },
-      "shotsSinceBurrs": 174,
-      "gramsSinceBurrs": 977.5
+      "shotsSinceBurrs": 45,
+      "gramsSinceBurrs": 264.4
     }
   ]
 }

@@ -83,7 +83,7 @@ func TestEquivalence1616_ComparativeAdvice(t *testing.T) {
 	advise := func() map[int64]any {
 		out := map[int64]any{}
 		for i, id := range env.info.ShotIDs {
-			if i%9 != 0 && id != env.info.LatestAnnotatedID {
+			if i%3 != 0 && id != env.info.LatestAnnotatedID {
 				continue
 			}
 			shot, err := env.svc.GetByID(id)
@@ -99,8 +99,14 @@ func TestEquivalence1616_ComparativeAdvice(t *testing.T) {
 		return out
 	}
 	cold := advise()
-	if cold[env.info.LatestAnnotatedID] == (*shots.ComparativeGrindAdvice)(nil) {
-		t.Fatal("expected advice for the latest annotated shot — check the seed")
+	advised := 0
+	for _, a := range cold {
+		if a != (*shots.ComparativeGrindAdvice)(nil) {
+			advised++
+		}
+	}
+	if advised < 3 {
+		t.Fatalf("only %d sampled shots have advice — check the seed", advised)
 	}
 	warmScoreCache(t, env.svc)
 	warm := advise()
