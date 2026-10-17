@@ -1,6 +1,7 @@
 package achievements
 
 import (
+	stdjson "encoding/json"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -109,6 +110,12 @@ func buildContext(deps Deps, event *Event) (*Context, error) {
 			clone[k] = v
 		}
 		clone["score"] = scoreForShot(s, beans)
+		// Decode the curve once here instead of once per badge that reads it
+		// (#1616: ~10-14 decodes per shot per pass). The score above still
+		// runs on the raw bytes, exactly as before.
+		if raw, ok := s["datapoints"].(stdjson.RawMessage); ok {
+			clone["datapoints"] = newShotSeries(raw)
+		}
 		scoredShots = append(scoredShots, clone)
 	}
 
@@ -185,5 +192,34 @@ func scoreForShot(shot shots.Shot, beans []library.Entity) *int {
 // shotScore reads the injected ["score"] as *int.
 func shotScore(shot shots.Shot) *int {
 	v, _ := shot["score"].(*int)
+	return v
+}
+
+// shotSeries is a context shot's "datapoints" value: the curve blob
+// tokenized once into its top-level series, each decoded into the []float64
+// of its numeric samples on first use and kept for every later badge.
+// datapointsScaled reads it; the samples are exactly the ones the
+// DatapointsMap + asFloat64 path yields for a JSON curve (float64 values,
+// nulls dropped — shots.DecodeFloatArray).
+type shotSeries struct {
+	raw  map[string]stdjson.RawMessage
+	vals map[string][]float64
+}
+
+func newShotSeries(raw stdjson.RawMessage) *shotSeries {
+	return &shotSeries{raw: shots.SplitSeries(raw), vals: map[string][]float64{}}
+}
+
+// samples returns key's numeric samples (nil when the series is absent or
+// not an array).
+func (ss *shotSeries) samples(key string) []float64 {
+	if v, ok := ss.vals[key]; ok {
+		return v
+	}
+	var v []float64
+	if r, ok := ss.raw[key]; ok {
+		v = shots.DecodeFloatArray(r)
+	}
+	ss.vals[key] = v
 	return v
 }
