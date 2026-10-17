@@ -3,7 +3,7 @@
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml } from '../../utils.js';
+import { esc, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
@@ -85,6 +85,7 @@ export function renderRecipeList(): void {
     const shotsBadge  = shotCount > 0
       ? html`<span class="lib-recipe-shots-badge">${esc(shotCount)} Shot${shotCount !== 1 ? html`s` : html``}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
       : html``;
+    const sourceHref = safeHttpUrl(r.sourceUrl);
     return html`<div class="lib-item">
       <div class="lib-item-info">
         <div class="lib-item-name">${brewLabel}${esc(r.name)}${shotsBadge}</div>
@@ -92,7 +93,7 @@ export function renderRecipeList(): void {
         ${params.length ? html`<div class="lib-recipe-params">${joinHtml(params.map(p => html`<span>${p}</span>`))}</div>` : html``}
         ${stepsHtml}
         ${r.notes ? html`<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : html``}
-        ${r.sourceUrl ? html`<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">${LINK_ICON_SVG} Quelle</a></div>` : html``}
+        ${sourceHref ? html`<div class="lib-item-source"><a href="${esc(sourceHref)}" target="_blank" rel="noopener">${LINK_ICON_SVG} Quelle</a></div>` : html``}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>

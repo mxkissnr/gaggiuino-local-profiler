@@ -3,7 +3,7 @@ import * as libraryApi from '../../api/library.js';
 import { S } from '../../state/index.js';
 import type { ShotMeta } from '../../state/index.js';
 import { localeFor, countryName } from '../../constants.js';
-import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml } from '../../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
 import { miniWheelSvg, flavorChipsHtml } from '../../components/flavor-mini-wheel.js';
@@ -101,17 +101,9 @@ export function beanFreshBadge(b: BeanListRow): Html {
     : esc('');
 }
 
-// #1408: safeHttpUrl returns u only when it parses as an absolute http(s)
-// URL, so a stored javascript:/data: value renders as plain text, never as a
-// clickable link.
-export function safeHttpUrl(u: string | null | undefined): string | null {
-  if (!u) return null;
-  try {
-    const parsed = new URL(u);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return u;
-  } catch { /* not a URL */ }
-  return null;
-}
+// safeHttpUrl moved to utils.ts (#1626) so every link sink can share it; it
+// stays re-exported here for library.ts's existing export list.
+export { safeHttpUrl };
 
 export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   const bags = Array.isArray(b.bags) ? b.bags : [];
