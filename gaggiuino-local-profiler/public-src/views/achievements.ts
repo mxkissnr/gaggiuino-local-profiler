@@ -199,7 +199,9 @@ function showDetail(id: string | undefined): void {
   const badge = _state.badges.find(b => b.id === id);
   if (!badge) return;
   document.querySelectorAll('.ach-field').forEach(el => el.removeAttribute('aria-current'));
-  document.querySelector(`.ach-field[data-ach-id="${id}"]`)?.setAttribute('aria-current', 'true');
+  // #1626: the id lands inside a selector string, so escape it like any
+  // other value there.
+  document.querySelector(`.ach-field[data-ach-id="${CSS.escape(badge.id)}"]`)?.setAttribute('aria-current', 'true');
 
   const secretLocked = badge.secret && !badge.unlocked;
   const detail = document.getElementById('achDetail');
