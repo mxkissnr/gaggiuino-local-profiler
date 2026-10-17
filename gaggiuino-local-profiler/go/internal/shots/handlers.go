@@ -164,21 +164,31 @@ const shotsTodayHeader = "X-Shots-Today"
 // or invalid limit, or one with ?trash=1, returns the full list as before.
 func (h *Handlers) listShots(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	var (
-		list []Shot
-		err  error
-	)
-	switch {
-	case q.Get("trash") == "1":
-		list, err = h.service.GetTrash()
-	case listLimit(q.Get("limit")) > 0:
-		list, err = h.service.GetLastN(listLimit(q.Get("limit")))
-	default:
-		list, err = h.service.GetAll()
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
-		return
+	var out []Shot
+	if q.Get("trash") == "1" {
+		list, err := h.service.GetTrash()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		detail := h.service.DetailScorer()
+		out = make([]Shot, len(list))
+		for i, shot := range list {
+			out[i] = withScore(shot, detail(shot))
+		}
+	} else {
+		// The active list's scores come from the score cache (#1616) — the
+		// values the per-shot DetailScorer computes, without rescoring the
+		// whole history on every integration poll.
+		rows, err := h.service.GetAllScored(listLimit(q.Get("limit")))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		out = make([]Shot, len(rows))
+		for i, row := range rows {
+			out[i] = withScore(row.Shot, ScoreDetail{Score: row.Score, UsedBeanTarget: row.UsedBeanTarget})
+		}
 	}
 	today, err := h.service.CountToday(time.Now())
 	if err != nil {
@@ -186,11 +196,6 @@ func (h *Handlers) listShots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set(shotsTodayHeader, strconv.Itoa(today))
-	detail := h.service.DetailScorer()
-	out := make([]Shot, len(list))
-	for i, shot := range list {
-		out[i] = withScore(shot, detail(shot))
-	}
 	writeJSON(w, http.StatusOK, out)
 }
 

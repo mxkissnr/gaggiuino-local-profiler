@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -265,6 +266,23 @@ func (r *Repository) scoredShots(query string, args []any, lookup beanLookup) ([
 		r.backfillScoreCache(backfill)
 	}
 	return out, nil
+}
+
+// FindAllScoredExcludingTrash is FindAllExcludingTrash (same shots, same
+// order: the timestamp index breaks a tie on the id) with each shot's score
+// resolved through the score cache instead of recomputed — GET /shots.json
+// (#1616). limit > 0 keeps only the newest limit shots, still oldest first.
+func (r *Repository) FindAllScoredExcludingTrash(limit int, lookup beanLookup) ([]PageRow, error) {
+	q := `SELECT ` + pageColumns + scoredFrom + ` WHERE s.id NOT IN (SELECT shot_id FROM trash)`
+	if limit <= 0 {
+		return r.scoredShots(q+` ORDER BY s.timestamp ASC, s.id ASC`, nil, lookup)
+	}
+	rows, err := r.scoredShots(q+` ORDER BY s.timestamp DESC, s.id DESC LIMIT ?`, []any{limit}, lookup)
+	if err != nil {
+		return nil, err
+	}
+	slices.Reverse(rows)
+	return rows, nil
 }
 
 // scoredIDsChunk bounds the bound-parameter list of one scoredShotsByIDs

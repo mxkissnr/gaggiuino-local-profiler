@@ -58,15 +58,22 @@ func (e perfEnv) get(tb testing.TB, path string) *httptest.ResponseRecorder {
 }
 
 // BenchmarkShotsJSON measures GET /shots.json against the #1616 dataset
-// (5,000 shots) — the Home Assistant integration polls it every 60 s. Run:
+// (5,000 shots) — the Home Assistant integration polls it every 60 s — in
+// steady state (one warm-up request first), for the full list and for the
+// ?limit=10 the integration needs. Run:
 //
 //	go test ./internal/shots -run '^$' -bench BenchmarkShotsJSON -benchmem
 func BenchmarkShotsJSON(b *testing.B) {
 	env := newPerfEnv(b, perfseed.Default)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		env.get(b, "/shots.json")
+	for _, path := range []string{"/shots.json", "/shots.json?limit=10"} {
+		b.Run(path, func(b *testing.B) {
+			env.get(b, path)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				env.get(b, path)
+			}
+		})
 	}
 }
 

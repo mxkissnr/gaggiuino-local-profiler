@@ -42,10 +42,12 @@ func (s *Service) GetAll() ([]Shot, error) {
 	return s.repo.FindAllExcludingTrash()
 }
 
-// GetLastN returns the newest n non-trashed shots, oldest first — the tail
-// of GetAll's list (#1616).
-func (s *Service) GetLastN(n int) ([]Shot, error) {
-	return s.repo.FindLastNExcludingTrash(n)
+// GetAllScored returns GetAll's shots (or, with limit > 0, only the newest
+// limit of them, still oldest first) with each shot's score taken from the
+// score cache — the same values ComputeScoreDetail yields, without
+// rescoring the whole history on every GET /shots.json (#1616).
+func (s *Service) GetAllScored(limit int) ([]PageRow, error) {
+	return s.repo.FindAllScoredExcludingTrash(limit, loadBeanLookup())
 }
 
 // CountToday counts the non-trashed shots (every machine) stamped on now's
