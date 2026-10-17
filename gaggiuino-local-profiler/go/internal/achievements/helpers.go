@@ -119,8 +119,8 @@ func hasPressurePlateau(times, pressures []float64, windowSec, tolerance float64
 }
 
 // datapointsScaled reads shot.datapoints[key] as a []float64 with each value
-// divided by div. A context shot carries a *shotSeries (decoded once per
-// evaluation pass, #1616); any other shot is decoded here.
+// divided by div. newCurveStats passes a *shotSeries (the curve decoded once,
+// #1616); any other shot is decoded here.
 func datapointsScaled(shot shots.Shot, key string, div float64) []float64 {
 	if ss, ok := shot["datapoints"].(*shotSeries); ok {
 		vals := ss.samples(key)
@@ -143,6 +143,9 @@ func datapointsScaled(shot shots.Shot, key string, div float64) []float64 {
 
 // finalWeightG returns the max of shotWeight (or weight), tenths -> grams.
 func finalWeightG(shot shots.Shot) float64 {
+	if cs := curveOf(shot); cs != nil {
+		return cs.finalWeightG
+	}
 	w := datapointsScaled(shot, "shotWeight", 10)
 	if len(w) == 0 {
 		w = datapointsScaled(shot, "weight", 10)
@@ -154,6 +157,34 @@ func finalWeightG(shot shots.Shot) float64 {
 		}
 	}
 	return mx
+}
+
+// isTempStable is the temp_stable test: more than 5 temperature samples
+// with a standard deviation within tempStableToleranceC.
+func isTempStable(shot shots.Shot) bool {
+	if cs := curveOf(shot); cs != nil {
+		return cs.tempStable
+	}
+	t := datapointsScaled(shot, "temperature", 10)
+	return len(t) > 5 && stddev(t) <= tempStableToleranceC
+}
+
+// hasShotPressurePlateau is the pressure_flat test on one shot.
+func hasShotPressurePlateau(shot shots.Shot) bool {
+	if cs := curveOf(shot); cs != nil {
+		return cs.pressurePlateau
+	}
+	times := datapointsScaled(shot, "timeInShot", 10)
+	pressures := datapointsScaled(shot, "pressure", 10)
+	return hasPressurePlateau(times, pressures, pressurePlateauWindowS, pressurePlateauToleranceBar)
+}
+
+// shotPreinfusionSeconds is detectPreinfusionSeconds on one shot's curve.
+func shotPreinfusionSeconds(shot shots.Shot) *float64 {
+	if cs := curveOf(shot); cs != nil {
+		return cs.preinfusionSeconds
+	}
+	return detectPreinfusionSeconds(datapointsScaled(shot, "timeInShot", 10), datapointsScaled(shot, "pressure", 10))
 }
 
 // totalYieldG sums every shot's final weight, in grams.

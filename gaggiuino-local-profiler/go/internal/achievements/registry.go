@@ -137,8 +137,7 @@ func badges() []badge {
 		}},
 		{ID: "temp_stable", Card: "craft", Stamp: "shield", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
-				t := datapointsScaled(s, "temperature", 10)
-				if len(t) > 5 && stddev(t) <= tempStableToleranceC {
+				if isTempStable(s) {
 					return true
 				}
 			}
@@ -146,9 +145,7 @@ func badges() []badge {
 		}},
 		{ID: "pressure_flat", Card: "craft", Stamp: "bolt", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
-				times := datapointsScaled(s, "timeInShot", 10)
-				pressures := datapointsScaled(s, "pressure", 10)
-				if hasPressurePlateau(times, pressures, pressurePlateauWindowS, pressurePlateauToleranceBar) {
+				if hasShotPressurePlateau(s) {
 					return true
 				}
 			}
@@ -160,9 +157,7 @@ func badges() []badge {
 				if sc == nil || *sc < 88 {
 					continue
 				}
-				times := datapointsScaled(s, "timeInShot", 10)
-				pressures := datapointsScaled(s, "pressure", 10)
-				if pre := detectPreinfusionSeconds(times, pressures); pre != nil && *pre > 10 {
+				if pre := shotPreinfusionSeconds(s); pre != nil && *pre > 10 {
 					return true
 				}
 			}

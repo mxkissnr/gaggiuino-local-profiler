@@ -9,10 +9,20 @@ import (
 // TestEquivalence1616_Achievements pins one full evaluation pass on the
 // #1616 equivalence dataset — every badge's check result and progress, and
 // the score buildContext injects into each shot — captured before the pass
-// stopped decoding each shot's curve once per badge.
+// stopped decoding each shot's curve once per badge. Since #1721 the scores
+// come from the score cache, so the pass runs twice: the first scores every
+// shot and fills the cache, the second is served from it, and both must
+// match the same golden.
 func TestEquivalence1616_Achievements(t *testing.T) {
 	perfseed.PinUTC(t)
 	deps := perfDeps(t, perfseed.Equivalence)
+	for _, pass := range []string{"cold cache", "warm cache"} {
+		t.Run(pass, func(t *testing.T) { assertAchievementsGolden(t, deps) })
+	}
+}
+
+func assertAchievementsGolden(t *testing.T, deps Deps) {
+	t.Helper()
 	ctx, err := buildContext(deps, nil)
 	if err != nil {
 		t.Fatal(err)
