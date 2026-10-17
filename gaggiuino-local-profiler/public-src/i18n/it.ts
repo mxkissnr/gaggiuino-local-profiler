@@ -652,6 +652,7 @@ const it: Partial<Translations> = {
     card_fmt_square:'Quadrato (1:1)',
     card_fmt_story:'Storia (9:16)',
     share_card_tooltip:'Esporta/condividi lo shot come card PNG',
+    onboarding_banner_host_fallback:'host configurato',
     onboarding_banner_msg:(host)=>`Gaggiuino su ${host} non raggiungibile — controlla l'host macchina in Impostazioni → Macchine`,
     onboarding_wiki_link:'Guida alla configurazione',
     onboarding_step1:"Imposta l'host macchina in Impostazioni → Macchine",

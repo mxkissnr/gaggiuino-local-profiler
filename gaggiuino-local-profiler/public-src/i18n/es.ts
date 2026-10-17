@@ -652,6 +652,7 @@ const es: Partial<Translations> = {
     card_fmt_square:'Cuadrado (1:1)',
     card_fmt_story:'Historia (9:16)',
     share_card_tooltip:'Exportar/compartir el shot como tarjeta PNG',
+    onboarding_banner_host_fallback:'el host configurado',
     onboarding_banner_msg:(host)=>`No se puede conectar con Gaggiuino en ${host} — revisa el host de la máquina en Ajustes → Máquinas`,
     onboarding_wiki_link:'Ayuda de configuración',
     onboarding_step1:'Configura el host de la máquina en Ajustes → Máquinas',

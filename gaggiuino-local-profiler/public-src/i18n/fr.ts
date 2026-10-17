@@ -652,6 +652,7 @@ const fr: Partial<Translations> = {
     card_fmt_square:'Carré (1:1)',
     card_fmt_story:'Story (9:16)',
     share_card_tooltip:'Exporter/partager le shot en carte PNG',
+    onboarding_banner_host_fallback:'l\'hôte configuré',
     onboarding_banner_msg:(host)=>`Gaggiuino sur ${host} injoignable — vérifiez l'hôte de la machine dans Paramètres → Machines`,
     onboarding_wiki_link:'Aide à la configuration',
     onboarding_step1:"Définir l'hôte de la machine dans Paramètres → Machines",
