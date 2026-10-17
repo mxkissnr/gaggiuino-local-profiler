@@ -42,6 +42,20 @@ func (s *Service) GetAll() ([]Shot, error) {
 	return s.repo.FindAllExcludingTrash()
 }
 
+// GetLastN returns the newest n non-trashed shots, oldest first — the tail
+// of GetAll's list (#1616).
+func (s *Service) GetLastN(n int) ([]Shot, error) {
+	return s.repo.FindLastNExcludingTrash(n)
+}
+
+// CountToday counts the non-trashed shots (every machine) stamped on now's
+// local calendar day, server time.
+func (s *Service) CountToday(now time.Time) (int, error) {
+	y, m, d := now.Date()
+	start := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	return s.repo.CountExcludingTrashBetween(start.Unix(), start.AddDate(0, 0, 1).Unix())
+}
+
 // DefaultPageLimit / MaxPageLimit bound GET /api/shots's ?limit= (#957).
 const (
 	DefaultPageLimit = 60

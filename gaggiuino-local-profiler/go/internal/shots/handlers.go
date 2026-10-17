@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
@@ -151,27 +152,57 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 
 // ── handlers ────────────────────────────────────────────────────────────
 
-// listShots serves the shot list; ?trash=1 selects the trash list.
+// shotsTodayHeader carries GET /shots.json's shotsToday count (#1616): the
+// number of non-trashed shots stamped today (server-local calendar day,
+// every machine). The body is a bare JSON array that existing clients
+// parse as-is, so the count travels as a header rather than a field.
+const shotsTodayHeader = "X-Shots-Today"
+
+// listShots serves the shot list; ?trash=1 selects the trash list. An
+// optional ?limit=N (a positive integer) returns only the newest N active
+// shots, still oldest first — the tail of the full list (#1616); an absent
+// or invalid limit, or one with ?trash=1, returns the full list as before.
 func (h *Handlers) listShots(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
 	var (
 		list []Shot
 		err  error
 	)
-	if r.URL.Query().Get("trash") == "1" {
+	switch {
+	case q.Get("trash") == "1":
 		list, err = h.service.GetTrash()
-	} else {
+	case listLimit(q.Get("limit")) > 0:
+		list, err = h.service.GetLastN(listLimit(q.Get("limit")))
+	default:
 		list, err = h.service.GetAll()
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	today, err := h.service.CountToday(time.Now())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	w.Header().Set(shotsTodayHeader, strconv.Itoa(today))
 	detail := h.service.DetailScorer()
 	out := make([]Shot, len(list))
 	for i, shot := range list {
 		out[i] = withScore(shot, detail(shot))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// listLimit parses /shots.json's ?limit=: a positive base-10 integer, or 0
+// for anything else (absent, malformed, zero, negative), which means "no
+// limit".
+func listLimit(v string) int {
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0
+	}
+	return n
 }
 
 // listShotsPage serves GET /api/shots (#957): a keyset-paginated,

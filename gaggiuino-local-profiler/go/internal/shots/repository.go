@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -77,6 +78,48 @@ func (r *Repository) FindLastExcludingTrash() (Shot, error) {
 		return nil, fmt.Errorf("shots: finding last shot: %w", err)
 	}
 	return shot, nil
+}
+
+// FindLastNExcludingTrash returns the newest n non-trashed shots in
+// FindAllExcludingTrash's order (timestamp ASC) — exactly the last n
+// elements of that list: the newest-first query breaks a timestamp tie on
+// the greater id, as the ASC list keeps it last (see FindLastExcludingTrash).
+// Serves GET /shots.json?limit=n (#1616), which then hydrates n shots
+// instead of the whole history.
+func (r *Repository) FindLastNExcludingTrash(n int) ([]Shot, error) {
+	rows, err := r.db.Query(selectBase+` WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp DESC, s.id DESC LIMIT ?`, n)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing newest shots: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Shot
+	for rows.Next() {
+		shot, err := hydrateRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, shot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	slices.Reverse(out)
+	return out, nil
+}
+
+// CountExcludingTrashBetween counts the non-trashed shots (every machine)
+// whose timestamp column lies in [fromSec, toSec) — the shotsToday count
+// GET /shots.json reports (#1616). One indexed range COUNT.
+func (r *Repository) CountExcludingTrashBetween(fromSec, toSec int64) (int, error) {
+	var n int
+	if err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM shots WHERE timestamp >= ? AND timestamp < ? AND id NOT IN (SELECT shot_id FROM trash)`,
+		fromSec, toSec,
+	).Scan(&n); err != nil {
+		return 0, fmt.Errorf("shots: counting shots in range: %w", err)
+	}
+	return n, nil
 }
 
 // FindAllExcludingTrashByMachine returns every non-trashed shot for one
