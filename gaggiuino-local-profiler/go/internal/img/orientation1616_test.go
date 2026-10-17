@@ -119,3 +119,19 @@ func TestOptimize_EveryOrientation1616(t *testing.T) {
 		}
 	}
 }
+
+// BenchmarkOptimizeRotatedPhoto measures an upload of a 4000×3000 phone
+// photo carrying EXIF orientation 6 (rotate 90° CW), the common portrait
+// case (#1616). Run:
+//
+//	go test ./internal/img -run '^$' -bench BenchmarkOptimizeRotatedPhoto -benchmem
+func BenchmarkOptimizeRotatedPhoto(b *testing.B) {
+	data := jpegWithOrientation(b, orientationFixture(4000, 3000), 6)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Optimize(data, "jpg", ModeUpload); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
