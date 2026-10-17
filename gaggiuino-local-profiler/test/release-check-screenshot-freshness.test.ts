@@ -73,10 +73,10 @@ describe('release-check screenshot freshness (#537)', () => {
         writeFileSync(join(repo, 'public-src', relPath), body);
     }
 
-    // extraFiles lets a test seed additional public-src/ files (main.js,
+    // extraFiles lets a test seed additional public-src/ files (main.ts,
     // style.css, ...) in the *same* initial commit as the screenshot, so
     // only the test's own follow-up commit is newer than the screenshot —
-    // otherwise "add main.js" would itself be a brand-new (and correctly
+    // otherwise "add main.ts" would itself be a brand-new (and correctly
     // relevant) file-creation commit newer than the screenshot.
     function seedRepo(repo: string, indexHtmlBody: string, extraFiles: Record<string, string> = {}): void {
         writeFile(repo, 'index.html', indexHtmlBody);

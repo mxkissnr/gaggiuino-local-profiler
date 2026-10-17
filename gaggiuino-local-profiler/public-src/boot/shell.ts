@@ -63,7 +63,7 @@ export function wireAppShell(): void {
 
   // ── Desktop topbar nav (#424) — same ids as the old #rail/#mode-bar
   // buttons, just relocated+restyled markup, so switchMode()'s active-state
-  // toggling and status.js's live/orders visibility gating both keep
+  // toggling and status.ts's live/orders visibility gating both keep
   // working unchanged.
   document.getElementById('btnLive')!.addEventListener('click', () => switchMode('live'));
   document.getElementById('btnShots')!.addEventListener('click', () => switchMode('shots'));
@@ -94,7 +94,7 @@ export function wireAppShell(): void {
   // the shot list is no longer reachable from here at all, only via the
   // burger drawer (#425's openShotDrawer, wired above). #443: which
   // destinations land in the bar vs. the "Mehr" sheet, and their click
-  // wiring, is now built by renderBottomNav() (components/bottom-nav.js)
+  // wiring, is now built by renderBottomNav() (components/bottom-nav.ts)
   // from the user's glp_bottom_nav_config — only the static backdrop needs
   // wiring here.
   renderBottomNav();

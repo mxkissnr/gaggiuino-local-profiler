@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// bottom-nav.js's import chain touches state.js/i18n.js (localStorage/
+// bottom-nav.ts's import chain touches state/index.ts/i18n.ts (localStorage/
 // navigator at module load time) — stub the minimum browser globals so the
 // module graph can be imported under vitest's node environment, same
-// pattern as test/milk-deduct-gate.test.js and test/sidebar-month-toggle.test.js.
+// pattern as test/sidebar-month-toggle.test.ts.
 // Unlike those, we need a *real* backing store (not an always-null stub)
 // since this whole feature is localStorage-driven — a small in-memory
 // Map-backed implementation, reset per test in beforeEach. The browser
@@ -148,9 +148,9 @@ describe('computeSettingsRows — max-4 enforcement + reorder boundaries (#443)'
 // This repo has no jsdom/happy-dom dependency (vitest runs with
 // environment: 'node') — build just enough of a DOM to support the
 // createElement/appendChild/classList/style/setAttribute calls
-// renderBottomNav() and status.js's updatePowerButton() actually make,
+// renderBottomNav() and status.ts's updatePowerButton() actually make,
 // mirroring the "fake minimal document" convention already used in
-// test/sidebar-month-toggle.test.js and test/library-profile-editor.test.js.
+// test/sidebar-month-toggle.test.ts and test/library-profile-editor.test.ts.
 interface FakeClassList {
   _set: Set<string>;
   toggle(cls: string, force?: boolean): boolean;
@@ -276,7 +276,7 @@ describe('applyBottomNavActiveState — bnMore highlights by DOM containment, no
   });
 
   it('a mode whose id is placed in the main bar (not the sheet) gets its own .active pill, and bnMore stays inactive', () => {
-    // Regression (peer review on PR #444): mode.js used to hardcode "if mode
+    // Regression (peer review on PR #444): mode.ts used to hardcode "if mode
     // is dialin/maintenance/orders/settings, highlight bnMore" — which broke
     // as soon as one of those could render in the main bar instead of the
     // sheet, since bnMore would light up while the actual clicked button
@@ -341,7 +341,7 @@ describe('capability gate stays authoritative over the user\'s selection (#443)'
     updatePowerButton({ configured: true, state: false });
     expect(bnLive.style.display).toBe('none');
 
-    // status.js's own poll re-invokes updatePowerButton() on the *existing*
+    // status.ts's own poll re-invokes updatePowerButton() on the *existing*
     // DOM node — no call to renderBottomNav() here, mirroring how the app
     // actually reacts to a ~30s status poll tick.
     updatePowerButton({ configured: true, state: true });

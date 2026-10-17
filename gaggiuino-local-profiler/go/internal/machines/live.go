@@ -27,7 +27,7 @@ import (
 // necessarily the same shape openapi.yaml's LiveData schema documents ...
 // reconciling the two is system-domain work"). That reconciliation is done
 // (#901, go/internal/system): only the system poller's own
-// emitLiveSnapshot() publishes LIVE_SNAPSHOT; the WS client (this file)
+// emitLiveSnapshot() publishes live-snapshot; the WS client (this file)
 // only updates a cache the poller reads from, never publishes itself. This
 // file now matches that: `hub` is kept (constructor signature unchanged,
 // still threaded through from cmd/server) only because a later phase may

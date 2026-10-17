@@ -145,7 +145,7 @@ const VIEWS: readonly View[] = [
 ];
 
 // Live/Orders ship hidden unless the capability is configured (updatePowerButton
-// in status.js); a static demo has no live machine to report one, so force both
+// in status.ts); a static demo has no live machine to report one, so force both
 // visible — same treatment screenshots.mts gives #btnLive — on either nav.
 const REVEAL_CSS = '#btnLive{display:flex!important}#btnOrders{display:flex!important}' +
     '#bnLive{display:flex!important}#bnOrders{display:flex!important}';

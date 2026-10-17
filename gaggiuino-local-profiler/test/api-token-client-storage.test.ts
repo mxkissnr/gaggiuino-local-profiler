@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// api/transport.js/state.js's import chain touches localStorage/navigator at module
+// api/transport.ts/state.js's import chain touches localStorage/navigator at module
 // load time — stub the minimum browser globals so the module graph can be
 // imported under vitest's node environment, same pattern as
-// test/bottom-nav-config.test.js. Backed by a real Map store (not an
+// test/bottom-nav-config.test.ts. Backed by a real Map store (not an
 // always-null stub) so the migration-cleanup test below can pre-seed a
 // legacy token and assert it actually gets removed.
 // vitest's node environment has no browser globals; stub them through a loose
@@ -22,9 +22,9 @@ const { S } = await import('../public-src/state/index.js');
 const { initToken, apiFetch } = await import('../public-src/api/transport.js');
 
 // Snapshot the calls made while the modules above were *imported* (i.e.
-// state.js's module-level `glpToken: ...` initializer) before beforeEach
+// state/index.ts's module-level `glpToken: ...` initializer) before beforeEach
 // clears the log. This is intentionally never reset, so it stays a live
-// check on state.js's own module-load-time behavior rather than a
+// check on state/index.ts's own module-load-time behavior rather than a
 // tautology — see the first test below.
 const importTimeCalls = [...localStorageCalls];
 

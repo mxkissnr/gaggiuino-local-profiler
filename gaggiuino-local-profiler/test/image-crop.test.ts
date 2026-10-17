@@ -1,5 +1,5 @@
 // The crop editor's pure zoom/pan math (#286, generalised to a width/height
-// box for the 3:4 bean crop, #1346). image-crop.js pulls in the i18n/state
+// box for the 3:4 bean crop, #1346). image-crop.ts pulls in the i18n/state
 // chain, which reads localStorage at module load — stub it so the module
 // graph imports under vitest's node environment.
 import { describe, it, expect } from 'vitest';

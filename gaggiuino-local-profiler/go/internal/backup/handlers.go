@@ -163,9 +163,9 @@ func backupTimestamp() string {
 // image on every hit — strictly more than GET /api/debug/export-db, which
 // only streams the raw SQLite file and is already limited to 5/min (#999,
 // security audit #977 round 3 finding 3.2) — so it gets the same feature
-// limiter on top of the app-wide 600/min backstop. This is DELIBERATELY
-// STRICTER than the image-upload routes, which rely on the shared backstop
-// alone.
+// limiter on top of the app-wide 600/min backstop, stricter than the
+// image-upload routes' 30/min. POST /api/backup (the zip export) has no
+// limit of its own.
 const backupRateLimitPerMin = 5
 
 // ── GET /api/backup ──────────────────────────────────────────────────────

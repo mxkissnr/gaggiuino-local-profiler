@@ -202,7 +202,7 @@ let _hlNode: string | null = null; // node highlighted from the legend, or null
 // #797: echarts (~370 kB gzip) only ships once a wheel is actually opened.
 // _echartsPromise caches the in-flight import so re-opening while it's
 // still loading reuses the same request; _renderReqToken mirrors the
-// analytics.js world-map guard (#648) — it invalidates a still-pending
+// analytics.ts world-map guard (#648) — it invalidates a still-pending
 // renderFlavorWheel() call once a newer open (or a close) has taken over,
 // so a late-arriving chunk never calls echarts.init() on a stale container.
 let _echartsPromise: Promise<typeof import('echarts')> | null = null;
@@ -233,7 +233,7 @@ function zoomTo(id: string | null): void {
   renderBreadcrumb();
 }
 
-// Called from the global data-action click delegate (main.js) when a
+// Called from the global data-action click delegate (boot/delegation.ts) when a
 // breadcrumb crumb is clicked; `id` is '' for the overview crumb.
 export function zoomFlavorWheelTo(id: string | null | undefined): void {
   if (!_chart) return;

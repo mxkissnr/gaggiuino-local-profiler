@@ -41,8 +41,8 @@ export interface HistoryBean {
 // views/library/bags.ts's classifyBeanBags() owns this rule ("past" + the
 // server's remainingG marks a tracked bag), but importing it would pull the
 // whole library view — and its module-load `document` listener — into the
-// topbar/panel import graph and break the DOM-free tests that import status.js
-// or live.js. The rule is small, so state it here directly.
+// topbar/panel import graph and break the DOM-free tests that import status.ts
+// or live.ts. The rule is small, so state it here directly.
 function isEmptiedBag(bag: HistoryBag): boolean {
   return !bag.current && bag.remainingG != null && bag.remainingG <= 0;
 }

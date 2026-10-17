@@ -208,8 +208,10 @@ func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, err
 }
 
 // GetLatestFirmwareRelease returns nil (not an error) if no matching
-// release was found — that's "unknown", not "no update available". Cached
-// per channel for firmwareCacheTTL.
+// release was found — that's "unknown", not "no update available". Results
+// are cached per channel (firmwareCacheTTL, or firmwareNegativeCacheTTL for
+// a nil result); a failed fetch serves the last good result if there is one
+// and is retried only after firmwareFailureBackoff.
 func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel *int) (*FirmwareRelease, error) {
 	ch := defaultFirmwareChannel
 	if channel != nil {

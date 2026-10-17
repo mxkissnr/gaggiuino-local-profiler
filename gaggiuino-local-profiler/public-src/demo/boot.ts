@@ -4,7 +4,7 @@
 // unchanged — the normal build still boots straight into main.ts.
 //
 // main.ts is intentionally left alone: it only unregisters/registers a worker
-// named exactly sw.js, so the demo worker (demo-sw.js) never collides with it.
+// named exactly sw.js, so the demo worker (demo-sw.ts) never collides with it.
 
 import { mountDemoBanner } from './banner.js';
 

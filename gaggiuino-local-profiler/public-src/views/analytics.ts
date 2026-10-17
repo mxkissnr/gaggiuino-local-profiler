@@ -106,7 +106,7 @@ function _rebuildMore(): void {
 }
 
 // Restore the remembered fold state, wire its toggle and keep the grey section
-// counter in the viewer's language. main.ts calls this with the rest of the
+// counter in the viewer's language. boot/views.ts calls this with the rest of the
 // analytics toolbar wiring; initAnalytics() calls it again (it is idempotent)
 // so the counter follows a language switch.
 export function initAnalyticsMoreFold(): void {
@@ -236,7 +236,7 @@ export function buildSummaryKpis() {
 // Score-by-equipment groupings sharing one aggregation/rendering pair.
 // Grinder is a free-text name stored directly on the annotation; baskets/
 // puck screens are pure ID-based library links (#635), so resolving id ->
-// name needs a lookup (_equipmentName() from views/shots/index.js). Grouped
+// name needs a lookup (_equipmentName() from views/shots/index.ts). Grouped
 // by whatever getKey() returns (a grinder name, or a basket/puck-screen id
 // as a string via Object.entries) rather than by the resolved name, so two
 // same-named baskets (go/internal/library (baskets) enforces no uniqueness)

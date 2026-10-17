@@ -293,11 +293,11 @@ export async function shareOrDownloadBlob(
 // shouldOpenSetupWizard()'s own host check keeps the wizard closed
 // regardless of the completed flag once a real host exists.
 //
-// Lives here rather than in views/setup-wizard.js so components/status.js can
+// Lives here rather than in views/setup-wizard.ts so components/status.ts can
 // call it from updateStatus() without importing the wizard back: the wizard
-// already imports components/machines-settings.js, which imports
-// components/status.js, so that edge closed an import cycle (#1102).
-// views/setup-wizard.js re-exports it for its existing importers.
+// already imports components/machines-settings.ts, which imports
+// components/status.ts, so that edge closed an import cycle (#1102).
+// views/setup-wizard.ts re-exports it for its existing importers.
 export const COMPLETED_KEY = 'glp_setup_wizard_completed';
 export const INSTALL_ID_KEY = 'glp_install_id';
 
@@ -365,11 +365,11 @@ export function mapToXY(
 }
 
 // mapShotDatapoints(datapoints) -> the XY-series bundle the shot charts and
-// metrics read. Split out of views/shots/utils.js's getShotData (#957) so the
-// per-shot curve cache (shot-curves.js) maps a lazily-fetched datapoints
+// metrics read. Split out of views/shots/utils.ts's getShotData (#957) so the
+// per-shot curve cache (shot-curves.ts) maps a lazily-fetched datapoints
 // object through the exact same shape. Pure; a missing/empty datapoints
 // yields all-empty series, never null. Kept in this leaf module (no imports)
-// so shot-curves.js can depend on it without an import cycle.
+// so shot-curves.ts can depend on it without an import cycle.
 export interface ShotDatapoints {
   timeInShot?: number[];
   pressure?: number[];
@@ -625,7 +625,8 @@ export function chartColors(): { text: string; tick: string; grid: string } {
   };
 }
 
-// #814: fired by _applyTheme() in main.js after the theme attribute changes.
+// #814: fired by theme.ts's applyTheme() (and main.ts's setAccentTheme) after
+// the theme changes.
 // A chart already on screen keeps the colours it was built with, so views
 // holding a live Chart instance listen for this and rebuild — without it,
 // switching theme in Settings leaves every open chart on the old palette

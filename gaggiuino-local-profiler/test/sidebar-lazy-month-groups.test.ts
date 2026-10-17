@@ -6,10 +6,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // a month boundary (it did on 2026-09-10).
 const FIXED_NOW = new Date('2026-09-15T12:00:00Z');
 
-// sidebar.js's import chain touches state.js/i18n.js, which read
+// sidebar.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/sidebar-month-toggle.test.js).
+// environment (same pattern as test/sidebar-month-toggle.test.ts).
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge test/machine-accent-theme.test.ts uses)
 // so the minimal fakes below need not satisfy the full Storage/Navigator/
@@ -27,10 +27,10 @@ const { renderSidebar, toggleMonthGroup, filterShots } =
 // needs a fuller fake document than the other sidebar tests — a node factory
 // with classList/style/dataset/children plus sibling links (filterShots()
 // walks nextElementSibling), still no jsdom/happy-dom dependency. Only the
-// handful of selectors sidebar.js actually queries are implemented.
+// handful of selectors sidebar.ts actually queries are implemented.
 let shotsEl: FakeNode;
 
-// The slice of HTMLElement the factory below builds: sidebar.js reads
+// The slice of HTMLElement the factory below builds: sidebar.ts reads
 // classList/style/dataset/children plus the sibling links filterShots() walks.
 interface FakeNode {
   tagName: string;

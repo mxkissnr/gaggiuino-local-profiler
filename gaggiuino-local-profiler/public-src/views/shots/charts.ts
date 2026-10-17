@@ -17,7 +17,7 @@ interface ChartShot extends ShotMeta {
 
 interface PQPoint { x: number; y: number }
 
-// #957: curves are lazy. updateView() (index.js) ensureCurves() for the
+// #957: curves are lazy. updateView() (index.ts) ensureCurves() for the
 // selected + comparand shots before switching to the P·Q / fullscreen chart,
 // so these synchronous cache reads hit; a synthetic/demo shot still carries
 // its own datapoints, used as the fallback.

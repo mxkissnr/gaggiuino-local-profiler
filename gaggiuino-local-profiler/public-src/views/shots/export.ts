@@ -207,9 +207,9 @@ export async function shareCard(format = 'square'): Promise<void> {
   try {
     // #462: the card should visually match whatever accent/theme the user
     // is actually looking at, not a hardcoded snapshot — same attributes
-    // main.js applies to <html> (dataset.accent/dataset.theme), same
+    // main.ts applies to <html> (dataset.accent/dataset.theme), same
     // defaults ('amber-americano'/'dark', see applyTheme()/_savedAccent in
-    // main.js). #1019: dataset.accent no longer drives any CSS itself (the
+    // main.ts). #1019: dataset.accent no longer drives any CSS itself (the
     // [data-accent] rules it used to key are retired), but is still set on
     // every setAccentTheme() call purely so this stays in sync with the
     // user's actual Farbschema pick.
@@ -232,5 +232,5 @@ export async function shareCard(format = 'square'): Promise<void> {
 
 // Backup export/restore is a modal flow (section picker, passphrase for the
 // encrypted API-token/MQTT block, a dry-run preview before anything is
-// written) — see public-src/components/backup-modal.js, wired directly from
-// main.js's event listeners rather than through this file.
+// written) — see public-src/components/backup-modal.ts, wired directly from
+// boot/settings.ts's event listeners rather than through this file.

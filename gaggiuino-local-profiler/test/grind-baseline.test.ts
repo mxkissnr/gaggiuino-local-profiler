@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { ShotLike } from '../public-src/views/shots/utils.js';
 
-// Same stubbing approach as suggest-grind-dose.test.js/best-grind-combo.test.js:
-// views/shots/utils.js pulls in state.js, which needs localStorage/navigator
+// Same stubbing approach as suggest-grind-dose.test.ts/best-grind-combo.test.js:
+// views/shots/utils.ts pulls in state/index.ts, which needs localStorage/navigator
 // at module load.
 type ShotUtils = typeof import('../public-src/views/shots/utils.js');
 let findPreviousShotForBean: ShotUtils['findPreviousShotForBean'];
@@ -94,7 +94,7 @@ describe('isNewestShotForBean (#429)', () => {
 // (a previous grind setting existing, or not) actually changes the rendered
 // label text, not just that the function runs without throwing.
 describe('buildGrinderGrindLabel (#838)', () => {
-  // Mirrors public-src/i18n.js's t(): looks a function up by key and calls
+  // Mirrors public-src/i18n.ts's t(): looks a function up by key and calls
   // it with the given args, matching how the real recipe_grinder_grind /
   // recipe_grind_with_baseline templates are invoked.
   type GrindTemplate = (g: string, s: string, p?: string) => string;

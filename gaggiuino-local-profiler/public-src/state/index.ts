@@ -10,7 +10,7 @@ import type { Basket, Milk, PuckScreen, Recipe } from '../api/types.js';
 
 // #957: shot rows are METADATA-ONLY — every hydrated-shot field except the
 // `datapoints` curve blob, plus `.score`/`.usedBeanTarget`/`.hasChartData`.
-// Curve data lives in shot-curves.js, fetched per shot on demand.
+// Curve data lives in shot-curves.ts, fetched per shot on demand.
 export interface ShotMeta {
   id: number;
   machineId?: number | null;
@@ -162,18 +162,18 @@ export const S: AppState = {
   // navigator.language used to be trusted as-is, with no
   // check against the languages GLP actually ships (TRANSLATIONS below) —
   // an unsupported browser locale (e.g. pt, pl, sv) fell through to
-  // i18n.js's own TRANSLATIONS.de fallback, showing the entire UI in German
+  // i18n.ts's own TRANSLATIONS.de fallback, showing the entire UI in German
   // to a non-German user by construction. Validate against the real key set
   // here instead and fall back to English, matching every other
-  // unsupported-language fallback in this codebase (i18n.js's t(),
-  // constants.js's localeFor(), the backend's getHaLanguage()/notifyT()).
+  // unsupported-language fallback in this codebase (i18n.ts's t(),
+  // constants.ts's localeFor(), the backend's getHaLanguage()/notifyT()).
   currentLang: ((): string => {
     const stored = safeLocalStorage.getItem('glp_lang');
     const lang = stored || navigator.language.slice(0, 2).toLowerCase();
     return Object.prototype.hasOwnProperty.call(TRANSLATIONS, lang) ? lang : 'en';
   })(),
   // In-memory only (#522) — never persisted to localStorage. A fresh token is
-  // fetched on every load via initToken()'s /api/token call (see api.js).
+  // fetched on every load via initToken()'s /api/token call (see api/transport.ts).
   glpToken: '',
   // #803: mirrors /api/status's exposeApiPort field. Starts true (the add-on
   // default) so a session that hasn't polled /api/status yet never shows the
@@ -183,12 +183,12 @@ export const S: AppState = {
   // view (sidebar, analytics, ...) already reads; S.allShots is the full
   // unfiltered fetch from the server, re-filtered into S.shots whenever
   // S.activeMachineId changes (#325) — see filterShotsByMachine() below and
-  // applyActiveMachineChange() in components/machines-settings.js.
+  // applyActiveMachineChange() in components/machines-settings.ts.
   //
   // #957: both hold METADATA-ONLY rows now — every hydrated-shot field EXCEPT
   // the `datapoints` curve blob, plus `.score` / `.usedBeanTarget` /
   // `.hasChartData`. Curve data is fetched per shot on demand and cached in
-  // shot-curves.js. loadData() paints S.shots/S.allShots from page 1 of
+  // shot-curves.ts. loadData() paints S.shots/S.allShots from page 1 of
   // GET /api/shots, then loadAllShotMeta() walks the rest into S.allShots in
   // the background (cursor + hasMore below track that walk; allShotsLoaded
   // flips true when it finishes).
@@ -240,7 +240,7 @@ export const S: AppState = {
   currentFilter: '',
   // Structured bean filter (shot history) — set by clicking a bean in the
   // Library view; ANDed with the free-text S.currentFilter search in
-  // filterShots() (sidebar.js). { id, name } or null for "no filter".
+  // filterShots() (sidebar.ts). { id, name } or null for "no filter".
   beanFilter: null,
   // #439: which month-tier sidebar groups are expanded — in-memory only
   // (never mirrored to localStorage), so it survives re-renders/shot
@@ -262,11 +262,11 @@ export const S: AppState = {
   // #735: SSE push connection state -- null = "not yet known" (treated the
   // same as false by consumers until proven true), true once EventSource
   // has successfully opened at least once, false once fallback detection
-  // (see sse.js) has given up on it for this session.
+  // (see sse.ts) has given up on it for this session.
   sseActive: null,
   isDemo: false,
   // Multi-machine registry (#319) — S.machines mirrors GET /api/machines;
-  // activeMachineId is restored from localStorage in machines-settings.js.
+  // activeMachineId is restored from localStorage in machines-settings.ts.
   machines: [],
   activeMachineId: null,
   machineProfiles: [],
@@ -275,14 +275,14 @@ export const S: AppState = {
   profileEditBeanId: null,
   profilePreviewChart: null,
   // Guided Dial-In (#310) — session is client-only, mirrored to localStorage
-  // so a reload doesn't lose an in-progress dial-in (see dialin-wizard.js).
+  // so a reload doesn't lose an in-progress dial-in (see dialin-wizard.ts).
   dialinSession: ((): Record<string, unknown> | null => {
     try { return JSON.parse(safeLocalStorage.getItem('glp_dialin_session') || 'null') as Record<string, unknown> | null; }
     catch { return null; }
   })(),
   // Profile Dial-In (#313) — same client-only, localStorage-mirrored pattern
   // as dialinSession, adapted for tuning a machine profile's phases (see
-  // profile-dialin-wizard.js) instead of a single grind number.
+  // profile-dialin-wizard.ts) instead of a single grind number.
   profileDialinSession: ((): Record<string, unknown> | null => {
     try { return JSON.parse(safeLocalStorage.getItem('glp_profile_dialin_session') || 'null') as Record<string, unknown> | null; }
     catch { return null; }
@@ -291,7 +291,7 @@ export const S: AppState = {
   // mirrored to localStorage (unlike dialinSession above): a reload mid-wizard
   // just reopens at the welcome step, which is fine since the wizard's own
   // trigger condition (zero machines configured) still holds either way.
-  // See views/setup-wizard.js.
+  // See views/setup-wizard.ts.
   setupWizardOpen: false,
   setupWizardStep: 'welcome',
 };

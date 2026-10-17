@@ -1,5 +1,5 @@
 // Profile Dial-In convergence logic (#313) — pure, no DOM/state/i18n. Sibling
-// to dialin-convergence.js (the grind wizard's engine), adapted for tuning
+// to dialin-convergence.ts (the grind wizard's engine), adapted for tuning
 // machine-profile phases instead of a single grind number.
 //
 // v1 SCOPE DECISION: the primary tuning signal is a manual taste-symptom pick
@@ -19,7 +19,7 @@
 // step size for the same field, for the halve-on-reversal logic below).
 // isProfileDialinConverged(roundHistory) is evaluated separately by the
 // wizard, over rounds *including* the one just accepted (mirrors
-// dialin-convergence.js's isConverged(s.rounds) called right after push).
+// dialin-convergence.ts's isConverged(s.rounds) called right after push).
 
 // One round of the profile dial-in session, as stored in
 // S.profileDialinSession.rounds.
@@ -105,7 +105,7 @@ function _resolvePrimarySymptom(symptom: unknown): string {
 }
 
 // ── Phase lookup (name-based, with structural fallback) ────────────────────
-// Real Gaggiuino profiles (see public-src/profile-suggestion.js, the
+// Real Gaggiuino profiles (see public-src/profile-suggestion.ts, the
 // community-derived skeleton) name phases 'Preinfusion' / 'Bloom' / 'Ramp' /
 // 'Decline Flow' — match on that first; fall back to phase shape/position
 // for hand-edited profiles that used different names.
@@ -154,7 +154,7 @@ function _setPath(obj: Record<string, unknown>, path: string, value: unknown): v
 
 // ── Field candidates per symptom ────────────────────────────────────────
 // min/max are sane per-session limits (not machine hard limits) grounded in
-// public-src/profile-suggestion.js's community-derived skeleton and a
+// public-src/profile-suggestion.ts's community-derived skeleton and a
 // symptom table. Step sizes: "±0.5-1 bar for pressure,
 // ±1-2s for time" per plan (time fields are milliseconds on the wire, so
 // 1-2s = 1000-2000).
@@ -218,7 +218,7 @@ function _resolveCandidate(def: CandidateDef, profile: unknown): ResolvedCandida
 }
 
 // Previous step size for this exact field (halve on direction reversal,
-// otherwise keep it — same binary-search philosophy as dialin-convergence.js,
+// otherwise keep it — same binary-search philosophy as dialin-convergence.ts,
 // just tracked per-field instead of for a single global grind number.
 function _stepFor(candidate: ResolvedCandidate, roundHistory: unknown): number {
   const history = roundHistory as ProfileDialinRoundRow[] | null | undefined;

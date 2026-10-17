@@ -4,8 +4,8 @@
 // in index.html. Same 8 DOM ids, same icons, same #bottom-nav-btn/
 // .more-sheet-item classes — only WHERE each id ends up (main bar vs. Mehr
 // sheet) is now driven by a user-chosen, localStorage-persisted order
-// instead of being fixed in markup. mode.js's active-state toggling and
-// status.js's Live/Orders capability gating both keep reading these ids via
+// instead of being fixed in markup. mode.ts's active-state toggling and
+// status.ts's Live/Orders capability gating both keep reading these ids via
 // getElementById() exactly as before and need no changes.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
@@ -45,7 +45,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'maintenance', i18nKey: 'nav_maintenance', label: 'Wartung',
     iconPaths: html`<path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/>` },
   // #812: no hiddenByDefault here on purpose — that flag is for a capability
-  // that gets revealed later by other code (status.js un-hides Live/Orders
+  // that gets revealed later by other code (status.ts un-hides Live/Orders
   // once the machine/orders capability is known). Achievements has no such
   // gate, and nothing would ever un-hide it, so it would render permanently
   // invisible in the "Mehr" sheet too, not just absent from the main bar.
@@ -136,7 +136,7 @@ function buildMoreSheetButton(item: NavItem): HTMLButtonElement {
   return btn;
 }
 
-// "Mehr" sheet open/close (#403, mobile) — moved here from main.js since the
+// "Mehr" sheet open/close (#403, mobile) — moved here from main.ts since the
 // sheet is now owned by this module's render function.
 export function toggleMoreSheet(): void {
   const open = (document.getElementById('moreSheet') as HTMLElement).classList.toggle('open');
@@ -168,11 +168,11 @@ function onMoreSheetClick(id: string): void {
 // the main bar instead, and vice versa; a hardcoded mode-name list would
 // desync from wherever the item actually renders).
 //
-// Exported so mode.js's switchMode() calls this directly instead of
+// Exported so mode.ts's switchMode() calls this directly instead of
 // duplicating the projection inline — this used to be a private
 // applyActiveState() re-run after every renderBottomNav() rebuild (nav
 // re-renders replace the DOM nodes, which would otherwise drop whichever
-// bn* button was showing .active), and mode.js had its own separate,
+// bn* button was showing .active), and mode.ts had its own separate,
 // hardcoded copy of the same logic; keeping one implementation avoids the
 // two copies drifting out of sync.
 export function applyBottomNavActiveState(mode: string): void {
@@ -190,7 +190,7 @@ export function applyBottomNavActiveState(mode: string): void {
 // persisted config. Capability gating (Live/Orders visibility) is untouched
 // here — every one of the 8 ids is always rendered somewhere, with the same
 // hiddenByDefault inline display:none the old static markup used, and
-// status.js's updateStatus()/updatePowerButton() (which run right after
+// status.ts's updateStatus()/updatePowerButton() (which run right after
 // this on every load, and again on every ~30s poll) apply the real
 // show/hide state on top, same as before.
 export function renderBottomNav(): void {
@@ -234,7 +234,7 @@ export function renderBottomNav(): void {
 // without a DOM. Max-4 enforcement strategy: disable further checkboxes
 // once 4 are selected, rather than silently bumping the oldest pick out — a
 // disabled control is a visible, predictable limit, whereas an
-// auto-evicted earlier choice would look like Max's own selection got lost.
+// auto-evicted earlier choice would look like the maintainer's own selection got lost.
 export interface SettingsRow {
   id: string;
   isSelected: boolean;

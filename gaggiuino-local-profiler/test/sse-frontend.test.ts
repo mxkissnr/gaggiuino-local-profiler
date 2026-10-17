@@ -1,8 +1,8 @@
-// public-src/sse.js (#735): EventSource wrapper + fallback detection. A
+// public-src/sse.ts (#735): EventSource wrapper + fallback detection. A
 // FakeEventSource stub stands in for the real browser EventSource so the
 // watchdog/error-counter logic can be driven deterministically without a
 // real network connection. Each test gets a fresh module instance
-// (vi.resetModules() + dynamic import) since sse.js keeps its connection
+// (vi.resetModules() + dynamic import) since sse.ts keeps its connection
 // state (source/everConnected/strikes/listeners) at module scope.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -23,7 +23,7 @@ g.navigator ??= { language: 'en-US' };
 type Listener = (ev: { data: string }) => void;
 
 class FakeEventSource {
-  // Mirror the browser's EventSource statics so sse.js's `readyState ===
+  // Mirror the browser's EventSource statics so sse.ts's `readyState ===
   // EventSource.CLOSED` check works against the fake.
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
@@ -133,7 +133,7 @@ describe('public-src/sse.js', () => {
   });
 
   // #1539: after a successful connect, EventSource stops retrying once the
-  // stream reaches CLOSED (e.g. a 502 while Home Assistant restarts). sse.js
+  // stream reaches CLOSED (e.g. a 502 while Home Assistant restarts). sse.ts
   // drives its own backoff reconnect so a live session recovers.
   it('reopens a connected stream that reaches CLOSED, then calls onReconnect on open', () => {
     const onReconnect = vi.fn();

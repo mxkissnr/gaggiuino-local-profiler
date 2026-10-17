@@ -84,11 +84,10 @@ export default defineConfig(({ mode }) => {
           // same way, so echarts/topojson-client/qrcode (see their use sites)
           // are dynamic imports, and the first load no longer ships or
           // preloads them. chart.js stays a static import — it's on the
-          // startup path (live.js, shots/). zrender is echarts' own rendering
+          // startup path (live.ts, shots/). zrender is echarts' own rendering
           // dependency and must ship in the same chunk as echarts, not split
-          // further. Still needs a live Ingress smoke test before release —
-          // this reasoning wasn't wrong before, but it also wasn't checked
-          // against actual build output, which is the whole point of #797.
+          // further. This Vite build serves the dev server and the demo; the
+          // shipped bundle comes from go/cmd/frontend-build (#1033).
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;
             if (id.includes('echarts') || id.includes('zrender')) return 'vendor-echarts';

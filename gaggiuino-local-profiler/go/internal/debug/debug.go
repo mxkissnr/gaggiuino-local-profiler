@@ -134,8 +134,7 @@ func (h *Handlers) clock() time.Time {
 // RegisterRoutes mounts the debug routes. /api/debug/machine (and the two
 // ingress routes) are registered only when GLP_DEV_BUILD is set (#1051) —
 // on a real install (GLP_DEV_BUILD unset, see Dockerfile) these routes
-// genuinely do not exist and 404, same gating export-db/import-db already
-// used.
+// genuinely do not exist and 404. export-db/import-db are always registered.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/debug/export-db", h.exportDB)
 	mux.HandleFunc("POST /api/debug/import-db", h.importDB)

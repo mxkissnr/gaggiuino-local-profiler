@@ -219,7 +219,7 @@ func TestStatic_ImmutableHashedAssets(t *testing.T) {
 }
 
 // TestEmbeddedBundle proves the real //go:embed all:dist resolves (against
-// the committed placeholder in CI, or the real Vite build locally) and that
+// the committed placeholder in CI, or the real frontend build locally) and that
 // GET / returns whatever index.html it holds.
 func TestEmbeddedBundle(t *testing.T) {
 	rec := httptest.NewRecorder()

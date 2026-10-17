@@ -350,11 +350,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// The debug domain — GET /api/debug/export-db, POST /api/debug/import-db,
 	// GET /api/debug/machine, and GET /api/debug/ingress (+ /sse-probe), a
 	// Go-only HA-ingress self-diagnostic for opening through the real HA
-	// panel. All of them (and the two ingress routes below) are gated on
-	// GLP_DEV_BUILD (#1051: previously /api/debug/machine and the ingress
-	// routes used a NODE_ENV != production check instead, but nothing in the
-	// shipped image ever sets NODE_ENV, so they were live on every real
-	// install). importDB's own http.MaxBytesReader is the route-scoped 500 MB
+	// panel. /api/debug/machine and the two ingress routes are registered only
+	// on a dev build (GLP_DEV_BUILD, #1051); export-db/import-db are always
+	// registered, behind the token like every other /api route. importDB's own http.MaxBytesReader is the route-scoped 500 MB
 	// body ceiling — see the handler-chain comment below and
 	// go/internal/debug/debug.go.
 	debug.NewHandlers(sqlDB, dbPath, registry).RegisterRoutes(mux)
@@ -665,8 +663,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		}
 	})
 
-	// The production frontend. internal/webapp embeds and serves the existing
-	// Vite SPA bundle (gaggiuino-local-profiler/public-src, built to public/)
+	// The production frontend. internal/webapp embeds and serves the SPA
+	// bundle cmd/frontend-build builds from gaggiuino-local-profiler/public-src
 	// — REST+SSE only, all relative paths. Registered last so its catch-all
 	// "GET /" only ever runs for paths no more-specific pattern (every /api/*
 	// route, /shots.json) claimed. Same registration-outside-/api/ auth model

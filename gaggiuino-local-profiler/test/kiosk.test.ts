@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Order, QueueEta } from '../public-src/api/types.js';
 
-// kiosk-helpers -> i18n -> state/index.js, and components/machines-settings.js
+// kiosk-helpers -> i18n -> state/index.ts, and components/machines-settings.ts
 // below, read localStorage at module load; vitest's node environment has none,
 // so stub a complete-enough Storage before the dynamic imports.
 vi.stubGlobal('localStorage', {
@@ -17,7 +17,7 @@ vi.stubGlobal('localStorage', {
   key: () => null,
   length: 0,
 });
-// components/machines-settings.js also touches window/document at call time —
+// components/machines-settings.ts also touches window/document at call time —
 // same minimal fakes test/theme-contrast.test.ts uses (navigator comes from
 // test/setup.ts).
 const g = globalThis as unknown as Record<string, unknown>;

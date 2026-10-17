@@ -56,7 +56,7 @@ describe('filterSuggestions — pure filtering logic', () => {
 // environment: 'node') — build just enough of a DOM to support the
 // createElement/appendChild/classList/attribute/event calls
 // attachAutocomplete() actually makes, mirroring the "fake minimal
-// document" convention in test/bottom-nav-config.test.js.
+// document" convention in test/bottom-nav-config.test.ts.
 interface FakeEvent {
   type: string;
   key?: string;

@@ -722,7 +722,7 @@ const nl: Partial<Translations> = {
     profile_send_to_machine:'Opslaan op machine',
     profile_utility_badge:'Utility',
 
-    // GaggiMate profile editor (gaggimate-profile-editor.js)
+    // GaggiMate profile editor (gaggimate-profile-editor.ts)
     gm_toast_load_error:'Profiel kon niet geladen worden',
     gm_toast_name_required:'Profielnaam is verplicht',
     gm_toast_phase_required:'Minstens één fase is vereist',

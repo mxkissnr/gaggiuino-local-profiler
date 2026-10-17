@@ -98,7 +98,7 @@ Reachable at `kiosk.html` — through the Ingress prefix on Home Assistant, or a
 All components authenticate automatically via a shared token:
 
 1. The app generates a random 64-character token at first start and stores it in `/data/api_token.txt`.
-2. `GET /api/token` returns the token to any caller that can reach the port, rate-limited to 10 requests per minute per source address. See the trust model below for why (#533) — this is the default; the `expose_api_port` option can turn it off for non-Ingress callers.
+2. `GET /api/token` returns the token to any caller that can reach the port, rate-limited per source address (10 requests per minute for direct-port callers, 120 via HA Ingress, where every request shares the Supervisor's address). See the trust model below for why (#533) — this is the default; the `expose_api_port` option can turn it off for non-Ingress callers.
 3. The browser UI reads the token via `/api/token` on startup (the request goes through the Supervisor) and includes it as an `X-GLP-Token` header on all subsequent requests.
 4. Requests coming through HA Ingress bypass the token check entirely — HA already authenticated the user.
 5. **GLP Order Card in direct-URL mode** (`glp_url` configured): set `glp_token: <your-token>` in the card YAML. Copy the token from **Settings → API Token** in the app UI.
@@ -131,7 +131,7 @@ All persistent data is stored in SQLite (`/data/glp.db`) with WAL journal mode e
 
 ### API spec
 
-A machine-readable OpenAPI 3.0.3 specification of all endpoints is served at `GET /api/openapi.json` (no auth required) and committed as [`openapi.yaml`](https://github.com/mxkissnr/gaggiuino-local-profiler/blob/main/gaggiuino-local-profiler/go/internal/system/openapi.yaml) in the repository. You can paste the URL or the file into [Swagger Editor](https://editor.swagger.io/) to browse the full API.
+A machine-readable OpenAPI 3.0.3 specification of all endpoints is served at `GET /api/openapi.json` (needs the `X-GLP-Token` header like every other API route, or an HA Ingress session) and committed as [`openapi.yaml`](https://github.com/mxkissnr/gaggiuino-local-profiler/blob/main/gaggiuino-local-profiler/go/internal/system/openapi.yaml) in the repository. You can paste the URL or the file into [Swagger Editor](https://editor.swagger.io/) to browse the full API.
 
 ## AI assistants (MCP server)
 
@@ -266,12 +266,12 @@ outside HA OS. GLP falls back to environment variables for both, all optional:
 
 | Env var | Replaces | Notes |
 |---|---|---|
-| `MACHINE_URL` | Settings → Machines (default machine host) | Same effect as setting the host in-app; still editable in Settings afterward |
-| `GLP_SYNC_INTERVAL` | `sync_interval` app option | Minutes, 1–60, default `5` |
-| `GLP_PREHEAT_TIME` | `preheat_time` app option | Minutes, 1–120, default `20` |
+| `MACHINE_URL` | — | Only a display fallback: `GET /api/status` reports it as the machine URL while the default machine has no host. It does not configure a machine; set the host in Settings → Machines |
+| `GLP_SYNC_INTERVAL` | `sync_interval` app option | Minutes (a positive whole number), default `5` |
+| `GLP_PREHEAT_TIME` | `preheat_time` app option | Minutes (a positive whole number), default `20` |
 | `GLP_ENABLE_ORDERS` | `enable_orders` app option | `true`/`false`, default `false` |
 | `GLP_DEBUG_LOGGING` | `debug_logging` app option | `true`/`false`, default `false` |
-| `GLP_EXPOSE_API_PORT` | `expose_api_port` app option | `true`/`false`, default `true` |
+| `GLP_EXPOSE_API_PORT` | `expose_api_port` app option | `false` turns it off; anything else (or unset) leaves it on, default `true` |
 | `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA API access) | Restores auto-sync, switch-entity power control and push notifications — see below. Both must be set together. |
 
 `GLP_HA_TOKEN` is a normal Home Assistant **long-lived access token**: in HA,

@@ -3,9 +3,9 @@
 // banner), instead of only in the Settings API-token card (#803).
 //
 // The module graph under test touches localStorage/navigator at import time
-// (state.js) and document/sessionStorage at call time, so the browser
-// globals are stubbed the same way test/api-token-client-storage.test.js and
-// test/dev-banner.test.js already do under vitest's node environment.
+// (state/index.ts) and document/sessionStorage at call time, so the browser
+// globals are stubbed the same way test/api-token-client-storage.test.ts and
+// test/dev-banner.test.ts already do under vitest's node environment.
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose

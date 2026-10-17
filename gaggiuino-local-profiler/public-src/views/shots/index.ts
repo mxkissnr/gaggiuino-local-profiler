@@ -49,12 +49,12 @@ interface GmPhasesOption {
 // ── Data loading ──────────────────────────────────────────────────────────
 
 // Guards against overlapping calls (loadData() is fired unawaited from at
-// least 6 independent triggers — main.js init, the reload-data button, live.js's
-// post-brew setTimeout, status.js, sidebar.js, onboarding.js — with no
+// least 6 independent triggers — the boot data chain, the reload-data button, live.ts's
+// post-brew setTimeout, status.ts, sidebar.ts, onboarding.ts — with no
 // coordination between them): a monotonic token is captured before the fetch
 // and only the call that is still the latest one when its response lands is
 // allowed to write state, same pattern as loadMachineProfileList() in
-// library-profile-editor.js (#521, #644).
+// library-profile-editor.ts (#521, #644).
 let _loadDataReqToken = 0;
 // True while a loadData() request is in flight. A live-sync reload defers on
 // shotsLoadInProgress() so it never starts mid-walk and truncates S.allShots
@@ -120,7 +120,7 @@ async function _loadGmPhases(shotA: ShotRow, token: number): Promise<GmPhaseRang
 // following page in the background so S.allShots ends up holding the full
 // shot-metadata history the non-visual consumers (analytics, dial-in
 // wizards, per-machine counts, findPreviousShot) still expect. Curve data is
-// fetched per shot on demand via shot-curves.js.
+// fetched per shot on demand via shot-curves.ts.
 const SHOTS_PAGE_LIMIT = 60;
 
 // #969: renderSidebar() rebuilds a DOM wrapper for every visible shot, so
@@ -198,7 +198,7 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
   // Multi-machine filtering (#325): S.allShots is the true unfiltered
   // fetch; S.shots (what every existing view already reads) becomes the
   // machine-filtered projection, re-derived whenever the active machine
-  // changes (see applyActiveMachineChange() in components/machines-settings.js).
+  // changes (see applyActiveMachineChange() in components/machines-settings.ts).
   //
   // A quiet reload re-fetches only the newest pages, so it would briefly drop
   // every older shot the sidebar already shows. Keep the already-loaded entries
@@ -633,7 +633,7 @@ export async function updateView(): Promise<void> {
   }
 
   // machineSubtitle (#344): make it reflect the machine that actually owns
-  // the shot being viewed, not the global default machine from status.js's
+  // the shot being viewed, not the global default machine from status.ts's
   // periodic poll — see that file's updateStatus() for the corresponding
   // guard (`!S.primaryShotId`) that keeps it from clobbering this back.
   // In compare mode there's no single "owning" machine worth naming, so it
@@ -744,7 +744,7 @@ export async function updateView(): Promise<void> {
   }
 
   // Shot photo (#448, #850): reuses the same image the annotation panel
-  // uploads/shows (_renderShotPhoto() in annotation.js) — the small circular
+  // uploads/shows (_renderShotPhoto() in annotation.ts) — the small circular
   // thumb fills the empty space next to the machine/freshness line on
   // mobile, and the large hero panel (floated top-right of #chart-area)
   // fills the unused desktop space above the chart. Both show the same

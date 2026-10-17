@@ -1,10 +1,10 @@
 // #604/#1019: the ACTIVE machine's per-machine colour theme (#594,
 // previously icon-only) drives the whole app's --accent-* variables via
-// applyActiveMachineAccentTheme() in components/machines-settings.js (#1019
+// applyActiveMachineAccentTheme() in components/machines-settings.ts (#1019
 // widened this from "only the default machine" to "whichever machine the
 // topbar switcher currently has active", and added the fallback to the
 // user's own persisted Farbschema pick when the active machine has none).
-// Fake DOM below mirrors test/machines-settings-theme-form.test.js's
+// Fake DOM below mirrors test/machines-settings-theme-form.test.ts's
 // pattern — just enough of documentElement/getElementById for the function
 // under test to run without a real browser.
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -47,7 +47,7 @@ class FakeEl {
   // renderAccentSwatches() binds click listeners on its own querySelectorAll()
   // result -- irrelevant here since these tests assert on the rendered
   // innerHTML string directly rather than simulating a click (same pattern
-  // test/machines-settings-theme-form.test.js uses for renderThemeSwatches()).
+  // test/machines-settings-theme-form.test.ts uses for renderThemeSwatches()).
   querySelectorAll(): unknown[] { return []; }
 }
 
@@ -231,7 +231,7 @@ describe('applyActiveMachineAccentTheme (#604/#1019)', () => {
 
   // #1021: --accent-ink light-theme override -- root.dataset is left
   // undefined by FakeEl (no data-theme test double needed elsewhere), so
-  // these tests set it directly the same way applyTheme() (theme.js) would
+  // these tests set it directly the same way applyTheme() (theme.ts) would
   // via documentElement.dataset.theme.
   describe('--accent-ink light-theme override (#1021)', () => {
     it('equals --accent (no override) in the dark theme, even for a preset with a light-theme override', () => {

@@ -27,7 +27,7 @@ vi.mock('barcode-detector/ponyfill', () => ({
   prepareZXingModule: ponyfill.prepareZXingModule,
 }));
 
-// library.js is huge and only openBeanForm() is reachable from the scanner
+// library.ts is huge and only openBeanForm() is reachable from the scanner
 // paths exercised here, so stand it in.
 vi.mock('../public-src/views/library.js', () => ({ openBeanForm: vi.fn() }));
 

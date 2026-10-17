@@ -14,11 +14,8 @@ import (
 )
 
 // This file implements the GitHub-release version check for GET /api/version.
-// GLP_VERSION is shared across the whole repo (the release process isn't
-// per-binary). Not used: the achievements up_to_date badge's cached-value path
-// (achievements isn't implemented yet — see go/README.md's domain list;
-// nothing in this Go binary calls checkForUpdate() except this endpoint
-// itself, which is why the cache exists).
+// Its result is cached so repeated GET /api/version calls do not hit GitHub
+// each time.
 const versionCacheTTL = time.Hour
 
 // versionFailureBackoff bounds how long a failed release lookup is
@@ -32,9 +29,6 @@ const versionFailureBackoff = time.Minute
 // config.yaml's `version:` is canonical; this const must match it and is
 // bumped alongside it at release time (CLAUDE.md's Versioning section).
 // Enforced by test/version-sync.test.ts and scripts/release-check.mts.
-// Duplicated rather than imported — no shared "constants" package exists in
-// this Go port; every domain package that needs a version-shaped value
-// defines its own, see internal/db's schema version handling.
 const glpVersion = "3.4.0"
 
 // Version returns the GLP version this binary reports from GET /api/version,

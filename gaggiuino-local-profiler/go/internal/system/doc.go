@@ -20,36 +20,39 @@
 // glp-integration's config-flow discovery probe AND every GlpDataCoordinator
 // poll's first call, so both are load-bearing for real clients. See
 // handlers.go's getToken/getStatus doc comments for exactly which fields those
-// two report. GET /api/status's lastSync/lastSyncError come from POST
-// /api/sync's manual pull loop (sync.go).
+// two report. GET /api/status's lastSync/lastSyncError come from the default
+// machine's shot-history pull (sync.go).
 //
 // The H2 debug-only GET /api/debug/machine lives in internal/debug alongside
 // export-db/import-db.
 //
 // # File layout
 //
-//	runtime.go   RuntimeState — the shared machine runtime state,
-//	             mutex-guarded because the 1s/30s/30s tickers plus
-//	             concurrent HTTP reads run in parallel.
-//	derive.go    deriveMachineState/isStillWarm — pure functions,
-//	             unit-tested without any I/O.
-//	poll.go      Poller — the polling loop + checkAndApplyMachinePower/
-//	             backgroundHaCheck, plus pollGlobalState (per-machine
-//	             reachability/error/firmware state keyed by machine id since
-//	             #1201), plus StatusInfo()/MachineStatus() snapshotting what
-//	             GET /api/status reads.
-//	preheat.go   buildPreheatResponse, SetReadyByTarget,
-//	             checkReadyByPreheat, save/load preheat_state.json.
-//	options.go   loadPreheatMinutes()/isApiPortExposed()/loadSyncIntervalMinutes()/
-//	             isOrdersEnabled() — all thin wrappers over internal/config's
-//	             one shared options.json reader (#1622 slice 8).
-//	status.go    GET /api/status's pure-logic pieces —
-//	             statusMachine/buildStatusMachines (the `machines` array),
-//	             apiURLAndHostnameFor/hostnameOnly (machineUrl/
-//	             machineHostname string formatting).
-//	version.go   GET /api/version's GitHub-release check.
-//	demo.go      POST /api/demo/{seed,end}.
-//	handlers.go  the REST surface for everything above.
+//	runtime.go          RuntimeState — the default machine's mutex-guarded
+//	                    power/preheat runtime state.
+//	derive.go           deriveMachineState/isStillWarm — pure functions.
+//	poll.go             Poller — the polling loop, checkAndApplyMachinePower/
+//	                    backgroundHaCheck, pollGlobalState (per-machine
+//	                    reachability/error/firmware state keyed by machine id,
+//	                    #1201) and StatusInfo()/MachineStatus().
+//	poll_live.go        the live-data accumulator and emitLiveSnapshot.
+//	poll_gaggiuino.go   per-tick machine status polling (pollViaGaggiuinoStatus).
+//	sync.go             the shot-history pull (default + other machines).
+//	sync_triggers.go    post-brew, scheduled and recovery sync drivers.
+//	maintenance_sync.go mirrors a Gaggiuino's service log onto maintenance
+//	                    tasks (#1639).
+//	profile_sync.go     pushes locally edited profiles to the machine.
+//	preheat.go          buildPreheatResponse, SetReadyByTarget,
+//	                    checkReadyByPreheat, the preheat-ready notifier and
+//	                    preheat_state.json; preheat_history.go its history.
+//	switch.go           GET /api/switch, POST /api/switch/toggle.
+//	options.go          thin wrappers over internal/config's shared
+//	                    options.json reader.
+//	status.go           GET /api/status's pure-logic pieces.
+//	version.go          GET /api/version's GitHub-release check.
+//	demo.go             POST /api/demo/{seed,end}.
+//	openapi.go          serves openapi.yaml as GET /api/openapi.json.
+//	handlers.go         the REST surface for everything above.
 //
 // # Live-snapshot production
 //
@@ -71,65 +74,25 @@
 // stream from internal/machines' live client, which doesn't exist yet; tracked
 // as a follow-up.
 //
-// # Deliberately not implemented (and why)
+// # Not implemented
 //
-//   - Most of the shot-sync engine. The default machine's syncShots() pull
-//     loop backs POST /api/sync's manual trigger (sync.go); #953
-//     (sync_triggers.go) added its three automatic drivers — the 3s post-brew
-//     pull, the periodic pull + retry-backoff, and the #725
-//     reachability-recovery catch-up. syncOtherMachines() (#341, #1146) rides
-//     along with the manual and scheduled triggers — a non-default Gaggiuino
-//     machine is pulled over the same /api/shots REST surface as the default
-//     one, a GaggiMate through its history adapter — so the default machine's
-//     own retry/backoff stays the only thing driven by a sync result. Still
-//     not implemented are syncProgress and the backgroundHaCheck
-//     `if (!cachedMachineVersion) fetchMachineVersion()` fallback: pollViaGaggiuinoStatus
-//     already opportunistically captures each machine's cached version from its
-//     successful status polls and shot syncs, and drops it again on an
-//     unreachable->reachable transition (#1197/#1201); fetchMachineVersion is
-//     only a fallback path for when polling itself isn't running, e.g. switch
-//     off.
-//
-//     syncNativeMaintenance() (#578) is no longer in that list: #1639
-//     re-implements it. The Gaggiuino adapter's GetServiceLog and the
-//     maintenance service's ApplyMachineServiceLog are wired into the sync
-//     loop (maintenance_sync.go), so a backflush or descale recorded by a
-//     Gaggiuino marks the matching task done automatically.
-//
+//   - syncProgress: the shot-history backfill runs, but nothing tracks or
+//     streams its progress.
 //   - The rolling-window debug-log connectivity summary
-//     (recordConnectivity/summarizeConnectivity) — pure logging diagnostics,
-//     not part of any response contract.
+//     (recordConnectivity/summarizeConnectivity).
+//   - Adopting a legacy machine_host/switch_entity app option into the
+//     registry: those options were removed (#662), and GET /api/status's
+//     legacyMachineOptionsPending was removed as dead code (#1621).
 //
-//   - The MQTT live-transport branch — already out of scope per
-//     internal/machines/doc.go; this package's poll.go calls
-//     machines.Adapter.GetLiveSensorSnapshot/GetLiveSystemState directly,
-//     which is always the WS-backed cache (GaggiuinoAdapter), matching the
-//     behavior for every install that hasn't opted into the MQTT Settings
-//     toggle.
-//
-//   - The barista "preheat ready" HA push (_checkPreheatNotify), gated by
-//     orders settings' notify_preheat_ready/baristaNotifyService plus its
-//     localized text — see preheat.go's header comment: wiring it needs a read
-//     dependency on internal/orders' settings, and internal/orders already
-//     depends on this package (see below) for its own shop-broadcast — adding
-//     the reverse dependency too would need a second round of callback
-//     plumbing. Still a follow-up (GET/POST /api/switch itself is
-//     implemented).
-//
-//   - The write side of reconciling a legacy machine_host/switch_entity
-//     add-on option into the registry (adoptOptionChanges); its read side
-//     (GET /api/status's legacyMachineOptionsPending) was removed as dead
-//     code (#1621).
+// The MQTT live transport (internal/mqtt) is wired in through
+// SetLiveTransport, and the preheat-ready push through
+// SetPreheatReadyNotifier (see preheat.go).
 //
 // # internal/orders' shop-broadcast
 //
-// internal/orders/doc.go flagged its POST /api/orders/settings shop-open/
-// shop-closed HA-notify broadcast as deferred pending the default machine's
-// live runtime state from the system domain. That dependency is now
-// resolvable: internal/orders/handlers.go takes a PreheatInfoFunc callback
-// (not a direct import of this package, which would close a cycle — this
-// package's own preheat-ready-notify would need to import internal/orders
-// right back for its settings, see above) that cmd/server wires to
-// Poller.PreheatInfo, closing that gap. See internal/orders/handlers.go's own
-// comment on _broadcastShopState.
+// internal/orders' shop-open/closed HA-notify broadcast needs the default
+// machine's preheat state. internal/orders takes a PreheatInfoFunc callback
+// (a direct import of this package would close a cycle, since the
+// preheat-ready notifier needs the orders settings) that cmd/server wires to
+// Poller.PreheatInfo.
 package system

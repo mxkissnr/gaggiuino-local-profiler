@@ -1,4 +1,4 @@
-// status.js's updateStatus() single-flight guard (#734 review): the function
+// status.ts's updateStatus() single-flight guard (#734 review): the function
 // can be triggered from three independent places (the 30s setInterval, a
 // machine switch, and #733's visibilitychange refocus handler) with no
 // ordering guarantee between them, so a call arriving while one is already
@@ -25,7 +25,7 @@ g.window ??= globalThis;
 // reference error and the shot-count branch never runs.
 g.sessionStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 
-// status.js routes a rising shotCount through live-sync's markDirty; mock the
+// status.ts routes a rising shotCount through live-sync's markDirty; mock the
 // module so the shot-count branch can be asserted without the scheduler.
 const liveMock = vi.hoisted(() => ({ markDirty: vi.fn(), noteServerRevs: vi.fn() }));
 vi.mock('../public-src/live-sync.js', () => ({

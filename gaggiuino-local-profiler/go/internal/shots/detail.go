@@ -3,10 +3,8 @@ package shots
 // This file holds the shot-detail metrics math CalcShotScoreDetail (score.go)
 // does not already expose: getShotData()+calcBrewRatio() (dose->yield->ratio,
 // EY) and detectPhases() (the preinfusion/extraction split). The history-aware
-// comparative grind advice lives separately in comparative.go. Deliberately
-// not implemented here: any bean-library-aware branch (#450, the same
-// internal/library boundary CalcShotScoreDetail's own doc comment already
-// describes) — out of scope for a single shot's detail view.
+// comparative grind advice lives separately in comparative.go. The metrics
+// here do not use the library bean (#450); only the score does.
 
 // ShotMetrics is the shot-detail page's derived recipe/duration/channeling
 // figures — a plain data struct (not pre-formatted strings), same division

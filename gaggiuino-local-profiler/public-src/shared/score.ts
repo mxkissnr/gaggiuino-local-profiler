@@ -42,8 +42,7 @@ function _stddev(vals: number[]): number {
   return Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length);
 }
 
-// "1:2.4" -> 2.4 — the bean form's own brewRatio convention (see
-// sanitize-bean.js). Anything that doesn't match (empty, freeform notes,
+// "1:2.4" -> 2.4 — the bean form's own brewRatio convention. Anything that doesn't match (empty, freeform notes,
 // old data predating the field) yields null so callers fall back cleanly.
 // This is the single brew-ratio parser (#1622): it must stay in parity with
 // Go's parseBrewRatioTarget (go/internal/shots/score.go), so the profile

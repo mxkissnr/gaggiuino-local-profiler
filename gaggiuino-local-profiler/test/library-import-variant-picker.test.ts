@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // import.ts's module graph (state, i18n, api) reads localStorage/navigator at
-// load (the library tests' pattern); library.js is huge and untouched by the
+// load (the library tests' pattern); library.ts is huge and untouched by the
 // picker, so stand it in (same as library-scan-manual.test.ts).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };

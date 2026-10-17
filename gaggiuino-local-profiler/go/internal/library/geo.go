@@ -24,10 +24,9 @@ import (
 // GeocodeHook below is what cmd/server wires createBean/UpdateBean's
 // un-awaited call to.
 //
-// The outbound request goes through assertPublicHost (ssrf.go) exactly like
-// scan.go's Open Food Facts call: nominatimHost is a fixed literal, not user
-// input, but a rebound DNS answer for it could still point at an internal
-// address, so every resolved address is checked before the request runs.
+// The fixed nominatimHost is pre-checked with assertPublicHost (ssrf.go)
+// before the request, like scan.go's Open Food Facts call; the http.Client
+// resolves it again when it dials, so this does not stop DNS rebinding.
 
 const (
 	nominatimHost = "nominatim.openstreetmap.org"
@@ -37,8 +36,8 @@ const (
 	geoCacheKey      = "geocode_cache"
 	geoCacheMax      = 500
 	// Cosmetic — Nominatim only needs a stable identifying User-Agent, not
-	// an exact version. Bumped alongside config.yaml at release time (same
-	// convention as internal/system/version.go's glpVersion).
+	// an exact version. Meant to be bumped by hand at release time, but not
+	// checked by any test, so it can lag behind config.yaml's version.
 	geoUserAgent = "GLP/3.2.0 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
 )
 

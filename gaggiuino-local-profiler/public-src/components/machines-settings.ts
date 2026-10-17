@@ -103,7 +103,7 @@ export function resolveActiveMachineId(id: number | 'all'): number | 'all' {
 }
 
 // The default machine's id, or null before /api/machines has ever loaded —
-// used by views/live.js to decide whether the currently active machine has
+// used by views/live.ts to decide whether the currently active machine has
 // real live-polling support (only the default machine does, in this round).
 export function getDefaultMachineId(): number | null {
   return (S.machines || []).find(m => m.isDefault)?.id ?? null;
@@ -111,7 +111,7 @@ export function getDefaultMachineId(): number | null {
 
 // #1019: resolves the currently ACTIVE machine object (topbar switcher,
 // S.activeMachineId) rather than always the default one -- same
-// null/'all'-means-default fallback semantics as views/live.js's
+// null/'all'-means-default fallback semantics as views/live.ts's
 // _isActiveMachineLiveCapable(), plus falling back to the default machine
 // when a stale/removed id no longer matches anything. Reads S.machines/
 // S.activeMachineId live on every call, never cached, since both can change
@@ -155,7 +155,7 @@ function relativeLuminance({ r, g, b }: { r: number; g: number; b: number }): nu
 // that actually fail as raw hex get an entry here; ruby-ristretto (8.01:1
 // on --raised) and mulberry-mocha (7.18:1) already clear the floor
 // unmodified and are absent deliberately, not by oversight — see
-// test/theme-contrast.test.js.
+// test/theme-contrast.test.ts.
 const LIGHT_ACCENT_INK_OVERRIDES: Record<string, string> = {
   'amber-americano':   '#905c06',
   'copper-cortado':    '#975730',
@@ -165,7 +165,7 @@ const LIGHT_ACCENT_INK_OVERRIDES: Record<string, string> = {
   'frosty-flat-white': '#0f736b',
 };
 
-// Pure lookup (no DOM) so test/theme-contrast.test.js can assert the table
+// Pure lookup (no DOM) so test/theme-contrast.test.ts can assert the table
 // above against the four light surfaces directly, the same way it already
 // asserts the base token scale straight from style.css. `presetKey` is
 // whichever THEME_PRESETS key is actually driving the current accent (see
@@ -193,7 +193,7 @@ export function resolveAccentInk(presetKey: string | null, accentHex: string, is
 // stylesheet rule regardless of cascade order — same "inline style wins"
 // pattern glp-card.js's _applySemanticColorContrast() uses. When the active
 // machine has no theme of its own, falls back to resolving the user's own
-// persisted Farbschema pick (post-migration, see theme.js's
+// persisted Farbschema pick (post-migration, see theme.ts's
 // migrateLegacyAccent()) instead of just clearing the vars — there is no
 // [data-accent] stylesheet fallback to catch that any more.
 //
@@ -439,7 +439,7 @@ function renderThemeSwatches(): void {
 // preset), replacing the old, unrelated 6-swatch static buttons that used
 // to live directly in index.html. Marks whichever preset is currently
 // persisted to localStorage as .active and wires each button straight to
-// window.setAccentTheme() -- there's nothing static left for main.js to
+// window.setAccentTheme() -- there's nothing static left for main.ts to
 // delegate a single click listener from, unlike the old swatches.
 export function renderAccentSwatches(): void {
   const wrap = document.getElementById('accentSwatches');
@@ -447,7 +447,7 @@ export function renderAccentSwatches(): void {
   const current = migrateLegacyAccent(safeLocalStorage.getItem('glp_accent_theme')) || 'amber-americano';
   wrap.innerHTML = joinHtml(THEME_PRESETS.map(p => html`<button type="button" class="accent-swatch${current === p.key ? html` active` : html``}" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? html`background-color:${escapeHtml(p.a)}` : html`background-image:linear-gradient(135deg,${escapeHtml(p.a)},${escapeHtml(p.b)})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`));
   wrap.querySelectorAll<HTMLElement>('[data-preset-key]').forEach(btn => {
-    // setAccentTheme is assigned onto window in main.js (Object.assign).
+    // setAccentTheme is assigned onto window in main.ts (Object.assign).
     btn.addEventListener('click', () => window.setAccentTheme?.(btn.dataset.presetKey ?? ''));
   });
 }
@@ -479,8 +479,8 @@ function syncThemeFormUI(): void {
 }
 
 // Static custom-colour input wiring (#machineThemeCustomA/B, the gradient
-// toggle) — called once from main.js's DOMContentLoaded handler, same
-// pattern as the other machine form buttons wired there.
+// toggle) — wired once from boot/settings.ts, same pattern as
+// the other machine form buttons wired there.
 export function onThemeCustomColorAChange(): void {
   if (!_selectedTheme || _selectedTheme.preset) return;
   const aInput = document.getElementById('machineThemeCustomA') as HTMLInputElement;
@@ -861,13 +861,10 @@ function themeForSave(theme: ThemeSelection | null): NonNullable<MachineSaveInpu
 // callers that need to distinguish "failed" from "nothing to save" can
 // inspect the DOM themselves, neither existing caller needs to.
 //
-// #731: triggerSync defaults to true (saveMachineForm()'s explicit "Speichern"
-// still fires the post-save shot sync) but testMachineForm() passes false —
-// "Verbindung testen" needs a saved machine id to test against, but that
-// implicit save must not itself start an import. Carried to the server as
-// a `?sync=0` query param rather than a body field: machineSchema/
-// machineSchema.partial() validate the body strictly, so an extra JSON
-// field would be unclean at best.
+// #731: testMachineForm() passes triggerSync = false, which adds a `?sync=0`
+// query param to the save. The Go backend ignores it: no machine save starts
+// a shot-history sync any more, the poller's regular sync picks the machine
+// up.
 async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = {}): Promise<string | number | null> {
   const id = (document.getElementById('machineFormId') as HTMLInputElement).value;
   const type = (document.getElementById('machineFormType') as HTMLSelectElement).value as 'gaggiuino' | 'gaggimate';
@@ -939,7 +936,7 @@ export async function saveMachineForm(): Promise<void> {
 }
 
 // #753: reassigns the default machine, then reloads so both this list's
-// badge/actions and getDefaultMachineId() consumers (views/live.js,
+// badge/actions and getDefaultMachineId() consumers (views/live.ts,
 // applyDefaultMachineAccentTheme() below) pick up the change.
 export async function setDefaultMachine(id: number): Promise<void> {
   const r = await machinesApi.setDefaultMachine(id);
@@ -952,7 +949,7 @@ export async function setDefaultMachine(id: number): Promise<void> {
 // Both cases can still be rejected by the backend (still-default after a
 // stale read, or the last remaining machine) -- that error is surfaced via
 // showToast rather than silently doing nothing, same as the sync-failed
-// toast pattern in components/status.js.
+// toast pattern in components/status.ts.
 export async function deleteMachine(id: number, isDefault?: boolean): Promise<void> {
   const confirmKey = isDefault ? 'settings_machine_delete_default_confirm' : 'settings_machine_delete_confirm';
   if (!confirm(t(confirmKey))) return;

@@ -128,7 +128,7 @@ let _liveSessionIsBrew: boolean | null = null;
 // same bean/grinder/basket) and gets written onto the next shot's annotation
 // automatically once that shot finishes syncing (see fetchLiveData's "brew
 // just ended" branch below) — same POST api/shots/{id}/annotate endpoint and
-// field shape shots/annotation.js's own auto-save uses, just triggered from
+// field shape shots/annotation.ts's own auto-save uses, just triggered from
 // here instead of from the annotation panel's own fields.
 function _liveSetupStorageKey(): string {
   return `glp_live_shot_setup_${S.activeMachineId ?? 'default'}`;
@@ -185,7 +185,7 @@ export function renderLiveShotSetupPanel(): void {
     const opt = beanSelect.selectedOptions[0];
     d.beanId = opt?.dataset.beanId ? parseInt(opt.dataset.beanId, 10) : null;
     // Prefill grinder/grind setting from the bean's known-grind-setting
-    // record (dial-in-wizard's own prefill source, see library.js) — only
+    // record (dial-in-wizard's own prefill source, see library.ts) — only
     // when the user hasn't already typed something into those fields, so
     // this never clobbers a manual override.
     if (!d.grinder && !d.grindSetting && d.beanId != null) {
@@ -445,15 +445,15 @@ export function connectLiveStream(): void {
   void fetchLiveData();
   void fetchPreheatData();
   // #736 review: SSE push (handleLiveSnapshotEvent/handlePreheatUpdateEvent,
-  // wired once in main.js's bootstrap) covers both once connected -- these
+  // wired once in boot/data.ts) covers both once connected -- these
   // polling intervals are only needed as the fallback for whenever SSE
   // hasn't (yet, or ever) taken over for this session. A one-time
   // `if (!S.sseActive)` check here (at the moment the tab opens) isn't
-  // enough: EventSource can take up to sse.js's WATCHDOG_MS (8s, longer
+  // enough: EventSource can take up to sse.ts's WATCHDOG_MS (8s, longer
   // still over HA Ingress per #738/#740) to actually open, so S.sseActive
   // can still be null/false right now even though it flips true moments
   // later -- these intervals must always start, and instead self-correct on
-  // every tick, same convention as status.js's own 30s updateStatus()
+  // every tick, same convention as status.ts's own 30s updateStatus()
   // interval, which likewise always fires rather than deciding once at
   // startup.
   timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) void fetchLiveData(); }, 1000));
@@ -492,8 +492,8 @@ function machineIconEl(): HTMLElement | null {
 let _lastPreheat: PreheatData | null = null;
 
 // #837: raw-data-to-icon-state translation itself now lives in
-// resolveMachineIconState() (machine-icon.js) — shared with the topbar's
-// own ambient icon instance (components/topbar-machine-icon.js) — this stays
+// resolveMachineIconState() (machine-icon.ts) — shared with the topbar's
+// own ambient icon instance (components/topbar-machine-icon.ts) — this stays
 // the Live view's own wiring: which element to drive and which preheat
 // snapshot to translate against.
 // #1383: a preheat event carries no reachability of its own, so remember the
@@ -655,7 +655,7 @@ function stopElapsedTimer(elId: string | null, finalElapsedSec: number | null): 
   }
 }
 
-// #736: SSE push handlers -- registered once in main.js's bootstrap
+// #736: SSE push handlers -- registered once in boot/data.ts
 // (connectEvents()/onEvent()), independent of whichever view is currently
 // open. Both payloads are already the identical shape their REST
 // counterparts (GET /api/live/data, GET /api/preheat) return -- so these

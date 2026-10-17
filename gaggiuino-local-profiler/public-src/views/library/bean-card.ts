@@ -66,7 +66,7 @@ export function originDisplay(bean: OriginBean): string {
 // Most recently used grind setting for a bean (#829). Deliberately reads
 // S.shots' own annotations rather than bean.knownGrindSettings: that array
 // is only written by the Guided Dial-In wizard's explicit "Save known grind"
-// button (dialin-wizard.js's dialinSaveKnownGrind, POST .../known-grind) —
+// button (dialin-wizard.ts's dialinSaveKnownGrind, POST .../known-grind) —
 // it stays empty for the common case of a bean that's only ever been
 // annotated on normal shots, which would make "last used" silently blank
 // for most beans. Same beanId-first, name-fallback matching convention as
@@ -158,7 +158,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   const bagHistoryHtml: Html = bags.length >= 1 ? (() => {
     const parts: Html[] = [];
     if (current) parts.push(renderBagCard(b, current, 'current', beans, false));
-    // data-bag-drag-list marks the container main.js's drag-reorder
+    // data-bag-drag-list marks the container bags.ts's drag-reorder
     // handler watches for drop targets — only "upcoming" bags participate.
     const upcomingHtml = joinHtml(upcoming.map(entry => renderBagCard(b, entry, 'upcoming', beans, true)));
     if (upcomingHtml) parts.push(html`<div class="lib-bag-drag-list" data-bag-drag-list data-bean-id="${esc(b.id)}">${upcomingHtml}</div>`);
@@ -397,7 +397,7 @@ export function closeFreezeForm(id: number): void {
 // Freezes a portion of the active bag: grams move into a dated frozen pool
 // (see bag.frozenPortions in the schema) but stay counted in stock_g — the
 // freeze doesn't consume anything, it just pauses that portion's own
-// freshness clock (frozenPortionAgeDays(), utils.js, #477 — the bag's own
+// freshness clock (frozenPortionAgeDays(), utils.ts, #477 — the bag's own
 // badge is never affected by this) until it's thawed.
 // frozenAt (#472) comes from the form's date picker (defaults to today, but
 // editable for logging a portion frozen in the past) rather than always

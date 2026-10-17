@@ -1,10 +1,10 @@
-// Profile Dial-In wizard (#313) — sibling to dialin-wizard.js (the grind
+// Profile Dial-In wizard (#313) — sibling to dialin-wizard.ts (the grind
 // wizard), same session/polling/candidate-confirm architecture, adapted for
 // tuning a machine profile's phases instead of a single grind number.
 //
 // v1 SCOPE: the primary tuning signal is a manual taste-symptom pick per
 // round (sour/balanced/bitter/watery/channeling), mapped to a concrete
-// phase/field adjustment via profile-dialin-convergence.js's symptom table.
+// phase/field adjustment via profile-dialin-convergence.ts's symptom table.
 // calcShotScore is the objective secondary signal, used only for convergence
 // detection. shot.profile.phases is intentionally NOT parsed here — its field
 // shape is unverified against real hardware.
@@ -132,15 +132,15 @@ export function profileDialinClose(): void {
   closeProfileDialinWizard();
 }
 
-// ── Actions (data-action wiring, see main.js) ──────────────────────────
+// ── Actions (data-action wiring, see boot/delegation.ts) ──────────────────────────
 
 // Toggles a symptom in the current round's pending pick set. "balanced" is
 // exclusive with every other symptom (matches the priority table in
-// profile-dialin-convergence.js, where balanced only ever wins alone).
+// profile-dialin-convergence.ts, where balanced only ever wins alone).
 export function profileDialinToggleSymptom(symptom: string | undefined): void {
   const s = wizard.session();
   if (!s || !s.reviewRound) return;
-  // The symptom buttons always carry data-symptom (see main.ts's [data-action]
+  // The symptom buttons always carry data-symptom (see boot/delegation.ts's [data-action]
   // handler), so this narrows to the value the untyped .js already handled.
   const sym = symptom as string;
   let picks = s.pendingSymptoms || [];
@@ -258,7 +258,7 @@ export function profileDialinEnd(): void {
 
 // isMatch: '1' confirms the candidate as this round's dial-in shot, '0'
 // dismisses it — no silent auto-matching, same reasoning as the grind
-// wizard (Max sometimes pulls shots for guests mid-session).
+// wizard (the maintainer sometimes pulls shots for guests mid-session).
 export function profileDialinConfirmShot(shotId: number, isMatch: boolean): void {
   const s = wizard.session();
   if (!s || s.status !== 'active') return;

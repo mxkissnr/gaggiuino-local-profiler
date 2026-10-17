@@ -1,5 +1,5 @@
-// Theme resolution + application (#1018). Split out of main.js so this
-// logic can be unit tested directly -- main.js's own import chain has heavy
+// Theme resolution + application (#1018). Split out of main.ts so this
+// logic can be unit tested directly -- main.ts's own import chain has heavy
 // side effects at load time (service worker registration, a DOMContentLoaded
 // bootstrap touching dozens of element ids) that make importing it in a test
 // impractical; this module has none.

@@ -4,8 +4,7 @@
 // devices currently home" filter and the notify-mapping customer list) —
 // plus GetSwitchState, CallHaService, and GetHaLanguage, used by the
 // background polling loop's machine-power/ready-by-preheat checks and the
-// preheat notification. getHaState is still NOT implemented — nothing in the
-// HTTP surface reaches it (it only backs Settings-page MQTT discovery).
+// preheat notification, and SupervisorGet (MQTT broker discovery).
 //
 // Every function here degrades to a no-op/empty-result (or, for
 // CallHaService, an error) when no token is configured — never a panic, since

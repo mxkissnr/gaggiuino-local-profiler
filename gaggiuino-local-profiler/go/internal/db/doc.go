@@ -2,7 +2,8 @@
 // (pure Go, no CGo). Open brings a database at a given path (DefaultPath for
 // the real /data/glp.db) to the current schema and runs the additive
 // migrations needed on every start: InitSchema, FixSchema,
-// MigrateMachineColumns, MigrateMachineTheme, EnsureInstallID. The legacy
+// MigrateMachineColumns, MigrateMachineTheme, MigrateMachineWaterSensor,
+// EnsureInstallID. The legacy
 // flat-JSON-to-SQLite migration is deliberately NOT implemented — every
 // install this binary can run against is already on SQLite.
 //

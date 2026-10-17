@@ -14,8 +14,7 @@ import (
 )
 
 // This file implements POST /api/restore: the largest handler, split
-// across a few helper functions the handler (postRestore, in handlers.go)
-// composes, following a top-to-bottom structure (parse request -> validate
+// across a few helper functions the handler (postRestore, below) composes, following a top-to-bottom structure (parse request -> validate
 // -> sanitize/preview -> [dry-run: return] -> apply -> side effects ->
 // respond).
 //
@@ -42,8 +41,7 @@ import (
 // a failure after the shots tx commits but during, say, the maintenance write
 // leaves shots restored and maintenance not. Threading a shared *sql.Tx
 // through every repository across five packages (the only way to close that
-// last gap in-process) remains out of scope. Flagged again in doc.go and
-// go/README.md.
+// last gap in-process) remains out of scope. Flagged again in doc.go.
 const maxShotID = shots.MaxShotID
 
 // shotMeta is the per-shot validation state pass 1 collects while

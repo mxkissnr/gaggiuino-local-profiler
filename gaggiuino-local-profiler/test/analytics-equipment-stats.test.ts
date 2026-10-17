@@ -6,13 +6,13 @@ function at<T>(arr: readonly T[], i: number): T {
   return v;
 }
 
-// Same window/localStorage/navigator stubbing as analytics-new-charts.test.js
-// — analytics.js calls window.calcShotScore/window.getShotData at runtime
-// (main.js's real window-exposure pattern) and pulls in echarts transitively.
+// Same window/localStorage/navigator stubbing as analytics-new-charts.test.ts
+// — analytics.ts calls window.calcShotScore/window.getShotData at runtime
+// (main.ts's real window-exposure pattern) and pulls in echarts transitively.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let _computeEquipmentStats: Analytics['_computeEquipmentStats'];
 
-// views/analytics.js's ShotRow interface isn't exported; derive it from the
+// views/analytics.ts's ShotRow interface isn't exported; derive it from the
 // helper under test so the fixtures stay shape-checked against it.
 type ShotRow = Parameters<Analytics['_computeEquipmentStats']>[0][number];
 
@@ -61,7 +61,7 @@ const puckScreens = [{ id: 5, name: 'Slayer mesh' }];
 const duplicateNameBaskets = [{ id: 10, name: 'Standard' }, { id: 11, name: 'Standard' }];
 
 // #674: helpers mirroring buildBasketStats()/buildPuckScreenStats()'s own
-// getKey/getName pair (views/analytics.js), so these tests exercise the
+// getKey/getName pair (views/analytics.ts), so these tests exercise the
 // same shape real callers use rather than a bespoke test-only convention.
 const basketStats     = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.basketId, id => baskets.find(b => b.id === Number(id))?.name || null);
 const puckScreenStats = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.puckScreenId, id => puckScreens.find(p => p.id === Number(id))?.name || null);

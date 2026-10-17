@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// annotation.js imports state.js, which reads localStorage/navigator at
+// annotation.ts imports state/index.ts, which reads localStorage/navigator at
 // module load time — same stubbing approach as annotation-select-dom.test.ts.
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge test/helpers/fake-option-dom.ts uses).

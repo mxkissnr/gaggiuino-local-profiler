@@ -7,7 +7,7 @@
 // # Why hand-written instead of protoc-gen-go
 //
 // The blocker this package starts from: no `.proto` source files exist in
-// this repo, in node_modules, or in any branch/tag of the firmware repo
+// this repo or in any branch/tag of the firmware repo
 // that could be located — the firmware is closed-source and its message
 // definitions were "reconstructed field-for-field from the machine's own
 // web UI bundle... and verified live against a real machine" (profile
@@ -18,20 +18,14 @@
 // schema blocks and the reconstructed field descriptors) field-by-field —
 // is what schema.proto below records the result of.
 //
-// This environment additionally has no `protoc`/`protoc-gen-go` binary
-// installed (confirmed: `which protoc protoc-gen-go` finds neither), so
-// even with real `.proto` sources in hand, codegen isn't available here.
-// schema.proto is written in real, syntactically valid proto3 — a future
-// environment with protoc-gen-go available can regenerate wire-compatible
-// bindings from it directly — but the structs and Marshal/Unmarshal
-// methods in messages.go are hand-written against the same field
-// numbers/wire types schema.proto documents, verified by:
+// schema.proto is written in real, syntactically valid proto3, so
+// wire-compatible bindings could be generated from it, but the structs and
+// Marshal/Unmarshal methods in messages.go are hand-written against the
+// same field numbers/wire types schema.proto documents, verified by:
 //
 //  1. wire_test.go's low-level encoder/decoder tests (varint, fixed32,
 //     length-delimited framing) against manually computed byte sequences.
-//  2. messages_test.go's round-trip tests (Marshal then Unmarshal returns
-//     the original value) for every message type.
-//  3. node_vectors_test.go's cross-validation against the former
+//  2. node_vectors_test.go's cross-validation against the former
 //     implementation: testdata/node_vectors.json is a fixture frozen from
 //     the pre-Go baseline (archived at tag archive/node-backend-final),
 //     captured from the real @protobuf-ts/runtime-backed encoder/decoder the
@@ -47,11 +41,8 @@
 //     That encoder is gone, so this fixture is the frozen wire-format
 //     reference.
 //
-// No live-hardware verification happens in this package — a golden-master
-// test against a real machine is a separate, later step (Max has a
-// real Gaggiuino to test against, but network access to it is not available
-// in this environment). See cmd/gaggiuino-ws-probe (go/cmd/gaggiuino-ws-probe)
-// for a small CLI this package ships specifically so that later step is a
+// No live-hardware verification happens in this package's tests. See
+// cmd/gaggiuino-ws-probe for a small CLI that makes that check a
 // `go run` away instead of a from-scratch tool: point it at a real
 // machine's ws:// URL and it dumps every decoded frame (with its raw hex)
 // for exactly this kind of manual verification.
@@ -63,6 +54,6 @@
 // uses plain JSON over REST, not this binary protocol, and is treated as
 // opaque JSON end-to-end specifically so the machine's inconsistent
 // bool-as-string quirk (some settings fields are JSON `"true"`/`"false"`
-// strings, not real JSON booleans — see go/internal/machines/doc.go) passes
-// through byte-identical rather than being normalized away by a typed struct.
+// strings, not real JSON booleans — see go/internal/machines/doc.go) is
+// never normalized away by a typed struct.
 package proto

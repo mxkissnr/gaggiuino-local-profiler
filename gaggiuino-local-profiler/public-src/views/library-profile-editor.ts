@@ -3,7 +3,7 @@
 // (GET/POST/PUT/DELETE /api/machine/profile[/:id]).
 //
 // Phase editing follows the same DOM-as-state pattern as the recipe-step
-// editor in library.js (_renderStepRows/addRecipeStep/removeRecipeStep/
+// editor in library.ts (_renderStepRows/addRecipeStep/removeRecipeStep/
 // _collectSteps): the rows in #profilePhaseList are the source of truth at
 // save time, no separate JS array is kept in sync. removeProfilePhase()
 // renumbers all remaining rows/ids/data-idx after a removal, same as
@@ -104,7 +104,7 @@ export async function loadMachineProfileList(): Promise<void> {
   updateProfileDatalist();
 }
 
-// recipeFormProfile's autocomplete (components/autocomplete.js, library.js)
+// recipeFormProfile's autocomplete (components/autocomplete.ts, library.ts)
 // reads S.machineProfiles live — this just re-renders it if it's currently
 // open, so a profile list refresh elsewhere shows up immediately.
 export function updateProfileDatalist(): void {
@@ -194,7 +194,7 @@ export function openNewProfileForm(): void {
 }
 
 // Opened from a bean card's "Create profile" button — empty editor with the
-// bean's suggestion pre-filled, so Max never has to re-type Sertao's shape.
+// bean's suggestion pre-filled, so the maintainer never has to re-type Sertao's shape.
 export function createProfileFromBean(beanId: number): void {
   const bean = S.coffeeLibrary.beans.find(b => b.id === beanId);
   if (!bean) return;
@@ -220,7 +220,7 @@ function _applySuggestion(suggestion: ProfileSuggestion): void {
   renderProfilePreviewChart();
 }
 
-// ── Phase editor (DOM-as-state, mirrors library.js's recipe-step editor) ──
+// ── Phase editor (DOM-as-state, mirrors library.ts's recipe-step editor) ──
 // Accepts either the API's phase shape or a suggestion's — both are only
 // read field-by-field with `?? ''` fallbacks (see Phase).
 function _renderPhaseRows(phases: unknown[] | null | undefined): void {
@@ -279,7 +279,7 @@ export function removeProfilePhase(i: number): void {
   const row = document.getElementById(`profilePhase${i}`);
   if (row) row.remove();
   // Re-number remaining rows — same detail as removeRecipeStep() in
-  // library.js: ids and the delete button's data-idx must stay in sync
+  // library.ts: ids and the delete button's data-idx must stay in sync
   // with DOM order since the DOM is the only source of truth.
   document.querySelectorAll<HTMLElement>('#profilePhaseList .pp-row').forEach((row, idx) => {
     row.id = `profilePhase${idx}`;
@@ -385,7 +385,7 @@ export async function sendProfileToMachine(): Promise<void> {
     window.showToast?.(t('profile_send_error') + (err ? `: ${err}` : ''));
     return;
   }
-  // Same offline-editor contract as gaggimate-profile-editor.js's
+  // Same offline-editor contract as gaggimate-profile-editor.ts's
   // saveGaggiMateProfile: the backend saved locally first, this 200 might
   // just mean "queued, machine unreachable right now" — surface that
   // distinctly from a silent success.
@@ -402,7 +402,7 @@ export async function sendProfileToMachine(): Promise<void> {
 // Synthesizes a time series from the phase list — pro-Phase target.curve
 // interpolation from start→end over target.time ms — and draws it exactly
 // like the shot-detail chart draws its dashed target-curves (destroy-before-
-// recreate, see public-src/views/shots/index.js's espressoShotChart setup).
+// recreate, see public-src/views/shots/index.ts's espressoShotChart setup).
 function _curveInterpolate(curve: string | number | undefined, frac: number): number {
   switch (curve) {
     case 'INSTANT': return 1;

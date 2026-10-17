@@ -1,7 +1,7 @@
 // #1539 slice 3: the per-kind live-sync refetch handlers, moved out of main.ts
 // so their behaviour is importable and testable instead of only readable as
 // source text. The loaders that already live in their own modules are imported
-// here directly; the few that are still local to main.ts (the shared
+// here directly; the few that are still local to boot/data.ts (the shared
 // Settings-page loader, the server ui-prefs applier and the maintenance refetch
 // guard) arrive through `deps`.
 import { S } from './state/index.js';
@@ -14,7 +14,7 @@ import { refreshMaintenanceView } from './views/maintenance.js';
 import { loadMachineProfileList } from './views/library-profile-editor.js';
 import { reloadBlocked, type LiveSyncHandlers } from './live-sync.js';
 
-// The functions the handler map needs that are still local to main.ts; every
+// The functions the handler map needs that are still local to boot/data.ts; every
 // other loader is imported from its own module above. Declared as properties
 // (not methods) so they can be passed by reference without a `this` binding.
 export interface LiveSyncHandlerDeps {

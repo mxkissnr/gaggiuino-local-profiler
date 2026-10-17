@@ -12,40 +12,32 @@
 //	kv.go         the mqtt/import settings get/save round trip — narrowly,
 //	              just what the `kv` block needs (see its own doc comment)
 //	crypto.go     AES-256-GCM-scrypt secrets encryption
-//	image.go      the filename/path helpers (duplicated, same
-//	              precedent as internal/shots' own copy) + the restore-time
-//	              path-traversal/magic-bytes image validation guard
+//	image.go      the restore-time path-traversal/magic-bytes image
+//	              validation guard (filename/path helpers are internal/img)
+//	referenced.go which stored images a backup bundles, and orphan cleanup
 //	sanitize.go   the restore-time row sanitizers (maintenance/
 //	              maintenance_log/order rows) — the coffee_library restore
 //	              sanitizer itself lives in internal/library/
 //	              restore_sanitize.go, since only that package can export it
 //	              without an import cycle
-//	ratelimit.go  rateLimit(key, maxPerMinute) — same duplication
-//	              precedent as internal/orders' own copy
 //	bundle.go     gatherSmallSections — every backup section except shots/
 //	              annotations/images (all small regardless of dataset size)
 //	stream.go     writeBundleJSON — the incremental bundle-JSON writer that
 //	              streams the shots array one hydrated shot at a time
-//	restore.go    the POST /api/restore handler and everything it composes
-//	              — the largest file in this package, deliberately split
-//	              from handlers.go given its size
+//	restore.go    the POST /api/restore handler (postRestore)
+//	restore_plan.go  the validated restore plan and the dry-run preview
+//	restore_apply.go applying a plan: per-section writes, kv, token, images
 //	restore_stream.go  the streaming restore plumbing: body -> temp file,
 //	              parseBundleStream, lazy zip image source, zip-bomb caps
 //	handlers.go   GET/POST /api/backup, route registration, zip streaming
 //
+// Per-route rate limits use internal/ratelimit's keyed limiter.
+//
 // # Cross-domain dependencies
 //
-// Two backup-only gaps live outside this package:
-//
 //   - internal/machines/registry.go's RestoreMachines handles machine
-//     restore. NOT included: evictLiveSession(oldHost) for every host that
-//     existed before the restore (a stale WS session reconnects/fails
-//     naturally against a host nothing identifies anymore, rather than being
-//     torn down immediately — cosmetic timing, not data correctness) and
-//     options reconciliation (ties a restored machine's stale host/
-//     switchEntity back to the current legacy add-on options.json — no
-//     options.json facade exists in this Go codebase yet). See RestoreMachines'
-//     own doc comment.
+//     restore. It does not tear down live sessions for hosts that existed
+//     before the restore; they idle out or reconnect on their own.
 //   - internal/library's whole-entity restore sanitizers
 //     (sanitizeBeanFields et al.) live in
 //     internal/library/restore_sanitize.go, and are called from this
@@ -78,8 +70,7 @@
 //     tx commits but during a later section (maintenance, machines, kv)
 //     leaves shots restored and that section not. Threading a shared *sql.Tx
 //     through every repository across five packages (the only in-process way
-//     to close it) remains out of scope. Flagged again in restore.go's header
-//     and go/README.md's status section.
+//     to close it) remains out of scope. Flagged again in restore.go's header.
 //   - A restored API token (POST /api/restore's decrypted secrets.apiToken)
 //     is persisted to TOKEN_FILE on disk, but does NOT take effect in the
 //     already-running Go server process: internal/auth.RequireToken closes
@@ -99,6 +90,5 @@
 //     streams entries through an archive/zip.Writer and restore reads them
 //     back through archive/zip.OpenReader on the spooled temp file.
 //
-// See openapi.yaml's Backup tag for the frozen contract this package
-// satisfies.
+// See openapi.yaml's Backup tag for the contract this package satisfies.
 package backup

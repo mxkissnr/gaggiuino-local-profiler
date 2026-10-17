@@ -30,9 +30,8 @@ type Machine struct {
 
 // Theme is the machines.theme JSON contract documented in
 // internal/db's schema comment: either {preset:"<key>"} or
-// {a:"#rrggbb",b:"#rrggbb"}. Both fields are pointers so an empty/absent
-// one round-trips through JSON exactly (no "" leaking into a shape that
-// should only ever have one variant populated).
+// {a:"#rrggbb",b:"#rrggbb"}. The fields are omitempty so an unset variant
+// is left out of the JSON instead of appearing as "".
 type Theme struct {
 	Preset string `json:"preset,omitempty"`
 	A      string `json:"a,omitempty"`
@@ -43,8 +42,8 @@ type Theme struct {
 // PUT /api/machines/{id}. Pointer fields distinguish "omitted" (nil, only
 // meaningful for PUT's partial update — keep the existing value) from "sent
 // as empty/false" (non-nil, apply it) — POST additionally requires
-// Name/Type/Host to be non-nil (validated in handlers.go, matching the
-// POST schema's required fields).
+// Name/Type/Host to be non-nil (validated below, matching the POST
+// schema's required fields).
 type MachineInput struct {
 	Name           *string `json:"name"`
 	Type           *string `json:"type"`

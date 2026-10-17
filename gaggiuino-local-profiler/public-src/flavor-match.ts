@@ -1,5 +1,5 @@
 // Pure flavor-matching logic — no DOM/state imports so it can be unit-tested
-// directly under Node (see flavor-wheel.js for the rendering/modal side).
+// directly under Node (see flavor-wheel.ts for the rendering/modal side).
 import { FLAVOR_WHEEL, FLAVOR_ALIASES } from './flavor-data.js';
 import type { FlavorNode } from './flavor-data.js';
 import { SCA_FLAVOR_COLORS } from './sca-flavor-colors.js';
@@ -98,7 +98,7 @@ export function markLit(node: FlavorNode, matched: Set<string>): boolean {
 
 // ── Zoom navigation helpers ──────────────────────────────────────────────
 // Pure tree-walking helpers backing the wheel's click-to-zoom + breadcrumb
-// navigation (see flavor-wheel.js) — kept here so they stay unit-testable
+// navigation (see flavor-wheel.ts) — kept here so they stay unit-testable
 // under vitest, same reasoning as the color helpers above.
 
 let _parentOf: Map<string, string | null> | null = null; // id -> parent id, or null for a top-level category
@@ -133,14 +133,14 @@ export function pathToNode(nodeId: string): string[] {
 
 // ── Sunburst color helpers ───────────────────────────────────────────────
 // Pure (no DOM/ECharts dependency), kept here alongside the other
-// wheel-adjacent pure logic so they stay unit-testable — flavor-wheel.js
+// wheel-adjacent pure logic so they stay unit-testable — flavor-wheel.ts
 // imports state/index.ts, which touches localStorage at module scope and can't be
 // imported under vitest's node test environment.
 
 const NEUTRAL_FALLBACK = '#71717a'; // gray-500, only hit if a node id is somehow missing from SCA_FLAVOR_COLORS
 
 // The real per-node SCA/WCR wheel color for a node's fill (see
-// sca-flavor-colors.js) — falls back to a neutral gray for any node id that
+// sca-flavor-colors.ts) — falls back to a neutral gray for any node id that
 // somehow isn't in the map (should not happen; all 111 FLAVOR_WHEEL nodes
 // are covered).
 export function colorForNode(id: string): string {

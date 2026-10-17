@@ -14,7 +14,7 @@
 //     routed /64 (or larger) IPv6 allocation can't dodge the limit by
 //     presenting a fresh address from that block on every request; IPv4
 //     addresses are used exactly as received, one bucket per address.
-//   - /assets/* (the content-hashed Vite bundle) never counts against the
+//   - /assets/* (the content-hashed SPA bundle) never counts against the
 //     budget.
 //
 // Algorithm difference, not a behavior gap: a fixed window counter allows up

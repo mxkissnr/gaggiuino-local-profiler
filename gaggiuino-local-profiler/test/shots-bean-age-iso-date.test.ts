@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
-// views/shots/utils.js pulls in state.js, which needs localStorage/navigator
+// views/shots/utils.ts pulls in state/index.ts, which needs localStorage/navigator
 // at module load (same stubbing approach as bean-id-resolution-frontend.test.ts).
 let calcBeanAgeAtShot: (typeof import('../public-src/views/shots/utils.js'))['calcBeanAgeAtShot'];
 let S: (typeof import('../public-src/state/index.js'))['S'];

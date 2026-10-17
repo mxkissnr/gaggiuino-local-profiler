@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// shelf.js's import chain (bags.js -> views/library.js -> state/i18n) reads
+// shelf.ts's import chain (bags.ts -> views/library.ts -> state/i18n) reads
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-past-bags-toggle.test.ts).
@@ -360,7 +360,7 @@ describe('sortShelf (#1329 part 2)', () => {
 describe('shelf prefs persistence (#1329 part 2, shared store #1375)', () => {
   // The module-load stub elsewhere in this file is a no-op store; persistence
   // needs a real (in-memory) one to round-trip. ui-prefs.ts memoises the
-  // shared store at module load, so each test re-imports shelf.js against a
+  // shared store at module load, so each test re-imports shelf.ts against a
   // fresh store instead of relying on a per-test localStorage swap.
   let store: Map<string, string>;
   let shelfMod: ShelfModule;

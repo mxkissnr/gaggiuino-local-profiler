@@ -1,4 +1,4 @@
-// Barrel re-export — keeps main.js import-path unchanged.
+// Barrel re-export — keeps main.ts import-path unchanged.
 // Implementation lives in shots/ sub-modules.
 export * from './shots/utils.js';
 export * from './shots/grind.js';

@@ -5,10 +5,10 @@
 // "Benachrichtigungstypen" section, which only renders when Orders is
 // enabled — users without Orders had no way to reach them. This card is
 // always visible and reads/writes the same /api/orders/settings blob as
-// views/orders.js's saveNotifyToggles() for the remaining 3 order-specific
+// views/orders.ts's saveNotifyToggles() for the remaining 3 order-specific
 // toggles; that route isn't gated on enable_orders, only the Orders nav
-// tab/panel is. Loaded once at app init (main.js), same as mqtt-settings.js,
-// so it doesn't depend on views/orders.js's code ever having run.
+// tab/panel is. Loaded once at app init (boot/data.ts), same as mqtt-settings.ts,
+// so it doesn't depend on views/orders.ts's code ever having run.
 import { getOrdersSettings, postOrdersSettings } from '../api/orders.js';
 import type { OrdersSettings, OrdersSettingsUpdate } from '../api/types.js';
 import { t, tHtml } from '../i18n.js';
@@ -16,7 +16,7 @@ import { html } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
 
 // The boolean toggles this card owns (the remaining order-specific ones live
-// in views/orders.js's saveNotifyToggles()).
+// in views/orders.ts's saveNotifyToggles()).
 type NotifyKey =
   | 'notify_preheat_ready'
   | 'notify_low_stock'

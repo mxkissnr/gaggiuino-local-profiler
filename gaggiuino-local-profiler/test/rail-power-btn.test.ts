@@ -1,10 +1,10 @@
 // #914: the power button (#powerBtn) lives in #sidebar-footer, which is
 // hidden entirely on mobile (updateMobileShotSidebarVisibility() in
-// sidebar.js), stranding it off-screen. #railPowerBtn is its topbar
-// duplicate; updatePowerButton() (components/status.js) must mirror the
+// sidebar.ts), stranding it off-screen. #railPowerBtn is its topbar
+// duplicate; updatePowerButton() (components/status.ts) must mirror the
 // same display/className/title onto it, and toggleMachinePower() must keep
 // both buttons disabled in lockstep. Same fake-document/fetch harness as
-// test/machine-on-duration.test.js.
+// test/machine-on-duration.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose

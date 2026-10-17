@@ -17,10 +17,6 @@ import (
 
 // Registry is one row per configured espresso machine, backed by the
 // `machines` table internal/db already creates (see internal/db/db.go).
-// RestoreMachines (below) handles the backup-restore path; its legacy-
-// options reconciliation is not implemented (see that method's own doc
-// comment). EnsureDefaultMachine's #718 seed-from-legacy-options behavior
-// is reduced — see its own doc comment below.
 type Registry struct {
 	db *sql.DB
 }
@@ -91,14 +87,9 @@ func scanMachineRow(scanner interface{ Scan(...any) error }) (machineRow, error)
 }
 
 // EnsureDefaultMachine is idempotent: it seeds machine #1 if the registry
-// is still empty. Rather than seeding it from config.yaml's legacy
-// machine_host/switch_entity add-on options (no options.json facade exists
-// here yet), it seeds an empty "not configured yet" machine #1 — empty
-// host/switchEntity, #718's "empty is a valid not-configured state"
-// convention that also applies when no legacy option is set. A future
-// system-domain package can extend this to read real options.json once it
-// exists; no currently-shipped behavior regresses since this binary isn't
-// wired into the add-on yet (see go/README.md).
+// is still empty, as an empty "not configured yet" machine (empty
+// host/switchEntity, #718). options.json carries no machine options any
+// more (#662), so there is nothing to seed from.
 func (r *Registry) EnsureDefaultMachine() error {
 	var count int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM machines`).Scan(&count); err != nil {
@@ -405,14 +396,8 @@ func CountRestorableMachines(in []Machine) int {
 // or a field that fails validation) is skipped, not fatal to the rest of
 // the restore.
 //
-// Deliberately NOT done here (see go/internal/machines/doc.go for the
-// full rationale): evicting the live session for every host that existed
-// before the restore (this package's own live WS sessions reconnect/fail
-// naturally against a host that no longer resolves to any machine, rather
-// than being torn down immediately) and reconciling a restored machine's
-// stale host/switchEntity back to the current legacy add-on options.json
-// (that facade doesn't exist yet, see internal/orders/options.go for the
-// same options.json-facade gap noted elsewhere).
+// It does not tear down live sessions for hosts that existed before the
+// restore; they idle out or reconnect on their own.
 func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	valid := restorableMachines(in)
 

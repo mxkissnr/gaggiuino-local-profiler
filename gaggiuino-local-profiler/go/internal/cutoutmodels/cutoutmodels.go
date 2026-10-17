@@ -1,12 +1,11 @@
 // Package cutoutmodels is the single Go source of truth for the on-device
 // sticker cut-out model files (#1404).
 //
-// The three ONNX models are not in git: they are published once as GitHub
-// release assets under Version and pinned by SHA-256. The Dockerfile's `models`
-// stage embeds the same names, release URL and hashes at image-build time;
-// this package mirrors that pin list so the Go-side build — and, in later
-// slices, the frontend manifest — share one definition instead of repeating
-// the names and sizes.
+// The three ONNX models are not in git or in the image: they are published
+// once as GitHub release assets under Version and pinned by SHA-256.
+// internal/webapp (models.go) downloads them on first request, verifies the
+// hash and caches them; cmd/frontend-build embeds Version and the sizes into
+// the SPA bundle. Both read this one pin list.
 //
 // It is deliberately data-only and imports nothing: cmd/frontend-build embeds
 // these values into the SPA bundle, and importing internal/webapp (which embeds

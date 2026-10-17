@@ -12,10 +12,9 @@ import (
 )
 
 // This file is the shot service: the DB-facing operations the HTTP handlers
-// call. importShots/upsertShot (sync/import call sites) are deliberately not
-// here — nothing in the current HTTP surface reaches them; add them alongside
-// the sync/import domain that does. Trash purging (#1152) is: see
-// PurgeExpiredTrash/StartTrashPurge below, wired into cmd/server's startup.
+// call. The shot-history sync writes through Repository.Upsert directly.
+// Trash purging (#1152): see PurgeExpiredTrash/StartTrashPurge below, wired
+// into cmd/server's startup.
 
 // ErrShotNotFound is the 404 returned when a shot does not exist. The trash
 // handler has no existence check of its own, so this error comes from the
@@ -95,10 +94,9 @@ func (s *Service) GetByID(id int64) (Shot, error) {
 	return s.repo.FindByID(id)
 }
 
-// GetLast returns the newest non-trashed shot — GET /api/shots/last reads the
-// full list and keeps the last element; this fetches only that shot (see
-// Repository.FindLastExcludingTrash). Returns (nil, nil) for an empty shot
-// history.
+// GetLast returns the newest non-trashed shot for GET /api/shots/last,
+// fetching only that row (see Repository.FindLastExcludingTrash). Returns
+// (nil, nil) for an empty shot history.
 func (s *Service) GetLast() (Shot, error) {
 	return s.repo.FindLastExcludingTrash()
 }

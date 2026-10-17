@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// analytics.js pulls in state.js/i18n.js (localStorage/navigator at module
+// analytics.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module
 // load) and its charts read window.calcShotScore at runtime — the same minimal
 // window stub as the other analytics tests. shouldBuildAnalyticsMore() is pure,
 // so the lazy fold's "closed → skip, first open → build" contract is pinned

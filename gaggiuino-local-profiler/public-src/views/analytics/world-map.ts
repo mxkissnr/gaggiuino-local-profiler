@@ -79,7 +79,7 @@ let _mapLibsPromise: Promise<[typeof import('echarts'), TopojsonModule]> | null 
 // #648: buildWorldMap() is fired unawaited from initAnalytics(), which can
 // itself run again (re-navigating to Analytics) before a prior call's
 // countries-110m.json fetch has resolved. A monotonic token guard, same
-// pattern shots/index.js's loadData() uses (#644), makes sure only the
+// pattern shots/index.ts's loadData() uses (#644), makes sure only the
 // still-latest call writes _worldTopo / touches the DOM after the await.
 let _worldMapReqToken = 0;
 
@@ -117,7 +117,7 @@ function _hexToRgba(hex: string, alpha: number): string {
 // literal (backgroundColor, geo/land fill+borders) except accentTo/mutedText,
 // which already resolved live from CSS custom properties — the same class of
 // bug #814 fixed for Chart.js charts (chartColors()/themeColor(), both in
-// utils.js). Resolved here the same way, via themeColor() + _hexToRgba(),
+// utils.ts). Resolved here the same way, via themeColor() + _hexToRgba(),
 // and factored into its own function so both the initial setOption() below
 // and the onThemeChange repaint further down build the exact same colors.
 // MUST be called at paint time, not cached — see themeColor()'s own comment.
@@ -147,7 +147,7 @@ export function resolveWorldMapColors() {
 }
 
 // #1024: unlike the Chart.js charts (which re-theme in place via
-// applyChartTheme(), see main.js's onThemeChange() registration), the map
+// applyChartTheme(), see boot/appearance.ts's onThemeChange() registration), the map
 // never repainted on a theme switch at all — switching Dark/Light/Auto while
 // Statistics was already open left it on whatever colors it was built with.
 // Partial setOption() (no notMerge flag) only touches the color-bearing keys
@@ -581,9 +581,9 @@ export async function buildWorldMap() {
   // the _worldMapRegistered guard below for echarts.registerMap) -- the
   // listener itself is a no-op via _repaintWorldMapTheme()'s _echartsInstance
   // check whenever the map hasn't been built yet. Guarded on `window` existing
-  // since onThemeChange() (utils.js) binds to it unconditionally, and this
+  // since onThemeChange() (utils.ts) binds to it unconditionally, and this
   // function is also exercised in headless unit tests with no window global
-  // (test/analytics-world-map-race.test.js).
+  // (test/analytics-world-map-race.test.ts).
   if (!_worldMapThemeListenerRegistered && typeof window !== 'undefined') {
     onThemeChange(_repaintWorldMapTheme);
     _worldMapThemeListenerRegistered = true;

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// setup-wizard.js imports state.js/i18n.js, which read localStorage/navigator
+// setup-wizard.ts imports state/index.ts/i18n.ts, which read localStorage/navigator
 // at module load time — stub the minimum browser globals needed so the
 // module graph can be imported under vitest's node environment (same pattern
-// as test/profile-dialin-wizard.test.js).
+// as test/profile-dialin-wizard.test.ts).
 const store: Record<string, string> = {};
-// globalThis carries the full DOM type; stub only the sliver state.js reads.
+// globalThis carries the full DOM type; stub only the sliver state/index.ts reads.
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= {
   getItem: (k: string) => (k in store ? store[k] : null),

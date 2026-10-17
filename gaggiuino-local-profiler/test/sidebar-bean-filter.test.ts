@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// sidebar.js's import chain touches state.js/i18n.js, which read
+// sidebar.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/sidebar-month-toggle.test.js). vitest's
+// environment (same pattern as test/sidebar-month-toggle.test.ts). vitest's
 // node environment has no browser globals, so the fakes go through a loose
 // view of globalThis rather than satisfying the full Storage/Navigator/
 // Document shapes (the same bridge test/dev-banner.test.ts uses).
@@ -17,7 +17,7 @@ const { filterShots, setBeanFilter, clearBeanFilter } = await import('../public-
 // filterShots() reads/writes DOM nodes by selector — stub only what it
 // touches (shot-wrapper list, plus empty day-sep/month-body lists so those
 // forEach()s are no-ops), same "fake minimal document" approach as
-// test/sidebar-month-toggle.test.js/test/library-profile-editor.test.js.
+// test/sidebar-month-toggle.test.ts/test/library-profile-editor.test.js.
 //
 // The fake nodes only need the fields filterShots() writes.
 interface FakeWrapper {
