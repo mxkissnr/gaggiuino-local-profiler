@@ -6,7 +6,7 @@
 // one), see machines-settings.ts.
 //
 // #731/#1727: testMachineForm()'s POST/PUT go to the same plain URLs as
-// saveMachineForm() -- the dead `` param is gone (a machine save never
+// saveMachineForm() -- the dead `?sync=0` param is gone (a machine save never
 // starts a shot import, the backend never read it).
 //
 // #733: #729 originally auto-closed the form after a 1200ms dwell, matching
