@@ -344,11 +344,23 @@ export const phasePlugin: Plugin<ChartType, PhasePluginOptions> = {
 };
 
 // ── Mobile: clear tooltip + crosshair on touchend ─────────────────────────
+// #1615: the shot chart's canvas is reused for every rebuild, so one listener
+// per canvas reads whichever chart is current at touch time. Adding one per
+// build piled up listeners whose closures kept every destroyed chart alive.
+// A destroyed chart (Chart.js nulls its canvas) is skipped until the next
+// build registers its replacement.
+const _touchEndChart = new WeakMap<HTMLCanvasElement, Chart>();
 export function clearChartOnTouchEnd(chart: Chart): void {
-  chart.canvas.addEventListener('touchend', () => {
-    if (chart.corsair) chart.corsair = { draw: false };
-    chart.tooltip?.setActiveElements([], { x: 0, y: 0 });
-    chart.update('none');
+  const canvas = chart.canvas;
+  const wired = _touchEndChart.has(canvas);
+  _touchEndChart.set(canvas, chart);
+  if (wired) return;
+  canvas.addEventListener('touchend', () => {
+    const current = _touchEndChart.get(canvas);
+    if (!current?.canvas) return;
+    if (current.corsair) current.corsair = { draw: false };
+    current.tooltip?.setActiveElements([], { x: 0, y: 0 });
+    current.update('none');
   }, { passive: true });
 }
 
