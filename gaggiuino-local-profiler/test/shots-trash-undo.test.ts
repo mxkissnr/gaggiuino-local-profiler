@@ -9,7 +9,7 @@ import type { ToastOptions } from '../public-src/components/toast.js';
 // never-settling ensureCurves(), which keeps it away from the DOM.
 
 const mock = vi.hoisted(() => ({
-  toasts: [] as { msg: string; opts?: ToastOptions | number }[],
+  toasts: [] as { msg: string; opts?: ToastOptions | number | undefined }[],
   restored: [] as number[],
   gone: new Set<number>(),
 }));
