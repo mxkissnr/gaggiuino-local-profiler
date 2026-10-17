@@ -6,6 +6,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // they are stubbed: updateView() is held at its first `await` by a never-
 // settling ensureCurves(), which keeps it away from the DOM entirely.
 
+// #1716: trashShot() now shows an Undo toast; there is no document here.
+vi.mock('../public-src/components/toast.js', () => ({ showToast: vi.fn() }));
+
 vi.mock('../public-src/components/sidebar.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/components/sidebar.js')>()),
   renderSidebar: vi.fn(),

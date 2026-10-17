@@ -24,6 +24,7 @@ import { updateMachineBanner, updateOnboardingPanel }          from '../../compo
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
 import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
+import { showToast }                                          from '../../components/toast.js';
 import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
 import { _shots }                                             from './shared.js';
@@ -470,11 +471,16 @@ export function toggleTrash(): void {
   _el('trash-list').style.display = S.trashOpen ? 'block' : 'none';
 }
 
+// How long the "moved to trash" toast keeps its Undo button (#1716).
+const TRASH_UNDO_MS = 6000;
+
 export async function trashShot(id: number): Promise<void> {
   try {
     const r = await sendShotToTrash(id);
     if (!r.ok) throw new Error(await r.text());
     evictCurve(id);
+    const row = (S.allShots as ShotRow[]).find(s => s.id === id) ?? (S.shots as ShotRow[]).find(s => s.id === id);
+    const wasPrimary = S.primaryShotId === id;
     // #1625: pick the neighbour of the trashed shot before removing it — the
     // next newer one if there is one, otherwise the next older one. S.shots is
     // oldest-first, so a higher index is newer; null when nothing is left.
@@ -493,9 +499,49 @@ export async function trashShot(id: number): Promise<void> {
     }
     renderSidebar();
     void updateView();
+    // #1716: a single click trashes, so offer a short Undo instead of a
+    // confirm dialog. One toast element: trashing another shot replaces it,
+    // and the earlier one stays restorable from the trash section.
+    if (row) {
+      showToast(t('trash_moved_toast'), {
+        duration: TRASH_UNDO_MS,
+        action: { label: t('trash_undo_label'), onClick: () => { void undoTrashShot(row, wasPrimary); } },
+      });
+    }
     await loadTrashData();
   } catch (e) {
     alert(t('error_generic', (e as Error).message));
+  }
+}
+
+// Undo for trashShot() (#1716): restore through the existing endpoint, put the
+// saved row back at its place in the oldest-first lists and reselect it when it
+// was the open shot. The restore route has no existence check, so a shot that
+// was permanently deleted meanwhile is confirmed gone with getShot() and left
+// out; one already restored elsewhere (a live-sync reload put it back) is not
+// inserted twice. Failures only show the generic error toast.
+export async function undoTrashShot(row: ShotRow, wasPrimary: boolean): Promise<void> {
+  const id = row.id;
+  try {
+    const r = await restoreShotFromTrash(id);
+    if (!r.ok) throw new Error(await r.text());
+    if (!(await getShot(id))) { await loadTrashData(); return; }
+    if (!(S.allShots as ShotRow[]).some(s => s.id === id)) {
+      const all = S.allShots as ShotRow[];
+      const at = all.findIndex(s => Number(s.id) > Number(id));
+      S.allShots = at === -1 ? [...all, row] : [...all.slice(0, at), row, ...all.slice(at)];
+      S.shots = filterShotsByMachine(S.allShots, S.activeMachineId);
+    }
+    if (wasPrimary && S.shots.some(s => s.id === id)) {
+      S.primaryShotId = id;
+      if (S.compareShotId === id) S.compareShotId = null;
+      safeLocalStorage.setItem('glp_primaryShotId', String(id));
+    }
+    renderSidebar();
+    void updateView();
+    await loadTrashData();
+  } catch (e) {
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 

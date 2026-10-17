@@ -327,6 +327,7 @@ const es: Partial<Translations> = {
     confirm_perm_delete:(id)=>`¿Eliminar definitivamente el shot ${id}?\nEsta acción no se puede deshacer.`,
     trash_days_left:(d)=>`eliminado en ${d} día${d!==1?'s':''}`,
     trash_restore_label:'↩ Restaurar', trash_delete_title:'Eliminar ahora',
+    trash_moved_toast:'Shot movido a la papelera', trash_undo_label:'Deshacer',
     freshness_title:(d)=>`Tostado hace ${d} días (óptimo: 7–21 días)`,
     bean_age_at_shot:(d)=>`${d} días al momento del shot`,
     bean_age_badge:(d)=>`${d}d al shot`,

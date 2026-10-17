@@ -327,6 +327,7 @@ const de: Partial<Translations> = {
     confirm_perm_delete:(id)=>`Shot ${id} jetzt permanent löschen?\nDieser Vorgang kann nicht rückgängig gemacht werden.`,
     trash_days_left:(d)=>`wird in ${d} Tag${d!==1?'en':''} gelöscht`,
     trash_restore_label:'↩ Wiederherstellen', trash_delete_title:'Jetzt löschen',
+    trash_moved_toast:'Shot in den Papierkorb verschoben', trash_undo_label:'Rückgängig',
     freshness_title:(d)=>`${d} Tage seit Röstung (Optimum: 7–21 Tage)`,
     bean_age_at_shot:(d)=>`${d} Tage alt beim Shot`,
     bean_age_badge:(d)=>`${d}d beim Shot`,
