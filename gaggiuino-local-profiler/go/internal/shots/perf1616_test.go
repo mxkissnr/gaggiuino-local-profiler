@@ -1,6 +1,7 @@
 package shots_test
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,6 +27,7 @@ func installBeanSource(tb testing.TB, libRepo *library.Repository) {
 }
 
 type perfEnv struct {
+	db   *sql.DB
 	repo *shots.Repository
 	svc  *shots.Service
 	mux  *http.ServeMux
@@ -42,7 +44,7 @@ func newPerfEnv(tb testing.TB, opts perfseed.Options) perfEnv {
 	repo := shots.NewRepository(sqlDB)
 	mux := http.NewServeMux()
 	shots.NewHandlers(repo).RegisterRoutes(mux)
-	return perfEnv{repo: repo, svc: shots.NewService(repo), mux: mux, info: info}
+	return perfEnv{db: sqlDB, repo: repo, svc: shots.NewService(repo), mux: mux, info: info}
 }
 
 func (e perfEnv) get(tb testing.TB, path string) *httptest.ResponseRecorder {

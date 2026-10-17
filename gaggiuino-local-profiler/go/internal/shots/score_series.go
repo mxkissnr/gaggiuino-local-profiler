@@ -145,6 +145,12 @@ func tempStabilityDev(v any) *float64 {
 	default:
 		return nil
 	}
+	return tempDeviation(temp, target)
+}
+
+// tempDeviation is tempStabilityDev's arithmetic over already-decoded
+// temperature/target series.
+func tempDeviation(temp, target []float64) *float64 {
 	n := len(temp)
 	if len(target) < n {
 		n = len(target)
@@ -170,6 +176,32 @@ func tempStabilityDev(v any) *float64 {
 	}
 	dev := sum / float64(count)
 	return &dev
+}
+
+// chartStats is hasChartSeries + tempStabilityDev for one GET /api/shots
+// row, splitting a raw datapoints blob once instead of once per value
+// (#1616) — each value is computed exactly as its own function does.
+func chartStats(v any) (hasChart bool, tempDev *float64) {
+	var raw []byte
+	switch t := v.(type) {
+	case stdjson.RawMessage:
+		raw = t
+	case []byte:
+		raw = t
+	default:
+		return hasChartSeries(v), tempStabilityDev(v)
+	}
+	m := SplitSeries(raw)
+	if m == nil {
+		return false, nil
+	}
+	for _, k := range [...]string{"timeInShot", "pressure"} {
+		if v := bytes.TrimSpace(m[k]); len(v) >= 2 && v[0] == '[' && string(v) != "[]" {
+			hasChart = true
+			break
+		}
+	}
+	return hasChart, tempDeviation(decodeFloatArray(m["temperature"]), decodeFloatArray(m["targetTemperature"]))
 }
 
 func tempTargetFromRaw(raw []byte) (temp, target []float64) {

@@ -241,34 +241,44 @@ const (
 	WHEN instr(s.data, '"annotation"') > 0 THEN s.data -> '$.annotation' END`
 )
 
-// legacyBlobKeys memoises, per *sql.DB, which of those two keys any shot's
-// data blob carries at the top level. No writer in this app ever adds
-// either — Upsert and RestoreShots strip both (shotInsertArgs), writeData
-// only round-trips a blob's existing keys, and the misfiled-shot move
-// copies an existing blob — so once a database has been checked and found
-// free of a key it stays that way, and every later read can skip parsing
-// the curve blobs for it. Only rows from an older app version can carry
-// one; then the memo says so and reads keep the exact per-row expression.
+// legacyBlobKeys memoises, per *sql.DB, which of those keys — plus the
+// "id" and "profileName" keys a light read keyed on the id/profile_name
+// columns must not miss — any shot's data blob carries at the top level.
+// No writer in this app ever adds any of them — Upsert and RestoreShots
+// strip them all (shotInsertArgs), writeData only round-trips a blob's
+// existing keys, and the misfiled-shot move copies an existing blob — so
+// once a database has been checked and found free of a key it stays that
+// way, and every later read can skip parsing the curve blobs for it. Only
+// rows from an older app version can carry one; then the memo says so and
+// reads keep the exact per-row expression (or the full hydrate).
 var legacyBlobKeys sync.Map // *sql.DB -> legacyKeys
 
-type legacyKeys struct{ timestamp, annotation bool }
+type legacyKeys struct{ timestamp, annotation, identity bool }
+
+func (r *Repository) legacyKeys() (legacyKeys, error) {
+	if v, ok := legacyBlobKeys.Load(r.db); ok {
+		return v.(legacyKeys), nil
+	}
+	var k legacyKeys
+	if err := r.db.QueryRow(`SELECT
+		EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"timestamp"') > 0 AND s.data -> '$.timestamp' IS NOT NULL),
+		EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"annotation"') > 0 AND s.data -> '$.annotation' IS NOT NULL),
+		EXISTS (SELECT 1 FROM shots s WHERE (instr(s.data, '"id"') > 0 AND s.data -> '$.id' IS NOT NULL)
+			OR (instr(s.data, '"profileName"') > 0 AND s.data -> '$.profileName' IS NOT NULL))`,
+	).Scan(&k.timestamp, &k.annotation, &k.identity); err != nil {
+		return legacyKeys{}, fmt.Errorf("shots: probing data blobs for legacy keys: %w", err)
+	}
+	legacyBlobKeys.Store(r.db, k)
+	return k, nil
+}
 
 // lightColumnsSQL returns the SQL expressions (over aliases s and a) for a
 // hydrated shot's int64 timestamp and its annotation JSON text.
 func (r *Repository) lightColumnsSQL() (ts, ann string, err error) {
-	v, ok := legacyBlobKeys.Load(r.db)
-	if !ok {
-		var k legacyKeys
-		if err := r.db.QueryRow(`SELECT
-			EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"timestamp"') > 0 AND s.data -> '$.timestamp' IS NOT NULL),
-			EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"annotation"') > 0 AND s.data -> '$.annotation' IS NOT NULL)`,
-		).Scan(&k.timestamp, &k.annotation); err != nil {
-			return "", "", fmt.Errorf("shots: probing data blobs for legacy keys: %w", err)
-		}
-		legacyBlobKeys.Store(r.db, k)
-		v = k
+	k, err := r.legacyKeys()
+	if err != nil {
+		return "", "", err
 	}
-	k := v.(legacyKeys)
 	ts, ann = "s.timestamp", "a.data"
 	if k.timestamp {
 		ts = hydratedTimestampSQL

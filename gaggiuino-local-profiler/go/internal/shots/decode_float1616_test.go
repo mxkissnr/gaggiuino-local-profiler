@@ -47,3 +47,32 @@ func TestDecodeFloatArray_FastPathMatchesPtrPath(t *testing.T) {
 		}
 	}
 }
+
+// TestChartStats_MatchesSeparateFunctions (#1616) pins that the one-split
+// chartStats returns exactly hasChartSeries and tempStabilityDev.
+func TestChartStats_MatchesSeparateFunctions(t *testing.T) {
+	inputs := []any{
+		nil, 5, map[string]any{}, map[string]any{"pressure": []any{1.0}, "temperature": []any{930.0}, "targetTemperature": []any{935.0}},
+	}
+	for _, raw := range []string{
+		``, `null`, `{}`, `[]`, `{"pressure":[]}`, `{"pressure":[1]}`, `{"timeInShot":[0,1]}`, `{"pressure":null}`,
+		`{"temperature":[930,0,931],"targetTemperature":[935,935,0]}`, `{"temperature":[930],"targetTemperature":[0]}`,
+		`{"temperature":[930,null,940],"targetTemperature":[935,935,935],"timeInShot":[1]}`, `{"pressure": [ ] }`, `{bad`,
+	} {
+		inputs = append(inputs, stdjson.RawMessage(raw), []byte(raw))
+	}
+	for _, in := range inputs {
+		has, dev := chartStats(in)
+		wantDev := tempStabilityDev(in)
+		if has != hasChartSeries(in) || fmt.Sprint(deref(dev)) != fmt.Sprint(deref(wantDev)) || (dev == nil) != (wantDev == nil) {
+			t.Errorf("chartStats(%T %v) = %v, %v; want %v, %v", in, in, has, deref(dev), hasChartSeries(in), deref(wantDev))
+		}
+	}
+}
+
+func deref(p *float64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}

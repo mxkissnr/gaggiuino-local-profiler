@@ -47,7 +47,7 @@ func TestWritersStripLegacyBlobKeys(t *testing.T) {
 		if err := rows.Scan(&id, &data); err != nil {
 			t.Fatal(err)
 		}
-		for _, key := range []string{`"timestamp"`, `"annotation"`} {
+		for _, key := range []string{`"timestamp"`, `"annotation"`, `"id"`, `"profileName"`} {
 			if strings.Contains(data, key) {
 				t.Errorf("shot %d: data blob carries %s: %s", id, key, data)
 			}

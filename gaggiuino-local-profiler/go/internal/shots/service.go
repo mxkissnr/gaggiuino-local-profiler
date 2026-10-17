@@ -129,19 +129,41 @@ func (s *Service) GetPreviousByProfile(shot Shot) (Shot, error) {
 
 // GetComparativeGrindAdvice is the history-aware call path for the comparative
 // grind advice (#901, design pass 4 follow-up — see comparative.go's own doc
-// comment for why this needs the full shot history): loads every other shot on
-// shot's own machine, then runs the pure comparison. Returns nil, nil (not an
-// error) whenever ComputeComparativeGrindAdvice itself would — no comparable
+// comment for why this needs the full shot history): compares shot against
+// every other shot on its own machine. Returns nil, nil (not an error)
+// whenever ComputeComparativeGrindAdvice itself would — no comparable
 // shots, no coffee/grinder set; nil is a legitimate, common answer.
+//
+// It returns exactly ComputeComparativeGrindAdvice(shot, <the machine's
+// history>), but hydrates only the comparable shots and takes their scores
+// from the score cache (#1616) instead of hydrating and rescoring the whole
+// history: a cached score is CalcShotScore against the same bean target,
+// guarded by the same fingerprint GET /api/shots trusts.
 func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice, error) {
 	if shot == nil {
 		return nil, nil
 	}
-	all, err := s.repo.FindAllExcludingTrashByMachine(shot.machineID())
+	m := newComparativeMatch(shot)
+	if m == nil {
+		return nil, nil
+	}
+	keep := func(c Shot) bool {
+		_, ok := m.grindOf(c)
+		return ok
+	}
+	rows, err := s.repo.scoredMachineShotsMatching(shot.machineID(), keep, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
-	return ComputeComparativeGrindAdvice(shot, all), nil
+	var comparable []comparableSibling
+	for _, row := range rows {
+		g, ok := m.grindOf(row.Shot)
+		if !ok || row.Score == nil {
+			continue
+		}
+		comparable = append(comparable, comparableSibling{grind: g, score: *row.Score})
+	}
+	return m.advice(comparable), nil
 }
 
 // AnnotationValidationError reports that a merged annotation failed
