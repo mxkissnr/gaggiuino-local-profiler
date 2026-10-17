@@ -327,6 +327,7 @@ const nl: Partial<Translations> = {
     confirm_perm_delete:(id)=>`Shot ${id} definitief verwijderen?\nDeze actie kan niet ongedaan worden.`,
     trash_days_left:(d)=>`verwijderd over ${d} dag${d!==1?'en':''}`,
     trash_restore_label:'↩ Herstellen', trash_delete_title:'Nu verwijderen',
+    trash_moved_toast:'Shot naar de prullenbak verplaatst', trash_undo_label:'Ongedaan maken',
     freshness_title:(d)=>`${d} dagen geleden geroosterd (optimum: 7–21 dagen)`,
     bean_age_at_shot:(d)=>`${d} dagen oud bij shot`,
     bean_age_badge:(d)=>`${d}d bij shot`,
