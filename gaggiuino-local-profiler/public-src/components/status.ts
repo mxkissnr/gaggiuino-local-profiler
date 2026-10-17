@@ -345,9 +345,9 @@ export function updatePowerButton(sw: SwitchPayload): void {
   S.machinePowerState = sw.state ?? null;
   btn.className = sw.state === true  ? 'machine-on'
                 : sw.state === false ? 'machine-off' : '';
-  btn.title = sw.state === true  ? 'Maschine AN – zum Ausschalten klicken'
-            : sw.state === false ? 'Maschine AUS – zum Einschalten klicken'
-            : 'Schalter-Status unbekannt';
+  btn.title = sw.state === true  ? t('power_btn_on_title')
+            : sw.state === false ? t('power_btn_off_title')
+            : t('power_btn_unknown_title');
   if (railBtn) { railBtn.className = btn.className; railBtn.title = btn.title; }
 
   const machineOff = sw.state === false;
