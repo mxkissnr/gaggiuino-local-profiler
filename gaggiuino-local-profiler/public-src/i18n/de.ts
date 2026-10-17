@@ -627,6 +627,7 @@ const de: Partial<Translations> = {
     card_fmt_square:'Quadrat (1:1)',
     card_fmt_story:'Story (9:16)',
     share_card_tooltip:'Shot als PNG-Karte exportieren / teilen',
+    onboarding_banner_host_fallback:'dem konfigurierten Host',
     onboarding_banner_msg:(host)=>`Gaggiuino unter ${host} nicht erreichbar — Maschinen-Host unter Einstellungen → Maschinen prüfen`,
     onboarding_wiki_link:'Einrichtungshilfe',
     onboarding_step1:'Maschinen-Host unter Einstellungen → Maschinen setzen',

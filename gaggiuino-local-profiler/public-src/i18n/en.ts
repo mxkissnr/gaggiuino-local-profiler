@@ -652,6 +652,7 @@ const en: Translations = {
     card_fmt_square:'Square (1:1)',
     card_fmt_story:'Story (9:16)',
     share_card_tooltip:'Export/share shot as a PNG card',
+    onboarding_banner_host_fallback:'the configured host',
     onboarding_banner_msg:(host)=>`Gaggiuino at ${host} is not reachable — check the machine host under Settings → Machines`,
     onboarding_wiki_link:'Setup help',
     onboarding_step1:'Set the machine host under Settings → Machines',

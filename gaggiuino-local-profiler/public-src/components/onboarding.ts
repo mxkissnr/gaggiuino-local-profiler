@@ -47,7 +47,7 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
     fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
   });
 
-  const host = status?.machineHostname || 'configured host';
+  const host = status?.machineHostname || t('onboarding_banner_host_fallback');
   const msg = document.createElement('span');
   msg.style.flex = '1';
   msg.textContent = t('onboarding_banner_msg', host);

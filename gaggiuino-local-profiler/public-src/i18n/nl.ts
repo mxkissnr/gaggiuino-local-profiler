@@ -652,6 +652,7 @@ const nl: Partial<Translations> = {
     card_fmt_square:'Vierkant (1:1)',
     card_fmt_story:'Verhaal (9:16)',
     share_card_tooltip:'Shot exporteren/delen als PNG-kaart',
+    onboarding_banner_host_fallback:'de ingestelde host',
     onboarding_banner_msg:(host)=>`Gaggiuino op ${host} niet bereikbaar — controleer het machine-host onder Instellingen → Machines`,
     onboarding_wiki_link:'Hulp bij installatie',
     onboarding_step1:'Stel het machine-host in onder Instellingen → Machines',
