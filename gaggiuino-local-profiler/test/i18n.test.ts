@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -48,13 +48,6 @@ const NEW_KEYS = [
 ];
 
 describe('i18n language files', () => {
-    it('all 6 languages export the same key set', () => {
-        const base = Object.keys(de).sort();
-        for (const [name, obj] of Object.entries(LANGS)) {
-            expect(Object.keys(obj).sort(), `key mismatch in ${name}.js`).toEqual(base);
-        }
-    });
-
     // Regression (#391): LOCALE_MAP only had 5 entries for 6 supported
     // languages (nl was missing), silently falling back to 'de-DE' for
     // Dutch-locale date formatting.
@@ -110,6 +103,86 @@ describe('i18n language files', () => {
             expect(rendered, `${name}.js compare_title output`).toContain('11');
             expect(rendered, `${name}.js compare_title output`).toContain('22');
         }
+    });
+});
+
+// #1620: one consistency guard for the six dictionaries. It fails when a key
+// is missing from a language, when code references a key no dictionary
+// defines, when a key nothing references is left behind, or when the
+// languages disagree on a key's placeholders (a formatter's parameter count).
+describe('i18n dictionaries stay consistent with the code (#1620)', () => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const SRC_ROOT = join(__dirname, '../public-src');
+
+    function sourceFiles(dir: string, out: string[] = []): string[] {
+        for (const name of readdirSync(dir)) {
+            const path = join(dir, name);
+            if (statSync(path).isDirectory()) {
+                if (name !== 'i18n' && name !== 'public') sourceFiles(path, out);
+            } else if (/\.(ts|html)$/.test(name)) {
+                out.push(path);
+            }
+        }
+        return out;
+    }
+    const sources = sourceFiles(SRC_ROOT).map(path => readFileSync(path, 'utf8')).join('\n');
+
+    // Keys the code builds at runtime, e.g. t(`ach_${id}_n`). Every key with
+    // one of these prefixes counts as used; each prefix must still occur in
+    // the code, so the list cannot outlive the construction it stands for.
+    const DYNAMIC_PREFIXES = [
+        'ach_', 'analytics_fact_wd_', 'analytics_summary_delta_', 'backup_section_',
+        'curve_', 'exit_reason_', 'machine_warn_', 'phase_type_',
+        'profile_dialin_symptom_', 'theme_preset_',
+    ];
+
+    it('every language defines exactly the English key set', () => {
+        const base = new Set(Object.keys(en));
+        for (const [name, dict] of Object.entries(LANGS)) {
+            const keys = new Set(Object.keys(dict));
+            const missing = [...base].filter(k => !keys.has(k));
+            const extra = [...keys].filter(k => !base.has(k));
+            expect(missing, `${name} is missing keys`).toEqual([]);
+            expect(extra, `${name} has keys English lacks`).toEqual([]);
+        }
+    });
+
+    it('every statically referenced key exists', () => {
+        const referenced = new Set<string>();
+        for (const m of sources.matchAll(/\bt(?:Html)?\(\s*['"]([A-Za-z0-9_-]+)['"]\s*[,)]/g)) referenced.add(m[1] ?? '');
+        for (const m of sources.matchAll(/\sdata-i18n(?:-[a-z-]+)?="([A-Za-z0-9_-]+)"/g)) referenced.add(m[1] ?? '');
+        const missing = [...referenced].filter(k => !(k in en)).sort();
+        expect(missing, 'keys referenced in public-src but defined in no dictionary').toEqual([]);
+    });
+
+    it('every key is referenced somewhere', () => {
+        const unused = Object.keys(en).filter(key => {
+            if (DYNAMIC_PREFIXES.some(prefix => key.startsWith(prefix))) return false;
+            return !new RegExp(`['"\`]${key}['"\`]`).test(sources);
+        });
+        expect(unused, 'keys no code or markup references').toEqual([]);
+    });
+
+    it('every dynamic key prefix is still built in the code', () => {
+        for (const prefix of DYNAMIC_PREFIXES) {
+            expect(sources.includes(`${prefix}\${`) || sources.includes(`'${prefix}' +`), `prefix ${prefix} is no longer built at runtime`).toBe(true);
+        }
+    });
+
+    it('placeholders match across languages', () => {
+        const mismatches: string[] = [];
+        for (const [key, ref] of Object.entries(en)) {
+            for (const [name, dict] of Object.entries(LANGS)) {
+                const val = dict[key];
+                if (val === undefined) continue; // reported by the key-set test
+                if (typeof val !== typeof ref) {
+                    mismatches.push(`${name}:${key} is a ${typeof val}, English a ${typeof ref}`);
+                } else if (typeof val === 'function' && typeof ref === 'function' && val.length !== ref.length) {
+                    mismatches.push(`${name}:${key} takes ${val.length} placeholders, English ${ref.length}`);
+                }
+            }
+        }
+        expect(mismatches).toEqual([]);
     });
 });
 
