@@ -2,7 +2,27 @@ package library
 
 import (
 	"testing"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
+
+// ComputeGrinderWearFrom is the pre-#1616 wear path, kept for tests as the
+// reference over an already-hydrated shot list: it reduces each shot to the GrinderUse the
+// wear fold reads and hands them to ComputeGrinderWearFromUses.
+func ComputeGrinderWearFrom(allShots []shots.Shot, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64) {
+	uses := make([]shots.GrinderUse, len(allShots))
+	for i, shot := range allShots {
+		ann, _ := shot["annotation"].(map[string]any)
+		u := shots.GrinderUse{}
+		u.Timestamp, _ = shot["timestamp"].(int64)
+		if ann != nil {
+			u.Grinder, _ = ann["grinder"].(string)
+			u.Dose = ann["dose"]
+		}
+		uses[i] = u
+	}
+	return ComputeGrinderWearFromUses(uses, grinder)
+}
 
 // TestGrinderUses_MatchesHydratedWear (#1616) pins that the SQL-side
 // GrinderUses read folds to exactly the wear the hydrate-every-shot path

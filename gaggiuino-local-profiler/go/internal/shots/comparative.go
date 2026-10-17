@@ -12,8 +12,7 @@ import (
 // scores best among this shot's comparable siblings". It is deliberately
 // separate from internal/shots/detail.go's own ComputeGrindAdvice (single-shot
 // dial-in heuristic) because, per that file's own doc comment, this needs the
-// full shot history, not just one shot, so a caller supplies the same
-// machine's FindAllExcludingTrashByMachine result.
+// full shot history, not just one shot (Service.GetComparativeGrindAdvice).
 
 // grindNumRe is the regex for the first integer-or-decimal numeric substring
 // in a free-text grind setting string ("Setting 3.5" -> 3.5, "3,5" -> 3.5 via
@@ -133,35 +132,6 @@ func (m *comparativeMatch) grindOf(s Shot) (float64, bool) {
 		}
 	}
 	return parseGrindNum(annotationStr(a, "grindSetting"))
-}
-
-// ComputeComparativeGrindAdvice computes the advice for shot from allShots —
-// every other shot on shot's own machine
-// (internal/shots.Repository.FindAllExcludingTrashByMachine), already
-// machine-filtered before reaching this function. Each comparable shot is
-// scored against its own bean target (one loadBeanLookup snapshot for the
-// whole pass), so the ranking matches the bean-aware list and detail scores
-// rather than the generic bands. Service.GetComparativeGrindAdvice reaches
-// the same result without hydrating the whole history (#1616).
-func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrindAdvice {
-	m := newComparativeMatch(shot)
-	if m == nil {
-		return nil
-	}
-	lookup := loadBeanLookup()
-	var comparable []comparableSibling
-	for _, s := range allShots {
-		g, ok := m.grindOf(s)
-		if !ok {
-			continue
-		}
-		score := CalcShotScore(s, lookup(s))
-		if score == nil {
-			continue
-		}
-		comparable = append(comparable, comparableSibling{grind: g, score: *score})
-	}
-	return m.advice(comparable)
 }
 
 // advice ranks the comparable shots' grind settings and phrases the result

@@ -36,13 +36,7 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo, imageDir: DefaultImageDir}
 }
 
-// GetAll returns every non-trashed shot (no machineId filter — see
-// Repository's type doc comment).
-func (s *Service) GetAll() ([]Shot, error) {
-	return s.repo.FindAllExcludingTrash()
-}
-
-// GetAllScored returns GetAll's shots (or, with limit > 0, only the newest
+// GetAllScored returns every non-trashed shot (or, with limit > 0, only the newest
 // limit of them, still oldest first) with each shot's score taken from the
 // score cache — the same values ComputeScoreDetail yields, without
 // rescoring the whole history on every GET /shots.json (#1616).
@@ -133,14 +127,15 @@ func (s *Service) GetPreviousByProfile(shot Shot) (Shot, error) {
 // grind advice (#901, design pass 4 follow-up — see comparative.go's own doc
 // comment for why this needs the full shot history): compares shot against
 // every other shot on its own machine. Returns nil, nil (not an error)
-// whenever ComputeComparativeGrindAdvice itself would — no comparable
-// shots, no coffee/grinder set; nil is a legitimate, common answer.
+// when there are no comparable shots or no coffee/grinder is set; nil is
+// a legitimate, common answer.
 //
-// It returns exactly ComputeComparativeGrindAdvice(shot, <the machine's
-// history>), but hydrates only the comparable shots and takes their scores
-// from the score cache (#1616) instead of hydrating and rescoring the whole
-// history: a cached score is CalcShotScore against the same bean target,
-// guarded by the same fingerprint GET /api/shots trusts.
+// It returns exactly what scoring every comparable shot of the machine's
+// fully hydrated history would (the pre-#1616 path, kept as the test
+// reference ComputeComparativeGrindAdvice in reference1616_test.go), but
+// hydrates only the comparable shots and takes their scores from the score
+// cache: a cached score is CalcShotScoreDetail's score against the same
+// bean target, guarded by the same fingerprint GET /api/shots trusts.
 func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice, error) {
 	if shot == nil {
 		return nil, nil
