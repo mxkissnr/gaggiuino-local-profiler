@@ -7572,8 +7572,8 @@ export interface components {
             }[];
             /** @description Computed burr-wear stats (shots/grams since burrsResetAt), added on read. */
             wear?: {
-                shots?: number;
-                grams?: number | null;
+                shotsSinceBurrs?: number;
+                gramsSinceBurrs?: number;
             };
         };
         /** @description Portafilter basket (#635). */

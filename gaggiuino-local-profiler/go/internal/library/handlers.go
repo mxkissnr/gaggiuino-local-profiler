@@ -300,11 +300,8 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, lib)
 }
 
-// withWear attaches wear: computeGrinderWearStats(g). Field names are
-// shotsSinceBurrs/gramsSinceBurrs, the actual return shape — NOT
-// openapi.yaml's Grinder.wear schema (documented there as `{shots, grams}`),
-// which drifted from the implementation; the running behavior wins, same
-// "doc vs. code disagree, code wins" rule shots/doc.go states.
+// withWear attaches wear: {shotsSinceBurrs, gramsSinceBurrs} from
+// ComputeGrinderWearStats.
 func (h *Handlers) withWear(grinder Entity) Entity {
 	shotsSince, gramsSince, err := ComputeGrinderWearStats(h.shotsRepo, grinder)
 	if err != nil {

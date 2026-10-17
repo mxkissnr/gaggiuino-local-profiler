@@ -331,13 +331,8 @@ type BagStatus struct {
 // current.
 //
 // frozenPortions is deliberately NOT subtracted from a bag's available
-// stock here: saveFreezePortions' own doc comment (handlers_beans.go)
-// states freezing "doesn't consume anything, it just pauses that portion's
-// freshness clock" — stock_g stays the bag's total gram count regardless
-// of how much of it is currently frozen. A review pass flagged this
-// function as "ignoring frozenPortions"; after checking that comment, that
-// reads as the intended behavior, not a bug — changing it would contradict
-// the documented freeze/thaw design elsewhere in this package.
+// stock here: freezing only pauses a portion's freshness clock, so stock_g
+// stays the bag's total gram count regardless of how much of it is frozen.
 func SimulateBagQueue(bean Entity, doseRows []shots.AnnotatedDose, allBeans []Entity) []BagStatus {
 	bags := bagsOf(bean)
 	if len(bags) == 0 {

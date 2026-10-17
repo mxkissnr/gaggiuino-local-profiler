@@ -24,10 +24,7 @@ var DefaultImageDir = img.DefaultImageDir
 
 // allowedImageHosts is the allowlist (ALLOWED_IMPORT_HOSTS plus
 // cdn.shopify.com): bean images are only ever downloaded from an import
-// source's own host or its CDN, never an arbitrary URL a client sends — this
-// exact allowlist, not a generic SSRF DNS-resolution guard (unlike
-// assertPublicHost in ssrf.go, used by the barcode-scan endpoint instead), is
-// what downloadBeanImage below checks.
+// source's own host or its CDN, never an arbitrary URL a client sends.
 var allowedImageHosts = map[string]bool{
 	"kaffeebraun.com":          true,
 	"www.kaffeebraun.com":      true,
@@ -69,8 +66,8 @@ var fetchImageClient = &http.Client{
 }
 
 // downloadBeanImage fetches a bean image once, validating against the
-// exact-hostname allowlist above (not assertPublicHost's DNS-resolution guard
-// — see allowedImageHosts' doc comment), with no redirect following, a size
+// exact-hostname allowlist above plus assertPublicHost's pre-flight check,
+// with no redirect following, a size
 // cap, and a content-type whitelist. It returns the downloaded body and its
 // content type for the caller to store; the filename is derived from the
 // (already-numeric) bean id, never from the URL. Returns (nil, "") on any
@@ -87,10 +84,9 @@ func downloadBeanImage(imageURL string) (data []byte, contentType string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	// The exact-hostname allowlist above (isAllowedImageURL) is the primary
-	// SSRF defense here — but a compromised/rebound DNS answer for an
-	// otherwise-trusted host could still resolve to an internal address, so this
-	// is the same assertPublicHost DNS-rebinding guard scan.go applies before its
-	// own outbound request.
+	// SSRF defense. assertPublicHost adds a pre-flight check that the host
+	// does not resolve to an internal address; fetchImageClient resolves it
+	// again when it dials, so this is not a DNS-rebinding guard (see ssrf.go).
 	if err := assertPublicHost(ctx, parsed.Hostname()); err != nil {
 		return nil, ""
 	}

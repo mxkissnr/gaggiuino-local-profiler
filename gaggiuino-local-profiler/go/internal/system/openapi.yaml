@@ -315,8 +315,8 @@ components:
           type: object
           description: Computed burr-wear stats (shots/grams since burrsResetAt), added on read.
           properties:
-            shots: { type: integer }
-            grams: { type: number, nullable: true }
+            shotsSinceBurrs: { type: integer }
+            gramsSinceBurrs: { type: number }
 
     Basket:
       type: object

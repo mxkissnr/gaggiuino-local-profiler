@@ -216,8 +216,7 @@ func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error
 
 // UpdateBasket applies a partial update to basket id (PUT
 // /api/library/basket/:id), including its wallType/shape enum validation
-// (an invalid value is reported via the bool return going false with a nil
-// error — see ErrInvalidField).
+// (an invalid value returns a *ValidationError).
 func UpdateBasket(repo *Repository, id int64, body Entity) (Entity, bool, error) {
 	var basket Entity
 	err := repo.Update(func(lib *Library) error {
