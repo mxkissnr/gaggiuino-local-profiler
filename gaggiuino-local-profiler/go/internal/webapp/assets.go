@@ -5,11 +5,11 @@ import (
 	"io/fs"
 )
 
-// distFS embeds the Vite/rolldown SPA build output. `all:` so Vite's
-// underscore/dot-prefixed emitted assets are included too. Only a
-// committed dist/index.html placeholder is tracked in git — the real
-// bundle is staged by `make -C go frontend` / the Dockerfile's frontend
-// stage; see this package's doc comment.
+// distFS embeds cmd/frontend-build's SPA build output. `all:` so
+// underscore/dot-prefixed emitted files are included too. Only a committed
+// dist/index.html placeholder is tracked in git — the real bundle is written
+// by `make -C go frontend` / the Dockerfile's builder stage; see this
+// package's doc comment.
 //
 //go:embed all:dist
 var distFS embed.FS

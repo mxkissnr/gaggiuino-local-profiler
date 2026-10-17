@@ -66,7 +66,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/token", h.getToken)
 	mux.HandleFunc("GET /api/status", h.getStatus)
 
-	// The remaining endpoints the embedded Vite frontend / glp-integration call
+	// The remaining endpoints the embedded frontend / glp-integration call
 	// — see switch.go, openapi.go, sync.go.
 	mux.HandleFunc("GET /api/switch", h.getSwitch)
 	mux.HandleFunc("POST /api/switch/toggle", h.postSwitchToggle)

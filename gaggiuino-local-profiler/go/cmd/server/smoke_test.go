@@ -15,8 +15,7 @@ import (
 // This file is the HA-ingress smoke test (#901). It boots the
 // real handler chain (buildApp: SecurityHeaders -> rate limiter ->
 // RequireToken -> the full domain mux, exactly what main() serves) and
-// drives the three ingress traps that hit the templ branch three times
-// historically:
+// drives the three HA-ingress traps:
 //
 //	(a) path-prefix handling — a request arriving under an HA ingress base
 //	    path must never be answered with an origin-absolute redirect/link
@@ -31,8 +30,8 @@ import (
 //
 // httptest.NewServer listens on loopback, and auth.IsSupervisorIP trusts
 // 127.0.0.1/::1 — so adding the X-Ingress-Path header to a request here is
-// a genuine ingress request as far as auth.IsIngressRequest (auth.go:~227,
-// reused, not reinvented) is concerned. The spoofed-header-from-a-LAN-IP
+// a genuine ingress request as far as auth.IsIngressRequest (reused, not
+// reinvented) is concerned. The spoofed-header-from-a-LAN-IP
 // rejection can't be reached over loopback and is covered by
 // internal/auth/auth_test.go's TestRequireToken_SpoofedIngressHeaderFromLANRejected.
 

@@ -33,7 +33,7 @@ func newHandlers(dist fs.FS) *Handlers {
 	index, err := fs.ReadFile(dist, "index.html")
 	if err != nil {
 		// index.html is always present: a committed placeholder when the
-		// Vite build hasn't run, the real shell when it has (see doc.go).
+		// frontend build hasn't run, the real shell when it has (see doc.go).
 		panic("webapp: dist/index.html missing: " + err.Error())
 	}
 	return &Handlers{dist: dist, indexHTML: index}

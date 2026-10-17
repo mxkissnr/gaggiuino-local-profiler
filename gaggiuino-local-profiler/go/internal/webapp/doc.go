@@ -1,22 +1,16 @@
-// Package webapp serves the production frontend: the existing Vite/rolldown
-// SPA bundle (gaggiuino-local-profiler/public-src, built to
-// gaggiuino-local-profiler/public), embedded into the Go binary via
-// //go:embed and served at the application root.
+// Package webapp serves the production frontend: the SPA bundle
+// cmd/frontend-build (esbuild's Go API, #1033) builds from
+// gaggiuino-local-profiler/public-src into dist/, embedded into the Go binary
+// via //go:embed and served at the application root. It also serves the
+// on-device cut-out model files (models.go).
 //
 // # Ship, don't rebuild (#901)
 //
-// The Go migration deliberately does NOT re-implement the frontend in
-// templ. The former eleven server-rendered templ pages were a foundation experiment;
-// re-creating the full SPA that way (shot charts, ECharts analytics,
-// dial-in convergence, i18n across six languages, the annotator, orders,
-// achievements, ...) is ~15-20k lines of new code chasing a target that
-// keeps moving as `dev` ships. The SPA already builds to a set of
-// relative-path, REST+SSE-only assets (see vite.config.js: `base: './'`,
-// dynamic imports for echarts/topojson-client/qrcode, static import for
-// chart.js) that run unmodified behind HA Ingress — the one hard
-// requirement. So this package embeds that build output and serves it here,
-// byte-for-byte the same UI the frontend already produces, rather than
-// rebuilding it.
+// The Go migration deliberately did NOT re-implement the frontend as
+// server-rendered pages. The SPA builds to relative-path, REST+SSE-only
+// assets (relative asset URLs, dynamic imports for
+// echarts/topojson-client/qrcode, a static import for chart.js) that run
+// unmodified behind HA Ingress — the one hard requirement.
 //
 // During the migration those templ pages were kept as a no-JS
 // fallback mounted under a /ui/ prefix; they have since been removed. The
@@ -32,7 +26,7 @@
 //     dist/index.html is sent with a <link rel="manifest"> injected before
 //     </head> ONLY when the request did not arrive through HA Ingress
 //     (auth.IsIngressRequest — reused, not re-derived). Under Ingress the
-//     add-on is framed inside the HA panel and a PWA install prompt /
+//     app is framed inside the HA panel and a PWA install prompt /
 //     service worker would be wrong; standalone (bare port) it is wanted.
 //     Sent with Cache-Control: no-cache, no-store, must-revalidate plus
 //     Pragma/Expires, so a redeploy's new asset hashes are always picked
@@ -55,7 +49,7 @@
 // the general 'unsafe-eval'. The built bundle was checked against that
 // policy: the emitted index.html loads only external same-origin
 // <script type="module"> / <link rel="stylesheet"> tags (no inline script, no
-// inline event handlers); grepping the eagerly-loaded chunks in public/assets/
+// inline event handlers); grepping the eagerly-loaded chunks in dist/assets/
 // for `eval(` / `new Function` / `new Worker` came back empty — modern
 // chart.js and ECharts builds need none of them. The build's only
 // `WebAssembly` is the lazily imported onnxruntime-web cut-out chunk, which is
@@ -72,11 +66,10 @@
 // # dist/ and the build
 //
 // //go:embed all:dist embeds the build output. dist/ is a build artifact:
-// `make -C go frontend` (or the Dockerfile's `frontend` stage) runs
-// `npm ci && npm run build` and stages gaggiuino-local-profiler/public
-// into it. Everything under dist/ is git-ignored EXCEPT a committed
-// dist/index.html placeholder, so a bare `go build ./...` / `go test ./...`
-// (CI's test.yaml go-test job runs exactly that, with no npm step)
-// resolves the embed without the frontend toolchain. The `all:` prefix
-// keeps Vite's underscore/dot-prefixed emitted assets in the embed.
+// `make -C go frontend` (or the Dockerfile's builder stage) runs
+// cmd/frontend-build, which wipes and rewrites dist/. Everything under dist/
+// is git-ignored EXCEPT a committed dist/index.html placeholder, so a bare
+// `go build ./...` / `go test ./...` (CI's go-test job runs exactly that)
+// resolves the embed without building the frontend. The `all:` prefix keeps
+// underscore/dot-prefixed emitted files in the embed.
 package webapp
