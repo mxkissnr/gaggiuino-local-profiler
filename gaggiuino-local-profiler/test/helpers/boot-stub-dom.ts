@@ -58,6 +58,8 @@ export interface BootStubOptions {
   missingIds?: string[];
   // Request paths (no query string) whose fetch rejects like a network error.
   failingPaths?: string[];
+  // Response bodies overriding the defaults, by request path.
+  bodies?: Record<string, unknown>;
 }
 
 export interface BootStubs {
@@ -68,7 +70,7 @@ export interface BootStubs {
 }
 
 // Installs the browser globals main.ts needs and returns handles on them.
-export function installBootStubs({ missingIds = [], failingPaths = [] }: BootStubOptions = {}): BootStubs {
+export function installBootStubs({ missingIds = [], failingPaths = [], bodies = {} }: BootStubOptions = {}): BootStubs {
   const g = globalThis as unknown as Record<string, unknown>;
   const windowEvents = new EventTarget();
   g.window = g;
@@ -99,7 +101,7 @@ export function installBootStubs({ missingIds = [], failingPaths = [] }: BootStu
     const path = String(url).split('?')[0] ?? '';
     requested.push(path);
     if (failingPaths.includes(path)) return Promise.reject(new TypeError('Failed to fetch'));
-    const body = path in BODIES ? BODIES[path] : {};
+    const body = path in bodies ? bodies[path] : path in BODIES ? BODIES[path] : {};
     return Promise.resolve({
       ok: true, status: 200, headers: new Headers(),
       json: () => Promise.resolve(body), text: () => Promise.resolve(JSON.stringify(body)),
