@@ -352,6 +352,12 @@ func scanShots(svc *shots.Service, filters shotFilters, limit int, visit func(sh
 		if count == limit || !page.HasMore {
 			break
 		}
+		// Pages are newest-first (#1616): once this page reaches back past
+		// the since bound, every older shot fails the timestamp filter, so
+		// stop instead of reading the rest of the history.
+		if filters.Lo > 0 && page.NextCursor.Timestamp < filters.Lo {
+			break
+		}
 		pageCursor = page.NextCursor
 	}
 	if count < limit {

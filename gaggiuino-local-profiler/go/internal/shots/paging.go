@@ -4,9 +4,12 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	json "github.com/goccy/go-json"
 )
 
 // This file backs GET /api/shots (#957): a keyset-paginated, newest-first
@@ -77,6 +80,9 @@ func DecodeCursor(token string) (Cursor, error) {
 // resolved score fields and hasChartData. Score is nil for a shot with too
 // little data to score at all (matching CalcShotScoreDetail).
 type PageRow struct {
+	// id is the row's id column (the hydrated Shot's "id" can differ for a
+	// legacy blob carrying its own "id" key).
+	id               int64
 	Shot             Shot
 	Score            *int
 	UsedBeanTarget   bool
@@ -191,7 +197,7 @@ func (r *Repository) runPageQuery(query string, args []any, limit int, lookup be
 		backfill []scoreCacheRow
 	)
 	for rows.Next() {
-		row, bf, err := r.scanPageRow(rows, lookup)
+		row, bf, err := r.scanPageRow(rows, lookup, true)
 		if err != nil {
 			return Page{}, err
 		}
@@ -225,6 +231,178 @@ func (r *Repository) runPageQuery(query string, args []any, limit int, lookup be
 	return page, nil
 }
 
+// scoredFrom is the join every score-cache-backed read selects
+// pageColumns from.
+const scoredFrom = `
+		FROM shots s
+		LEFT JOIN annotations a ON a.shot_id = s.id
+		LEFT JOIN shot_score_cache c ON c.shot_id = s.id`
+
+// scoredShots runs a pageColumns query and resolves each row's score
+// through shot_score_cache exactly like a GET /api/shots page (a miss is
+// computed and backfilled), without the page-only chart stats.
+func (r *Repository) scoredShots(query string, args []any, lookup beanLookup) ([]PageRow, error) {
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing scored shots: %w", err)
+	}
+	defer rows.Close()
+
+	var (
+		out      []PageRow
+		backfill []scoreCacheRow
+	)
+	for rows.Next() {
+		row, bf, err := r.scanPageRow(rows, lookup, false)
+		if err != nil {
+			return nil, err
+		}
+		if bf != nil {
+			backfill = append(backfill, *bf)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(backfill) > 0 {
+		r.backfillScoreCache(backfill)
+	}
+	return out, nil
+}
+
+// FindAllScoredExcludingTrash is FindAllExcludingTrash (same shots, same
+// order: the timestamp index breaks a tie on the id) with each shot's score
+// resolved through the score cache instead of recomputed — GET /shots.json
+// (#1616). limit > 0 keeps only the newest limit shots, still oldest first.
+func (r *Repository) FindAllScoredExcludingTrash(limit int, lookup beanLookup) ([]PageRow, error) {
+	q := `SELECT ` + pageColumns + scoredFrom + ` WHERE s.id NOT IN (SELECT shot_id FROM trash)`
+	if limit <= 0 {
+		return r.scoredShots(q+` ORDER BY s.timestamp ASC, s.id ASC`, nil, lookup)
+	}
+	rows, err := r.scoredShots(q+` ORDER BY s.timestamp DESC, s.id DESC LIMIT ?`, []any{limit}, lookup)
+	if err != nil {
+		return nil, err
+	}
+	slices.Reverse(rows)
+	return rows, nil
+}
+
+// scoredIDsChunk bounds the bound-parameter list of one scoredShotsByIDs
+// query, well under SQLite's variable limit.
+const scoredIDsChunk = 500
+
+// scoredShotsByIDs hydrates and scores (through the cache) the shots with
+// the given ids, in chunks.
+func (r *Repository) scoredShotsByIDs(ids []int64, lookup beanLookup) ([]PageRow, error) {
+	var out []PageRow
+	for start := 0; start < len(ids); start += scoredIDsChunk {
+		chunk := ids[start:min(start+scoredIDsChunk, len(ids))]
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		rows, err := r.scoredShots(`SELECT `+pageColumns+scoredFrom+
+			` WHERE s.id IN (?`+strings.Repeat(`,?`, len(chunk)-1)+`)`, args, lookup)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rows...)
+	}
+	return out, nil
+}
+
+// scoredCandidate is one comparative-advice candidate: the light shot it
+// was matched on and its score.
+type scoredCandidate struct {
+	light Shot
+	score *int
+}
+
+// comparativeCandidates returns the non-trashed shots of machineID that
+// keep accepts, each with its score resolved through the score cache — the
+// comparative-advice read (#1616), which used to hydrate and rescore the
+// machine's whole history to keep a handful of shots.
+//
+// keep sees a light shot: "id" and "profileName" from their columns and
+// the annotation from SQL (no curve blobs). Only the kept shots are then
+// hydrated, and only for their score; the match itself stays on the light
+// values.
+func (r *Repository) comparativeCandidates(machineID int64, keep func(Shot) bool, lookup beanLookup) ([]scoredCandidate, error) {
+	rows, err := r.db.Query(`SELECT s.id, s.profile_name, a.shot_id IS NOT NULL, `+hydratedAnnotationSQL+`
+		FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
+		WHERE s.machine_id = ? AND s.id NOT IN (SELECT shot_id FROM trash)`, machineID)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing comparative candidates: %w", err)
+	}
+	var (
+		ids  []int64
+		kept = map[int64]Shot{}
+	)
+	err = func() error {
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				id     int64
+				pn     sql.NullString
+				hasRow bool
+				ann    sql.NullString
+			)
+			if err := rows.Scan(&id, &pn, &hasRow, &ann); err != nil {
+				return fmt.Errorf("shots: scanning comparative candidate: %w", err)
+			}
+			light, err := lightShot(id, pn, hasRow, ann)
+			if err != nil {
+				return err
+			}
+			if keep(light) {
+				ids = append(ids, id)
+				kept[id] = light
+			}
+		}
+		return rows.Err()
+	}()
+	if err != nil {
+		return nil, err
+	}
+	scored, err := r.scoredShotsByIDs(ids, lookup)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]scoredCandidate, 0, len(scored))
+	for _, row := range scored {
+		if light, ok := kept[row.id]; ok {
+			out = append(out, scoredCandidate{light: light, score: row.Score})
+		}
+	}
+	return out, nil
+}
+
+// lightShot builds the "id"/"profileName"/"annotation" part of a hydrated
+// shot from SQL values, with hydrateFields' rules and decoder: an annotations row must
+// decode as an object (an error otherwise, as hydration fails), a legacy
+// blob annotation is any decoded value, and no annotation at all is {}.
+func lightShot(id int64, profileName sql.NullString, hasAnnotationRow bool, ann sql.NullString) (Shot, error) {
+	var pn any
+	if profileName.Valid {
+		pn = profileName.String
+	}
+	shot := Shot{"id": id, "profileName": pn}
+	switch {
+	case hasAnnotationRow:
+		var m map[string]any
+		if err := json.Unmarshal([]byte(ann.String), &m); err != nil {
+			return nil, fmt.Errorf("shots: decoding annotation for shot %d: %w", id, err)
+		}
+		shot["annotation"] = m
+	case ann.Valid:
+		shot["annotation"] = decodeJSONValue(ann)
+	default:
+		shot["annotation"] = map[string]any{}
+	}
+	return shot, nil
+}
+
 type scoreCacheRow struct {
 	shotID         int64
 	score          *int
@@ -239,8 +417,9 @@ type scoreCacheRow struct {
 // backfill. lookup (nil = generic bands) resolves each shot's bean target;
 // that target is folded into the fingerprint, so editing a bean's
 // brewTempC/brewRatio misses the cache and recomputes instead of serving the
-// old score forever.
-func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup) (PageRow, *scoreCacheRow, error) {
+// old score forever. withChart fills HasChartData/TempStabilityDev; callers
+// that only need the score (comparative advice, /shots.json) skip them.
+func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, withChart bool) (PageRow, *scoreCacheRow, error) {
 	var (
 		id, timestamp, machineID int64
 		duration                 sql.NullInt64
@@ -268,12 +447,13 @@ func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup) (PageRow, *sc
 	}
 	fp := fingerprint + "|" + beanTargetSignature(bean)
 
-	row := PageRow{Shot: shot}
+	row := PageRow{id: id, Shot: shot}
 	// hasChartData / tempStabilityDev are derived from the raw datapoints
-	// bytes on every row (cache hit or miss) — one shallow tokenize each,
-	// bounded by page size, never the full score-series decode.
-	row.HasChartData = hasChartSeries(shot["datapoints"])
-	row.TempStabilityDev = tempStabilityDev(shot["datapoints"])
+	// bytes on every row (cache hit or miss) — one shared split of the blob
+	// (#1616: it used to be split once per value), bounded by page size.
+	if withChart {
+		row.HasChartData, row.TempStabilityDev = chartStats(shot["datapoints"])
+	}
 
 	if cachedFingerprint.Valid && cachedFingerprint.String == fp {
 		if cachedScore.Valid {

@@ -73,16 +73,23 @@ func (p *Poller) PreheatInfo() (ready bool, remainingMin int) {
 
 func (p *Poller) defaultSwitchEntity() string {
 	machine, err := p.registry.GetDefaultMachine()
-	if err != nil || machine == nil || machine.SwitchEntity == nil {
+	if err != nil {
 		return ""
 	}
-	return *machine.SwitchEntity
+	return switchEntityOf(machine)
 }
 
 // buildPreheatResponse is shared by GET /api/preheat and
 // POST /api/preheat/ready-by so both return the identical shape, and by every
 // preheat-update SSE push.
 func (p *Poller) buildPreheatResponse() PreheatStatus {
+	return p.buildPreheatResponseFor(p.defaultSwitchEntity())
+}
+
+// buildPreheatResponseFor is buildPreheatResponse for an already-resolved
+// default machine's switch entity ("" for none) — the poll tick passes its
+// own machine's instead of re-querying the registry (#1616).
+func (p *Poller) buildPreheatResponseFor(switchEntity string) PreheatStatus {
 	preheatMins := loadPreheatMinutes()
 	preheatMs := int64(preheatMins) * 60_000
 	snap := p.runtime.Get()
@@ -92,7 +99,7 @@ func (p *Poller) buildPreheatResponse() PreheatStatus {
 	plannedSwitchOnAt := p.state.plannedSwitchOnAt
 	p.state.mu.Unlock()
 
-	machineOff := snap.Standby || (!snap.MachineOn && p.defaultSwitchEntity() != "")
+	machineOff := snap.Standby || (!snap.MachineOn && switchEntity != "")
 	if machineOff || snap.SwitchOnAt == nil {
 		return PreheatStatus{
 			Ready: false, Standby: snap.Standby, Elapsed: 0, Remaining: preheatMins * 60, Pct: 0,

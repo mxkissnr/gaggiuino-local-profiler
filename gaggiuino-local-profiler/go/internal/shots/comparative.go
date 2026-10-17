@@ -12,8 +12,7 @@ import (
 // scores best among this shot's comparable siblings". It is deliberately
 // separate from internal/shots/detail.go's own ComputeGrindAdvice (single-shot
 // dial-in heuristic) because, per that file's own doc comment, this needs the
-// full shot history, not just one shot, so a caller supplies the same
-// machine's FindAllExcludingTrashByMachine result.
+// full shot history, not just one shot (Service.GetComparativeGrindAdvice).
 
 // grindNumRe is the regex for the first integer-or-decimal numeric substring
 // in a free-text grind setting string ("Setting 3.5" -> 3.5, "3,5" -> 3.5 via
@@ -69,61 +68,75 @@ func comparativeSameBean(annA, annB map[string]any) bool {
 	return coffeeA != "" && strings.EqualFold(strings.TrimSpace(coffeeA), strings.TrimSpace(coffeeB))
 }
 
-// ComputeComparativeGrindAdvice computes the advice for shot from allShots —
-// every other shot on shot's own machine
-// (internal/shots.Repository.FindAllExcludingTrashByMachine), already
-// machine-filtered before reaching this function. Each comparable shot is
-// scored against its own bean target (one loadBeanLookup snapshot for the
-// whole pass), so the ranking matches the bean-aware list and detail scores
-// rather than the generic bands.
-func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrindAdvice {
+// comparativeMatch is one reference shot's comparison key — what decides
+// whether another shot of the same machine is comparable (same bean,
+// grinder and profile, dose within 1 g, a numeric grind setting).
+type comparativeMatch struct {
+	shotID          int64
+	ann             map[string]any
+	grinder         string
+	profile         string
+	dose            float64
+	hasDose         bool
+	currentGrind    float64
+	hasCurrentGrind bool
+}
+
+// comparableSibling is one comparable sibling's grind setting and score.
+type comparableSibling struct {
+	grind float64
+	score int
+}
+
+// newComparativeMatch returns shot's comparison key, or nil when shot has
+// no coffee or grinder (no advice is possible then).
+func newComparativeMatch(shot Shot) *comparativeMatch {
 	ann := toMap(shot["annotation"])
 	coffee := strings.ToLower(strings.TrimSpace(annotationStr(ann, "coffee")))
 	grinder := strings.ToLower(strings.TrimSpace(annotationStr(ann, "grinder")))
-	profile := strings.ToLower(strings.TrimSpace(shot.profileName()))
 	if coffee == "" || grinder == "" {
 		return nil
 	}
-	dose, hasDose := toFloat(ann["dose"])
-	currentGrind, hasCurrentGrind := parseGrindNum(annotationStr(ann, "grindSetting"))
-	shotID := shot.id()
+	m := &comparativeMatch{
+		shotID:  shot.id(),
+		ann:     ann,
+		grinder: grinder,
+		profile: strings.ToLower(strings.TrimSpace(shot.profileName())),
+	}
+	m.dose, m.hasDose = toFloat(ann["dose"])
+	m.currentGrind, m.hasCurrentGrind = parseGrindNum(annotationStr(ann, "grindSetting"))
+	return m
+}
 
-	type comparableShot struct {
-		grind float64
-		score int
+// grindOf reports whether s is comparable to the reference shot and, if
+// so, s's numeric grind setting. It reads only s's id, profile name and
+// annotation.
+func (m *comparativeMatch) grindOf(s Shot) (float64, bool) {
+	if s.id() == m.shotID {
+		return 0, false
 	}
-	lookup := loadBeanLookup()
-	var comparable []comparableShot
-	for _, s := range allShots {
-		if s.id() == shotID {
-			continue
-		}
-		a := toMap(s["annotation"])
-		if !comparativeSameBean(ann, a) {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(annotationStr(a, "grinder"))) != grinder {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(s.profileName())) != profile {
-			continue
-		}
-		if hasDose && dose > 0 {
-			sd, ok := toFloat(a["dose"])
-			if !ok || sd <= 0 || abs(sd-dose) > 1 {
-				continue
-			}
-		}
-		g, ok := parseGrindNum(annotationStr(a, "grindSetting"))
-		if !ok {
-			continue
-		}
-		score := CalcShotScore(s, lookup(s))
-		if score == nil {
-			continue
-		}
-		comparable = append(comparable, comparableShot{grind: g, score: *score})
+	a := toMap(s["annotation"])
+	if !comparativeSameBean(m.ann, a) {
+		return 0, false
 	}
+	if strings.ToLower(strings.TrimSpace(annotationStr(a, "grinder"))) != m.grinder {
+		return 0, false
+	}
+	if strings.ToLower(strings.TrimSpace(s.profileName())) != m.profile {
+		return 0, false
+	}
+	if m.hasDose && m.dose > 0 {
+		sd, ok := toFloat(a["dose"])
+		if !ok || sd <= 0 || abs(sd-m.dose) > 1 {
+			return 0, false
+		}
+	}
+	return parseGrindNum(annotationStr(a, "grindSetting"))
+}
+
+// advice ranks the comparable shots' grind settings and phrases the result
+// relative to the reference shot's own setting; nil when nothing compares.
+func (m *comparativeMatch) advice(comparable []comparableSibling) *ComparativeGrindAdvice {
 	if len(comparable) < 1 {
 		return nil
 	}
@@ -172,14 +185,14 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 	n := len(comparable)
 	bestScore := int(roundHalfAwayFromZero(bestAvg))
 
-	if !hasCurrentGrind {
+	if !m.hasCurrentGrind {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",
 			Text:        comparativeOkText(n, bestSetting, bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
-	diff := currentGrind - bestSetting
+	diff := m.currentGrind - bestSetting
 	if abs(diff) < 0.6 {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",

@@ -1,0 +1,99 @@
+{
+  "full": {
+    "grinders": [
+      {
+        "id": 101,
+        "name": "Niche Zero",
+        "burr_type": "conical",
+        "purchase_date": "2021-01-01",
+        "shots_since_burrs": 54,
+        "grams_since_burrs": 828.9
+      },
+      {
+        "id": 102,
+        "name": "Mühle Pro",
+        "burr_type": "flat",
+        "burrs_reset_at": "2024-03-01T10:00:00.000Z",
+        "shots_since_burrs": 32,
+        "grams_since_burrs": 490.3
+      },
+      {
+        "id": 103,
+        "name": "DF64",
+        "burrs_reset_at": "2025-06-15",
+        "shots_since_burrs": 13,
+        "grams_since_burrs": 225.2
+      },
+      {
+        "id": 104,
+        "name": "Retired Grinder",
+        "burrs_reset_at": "not a date",
+        "shots_since_burrs": 0,
+        "grams_since_burrs": 0
+      }
+    ],
+    "baskets": [
+      {
+        "id": 4001,
+        "name": "VST 18g",
+        "dose_capacity": "18"
+      }
+    ],
+    "puck_screens": [],
+    "milks": [
+      {
+        "id": 3001,
+        "name": "Oat",
+        "stock_ml": 1500
+      }
+    ],
+    "recipes": [
+      {
+        "id": 2001,
+        "name": "Morning flat white"
+      },
+      {
+        "id": 2002,
+        "name": "Cortado"
+      }
+    ]
+  },
+  "grinders": {
+    "grinders": [
+      {
+        "id": 101,
+        "name": "Niche Zero",
+        "burr_type": "conical",
+        "purchase_date": "2021-01-01",
+        "shots_since_burrs": 54,
+        "grams_since_burrs": 828.9
+      },
+      {
+        "id": 102,
+        "name": "Mühle Pro",
+        "burr_type": "flat",
+        "burrs_reset_at": "2024-03-01T10:00:00.000Z",
+        "shots_since_burrs": 32,
+        "grams_since_burrs": 490.3
+      },
+      {
+        "id": 103,
+        "name": "DF64",
+        "burrs_reset_at": "2025-06-15",
+        "shots_since_burrs": 13,
+        "grams_since_burrs": 225.2
+      },
+      {
+        "id": 104,
+        "name": "Retired Grinder",
+        "burrs_reset_at": "not a date",
+        "shots_since_burrs": 0,
+        "grams_since_burrs": 0
+      }
+    ],
+    "baskets": [],
+    "puck_screens": [],
+    "milks": [],
+    "recipes": []
+  }
+}

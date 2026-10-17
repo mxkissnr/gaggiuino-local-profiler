@@ -73,8 +73,9 @@ func Optimize(data []byte, srcExt string, mode Mode) (Result, error) {
 		return Result{}, err
 	}
 
+	orientation := 1
 	if srcExt == "jpg" {
-		src = applyOrientation(src, exifOrientation(data))
+		orientation = exifOrientation(data)
 	}
 
 	alpha := hasAlpha(src)
@@ -88,7 +89,13 @@ func Optimize(data []byte, srcExt string, mode Mode) (Result, error) {
 		}
 	}
 
-	mainImg := scaleDown(src, MaxEdge)
+	// Downscale first, then apply the EXIF orientation to the (at most
+	// MaxEdge) result: the orientation transform is a per-pixel copy, so on
+	// a full-resolution phone photo it cost far more than the scale (#1616).
+	// The scale's target size is symmetric in width and height, so the
+	// output dimensions are the same either way round. A JPEG carries no
+	// alpha, so reading it off the unrotated source is equivalent.
+	mainImg := applyOrientation(scaleDown(src, MaxEdge), orientation)
 	mainBytes, err := encodeImage(mainImg, mainExt)
 	if err != nil {
 		return Result{}, err

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // This file implements the GitHub-release version check for GET /api/version.
@@ -18,6 +20,13 @@ import (
 // nothing in this Go binary calls checkForUpdate() except this endpoint
 // itself, which is why the cache exists).
 const versionCacheTTL = time.Hour
+
+// versionFailureBackoff bounds how long a failed release lookup is
+// remembered before GitHub is asked again (#1616). Without it every
+// GET /api/version during a GitHub outage or rate limit started a fresh
+// request of up to 8 s; the response is the same either way (whatever is
+// cached, possibly nothing).
+const versionFailureBackoff = time.Minute
 
 // glpVersion is the GLP version this binary reports from GET /api/version.
 // config.yaml's `version:` is canonical; this const must match it and is
@@ -50,9 +59,14 @@ type VersionInfo struct {
 // construct one pointed at a fake GitHub API instead of relying on
 // process-wide state.
 type versionChecker struct {
-	mu       sync.Mutex
-	cache    *string
-	cacheAt  time.Time
+	mu      sync.Mutex
+	cache   *string
+	cacheAt time.Time
+	// failedAt is when the last lookup failed (zero after a success).
+	failedAt time.Time
+	// flight collapses concurrent lookups into a single GitHub request
+	// (#1616).
+	flight   singleflight.Group
 	http     *http.Client
 	apiURL   string // overridable in tests
 	devBuild bool   // GLP_DEV_BUILD set — see #704's dev-channel guard below
@@ -78,18 +92,31 @@ func newVersionChecker() *versionChecker {
 // CheckForUpdate fetches the latest GitHub release tag at most once per
 // versionCacheTTL, then returns result()'s shape either way (a fetch failure
 // just means "keep whatever's cached, possibly nil").
+//
+// Concurrent stale callers share one fetch, which runs detached from any
+// one caller's cancellation (the client timeout still bounds it), and a
+// failed fetch is not retried for versionFailureBackoff (#1616).
 func (v *versionChecker) CheckForUpdate(ctx context.Context) VersionInfo {
 	v.mu.Lock()
 	stale := v.cache == nil || time.Since(v.cacheAt) > versionCacheTTL
+	backingOff := !v.failedAt.IsZero() && time.Since(v.failedAt) < versionFailureBackoff
 	v.mu.Unlock()
 
-	if stale {
-		if tag, ok := v.fetchLatestTag(ctx); ok {
+	if stale && !backingOff {
+		fetchCtx := context.WithoutCancel(ctx)
+		_, _, _ = v.flight.Do("latest", func() (any, error) {
+			tag, ok := v.fetchLatestTag(fetchCtx)
 			v.mu.Lock()
-			v.cache = &tag
-			v.cacheAt = time.Now()
-			v.mu.Unlock()
-		}
+			defer v.mu.Unlock()
+			if ok {
+				v.cache = &tag
+				v.cacheAt = time.Now()
+				v.failedAt = time.Time{}
+			} else {
+				v.failedAt = time.Now()
+			}
+			return nil, nil
+		})
 	}
 	return v.result()
 }

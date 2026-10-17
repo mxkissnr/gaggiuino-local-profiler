@@ -117,11 +117,13 @@ type Stat = map[string]any
 // machine; waterfilter/grinder_* (shared equipment, #338) count shots
 // across every machine.
 func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task, machineID int64) (map[string]Stat, error) {
-	globalShots, err := shotsRepo.FindAllExcludingTrash()
+	// Only each shot's timestamp is read below, so load just those instead
+	// of every shot with its curve blob (#1616).
+	globalShots, err := shotsRepo.TimestampsExcludingTrash()
 	if err != nil {
 		return nil, err
 	}
-	scopedShots, err := shotsRepo.FindAllExcludingTrashByMachine(machineID)
+	scopedShots, err := shotsRepo.TimestampsExcludingTrashByMachine(machineID)
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +160,7 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 			daysSince = jsFloorDivDays(now - lastTs)
 		}
 		var shotsSince int
-		for _, s := range shotList {
-			ts, _ := s["timestamp"].(int64)
+		for _, ts := range shotList {
 			if ts*1000 > lastTs {
 				shotsSince++
 			}

@@ -79,6 +79,20 @@ func (r *Repository) FindLastExcludingTrash() (Shot, error) {
 	return shot, nil
 }
 
+// CountExcludingTrashBetween counts the non-trashed shots (every machine)
+// whose timestamp column lies in [fromSec, toSec) — the shotsToday count
+// GET /shots.json reports (#1616). One indexed range COUNT.
+func (r *Repository) CountExcludingTrashBetween(fromSec, toSec int64) (int, error) {
+	var n int
+	if err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM shots WHERE timestamp >= ? AND timestamp < ? AND id NOT IN (SELECT shot_id FROM trash)`,
+		fromSec, toSec,
+	).Scan(&n); err != nil {
+		return 0, fmt.Errorf("shots: counting shots in range: %w", err)
+	}
+	return n, nil
+}
+
 // FindAllExcludingTrashByMachine returns every non-trashed shot for one
 // machine. Used by the maintenance domain (computeMaintenanceStats scopes
 // descaling/backflush/grouphead/gaskets counts to one machine, see
@@ -174,6 +188,107 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 			d.Dose = &v
 		}
 		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// Light reads (#1616) select a shot's timestamp and annotation straight
+// from SQL instead of hydrating it. The timestamp is always the column: a
+// legacy data blob carrying its own top-level "timestamp" key no longer
+// hides the shot from these reads (on a hydrated shot that key replaces the
+// int64 column with a decoded JSON value, so an int64 read used to yield 0
+// — a bug, not behaviour to keep). The annotation keeps hydration's source:
+// the annotations row, else the blob's own "annotation" key (a legacy shot
+// with no annotations row); the instr() pre-check keeps the JSON parse off
+// blobs that cannot hold that key.
+const hydratedAnnotationSQL = `CASE WHEN a.shot_id IS NOT NULL THEN a.data
+	WHEN instr(s.data, '"annotation"') > 0 THEN s.data -> '$.annotation' END`
+
+// TimestampsExcludingTrash returns every non-trashed shot's timestamp
+// column, in FindAllExcludingTrash's order — the light read for
+// the maintenance stats, which only count shots newer than a task's last
+// date (#1616).
+func (r *Repository) TimestampsExcludingTrash() ([]int64, error) {
+	return r.timestamps(``)
+}
+
+// TimestampsExcludingTrashByMachine is TimestampsExcludingTrash scoped to
+// one machine, matching FindAllExcludingTrashByMachine's filter.
+func (r *Repository) TimestampsExcludingTrashByMachine(machineID int64) ([]int64, error) {
+	return r.timestamps(` AND s.machine_id = ?`, machineID)
+}
+
+func (r *Repository) timestamps(filter string, args ...any) ([]int64, error) {
+	rows, err := r.db.Query(`SELECT s.timestamp FROM shots s WHERE s.id NOT IN (SELECT shot_id FROM trash)`+
+		filter+` ORDER BY s.timestamp ASC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing shot timestamps: %w", err)
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var ts int64
+		if err := rows.Scan(&ts); err != nil {
+			return nil, fmt.Errorf("shots: scanning shot timestamp: %w", err)
+		}
+		out = append(out, ts)
+	}
+	return out, rows.Err()
+}
+
+// CountByMachine counts every shot of one machine, trashed ones included —
+// Count's machine-scoped counterpart.
+func (r *Repository) CountByMachine(machineID int64) (int, error) {
+	var n int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots WHERE machine_id = ?`, machineID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("shots: counting machine %d: %w", machineID, err)
+	}
+	return n, nil
+}
+
+// GrinderUse is one non-trashed shot's grinder-wear input, read without
+// hydrating the shot (#1616): the three values the library's burr-wear
+// computation reads.
+type GrinderUse struct {
+	// Timestamp is the shot's timestamp column.
+	Timestamp int64
+	// Grinder is the annotation's "grinder" when that is a JSON string,
+	// else "".
+	Grinder string
+	// Dose is the annotation's "dose" as decoded JSON (nil when absent).
+	Dose any
+}
+
+// GrinderUses returns every non-trashed shot's GrinderUse — the
+// SQL-aggregate replacement for hydrating the whole history just to fold
+// each grinder's wear (GET /api/library, the MCP get_library tool). Rows
+// come in FindAllExcludingTrash's order: the wear sums doses as float64,
+// and a different summation order can change the rounded gram total.
+func (r *Repository) GrinderUses() ([]GrinderUse, error) {
+	rows, err := r.db.Query(`
+		SELECT ts, ann -> '$.grinder', ann -> '$.dose' FROM (
+			SELECT s.timestamp AS ts, ` + hydratedAnnotationSQL + ` AS ann
+			FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
+			WHERE s.id NOT IN (SELECT shot_id FROM trash)
+		) ORDER BY ts ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing grinder uses: %w", err)
+	}
+	defer rows.Close()
+
+	var out []GrinderUse
+	for rows.Next() {
+		var ts int64
+		var grinder, dose sql.NullString
+		if err := rows.Scan(&ts, &grinder, &dose); err != nil {
+			return nil, fmt.Errorf("shots: scanning grinder use: %w", err)
+		}
+		u := GrinderUse{Timestamp: ts}
+		if v, ok := decodeJSONValue(grinder).(string); ok {
+			u.Grinder = v
+		}
+		u.Dose = decodeJSONValue(dose)
+		out = append(out, u)
 	}
 	return out, rows.Err()
 }
@@ -279,8 +394,9 @@ func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 
 // Count is a plain `SELECT COUNT(*) FROM shots`, deliberately including
 // trashed rows (no `NOT IN (SELECT shot_id FROM trash)` filter, unlike
-// FindAllExcludingTrash). GET /api/status's shotCount field (#901) is its
-// only caller.
+// FindAllExcludingTrash). GET /api/status's shotCount field (#901), the
+// maintenance log's shared-equipment shot count and the demo-mode
+// emptiness check use it.
 func (r *Repository) Count() (int, error) {
 	var n int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots`).Scan(&n); err != nil {

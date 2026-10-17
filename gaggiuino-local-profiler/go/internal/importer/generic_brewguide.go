@@ -53,8 +53,27 @@ func firstNumber(raw string) any {
 	return f
 }
 
+// brewLineRe builds brewLineValue's per-key matcher; key is a fixed
+// identifier from this file, inserted as-is.
+func brewLineRe(key string) *regexp.Regexp {
+	return regexp.MustCompile(`(?i)^` + key + `\s*:\s*(.+)$`)
+}
+
+// brewLineRes holds brewLineRe for every key the brew-guide parser asks
+// for, compiled once instead of on every call (#1616).
+var brewLineRes = func() map[string]*regexp.Regexp {
+	out := map[string]*regexp.Regexp{}
+	for _, key := range []string{"In", "Out", "Time", "Ratio", "Temp"} {
+		out[key] = brewLineRe(key)
+	}
+	return out
+}()
+
 func brewLineValue(lines []string, key string) string {
-	re := regexp.MustCompile(`(?i)^` + key + `\s*:\s*(.+)$`)
+	re, ok := brewLineRes[key]
+	if !ok {
+		re = brewLineRe(key)
+	}
 	for _, line := range lines {
 		if m := re.FindStringSubmatch(line); m != nil {
 			return strings.TrimSpace(m[1])

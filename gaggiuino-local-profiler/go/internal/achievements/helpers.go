@@ -119,8 +119,17 @@ func hasPressurePlateau(times, pressures []float64, windowSec, tolerance float64
 }
 
 // datapointsScaled reads shot.datapoints[key] as a []float64 with each value
-// divided by div.
+// divided by div. A context shot carries a *shotSeries (decoded once per
+// evaluation pass, #1616); any other shot is decoded here.
 func datapointsScaled(shot shots.Shot, key string, div float64) []float64 {
+	if ss, ok := shot["datapoints"].(*shotSeries); ok {
+		vals := ss.samples(key)
+		out := make([]float64, len(vals))
+		for i, f := range vals {
+			out[i] = f / div
+		}
+		return out
+	}
 	dp := shots.DatapointsMap(shot)
 	arr, _ := dp[key].([]any)
 	out := make([]float64, 0, len(arr))

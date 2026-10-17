@@ -36,10 +36,20 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo, imageDir: DefaultImageDir}
 }
 
-// GetAll returns every non-trashed shot (no machineId filter — see
-// Repository's type doc comment).
-func (s *Service) GetAll() ([]Shot, error) {
-	return s.repo.FindAllExcludingTrash()
+// GetAllScored returns every non-trashed shot (or, with limit > 0, only the newest
+// limit of them, still oldest first) with each shot's score taken from the
+// score cache — the same values ComputeScoreDetail yields, without
+// rescoring the whole history on every GET /shots.json (#1616).
+func (s *Service) GetAllScored(limit int) ([]PageRow, error) {
+	return s.repo.FindAllScoredExcludingTrash(limit, loadBeanLookup())
+}
+
+// CountToday counts the non-trashed shots (every machine) stamped on now's
+// local calendar day, server time.
+func (s *Service) CountToday(now time.Time) (int, error) {
+	y, m, d := now.Date()
+	start := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	return s.repo.CountExcludingTrashBetween(start.Unix(), start.AddDate(0, 0, 1).Unix())
 }
 
 // DefaultPageLimit / MaxPageLimit bound GET /api/shots's ?limit= (#957).
@@ -59,6 +69,12 @@ func ClampPageLimit(limit int) int {
 		return MaxPageLimit
 	}
 	return limit
+}
+
+// GrinderUses returns every non-trashed shot's grinder-wear input without
+// hydrating the history — see Repository.GrinderUses.
+func (s *Service) GrinderUses() ([]GrinderUse, error) {
+	return s.repo.GrinderUses()
 }
 
 // GetPage serves the GET /api/shots list (#957): one keyset page of
@@ -109,19 +125,42 @@ func (s *Service) GetPreviousByProfile(shot Shot) (Shot, error) {
 
 // GetComparativeGrindAdvice is the history-aware call path for the comparative
 // grind advice (#901, design pass 4 follow-up — see comparative.go's own doc
-// comment for why this needs the full shot history): loads every other shot on
-// shot's own machine, then runs the pure comparison. Returns nil, nil (not an
-// error) whenever ComputeComparativeGrindAdvice itself would — no comparable
-// shots, no coffee/grinder set; nil is a legitimate, common answer.
+// comment for why this needs the full shot history): compares shot against
+// every other shot on its own machine. Returns nil, nil (not an error)
+// when there are no comparable shots or no coffee/grinder is set; nil is
+// a legitimate, common answer.
+//
+// It returns exactly what scoring every comparable shot of the machine's
+// fully hydrated history would (the pre-#1616 path, kept as the test
+// reference ComputeComparativeGrindAdvice in reference1616_test.go), but
+// hydrates only the comparable shots and takes their scores from the score
+// cache: a cached score is CalcShotScoreDetail's score against the same
+// bean target, guarded by the same fingerprint GET /api/shots trusts.
 func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice, error) {
 	if shot == nil {
 		return nil, nil
 	}
-	all, err := s.repo.FindAllExcludingTrashByMachine(shot.machineID())
+	m := newComparativeMatch(shot)
+	if m == nil {
+		return nil, nil
+	}
+	keep := func(c Shot) bool {
+		_, ok := m.grindOf(c)
+		return ok
+	}
+	candidates, err := s.repo.comparativeCandidates(shot.machineID(), keep, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
-	return ComputeComparativeGrindAdvice(shot, all), nil
+	var comparable []comparableSibling
+	for _, c := range candidates {
+		g, _ := m.grindOf(c.light)
+		if c.score == nil {
+			continue
+		}
+		comparable = append(comparable, comparableSibling{grind: g, score: *c.score})
+	}
+	return m.advice(comparable), nil
 }
 
 // AnnotationValidationError reports that a merged annotation failed

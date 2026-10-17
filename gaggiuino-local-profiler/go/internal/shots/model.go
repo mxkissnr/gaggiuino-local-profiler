@@ -265,3 +265,17 @@ func decodeDatapoints(raw []byte) map[string]any {
 	}
 	return m
 }
+
+// decodeJSONValue decodes one JSON value SQLite's -> operator returned
+// (SQL NULL for a missing key), the same decoder hydrateFields uses, so the
+// value has the exact Go shape a hydrated shot would hold.
+func decodeJSONValue(v sql.NullString) any {
+	if !v.Valid {
+		return nil
+	}
+	var out any
+	if err := json.Unmarshal([]byte(v.String), &out); err != nil {
+		return nil
+	}
+	return out
+}

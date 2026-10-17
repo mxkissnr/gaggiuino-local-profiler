@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func fakeGitHubReleases(t *testing.T, tag string) *httptest.Server {
@@ -98,5 +101,82 @@ func TestVersionChecker_TestBinaryNeverDialsGitHub(t *testing.T) {
 	}
 	if info.UpdateAvailable {
 		t.Error("UpdateAvailable = true, want false when no fetch is attempted")
+	}
+}
+
+// TestVersionChecker_FailureBackoff (#1616): a failed lookup is not retried
+// for versionFailureBackoff — the response stays "nothing known" — and the
+// next call after the backoff asks GitHub again and picks up the release.
+func TestVersionChecker_FailureBackoff(t *testing.T) {
+	var calls atomic.Int32
+	fail := atomic.Bool{}
+	fail.Store(true)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if fail.Load() {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.Write([]byte(`{"tag_name":"v99.0.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+	vc := newVersionChecker()
+	vc.apiURL = srv.URL
+
+	for i := 0; i < 3; i++ {
+		if info := vc.CheckForUpdate(context.Background()); info.Latest != nil {
+			t.Fatalf("call %d: Latest = %v, want nil while GitHub fails", i, *info.Latest)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("expected 1 request inside the failure backoff, got %d", got)
+	}
+
+	fail.Store(false)
+	vc.mu.Lock()
+	vc.failedAt = time.Now().Add(-2 * versionFailureBackoff)
+	vc.mu.Unlock()
+	info := vc.CheckForUpdate(context.Background())
+	if info.Latest == nil || *info.Latest != "99.0.0" {
+		t.Fatalf("after the backoff: Latest = %v, want 99.0.0", info.Latest)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("expected a retry after the backoff, got %d requests", got)
+	}
+}
+
+// TestVersionChecker_ConcurrentCallsShareOneFetch (#1616): stale callers
+// that arrive together share a single GitHub request.
+func TestVersionChecker_ConcurrentCallsShareOneFetch(t *testing.T) {
+	var calls atomic.Int32
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		<-release
+		w.Write([]byte(`{"tag_name":"v99.0.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+	vc := newVersionChecker()
+	vc.apiURL = srv.URL
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vc.CheckForUpdate(context.Background())
+		}()
+	}
+	for calls.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("expected one shared request, got %d", got)
+	}
+	if info := vc.CheckForUpdate(context.Background()); info.Latest == nil || *info.Latest != "99.0.0" {
+		t.Fatalf("Latest = %v, want 99.0.0", info.Latest)
 	}
 }

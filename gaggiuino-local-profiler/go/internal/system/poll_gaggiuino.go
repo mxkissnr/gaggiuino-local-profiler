@@ -70,7 +70,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		// #1498: an unreachable machine is not in standby.
 		p.runtime.SetStandby(false)
 		log.Printf("system: live poll error: %v", err)
-		p.emitLiveSnapshot()
+		p.emitLiveSnapshotFor(machine.ID)
 		return
 	}
 
@@ -170,7 +170,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 				p.runtime.SetStabilityReady(true)
 				p.savePreheatState()
 				log.Printf("system: temperature stable -- preheat marked complete")
-				p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+				p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponseFor(switchEntityOf(machine))})
 			}
 		}
 	} else if result.IsBrewing {
@@ -278,7 +278,15 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		p.scheduleSyncAfterBrew()
 	}
 
-	p.emitLiveSnapshot()
+	p.emitLiveSnapshotFor(machine.ID)
+}
+
+// switchEntityOf is defaultSwitchEntity for an already-resolved machine.
+func switchEntityOf(m *machines.Machine) string {
+	if m == nil || m.SwitchEntity == nil {
+		return ""
+	}
+	return *m.SwitchEntity
 }
 
 func round10(v float64) int { return int(v*10 + 0.5) }

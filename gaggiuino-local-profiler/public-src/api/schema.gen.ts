@@ -17,6 +17,8 @@ export interface paths {
                 query?: {
                     /** @description Set to "1" to return trashed shots instead of active shots */
                     trash?: "0" | "1";
+                    /** @description Return only the newest N active shots, still oldest first (the last N entries of the full list). Absent, zero, negative or non-numeric means no limit; ignored with trash=1. (#1616) */
+                    limit?: number;
                 };
                 header?: never;
                 path?: never;
@@ -27,6 +29,8 @@ export interface paths {
                 /** @description Array of shots */
                 200: {
                     headers: {
+                        /** @description Number of active shots (every machine) stamped on the server's local calendar day. A header because the body is a bare array. (#1616) */
+                        "X-Shots-Today"?: number;
                         [name: string]: unknown;
                     };
                     content: {

@@ -1150,9 +1150,23 @@ paths:
           in: query
           description: Set to "1" to return trashed shots instead of active shots
           schema: { type: string, enum: ["0", "1"] }
+        - name: limit
+          in: query
+          description: >
+            Return only the newest N active shots, still oldest first (the
+            last N entries of the full list). Absent, zero, negative or
+            non-numeric means no limit; ignored with trash=1. (#1616)
+          schema: { type: integer, minimum: 1 }
       responses:
         "200":
           description: Array of shots
+          headers:
+            X-Shots-Today:
+              description: >
+                Number of active shots (every machine) stamped on the
+                server's local calendar day. A header because the body is a
+                bare array. (#1616)
+              schema: { type: integer, minimum: 0 }
           content:
             application/json:
               schema:

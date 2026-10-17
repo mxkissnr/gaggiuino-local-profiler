@@ -497,8 +497,3 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		PressureNote:   pressureNote,
 	}
 }
-
-// CalcShotScore is the score-only wrapper every non-detail caller uses.
-func CalcShotScore(shot Shot, bean *Bean) *int {
-	return CalcShotScoreDetail(shot, bean).Score
-}
