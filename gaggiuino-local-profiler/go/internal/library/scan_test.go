@@ -49,6 +49,12 @@ func TestScanBarcode_HappyPathAndNotFound(t *testing.T) {
 	origBase := offBaseURL
 	offBaseURL = srv.URL
 	t.Cleanup(func() { offBaseURL = origBase })
+	// The production client pins its dial to a public address (#1626), so the
+	// loopback test server needs the test server's own client, the same way
+	// the image and geocoder tests inject theirs.
+	origClient := scanHTTPClient
+	scanHTTPClient = srv.Client()
+	t.Cleanup(func() { scanHTTPClient = origClient })
 
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)

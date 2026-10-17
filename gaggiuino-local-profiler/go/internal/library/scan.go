@@ -15,8 +15,8 @@ import (
 // This file handles the barcode-scan endpoint: a server-side proxy to Open Food
 // Facts (the browser can't call it directly — the app's CSP pins connect-src
 // to 'self'). The fixed target host is pre-checked with assertPublicHost
-// (ssrf.go) before the request; scanHTTPClient resolves it again when it
-// dials, so this does not stop DNS rebinding.
+// (ssrf.go) before the request, and scanHTTPClient's dial is pinned to the
+// checked address (newGuardedTransport, #1626).
 
 const offHost = "world.openfoodfacts.org"
 
@@ -33,7 +33,8 @@ var barcodeRe = regexp.MustCompile(`^(\d{8}|\d{12}|\d{13}|\d{14})$`)
 const scanFetchMaxBytes = 1 * 1024 * 1024
 
 var scanHTTPClient = &http.Client{
-	Timeout: 8 * time.Second,
+	Timeout:   8 * time.Second,
+	Transport: newGuardedTransport(),
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse // maxRedirects: 0
 	},

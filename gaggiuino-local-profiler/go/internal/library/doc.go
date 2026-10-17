@@ -61,7 +61,8 @@
 //     fire-and-forget when a bean's region is set/changed (cmd/server wires
 //     it to a Geocoder; nil in tests). The outbound Nominatim call is
 //     pre-checked with assertPublicHost (ssrf.go) like scan.go's Open Food
-//     Facts call, and results are cached in the kv table.
+//     Facts call, its dial pinned to the checked address
+//     (newGuardedTransport), and results are cached in the kv table.
 //   - Bean-change events are not fired through an event bus (this server has
 //     none): internal/achievements re-evaluates on every read instead, and
 //     the restock badge's live "wasEmpty" moment is driven explicitly —
