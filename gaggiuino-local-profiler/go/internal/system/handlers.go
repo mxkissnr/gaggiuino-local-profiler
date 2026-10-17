@@ -12,6 +12,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 )
 
 const jsonBodyLimit = 16 * 1024 // 16kb global JSON body limit.
@@ -336,7 +337,9 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 				} else {
 					reachable := false
 					machineReachable = &reachable
-					msg := aerr.Error()
+					// #1626: the same redaction the poller applies to
+					// a recorded machine error.
+					msg := redact.Redact(aerr.Error())
 					lastMachineError = &msg
 				}
 			}

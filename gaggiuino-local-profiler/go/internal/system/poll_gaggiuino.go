@@ -11,6 +11,7 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
@@ -62,7 +63,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		reachable := false
 		ms.reachable = &reachable
 		ms.wasReachable = &reachable
-		msg := redactURLs(err.Error())
+		msg := redact.Redact(err.Error())
 		ms.lastError = &msg
 		// #1324: an unreachable machine has no machine-control snapshot.
 		ms.control = nil
@@ -453,24 +454,5 @@ func anyToString(v any) string {
 		return strconv.FormatFloat(t, 'f', -1, 64)
 	default:
 		return ""
-	}
-}
-
-// redactURLs replaces any URL in an error message with "[url]" --
-// lastMachineError must never leak the configured machine host to a client.
-func redactURLs(msg string) string {
-	for {
-		idx := strings.Index(msg, "http://")
-		if idx == -1 {
-			idx = strings.Index(msg, "https://")
-		}
-		if idx == -1 {
-			return msg
-		}
-		end := idx
-		for end < len(msg) && msg[end] != ' ' && msg[end] != '\t' && msg[end] != '\n' {
-			end++
-		}
-		msg = msg[:idx] + "[url]" + msg[end:]
 	}
 }

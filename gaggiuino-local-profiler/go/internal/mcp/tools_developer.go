@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -149,7 +149,7 @@ type getDiagnosticsInput struct {
 }
 
 type getDiagnosticsOutput struct {
-	LogLines               []string `json:"log_lines" jsonschema:"the app's recent log lines, oldest first, secrets masked"`
+	LogLines               []string `json:"log_lines" jsonschema:"the app's recent log lines, oldest first, with credentials, URLs and host addresses masked"`
 	LastSync               string   `json:"last_sync,omitempty" jsonschema:"RFC 3339 time of the last shot-history sync, when one has run"`
 	LastSyncError          string   `json:"last_sync_error,omitempty" jsonschema:"the last sync error, when the last sync failed"`
 	PolledMachineReachable *bool    `json:"polled_machine_reachable,omitempty" jsonschema:"whether the last poll reached the default machine"`
@@ -177,21 +177,22 @@ func getDiagnostics(deps Deps, in getDiagnosticsInput) (getDiagnosticsOutput, er
 			out.LastSync = *st.LastSync
 		}
 		if st.LastSyncError != nil {
-			out.LastSyncError = *st.LastSyncError
+			out.LastSyncError = redact.Redact(*st.LastSyncError)
 		}
 	}
 	if deps.Poller != nil {
 		info := deps.Poller.StatusInfo()
 		out.PolledMachineReachable = info.MachineReachable
 		if info.LastMachineError != nil {
-			out.LastMachineError = *info.LastMachineError
+			out.LastMachineError = redact.Redact(*info.LastMachineError)
 		}
 	}
 	return out, nil
 }
 
 // recentLogLines returns up to in.Lines of the buffer's most recent lines,
-// oldest first, filtered by in.Contains and with secrets masked. It reads the
+// oldest first, filtered by in.Contains and passed through redact.Redact
+// (credentials, URLs and hosts masked, #1626). It reads the
 // whole kept buffer before applying the limit so a filter matches older lines
 // too, and returns an empty (never nil) slice so JSON gets [] rather than null.
 func recentLogLines(src LogSource, in getDiagnosticsInput) []string {
@@ -225,22 +226,9 @@ func recentLogLines(src LogSource, in getDiagnosticsInput) []string {
 		lines = lines[len(lines)-n:]
 	}
 	for _, line := range lines {
-		out = append(out, maskSecrets(line))
+		out = append(out, redact.Redact(line))
 	}
 	return out
-}
-
-// The two shapes of credential the app might log: an X-GLP-Token header or
-// token= query value, a Bearer token, or user:pass credentials in a URL. The
-// URL pattern requires a trailing "@" so a bare host:port is left alone.
-var (
-	secretTokenPattern = regexp.MustCompile(`(?i)(X-GLP-Token\s*[:=]\s*|token=|Bearer\s+)([^/\s@&]+)`)
-	secretURLPattern   = regexp.MustCompile(`(://[^/\s:@]+:)([^/\s@]+)(@)`)
-)
-
-func maskSecrets(line string) string {
-	line = secretTokenPattern.ReplaceAllString(line, "${1}***")
-	return secretURLPattern.ReplaceAllString(line, "${1}***${3}")
 }
 
 type explainScoreInput struct {
