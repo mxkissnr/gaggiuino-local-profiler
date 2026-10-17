@@ -294,9 +294,9 @@ func getLibrary(deps Deps, in getLibraryInput) (libraryOutput, error) {
 		Milks:       []milkInfo{},
 		Recipes:     []recipeInfo{},
 	}
-	var allShots []shots.Shot
+	var uses []shots.GrinderUse
 	if (section == "" || section == "grinders") && deps.Shots != nil {
-		allShots, err = deps.Shots.GetAll()
+		uses, err = deps.Shots.GrinderUses()
 		if err != nil {
 			log.Printf("mcp: get_library: reading shots for grinder wear: %v", err)
 			return libraryOutput{}, fmt.Errorf("could not read the coffee library; try again")
@@ -304,7 +304,7 @@ func getLibrary(deps Deps, in getLibraryInput) (libraryOutput, error) {
 	}
 	if section == "" || section == "grinders" {
 		for _, g := range lib.Grinders {
-			out.Grinders = append(out.Grinders, toGrinderInfo(g, allShots))
+			out.Grinders = append(out.Grinders, toGrinderInfo(g, uses))
 		}
 	}
 	if section == "" || section == "baskets" {
@@ -356,7 +356,7 @@ func validLibrarySection(s string) bool {
 	return false
 }
 
-func toGrinderInfo(g library.Entity, allShots []shots.Shot) grinderInfo {
+func toGrinderInfo(g library.Entity, uses []shots.GrinderUse) grinderInfo {
 	out := grinderInfo{
 		ID:           entityID(g),
 		Name:         entityStr(g, "name"),
@@ -367,10 +367,10 @@ func toGrinderInfo(g library.Entity, allShots []shots.Shot) grinderInfo {
 	if zp, ok := library.CurrentGrinderZeroPoint(g); ok {
 		out.ZeroPoint = &zp
 	}
-	// allShots is nil when the section wasn't requested or the shots service
-	// is unwired: report zero wear rather than guessing.
-	if allShots != nil {
-		shotsSince, grams := library.ComputeGrinderWearFrom(allShots, g)
+	// uses is nil when the section wasn't requested, the shots service is
+	// unwired or the history is empty: report zero wear rather than guessing.
+	if uses != nil {
+		shotsSince, grams := library.ComputeGrinderWearFromUses(uses, g)
 		out.ShotsSinceBurrs = shotsSince
 		out.GramsSinceBurrs = grams
 	}

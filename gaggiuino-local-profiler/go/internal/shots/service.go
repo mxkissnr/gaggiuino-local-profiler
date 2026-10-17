@@ -61,6 +61,12 @@ func ClampPageLimit(limit int) int {
 	return limit
 }
 
+// GrinderUses returns every non-trashed shot's grinder-wear input without
+// hydrating the history — see Repository.GrinderUses.
+func (s *Service) GrinderUses() ([]GrinderUse, error) {
+	return s.repo.GrinderUses()
+}
+
 // GetPage serves the GET /api/shots list (#957): one keyset page of
 // non-trashed shot metadata, newest first, each row carrying a
 // cache-resolved score. machineID == 0 lists every machine. limit is

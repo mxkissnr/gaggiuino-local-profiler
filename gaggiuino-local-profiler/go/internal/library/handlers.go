@@ -266,9 +266,9 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	var allShots []shots.Shot
+	var uses []shots.GrinderUse
 	if len(lib.Grinders) > 0 {
-		allShots, err = h.shotsRepo.FindAllExcludingTrash()
+		uses, err = h.shotsRepo.GrinderUses()
 		if err != nil {
 			internalError(w, err)
 			return
@@ -276,7 +276,7 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	grinders := make([]Entity, len(lib.Grinders))
 	for i, g := range lib.Grinders {
-		shotsSince, gramsSince := ComputeGrinderWearFrom(allShots, g)
+		shotsSince, gramsSince := ComputeGrinderWearFromUses(uses, g)
 		grinders[i] = withWearEntity(g, shotsSince, gramsSince)
 	}
 	lib.Grinders = grinders

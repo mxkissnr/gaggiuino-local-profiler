@@ -90,21 +90,39 @@ func ParseJSDate(s string) (ms int64, ok bool) {
 // domain doesn't expose a Service for this cross-domain read, so this package
 // talks to its Repository directly rather than through a Service.
 func ComputeGrinderWearStats(shotsRepo *shots.Repository, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64, err error) {
-	allShots, err := shotsRepo.FindAllExcludingTrash()
+	uses, err := shotsRepo.GrinderUses()
 	if err != nil {
 		return 0, 0, err
 	}
-	s, g := ComputeGrinderWearFrom(allShots, grinder)
+	s, g := ComputeGrinderWearFromUses(uses, grinder)
 	return s, g, nil
 }
 
-// ComputeGrinderWearFrom is ComputeGrinderWearStats' pure core: one
-// grinder's burr wear against an already-loaded shot list. Enriching every
-// grinder for GET /api/library (and the /grinders web page) used to call
-// ComputeGrinderWearStats per grinder, so a 3-grinder library scanned the
-// whole shot history 3× (#951); those call sites now load the shots once
-// and fold every grinder through this in a single pass.
+// ComputeGrinderWearFrom is ComputeGrinderWearStats' pure core over an
+// already-hydrated shot list: it reduces each shot to the GrinderUse the
+// wear fold reads and hands them to ComputeGrinderWearFromUses.
 func ComputeGrinderWearFrom(allShots []shots.Shot, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64) {
+	uses := make([]shots.GrinderUse, len(allShots))
+	for i, shot := range allShots {
+		ann, _ := shot["annotation"].(map[string]any)
+		u := shots.GrinderUse{}
+		u.Timestamp, _ = shot["timestamp"].(int64)
+		if ann != nil {
+			u.Grinder, _ = ann["grinder"].(string)
+			u.Dose = ann["dose"]
+		}
+		uses[i] = u
+	}
+	return ComputeGrinderWearFromUses(uses, grinder)
+}
+
+// ComputeGrinderWearFromUses folds one grinder's burr wear over the
+// history's GrinderUse rows (internal/shots.Repository.GrinderUses).
+// Enriching every grinder for GET /api/library used to call
+// ComputeGrinderWearStats per grinder, scanning the whole shot history per
+// grinder (#951); the call sites load the rows once and fold every grinder
+// through this. The rows replace a full hydrate of every shot (#1616).
+func ComputeGrinderWearFromUses(uses []shots.GrinderUse, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64) {
 	name, _ := grinder["name"].(string)
 	name = lowerOrEmpty(name)
 
@@ -123,24 +141,16 @@ func ComputeGrinderWearFrom(allShots []shots.Shot, grinder Entity) (shotsSinceBu
 	}
 
 	var grams float64
-	for _, shot := range allShots {
-		ann, _ := shot["annotation"].(map[string]any)
-		grinderName := ""
-		if ann != nil {
-			grinderName, _ = ann["grinder"].(string)
-		}
-		if lowerOrEmpty(grinderName) != name {
+	for _, u := range uses {
+		if lowerOrEmpty(u.Grinder) != name {
 			continue
 		}
-		ts, _ := shot["timestamp"].(int64)
-		if ts*1000 <= resetTs {
+		if u.Timestamp*1000 <= resetTs {
 			continue
 		}
 		shotsSinceBurrs++
-		if ann != nil {
-			if dose, ok := jsParseFloat(ann["dose"]); ok {
-				grams += dose
-			}
+		if dose, ok := jsParseFloat(u.Dose); ok {
+			grams += dose
 		}
 	}
 	return shotsSinceBurrs, roundTo1(grams)

@@ -178,6 +178,116 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 	return out, rows.Err()
 }
 
+// Light reads (#1616) select a hydrated shot's timestamp and annotation
+// straight from SQL instead of hydrating it. Hydration spreads a data
+// blob's own top-level keys over the fixed columns and falls back to the
+// blob's "annotation" key when a shot has no annotations row, so the exact
+// SQL counterparts are:
+//
+//   - timestamp (hydrateRow(...)["timestamp"].(int64)): the column, or NULL
+//     (read as 0) when the blob carries its own "timestamp" key — the
+//     decoded JSON value replaces the int64, so the int64 read yields 0;
+//   - annotation: the annotations row, else the blob's "annotation" key.
+//
+// The instr() pre-checks keep the JSON parse off rows that cannot hold the
+// key.
+const (
+	hydratedTimestampSQL = `CASE WHEN instr(s.data, '"timestamp"') > 0 AND s.data -> '$.timestamp' IS NOT NULL
+	THEN NULL ELSE s.timestamp END`
+	hydratedAnnotationSQL = `CASE WHEN a.shot_id IS NOT NULL THEN a.data
+	WHEN instr(s.data, '"annotation"') > 0 THEN s.data -> '$.annotation' END`
+)
+
+// legacyBlobKeys memoises, per *sql.DB, which of those two keys any shot's
+// data blob carries at the top level. No writer in this app ever adds
+// either — Upsert and RestoreShots strip both (shotInsertArgs), writeData
+// only round-trips a blob's existing keys, and the misfiled-shot move
+// copies an existing blob — so once a database has been checked and found
+// free of a key it stays that way, and every later read can skip parsing
+// the curve blobs for it. Only rows from an older app version can carry
+// one; then the memo says so and reads keep the exact per-row expression.
+var legacyBlobKeys sync.Map // *sql.DB -> legacyKeys
+
+type legacyKeys struct{ timestamp, annotation bool }
+
+// lightColumnsSQL returns the SQL expressions (over aliases s and a) for a
+// hydrated shot's int64 timestamp and its annotation JSON text.
+func (r *Repository) lightColumnsSQL() (ts, ann string, err error) {
+	v, ok := legacyBlobKeys.Load(r.db)
+	if !ok {
+		var k legacyKeys
+		if err := r.db.QueryRow(`SELECT
+			EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"timestamp"') > 0 AND s.data -> '$.timestamp' IS NOT NULL),
+			EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"annotation"') > 0 AND s.data -> '$.annotation' IS NOT NULL)`,
+		).Scan(&k.timestamp, &k.annotation); err != nil {
+			return "", "", fmt.Errorf("shots: probing data blobs for legacy keys: %w", err)
+		}
+		legacyBlobKeys.Store(r.db, k)
+		v = k
+	}
+	k := v.(legacyKeys)
+	ts, ann = "s.timestamp", "a.data"
+	if k.timestamp {
+		ts = hydratedTimestampSQL
+	}
+	if k.annotation {
+		ann = hydratedAnnotationSQL
+	}
+	return ts, ann, nil
+}
+
+// GrinderUse is one non-trashed shot's grinder-wear input, read without
+// hydrating the shot (#1616): exactly the three values the library's
+// burr-wear computation reads off a hydrated shot.
+type GrinderUse struct {
+	// Timestamp is the hydrated shot's timestamp as an int64 read sees it
+	// — 0 when the data blob overrides it, see lightColumnsSQL.
+	Timestamp int64
+	// Grinder is the annotation's "grinder" when that is a JSON string,
+	// else "".
+	Grinder string
+	// Dose is the annotation's "dose" as decoded JSON (nil when absent).
+	Dose any
+}
+
+// GrinderUses returns every non-trashed shot's GrinderUse — the
+// SQL-aggregate replacement for hydrating the whole history just to fold
+// each grinder's wear (GET /api/library, the MCP get_library tool). Rows
+// come in FindAllExcludingTrash's order: the wear sums doses as float64,
+// and a different summation order can change the rounded gram total.
+func (r *Repository) GrinderUses() ([]GrinderUse, error) {
+	tsSQL, annSQL, err := r.lightColumnsSQL()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(`
+		SELECT ts, ann -> '$.grinder', ann -> '$.dose' FROM (
+			SELECT s.timestamp AS ord, ` + tsSQL + ` AS ts, ` + annSQL + ` AS ann
+			FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
+			WHERE s.id NOT IN (SELECT shot_id FROM trash)
+		) ORDER BY ord ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing grinder uses: %w", err)
+	}
+	defer rows.Close()
+
+	var out []GrinderUse
+	for rows.Next() {
+		var ts sql.NullInt64
+		var grinder, dose sql.NullString
+		if err := rows.Scan(&ts, &grinder, &dose); err != nil {
+			return nil, fmt.Errorf("shots: scanning grinder use: %w", err)
+		}
+		u := GrinderUse{Timestamp: ts.Int64}
+		if v, ok := decodeJSONValue(grinder).(string); ok {
+			u.Grinder = v
+		}
+		u.Dose = decodeJSONValue(dose)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // GetAnnotation returns the raw stored annotation object, or {} if none
 // exists — the read half of UpdateAnnotation's locked read-modify-write (see
 // its doc comment), which merges onto whatever annotation already exists
