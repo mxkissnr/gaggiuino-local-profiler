@@ -3,6 +3,7 @@ package shots
 import (
 	"fmt"
 	"math"
+	"unicode/utf8"
 )
 
 // This file validates the two shot-relevant request bodies (annotations and
@@ -25,7 +26,8 @@ func isJSONInt(f float64) bool {
 	return !math.IsInf(f, 0) && !math.IsNaN(f) && f == math.Trunc(f)
 }
 
-// checkString validates body[key] as a string of at most maxLen, with the
+// checkString validates body[key] as a string of at most maxLen characters
+// (runes, not bytes: "ü" counts once, #1620), with the
 // schema's nullability semantics: absent is always fine (optional), explicit
 // null is fine only when nullable is true.
 func checkString(issues *[]ValidationIssue, body map[string]any, key string, maxLen int, nullable bool) {
@@ -44,7 +46,7 @@ func checkString(issues *[]ValidationIssue, body map[string]any, key string, max
 		*issues = append(*issues, ValidationIssue{key, "expected string"})
 		return
 	}
-	if len(s) > maxLen {
+	if utf8.RuneCountInString(s) > maxLen {
 		*issues = append(*issues, ValidationIssue{key, fmt.Sprintf("String must contain at most %d character(s)", maxLen)})
 	}
 }
