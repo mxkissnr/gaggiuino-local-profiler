@@ -1,0 +1,95 @@
+{
+  "getLibraryGrinders": [
+    {
+      "burrType": "conical",
+      "id": 101,
+      "name": "Niche Zero",
+      "purchaseDate": "2021-01-01",
+      "wear": {
+        "gramsSinceBurrs": 3038.7,
+        "shotsSinceBurrs": 194
+      }
+    },
+    {
+      "burrType": "flat",
+      "burrsResetAt": "2024-03-01T10:00:00.000Z",
+      "id": 102,
+      "name": "Mühle Pro",
+      "wear": {
+        "gramsSinceBurrs": 1682.7,
+        "shotsSinceBurrs": 106
+      },
+      "zeroPoints": [
+        {
+          "setAt": "2024-03-01",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "burrsResetAt": "2025-06-15",
+      "id": 103,
+      "name": "DF64",
+      "wear": {
+        "gramsSinceBurrs": 283.6,
+        "shotsSinceBurrs": 18
+      }
+    },
+    {
+      "burrsResetAt": "not a date",
+      "id": 104,
+      "name": "Retired Grinder",
+      "wear": {
+        "gramsSinceBurrs": 0,
+        "shotsSinceBurrs": 0
+      }
+    }
+  ],
+  "wearStats": [
+    {
+      "grinder": {
+        "name": "Niche Zero"
+      },
+      "shotsSinceBurrs": 194,
+      "gramsSinceBurrs": 3038.7
+    },
+    {
+      "grinder": {
+        "burrsResetAt": "2025-03-04T05:06:07.890Z",
+        "name": "niche zero"
+      },
+      "shotsSinceBurrs": 59,
+      "gramsSinceBurrs": 850.2
+    },
+    {
+      "grinder": {
+        "burrsResetAt": "2023-01-01",
+        "name": "mühle pro"
+      },
+      "shotsSinceBurrs": 147,
+      "gramsSinceBurrs": 2302.9
+    },
+    {
+      "grinder": {
+        "burrsResetAt": "2099-01-01",
+        "name": "DF64"
+      },
+      "shotsSinceBurrs": 0,
+      "gramsSinceBurrs": 0
+    },
+    {
+      "grinder": {
+        "name": "Nobody Uses This"
+      },
+      "shotsSinceBurrs": 0,
+      "gramsSinceBurrs": 0
+    },
+    {
+      "grinder": {
+        "name": ""
+      },
+      "shotsSinceBurrs": 174,
+      "gramsSinceBurrs": 977.5
+    }
+  ]
+}

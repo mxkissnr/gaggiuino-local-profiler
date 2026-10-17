@@ -196,30 +196,33 @@ func Seed(tb testing.TB, sqlDB *sql.DB, opts Options) Info {
 
 	exec(`INSERT INTO library (key, data) VALUES ('main', ?)`, libraryBlob(midnight))
 
-	day := func(d float64) string {
-		return midnight.Add(-time.Duration(d * float64(24*time.Hour))).UTC().Format("2006-01-02T15:04:05.000Z")
+	// Whole days before the seed day's local midnight, and never further
+	// back than the date-anchored tail of the history: days-since and
+	// shots-since then come out the same whatever day the tests run.
+	day := func(d int) string {
+		return midnight.AddDate(0, 0, -d).UTC().Format("2006-01-02T15:04:05.000Z")
 	}
 	maint := []struct {
 		machine int64
 		key     string
 		task    map[string]any
 	}{
-		{1, "descaling", map[string]any{"lastDate": day(20.5), "threshold_days": 60}},
-		{1, "backflush", map[string]any{"lastDate": day(6.5), "threshold_shots": 30}},
-		{1, "grouphead", map[string]any{"lastDate": day(90.5), "threshold_shots": 500, "threshold_days": 120}},
+		{1, "descaling", map[string]any{"lastDate": day(20), "threshold_days": 60}},
+		{1, "backflush", map[string]any{"lastDate": day(6), "threshold_shots": 30}},
+		{1, "grouphead", map[string]any{"lastDate": day(38), "threshold_shots": 500, "threshold_days": 120}},
 		{1, "gaskets", map[string]any{"threshold_days": 365}},
-		{1, "waterfilter", map[string]any{"lastDate": day(30.5), "threshold_shots": 200}},
-		{1, "grinder_101", map[string]any{"lastDate": day(400.5), "threshold_g": 5000}},
-		{1, "grinder_102", map[string]any{"lastDate": "2024-03-01", "threshold_shots": 1000}},
-		{2, "descaling", map[string]any{"lastDate": day(45.5), "threshold_days": 60}},
-		{2, "backflush", map[string]any{"lastDate": day(3.5), "threshold_shots": 30}},
+		{1, "waterfilter", map[string]any{"lastDate": day(30), "threshold_shots": 200}},
+		{1, "grinder_101", map[string]any{"lastDate": day(39), "threshold_g": 5000}},
+		{1, "grinder_102", map[string]any{"lastDate": day(35), "threshold_shots": 1000}},
+		{2, "descaling", map[string]any{"lastDate": day(25), "threshold_days": 60}},
+		{2, "backflush", map[string]any{"lastDate": day(3), "threshold_shots": 30}},
 	}
 	for _, m := range maint {
 		b, _ := json.Marshal(m.task)
 		exec(`INSERT INTO maintenance (machine_id, key, data) VALUES (?, ?, ?)`, m.machine, m.key, string(b))
 	}
 	for i := 0; i < 24; i++ {
-		ts := midnight.AddDate(0, 0, -15*(i+1)).Unix()
+		ts := midnight.AddDate(0, 0, -3*(i+1)).Unix()
 		task := []string{"descaling", "backflush", "waterfilter"}[i%3]
 		exec(`INSERT INTO maintenance_log (ts, date, task, machine, shot_count, notes, machine_id) VALUES (?,?,?,?,?,?,?)`,
 			ts, time.Unix(ts, 0).UTC().Format("2006-01-02"), task, "Kitchen", 100+i, "", 1+int64(i%2))

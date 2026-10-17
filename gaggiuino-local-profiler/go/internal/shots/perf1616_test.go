@@ -34,6 +34,9 @@ type perfEnv struct {
 
 func newPerfEnv(tb testing.TB, opts perfseed.Options) perfEnv {
 	tb.Helper()
+	if opts == perfseed.Equivalence {
+		perfseed.PinUTC(tb)
+	}
 	sqlDB, info := perfseed.OpenSeeded(tb, opts)
 	installBeanSource(tb, library.NewRepository(sqlDB))
 	repo := shots.NewRepository(sqlDB)
