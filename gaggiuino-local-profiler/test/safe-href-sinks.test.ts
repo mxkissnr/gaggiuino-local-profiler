@@ -119,7 +119,8 @@ describe('safeHttpUrl on every link sink (#1626)', () => {
       mock.version = { update_available: true, current: '1', latest: '2', release_url: 'javascript:alert(1)' };
       await checkForUpdate();
       expect(banner().children).toHaveLength(2);
-      expect(banner().children.some(c => c.href.startsWith('javascript:'))).toBe(false);
+      // Neither remaining child (message, close button) carries any href.
+      expect(banner().children.every(c => c.href === '')).toBe(true);
     });
   });
 });
