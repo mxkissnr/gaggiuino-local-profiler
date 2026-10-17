@@ -1,5 +1,6 @@
 import type { Chart } from 'chart.js';
 import { TRANSLATIONS } from '../constants.js';
+import { safeLocalStorage } from '../storage.js';
 import type { Basket, Milk, PuckScreen, Recipe } from '../api/types.js';
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ export const S: AppState = {
   // unsupported-language fallback in this codebase (i18n.js's t(),
   // constants.js's localeFor(), the backend's getHaLanguage()/notifyT()).
   currentLang: ((): string => {
-    const stored = localStorage.getItem('glp_lang');
+    const stored = safeLocalStorage.getItem('glp_lang');
     const lang = stored || navigator.language.slice(0, 2).toLowerCase();
     return Object.prototype.hasOwnProperty.call(TRANSLATIONS, lang) ? lang : 'en';
   })(),
@@ -276,14 +277,14 @@ export const S: AppState = {
   // Guided Dial-In (#310) — session is client-only, mirrored to localStorage
   // so a reload doesn't lose an in-progress dial-in (see dialin-wizard.js).
   dialinSession: ((): Record<string, unknown> | null => {
-    try { return JSON.parse(localStorage.getItem('glp_dialin_session') || 'null') as Record<string, unknown> | null; }
+    try { return JSON.parse(safeLocalStorage.getItem('glp_dialin_session') || 'null') as Record<string, unknown> | null; }
     catch { return null; }
   })(),
   // Profile Dial-In (#313) — same client-only, localStorage-mirrored pattern
   // as dialinSession, adapted for tuning a machine profile's phases (see
   // profile-dialin-wizard.js) instead of a single grind number.
   profileDialinSession: ((): Record<string, unknown> | null => {
-    try { return JSON.parse(localStorage.getItem('glp_profile_dialin_session') || 'null') as Record<string, unknown> | null; }
+    try { return JSON.parse(safeLocalStorage.getItem('glp_profile_dialin_session') || 'null') as Record<string, unknown> | null; }
     catch { return null; }
   })(),
   // First-run setup wizard (#744) — in-memory only, deliberately not

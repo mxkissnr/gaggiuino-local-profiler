@@ -169,6 +169,7 @@ import { renderWhatsNewCard } from './components/whats-new.js';
 import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
+import { safeLocalStorage } from './storage.js';
 
 declare global {
   interface Window {
@@ -293,7 +294,7 @@ watchSystemTheme();
 // Theme picker — exposed on window for HTML onclick handlers and called by
 // the #themeToggleGroup wiring inside DOMContentLoaded below.
 function setTheme(theme: string): void {
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  safeLocalStorage.setItem(THEME_STORAGE_KEY, theme);
   applyTheme(theme);
 }
 
@@ -308,7 +309,7 @@ Object.assign(window, {
   // theme
   setTheme,
   setAccentTheme: (name: string) => {
-    localStorage.setItem('glp_accent_theme', name);
+    safeLocalStorage.setItem('glp_accent_theme', name);
     // #1019: the only thing that still applies --accent-* now -- the
     // [data-accent="..."] CSS blocks that used to pick this up on their own
     // are retired, so a manual pick has to be pushed through the same
@@ -718,14 +719,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // changes.
   onThemeChange(() => applyActiveMachineAccentTheme());
 
-  applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
+  applyTheme(safeLocalStorage.getItem(THEME_STORAGE_KEY) || 'dark');
 
   // #1019: migrates a pre-#1019 6-swatch value (amber/ocean/aurora/ember/
   // forest/crema) to its nearest of the 8 THEME_PRESETS, and is a no-op on
   // an already-migrated value -- written back so this doesn't silently
   // re-run every load (harmless if it did, but there's no reason to).
-  const _savedAccent = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
-  localStorage.setItem('glp_accent_theme', _savedAccent);
+  const _savedAccent = migrateLegacyAccent(safeLocalStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  safeLocalStorage.setItem('glp_accent_theme', _savedAccent);
   document.documentElement.dataset.accent = _savedAccent;
   renderAccentSwatches();
 
@@ -959,7 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // hidden canvas).
   initAnalyticsMoreFold();
   document.getElementById('dialinCount')!.addEventListener('change', e => {
-    localStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
+    safeLocalStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
     void renderDialin();
   });
   // #1018: scoped to #themeToggleGroup, not the bare .theme-btn class --

@@ -1,4 +1,5 @@
 import { S } from '../state/index.js';
+import { safeLocalStorage } from '../storage.js';
 
 // #1539: a random per-page id sent as X-GLP-Client so the server can attach it
 // to the data-changed event a write produced (DataChanged.src) and this page
@@ -26,7 +27,7 @@ export function lastWriteAt(): number | null {
 export async function initToken(): Promise<void> {
   // Migration for pre-#522 installs: the token used to be cached in
   // localStorage under this key. Idempotent no-op once the key is gone.
-  localStorage.removeItem('glp_token');
+  safeLocalStorage.removeItem('glp_token');
   try {
     // /api/token answers any caller that can reach the port by default (#533),
     // so a fresh token is normally available on every load — no need to
