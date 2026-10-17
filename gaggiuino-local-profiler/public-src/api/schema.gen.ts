@@ -7067,6 +7067,13 @@ export interface paths {
                         "application/zip": string;
                     };
                 };
+                /** @description Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626) */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;

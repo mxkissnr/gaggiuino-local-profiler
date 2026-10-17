@@ -3565,6 +3565,7 @@ paths:
           content:
             application/zip:
               schema: { type: string, format: binary }
+        "429": { description: "Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626)" }
 
   /api/restore:
     post:

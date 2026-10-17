@@ -164,8 +164,10 @@ func backupTimestamp() string {
 // only streams the raw SQLite file and is already limited to 5/min (#999,
 // security audit #977 round 3 finding 3.2) — so it gets the same feature
 // limiter on top of the app-wide 600/min backstop, stricter than the
-// image-upload routes' 30/min. POST /api/backup (the zip export) has no
-// limit of its own.
+// image-upload routes' 30/min. #1626: POST /api/backup (the zip export,
+// which streams the same data) gets the same ceiling under its own
+// "backup-zip:<ip>" key, so it never eats into the GET budget the HA
+// integration's backup service uses.
 const backupRateLimitPerMin = 5
 
 // ── GET /api/backup ──────────────────────────────────────────────────────
@@ -214,6 +216,10 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 // the stream ends and treat a missing/zero/non-numeric header as
 // indeterminate (a missing header is unknown, not zero).
 func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
+	if !h.rl.Allow("backup-zip:"+auth.RemoteIP(r), backupRateLimitPerMin) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, postBackupBodyLimit)
 	var body struct {
 		Passphrase string `json:"passphrase"`
