@@ -136,8 +136,9 @@ export function applyTranslations(): void {
     const key = el.dataset.i18n;
     if (key) el.textContent = t(key);
   });
-  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-i18n-placeholder]').forEach(el => {
-    const key = el.dataset.i18nPlaceholder;
+  // #1620: index.html also uses the short data-i18n-ph form for placeholders.
+  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-i18n-placeholder], [data-i18n-ph]').forEach(el => {
+    const key = el.dataset.i18nPlaceholder ?? el.dataset.i18nPh;
     if (key) el.placeholder = t(key);
   });
   document.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach(el => {
