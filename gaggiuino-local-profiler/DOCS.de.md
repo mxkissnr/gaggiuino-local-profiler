@@ -98,7 +98,7 @@ Erreichbar unter `kiosk.html` — auf Home Assistant über das Ingress-Präfix, 
 Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token:
 
 1. Das App generiert beim ersten Start einen zufälligen 64-stelligen Token und speichert ihn in `/data/api_token.txt`.
-2. `GET /api/token` gibt den Token an jeden Aufrufer zurück, der den Port erreichen kann — begrenzt auf 10 Anfragen pro Minute je Quelladresse. Die Begründung steht unten im Vertrauensmodell (#533) — das ist der Standard; die Option `expose_api_port` kann das für Aufrufer außerhalb von Ingress abschalten.
+2. `GET /api/token` gibt den Token an jeden Aufrufer zurück, der den Port erreichen kann — begrenzt je Quelladresse (10 Anfragen pro Minute bei direktem Portzugriff, 120 über HA Ingress, wo alle Anfragen die Adresse des Supervisors teilen). Die Begründung steht unten im Vertrauensmodell (#533) — das ist der Standard; die Option `expose_api_port` kann das für Aufrufer außerhalb von Ingress abschalten.
 3. Browser-UI und Integration lesen den Token beim Start über `/api/token` (die Anfrage läuft durch den Supervisor) und schicken ihn danach als `X-GLP-Token`-Header bei allen Anfragen mit.
 4. Anfragen über HA Ingress umgehen die Token-Prüfung vollständig — HA hat den Benutzer bereits authentifiziert.
 5. **GLP Order Card im Direkt-URL-Modus** (`glp_url` konfiguriert): `glp_token: <token>` in der Karten-YAML-Konfiguration setzen. Den Token findest du unter **Einstellungen → API Token** in der App-Oberfläche (App einmal über HA Ingress öffnen, oder eine Sitzung nutzen, die bereits einen gültigen Token besitzt).
@@ -131,7 +131,7 @@ Alle persistenten Daten werden in SQLite (`/data/glp.db`) mit aktiviertem WAL-Jo
 
 ### API-Spec
 
-Eine maschinenlesbare OpenAPI-3.0.3-Spezifikation aller Endpunkte ist unter `GET /api/openapi.json` (ohne Auth) abrufbar und als [`openapi.yaml`](https://github.com/mxkissnr/gaggiuino-local-profiler/blob/main/gaggiuino-local-profiler/go/internal/system/openapi.yaml) im Repository abgelegt. Einfach die URL oder die Datei in den [Swagger Editor](https://editor.swagger.io/) einfügen, um die vollständige API zu erkunden.
+Eine maschinenlesbare OpenAPI-3.0.3-Spezifikation aller Endpunkte ist unter `GET /api/openapi.json` abrufbar (braucht wie jede andere API-Route den `X-GLP-Token`-Header oder eine HA-Ingress-Sitzung) und als [`openapi.yaml`](https://github.com/mxkissnr/gaggiuino-local-profiler/blob/main/gaggiuino-local-profiler/go/internal/system/openapi.yaml) im Repository abgelegt. Einfach die URL oder die Datei in den [Swagger Editor](https://editor.swagger.io/) einfügen, um die vollständige API zu erkunden.
 
 ## KI-Assistenten (MCP-Server)
 
@@ -268,12 +268,12 @@ Umgebungsvariablen zurück, alle optional:
 
 | Env-Var | Ersetzt | Hinweise |
 |---|---|---|
-| `MACHINE_URL` | Einstellungen → Maschinen (Standardmaschinen-Host) | Gleicher Effekt wie das Setzen des Hosts in der App; danach weiterhin in den Einstellungen änderbar |
-| `GLP_SYNC_INTERVAL` | App-Option `sync_interval` | Minuten, 1–60, Standard `5` |
-| `GLP_PREHEAT_TIME` | App-Option `preheat_time` | Minuten, 1–120, Standard `20` |
+| `MACHINE_URL` | — | Nur ein Anzeige-Fallback: `GET /api/status` meldet ihn als Maschinen-URL, solange die Standardmaschine keinen Host hat. Er richtet keine Maschine ein; den Host unter Einstellungen → Maschinen setzen |
+| `GLP_SYNC_INTERVAL` | App-Option `sync_interval` | Minuten (positive ganze Zahl), Standard `5` |
+| `GLP_PREHEAT_TIME` | App-Option `preheat_time` | Minuten (positive ganze Zahl), Standard `20` |
 | `GLP_ENABLE_ORDERS` | App-Option `enable_orders` | `true`/`false`, Standard `false` |
 | `GLP_DEBUG_LOGGING` | App-Option `debug_logging` | `true`/`false`, Standard `false` |
-| `GLP_EXPOSE_API_PORT` | App-Option `expose_api_port` | `true`/`false`, Standard `true` |
+| `GLP_EXPOSE_API_PORT` | App-Option `expose_api_port` | `false` schaltet sie ab; jeder andere Wert (oder nicht gesetzt) lässt sie an, Standard `true` |
 | `GLP_HA_URL` + `GLP_HA_TOKEN` | `SUPERVISOR_TOKEN` (HA-API-Zugriff) | Stellt Auto-Sync, Switch-Entity-Power-Control und Push-Benachrichtigungen wieder her — siehe unten. Beide müssen gemeinsam gesetzt sein. |
 
 `GLP_HA_TOKEN` ist ein normaler Home-Assistant-**Langzeit-Zugriffstoken**: in

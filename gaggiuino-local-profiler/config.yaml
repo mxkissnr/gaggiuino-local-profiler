@@ -40,12 +40,9 @@ ports_description:
   8099/tcp: "GLP web interface (required for the companion HA integration)"
 panel_icon: mdi:coffee
 panel_title: "GLP"
-# #662: machine_host/switch_entity are deprecated here (soft removal --
-# removed from schema/options so the Configuration UI stops offering them;
-# the machine registry's option-adoption pass treats an option absent from
-# options.json as "never adopt", built with exactly this deprecation in
-# mind -- see go/internal/machines/doc.go). Machine #1 now configures like
-# every other machine (#2+ already worked this way) -- only in-app, via
+# #662: machine_host/switch_entity are no longer app options (removed from
+# schema/options so the Configuration UI stops offering them; nothing reads
+# them). Machine #1 configures like every other machine -- only in-app, via
 # Settings -> Machines.
 options:
   sync_interval: 5
