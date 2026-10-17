@@ -110,6 +110,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   close.className = 'lib-sheet-close';
   close.setAttribute('data-action', 'close-bean-form-sheet');
   close.setAttribute('aria-label', t('lib_sheet_close'));
+  close.setAttribute('data-i18n-aria-label', 'lib_sheet_close');
   close.innerHTML = CLOSE_ICON_SVG;
   head.appendChild(close);
   const title = document.createElement('h2');
@@ -126,6 +127,8 @@ function _beanFormSheetHost(): HTMLElement | null {
   save.className = 'lib-sheet-save';
   save.setAttribute('aria-label', t('lib_save'));
   save.textContent = t('lib_save');
+  save.setAttribute('data-i18n-aria-label', 'lib_save');
+  save.setAttribute('data-i18n', 'lib_save');
   save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanNoBag()); });
   headActions.appendChild(save);
   _formSheetSaveBtn = save;
@@ -138,6 +141,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   const question = document.createElement('span');
   question.className = 'lib-form-confirm-q';
   question.textContent = t('lib_form_discard_q');
+  question.setAttribute('data-i18n', 'lib_form_discard_q');
   confirm.appendChild(question);
   const confirmActions = document.createElement('div');
   confirmActions.className = 'lib-form-confirm-actions';
@@ -145,12 +149,14 @@ function _beanFormSheetHost(): HTMLElement | null {
   discard.type = 'button';
   discard.className = 'lib-btn-sm';
   discard.textContent = t('lib_form_discard');
+  discard.setAttribute('data-i18n', 'lib_form_discard');
   discard.addEventListener('click', () => discardBeanForm());
   confirmActions.appendChild(discard);
   const keep = document.createElement('button');
   keep.type = 'button';
   keep.className = 'lib-save-btn';
   keep.textContent = t('lib_form_keep_editing');
+  keep.setAttribute('data-i18n', 'lib_form_keep_editing');
   keep.addEventListener('click', () => _hideFormConfirm());
   confirmActions.appendChild(keep);
   confirm.appendChild(confirmActions);
@@ -234,7 +240,12 @@ function _showBeanFormSheet(): void {
   if (!host) return;
   _rememberFormHome();
   const isEdit = S.beanEditId != null;
-  if (_formSheetTitle) _formSheetTitle.textContent = t(isEdit ? 'lib_form_sheet_edit' : 'lib_form_sheet_new');
+  // #1620: data-i18n lets applyTranslations() retitle an open sheet on a language change.
+  const titleKey = isEdit ? 'lib_form_sheet_edit' : 'lib_form_sheet_new';
+  if (_formSheetTitle) {
+    _formSheetTitle.setAttribute('data-i18n', titleKey);
+    _formSheetTitle.textContent = t(titleKey);
+  }
   // #1489: hide the form's own action row only when editing; creating keeps it
   // so both "save without / with a bag" choices stay reachable.
   _formSheetSection?.classList?.toggle('is-editing', isEdit);
