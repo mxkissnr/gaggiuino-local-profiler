@@ -4347,7 +4347,7 @@ export interface paths {
         };
         /**
          * App status (public — no auth required)
-         * @description `?machineId=<id>` for a non-default machine scopes machineHostname/machineReachable/lastMachineError to that machine via a live reachability probe, instead of describing the default machine (#464). Omitted, or a machineId that resolves back to the default machine, keeps the default-machine behavior.
+         * @description `?machineId=<id>` for a non-default machine scopes machineHostname/machineReachable/lastMachineError to that machine via a live reachability probe, instead of describing the default machine (#464). Omitted, or a machineId that resolves back to the default machine, keeps the default-machine behavior. The live probe only runs for a caller with a valid `X-GLP-Token` or one arriving through HA Ingress (#1626); any other caller gets that machine's last polled reachability instead.
          */
         get: {
             parameters: {

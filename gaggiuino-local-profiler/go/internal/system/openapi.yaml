@@ -2668,7 +2668,10 @@ paths:
         machineHostname/machineReachable/lastMachineError to that machine
         via a live reachability probe, instead of describing the default
         machine (#464). Omitted, or a machineId that resolves back to the
-        default machine, keeps the default-machine behavior.
+        default machine, keeps the default-machine behavior. The live probe
+        only runs for a caller with a valid `X-GLP-Token` or one arriving
+        through HA Ingress (#1626); any other caller gets that machine's last
+        polled reachability instead.
       parameters:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
