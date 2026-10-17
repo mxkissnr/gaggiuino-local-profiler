@@ -10,9 +10,9 @@ import (
 
 // This file computes the comparative grind advice: "which grind setting
 // scores best among this shot's comparable siblings". It is deliberately
-// separate from internal/shots/detail.go's own ComputeGrindAdvice (single-shot
-// dial-in heuristic) because, per that file's own doc comment, this needs the
-// full shot history, not just one shot (Service.GetComparativeGrindAdvice).
+// separate from detail.go's ComputeGrindAdvice (single-shot dial-in
+// heuristic) because it compares the shot with the machine's other shots
+// (Service.GetComparativeGrindAdvice).
 
 // grindNumRe is the regex for the first integer-or-decimal numeric substring
 // in a free-text grind setting string ("Setting 3.5" -> 3.5, "3,5" -> 3.5 via
@@ -236,10 +236,7 @@ func roundToHalf(v float64) float64 {
 	return roundHalfAwayFromZero(v*2) / 2
 }
 
-// roundHalfAwayFromZero rounds half away from zero (half-up), not Go's
-// round-half-to-even default — only matters at exact .5 boundaries, but grind
-// settings land there often enough (whole and half increments) that the
-// distinction is worth getting right.
+// roundHalfAwayFromZero rounds half away from zero, like math.Round.
 func roundHalfAwayFromZero(v float64) float64 {
 	if v < 0 {
 		return -roundHalfAwayFromZero(-v)

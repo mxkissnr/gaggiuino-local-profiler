@@ -70,11 +70,9 @@ type ScoreComponent struct {
 	Target string
 }
 
-// jsRound rounds half-up (towards +Infinity), not Go's math.Round
-// (round-half-away-from-zero) — the two only disagree on negative .5
-// boundaries, which this package's score math never produces, but the
-// distinct name documents the intent instead of leaving a bare math.Round
-// call for a future reader to wonder about.
+// jsRound rounds half-up (towards +Infinity) as math.Floor(x+0.5), not Go's
+// math.Round (half away from zero). The two differ on negative .5 values,
+// which the score math never produces.
 func jsRound(x float64) int {
 	return int(math.Floor(x + 0.5))
 }

@@ -12,11 +12,9 @@ import (
 // Repository is the SQL DB access for shots, annotations and the related
 // trash/blocklist tables. It grew with the domains that needed it: the
 // machineId-scoped variants, FindAll, GetAnnotatedDoses, GetAnnotation,
-// GetLatestID and Upsert serve the orders/maintenance/backup domains, and
-// Count (#901) serves GET /api/status's shotCount. Deliberately still absent
-// are the import/sync-path helpers (bulk upsert, max-id, all-annotations and
-// machine-id reads) — no HTTP route reaches them yet; add them alongside the
-// sync/import domain that calls them.
+// GetLatestID, MaxNativeShotID and Upsert serve the orders/maintenance/backup
+// domains and internal/system's shot-history sync, and Count (#901) serves
+// GET /api/status's shotCount.
 type Repository struct {
 	db *sql.DB
 }
@@ -65,8 +63,8 @@ func (r *Repository) FindAllExcludingTrash() ([]Shot, error) {
 // keep the list's last element: greatest timestamp and, on a tie, the row
 // SQLite returned last for that ASC scan (greatest id) — so the single-row
 // query is ORDER BY s.timestamp DESC, s.id DESC LIMIT 1, the same ordering
-// GetLatestID uses. Hydrating one row instead of all 213 to discard the rest
-// (#951). Returns (nil, nil) when there are no shots.
+// GetLatestID uses. Hydrates one row instead of the whole history (#951).
+// Returns (nil, nil) when there are no shots.
 func (r *Repository) FindLastExcludingTrash() (Shot, error) {
 	row := r.db.QueryRow(selectBase + ` WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp DESC, s.id DESC LIMIT 1`)
 	shot, err := hydrateRow(row)

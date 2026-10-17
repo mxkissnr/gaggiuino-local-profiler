@@ -37,10 +37,7 @@ const (
 // globally-unique synthetic ids stored internally (machine 1 keeps its native
 // ids; any other machine's shots live at machineID*MachineIDOffset+nativeID).
 // Exported because internal/system/sync.go uses it too, to scope a machine's
-// blocklist range to that machine's own ids (#1147); the machines domain has
-// no home for it yet (internal/machines is still a placeholder), so the small
-// amount of arithmetic this package needs from it (toNativeShotID/
-// ownerOfShotID) stays duplicated here rather than imported.
+// blocklist range to that machine's own ids (#1147).
 const MachineIDOffset = 10_000_000
 
 // toNativeShotID converts a globally-unique synthetic id back to the

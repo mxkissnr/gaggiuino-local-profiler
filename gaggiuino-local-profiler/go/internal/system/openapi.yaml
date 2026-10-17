@@ -1387,6 +1387,7 @@ paths:
       responses:
         "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
         "400": { description: Invalid shot ID, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Shot not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/shots/{id}/restore:
     post:
