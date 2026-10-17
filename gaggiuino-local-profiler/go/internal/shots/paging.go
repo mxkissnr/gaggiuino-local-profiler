@@ -288,6 +288,45 @@ func (r *Repository) FindAllScoredExcludingTrash(limit int, lookup beanLookup) (
 	return rows, nil
 }
 
+// EachScoredExcludingTrash streams FindAllScoredExcludingTrash's shots (same
+// shots, same order) to fn one at a time, each with its score resolved
+// through the score cache — the achievements evaluation (#1721), which keeps
+// a few values per shot instead of the hydrated history. The shot passed to
+// fn is only valid for that call, and fn must not query the database (the
+// scan's rows are still open). Cache misses are backfilled after the scan; a
+// non-nil error from fn stops it.
+func (r *Repository) EachScoredExcludingTrash(lookup func(Shot) *Bean, fn func(shot Shot, score *int) error) error {
+	rows, err := r.db.Query(`SELECT ` + pageColumns + scoredFrom +
+		` WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp ASC, s.id ASC`)
+	if err != nil {
+		return fmt.Errorf("shots: streaming scored shots: %w", err)
+	}
+	var backfill []scoreCacheRow
+	err = func() error {
+		defer rows.Close()
+		for rows.Next() {
+			row, bf, err := r.scanPageRow(rows, lookup, false)
+			if err != nil {
+				return err
+			}
+			if bf != nil {
+				backfill = append(backfill, *bf)
+			}
+			if err := fn(row.Shot, row.Score); err != nil {
+				return err
+			}
+		}
+		return rows.Err()
+	}()
+	if err != nil {
+		return err
+	}
+	if len(backfill) > 0 {
+		r.backfillScoreCache(backfill)
+	}
+	return nil
+}
+
 // scoredIDsChunk bounds the bound-parameter list of one scoredShotsByIDs
 // query, well under SQLite's variable limit.
 const scoredIDsChunk = 500
