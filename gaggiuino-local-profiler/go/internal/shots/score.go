@@ -11,6 +11,17 @@ import (
 // 20, channeling 15), thresholds and rounding are the agreed scoring
 // definition, shared with the frontend.
 
+// scoreVersion tags every shot_score_cache fingerprint (see pageColumns in
+// paging.go), so changing it invalidates every cached score at once. Bump it
+// (v3 -> v4, ...) in the same change whenever the score a shot gets can
+// change for the same inputs: weights, thresholds, rounding, what counts as
+// scoreable. Otherwise GET /api/shots and everything else reading the cache
+// keeps serving old scores while the live shot detail shows new ones (#1718).
+// TestScoreVersionPinsParityFixture fails when test/fixtures/score-parity.json's
+// expected scores change without a bump. It is spliced into SQL as a
+// literal, so it must stay a plain [a-z0-9] tag.
+const scoreVersion = "v3"
+
 // Bean is the subset of a library bean's fields the scorer reads
 // (brewTempC/brewRatio) to replace the generic fixed-band targets with the
 // bean's own recommendation (#450). library.ScoreBean resolves a shot's
