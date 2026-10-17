@@ -460,8 +460,9 @@ func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 
 // Count is a plain `SELECT COUNT(*) FROM shots`, deliberately including
 // trashed rows (no `NOT IN (SELECT shot_id FROM trash)` filter, unlike
-// FindAllExcludingTrash). GET /api/status's shotCount field (#901) and the
-// maintenance log's shared-equipment shot count use it.
+// FindAllExcludingTrash). GET /api/status's shotCount field (#901), the
+// maintenance log's shared-equipment shot count and the demo-mode
+// emptiness check use it.
 func (r *Repository) Count() (int, error) {
 	var n int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots`).Scan(&n); err != nil {
