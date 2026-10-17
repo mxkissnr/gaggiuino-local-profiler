@@ -554,12 +554,13 @@ func countMaintLogs(c *Context, task string) int {
 	return n
 }
 
-// shotDaySet returns the UTC calendar days ("2006-01-02") that have a shot.
+// shotDaySet returns the local calendar days ("2006-01-02", time.Local —
+// see currentDayStreak) that have a shot.
 func shotDaySet(shotList []shots.Shot) map[string]bool {
 	set := map[string]bool{}
 	for _, s := range shotList {
 		if ts, ok := asInt64(s["timestamp"]); ok {
-			set[time.UnixMilli(ts*1000).UTC().Format("2006-01-02")] = true
+			set[time.Unix(ts, 0).In(time.Local).Format("2006-01-02")] = true
 		}
 	}
 	return set

@@ -27,20 +27,13 @@ export async function listMachines(): Promise<Machine[] | null> {
 }
 
 /**
- * POST/PUT /api/machines[/{id}] — create (`id` null) or update a machine.
- * `triggerSync` false appends `?sync=0`, which the backend reads as "don't
- * start a shot import after this save" (#731), used by the test-connection
- * flow's implicit save. Returns the raw Response: the caller reads the saved
+ * POST/PUT /api/machines[/{id}] — create (`id` null) or update a machine. A
+ * save never starts a shot import; the poller's regular sync picks the
+ * machine up (#731). Returns the raw Response: the caller reads the saved
  * id and the server's error body off it.
  */
-export function saveMachine(
-  id: string | number | null,
-  payload: MachineSaveInput,
-  { triggerSync = true }: { triggerSync?: boolean } = {},
-): Promise<Response> {
-  const base = id ? `api/machines/${id}` : 'api/machines';
-  const url = triggerSync ? base : `${base}?sync=0`;
-  return apiFetch(url, jsonBody(payload, id ? 'PUT' : 'POST'));
+export function saveMachine(id: string | number | null, payload: MachineSaveInput): Promise<Response> {
+  return apiFetch(id ? `api/machines/${id}` : 'api/machines', jsonBody(payload, id ? 'PUT' : 'POST'));
 }
 
 /** POST /api/machines/{id}/test — connection test; the caller reads `{ reachable }` off the raw Response. */

@@ -7,8 +7,7 @@ import (
 
 // This file is the machine-registry CRUD + probe endpoints (#317). A save
 // does not start a catch-up shot-history sync (#729/#731); the poller's
-// regular sync picks up a new or changed machine. A `?sync=0` query param
-// is ignored.
+// regular sync picks up a new or changed machine.
 
 func (h *Handlers) registerRegistryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/machines", h.listMachines)

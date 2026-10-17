@@ -327,6 +327,7 @@ const fr: Partial<Translations> = {
     confirm_perm_delete:(id)=>`Supprimer définitivement le shot ${id} ?\nCette action est irréversible.`,
     trash_days_left:(d)=>`supprimé dans ${d} jour${d!==1?'s':''}`,
     trash_restore_label:'↩ Restaurer', trash_delete_title:'Supprimer maintenant',
+    trash_moved_toast:'Shot déplacé dans la corbeille', trash_undo_label:'Annuler',
     freshness_title:(d)=>`Torréfié il y a ${d} jours (optimal: 7–21 jours)`,
     bean_age_at_shot:(d)=>`${d} jours au moment du shot`,
     bean_age_badge:(d)=>`${d}j au shot`,

@@ -327,6 +327,7 @@ const en: Translations = {
     confirm_perm_delete:(id)=>`Permanently delete shot ${id}?\nThis action cannot be undone.`,
     trash_days_left:(d)=>`deleted in ${d} day${d!==1?'s':''}`,
     trash_restore_label:'↩ Restore', trash_delete_title:'Delete now',
+    trash_moved_toast:'Shot moved to trash', trash_undo_label:'Undo',
     freshness_title:(d)=>`Roasted ${d} days ago (optimal: 7–21 days)`,
     bean_age_at_shot:(d)=>`${d} days old at shot`,
     bean_age_badge:(d)=>`${d}d at shot`,

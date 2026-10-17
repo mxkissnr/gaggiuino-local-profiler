@@ -861,11 +861,9 @@ function themeForSave(theme: ThemeSelection | null): NonNullable<MachineSaveInpu
 // callers that need to distinguish "failed" from "nothing to save" can
 // inspect the DOM themselves, neither existing caller needs to.
 //
-// #731: testMachineForm() passes triggerSync = false, which adds a `?sync=0`
-// query param to the save. The Go backend ignores it: no machine save starts
-// a shot-history sync any more, the poller's regular sync picks the machine
-// up.
-async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = {}): Promise<string | number | null> {
+// #731: no machine save starts a shot-history sync, the poller's regular
+// sync picks the machine up -- so both callers save the same way.
+async function _saveMachine(): Promise<string | number | null> {
   const id = (document.getElementById('machineFormId') as HTMLInputElement).value;
   const type = (document.getElementById('machineFormType') as HTMLSelectElement).value as 'gaggiuino' | 'gaggimate';
   const payload: MachineSaveInput = {
@@ -878,7 +876,7 @@ async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = 
   };
   if (!payload.name || !payload.host) return null;
   const resultEl = document.getElementById('machineFormTestResult');
-  const r = await machinesApi.saveMachine(id || null, payload, { triggerSync });
+  const r = await machinesApi.saveMachine(id || null, payload);
   if (r.ok) {
     const data = await r.json().catch(() => ({})) as { error?: string; id?: number; reachable?: boolean };
     return id || data?.id || null;
@@ -969,9 +967,8 @@ export async function deleteMachine(id: number, isDefault?: boolean): Promise<vo
 // originally auto-closed it to mirror Save, but that turned out to be
 // confusing for a *test* action; only the explicit Save button closes now.
 //
-// #731: this save is only a means to get a testable id -- it must not start
-// a shot import the way an explicit "Speichern" does, so triggerSync:false
-// is passed through to _saveMachine() (server-side gate in go/internal/machines).
+// #731: this save is only a means to get a testable id; like every machine
+// save it does not start a shot import.
 //
 // #730 review: the form stays open (and clickable) while the request is in
 // flight -- a double-click used to re-enter _saveMachine() with
@@ -984,7 +981,7 @@ export async function deleteMachine(id: number, isDefault?: boolean): Promise<vo
 export async function testMachineForm(): Promise<void> {
   const btn = document.getElementById('machineFormTestBtn') as HTMLButtonElement | null;
   if (btn) btn.disabled = true;
-  const id = await _saveMachine({ triggerSync: false });
+  const id = await _saveMachine();
   if (id === null) {
     if (btn) btn.disabled = false;
     return;
