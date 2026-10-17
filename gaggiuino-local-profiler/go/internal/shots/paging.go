@@ -99,8 +99,9 @@ type Page struct {
 
 // pageColumns is selectBase's column list plus the three shot_score_cache
 // columns and the SQL-recomputed fingerprint, in the order scanPageRow
-// scans them. The `v3:` prefix is the score-version tag: it is not derived
-// from the shot at all, so bumping it invalidates every cached row at once.
+// scans them. The scoreVersion prefix (score.go) is the score-version tag: it
+// is not derived from the shot at all, so bumping it invalidates every cached
+// row at once.
 // #1538 changed what counts as scoreable (a sub-5-bar shot now scores), so
 // every pre-#1538 cached score is stale and must be recomputed — a plain
 // rescan of the same row would otherwise keep serving the old nil score.
@@ -109,7 +110,7 @@ type Page struct {
 // only changes it must miss the cache instead of serving the old score (#1609).
 const pageColumns = `s.id, s.timestamp, s.duration, s.profile_name, s.data, s.machine_id, a.data AS ann_data,
 	c.score, c.used_bean_target, c.fingerprint,
-	('v3:' || length(s.data) || ':' || s.timestamp || ':' || IFNULL(s.duration, 0) || ':' || IFNULL(length(a.data), 0)) AS fp`
+	('` + scoreVersion + `:' || length(s.data) || ':' || s.timestamp || ':' || IFNULL(s.duration, 0) || ':' || IFNULL(length(a.data), 0)) AS fp`
 
 // FindPageExcludingTrash returns one keyset page of non-trashed shots,
 // newest first (timestamp DESC, id DESC), resolving each row's score
