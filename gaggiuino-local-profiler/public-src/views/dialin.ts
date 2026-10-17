@@ -4,6 +4,7 @@ import { tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { esc, html, joinHtml, scoreColor } from '../utils.js';
 import type { Html } from '../utils.js';
+import { safeLocalStorage } from '../storage.js';
 
 interface DialinAnnotation {
   dose?: string | number | null;
@@ -23,7 +24,7 @@ interface DialinShot extends ShotMeta {
 
 export async function renderDialin(): Promise<void> {
   const select = document.getElementById('dialinCount') as HTMLSelectElement | null;
-  const saved  = localStorage.getItem('glp_dialin_count');
+  const saved  = safeLocalStorage.getItem('glp_dialin_count');
   if (select && saved && select.value !== saved) select.value = saved;
 
   const n    = parseInt((select?.value || 5) as string);

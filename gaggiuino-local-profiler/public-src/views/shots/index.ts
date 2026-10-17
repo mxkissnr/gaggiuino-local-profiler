@@ -28,6 +28,7 @@ import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
 import { _shots }                                             from './shared.js';
 import type { ShotRow }                                       from './shared.js';
+import { safeLocalStorage } from '../../storage.js';
 
 export { _equipmentName } from './shared.js';
 export { exportAllCSV, exportCSV, exportProfile, exportShot, shareCard } from './export.js';
@@ -216,13 +217,13 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
   if (S.shots.length > 0) {
     empty.style.display     = 'none';
     chartArea.style.display = 'flex';
-    const savedCompare = parseInt(localStorage.getItem('glp_compareShotId') as string);
+    const savedCompare = parseInt(safeLocalStorage.getItem('glp_compareShotId') as string);
     // #431: the mobile Shots tab now opens straight to a shot's detail (no
     // list step in between), so the initial selection needs to actually
     // honor the last-selected shot (persisted on every selection, see
     // selectShot()/the sidebar row click handler) rather than always
     // resetting to the newest one.
-    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId') as string);
+    const savedPrimary = parseInt(safeLocalStorage.getItem('glp_primaryShotId') as string);
     S.primaryShotId = (savedPrimary && S.shots.find(s => s.id === savedPrimary))
       ? savedPrimary
       : (S.shots.at(-1)?.id ?? null);
@@ -483,12 +484,12 @@ export async function trashShot(id: number): Promise<void> {
     S.allShots = (S.allShots || []).filter(s => s.id !== id);
     if (S.primaryShotId === id) {
       S.primaryShotId = neighbourId;
-      if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', String(S.primaryShotId));
-      else localStorage.removeItem('glp_primaryShotId');
+      if (S.primaryShotId) safeLocalStorage.setItem('glp_primaryShotId', String(S.primaryShotId));
+      else safeLocalStorage.removeItem('glp_primaryShotId');
     }
     if (S.compareShotId === id) {
       S.compareShotId = null;
-      localStorage.removeItem('glp_compareShotId');
+      safeLocalStorage.removeItem('glp_compareShotId');
     }
     renderSidebar();
     void updateView();

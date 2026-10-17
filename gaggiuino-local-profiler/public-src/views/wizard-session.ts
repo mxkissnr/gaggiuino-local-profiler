@@ -13,6 +13,7 @@ import { S } from '../state/index.js';
 import { textEntryFocused } from '../live-sync.js';
 import { esc, html, joinHtml, scoreColor } from '../utils.js';
 import type { Html } from '../utils.js';
+import { safeLocalStorage } from '../storage.js';
 
 const POLL_MS = 3000;
 
@@ -68,8 +69,8 @@ export function createWizardSession<TSession extends Record<string, unknown>, TS
     shots: () => S.shots as unknown as TShot[],
     persist: () => {
       const s = S[stateKey];
-      if (s) localStorage.setItem(storageKey, JSON.stringify(s));
-      else localStorage.removeItem(storageKey);
+      if (s) safeLocalStorage.setItem(storageKey, JSON.stringify(s));
+      else safeLocalStorage.removeItem(storageKey);
     },
     startPoll,
     stopPoll,

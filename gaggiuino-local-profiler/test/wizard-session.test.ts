@@ -98,4 +98,22 @@ describe('createWizardSession (#1622 shared wizard plumbing)', () => {
 
     wizard.stopPoll();
   });
+
+  // #1615: with storage blocked by the browser even reading the global
+  // throws; persisting must degrade to "not remembered", not crash the wizard.
+  it('persist() does not throw when the browser blocks storage', () => {
+    const wizard = makeWizard(() => {});
+    Object.defineProperty(g, 'localStorage', {
+      get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+      configurable: true,
+    });
+    try {
+      S.dialinSession = { status: 'active' };
+      expect(() => wizard.persist()).not.toThrow();
+      S.dialinSession = null;
+      expect(() => wizard.persist()).not.toThrow();
+    } finally {
+      Object.defineProperty(g, 'localStorage', { value: localStorageStub, configurable: true, writable: true });
+    }
+  });
 });

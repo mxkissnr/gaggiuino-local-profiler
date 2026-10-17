@@ -6,6 +6,7 @@ import type { Html } from '../utils.js';
 import { STAR_ICON_SVG , SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG} from '../icons.js';
 import { resolveBeanForAnnotation } from '../views/shots/utils.js';
 import type { ShotMeta } from '../state/index.js';
+import { safeLocalStorage } from '../storage.js';
 
 // state/index.ts types shot rows as metadata-only `ShotMeta` with an index
 // signature; these local aliases name the fields the sidebar actually reads.
@@ -179,8 +180,8 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
         // away from before its DOM fields get overwritten by the new shot.
         if (S.primaryShotId !== shot.id && window.flushAutoSave) window.flushAutoSave();
         S.primaryShotId = shot.id; S.compareShotId = null;
-        localStorage.setItem('glp_primaryShotId', String(shot.id));
-        localStorage.removeItem('glp_compareShotId');
+        safeLocalStorage.setItem('glp_primaryShotId', String(shot.id));
+        safeLocalStorage.removeItem('glp_compareShotId');
         updateSidebarHighlighting();
         if (S.currentMode !== 'shots' && window.switchMode) window.switchMode('shots');
         // #410/#461: on mobile the shot list is only ever reached via the
@@ -238,8 +239,8 @@ export function toggleMonthGroup(key: string): void {
 export function toggleCompare(id: number): void {
   if (S.primaryShotId === id) return;
   S.compareShotId = (S.compareShotId === id) ? null : id;
-  if (S.compareShotId) localStorage.setItem('glp_compareShotId', String(S.compareShotId));
-  else localStorage.removeItem('glp_compareShotId');
+  if (S.compareShotId) safeLocalStorage.setItem('glp_compareShotId', String(S.compareShotId));
+  else safeLocalStorage.removeItem('glp_compareShotId');
   updateSidebarHighlighting();
   if (window.updateView) window.updateView();
 }
@@ -550,8 +551,8 @@ export function selectShot(id: number): void {
   if (S.primaryShotId !== id && window.flushAutoSave) window.flushAutoSave(); // #430
   S.primaryShotId = id;
   S.compareShotId = null;
-  localStorage.setItem('glp_primaryShotId', String(id));
-  localStorage.removeItem('glp_compareShotId');
+  safeLocalStorage.setItem('glp_primaryShotId', String(id));
+  safeLocalStorage.removeItem('glp_compareShotId');
   updateSidebarHighlighting();
   if (window.updateView) window.updateView();
 }
