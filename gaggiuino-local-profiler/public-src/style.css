@@ -2402,6 +2402,16 @@
             border-radius:var(--radius); padding: 1px var(--sp-2); font-size: var(--fs-1); font-weight: 700;
         }
         #trash-list { overflow-y: auto; max-height: 220px; }
+        /* ── Toast action (#1716, e.g. Undo after trashing a shot) ── */
+        .glp-toast-action {
+            background: none; border: none; border-radius: var(--radius);
+            color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer;
+            min-height: 44px; min-width: 44px; padding: 0 var(--sp-3);
+            margin: -12px calc(-1 * var(--sp-3)) -12px var(--sp-3);
+        }
+        .glp-toast-action:hover { background: var(--accent-glow); }
+        .glp-toast-action:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
+
         .trash-item {
             display: flex; align-items: center; gap: var(--sp-2);
             padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-5);

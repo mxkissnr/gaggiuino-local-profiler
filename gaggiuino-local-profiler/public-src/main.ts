@@ -35,12 +35,13 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 }
 
 import { t, applyTranslations } from './i18n.js';
-import { themeColor, THEME_CHANGE_EVENT } from './utils.js';
+import { THEME_CHANGE_EVENT } from './utils.js';
 import { watchSystemTheme } from './theme.js';
 import { renderSidebar, updateMobileShotSidebarVisibility, selectShot } from './components/sidebar.js';
 import { updateStatus } from './components/status.js';
 import { switchMode, goToShot } from './components/mode.js';
 import { initTopbarNavFade } from './components/topbar-nav-fade.js';
+import { showToast } from './components/toast.js';
 import { calcShotScore, loadData, trashShot, flushAutoSave, updateView } from './views/shots.js';
 import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData } from './shot-curves.js';
 import { populateRefSelector, connectLiveStream, disconnectLiveStream } from './views/live.js';
@@ -63,29 +64,6 @@ import { wireLibrary } from './boot/library.js';
 import { wireSettings } from './boot/settings.js';
 import { wireDelegation } from './boot/delegation.js';
 import { bootData } from './boot/data.js';
-
-// ── Toast helper ──────────────────────────────────────────────────────────
-function showToast(msg: string, duration = 3000) {
-  let el = document.getElementById('glpToast');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'glpToast';
-    el.style.cssText = [
-      'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
-      // #814: was a hardcoded #27272a/#e4e4e7 — a dark chip on a light page.
-      `background:${themeColor('--raised', '#27272a')}`, `color:${themeColor('--gray-200', '#e4e4e7')}`,
-      'padding:10px 20px', 'border-radius:8px',
-      'font-size:.85rem', 'z-index:9999', 'box-shadow:0 4px 12px rgba(0,0,0,.4)',
-      'transition:opacity .3s', 'pointer-events:none', 'white-space:nowrap',
-    ].join(';');
-    document.body.appendChild(el);
-  }
-  const toast = el as HTMLElement & { _t?: ReturnType<typeof setTimeout> };
-  toast.textContent = msg;
-  toast.style.opacity = '1';
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
-}
 
 // #1018: live re-resolution while 'auto' is selected -- see theme.js.
 watchSystemTheme();
