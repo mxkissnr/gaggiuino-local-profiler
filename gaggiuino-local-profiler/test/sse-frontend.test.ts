@@ -224,10 +224,68 @@ describe('public-src/sse.js', () => {
     expect(onFallback).not.toHaveBeenCalled();
   });
 
-  it('builds the stream URL with a ?token= fallback when S.glpToken is set', () => {
-    S.glpToken = 'abc123';
+  // #1626: the long-lived token never goes into the stream URL. With a token,
+  // each open first trades it (as a header) for a single-use ticket.
+  describe('stream ticket (#1626)', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+    let tickets: string[];
+
+    // The ticket request resolves through a few promise hops (fetch, json,
+    // then) before the EventSource is created.
+    async function flush(): Promise<void> {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    }
+
+    const realFetch = g.fetch;
+    afterEach(() => { g.fetch = realFetch; });
+
+    beforeEach(() => {
+      tickets = ['t1', 't2', 't3'];
+      fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ ticket: tickets.shift() }) }));
+      g.fetch = fetchMock;
+      S.glpToken = 'abc123';
+    });
+
+    it('opens the stream with a ticket, never with the token', async () => {
+      connectEvents(() => {});
+      expect(FakeEventSource.instances).toHaveLength(0);
+      await flush();
+
+      expect(fetchMock).toHaveBeenCalledWith('api/events/ticket', { method: 'POST', headers: { 'X-GLP-Token': 'abc123' } });
+      expect(firstSource().url).toBe('api/events?ticket=t1');
+      expect(firstSource().url).not.toContain('abc123');
+    });
+
+    it('asks for a fresh ticket on every reconnect', async () => {
+      connectEvents(() => {});
+      await flush();
+      firstSource()._open();
+      firstSource()._fail();
+      vi.advanceTimersByTime(5000);
+      await flush();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(sourceAt(1).url).toBe('api/events?ticket=t2');
+    });
+
+    it('falls back to the bare URL, not the token, when the ticket request fails', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('offline'));
+      connectEvents(() => {});
+      await flush();
+      expect(firstSource().url).toBe('api/events');
+    });
+
+    it('opens nothing when disconnected while the ticket is still pending', async () => {
+      connectEvents(() => {});
+      disconnectEvents();
+      await flush();
+      expect(FakeEventSource.instances).toHaveLength(0);
+    });
+  });
+
+  it('opens the bare stream URL synchronously without a token (Ingress session)', () => {
     connectEvents(() => {});
-    expect(firstSource().url).toBe('api/events?token=abc123');
+    expect(firstSource().url).toBe('api/events');
   });
 
   // #1016/#1612: mid-session staleness -- a connected stream that goes silent

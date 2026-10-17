@@ -29,6 +29,7 @@ export type Route =
     | { kind: 'passthrough' }
     | { kind: 'token' }
     | { kind: 'sse' }
+    | { kind: 'sse-ticket' }
     | { kind: 'fixture'; entry: FixtureEntry }
     | { kind: 'write' }
     | { kind: 'missing'; key: string };
@@ -318,6 +319,7 @@ export const GLPDemo = (() => {
      *   { kind: 'passthrough' }           not ours — let the network handle it
      *   { kind: 'token' }                 GET api/token
      *   { kind: 'sse' }                   GET api/events
+     *   { kind: 'sse-ticket' }            POST api/events/ticket (#1626)
      *   { kind: 'fixture', entry }        GET with a recorded response
      *   { kind: 'write' }                 any non-GET/HEAD under api/
      *   { kind: 'missing', key }          GET with no recorded response
@@ -336,6 +338,9 @@ export const GLPDemo = (() => {
         const upper = method.toUpperCase();
         if (upper === 'GET' && relative === 'api/token') return { kind: 'token' };
         if (upper === 'GET' && relative === 'api/events') return { kind: 'sse' };
+        // #1626: the stream ticket is not a data write, so it must not land in
+        // the discarded-write branch below (and its notice) on every connect.
+        if (upper === 'POST' && relative === 'api/events/ticket') return { kind: 'sse-ticket' };
         if (upper !== 'GET' && upper !== 'HEAD') {
             // Writes under api/ are accepted and discarded a little further
             // down, in demo-sw.ts; anything else is not ours to touch.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -169,7 +170,21 @@ func TestIngressSmoke_PWAGatingFollowsIngressDetection(t *testing.T) {
 func TestIngressSmoke_SSEEndpointNotBuffered(t *testing.T) {
 	base, token := newSmokeServer(t)
 
-	req, _ := http.NewRequest(http.MethodGet, base+"/api/events?token="+token, nil)
+	// #1626: the stream URL carries a short-lived ticket, not the token.
+	ticketReq, _ := http.NewRequest(http.MethodPost, base+"/api/events/ticket", nil)
+	ticketReq.Header.Set("X-GLP-Token", token)
+	ticketResp, err := (&http.Client{Timeout: 5 * time.Second}).Do(ticketReq)
+	if err != nil {
+		t.Fatalf("POST /api/events/ticket: %v", err)
+	}
+	var ticket struct{ Ticket string }
+	err = json.NewDecoder(ticketResp.Body).Decode(&ticket)
+	ticketResp.Body.Close()
+	if err != nil || ticketResp.StatusCode != http.StatusOK || ticket.Ticket == "" {
+		t.Fatalf("POST /api/events/ticket: status %d, ticket %q, err %v", ticketResp.StatusCode, ticket.Ticket, err)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, base+"/api/events?ticket="+ticket.Ticket, nil)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatalf("GET /api/events: %v", err)

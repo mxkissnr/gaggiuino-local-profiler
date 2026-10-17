@@ -46,6 +46,9 @@ let reconnectDelay = RECONNECT_BASE_MS;
 // scheduleReconnect() when it tears a dead source down.
 let currentOnFallback: (() => void) | undefined;
 let currentOnReconnect: (() => void) | undefined;
+// Bumped by disconnectEvents(), so an _open() still waiting for its ticket
+// knows the connection it was opening has been cancelled meanwhile.
+let openGeneration = 0;
 const listeners = new Map<string, Set<(data: unknown) => void>>(); // type -> Set<cb>
 const attachedTypes = new Set<string>(); // types with a native listener already wired on the current `source`
 
@@ -110,22 +113,54 @@ function triggerFallback(onFallback?: () => void): void {
   onFallback?.();
 }
 
+// #1626: EventSource can't send a header, so a session holding the API token
+// trades it (as the usual header) for a short-lived, single-use ticket and puts
+// only that in the stream URL — never the long-lived token. Without a token
+// (an Ingress session the server trusts as is) the URL stays bare. A failed
+// ticket request also falls back to the bare URL; the server then refuses it
+// like any unauthenticated stream, and the error counter below handles that.
+async function ticketedStreamUrl(token: string): Promise<string> {
+  try {
+    const r = await fetch('api/events/ticket', { method: 'POST', headers: { 'X-GLP-Token': token } });
+    if (r.ok) {
+      const { ticket } = await r.json() as { ticket?: string };
+      if (ticket) return `api/events?ticket=${encodeURIComponent(ticket)}`;
+    }
+  } catch { /* fall through to the bare URL */ }
+  return 'api/events';
+}
+
 // Opens a fresh EventSource and wires its handlers. `isReconnect` leaves
 // everConnected set, so a successful reopen announces itself through
 // onReconnect instead of being mistaken for a first connect (which would arm
-// the fallback watchdog and reset the error counter).
+// the fallback watchdog and reset the error counter). Each open asks for a
+// fresh ticket: a ticket authenticates one connection only, so EventSource's
+// own retry of a dropped stream is refused, the stream reaches CLOSED, and
+// the reconnect below comes back here for a new one.
 function _open(onFallback: (() => void) | undefined, onReconnect: (() => void) | undefined, isReconnect: boolean): void {
   currentOnFallback = onFallback;
   currentOnReconnect = onReconnect;
-  const url = S.glpToken ? `api/events?token=${encodeURIComponent(S.glpToken)}` : 'api/events';
-  source = new EventSource(url);
-  for (const type of listeners.keys()) attachType(type);
 
   if (!isReconnect) {
     watchdogTimer = setTimeout(() => {
       if (!everConnected) triggerFallback(onFallback);
     }, WATCHDOG_MS);
   }
+
+  const token = S.glpToken;
+  if (!token) {
+    _attach('api/events', onFallback, onReconnect);
+    return;
+  }
+  const generation = openGeneration;
+  void ticketedStreamUrl(token).then(url => {
+    if (generation === openGeneration) _attach(url, onFallback, onReconnect);
+  });
+}
+
+function _attach(url: string, onFallback: (() => void) | undefined, onReconnect: (() => void) | undefined): void {
+  source = new EventSource(url);
+  for (const type of listeners.keys()) attachType(type);
 
   source.onopen = () => {
     // A second open (within one connection, or after our own reopen) follows a
@@ -181,6 +216,7 @@ export function connectEvents(onFallback?: () => void, onReconnect?: () => void)
 }
 
 export function disconnectEvents(): void {
+  openGeneration++;
   clearWatchdog();
   clearStaleTimer();
   clearReconnect();

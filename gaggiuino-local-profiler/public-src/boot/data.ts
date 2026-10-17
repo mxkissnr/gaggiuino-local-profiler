@@ -80,7 +80,7 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
   return runBootTasks([
     // Every request below needs the session token (or its absence settled):
     // initToken() populates S.glpToken for the X-GLP-Token header and the
-    // SSE ?token= fallback.
+    // SSE stream ticket (#1626).
     { name: 'token', run: initToken },
     {
       name: 'live events', requires: ['token'],
@@ -88,8 +88,8 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
         // #735: opened once at app bootstrap, not per view-switch -- SSE-driven
         // updates must keep arriving regardless of which view/tab is currently
         // open, same reasoning as the 30s updateStatus() interval in main.ts.
-        // Needs S.glpToken to already be populated (for the ?token= fallback
-        // EventSource itself can't send as a header), hence after initToken()
+        // Needs S.glpToken to already be populated (to request the stream
+        // ticket EventSource itself can't send as a header), hence after initToken()
         // resolves. `onFallback` is a no-op here -- the PR 2 follow-up (Live
         // view over the same stream) extends it.
         // #736: Live view telemetry/preheat push -- same bootstrap-time wiring
