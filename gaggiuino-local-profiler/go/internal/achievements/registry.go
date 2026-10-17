@@ -559,6 +559,7 @@ func countMaintLogs(c *Context, task string) int {
 	return n
 }
 
+// shotDaySet returns the UTC calendar days ("2006-01-02") that have a shot.
 func shotDaySet(shotList []shots.Shot) map[string]bool {
 	set := map[string]bool{}
 	for _, s := range shotList {

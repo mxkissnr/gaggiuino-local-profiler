@@ -237,8 +237,9 @@ func bagAtShotTime(bean library.Entity, shotTimestampSec int64) library.Entity {
 	return best
 }
 
-// currentDayStreak returns the longest run of consecutive local calendar days
-// in dateSet ending today or yesterday.
+// currentDayStreak returns the length of the run of consecutive UTC calendar
+// days in dateSet that ends today or yesterday (UTC). Days are bucketed in
+// UTC, not the server's local time zone.
 func currentDayStreak(dateSet map[string]bool, nowMS int64) int {
 	const dayMS = int64(86_400_000)
 	now := time.UnixMilli(nowMS).UTC()
