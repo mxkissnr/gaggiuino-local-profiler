@@ -26,8 +26,8 @@ import (
 //     catch up immediately instead of waiting for the next scheduled pull.
 //
 // syncOtherMachines (#1146) rides along with the scheduled loop (and with the
-// manual trigger) — see sync.go; native-maintenance sync and syncProgress stay
-// unimplemented (see sync.go + doc.go). The post-brew and reachability-recovery
+// manual trigger) — see sync.go; syncProgress stays unimplemented (see
+// sync.go). The post-brew and reachability-recovery
 // catch-up paths deliberately stay default-only: they pull the default machine
 // alone.
 
