@@ -19,7 +19,7 @@ func TestLibraryClientsRefuseAPrivateAddressAtDialTime(t *testing.T) {
 	clients := map[string]*http.Client{
 		"barcode scan": scanHTTPClient,
 		"bean image":   fetchImageClient,
-		"geocoder":     NewGeocoder(nil).http,
+		"geocoder":     NewGeocoder(nil, "test").http,
 	}
 	for name, client := range clients {
 		t.Run(name, func(t *testing.T) {
