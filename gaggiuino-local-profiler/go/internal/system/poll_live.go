@@ -25,6 +25,13 @@ import (
 // never-mutated-after-set invariant, see its doc comment).
 func (p *Poller) buildLiveDataResponse() LiveData {
 	defaultID, _ := p.defaultMachineID()
+	return p.buildLiveDataResponseFor(defaultID)
+}
+
+// buildLiveDataResponseFor is buildLiveDataResponse for an already-resolved
+// default machine id — the poll tick resolves the default machine once and
+// passes its id down instead of re-querying the registry (#1616).
+func (p *Poller) buildLiveDataResponseFor(defaultID int64) LiveData {
 	// #902 idle stats: read the per-tick machineStatus (RuntimeState.mu
 	// first, then p.state.mu — the fixed lock ordering, see RuntimeState's
 	// doc comment). Get() releases before p.state.mu is taken below.
@@ -145,4 +152,10 @@ func (p *Poller) LiveData() LiveData { return p.buildLiveDataResponse() }
 // tick-driven only; see doc.go.
 func (p *Poller) emitLiveSnapshot() {
 	p.hub.Publish(sse.Event{Type: sse.EventLiveSnapshot, Data: p.buildLiveDataResponse()})
+}
+
+// emitLiveSnapshotFor is emitLiveSnapshot for the poll tick's already
+// resolved default machine (see buildLiveDataResponseFor).
+func (p *Poller) emitLiveSnapshotFor(defaultID int64) {
+	p.hub.Publish(sse.Event{Type: sse.EventLiveSnapshot, Data: p.buildLiveDataResponseFor(defaultID)})
 }
