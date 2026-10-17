@@ -122,7 +122,7 @@ together, in one commit:
 
 `test/version-sync.test.ts` fails if any of the latter three drift from
 `config.yaml`; `scripts/release-check.mts` check 1 does the same.
-(`go/internal/library/geo.go`'s `geoUserAgent` carries the version too — cosmetic, bump it along but it isn't gated.)
+(The geocoder's User-Agent is derived from `system.Version()` — nothing to bump there.)
 
 ## Commits
 
@@ -184,10 +184,9 @@ README.md                     ← Repo root README (English)
 - **Machine config source of truth**: the `machines` SQLite table
   (`go/internal/machines`, the registry) is the only source of truth for a
   machine's host and switch entity — never `options.json`. `options.json`
-  (the HA app configuration) is a *tracked input*: the registry adopts a
-  changed app option once, at startup; after that the registry's own
-  value (including one intentionally cleared via Settings → Machines) always
-  wins. Read machine config only through the registry's resolver methods
+  (the HA app configuration) carries no machine options (#662): on an empty
+  registry the default machine is seeded unconfigured (empty host, #718)
+  and is then set up via Settings → Machines only. Read machine config only through the registry's resolver methods
   (`machineId = nil`/`0` means the default machine) — never off a raw
   options bag. This exists because #638/#641/#643/#648 were four separate
   bugs from the same copy-pasted `opts`-shaped resolution logic (the Node

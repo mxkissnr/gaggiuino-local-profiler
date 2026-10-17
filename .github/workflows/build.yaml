@@ -72,7 +72,7 @@ jobs:
             org.opencontainers.image.description=Local shot profiler for Gaggiuino espresso machine
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=GPL-3.0-only
             io.hass.version=${{ steps.version.outputs.version }}
             io.hass.type=addon
             io.hass.arch=${{ matrix.arch }}

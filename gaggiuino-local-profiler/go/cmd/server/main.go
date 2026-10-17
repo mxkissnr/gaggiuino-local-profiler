@@ -298,7 +298,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// written; when it actually stored new coordinates, publish `library`
 	// again with no src, so every open page — the writing one included —
 	// picks up the new map position.
-	geocoder := library.NewGeocoder(libRepo)
+	geocoder := library.NewGeocoder(libRepo, system.Version())
 	library.GeocodeHook = func(beanID int64, _, _ string) {
 		if geocoder.GeocodeBean(context.Background(), beanID) {
 			changes.Publish("library", "", "")

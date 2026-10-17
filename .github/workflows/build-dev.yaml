@@ -151,7 +151,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=GPL-3.0-only
             io.hass.version=${{ needs.prep.outputs.version }}
             io.hass.type=addon
             io.hass.arch=amd64
@@ -181,7 +181,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=GPL-3.0-only
             io.hass.version=${{ needs.prep.outputs.version }}
             io.hass.type=addon
             io.hass.arch=amd64
@@ -274,7 +274,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=GPL-3.0-only
             io.hass.version=${{ needs.prep.outputs.version }}
             io.hass.type=addon
             io.hass.arch=${{ matrix.arch }}
@@ -306,7 +306,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=GPL-3.0-only
             io.hass.version=${{ needs.prep.outputs.version }}
             io.hass.type=addon
             io.hass.arch=${{ matrix.arch }}
