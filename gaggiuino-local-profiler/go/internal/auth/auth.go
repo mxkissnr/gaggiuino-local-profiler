@@ -216,8 +216,9 @@ func SecurityHeaders(next http.Handler) http.Handler {
 // pages), without having to special-case each route individually.
 // It must run behind SecurityHeaders and ahead of any route — see
 // cmd/server's middleware chain, whose ordering is security headers, then
-// the rate limiter, then this.
-func RequireToken(token string) func(http.Handler) http.Handler {
+// the rate limiter, then this. tickets backs GET /api/events' ?ticket=
+// (#1626); nil accepts no ticket.
+func RequireToken(token string, tickets *TicketStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Fail closed, not open: if no token is available, deny
@@ -233,11 +234,20 @@ func RequireToken(token string) func(http.Handler) http.Handler {
 
 			authenticated := IsTokenValid(token, r.Header.Get("X-GLP-Token"))
 			// #735: EventSource can't send custom headers, so /api/events —
-			// and only that route — also accepts the token as a query
-			// param. See internal/sse/doc.go for why this lives here and
-			// not in that package.
+			// and only that route — also accepts a credential in the query.
+			// #1626: that is a short-lived, single-use ?ticket= from
+			// POST /api/events/ticket (ticket.go). The long-lived token as
+			// ?token= is still accepted for now, deprecated, so a web app
+			// loaded before the update keeps its live stream until reload.
+			// See internal/sse/doc.go for why this lives here and not in
+			// that package.
 			if !authenticated && r.URL.Path == "/api/events" {
-				authenticated = IsTokenValid(token, r.URL.Query().Get("token"))
+				q := r.URL.Query()
+				if ticket := q.Get("ticket"); ticket != "" {
+					authenticated = tickets.Consume(ticket)
+				} else {
+					authenticated = IsTokenValid(token, q.Get("token"))
+				}
 			}
 
 			// Ingress bypass: only trust X-Ingress-Path when the request

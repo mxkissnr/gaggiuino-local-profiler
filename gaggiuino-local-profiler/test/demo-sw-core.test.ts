@@ -52,6 +52,11 @@ describe('sw-core route (#1193)', () => {
 
     it('routes the SSE endpoint', () => {
         expect(glp.route('GET', `${SCOPE}api/events`, SCOPE, EMPTY_MANIFEST)).toEqual({ kind: 'sse' });
+        expect(glp.route('GET', `${SCOPE}api/events?ticket=demo`, SCOPE, EMPTY_MANIFEST)).toEqual({ kind: 'sse' });
+    });
+
+    it('answers the SSE ticket request instead of treating it as a discarded write (#1626)', () => {
+        expect(glp.route('POST', `${SCOPE}api/events/ticket`, SCOPE, EMPTY_MANIFEST)).toEqual({ kind: 'sse-ticket' });
     });
 
     it('returns a recorded fixture, caching-busters normalised away', () => {

@@ -4,6 +4,7 @@
 // rule can see the Html brand. Lines ending in "// rejected" must be reported by
 // the rule; lines ending in "// accepted" must not.
 import { esc, html, joinHtml } from '../../public-src/utils.js';
+import type { Html } from '../../public-src/utils.js';
 import { tHtml } from '../../public-src/i18n.js';
 
 declare const el: HTMLElement;
@@ -39,3 +40,29 @@ el.innerHTML = cond ? esc('a') : esc('b'); // accepted
 el.innerHTML = html``; // accepted
 el['innerHTML'] = html`<u>${esc(someString)}</u>`; // accepted
 el.insertAdjacentHTML('beforeend', html`<i>${esc(someString)}</i>`); // accepted
+
+// #1626: the further markup sinks. write/writeln only count on a Document.
+declare const parser: DOMParser;
+declare const range: Range;
+declare const frame: HTMLIFrameElement;
+declare const stream: { write(s: string): void };
+document.write(someString); // rejected
+document.writeln('raw'); // rejected
+parser.parseFromString(someString, 'text/html'); // rejected
+range.createContextualFragment(someString); // rejected
+el.setHTMLUnsafe(someString); // rejected
+frame.srcdoc = someString; // rejected
+document.write(html`<p>${esc(someString)}</p>`); // accepted
+parser.parseFromString(esc(someString), 'text/html'); // accepted
+range.createContextualFragment(html`<b></b>`); // accepted
+el.setHTMLUnsafe(esc(someString)); // accepted
+frame.srcdoc = html`<p>${esc(someString)}</p>`; // accepted
+stream.write(someString); // accepted
+
+// #1626: casting a computed string to Html mints the brand without escaping;
+// only a static string may be cast.
+export const castInterpolated = `<b>${someString}</b>` as Html; // rejected
+export const castIdentifier = someString as Html; // rejected
+export const castCall = parts.join('') as Html; // rejected
+export const castLiteral = '<b>static</b>' as Html; // accepted
+export const castStaticTemplate = `<svg viewBox="0 0 1 1"></svg>` as Html; // accepted

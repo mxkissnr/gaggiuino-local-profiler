@@ -4347,7 +4347,7 @@ export interface paths {
         };
         /**
          * App status (public — no auth required)
-         * @description `?machineId=<id>` for a non-default machine scopes machineHostname/machineReachable/lastMachineError to that machine via a live reachability probe, instead of describing the default machine (#464). Omitted, or a machineId that resolves back to the default machine, keeps the default-machine behavior.
+         * @description `?machineId=<id>` for a non-default machine scopes machineHostname/machineReachable/lastMachineError to that machine via a live reachability probe, instead of describing the default machine (#464). Omitted, or a machineId that resolves back to the default machine, keeps the default-machine behavior. The live probe only runs for a caller with a valid `X-GLP-Token` or one arriving through HA Ingress (#1626); any other caller gets that machine's last polled reachability instead.
          */
         get: {
             parameters: {
@@ -6545,7 +6545,7 @@ export interface paths {
         };
         /**
          * Server-Sent Events stream multiplexing every push event type over one connection (#735/#736)
-         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus), `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write bumped a data kind's revision). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, the token as a `?token=` query parameter — EventSource can't set custom headers, so this is the one exception to header-only auth.
+         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus), `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write bumped a data kind's revision). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, a short-lived single-use `?ticket=` from `POST /api/events/ticket` (#1626) — EventSource can't set custom headers, so this is the one exception to header-only auth. The long-lived token as `?token=` is still accepted but deprecated.
          */
         get: {
             parameters: {
@@ -6569,6 +6569,48 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a short-lived ticket for the /api/events stream (#1626)
+         * @description Trades the API token (sent as the usual `X-GLP-Token` header) for a random ticket the client puts in the `GET /api/events?ticket=` URL instead of the token. A ticket is valid for 30 seconds and authenticates one connection; ask for a new one before every (re)connect.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The ticket */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7066,6 +7108,13 @@ export interface paths {
                     content: {
                         "application/zip": string;
                     };
+                };
+                /** @description Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626) */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };

@@ -173,6 +173,7 @@ func buildDataIgnored() map[string]string {
 	add("POST /api/backup", "writes only achievement unlocks; achievements are not part of live sync")
 	add("POST /api/sync", "a manual shot pull: new shots arrive through the status poll's revision")
 	add("POST /api/preheat/ready-by", "preheat-update already carries the resulting status")
+	add("POST /api/events/ticket", "issues a short-lived stream ticket; no stored data changes")
 	add("/api/mcp", "MCP write tools publish their own data-changed events (slice 2)")
 
 	// Machine-side control: the controller acts, GLP's database does not change.

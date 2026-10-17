@@ -70,6 +70,26 @@ func TestGetBackup_RateLimited(t *testing.T) {
 	}
 }
 
+// TestPostBackup_RateLimited (#1626): the zip export gets the same per-IP
+// ceiling as GET /api/backup, under its own key — a tripped POST bucket
+// leaves the GET budget untouched.
+func TestPostBackup_RateLimited(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	for i := 0; i < backupRateLimitPerMin; i++ {
+		if rec := doJSON(t, mux, http.MethodPost, "/api/backup", nil); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200 (limiter not yet tripped); body=%s", i, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := doJSON(t, mux, http.MethodPost, "/api/backup", nil); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d: status = %d, want 429", backupRateLimitPerMin, rec.Code)
+	}
+	if rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil); rec.Code != http.StatusOK {
+		t.Fatalf("GET after a tripped POST bucket: status = %d, want 200", rec.Code)
+	}
+}
+
 // TestGetBackupJSON_SkipsUnreferencedImages (#1602): the legacy GET /api/backup
 // JSON export bundles only images a row still refers to, like the zip export —
 // its inline images map carries the referenced bean photo but not an app-named

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -695,7 +696,7 @@ func (p *Poller) recordSyncSuccess() {
 func (p *Poller) recordMachineError(machineID int64, err error) {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
-	msg := redactURLs(err.Error())
+	msg := redact.Redact(err.Error())
 	ms := p.state.machine(machineID)
 	reachable := false
 	ms.reachable = &reachable
@@ -708,7 +709,7 @@ func (p *Poller) recordMachineError(machineID int64, err error) {
 func (p *Poller) recordSyncError(machineID int64, err error) {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
-	msg := redactURLs(err.Error())
+	msg := redact.Redact(err.Error())
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	p.state.lastSyncError = &msg
 	p.state.lastSyncTime = &now

@@ -368,7 +368,10 @@ preheat_json=$(curl_a "$BASE_A/api/preheat")
 
 step "sse: GET /api/events"
 sse_file="$SMOKE_DIR/sse_a.txt"
-curl -s --max-time 3 -N "$BASE_A/api/events?token=$TOKEN_A" >"$sse_file" 2>/dev/null
+# #1626: the stream URL carries a short-lived ticket, not the token.
+sse_ticket=$(curl_a -X POST "$BASE_A/api/events/ticket" | jq -r '.ticket // empty')
+[[ -n "$sse_ticket" ]] && ok "POST /api/events/ticket" || bad "POST /api/events/ticket returned no ticket"
+curl -s --max-time 3 -N "$BASE_A/api/events?ticket=$sse_ticket" >"$sse_file" 2>/dev/null
 line1=$(sed -n '1p' "$sse_file")
 line1_len=${#line1}
 # ":" + 2048 spaces (see internal/sse/sse.go's paddingBytes const).

@@ -313,6 +313,7 @@ function machineIconStaticMarkup(theme: unknown, kind: unknown, mini: boolean): 
     const { a, b } = stopsFor(theme);
     const vb = mate ? '0 -21 100 183' : '0 0 100 162';
     const { panel } = mate ? gaggimatePanelAndDisplay() : gaggiuinoPanelAndDisplay();
+    // eslint-disable-next-line local/html-sink -- module-internal SVG geometry; the only outside value, the theme colour, is validated by stopsFor() (HEX_RE or CSS var)
     return `
     <svg viewBox="${vb}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -402,6 +403,7 @@ export function machineIconAnimatedSvg(theme: unknown, kind: unknown = 'gaggiuin
     const vb = mate ? '0 -21 100 183' : '0 0 100 162';
     const { panel, disp } = mate ? gaggimatePanelAndDisplay() : gaggiuinoPanelAndDisplay();
 
+    // eslint-disable-next-line local/html-sink -- module-internal SVG geometry; the only outside value, the theme colour, is validated by stopsFor() (HEX_RE or CSS var)
     return `
     <svg viewBox="${vb}" class="m-svg" aria-hidden="true">
       <defs>

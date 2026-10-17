@@ -11,7 +11,9 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 )
 
 const jsonBodyLimit = 16 * 1024 // 16kb global JSON body limit.
@@ -304,40 +306,33 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	machineReachable := info.MachineReachable
 	lastMachineError := info.LastMachineError
 
+	// machines[].lastError can embed a machine host, so it is gated the same
+	// way the top-level sensitive block below is: computed once here so
+	// both (and the ?machineId probe gate just below) use the same
+	// authentication decision.
+	authenticated := auth.IsTokenValid(h.token, r.Header.Get("X-GLP-Token"))
+
 	// #464: ?machineId for a non-default machine live-probes THAT machine
 	// (same adapter.GetStatus() call POST /api/machines/:id/test uses)
 	// instead of describing the default one. No machineId, or one that
 	// resolves back to the default machine, keeps the behavior above
 	// unchanged — this endpoint is polled unparameterized by every other
 	// caller (glp-integration included).
+	//
+	// #1626: /api/status answers without a token, but only a caller with the
+	// token, or one arriving through HA Ingress, may make it reach out to a
+	// machine. Anyone else gets that machine's last polled state instead of
+	// a fresh outbound probe.
+	probeAllowed := authenticated || auth.IsIngressRequest(r)
 	if raw := r.URL.Query().Get("machineId"); raw != "" {
 		if id, perr := strconv.ParseInt(raw, 10, 64); perr == nil {
 			if requested, rerr := registry.ResolveMachine(&id); rerr == nil && requested != nil && !requested.IsDefault {
 				machineHostname = hostnameOnly(requested.Host)
-				// A GetAdapter failure (e.g. an orphaned registry row
-				// with an empty/unknown Type from an incomplete
-				// migration) reports as a probe failure for THIS
-				// machine, same as a reachable probe that errors out
-				// -- never silently falls through to leave
-				// machineReachable/lastMachineError describing the
-				// default machine while machineHostname above
-				// already switched to the requested one (#901 code
-				// review).
-				adapter, aerr := h.poller.adapters.GetAdapter(requested)
-				if aerr == nil {
-					ctx, cancel := context.WithTimeout(r.Context(), machineStatusProbeTimeout)
-					_, aerr = adapter.GetStatus(ctx, requested)
-					cancel()
-				}
-				if aerr == nil {
-					reachable := true
-					machineReachable = &reachable
-					lastMachineError = nil
+				if probeAllowed {
+					machineReachable, lastMachineError = h.probeMachine(r.Context(), requested)
 				} else {
-					reachable := false
-					machineReachable = &reachable
-					msg := aerr.Error()
-					lastMachineError = &msg
+					st := h.poller.MachineStatus(requested.ID)
+					machineReachable, lastMachineError = st.Reachable, st.LastError
 				}
 			}
 		}
@@ -347,11 +342,6 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		machinesList = nil
 	}
-
-	// machines[].lastError can embed a machine host, so it is gated the same
-	// way the top-level sensitive block below is: computed once here so
-	// both use the same authentication decision.
-	authenticated := auth.IsTokenValid(h.token, r.Header.Get("X-GLP-Token"))
 
 	// #1539 slice 2: the SSE tracker's epoch and per-kind revisions, so a client
 	// that reconnects (or falls back to polling) can compare them with the ones
@@ -404,6 +394,30 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// probeMachine live-probes one machine for GET /api/status?machineId (#464)
+// and reports its reachability and redacted error. A GetAdapter failure (e.g.
+// an orphaned registry row with an empty/unknown Type from an incomplete
+// migration) reports as a probe failure for THIS machine, same as a reachable
+// probe that errors out -- never silently falls through to leave
+// machineReachable/lastMachineError describing the default machine while
+// machineHostname already switched to the requested one (#901 code review).
+func (h *Handlers) probeMachine(ctx context.Context, m *machines.Machine) (*bool, *string) {
+	adapter, err := h.poller.adapters.GetAdapter(m)
+	if err == nil {
+		probeCtx, cancel := context.WithTimeout(ctx, machineStatusProbeTimeout)
+		_, err = adapter.GetStatus(probeCtx, m)
+		cancel()
+	}
+	reachable := err == nil
+	if reachable {
+		return &reachable, nil
+	}
+	// #1626: the same redaction the poller applies to a recorded machine
+	// error.
+	msg := redact.Redact(err.Error())
+	return &reachable, &msg
 }
 
 // ── response/body helpers (see internal/httputil: WriteJSON/WriteError were

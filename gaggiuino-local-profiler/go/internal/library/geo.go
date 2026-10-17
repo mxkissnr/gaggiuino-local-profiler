@@ -25,8 +25,8 @@ import (
 // un-awaited call to.
 //
 // The fixed nominatimHost is pre-checked with assertPublicHost (ssrf.go)
-// before the request, like scan.go's Open Food Facts call; the http.Client
-// resolves it again when it dials, so this does not stop DNS rebinding.
+// before the request, like scan.go's Open Food Facts call, and the client's
+// dial is pinned to the checked address (newGuardedTransport, #1626).
 
 const (
 	nominatimHost = "nominatim.openstreetmap.org"
@@ -83,7 +83,7 @@ type Geocoder struct {
 func NewGeocoder(repo *Repository, version string) *Geocoder {
 	return &Geocoder{
 		repo:       repo,
-		http:       &http.Client{Timeout: 8 * time.Second},
+		http:       &http.Client{Timeout: 8 * time.Second, Transport: newGuardedTransport()},
 		apiURL:     nominatimURL,
 		userAgent:  geoUserAgent(version),
 		assertHost: assertPublicHost,

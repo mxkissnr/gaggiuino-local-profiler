@@ -21,7 +21,7 @@ cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
 - One package per concern under `internal/`: `shots`, `library`,
   `machines` (+ `machines/proto` for the Gaggiuino binary WS codec),
   `orders`, `maintenance`, `backup`, `importer`, `db`, `auth`,
-  `ratelimit`, `sse`, `system` (status/preheat/version/demo), `ha`,
+  `ratelimit`, `redact`, `sse`, `system` (status/preheat/version/demo), `ha`,
   `mqtt`, `mcp`, `img`, `achievements`, `netguard`, `uiprefs`, `cutoutmodels`,
   `config`, `httputil`, `logbuf`, `debug`, `webapp` (SPA embed + serve).
 - Each package has a `doc.go` that is the authoritative description of what
@@ -100,6 +100,7 @@ go/
     netguard/      SSRF/host guards
     orders/        barista-orders queue
     ratelimit/     app-level rate limiter
+    redact/        the one redaction function for errors and logs sent to clients
     shots/         shot history + scoring
     sse/           `/api/events` Server-Sent Events hub
     system/        status/preheat/version/demo + background polling

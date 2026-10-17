@@ -396,6 +396,9 @@ function attachRecorder(page: Page): Promise<void>[] {
         }
         if (!pathname.startsWith('/api/')) return;
         if (pathname === '/api/token') return;
+        // #1626: a stream ticket is a one-off secret, and the demo service
+        // worker answers this route itself, so there is nothing to record.
+        if (pathname === '/api/events/ticket') return;
         const contentType = (response.headers()['content-type'] || '').toLowerCase();
         if (contentType.includes('text/event-stream')) return;
         const method = response.request().method();

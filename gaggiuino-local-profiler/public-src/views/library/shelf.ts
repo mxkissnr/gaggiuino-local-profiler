@@ -171,15 +171,15 @@ function icicleRng(seed: number): () => number {
 // Pure and DOM-free, so the tests can assert on its geometry.
 export function icicleSvg(frozenG: number, seed: number): Html {
   const rnd = icicleRng(seed);
-  const num = (x: number): string => String(Math.round(x * 10) / 10);
+  const num = (x: number): Html => esc(Math.round(x * 10) / 10);
   const n = 9 + Math.floor(rnd() * 3);
   const scale = 0.2 + 0.8 * Math.min(1, Math.max(0, frozenG) / 250);
   const gradId = `lib-icicle-${Math.abs(Math.floor(seed))}`;
   const slot = 100 / n;
   const y0 = 2.5;
-  const parts: string[] = [
-    `<path class="lib-shelf-frost" d="M0 0 H100 V2.5 C76 4.9 62 0.7 50 2.3 C37 4.1 22 0.8 0 2.7 Z" fill="#e9f8ff"/>`,
-    `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6feff"/><stop offset="1" stop-color="#a9dcff" stop-opacity="0.5"/></linearGradient></defs>`,
+  const parts: Html[] = [
+    html`<path class="lib-shelf-frost" d="M0 0 H100 V2.5 C76 4.9 62 0.7 50 2.3 C37 4.1 22 0.8 0 2.7 Z" fill="#e9f8ff"/>`,
+    html`<defs><linearGradient id="${esc(gradId)}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6feff"/><stop offset="1" stop-color="#a9dcff" stop-opacity="0.5"/></linearGradient></defs>`,
   ];
   let dropX = 50;
   const mid = Math.floor(n / 2);
@@ -190,13 +190,13 @@ export function icicleSvg(frozenG: number, seed: number): Html {
     const tip = y0 + len;
     const lx = cx - half;
     const rx = cx + half;
-    parts.push(`<path d="M${num(lx)} ${num(y0)} Q${num(lx + half * 0.25)} ${num(y0 + len * 0.55)} ${num(cx)} ${num(tip)} Q${num(rx - half * 0.25)} ${num(y0 + len * 0.55)} ${num(rx)} ${num(y0)} Z" fill="url(#${gradId})"/>`);
-    parts.push(`<path d="M${num(lx + half * 0.3)} ${num(y0 + 1)} Q${num(lx + half * 0.32)} ${num(y0 + len * 0.6)} ${num(cx - half * 0.12)} ${num(tip - 1.5)}" fill="none" stroke="#ffffff" stroke-width="0.6" stroke-linecap="round" opacity="0.75"/>`);
+    parts.push(html`<path d="M${num(lx)} ${num(y0)} Q${num(lx + half * 0.25)} ${num(y0 + len * 0.55)} ${num(cx)} ${num(tip)} Q${num(rx - half * 0.25)} ${num(y0 + len * 0.55)} ${num(rx)} ${num(y0)} Z" fill="url(#${esc(gradId)})"/>`);
+    parts.push(html`<path d="M${num(lx + half * 0.3)} ${num(y0 + 1)} Q${num(lx + half * 0.32)} ${num(y0 + len * 0.6)} ${num(cx - half * 0.12)} ${num(tip - 1.5)}" fill="none" stroke="#ffffff" stroke-width="0.6" stroke-linecap="round" opacity="0.75"/>`);
     if (i === mid) dropX = cx;
   }
   const delay = (((Math.floor(seed) % 45) + 45) % 45) / 10;
-  parts.push(`<circle class="lib-shelf-icicle-drop" cx="${num(dropX)}" cy="${num(y0 + 2)}" r="1.7" fill="#bfe8ff" style="animation-delay:${num(delay)}s"/>`);
-  return `<svg class="lib-shelf-icicles" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true">${parts.join('')}</svg>` as Html;
+  parts.push(html`<circle class="lib-shelf-icicle-drop" cx="${num(dropX)}" cy="${num(y0 + 2)}" r="1.7" fill="#bfe8ff" style="animation-delay:${num(delay)}s"/>`);
+  return html`<svg class="lib-shelf-icicles" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true">${joinHtml(parts)}</svg>`;
 }
 
 // One bag standing on the shelf. A button so a tap opens the bean's detail

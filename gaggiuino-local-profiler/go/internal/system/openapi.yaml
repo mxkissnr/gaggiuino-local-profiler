@@ -36,15 +36,25 @@ components:
         `/data/api_token.txt`. Retrieve from `GET /api/token`.
         Requests via HA Ingress bypass this check (HA session is sufficient).
         `GET /api/status` and `GET /api/token` need no token.
+    ticketQueryAuth:
+      type: apiKey
+      in: query
+      name: ticket
+      description: >
+        A short-lived, single-use ticket from `POST /api/events/ticket`
+        (#1626). Only honored on `GET /api/events`, since a browser-native
+        EventSource connection can't set custom headers — every other route
+        requires the header. Valid for 30 seconds and for one connection.
     tokenQueryAuth:
       type: apiKey
       in: query
       name: token
       description: >
-        Same token as `tokenAuth`, accepted as a `?token=` query parameter
-        instead of the `X-GLP-Token` header. Only honored on `GET
-        /api/events`, since a browser-native EventSource connection can't
-        set custom headers — every other route requires the header.
+        Deprecated (#1626): use `ticketQueryAuth`. Same token as `tokenAuth`,
+        accepted as a `?token=` query parameter on `GET /api/events` only,
+        so a web app loaded before the ticket was introduced keeps its live
+        stream until it reloads. A long-lived token in a URL can end up in
+        logs, so this is going away.
 
   schemas:
 
@@ -2668,7 +2678,10 @@ paths:
         machineHostname/machineReachable/lastMachineError to that machine
         via a live reachability probe, instead of describing the default
         machine (#464). Omitted, or a machineId that resolves back to the
-        default machine, keeps the default-machine behavior.
+        default machine, keeps the default-machine behavior. The live probe
+        only runs for a caller with a valid `X-GLP-Token` or one arriving
+        through HA Ingress (#1626); any other caller gets that machine's last
+        polled reachability instead.
       parameters:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
@@ -3315,10 +3328,13 @@ paths:
         stream doesn't work. Not exposed in the OpenAPI response schemas
         below since this is a raw multiplexed text stream, not JSON.
         Auth: accepts either the usual `X-GLP-Token` header or, only on this
-        route, the token as a `?token=` query parameter — EventSource can't
-        set custom headers, so this is the one exception to header-only auth.
+        route, a short-lived single-use `?ticket=` from
+        `POST /api/events/ticket` (#1626) — EventSource can't set custom
+        headers, so this is the one exception to header-only auth. The
+        long-lived token as `?token=` is still accepted but deprecated.
       security:
         - tokenAuth: []
+        - ticketQueryAuth: []
         - tokenQueryAuth: []
       responses:
         "200":
@@ -3326,6 +3342,30 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+
+  /api/events/ticket:
+    post:
+      tags: [System]
+      summary: Issue a short-lived ticket for the /api/events stream (#1626)
+      description: >
+        Trades the API token (sent as the usual `X-GLP-Token` header) for a
+        random ticket the client puts in the `GET /api/events?ticket=` URL
+        instead of the token. A ticket is valid for 30 seconds and
+        authenticates one connection; ask for a new one before every
+        (re)connect.
+      responses:
+        "200":
+          description: The ticket
+          headers:
+            Cache-Control:
+              schema: { type: string, example: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket]
+                properties:
+                  ticket: { type: string }
 
   /api/menu:
     get:
@@ -3562,6 +3602,7 @@ paths:
           content:
             application/zip:
               schema: { type: string, format: binary }
+        "429": { description: "Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626)" }
 
   /api/restore:
     post:

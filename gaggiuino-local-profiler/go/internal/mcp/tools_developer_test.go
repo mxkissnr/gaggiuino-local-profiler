@@ -697,6 +697,32 @@ func TestGetDiagnosticsReturnsLogsAndState(t *testing.T) {
 	}
 }
 
+// #1626: the two error fields go through the same redaction as the log
+// lines; reachability itself stays visible.
+func TestGetDiagnosticsRedactsErrorFields(t *testing.T) {
+	syncErr := `Get "https://gaggiuino.local/api/shots/latest": dial tcp 192.168.1.5:443: i/o timeout`
+	reachable := false
+	machineErr := "lookup gaggimate.local on 10.0.0.1:53: no such host"
+	ts, _ := newDeveloperServerFull(t, true, false,
+		fakePoller{reachable: &reachable, lastErr: &machineErr},
+		newLogBuffer(t, 10),
+		fakeSync{lastErr: &syncErr},
+		nil,
+	)
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
+
+	if got, _ := out["last_sync_error"].(string); got != `Get "[url]": dial tcp [host]: i/o timeout` {
+		t.Fatalf("last_sync_error = %q", got)
+	}
+	if got, _ := out["last_machine_error"].(string); got != "lookup [host] on [host]: no such host" {
+		t.Fatalf("last_machine_error = %q", got)
+	}
+	if got, ok := out["polled_machine_reachable"].(bool); !ok || got {
+		t.Fatalf("polled_machine_reachable = %v, want false", out["polled_machine_reachable"])
+	}
+}
+
 func TestGetDiagnosticsOmitsAbsentState(t *testing.T) {
 	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, nil, nil, nil)
 	session := connect(t, ts.URL+Path)
@@ -735,18 +761,22 @@ func TestGetDiagnosticsMasksSecrets(t *testing.T) {
 		"GET /api/shots?token=abc123&limit=5",
 		"Authorization: Bearer eyJhbGciOiJIUzI1",
 		"dialing https://alice:hunter2@example.test/api",
+		"mqtt connect password=hunter3 refused",
+		"poll failed: dial tcp 192.168.1.5:80: connect: connection refused",
+		"gaggimate: ws://gaggimate.local/ws closed",
 	)
 	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil, nil)
 	session := connect(t, ts.URL+Path)
 	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
 	joined := strings.Join(stringList(out, "log_lines"), "\n")
 
-	for _, secret := range []string{"supersecretvalue", "abc123", "eyJhbGciOiJIUzI1", "hunter2"} {
+	// #1626: one redaction function everywhere, so hosts are masked here too.
+	for _, secret := range []string{"supersecretvalue", "abc123", "eyJhbGciOiJIUzI1", "hunter2", "alice", "example.test", "hunter3", "192.168.1.5", "gaggimate.local"} {
 		if strings.Contains(joined, secret) {
 			t.Fatalf("secret %q leaked in %q", secret, joined)
 		}
 	}
-	for _, masked := range []string{"X-GLP-Token: ***", "token=***&limit=5", "Bearer ***", "https://alice:***@example.test/api"} {
+	for _, masked := range []string{"X-GLP-Token: ***", "token=***&limit=5", "Bearer ***", "dialing [url]", "password=*** refused", "dial tcp [host]: connect", "gaggimate: [url] closed"} {
 		if !strings.Contains(joined, masked) {
 			t.Fatalf("expected %q in masked output %q", masked, joined)
 		}

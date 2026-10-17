@@ -16,7 +16,7 @@ import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-pre
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
-import { esc as escapeHtml, html, joinHtml } from '../utils.js';
+import { esc as escapeHtml, html, joinHtml, safeHttpUrl } from '../utils.js';
 import type { Html } from '../utils.js';
 import type { MachineRecord } from '../state/index.js';
 import type { FirmwareVersion, MachineSaveInput } from '../api/types.js';
@@ -623,7 +623,7 @@ async function loadFirmwareStatus(machineId: number, row: HTMLElement): Promise<
 // update is actually available, lazily inserts the expand panel (update
 // banner + trigger button + progress bar) right after it -- most rows never
 // need that markup at all, since most machines are already up to date.
-function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVersion | null): void {
+export function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVersion | null): void {
   const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
   if (!badge) return; // row was already replaced by a later renderMachinesList() call
   let panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
@@ -647,7 +647,7 @@ function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVe
     const msgEl = panel.querySelector('.machine-firmware-update-msg');
     const linkEl = panel.querySelector<HTMLAnchorElement>('.machine-firmware-changelog-link');
     if (msgEl) msgEl.textContent = t('settings_machine_firmware_update_available', data.latest);
-    if (linkEl) linkEl.href = data.releaseUrl || '#';
+    if (linkEl) linkEl.href = safeHttpUrl(data.releaseUrl) ?? '#';
   } else {
     badge.textContent = t('settings_machine_firmware_badge_current', data.installed);
     badge.title = t('settings_machine_firmware_installed', data.installed);

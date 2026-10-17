@@ -5,6 +5,20 @@ import { safeLocalStorage } from './storage.js';
 // #1547: this module holds pure helpers and renders no <input>/<select>/<textarea>,
 // so there is no form field here to give an accessible name.
 
+// ── Link targets ──────────────────────────────────────────────────────────
+// #1408: safeHttpUrl returns u only when it parses as an absolute http(s)
+// URL, so a stored javascript:/data: value renders as plain text, never as a
+// clickable link. #1626: every href built from stored or fetched data goes
+// through it.
+export function safeHttpUrl(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return u;
+  } catch { /* not a URL */ }
+  return null;
+}
+
 // ── HTML escaping (XSS prevention) ───────────────────────────────────────
 // Branded marker for a string known to be safe to interpolate into markup
 // (either escaped by esc() or authored as trusted HTML). A plain string is

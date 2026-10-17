@@ -233,6 +233,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/events", sseHandler)
+	// #1626: the short-lived ?ticket= a client puts in the /api/events URL
+	// instead of the API token (see auth.RequireToken).
+	sseTickets := auth.NewTicketStore()
+	mux.Handle("POST /api/events/ticket", auth.TicketHandler(sseTickets))
 
 	shotsRepo := shots.NewRepository(sqlDB)
 	shotsHandlers := shots.NewHandlers(shotsRepo)
@@ -710,7 +714,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	handler := auth.SecurityHeaders(
 		auth.RequireKnownHost(cfg.allowedHosts)(
 			limiter.Middleware(
-				auth.RequireToken(token)(recorder.Middleware(changes.Middleware(dataRoutes)(mux))),
+				auth.RequireToken(token, sseTickets)(recorder.Middleware(changes.Middleware(dataRoutes)(mux))),
 			),
 		),
 	)

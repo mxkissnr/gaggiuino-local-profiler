@@ -59,7 +59,8 @@ func isAllowedImageURL(raw string) bool {
 // re-checked against the allowlist, so following it would reopen the exact
 // SSRF surface the allowlist exists to close.
 var fetchImageClient = &http.Client{
-	Timeout: 8 * time.Second,
+	Timeout:   8 * time.Second,
+	Transport: newGuardedTransport(),
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	},
