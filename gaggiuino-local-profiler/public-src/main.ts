@@ -36,58 +36,54 @@ if ('serviceWorker' in navigator && document.querySelector('link[rel="manifest"]
 
 import { S } from './state/index.js';
 import { getUiPref, loadUiPrefsFromServer } from './ui-prefs.js';
-import { initToken, apiFetch } from './api/transport.js';
+import { initToken } from './api/transport.js';
 import type { Bean } from './api/types.js';
 import { t, tHtml, setLang, applyTranslations } from './i18n.js';
 import { connectEvents, onEvent, EVENTS } from './sse.js';
 import { initLiveSync, handleDataChanged, resyncAll } from './live-sync.js';
 import { createLiveSyncHandlers } from './live-sync-handlers.js';
-import { generateBeanQR } from './glp-qr.js';
 import { themeColor, THEME_CHANGE_EVENT, onThemeChange, applyChartTheme, html } from './utils.js';
 import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme, migrateLegacyAccent } from './theme.js';
 import { openBackupExportModal, openBackupRestoreModal } from './components/backup-modal.js';
 
-import { renderSidebar, updateSidebarHighlighting, filterShots, setSortMode, sortedShots, updateFlapCounter,
+import { renderSidebar, filterShots, setSortMode, sortedShots,
          toggleDesktopSidebar, updateMobileShotSidebarVisibility, selectShot,
          openShotDrawer, closeShotDrawer, handleDrawerTouchStart, handleDrawerTouchEnd,
          handleEdgeSwipeStart, handleEdgeSwipeEnd,
-         toggleMonthGroup, setBeanFilter, clearBeanFilter } from './components/sidebar.js';
-import { updateStatus, updatePowerButton, toggleMachinePower, triggerSync, exportDevDb, importDevDb } from './components/status.js';
+         toggleMonthGroup, clearBeanFilter } from './components/sidebar.js';
+import { updateStatus, toggleMachinePower, triggerSync, exportDevDb, importDevDb } from './components/status.js';
 import { checkForUpdate } from './components/update-check.js';
 import { switchMode, goToShot } from './components/mode.js';
 import { initTopbarNavFade } from './components/topbar-nav-fade.js';
 import { renderBottomNav, renderBottomNavSettings, closeMoreSheet } from './components/bottom-nav.js';
 
-import { getShotData, calcShotScore, loadData,
-         loadTrashData, renderTrash, toggleTrash,
+import { calcShotScore, loadData,
+         toggleTrash,
          trashShot, restoreShot, permanentDeleteShot,
-         renderAnnotationPanel, renderStars, quickClone, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
+         renderStars, quickClone, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
          suggestGrindDoseForBean,
          uploadShotImage, removeShotImage, openShotPhotoLightbox,
-         updateView, switchChartTab, updatePQChart,
+         updateView, switchChartTab,
          openChartFullscreen, closeChartFullscreen, switchFsTab,
-         exportCSV, exportAllCSV, exportShot, exportProfile, shareCard,
+         exportAllCSV, exportShot, exportProfile, shareCard,
          loadDrinkMenu, loadMilkTypes, selectDrinkType, selectMilkType,
          selectFrozenPortion, _renderFrozenPortionPills } from './views/shots.js';
 
 // #957: shot curve data is fetched lazily per shot (list rows are
 // metadata-only). Views reach the cache through these window globals, same
 // as they already do for getShotData / calcShotScore.
-import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData,
-         primeCurve, evictCurve } from './shot-curves.js';
+import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData } from './shot-curves.js';
 
-import { initLiveChart, populateRefSelector, autoApplyRefShot, onRefShotChange, clearReferenceShot,
-         connectLiveStream, disconnectLiveStream, setLiveBadge, handleLiveData,
-         fetchPreheatData, updatePreheatWidget, fetchLiveData,
+import { populateRefSelector, onRefShotChange, clearReferenceShot,
+         connectLiveStream, disconnectLiveStream,
          handleLiveSnapshotEvent, handlePreheatUpdateEvent } from './views/live.js';
 
-import { initAnalytics, buildCalendar, buildTrendChart, buildBeanShelf, buildProfileChart, _renderCalendar,
+import { initAnalytics,
          getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold,
          openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail, setDialinProgressionBean,
          openFactDetail, shuffleFacts } from './views/analytics.js';
 
 import { loadMaintenanceView, markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope,
-         renderMaintenanceDashboard, maintStatusLabel,
          openMaintLogForm, closeMaintLogForm, submitMaintLogEntry, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
          toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask } from './views/maintenance.js';
@@ -97,35 +93,30 @@ import { highlightSheetFlavor } from './components/flavor-mini-wheel.js';
 import { closeDetailSheet } from './components/detail-sheet.js';
 
 import { loadOrdersView, startOrdersPolling, stopOrdersPolling, setOrdersEnabled,
-         toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify,
-         renderOrdersList, renderOrderCard, renderOrdersMenuAdmin, renderOrdersStats,
-         acceptOrder, toggleDeclineRow, submitDecline, completeOrder,
-         deleteOrder, clearOrderHistory,
-         loadNotifyMappingView, saveNotifyMapping, saveBroadcastRecipients, saveBaristaNotify,
-         _updateOrdersToggleUI, _orderTimeAgo } from './views/orders.js';
+         toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify } from './views/orders.js';
 
-import { loadLibrary, updateLibraryDatalist, switchLibTab, renderBeanList, resetShelfPrefs, renderGrinderList,
-         openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
+import { loadLibrary, switchLibTab, renderBeanList, resetShelfPrefs, renderGrinderList,
+         openBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean, toggleBeanActive, uploadBeanImage, stageNewBeanImage, cutOutBeanSticker,
          openGrinderForm, closeGrinderForm, editGrinder, saveGrinder, deleteGrinder, uploadGrinderImage, resetGrinderBurrs, deleteGrinderZeroPointEntry,
          toggleBeanQR,
          openNewBagForm, closeNewBagForm, saveNewBag, deleteBag,
          openEditBag, closeEditBag, saveEditBag,
          openBagStockEdit, closeBagStockEdit, saveBagStock, markBagEmpty, togglePastBags, openBeanSheet, closeBeanSheet, requestCloseBeanSheet,
-         toggleBagCard, reorderBags,
+         toggleBagCard,
          openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm,
-         openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe, renderRecipeList,
+         openRecipeForm, closeRecipeForm, editRecipe, saveRecipe, deleteRecipe,
          addRecipeStep, removeRecipeStep,
          toggleUrlImport, importFromUrl,
          toggleImportSettings, addCustomShopifyDomain,
-         openScanModal, closeScanModal, _runScanLoop, _submitManualScan, _handleScanPhoto, _handleScanResult,
-         renderMilkList, openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk,
-         renderBasketList, openBasketForm, closeBasketForm, editBasket, saveBasket, deleteBasket, uploadBasketImage,
-         renderPuckScreenList, openPuckScreenForm, closePuckScreenForm, editPuckScreen, savePuckScreen, deletePuckScreen, uploadPuckScreenImage
+         openScanModal, closeScanModal, _submitManualScan, _handleScanPhoto,
+         openMilkForm, closeMilkForm, saveMilk, restockMilk, deleteMilk,
+         openBasketForm, closeBasketForm, editBasket, saveBasket, deleteBasket, uploadBasketImage,
+         openPuckScreenForm, closePuckScreenForm, editPuckScreen, savePuckScreen, deletePuckScreen, uploadPuckScreenImage
        } from './views/library.js';
 
-import { loadMachineProfileList, updateProfileDatalist, renderProfileList,
-         editProfile, duplicateProfile, deleteMachineProfile, openProfileForm, closeProfileForm, openNewProfileForm,
+import { loadMachineProfileList,
+         editProfile, duplicateProfile, deleteMachineProfile, closeProfileForm, openNewProfileForm,
          createProfileFromBean, applyBeanSuggestion, addProfilePhase, removeProfilePhase,
          sendProfileToMachine, renderProfilePreviewChart } from './views/library-profile-editor.js';
 
@@ -134,7 +125,7 @@ import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMate
 
 import { renderDialin } from './views/dialin.js';
 
-import { openDialinWizard, closeDialinWizard, startDialinFromBean, renderDialinWizard, dialinGrinderChange,
+import { openDialinWizard, startDialinFromBean, dialinGrinderChange,
          dialinConfirmShot, dialinAcceptNext, dialinOverride, dialinEnd, dialinSaveKnownGrind,
          dialinClose } from './views/dialin-wizard.js';
 
@@ -170,12 +161,6 @@ import { attachAutocomplete } from './components/autocomplete.js';
 
 import { BEAN_ICON_SVG } from './icons.js';
 import { safeLocalStorage } from './storage.js';
-
-declare global {
-  interface Window {
-    scheduleAutoSave?: () => void;
-  }
-}
 
 // Profile creation/editing branches to the GaggiMate editor instead of the
 // Gaggiuino one for GaggiMate machines — checked at 3 call sites below.
@@ -291,23 +276,19 @@ function copyApiToken() {
 // #1018: live re-resolution while 'auto' is selected -- see theme.js.
 watchSystemTheme();
 
-// Theme picker — exposed on window for HTML onclick handlers and called by
-// the #themeToggleGroup wiring inside DOMContentLoaded below.
+// Theme picker — called by the #themeToggleGroup wiring inside
+// DOMContentLoaded below.
 function setTheme(theme: string): void {
   safeLocalStorage.setItem(THEME_STORAGE_KEY, theme);
   applyTheme(theme);
 }
 
-// ── Expose everything on window (for HTML onclick handlers) ───────────────
+// ── Cross-module entry points on window ───────────────────────────────────
+// Only what another module reads as `window.X` to stay off a direct import
+// (import cycles, see window-globals.d.ts). There are no inline HTML
+// handlers; test/window-exports.test.ts pins this list (#1615).
 Object.assign(window, {
-  // state & i18n
-  S,
   t,
-  setLang,
-  applyTranslations,
-
-  // theme
-  setTheme,
   setAccentTheme: (name: string) => {
     safeLocalStorage.setItem('glp_accent_theme', name);
     // #1019: the only thing that still applies --accent-* now -- the
@@ -328,271 +309,45 @@ Object.assign(window, {
     document.querySelectorAll<HTMLElement>('.accent-swatch').forEach(b =>
       b.classList.toggle('active', b.dataset.presetKey === name));
   },
-
-  // api
-  initToken,
-  apiFetch,
-
-  // sidebar
   renderSidebar,
-  updateSidebarHighlighting,
-  filterShots,
-  setSortMode,
-  sortedShots,
-  updateFlapCounter,
-  toggleDesktopSidebar,
-  updateMobileShotSidebarVisibility,
   selectShot,
-  setBeanFilter,
-  clearBeanFilter,
-
-  // status / machine
-  updateStatus,
-  updatePowerButton,
-  toggleMachinePower,
-  triggerSync,
-
-  // update check
-  checkForUpdate,
-
-  // mode switcher
   switchMode,
   goToShot,
 
   // shots view
-  getShotData,
   calcShotScore,
   // #957 curve cache
   getShotCurve,
   ensureCurves,
   getRawCurve,
   getShotDataById: getCachedShotData,
-  primeCurve,
-  evictCurve,
   loadData,
-  loadTrashData,
-  renderTrash,
-  toggleTrash,
   trashShot,
-  restoreShot,
-  permanentDeleteShot,
-  renderAnnotationPanel,
-  renderStars,
-  quickClone,
-  scheduleAutoSave,
   flushAutoSave,
-  selectDrinkType,
-  selectMilkType,
-  selectFrozenPortion,
-  loadDrinkMenu,
-  loadMilkTypes,
-  updateDegassing,
   updateView,
-  switchChartTab,
-  updatePQChart,
-  openChartFullscreen,
-  closeChartFullscreen,
-  switchFsTab,
-  exportCSV,
-  exportAllCSV,
-  exportShot,
-  exportProfile,
 
   // live view
-  initLiveChart,
   populateRefSelector,
-  autoApplyRefShot,
-  onRefShotChange,
-  clearReferenceShot,
   connectLiveStream,
   disconnectLiveStream,
-  setLiveBadge,
-  handleLiveData,
-  fetchPreheatData,
-  updatePreheatWidget,
-  fetchLiveData,
 
-  // analytics view
+  // views mode.ts opens without importing the view graph
   initAnalytics,
-  buildCalendar,
-  buildTrendChart,
-  buildBeanShelf,
-  buildProfileChart,
-  _renderCalendar,
-
-  // achievements view (#812)
   loadAchievementsView,
-
-  // maintenance view
   loadMaintenanceView,
-  markMaintDone,
-  saveMaintThreshold,
-  setMaintMode,
-  setMaintScope,
-  renderMaintenanceDashboard,
-  maintStatusLabel,
-  openMaintLogForm,
-  closeMaintLogForm,
-  submitMaintLogEntry,
-  deleteMaintLogEntry,
-  toggleMaintDisabled,
-  addCustomMaintTask,
-  deleteCustomMaintTask,
-
-  // orders view
   loadOrdersView,
   startOrdersPolling,
   stopOrdersPolling,
-  setOrdersEnabled,
-  toggleOrdersMenu,
-  addOrderMenuItem,
-  toggleOrdersStats,
-  toggleOrdersNotify,
-  renderOrdersList,
-  renderOrderCard,
-  renderOrdersMenuAdmin,
-  renderOrdersStats,
-  acceptOrder,
-  toggleDeclineRow,
-  submitDecline,
-  completeOrder,
-  deleteOrder,
-  clearOrderHistory,
-  loadNotifyMappingView,
-  saveNotifyMapping,
-  saveBroadcastRecipients,
-  saveBaristaNotify,
-  _updateOrdersToggleUI,
-  _orderTimeAgo,
-
-  // library view
   loadLibrary,
-  updateLibraryDatalist,
-  switchLibTab,
   renderBeanList,
   renderGrinderList,
   renderMachinesList,
-  openBeanForm,
-  closeBeanForm,
-  editBean,
-  saveBean,
-  saveBeanNoBag,
-  saveBeanAddBag,
-  deleteBean,
-  openGrinderForm,
-  closeGrinderForm,
-  editGrinder,
-  saveGrinder,
-  deleteGrinder,
-  toggleBeanQR,
-  generateBeanQR,
-  openNewBagForm,
-  closeNewBagForm,
-  saveNewBag,
-  deleteBag,
-  openEditBag,
-  closeEditBag,
-  saveEditBag,
-  openBagStockEdit,
-  closeBagStockEdit,
-  saveBagStock,
-  markBagEmpty,
-  togglePastBags,
-  openBeanSheet,
+  renderDialin,
   closeBeanSheet,
   // #1543: mode.js closes the wheel on a tab switch; exposed here like the
   // sheet's own close so the components/ tree never imports the view graph.
   closeFlavorWheel,
-  toggleBagCard,
-  reorderBags,
-  openFreezeForm,
-  closeFreezeForm,
-  saveFreezePortions,
-  thawPortion,
-  filterShotsByBean,
-  openEditFrozenForm,
-  closeEditFrozenForm,
-  saveEditFrozenForm,
-  openRecipeForm,
-  closeRecipeForm,
-  editRecipe,
-  saveRecipe,
-  deleteRecipe,
-  renderRecipeList,
-  addRecipeStep,
-  removeRecipeStep,
-  toggleUrlImport,
-  importFromUrl,
-  toggleImportSettings,
-  addCustomShopifyDomain,
-  openScanModal,
-  closeScanModal,
-  _runScanLoop,
-  _submitManualScan,
-  _handleScanPhoto,
-  _handleScanResult,
-  renderMilkList,
-  openMilkForm,
-  closeMilkForm,
-  saveMilk,
-  restockMilk,
-  deleteMilk,
-  renderBasketList,
-  openBasketForm,
-  closeBasketForm,
-  editBasket,
-  saveBasket,
-  deleteBasket,
-  renderPuckScreenList,
-  openPuckScreenForm,
-  closePuckScreenForm,
-  editPuckScreen,
-  savePuckScreen,
-  deletePuckScreen,
 
-  // profile editor view
-  loadMachineProfileList,
-  updateProfileDatalist,
-  renderProfileList,
-  editProfile,
-  duplicateProfile,
-  duplicateGaggiMateProfile,
-  deleteMachineProfile,
-  openProfileForm,
-  closeProfileForm,
-  openNewProfileForm,
-  createProfileFromBean,
-  applyBeanSuggestion,
-  addProfilePhase,
-  removeProfilePhase,
-  sendProfileToMachine,
-  renderProfilePreviewChart,
-
-  // dialin view
-  renderDialin,
-
-  // guided dial-in wizard
-  openDialinWizard,
-  closeDialinWizard,
-  startDialinFromBean,
-  renderDialinWizard,
-  dialinConfirmShot,
-  dialinAcceptNext,
-  dialinOverride,
-  dialinEnd,
-  dialinSaveKnownGrind,
-  dialinClose,
-
-  // profile dial-in wizard
-  startProfileDialinFromList,
-  profileDialinClose,
-  profileDialinToggleSymptom,
-  profileDialinAcceptNext,
-  profileDialinOverride,
-  profileDialinEnd,
-  profileDialinConfirmShot,
-
-  // toast
   showToast,
 });
 
@@ -617,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const val = parseInt(star.dataset.val ?? '');
       S.currentRating = S.currentRating === val ? 0 : val;
       renderStars(S.currentRating);
-      if (window.scheduleAutoSave) window.scheduleAutoSave();
+      scheduleAutoSave();
     });
   }
 
