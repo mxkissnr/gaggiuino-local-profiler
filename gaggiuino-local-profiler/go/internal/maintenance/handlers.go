@@ -236,17 +236,19 @@ func (h *Handlers) taskDone(w http.ResponseWriter, r *http.Request) {
 // and cmd/server's firmware-update hook (a task outside this package) reuses
 // the exact same scoping rather than duplicating it.
 func ShotCountFor(shotsRepo *shots.Repository, task string, machineID int64) int64 {
-	var list []shots.Shot
+	// COUNT(*) instead of loading every shot just for len() (#1616). Every
+	// synced shot counts, trashed or not; an error still records 0.
+	var n int
 	var err error
 	if isGlobalMaintenanceTask(task) {
-		list, err = shotsRepo.FindAll()
+		n, err = shotsRepo.Count()
 	} else {
-		list, err = findAllByMachine(shotsRepo, machineID)
+		n, err = shotsRepo.CountByMachine(machineID)
 	}
 	if err != nil {
 		return 0
 	}
-	return int64(len(list))
+	return int64(n)
 }
 
 // FirmwareUpdateNote formats the maintenance-log note for a `firmware_update`
@@ -265,27 +267,6 @@ func FirmwareUpdateNote(from, to string) string {
 	default:
 		return ""
 	}
-}
-
-// findAllByMachine returns the machineId-scoped shots for a maintenance
-// log's shot_count — internal/shots.Repository.FindAll() has no
-// machineId-scoped variant (only FindAllExcludingTrashByMachine, which
-// this call needs to NOT apply, since shot_count counts every synced shot,
-// trashed or not). Filters client-side rather than adding a fifth query
-// variant to internal/shots.Repository for this one cosmetic counter.
-func findAllByMachine(shotsRepo *shots.Repository, machineID int64) ([]shots.Shot, error) {
-	all, err := shotsRepo.FindAll()
-	if err != nil {
-		return nil, err
-	}
-	out := make([]shots.Shot, 0, len(all))
-	for _, s := range all {
-		mid, _ := s["machineId"].(int64)
-		if mid == machineID {
-			out = append(out, s)
-		}
-	}
-	return out, nil
 }
 
 func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {

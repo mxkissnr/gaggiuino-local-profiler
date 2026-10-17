@@ -1,6 +1,7 @@
 package shots
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -58,5 +59,73 @@ func TestWritersStripLegacyBlobKeys(t *testing.T) {
 	}
 	if ts != "s.timestamp" || ann != "a.data" {
 		t.Errorf("lightColumnsSQL = %q, %q; want the plain columns on a clean database", ts, ann)
+	}
+}
+
+// TestTimestampsMatchHydratedShots (#1616) pins that the light timestamp
+// reads return exactly what an int64 read of each hydrated shot sees, in
+// the same order, on rows whose data blob overrides the timestamp column.
+func TestTimestampsMatchHydratedShots(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+	for _, r := range []struct {
+		id, ts, machine int64
+		data            string
+	}{
+		{1, 3000, 1, `{}`},
+		{2, 1000, 2, `{"timestamp":17}`},
+		{3, 2000, 1, `{"timestamp":null,"annotation":{"dose":18}}`},
+		{4, 2000, 2, `{"note":"timestamp"}`},
+		{5, 500, 1, `{}`},
+		{6, 4000, 1, `{}`}, // trashed below
+	} {
+		if _, err := sqlDB.Exec(`INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (?,?,280,'V60',?,?)`, r.id, r.ts, r.data, r.machine); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO trash (shot_id, deleted_at) VALUES (6, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	hydratedTS := func(list []Shot) []int64 {
+		var out []int64
+		for _, s := range list {
+			ts, _ := s["timestamp"].(int64)
+			out = append(out, ts)
+		}
+		return out
+	}
+	all, err := repo.FindAllExcludingTrash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.TimestampsExcludingTrash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := hydratedTS(all); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("TimestampsExcludingTrash = %v, hydrated %v", got, want)
+	}
+	for _, m := range []int64{0, 1, 2, 3} {
+		byMachine, err := repo.FindAllExcludingTrashByMachine(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := repo.TimestampsExcludingTrashByMachine(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := hydratedTS(byMachine); fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("machine %d: TimestampsExcludingTrashByMachine = %v, hydrated %v", m, got, want)
+		}
+		n, err := repo.CountByMachine(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want int
+		if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM shots WHERE machine_id = ?`, m).Scan(&want); err != nil {
+			t.Fatal(err)
+		}
+		if n != want {
+			t.Errorf("CountByMachine(%d) = %d, want %d", m, n, want)
+		}
 	}
 }

@@ -236,6 +236,53 @@ func (r *Repository) lightColumnsSQL() (ts, ann string, err error) {
 	return ts, ann, nil
 }
 
+// TimestampsExcludingTrash returns every non-trashed shot's hydrated
+// timestamp (as an int64 read of a hydrated shot sees it, see
+// lightColumnsSQL), in FindAllExcludingTrash's order — the light read for
+// the maintenance stats, which only count shots newer than a task's last
+// date (#1616).
+func (r *Repository) TimestampsExcludingTrash() ([]int64, error) {
+	return r.timestamps(``)
+}
+
+// TimestampsExcludingTrashByMachine is TimestampsExcludingTrash scoped to
+// one machine, matching FindAllExcludingTrashByMachine's filter.
+func (r *Repository) TimestampsExcludingTrashByMachine(machineID int64) ([]int64, error) {
+	return r.timestamps(` AND s.machine_id = ?`, machineID)
+}
+
+func (r *Repository) timestamps(filter string, args ...any) ([]int64, error) {
+	tsSQL, _, err := r.lightColumnsSQL()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(`SELECT `+tsSQL+` FROM shots s WHERE s.id NOT IN (SELECT shot_id FROM trash)`+
+		filter+` ORDER BY s.timestamp ASC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing shot timestamps: %w", err)
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var ts sql.NullInt64
+		if err := rows.Scan(&ts); err != nil {
+			return nil, fmt.Errorf("shots: scanning shot timestamp: %w", err)
+		}
+		out = append(out, ts.Int64)
+	}
+	return out, rows.Err()
+}
+
+// CountByMachine counts every shot of one machine, trashed ones included —
+// Count's machine-scoped counterpart.
+func (r *Repository) CountByMachine(machineID int64) (int, error) {
+	var n int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots WHERE machine_id = ?`, machineID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("shots: counting machine %d: %w", machineID, err)
+	}
+	return n, nil
+}
+
 // GrinderUse is one non-trashed shot's grinder-wear input, read without
 // hydrating the shot (#1616): exactly the three values the library's
 // burr-wear computation reads off a hydrated shot.
@@ -389,8 +436,8 @@ func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 
 // Count is a plain `SELECT COUNT(*) FROM shots`, deliberately including
 // trashed rows (no `NOT IN (SELECT shot_id FROM trash)` filter, unlike
-// FindAllExcludingTrash). GET /api/status's shotCount field (#901) is its
-// only caller.
+// FindAllExcludingTrash). GET /api/status's shotCount field (#901) and the
+// maintenance log's shared-equipment shot count use it.
 func (r *Repository) Count() (int, error) {
 	var n int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots`).Scan(&n); err != nil {
