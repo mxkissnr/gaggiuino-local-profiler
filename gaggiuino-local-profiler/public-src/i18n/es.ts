@@ -448,7 +448,7 @@ const es: Partial<Translations> = {
     degas_aging:(d)=>`${d} días desde el tueste — envejeciendo`,
     degas_old:(d)=>`${d} días desde el tueste — demasiado viejo`,
     backup_title:'Backup & Restore',
-    backup_desc:'Guarda o restaura toda la base de datos (shots, biblioteca, mantenimiento, pedidos, máquinas, ajustes) como archivo ZIP. Las credenciales MQTT quedan excluidas por seguridad.',
+    backup_desc:'Guarda o restaura toda la base de datos (shots, biblioteca, mantenimiento, pedidos, máquinas, ajustes) como archivo ZIP. El token de API y el inicio de sesión MQTT solo se incluyen cifrados, con una contraseña que tú eliges.',
     backup_download:'Descargar copia de seguridad', backup_restore:'Restaurar copia de seguridad',
     backup_invalid:'Archivo de copia de seguridad no válido.',
     backup_restored:(n)=>`Restaurado: ${n} shot${n!==1?'s':''}.`,

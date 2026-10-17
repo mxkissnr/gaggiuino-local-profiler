@@ -448,7 +448,7 @@ const nl: Partial<Translations> = {
     degas_aging:(d)=>`${d} dagen na roosten — veroudert`,
     degas_old:(d)=>`${d} dagen na roosten — te oud`,
     backup_title:'Backup & Herstel',
-    backup_desc:'Sla de volledige database (shots, bibliotheek, onderhoud, bestellingen, machines, instellingen) op of herstel deze als ZIP-bestand. MQTT-inloggegevens zijn om veiligheidsredenen uitgesloten.',
+    backup_desc:'Sla de volledige database (shots, bibliotheek, onderhoud, bestellingen, machines, instellingen) op of herstel deze als ZIP-bestand. Het API-token en de MQTT-inloggegevens worden alleen versleuteld meegenomen, met een wachtwoord dat je zelf kiest.',
     backup_download:'Backup downloaden', backup_restore:'Backup herstellen',
     backup_invalid:'Ongeldig backupbestand.',
     backup_restored:(n)=>`Hersteld: ${n} shot${n!==1?'s':''}.`,

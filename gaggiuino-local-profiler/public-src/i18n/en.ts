@@ -448,7 +448,7 @@ const en: Translations = {
     degas_aging:(d)=>`${d} days since roast — aging`,
     degas_old:(d)=>`${d} days since roast — too old`,
     backup_title:'Backup & Restore',
-    backup_desc:'Save or restore the entire database (shots, library, maintenance, orders, machines, settings) as a ZIP file. MQTT credentials are excluded for security.',
+    backup_desc:'Save or restore the entire database (shots, library, maintenance, orders, machines, settings) as a ZIP file. The API token and MQTT login are only included encrypted, with a passphrase you choose.',
     backup_download:'Download backup', backup_restore:'Restore backup',
     backup_invalid:'Invalid backup file.',
     backup_restored:(n)=>`Restored: ${n} shots.`,

@@ -437,7 +437,7 @@ const de: Partial<Translations> = {
     degas_aging:(d)=>`${d} Tage seit Röstung – wird älter`,
     degas_old:(d)=>`${d} Tage seit Röstung – zu alt`,
     backup_title:'Backup & Restore',
-    backup_desc:'Die komplette Datenbank (Shots, Bibliothek, Wartung, Bestellungen, Maschinen, Einstellungen) als ZIP-Datei sichern oder wiederherstellen. MQTT-Zugangsdaten sind aus Sicherheitsgründen nicht enthalten.',
+    backup_desc:'Die komplette Datenbank (Shots, Bibliothek, Wartung, Bestellungen, Maschinen, Einstellungen) als ZIP-Datei sichern oder wiederherstellen. API-Token und MQTT-Login sind nur verschlüsselt mit einem selbst gewählten Passwort enthalten.',
     backup_download:'Backup herunterladen', backup_restore:'Backup wiederherstellen',
     backup_invalid:'Ungültige Backup-Datei.',
     backup_restored:(n)=>`Wiederhergestellt: ${n} Shots.`,
