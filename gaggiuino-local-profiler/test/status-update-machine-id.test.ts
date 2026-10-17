@@ -1,17 +1,17 @@
-// status.js's updateStatus(machineId) — #464. Before this, switching the
+// status.ts's updateStatus(machineId) — #464. Before this, switching the
 // active machine via the topbar switcher left #railStatusDot/#railMachineName
 // showing the default machine (or stale data) until the next unparameterized
 // 30s poll. updateStatus() now accepts an optional machineId and forwards it
 // as ?machineId= on /api/status; omitting it (or passing 'all', the
 // switcher's "all machines" value) must keep hitting the endpoint
 // unparameterized, matching the existing "'all' == default machine"
-// convention already used by views/live.js's _isActiveMachineLiveCapable()
-// and views/maintenance.js's _effectiveScope().
+// convention already used by views/live.ts's _isActiveMachineLiveCapable()
+// and views/maintenance.ts's _effectiveScope().
 //
 // This repo has no jsdom/happy-dom dependency (vitest runs with
 // environment: 'node') — build just enough of a fake document/fetch to
 // exercise updateStatus(), mirroring the convention in
-// test/bottom-nav-config.test.js.
+// test/bottom-nav-config.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; the stubs go through a
@@ -29,7 +29,7 @@ g.navigator ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 const { updateStatus } = await import('../public-src/components/status.js');
 
-// Only the fields status.js writes on the rail/topbar nodes it looks up.
+// Only the fields status.ts writes on the rail/topbar nodes it looks up.
 interface FakeStatusElement {
   className: string;
   textContent: string;

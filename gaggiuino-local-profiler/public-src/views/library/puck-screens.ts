@@ -1,5 +1,5 @@
 // Puck Screens section (#635) of the Library view, split out of
-// views/library.js. Pure move + type port (Part of #1115); no behavior change.
+// views/library.ts. Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';

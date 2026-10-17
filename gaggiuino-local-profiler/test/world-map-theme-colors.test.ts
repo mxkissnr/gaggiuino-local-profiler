@@ -5,9 +5,9 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // test/api-port-closed-notice.test.ts uses).
 const g = globalThis as unknown as Record<string, unknown>;
 
-// analytics.js pulls in state.js/i18n.js (localStorage/navigator at module
+// analytics.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module
 // load) -- same minimal stub other analytics test files use (see
-// world-map-antimeridian.test.js, analytics-world-map-race.test.js).
+// world-map-antimeridian.test.ts, analytics-world-map-race.test.ts).
 let resolveWorldMapColors: (typeof import('../public-src/views/analytics.js'))['resolveWorldMapColors'];
 
 beforeAll(async () => {
@@ -23,11 +23,11 @@ beforeAll(async () => {
 });
 
 // #1024: resolveWorldMapColors() reads --gray-900/--gray-600/--gray-500/
-// --accent-to via themeColor() (utils.js, #814), i.e.
+// --accent-to via themeColor() (utils.ts, #814), i.e.
 // getComputedStyle(document.documentElement).getPropertyValue(...) at call
 // time. Faking just that entry point lets this flip between the dark- and
 // light-theme token values actually declared in style.css (:root vs.
-// [data-theme="light"], same source test/theme-contrast.test.js audits)
+// [data-theme="light"], same source test/theme-contrast.test.ts audits)
 // without needing a real stylesheet or DOM.
 function stubTheme(tokens: Record<string, string>) {
   g.document = { documentElement: {} };

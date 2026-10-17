@@ -7,9 +7,9 @@ function at<T>(arr: readonly T[], i: number): T {
   return v;
 }
 
-// grind.js pulls in state.js (localStorage/navigator at module load) and
-// i18n.js — neither is available in the plain Node test environment, so
-// stub the minimum before importing, same approach as share-or-download.test.js.
+// grind.ts pulls in state/index.ts (localStorage/navigator at module load) and
+// i18n.ts — neither is available in the plain Node test environment, so
+// stub the minimum before importing, same approach as share-or-download.test.ts.
 let calcBestGrindCombosForBean: (typeof import('../public-src/views/shots/grind.js'))['calcBestGrindCombosForBean'];
 
 beforeAll(async () => {
@@ -25,7 +25,7 @@ beforeAll(async () => {
 });
 
 // Shots carry a pre-computed .score (server-side), which calcShotScore()
-// in shots/utils.js prefers over recomputing — so tests just set .score
+// in shots/utils.ts prefers over recomputing — so tests just set .score
 // directly instead of faking datapoints.
 const shot = (coffee: string, grinder: string, grindSetting: string, score: number): GrindShot => ({
   annotation: { coffee, grinder, grindSetting },

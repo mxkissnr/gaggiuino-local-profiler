@@ -1,16 +1,16 @@
 // Topbar ambient machine-status widget (#837) — the animated "Instrument"
-// icon (machine-icon.js's machineIconAnimatedSvg(), #811) gets a second,
+// icon (machine-icon.ts's machineIconAnimatedSvg(), #811) gets a second,
 // permanent home in the app topbar (#content-topbar) so its brewing/steaming
 // states are visible on every tab, not only while the Live view happens to
 // be open and its own #liveMachineIcon panel isn't currently hidden behind
-// the running-shot chart (see views/live.js's handleLiveData()).
+// the running-shot chart (see views/live.ts's handleLiveData()).
 //
-// Fully independent from views/live.js's own icon instance: a separate SSE
-// subscription (registered alongside live.js's, in main.js's bootstrap), its
+// Fully independent from views/live.ts's own icon instance: a separate SSE
+// subscription (registered alongside live.ts's, in boot/data.ts), its
 // own _lastPreheat tracking and its own cached-SVG-per-machine-id state. The
 // two only share the pure resolveMachineIconState() translator and the
 // setMachineIconMode()/machineIconAnimatedSvg() renderers, all in
-// machine-icon.js — #902 made isSteaming/isFlushing real signals sourced via
+// machine-icon.ts — #902 made isSteaming/isFlushing real signals sourced via
 // the backend's deriveMachineState() (go/internal/system/derive.go) from
 // sensorSnap.steamActive/sysState.operationMode, so steaming and flushing
 // are now told apart from heating and from each other, not just inferred
@@ -27,12 +27,12 @@ function host(): HTMLElement | null {
 }
 
 // Rebuilt only when the active machine actually changes (theme/kind) — same
-// caching convention as live.js's machineIconEl(), so a state change
+// caching convention as live.ts's machineIconEl(), so a state change
 // mid-animation never restarts it. The class reset below mirrors
 // machineIconEl()'s own host.className reset on rebuild: the freshly
 // inserted SVG has no is-* state classes yet (renders as the plain 'off'
 // look) until the next SSE tick or fallback poll re-applies the real state —
-// same brief transient views/live.js's own icon already has after a machine
+// same brief transient views/live.ts's own icon already has after a machine
 // switch, not a new regression here.
 let _iconFor: unknown = null;
 
@@ -69,9 +69,9 @@ export function renderTopbarMachineIcon(): void {
 
 let _lastPreheat: unknown = null;
 
-// SSE push — registered once in main.js's bootstrap, independent of
-// live.js's own handlers for the same two event types (multiple listeners
-// per event are supported, see sse.js's onEvent()).
+// SSE push — registered once in boot/data.ts, independent of
+// live.ts's own handlers for the same two event types (multiple listeners
+// per event are supported, see sse.ts's onEvent()).
 export function handleTopbarLiveSnapshotEvent(msg: unknown): void {
   _lastSnapshot = msg;
   if (!iconShowsDefaultMachine()) return;
@@ -94,7 +94,7 @@ function _applyState(msg: unknown): void {
   setMachineIconMode(el, mode, heatFraction);
 }
 
-// Fallback when SSE isn't active — components/status.js's updateStatus()
+// Fallback when SSE isn't active — components/status.ts's updateStatus()
 // calls this with its /api/status response's machineReachable field, the
 // same source #railStatusDot already uses. Coarse on/off only: without a
 // live telemetry stream there's no heat-fraction/brewing/steaming detail to
@@ -121,7 +121,7 @@ export function syncTopbarMachineIconFallback(reachable: unknown): void {
 // read as a filter slapped over the machine rather than the machine's own
 // colour changing. animateGradientRainbow() below instead rotates the
 // icon's own hot-gradient `<stop>` colours (`.mi-grad-a`/`.mi-grad-b`,
-// machine-icon.js) directly, so RGB mode is genuinely the machine's theme
+// machine-icon.ts) directly, so RGB mode is genuinely the machine's theme
 // cycling through the hue wheel.
 const EASTER_EGG_CLICKS = 7;
 const EASTER_EGG_WINDOW_MS = 3000;
@@ -298,8 +298,8 @@ export function closeEasterEggPanel(): void {
   _coffeeHistoryStop = null;
 }
 
-// Called once from main.js's bootstrap, not at module-import time — this
-// module is imported by test files (via machines-settings.js/status.js)
+// Called once from the boot code (boot/*.ts), not at module-import time — this
+// module is imported by test files (via machines-settings.ts/status.js)
 // under Node/vitest, where `document` doesn't exist.
 export function bindEasterEggPanelEscape(): void {
   document.addEventListener('keydown', e => {

@@ -1,5 +1,5 @@
 // Bag lifecycle, stock quick-adjust, full bag edit and drag-reorder sections of
-// the Library view, split out of views/library.js. Pure move + type port
+// the Library view, split out of views/library.ts. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
@@ -10,7 +10,7 @@ import type { Html } from '../../utils.js';
 import type { Bean } from '../../api/types.js';
 import * as libraryView from '../library.js';
 
-// Circular with library.js (it re-exports this module): only ever touched at
+// Circular with library.ts (it re-exports this module): only ever touched at
 // call time, never read at module load.
 const library = libraryView;
 
@@ -104,7 +104,7 @@ export function classifyBeanBags(b: BeanRow): ClassifiedBags {
 
 // Bag cards are collapsed by default (space-saving on mobile) — this Set
 // tracks which bag ids are expanded, mirroring the _pendingBeanActiveToggles
-// module-state pattern already used in views/library.js.
+// module-state pattern already used in views/library.ts.
 const _expandedBagCards = new Set<number | undefined>();
 // Same pattern for the "Vergangene" (past bags) section per bean id — see
 // renderBeanList's pastSection comment for why this can't live as
@@ -119,8 +119,8 @@ export const _expandedPastSections = new Set<number>();
 // still unconsumed (consumed === 0) — upcoming bags always qualify by
 // construction (SimulateBagQueue never touches a bag before its turn),
 // current loses it as soon as any dose lands on it, past bags never had it.
-// Only 'upcoming' bags are drag-reorderable (see main.js's pointer-events
-// drag handler) — current is queue-position-fixed, past is inert.
+// Only 'upcoming' bags are drag-reorderable (see bagDragPointerDown
+// below) — current is queue-position-fixed, past is inert.
 export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, beans: BeanRow[], canDelete: boolean): Html {
   const { bg, consumed, stockG, remaining } = entry;
   const pct = remaining != null && stockG != null && stockG > 0 ? Math.round((remaining / stockG) * 100) : null;

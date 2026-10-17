@@ -27,7 +27,7 @@ export function apiPortClosedHtml(): Html {
 }
 
 // Same shape/stacking convention as the machine-unreachable and legacy-
-// machine-options banners in components/onboarding.js. Called from the
+// machine-options banners in components/onboarding.ts. Called from the
 // status poll, right after S.apiPortExposed is refreshed, so it appears as
 // soon as /api/status (which stays public precisely for this) answers.
 export function updateApiPortClosedBanner(): void {

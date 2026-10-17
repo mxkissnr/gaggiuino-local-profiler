@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
-// api/transport.js (and state/index.js) touch these browser globals at module
+// api/transport.ts (and state/index.ts) touch these browser globals at module
 // load — stub the minimum so the module graph imports under vitest's node
 // environment, the same bridge the sibling api tests use.
 const g = globalThis as unknown as Record<string, unknown>;

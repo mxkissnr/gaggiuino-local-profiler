@@ -258,9 +258,9 @@ export async function loadDrinkMenu(): Promise<void> {
 }
 
 // #654: optional per-install defaults auto-prefilled into a brand-new shot's
-// annotation panel — loaded once at app init (main.js), same as
+// annotation panel — loaded once at app init (boot/data.ts), same as
 // loadDrinkMenu()/loadMilkTypes() above, and refreshed by
-// components/shot-defaults-settings.js whenever the Settings card saves.
+// components/shot-defaults-settings.ts whenever the Settings card saves.
 export async function loadShotDefaults(): Promise<void> {
   try {
     const defaults = await getShotDefaults();
@@ -341,7 +341,7 @@ export function selectMilkType(id: string): void {
 // ── Frozen-portion pill (which pool of this bean's stock a shot used) ──────
 
 // Bags/portions active as of a given shot's timestamp — mirrors the
-// activeBag resolution in main.js's annCoffee change handler (openedAt <=
+// activeBag resolution in boot/annotation.ts's annCoffee change handler (openedAt <=
 // shotMs, most recent first), so the frozen-portion choices reflect what
 // was actually in the freezer at brew time, not just "now". Only portions
 // with remaining stock are offered (a fully-thawed one has nothing left to
@@ -355,7 +355,7 @@ function _activeFrozenPortionsForBean(bean: LibraryRow | null | undefined, shotM
 }
 
 // #502: an explicit "not frozen" pill is always offered alongside any active
-// frozen batches — Max wants that to be a deliberate recorded choice, not
+// frozen batches — the maintainer wants that to be a deliberate recorded choice, not
 // just the absence of a selection. The whole field hides when the bean has
 // no active frozen stock at all, since there'd be nothing to choose between.
 export function _renderFrozenPortionPills(beanName: string | null, shotMs: number, selectedId: number | string | null | undefined, beanId?: number | null): void {
@@ -429,14 +429,14 @@ export function _updateMilkFieldVisibility(): void {
 
 // Ported from PR #1120 (contributor branch origin/ppops-src/live-shot-setup)
 // onto this TypeScript module by the ppops/port-1120-live-shot-setup branch:
-// dev no longer has the contributor's public-src/views/shots/annotation.js,
+// dev no longer has the contributor's public-src/views/shots/annotation.ts,
 // so the three grinder-field helpers below and the selectId/fieldId arguments
 // on the render helpers further down live here instead.
 //
-// Same select-with-"other"-fallback grinder field as dialin-wizard.js's
+// Same select-with-"other"-fallback grinder field as dialin-wizard.ts's
 // _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
 // existing <select>/<input> pair by id) instead of returning an HTML
-// string, since live.js's pre-shot setup panel's markup is static in
+// string, since live.ts's pre-shot setup panel's markup is static in
 // index.html rather than re-rendered from a template each time.
 export function renderGrinderField(selectId: string, otherId: string, currentValue: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
@@ -466,7 +466,7 @@ export function getGrinderFieldValue(selectId: string, otherId: string): string 
 }
 
 // Toggles the free-text fallback input's visibility on select change —
-// mirrors dialin-wizard.js's dialinGrinderChange.
+// mirrors dialin-wizard.ts's dialinGrinderChange.
 export function handleGrinderFieldChange(selectId: string, otherId: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   const other  = document.getElementById(otherId) as HTMLInputElement | null;
@@ -478,7 +478,7 @@ export function handleGrinderFieldChange(selectId: string, otherId: string): voi
 // a bean rename, name does not. Without it (or when it no longer resolves
 // in the current library — e.g. a deleted bean), falls back to matching by
 // name, same as before this second parameter existed.
-// selectId defaults to the annotation panel's own #annCoffee — views/live.js's
+// selectId defaults to the annotation panel's own #annCoffee — views/live.ts's
 // pre-shot setup panel passes '#lsBean' to reuse this same in-stock/exhausted
 // bean-listing logic instead of duplicating it.
 export function _renderBeanSelect(selectedName: string | null, selectedBeanId: number | null, selectId = 'annCoffee'): void {
@@ -552,7 +552,7 @@ function _fillIdSelect(select: HTMLSelectElement, noneLabel: string, items: Libr
 // data-basket-id/data-puckscreen-id both carry the id, mirroring
 // _renderBeanSelect's data-attribute pattern for _buildAnnotationPayload.
 // selectId/fieldId default to the annotation panel's own elements —
-// views/live.js's pre-shot setup panel (#lsBasket/#lsPuckScreen/#lsRecipe)
+// views/live.ts's pre-shot setup panel (#lsBasket/#lsPuckScreen/#lsRecipe)
 // passes its own ids to reuse this same library-backed population logic
 // instead of duplicating it.
 export function _renderBasketSelect(selectedId: number | null, selectId = 'annBasket'): void {

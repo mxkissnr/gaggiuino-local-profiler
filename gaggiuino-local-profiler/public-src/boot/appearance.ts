@@ -17,7 +17,7 @@ function setTheme(theme: string): void {
 
 export function wireAppearance(): void {
   // ── Theme ──────────────────────────────────────────────────────────────
-  // applyTheme()/resolveTheme() live in theme.js (#1018), shared with
+  // applyTheme()/resolveTheme() live in theme.ts (#1018), shared with
   // setTheme() and watchSystemTheme()'s OS prefers-color-scheme listener.
   // #814: one listener for every live Chart instance. Charts resolve their
   // chrome colours at construction, so without this a chart already on screen
@@ -34,8 +34,8 @@ export function wireAppearance(): void {
   });
 
   // #1021: --accent-ink now has a light-theme-only override table (see
-  // machines-settings.js), so toggling dark<->light (manually or via the OS
-  // 'auto' listener in theme.js, which also fires this event) has to
+  // machines-settings.ts), so toggling dark<->light (manually or via the OS
+  // 'auto' listener in theme.ts, which also fires this event) has to
   // recompute it too, not just whenever the accent/machine choice itself
   // changes.
   onThemeChange(() => applyActiveMachineAccentTheme());

@@ -1,4 +1,4 @@
-// #594: machine icon rendering (public-src/machine-icon.js). Pure ESM string
+// #594: machine icon rendering (public-src/machine-icon.ts). Pure ESM string
 // builder, no DOM dependency, so it's tested directly.
 import { describe, it, expect } from 'vitest';
 import { machineIconSvg, machineIconMiniSvg, machineIconAnimatedSvg,
@@ -37,7 +37,7 @@ describe('machineIconSvg / machineIconMiniSvg theme rendering (#594)', () => {
     // XSS safety: theme.a/b are meant to be validated #rrggbb hex by
     // machineSchema before ever reaching the
     // DB, but this module has its own defense-in-depth guard (HEX_RE in
-    // machine-icon.js) — a value that somehow bypassed validation (corrupt
+    // machine-icon.ts) — a value that somehow bypassed validation (corrupt
     // DB row, future caller that forgets to validate) must never be
     // interpolated verbatim into the SVG markup returned here.
     it('never interpolates a non-hex theme value into the rendered SVG (defense in depth against XSS)', () => {

@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// profile-dialin-wizard.js imports state.js/i18n.js/api/transport.js, which read
+// profile-dialin-wizard.ts imports state/index.ts/i18n.ts/api/transport.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals needed so the module graph can be imported under vitest's node
-// environment (same pattern as test/milk-deduct-gate.test.js and
-// test/library-profile-editor.test.js).
+// environment (same pattern as test/library-profile-editor.test.ts).
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge the other typed fixtures use).
 const g = globalThis as unknown as Record<string, unknown>;

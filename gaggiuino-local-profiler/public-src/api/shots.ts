@@ -3,8 +3,7 @@ import type { HydratedShot, ShotAnnotationInput, ShotDefaults } from './types.js
 
 // Typed client for the `shots` domain (go/internal/shots — every route that
 // package registers: /shots.json plus /api/shots*). Package A3b of the TS
-// migration (#1110); the remaining domains stay on the api.js shim until
-// their own runs.
+// migration (#1110).
 //
 // URL building lives here so the views never assemble an endpoint string or
 // repeat the JSON-headers boilerplate. Helpers whose result the caller

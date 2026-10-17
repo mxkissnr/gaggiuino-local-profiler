@@ -1,19 +1,19 @@
 // #736 review: connectLiveStream() used to check S.sseActive exactly once,
 // at the moment the Live tab opened, to decide whether to start the 1s/10s
 // REST-polling fallback intervals at all. EventSource can take up to
-// public-src/sse.js's WATCHDOG_MS (8s, longer still over HA Ingress per
+// public-src/sse.ts's WATCHDOG_MS (8s, longer still over HA Ingress per
 // #738/#740's history) to actually open -- so S.sseActive was still
 // null/false at that one-time check even on a session where SSE goes on to
 // connect moments later, permanently locking in the (now redundant) REST
 // polling for the rest of the session. Fixed by always starting the
 // intervals, but having their own callbacks re-check S.sseActive fresh on
-// every tick -- same self-correcting convention as status.js's own 30s
+// every tick -- same self-correcting convention as status.ts's own 30s
 // updateStatus() interval, which likewise always fires rather than deciding
 // once at startup.
 //
 // Chart.js needs a real <canvas> context this test harness doesn't provide,
 // and isn't what's under test here -- stubbed out with a minimal fake, same
-// reasoning test/shot-defaults-grinder-autocomplete.test.js uses for
+// reasoning test/shot-defaults-grinder-autocomplete.test.ts uses for
 // attachAutocomplete().
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -47,7 +47,7 @@ vi.mock('../public-src/components/machines-settings.js', () => ({
 // real <select>-population logic (new Option(), replaceChildren()) with no
 // bearing on the SSE/REST-fallback gating this file tests — stubbed to
 // no-ops rather than teaching the fake document below a second DOM API
-// surface it doesn't otherwise need. grind.js's suggestion heuristic reads
+// surface it doesn't otherwise need. grind.ts's suggestion heuristic reads
 // S.shots/S.coffeeLibrary directly and isn't wired to anything here either.
 vi.mock('../public-src/views/shots/annotation.js', () => ({
   renderGrinderField: () => {},

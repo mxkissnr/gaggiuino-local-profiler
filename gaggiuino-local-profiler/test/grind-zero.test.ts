@@ -1,6 +1,6 @@
 // #zero-point: frontend port of go/internal/library/zero_point_test.go's
 // scenarios — same history-lookup convention, inline grinder objects
-// instead of a DB round trip, since grind-zero.js is a pure ESM module.
+// instead of a DB round trip, since grind-zero.ts is a pure ESM module.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { currentGrinderZeroPoint, normalizeGrindToNow } from '../public-src/grind-zero.js';
 
@@ -59,9 +59,9 @@ type GrindModule = typeof import('../public-src/views/shots/grind.js');
 let _parseGrindNum: GrindModule['_parseGrindNum'];
 
 beforeAll(async () => {
-  // shots/grind.js pulls in state.js/i18n.js (localStorage/navigator at module
+  // shots/grind.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module
   // load), so stub the minimum browser globals before importing — same
-  // approach as best-grind-combo.test.js.
+  // approach as best-grind-combo.test.ts.
   Object.defineProperty(globalThis, 'localStorage', {
     value: { getItem: () => null, setItem: () => {} },
     configurable: true, writable: true,

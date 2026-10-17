@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// library.js's import chain touches state.js/i18n.js, which read
+// library.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/library-load-render-race.test.js).
+// environment (same pattern as test/library-load-render-race.test.ts).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };

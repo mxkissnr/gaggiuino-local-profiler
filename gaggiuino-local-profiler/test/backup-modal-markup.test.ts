@@ -1,6 +1,6 @@
 // A real backup was exported with the "API token & MQTT login" checkbox
 // checked and a passphrase entered, yet the resulting file had no `secrets`
-// block and `sections` didn't list "secrets" at all — reported by Max
+// block and `sections` didn't list "secrets" at all — reported by the maintainer
 // against a live GLP DEV export.
 //
 // Root cause: public-src/components/backup-modal.ts's checkedSections()

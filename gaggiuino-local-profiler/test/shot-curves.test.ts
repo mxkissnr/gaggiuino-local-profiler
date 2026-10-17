@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// state.js/i18n.js touch localStorage/navigator at module load — stub them
+// state/index.ts/i18n.ts touch localStorage/navigator at module load — stub them
 // so the module graph imports under vitest's node environment (same pattern
-// as test/shots-load-data-race.test.js).
-// globalThis carries the full DOM type; stub only the sliver state.js reads.
+// as test/shots-load-data-race.test.ts).
+// globalThis carries the full DOM type; stub only the sliver state/index.ts reads.
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };

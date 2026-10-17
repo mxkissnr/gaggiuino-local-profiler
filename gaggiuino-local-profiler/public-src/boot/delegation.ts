@@ -118,7 +118,7 @@ export function wireDelegation(): void {
       case 'select-frozen-portion': selectFrozenPortion(strId()); break;
       case 'reload-data':        void loadData(); break;
       // #807: the "why is this empty" notices (in-view block and app-wide
-      // banner, components/api-port-notice.js) both link here.
+      // banner, components/api-port-notice.ts) both link here.
       case 'goto-settings':      switchMode('settings'); break;
       case 'set-maint-mode':     void setMaintMode(el.dataset.task!, el.dataset.mode!, el.dataset.machineId, el.dataset.currentShots, el.dataset.currentDays, el.dataset.currentG); break;
       case 'mark-maint-done':    void markMaintDone(el.dataset.task!, el.dataset.machineId); break;

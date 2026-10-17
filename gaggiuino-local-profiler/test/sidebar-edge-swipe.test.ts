@@ -2,7 +2,7 @@
 // gesture to the existing swipe-left-to-close pair (handleDrawerTouchStart/
 // End). Bound to `document` rather than #sidebar, since the sidebar is
 // transformed off-screen (untouchable) while closed. Fake DOM mirrors
-// test/machine-accent-theme.test.js's FakeClassList pattern.
+// test/machine-accent-theme.test.ts's FakeClassList pattern.
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose
@@ -13,7 +13,7 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 g.window ??= globalThis;
-// sidebar.js only schedules a frame to add the drawer-mode class; run it
+// sidebar.ts only schedules a frame to add the drawer-mode class; run it
 // straight away so the class lands synchronously (the return value is unused).
 g.requestAnimationFrame ??= (cb: FrameRequestCallback) => { cb(0); };
 

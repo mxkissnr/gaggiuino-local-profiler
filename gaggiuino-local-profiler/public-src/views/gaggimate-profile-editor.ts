@@ -75,7 +75,7 @@ export async function openGaggiMateProfileEditor(id: string): Promise<void> {
   _openEditor(profile);
 }
 
-// Same "fresh unsaved copy" contract as library-profile-editor.js's
+// Same "fresh unsaved copy" contract as library-profile-editor.ts's
 // duplicateProfile: id cleared so saveGaggiMateProfile() POSTs instead of
 // PUTting over the original, label suffixed so it's never confused with
 // its source in the list.
@@ -835,7 +835,7 @@ function _bind(id: string, evt: string, fn: (e: Event) => void): void {
   if (el) el.addEventListener(evt, fn);
 }
 
-// ── Event delegation (wired by main.js via body click) ────────────────────
+// ── Event delegation (wired by boot/delegation.ts via body click) ────────────────────
 
 export function handleGmEditorAction(action: string, el: HTMLElement): void {
   if (!_profile) return;

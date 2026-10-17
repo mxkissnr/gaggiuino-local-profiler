@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// Same harness as analytics-bean-shelf.test.ts: analytics.js pulls in
-// state.js/i18n.js (localStorage/navigator at module load) and calls
+// Same harness as analytics-bean-shelf.test.ts: analytics.ts pulls in
+// state/index.ts/i18n.ts (localStorage/navigator at module load) and calls
 // window.calcShotScore at runtime, so stub a minimal scoring window.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let _computeBeanRanking: Analytics['_computeBeanRanking'];

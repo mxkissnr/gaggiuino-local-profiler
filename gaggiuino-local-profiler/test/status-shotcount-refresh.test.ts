@@ -1,4 +1,4 @@
-// status.js's rising-shotCount refresh: a new finished shot seen on the 30s
+// status.ts's rising-shotCount refresh: a new finished shot seen on the 30s
 // status poll must refetch the shots list through live-sync's `shots` kind
 // (markDirty), not by calling window.loadData() directly — the direct call
 // bypassed the annotation/focus guards and could clobber in-progress text.
@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const g = globalThis as unknown as Record<string, unknown>;
 
-// status.js imports markDirty/noteServerRevs from live-sync; mock them so the
+// status.ts imports markDirty/noteServerRevs from live-sync; mock them so the
 // shot-count branch can be asserted without pulling in the scheduler.
 const liveMock = vi.hoisted(() => ({ markDirty: vi.fn(), noteServerRevs: vi.fn() }));
 vi.mock('../public-src/live-sync.js', () => ({

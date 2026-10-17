@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { CoffeeLibrary, LibraryRow } from '../public-src/state/index.js';
 
-// annotation.js imports state.js, which reads localStorage/navigator at
+// annotation.ts imports state/index.ts, which reads localStorage/navigator at
 // module load time — stub the minimum browser globals needed so the module
 // graph can be imported under vitest's node environment.
-// globalThis carries the full DOM type; stub only the sliver state.js reads.
+// globalThis carries the full DOM type; stub only the sliver state/index.ts reads.
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
@@ -62,7 +62,7 @@ describe('_stockFieldsChanged (#1411)', () => {
 
 // _renderFrozenPortionPills() reads/writes DOM nodes by id — stub only what
 // it touches, same "fake minimal document" approach as
-// test/sidebar-bean-filter.test.js.
+// test/sidebar-bean-filter.test.ts.
 function fakePanelDom() {
     const field     = { style: { display: 'none' } };
     const container = { innerHTML: '' };

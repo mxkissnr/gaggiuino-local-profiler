@@ -54,7 +54,7 @@ interface StatusPayload {
 
 // Tracks the server-side shot count as of the last status poll, so the periodic
 // poll below can detect a newly-finished shot even when the user isn't on the
-// shots view (and thus never got the live.js post-brew loadData() trigger) —
+// shots view (and thus never got the live.ts post-brew loadData() trigger) —
 // see #296. A rise marks the `shots` kind dirty through live-sync instead of
 // calling window.loadData() directly, so the refresh goes through the
 // annotation/focus guards and never clobbers in-progress text.
@@ -80,7 +80,7 @@ let _rerunPending = false;
 // S.activeMachineId instead of the default machine, so the start-up call and
 // the 30s poll can no longer overwrite a selected non-default machine's status
 // with the default machine's (#464 regression). 'all'/null keep the unscoped
-// call, mirroring the same convention views/live.js and views/maintenance.js
+// call, mirroring the same convention views/live.ts and views/maintenance.ts
 // already use for the 'all' switcher value.
 export async function updateStatus(machineId?: string | number | null): Promise<void> {
   if (machineId === undefined) machineId = S.activeMachineId;
@@ -107,7 +107,7 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // live-sync tracker, so a reconnect (or a missed SSE event) shows up as a
     // refetch on the next poll.
     if (s.dataEpoch != null && s.dataRevs != null) noteServerRevs(s.dataEpoch, s.dataRevs);
-    // #750: must run before main.js's shouldOpenSetupWizard() check on the
+    // #750: must run before boot/data.ts's shouldOpenSetupWizard() check on the
     // very first status poll after boot -- see syncInstallId()'s own comment.
     syncInstallId(s.installId);
     if (typeof s.shotCount === 'number') {
@@ -119,7 +119,7 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     // #803: exposeApiPort mirrors the add-on option of the same name (default
     // true if the field is somehow missing, e.g. an older server -- matches
-    // the option's own default). main.js's renderApiTokenCard() reads this to
+    // the option's own default). boot/settings.ts's renderApiTokenCard() reads this to
     // tell "no token because expose_api_port is off" apart from "no token yet".
     S.apiPortExposed = s.exposeApiPort !== false;
     // #807: the app-wide banner for that state -- re-evaluated on every poll
@@ -170,7 +170,7 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // driving it with richer detail (see syncTopbarMachineIconFallback()).
     syncTopbarMachineIconFallback(s.machineReachable);
     // Skip machineSubtitle while a shot is being viewed (#344): updateView()
-    // (views/shots/index.js) owns it in that case, showing the machine that
+    // (views/shots/index.ts) owns it in that case, showing the machine that
     // actually owns the viewed shot — this global/default-machine value
     // would otherwise clobber it on the next 30s poll tick regardless of
     // which machine's shot is on screen.

@@ -17,11 +17,11 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// #1021: resolveAccentInk() (components/machines-settings.js) is the module
+// #1021: resolveAccentInk() (components/machines-settings.ts) is the module
 // under test for the "accent used as text" describe block below -- that
 // module's own top-level IIFE reads localStorage on import (restoreActive
 // Machine()), so it needs the same minimal fake-DOM globals
-// test/machine-accent-theme.test.js already sets up, imported here first.
+// test/machine-accent-theme.test.ts already sets up, imported here first.
 const g = globalThis as unknown as Record<string, unknown>;
 
 const _localStorageStore: Record<string, string> = {};
@@ -160,7 +160,7 @@ describe('design token contrast (#811)', () => {
   // #1021: successor to the #1019-removed "accent used as text
   // (--accent-ink)" block above (see git blame on this file around that
   // merge) -- redone for the 8 new THEME_PRESETS against resolveAccentInk()
-  // (components/machines-settings.js) instead of the old per-accent
+  // (components/machines-settings.ts) instead of the old per-accent
   // [data-accent="..."] CSS selectors, which stay retired. Reads the four
   // light surfaces straight from the already-parsed `light` VARIANTS tokens
   // above, so this stays correct if the surface values themselves ever move.

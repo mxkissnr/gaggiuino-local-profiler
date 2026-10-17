@@ -217,8 +217,8 @@ function request(
       ...(onProgress ? { onProgress } : {}),
       timer: setTimeout(stall, REQUEST_TIMEOUT_MS),
       // A request that keeps reporting progress is still making headway: the
-      // first cut-out downloads 46 MB and runs inference server-side, which can
-      // outlast REQUEST_TIMEOUT_MS on slow hardware or links. Resetting the
+      // first cut-out downloads a 46 MB model and runs inference on the device,
+      // which can outlast REQUEST_TIMEOUT_MS on slow hardware or links. Resetting the
       // watchdog on every progress message means only that much *silence* is a
       // stall, so a slow but progressing download is not killed mid-flight.
       rearm: () => {

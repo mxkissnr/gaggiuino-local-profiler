@@ -1,8 +1,8 @@
 // AI-assistant (MCP) Settings card (#1288, part of #1196). The MCP server
 // was previously switched on through the Home Assistant add-on options; it
 // now reads/writes its own /api/mcp/settings blob and this always-visible
-// card is the only place to turn it on. Loaded once at app init (main.js),
-// same as notify-settings.js. The developer-tools row only exists on the
+// card is the only place to turn it on. Loaded once at app init (boot/data.ts),
+// same as notify-settings.ts. The developer-tools row only exists on the
 // GLP_DEV_BUILD channel — GET reports developerToolsAvailable and the row
 // stays hidden (and its value stays false) everywhere else.
 import { getMcpSettings, postMcpSettings } from '../api/mcp.js';

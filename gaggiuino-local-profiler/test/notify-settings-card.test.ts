@@ -1,9 +1,9 @@
 // #614: notify_preheat_ready/notify_low_stock moved from the Orders admin
 // panel (only rendered when enable_orders: true) to an always-visible
 // "Notifications" Settings card. This tests that the card reads/writes the
-// same /api/orders/settings blob independently of views/orders.js — same
-// apiFetch-spy pattern as test/milk-deduct-gate.test.js, same fake-DOM
-// pattern as test/machines-settings-theme-form.test.js.
+// same /api/orders/settings blob independently of views/orders.ts — same
+// apiFetch-spy pattern as the other settings-card tests, same fake-DOM
+// pattern as test/machines-settings-theme-form.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose

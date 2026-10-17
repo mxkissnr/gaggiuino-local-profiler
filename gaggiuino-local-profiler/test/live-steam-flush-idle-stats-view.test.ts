@@ -1,11 +1,10 @@
-// #902: views/live.js's handleLiveData()/setLiveBadge() coverage for the
+// #902: views/live.ts's handleLiveData()/setLiveBadge() coverage for the
 // new steam/flush live-content branches and the always-current idle stats
 // row -- resolveMachineIconState()'s own mode-resolution logic is already
-// covered directly in test/machine-icon.test.js, so machine-icon.js is
+// covered directly in test/machine-icon.test.ts, so machine-icon.ts is
 // mocked out here to keep this file focused on the DOM wiring under test.
 // Same minimal-fake-document pattern as
-// test/live-stream-sse-fallback-gating.test.js/
-// test/machine-reachable-offline-signal.test.js.
+// test/live-stream-sse-fallback-gating.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose

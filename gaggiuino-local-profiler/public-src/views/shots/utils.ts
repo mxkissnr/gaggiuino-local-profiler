@@ -43,8 +43,8 @@ type BeanRecord = {
 // #456: resolves a shot/annotation to its library bean, preferring the
 // stable beanId link over the free-text coffee name — mirrors
 // LibraryService.resolveBeanForAnnotation on the backend, and the same
-// underlying rule as library.js's renderBeanList consumption totals. The
-// matching itself lives in utils.js (the pure helper module, so a caller that
+// underlying rule as library.ts's renderBeanList consumption totals. The
+// matching itself lives in utils.ts (the pure helper module, so a caller that
 // passes the bean list explicitly need not pull this state-backed module in);
 // this wrapper only supplies the current library as the default list.
 export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): BeanRecord | null {
@@ -101,7 +101,7 @@ export function calcBeanAgeAtShot(
 // object that actually carries its curve blob (synthetic/demo data, a shot
 // just fetched from GET /api/shots/{id}, or a live-brew payload). List rows
 // from GET /api/shots no longer carry datapoints: go through the curve cache
-// (shot-curves.js getShotCurve / getCachedShotData) for those.
+// (shot-curves.ts getShotCurve / getCachedShotData) for those.
 export function getShotData(shot: { datapoints?: ShotDatapoints } | null | undefined): ShotSeries | null {
   if (!shot) return null;
   return mapShotDatapoints(shot.datapoints);

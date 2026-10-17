@@ -1,4 +1,4 @@
-// Baskets section (#635) of the Library view, split out of views/library.js.
+// Baskets section (#635) of the Library view, split out of views/library.ts.
 // Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
@@ -57,7 +57,7 @@ export function renderBasketList(): void {
 }
 
 // Basket images need the auth token, so <img src> can't point at the API
-// directly (see bean-image.js) — set the blob-url src async after render,
+// directly (see bean-image.ts) — set the blob-url src async after render,
 // same pattern as loadGrinderThumbnails.
 function loadBasketThumbnails(): void {
   document.querySelectorAll<HTMLImageElement>('.lib-basket-thumb[data-basket-id]').forEach(img => {

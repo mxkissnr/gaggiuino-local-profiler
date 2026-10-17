@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// analytics.js pulls in state.js (localStorage/navigator at module load)
-// and i18n.js — neither is available in the plain Node test environment, so
+// analytics.ts pulls in state/index.ts (localStorage/navigator at module load)
+// and i18n.ts — neither is available in the plain Node test environment, so
 // stub the minimum before importing, same approach as
-// best-grind-combo.test.js / share-or-download.test.js.
+// best-grind-combo.test.ts / share-or-download.test.ts.
 let splitAntimeridianRing: (typeof import('../public-src/views/analytics.js'))['splitAntimeridianRing'];
 
 beforeAll(async () => {

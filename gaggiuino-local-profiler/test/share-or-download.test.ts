@@ -6,7 +6,7 @@ import { shareOrDownloadBlob } from '../public-src/utils.js';
 // enough to exercise the share-vs-download branching logic.
 let clickSpy: ReturnType<typeof vi.fn>;
 
-// globalThis carries the full DOM type; stub only the sliver utils.js reads.
+// globalThis carries the full DOM type; stub only the sliver utils.ts reads.
 const g = globalThis as unknown as Record<string, unknown>;
 
 function setNavigator(value: unknown) {

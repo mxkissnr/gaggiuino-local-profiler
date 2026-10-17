@@ -6,8 +6,7 @@ import type {
 
 // Typed client for the `library` domain (go/internal/library — every route
 // that package registers under /api/library*). Package A3c of the TS
-// migration (#1110); the remaining domains stay on the api.js shim until
-// their own runs.
+// migration (#1110).
 //
 // URL building and the JSON-headers boilerplate live here so the views never
 // assemble an endpoint string or repeat the fetch options. Helpers whose

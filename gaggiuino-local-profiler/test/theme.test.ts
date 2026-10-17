@@ -1,7 +1,7 @@
-// #1018: applyTheme()/resolveTheme()/watchSystemTheme() (public-src/theme.js).
-// Split out of main.js specifically so this could be unit tested without
-// pulling in main.js's whole side-effecting import chain -- see the fake
-// minimal document/window approach test/library-load-render-race.test.js
+// #1018: applyTheme()/resolveTheme()/watchSystemTheme() (public-src/theme.ts).
+// Split out of main.ts specifically so this could be unit tested without
+// pulling in main.ts's whole side-effecting import chain -- see the fake
+// minimal document/window approach test/library-load-render-race.test.ts
 // already uses for the same reason, rather than pulling in jsdom.
 import { describe, it, expect, vi } from 'vitest';
 import { resolveTheme, applyTheme, watchSystemTheme, THEME_STORAGE_KEY } from '../public-src/theme.js';
@@ -163,7 +163,7 @@ describe('applyTheme active-state class (#1018)', () => {
     expect(doc.documentElement.dataset.theme).toBe('dark');
   });
 
-  // #1018's actual bug: main.js used to query the bare `.theme-btn` class,
+  // #1018's actual bug: main.ts used to query the bare `.theme-btn` class,
   // which #mqttTransportToggle's WebSocket/MQTT buttons also carry (with no
   // data-theme-val) -- an unscoped query wired/matched those too, and
   // clicking one called setTheme(undefined), which matched neither 'dark'

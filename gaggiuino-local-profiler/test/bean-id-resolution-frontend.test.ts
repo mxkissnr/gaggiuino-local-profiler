@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
-// Same stubbing approach as grind-baseline.test.js/best-grind-combo.test.js:
-// views/shots/utils.js pulls in state.js, which needs localStorage/navigator
+// Same stubbing approach as grind-baseline.test.ts/best-grind-combo.test.js:
+// views/shots/utils.ts pulls in state/index.ts, which needs localStorage/navigator
 // at module load.
 let resolveBeanForAnnotation: (typeof import('../public-src/views/shots/utils.js'))['resolveBeanForAnnotation'];
 let S: (typeof import('../public-src/state/index.js'))['S'];

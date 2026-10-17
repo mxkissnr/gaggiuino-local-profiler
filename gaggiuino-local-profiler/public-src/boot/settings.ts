@@ -55,9 +55,9 @@ function copyApiToken() {
 export function wireSettings(): void {
   // Cancel/confirm handlers are wired fresh by openBackupExportModal()/
   // openBackupRestoreModal() every time the modal opens (see
-  // components/backup-modal.js) -- no separate wiring needed here, same
+  // components/backup-modal.ts) -- no separate wiring needed here, same
   // convention #scanModal uses (its "Schließen" button is wired once, in
-  // main.js, but this modal's actions depend on which flow opened it).
+  // main.ts, but this modal's actions depend on which flow opened it).
   document.getElementById('backupRestoreInput')!.addEventListener('change', e => { void openBackupRestoreModal(e.target as HTMLInputElement); });
   document.getElementById('backupDownloadBtn')!.addEventListener('click', openBackupExportModal);
   document.getElementById('devExportDbBtn')?.addEventListener('click', () => { void exportDevDb(); });

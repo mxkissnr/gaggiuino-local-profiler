@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ApiFetchToBlobResult } from '../public-src/api/transport.js';
 
-// api/transport.js -> state.js touches localStorage/navigator at module-load time —
+// api/transport.ts -> state/index.ts touches localStorage/navigator at module-load time —
 // stub the minimum browser globals so the module graph imports under
-// vitest's node environment (same pattern as api-token-client-storage.test.js).
+// vitest's node environment (same pattern as api-token-client-storage.test.ts).
 const g = globalThis as unknown as Record<string, unknown>;
 const _store = new Map<string, string>();
 g.localStorage = {

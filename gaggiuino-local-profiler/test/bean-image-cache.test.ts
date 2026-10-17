@@ -5,7 +5,7 @@
 // just a 304) while still sending the X-GLP-Token header.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// state/index.js reads localStorage/navigator at module-eval time; stub the
+// state/index.ts reads localStorage/navigator at module-eval time; stub the
 // minimum browser globals the import chain needs, same convention as
 // test/api-token-client-storage.test.ts.
 const g = globalThis as unknown as Record<string, unknown>;

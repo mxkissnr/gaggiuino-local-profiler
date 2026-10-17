@@ -1,4 +1,4 @@
-// orders.js's ordersDraftOpen(): the 10s orders poll and the live-sync `orders`
+// orders.ts's ordersDraftOpen(): the 10s orders poll and the live-sync `orders`
 // handler must both hold back while the view holds text a reload would discard —
 // a focused field inside #orders-view, or a decline-reason input left with a
 // value (its row stays open even without focus).

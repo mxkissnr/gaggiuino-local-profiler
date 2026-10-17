@@ -4,13 +4,11 @@
 // overlay is the DOM shell that drives the slice-2 cut-out runtime
 // (segment.ts) and the slice-1 mask helpers (mask.ts).
 //
-// Nothing imports this module yet — slice 3b wires it into the photo flow — so
-// it never reaches the first-load bundle.
-// mask.ts and segment.ts are the two earlier slices of this epic, already
-// merged to `dev`: mask.ts holds slice 1's pure mask maths (applyTap,
-// paintBrush, featherAlpha) and segment.ts holds slice 2's lazy cut-out runtime
-// (autoCutout, tapMask, resetCutout). This slice is the UI shell around them;
-// segment.ts also forwards the cut-out's progress, which drives the bar below.
+// views/library/bean-sticker.ts loads this module with a dynamic import(), so
+// it never reaches the first-load bundle. mask.ts holds the pure mask maths
+// (applyTap, paintBrush, featherAlpha) and segment.ts the lazy cut-out runtime
+// (autoCutout, tapMask, resetCutout); segment.ts also forwards the cut-out's
+// progress, which drives the bar below.
 import { t } from '../../i18n.js';
 import { applyTap, featherAlpha, paintBrush } from './mask.js';
 import { autoCutout, resetCutout, tapMask, type CutoutProgress } from './segment.js';

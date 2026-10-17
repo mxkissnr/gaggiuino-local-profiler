@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
 // Same headless harness as analytics-bean-shelf.test.ts / analytics-world-map-race.test.ts:
-// analytics.js pulls in state.js/i18n.js (localStorage/navigator at module load) and
+// analytics.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module load) and
 // reads window.calcShotScore at runtime. vitest's node environment has no browser
 // globals, so stub the minimum through a loose view of globalThis.
 type Analytics = typeof import('../public-src/views/analytics.js');

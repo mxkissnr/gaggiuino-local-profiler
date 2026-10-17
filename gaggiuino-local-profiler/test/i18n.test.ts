@@ -217,7 +217,7 @@ describe('setLang() re-renders the open shot view', () => {
 
 // #811 Phase 5 removed the app's second visual language: text glyphs baked
 // into translated status strings (e.g. "✓ Gespeichert") instead of the
-// app's own drawn icon set (public-src/icons.js). One sibling key
+// app's own drawn icon set (public-src/icons.ts). One sibling key
 // (orders_types_saved) was missed by the original sweep and only found by a
 // manual recount -- no test caught it, because the existing key-set-
 // equality test above only checks keys exist, not what their values

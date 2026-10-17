@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { installFakeOptionDom } from './helpers/fake-option-dom.js';
 import type { FakeOption, FakeSelect } from './helpers/fake-option-dom.js';
 
-// Same module-load stubbing as bean-select-by-id.test.js.
+// Same module-load stubbing as bean-select-by-id.test.ts.
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };

@@ -7,7 +7,7 @@
 //     (#811) for the Live view.
 // Both share one body silhouette (animBody()) and per-type front panel
 // (gaggiuinoPanelAndDisplay()/gaggimatePanelAndDisplay()) — geometry and
-// comments below are Max's approved Theme Lab / redesign-2026-08 mockup
+// comments below are the maintainer's approved Theme Lab / redesign-2026-08 mockup
 // measurements, kept as-is; do not redesign.
 //
 // Body colour comes from the machine's theme (resolveTheme()); the
@@ -80,7 +80,7 @@ function stopsFor(theme: unknown): ThemeStops {
 // Colours for the mini shot-curve/display readout are the machine's own
 // on-device palette (build-prototype.py's PRES/FLOW/TEMP/WGT/ORG) —
 // intentionally distinct from the app's Okabe-Ito chart series
-// (views/live.js's initLiveChart()), which stays accessibility-tuned for a
+// (views/live.ts's initLiveChart()), which stays accessibility-tuned for a
 // full-size chart with a legend. This is a small illustrative readout, not
 // a data-accurate chart.
 const MINI_PRES = '#6aa9d8';
@@ -523,9 +523,9 @@ export function setMachineIconMode(
 // Maps what the backend actually reports onto one of MACHINE_ICON_MODES.
 // Pure -- same {mode, heatFraction} for the same (msg, preheat) pair, no
 // DOM/state access -- so every caller that drives an animated icon instance
-// shares one translation instead of copy-pasting it: views/live.js's own
+// shares one translation instead of copy-pasting it: views/live.ts's own
 // #liveMachineIcon and the topbar's always-visible ambient widget
-// (components/topbar-machine-icon.js, #837) both call this, then hand the
+// (components/topbar-machine-icon.ts, #837) both call this, then hand the
 // result straight to setMachineIconMode().
 //
 // #902/#983: steam/flush/descale signal source -- msg.isSteaming/

@@ -3,7 +3,7 @@ import type { Order, QueueEta } from './api/types.js';
 
 // Pure helpers for the kiosk page, kept out of kiosk.ts so tests can import
 // them without pulling in that module's bootstrap (which touches the DOM).
-// Ported from the old /ui/kiosk's static/kiosk.js.
+// Ported from the former server-rendered /ui/kiosk page's script.
 
 // The queue row's ETA label: an accepted order counts down from its own
 // acceptedAt + eta; a still-pending one falls back to the rolling queue

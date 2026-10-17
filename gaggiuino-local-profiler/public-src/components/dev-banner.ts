@@ -1,7 +1,7 @@
 // #683: persistent identity marker for the dev-channel image, so it's never
 // mistaken for a real release build. Non-dismissible -- unlike the
-// update-available (components/update-check.js) and machine-unreachable
-// (components/onboarding.js) banners, this describes a fact about the build
+// update-available (components/update-check.ts) and machine-unreachable
+// (components/onboarding.ts) banners, this describes a fact about the build
 // itself for the whole session, not a transient/actionable state the user
 // might want to hide. Styled to match the existing yellow update banner
 // (same accent color / dark text), positioned above it so it reads as the

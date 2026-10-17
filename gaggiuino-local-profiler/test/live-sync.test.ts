@@ -7,7 +7,7 @@ import type { LiveSyncHandlerDeps } from '../public-src/live-sync-handlers.js';
 // cache invalidation it drives, and the boot wiring it plugs into. The module
 // keeps its state (seen revisions, dirty kinds, listeners) at module scope, so
 // every test loads a fresh instance through vi.resetModules(). The minimum
-// browser globals the import chain (state.js/ui-prefs.js) needs are stubbed
+// browser globals the import chain (state/index.ts/ui-prefs.js) needs are stubbed
 // first, same convention as the other frontend tests.
 
 const g = globalThis as unknown as Record<string, unknown>;

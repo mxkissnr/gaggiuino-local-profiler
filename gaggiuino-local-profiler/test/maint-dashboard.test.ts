@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// maintenance.js pulls in state.js (localStorage/navigator at module load)
-// and i18n.js — neither is available in the plain Node test environment, so
-// stub the minimum before importing, same approach as best-grind-combo.test.js.
+// maintenance.ts pulls in state/index.ts (localStorage/navigator at module load)
+// and i18n.ts — neither is available in the plain Node test environment, so
+// stub the minimum before importing, same approach as best-grind-combo.test.ts.
 type MaintView = typeof import('../public-src/views/maintenance.js');
 type MaintTileFixture = Parameters<MaintView['_pickNextDueTile']>[0][number];
 let _normalizeMaintTiles: MaintView['_normalizeMaintTiles'];

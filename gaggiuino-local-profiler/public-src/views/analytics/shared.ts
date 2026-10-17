@@ -201,7 +201,7 @@ export function _fmtCalendarDay(key: string, locale: string): string {
 // already does for its own colors.
 export const _mutedTickColor = () =>
   (getComputedStyle(document.documentElement).getPropertyValue('--gray-600') || '#52525b').trim() || '#52525b';
-// #1622: the shared five-step score scale (scoreColor(), utils.js) resolved
+// #1622: the shared five-step score scale (scoreColor(), utils.ts) resolved
 // to a value Chart.js can paint. Fallbacks are the dark-theme token values,
 // used only before the stylesheet has applied.
 const _SCORE_FALLBACK: Record<string, string> = {

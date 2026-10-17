@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 
-// sidebar.js's import chain touches state.js/i18n.js, which read
+// sidebar.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/sidebar-month-toggle.test.js).
-// globalThis carries the full DOM type; stub only the sliver sidebar.js reads.
+// environment (same pattern as test/sidebar-month-toggle.test.ts).
+// globalThis carries the full DOM type; stub only the sliver sidebar.ts reads.
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
@@ -14,9 +14,9 @@ const { updateFlapCounter } = await import('../public-src/components/sidebar.js'
 // #823: the sidebar shot count was flattened from a mechanical split-flap
 // odometer (per-digit boxed cells, flip animation) to a plain textContent
 // write on a single element. updateFlapCounter() keeps its old export name
-// (least churn for its call sites in main.js/status.js) but its internals
+// (least churn for its call sites in main.ts/status.js) but its internals
 // are now a single synchronous, unconditional write — same "fake minimal
-// document" approach as test/sidebar-month-toggle.test.js rather than
+// document" approach as test/sidebar-month-toggle.test.ts rather than
 // pulling in a full jsdom/happy-dom dependency this repo doesn't otherwise
 // use.
 function fakeFlapDigits() {
