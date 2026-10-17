@@ -45,7 +45,7 @@ export function stub(overrides: Record<PropertyKey, unknown> = {}): unknown {
 // Response bodies for the endpoints whose callers need a specific shape;
 // everything else answers `{}`.
 const BODIES: Record<string, unknown> = {
-  'api/token': { token: 'test-token' },
+  'api/token': { apiToken: 'test-token' },
   'api/machines': [],
   'api/menu': [],
   'api/library/milks': [],

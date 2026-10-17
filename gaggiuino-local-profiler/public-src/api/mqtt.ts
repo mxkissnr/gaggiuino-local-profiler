@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, jsonBody } from './fetch.js';
 import type { MqttSettingsInput } from './types.js';
 
 // Typed client for the `mqtt` domain (go/internal/mqtt — its four routes:
@@ -8,10 +8,6 @@ import type { MqttSettingsInput } from './types.js';
 // URL building and the JSON-headers boilerplate live here. Helpers whose
 // result the caller inspects (`ok`/status and the server's error body) return
 // the raw Response unchanged, matching api/maintenance.ts.
-
-function _json(body: unknown): RequestInit {
-  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
 
 /** GET /api/mqtt/settings — the redacted settings view (`hasPassword`, never the stored password). */
 export function getMqttSettings(): Promise<Response> {
@@ -25,7 +21,7 @@ export function getMqttDiscovery(): Promise<Response> {
 
 /** POST /api/mqtt/settings — save the connection; the caller reads the JSON error body on a non-ok. */
 export function saveMqttSettings(payload: MqttSettingsInput): Promise<Response> {
-  return apiFetch('api/mqtt/settings', _json(payload));
+  return apiFetch('api/mqtt/settings', jsonBody(payload));
 }
 
 /** POST /api/mqtt/apply-to-machine — push the saved connection to the machine (#598). */

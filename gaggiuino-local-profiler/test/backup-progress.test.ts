@@ -138,6 +138,7 @@ describe('apiUpload', () => {
     responseText?: string;
     onload?: () => void;
     onerror?: () => void;
+    onabort?: () => void;
     constructor() {
       captureXHR(this);
     }
@@ -196,5 +197,15 @@ describe('apiUpload', () => {
     }
     vi.stubGlobal('XMLHttpRequest', ErrXHR);
     await expect(apiUpload('api/x', { body: 'x' })).rejects.toThrow('network error');
+  });
+
+  // #1615: an aborted XHR fires neither onload nor onerror, so the promise
+  // used to stay pending forever.
+  it('rejects when the request is aborted', async () => {
+    class AbortXHR extends FakeXHR {
+      send() { this.onabort?.(); }
+    }
+    vi.stubGlobal('XMLHttpRequest', AbortXHR);
+    await expect(apiUpload('api/x', { body: 'x' })).rejects.toThrow('upload aborted');
   });
 });

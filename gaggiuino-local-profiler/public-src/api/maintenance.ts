@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, jsonBody } from './fetch.js';
 
 // Typed client for the `maintenance` domain (go/internal/maintenance — every
 // route that package registers: /api/maintenance plus /api/maintenance/log*).
@@ -12,10 +12,6 @@ import { apiFetch } from './fetch.js';
 // The concrete `machineId` is resolved by the caller: views/maintenance.js's
 // _writeMachineId() owns the local view scope and the 'all' → first-machine
 // fallback, so these helpers only build the URL.
-
-function _json(body: unknown): RequestInit {
-  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
 
 /** GET /api/maintenance?machineId=... — task status for one machine, or the whole fleet with `machineId=all`. */
 export function getMaintenance(machineId: string | number): Promise<Response> {
@@ -37,7 +33,7 @@ export function saveMaintenanceThreshold(
   machineId: string | number,
   body: unknown,
 ): Promise<Response> {
-  return apiFetch(`api/maintenance/${task}/threshold?machineId=${machineId}`, _json(body));
+  return apiFetch(`api/maintenance/${task}/threshold?machineId=${machineId}`, jsonBody(body));
 }
 
 /** POST /api/maintenance/custom?machineId=... — create a user-defined maintenance task. */
@@ -45,7 +41,7 @@ export function addCustomMaintenanceTask(
   machineId: string | number,
   body: { label: string; threshold_shots: number | null; threshold_days: number | null },
 ): Promise<Response> {
-  return apiFetch(`api/maintenance/custom?machineId=${machineId}`, _json(body));
+  return apiFetch(`api/maintenance/custom?machineId=${machineId}`, jsonBody(body));
 }
 
 /** DELETE /api/maintenance/custom/{task}?machineId=... — remove a user-defined maintenance task. */
@@ -63,7 +59,7 @@ export function addMaintenanceLogEntry(
   machineId: string | number,
   entry: { task: string; date: string; notes: string },
 ): Promise<Response> {
-  return apiFetch(`api/maintenance/log?machineId=${machineId}`, _json(entry));
+  return apiFetch(`api/maintenance/log?machineId=${machineId}`, jsonBody(entry));
 }
 
 /** DELETE /api/maintenance/log/{id} — remove one log entry. */
