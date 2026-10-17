@@ -10,6 +10,19 @@ import type { ShotRow } from './shared.js';
 
 // ── CSV Export ────────────────────────────────────────────────────────────
 
+// #1626: a text cell that starts with one of these is read as a formula by
+// spreadsheet apps, so a name typed or imported elsewhere could run as one.
+// Such a cell gets a leading apostrophe, which makes the app keep it as text.
+// A plain number (a negative grind setting, say) cannot be a formula and is
+// left as it is.
+const CSV_FORMULA_PREFIX = /^[=+\-@\t\r]/;
+const CSV_PLAIN_NUMBER = /^[+-]?\d+(?:[.,]\d+)?$/;
+
+export function neutraliseCsvText(value: string | number | null | undefined): string {
+  const s = value == null ? '' : String(value);
+  return CSV_FORMULA_PREFIX.test(s) && !CSV_PLAIN_NUMBER.test(s) ? `'${s}` : s;
+}
+
 // d is the mapped XY curve bundle for this shot (from the curve cache) — the
 // caller fetches it via getShotCurve() first, since list rows no longer carry
 // datapoints (#957).
@@ -23,17 +36,17 @@ function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
   const date   = new Date(shot.timestamp * 1000).toLocaleString(localeFor(S.currentLang));
   return [
     shot.id, date,
-    shot.profile?.name || shot.profileName || '',
+    neutraliseCsvText(shot.profile?.name || shot.profileName || ''),
     secs,
     avgP   != null ? avgP.toFixed(2)   : '',
     finalW != null ? finalW.toFixed(1) : '',
     ann.dose || '', ratio,
     avgT   != null ? avgT.toFixed(1)   : '',
-    ann.rating || '', ann.coffee || '', ann.grinder || '',
-    ann.grindSetting || '',
-    _equipmentName(_libCollection('baskets'), ann.basketId) || '',
-    _equipmentName(_libCollection('puckScreens'), ann.puckScreenId) || '',
-    (ann.notes || '').replace(/\n/g, ' ')
+    ann.rating || '', neutraliseCsvText(ann.coffee || ''), neutraliseCsvText(ann.grinder || ''),
+    neutraliseCsvText(ann.grindSetting || ''),
+    neutraliseCsvText(_equipmentName(_libCollection('baskets'), ann.basketId) || ''),
+    neutraliseCsvText(_equipmentName(_libCollection('puckScreens'), ann.puckScreenId) || ''),
+    neutraliseCsvText((ann.notes || '').replace(/\n/g, ' '))
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
 }
 
