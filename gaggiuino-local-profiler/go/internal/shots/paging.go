@@ -80,6 +80,9 @@ func DecodeCursor(token string) (Cursor, error) {
 // resolved score fields and hasChartData. Score is nil for a shot with too
 // little data to score at all (matching CalcShotScoreDetail).
 type PageRow struct {
+	// id is the row's id column (the hydrated Shot's "id" can differ for a
+	// legacy blob carrying its own "id" key).
+	id               int64
 	Shot             Shot
 	Score            *int
 	UsedBeanTarget   bool
@@ -309,38 +312,33 @@ func (r *Repository) scoredShotsByIDs(ids []int64, lookup beanLookup) ([]PageRow
 	return out, nil
 }
 
-// scoredMachineShotsMatching returns the non-trashed shots of machineID
-// that keep accepts, each hydrated and scored through the score cache —
-// the comparative-advice read (#1616), which used to hydrate and rescore
-// the machine's whole history to keep a handful of shots.
+// scoredCandidate is one comparative-advice candidate: the light shot it
+// was matched on and its score.
+type scoredCandidate struct {
+	light Shot
+	score *int
+}
+
+// comparativeCandidates returns the non-trashed shots of machineID that
+// keep accepts, each with its score resolved through the score cache — the
+// comparative-advice read (#1616), which used to hydrate and rescore the
+// machine's whole history to keep a handful of shots.
 //
-// keep must read only a shot's "id", "profileName" and "annotation": a
-// light first pass builds exactly those three values from SQL (no curve
-// blobs) and keeps the candidates; only they are then hydrated, and the
-// caller re-checks keep on the hydrated shots. The light values equal the
-// hydrated ones unless a legacy data blob overrides "id" or "profileName"
-// (see legacyBlobKeys) — on such a database every shot of the machine is
-// hydrated instead.
-func (r *Repository) scoredMachineShotsMatching(machineID int64, keep func(Shot) bool, lookup beanLookup) ([]PageRow, error) {
-	k, err := r.legacyKeys()
-	if err != nil {
-		return nil, err
-	}
-	if k.identity {
-		return r.scoredShots(`SELECT `+pageColumns+scoredFrom+
-			` WHERE s.machine_id = ? AND s.id NOT IN (SELECT shot_id FROM trash)`, []any{machineID}, lookup)
-	}
-	_, annSQL, err := r.lightColumnsSQL()
-	if err != nil {
-		return nil, err
-	}
-	rows, err := r.db.Query(`SELECT s.id, s.profile_name, a.shot_id IS NOT NULL, `+annSQL+`
+// keep sees a light shot: "id" and "profileName" from their columns and
+// the annotation from SQL (no curve blobs). Only the kept shots are then
+// hydrated, and only for their score; the match itself stays on the light
+// values.
+func (r *Repository) comparativeCandidates(machineID int64, keep func(Shot) bool, lookup beanLookup) ([]scoredCandidate, error) {
+	rows, err := r.db.Query(`SELECT s.id, s.profile_name, a.shot_id IS NOT NULL, `+hydratedAnnotationSQL+`
 		FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
 		WHERE s.machine_id = ? AND s.id NOT IN (SELECT shot_id FROM trash)`, machineID)
 	if err != nil {
 		return nil, fmt.Errorf("shots: listing comparative candidates: %w", err)
 	}
-	var ids []int64
+	var (
+		ids  []int64
+		kept = map[int64]Shot{}
+	)
 	err = func() error {
 		defer rows.Close()
 		for rows.Next() {
@@ -359,6 +357,7 @@ func (r *Repository) scoredMachineShotsMatching(machineID int64, keep func(Shot)
 			}
 			if keep(light) {
 				ids = append(ids, id)
+				kept[id] = light
 			}
 		}
 		return rows.Err()
@@ -366,7 +365,17 @@ func (r *Repository) scoredMachineShotsMatching(machineID int64, keep func(Shot)
 	if err != nil {
 		return nil, err
 	}
-	return r.scoredShotsByIDs(ids, lookup)
+	scored, err := r.scoredShotsByIDs(ids, lookup)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]scoredCandidate, 0, len(scored))
+	for _, row := range scored {
+		if light, ok := kept[row.id]; ok {
+			out = append(out, scoredCandidate{light: light, score: row.Score})
+		}
+	}
+	return out, nil
 }
 
 // lightShot builds the "id"/"profileName"/"annotation" part of a hydrated
@@ -438,7 +447,7 @@ func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, withChart boo
 	}
 	fp := fingerprint + "|" + beanTargetSignature(bean)
 
-	row := PageRow{Shot: shot}
+	row := PageRow{id: id, Shot: shot}
 	// hasChartData / tempStabilityDev are derived from the raw datapoints
 	// bytes on every row (cache hit or miss) — one shared split of the blob
 	// (#1616: it used to be split once per value), bounded by page size.

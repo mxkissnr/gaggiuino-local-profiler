@@ -192,86 +192,20 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 	return out, rows.Err()
 }
 
-// Light reads (#1616) select a hydrated shot's timestamp and annotation
-// straight from SQL instead of hydrating it. Hydration spreads a data
-// blob's own top-level keys over the fixed columns and falls back to the
-// blob's "annotation" key when a shot has no annotations row, so the exact
-// SQL counterparts are:
-//
-//   - timestamp (hydrateRow(...)["timestamp"].(int64)): the column, or NULL
-//     (read as 0) when the blob carries its own "timestamp" key — the
-//     decoded JSON value replaces the int64, so the int64 read yields 0;
-//   - annotation: the annotations row, else the blob's "annotation" key.
-//
-// The instr() pre-checks keep the JSON parse off rows that cannot hold the
-// key.
-const (
-	hydratedTimestampSQL = `CASE WHEN instr(s.data, '"timestamp"') > 0 AND s.data -> '$.timestamp' IS NOT NULL
-	THEN NULL ELSE s.timestamp END`
-	hydratedAnnotationSQL = `CASE WHEN a.shot_id IS NOT NULL THEN a.data
+// Light reads (#1616) select a shot's timestamp and annotation straight
+// from SQL instead of hydrating it. The timestamp is always the column: a
+// legacy data blob carrying its own top-level "timestamp" key no longer
+// hides the shot from these reads (on a hydrated shot that key replaces the
+// int64 column with a decoded JSON value, so an int64 read used to yield 0
+// — a bug, not behaviour to keep). The annotation keeps hydration's source:
+// the annotations row, else the blob's own "annotation" key (a legacy shot
+// with no annotations row); the instr() pre-check keeps the JSON parse off
+// blobs that cannot hold that key.
+const hydratedAnnotationSQL = `CASE WHEN a.shot_id IS NOT NULL THEN a.data
 	WHEN instr(s.data, '"annotation"') > 0 THEN s.data -> '$.annotation' END`
-)
 
-// legacyBlobKeys memoises, per *sql.DB, which of those keys — plus the
-// "id" and "profileName" keys a light read keyed on the id/profile_name
-// columns must not miss — any shot's data blob carries at the top level.
-// No writer in this app ever adds any of them — Upsert and RestoreShots
-// strip them all (shotInsertArgs), writeData only round-trips a blob's
-// existing keys, and the misfiled-shot move copies an existing blob — so
-// once a database has been checked and found free of a key it stays that
-// way, and every later read can skip parsing the curve blobs for it. Only
-// rows from an older app version can carry one; then the memo says so and
-// reads keep the exact per-row expression (or the full hydrate).
-var legacyBlobKeys sync.Map // *sql.DB -> legacyKeys
-
-type legacyKeys struct{ timestamp, annotation, identity bool }
-
-func (r *Repository) legacyKeys() (legacyKeys, error) {
-	if v, ok := legacyBlobKeys.Load(r.db); ok {
-		return v.(legacyKeys), nil
-	}
-	var k legacyKeys
-	if err := r.db.QueryRow(`SELECT
-		EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"timestamp"') > 0 AND s.data -> '$.timestamp' IS NOT NULL),
-		EXISTS (SELECT 1 FROM shots s WHERE instr(s.data, '"annotation"') > 0 AND s.data -> '$.annotation' IS NOT NULL),
-		EXISTS (SELECT 1 FROM shots s WHERE (instr(s.data, '"id"') > 0 AND s.data -> '$.id' IS NOT NULL)
-			OR (instr(s.data, '"profileName"') > 0 AND s.data -> '$.profileName' IS NOT NULL))`,
-	).Scan(&k.timestamp, &k.annotation, &k.identity); err != nil {
-		return legacyKeys{}, fmt.Errorf("shots: probing data blobs for legacy keys: %w", err)
-	}
-	legacyBlobKeys.Store(r.db, k)
-	return k, nil
-}
-
-// ForgetLegacyKeyProbe drops db's legacy-key memo so the next light read
-// probes the data blobs again. Called when the database file is replaced
-// underneath the open handle (the debug DB import, #1616): until the
-// required restart, new pooled connections can already read the imported
-// file, which may come from an older app version.
-func ForgetLegacyKeyProbe(db *sql.DB) {
-	legacyBlobKeys.Delete(db)
-}
-
-// lightColumnsSQL returns the SQL expressions (over aliases s and a) for a
-// hydrated shot's int64 timestamp and its annotation JSON text.
-func (r *Repository) lightColumnsSQL() (ts, ann string, err error) {
-	k, err := r.legacyKeys()
-	if err != nil {
-		return "", "", err
-	}
-	ts, ann = "s.timestamp", "a.data"
-	if k.timestamp {
-		ts = hydratedTimestampSQL
-	}
-	if k.annotation {
-		ann = hydratedAnnotationSQL
-	}
-	return ts, ann, nil
-}
-
-// TimestampsExcludingTrash returns every non-trashed shot's hydrated
-// timestamp (as an int64 read of a hydrated shot sees it, see
-// lightColumnsSQL), in FindAllExcludingTrash's order — the light read for
+// TimestampsExcludingTrash returns every non-trashed shot's timestamp
+// column, in FindAllExcludingTrash's order — the light read for
 // the maintenance stats, which only count shots newer than a task's last
 // date (#1616).
 func (r *Repository) TimestampsExcludingTrash() ([]int64, error) {
@@ -285,11 +219,7 @@ func (r *Repository) TimestampsExcludingTrashByMachine(machineID int64) ([]int64
 }
 
 func (r *Repository) timestamps(filter string, args ...any) ([]int64, error) {
-	tsSQL, _, err := r.lightColumnsSQL()
-	if err != nil {
-		return nil, err
-	}
-	rows, err := r.db.Query(`SELECT `+tsSQL+` FROM shots s WHERE s.id NOT IN (SELECT shot_id FROM trash)`+
+	rows, err := r.db.Query(`SELECT s.timestamp FROM shots s WHERE s.id NOT IN (SELECT shot_id FROM trash)`+
 		filter+` ORDER BY s.timestamp ASC`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("shots: listing shot timestamps: %w", err)
@@ -297,11 +227,11 @@ func (r *Repository) timestamps(filter string, args ...any) ([]int64, error) {
 	defer rows.Close()
 	var out []int64
 	for rows.Next() {
-		var ts sql.NullInt64
+		var ts int64
 		if err := rows.Scan(&ts); err != nil {
 			return nil, fmt.Errorf("shots: scanning shot timestamp: %w", err)
 		}
-		out = append(out, ts.Int64)
+		out = append(out, ts)
 	}
 	return out, rows.Err()
 }
@@ -317,11 +247,10 @@ func (r *Repository) CountByMachine(machineID int64) (int, error) {
 }
 
 // GrinderUse is one non-trashed shot's grinder-wear input, read without
-// hydrating the shot (#1616): exactly the three values the library's
-// burr-wear computation reads off a hydrated shot.
+// hydrating the shot (#1616): the three values the library's burr-wear
+// computation reads.
 type GrinderUse struct {
-	// Timestamp is the hydrated shot's timestamp as an int64 read sees it
-	// — 0 when the data blob overrides it, see lightColumnsSQL.
+	// Timestamp is the shot's timestamp column.
 	Timestamp int64
 	// Grinder is the annotation's "grinder" when that is a JSON string,
 	// else "".
@@ -336,16 +265,12 @@ type GrinderUse struct {
 // come in FindAllExcludingTrash's order: the wear sums doses as float64,
 // and a different summation order can change the rounded gram total.
 func (r *Repository) GrinderUses() ([]GrinderUse, error) {
-	tsSQL, annSQL, err := r.lightColumnsSQL()
-	if err != nil {
-		return nil, err
-	}
 	rows, err := r.db.Query(`
 		SELECT ts, ann -> '$.grinder', ann -> '$.dose' FROM (
-			SELECT s.timestamp AS ord, ` + tsSQL + ` AS ts, ` + annSQL + ` AS ann
+			SELECT s.timestamp AS ts, ` + hydratedAnnotationSQL + ` AS ann
 			FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
 			WHERE s.id NOT IN (SELECT shot_id FROM trash)
-		) ORDER BY ord ASC`)
+		) ORDER BY ts ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("shots: listing grinder uses: %w", err)
 	}
@@ -353,12 +278,12 @@ func (r *Repository) GrinderUses() ([]GrinderUse, error) {
 
 	var out []GrinderUse
 	for rows.Next() {
-		var ts sql.NullInt64
+		var ts int64
 		var grinder, dose sql.NullString
 		if err := rows.Scan(&ts, &grinder, &dose); err != nil {
 			return nil, fmt.Errorf("shots: scanning grinder use: %w", err)
 		}
-		u := GrinderUse{Timestamp: ts.Int64}
+		u := GrinderUse{Timestamp: ts}
 		if v, ok := decodeJSONValue(grinder).(string); ok {
 			u.Grinder = v
 		}

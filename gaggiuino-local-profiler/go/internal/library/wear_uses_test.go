@@ -1,6 +1,7 @@
 package library
 
 import (
+	"database/sql"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -26,10 +27,13 @@ func ComputeGrinderWearFrom(allShots []shots.Shot, grinder Entity) (shotsSinceBu
 
 // TestGrinderUses_MatchesHydratedWear (#1616) pins that the SQL-side
 // GrinderUses read folds to exactly the wear the hydrate-every-shot path
-// computes, on rows built to hit each hydration rule it has to mirror: a
-// data blob whose own "timestamp" key overrides the column (read as 0), a
-// legacy annotation stored in the data blob, a null annotation, a
-// non-string grinder, string and missing doses, and a trashed shot.
+// computes, on rows built to hit each hydration rule it mirrors: a legacy
+// annotation stored in the data blob, a null annotation, a non-string
+// grinder, string and missing doses, and a trashed shot. One rule is
+// deliberately not mirrored: a legacy blob carrying its own "timestamp"
+// key made the hydrated int64 read yield 0 and hid the shot from the wear
+// (a bug); the reference here reads the timestamp column, as GrinderUses
+// does, and TestGrinderUses_BlobTimestampKeyNoLongerHidesShot pins the fix.
 func TestGrinderUses_MatchesHydratedWear(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	rows := []struct {
@@ -72,6 +76,7 @@ func TestGrinderUses_MatchesHydratedWear(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	withColumnTimestamps(t, sqlDB, allShots)
 	uses, err := h.shotsRepo.GrinderUses()
 	if err != nil {
 		t.Fatal(err)
@@ -92,5 +97,39 @@ func TestGrinderUses_MatchesHydratedWear(t *testing.T) {
 		if gotShots != wantShots || gotGrams != wantGrams {
 			t.Errorf("grinder %v: uses = (%d, %v), hydrated = (%d, %v)", g, gotShots, gotGrams, wantShots, wantGrams)
 		}
+	}
+}
+
+// withColumnTimestamps replaces each hydrated shot's "timestamp" with its
+// timestamp column, undoing a legacy blob key's override.
+func withColumnTimestamps(t *testing.T, sqlDB *sql.DB, list []shots.Shot) {
+	t.Helper()
+	for _, s := range list {
+		var ts int64
+		if err := sqlDB.QueryRow(`SELECT timestamp FROM shots WHERE id = ?`, s["id"]).Scan(&ts); err != nil {
+			t.Fatal(err)
+		}
+		s["timestamp"] = ts
+	}
+}
+
+// TestGrinderUses_BlobTimestampKeyNoLongerHidesShot (#1616): a legacy data
+// blob carrying its own "timestamp" key used to hide the shot from the
+// grinder wear (the hydrated int64 read yielded 0); the wear now counts it
+// by its timestamp column.
+func TestGrinderUses_BlobTimestampKeyNoLongerHidesShot(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	if _, err := sqlDB.Exec(`INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) VALUES (1, 5000, 280, 'V60', '{"timestamp":5}', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO annotations (shot_id, data) VALUES (1, '{"grinder":"Niche Zero","dose":18}')`); err != nil {
+		t.Fatal(err)
+	}
+	shotsSince, grams, err := ComputeGrinderWearStats(h.shotsRepo, Entity{"name": "Niche Zero", "burrsResetAt": "1970-01-01T00:00:01.000Z"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shotsSince != 1 || grams != 18 {
+		t.Errorf("wear = (%d, %v), want (1, 18)", shotsSince, grams)
 	}
 }

@@ -148,17 +148,17 @@ func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice,
 		_, ok := m.grindOf(c)
 		return ok
 	}
-	rows, err := s.repo.scoredMachineShotsMatching(shot.machineID(), keep, loadBeanLookup())
+	candidates, err := s.repo.comparativeCandidates(shot.machineID(), keep, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
 	var comparable []comparableSibling
-	for _, row := range rows {
-		g, ok := m.grindOf(row.Shot)
-		if !ok || row.Score == nil {
+	for _, c := range candidates {
+		g, _ := m.grindOf(c.light)
+		if c.score == nil {
 			continue
 		}
-		comparable = append(comparable, comparableSibling{grind: g, score: *row.Score})
+		comparable = append(comparable, comparableSibling{grind: g, score: *c.score})
 	}
 	return m.advice(comparable), nil
 }
