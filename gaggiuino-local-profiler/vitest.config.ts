@@ -10,7 +10,7 @@ export default defineConfig({
             reporter: ['text', 'json-summary', 'lcov'],
             // Frontend-only suite (the Node backend and its tests were removed
             // in 3.0.0, #1028). The denominator is dominated by large view
-            // modules (library.js, analytics.js, shots/index.js) that the
+            // modules (library.ts, analytics.ts, shots/index.ts) that the
             // targeted DOM tests only exercise in part.
             // `npm run coverage:ratchet` (each minor release, #1560) raises
             // these to the measured value minus 1 point. They never go down.

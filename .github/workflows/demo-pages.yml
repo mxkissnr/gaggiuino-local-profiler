@@ -40,9 +40,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: gaggiuino-local-profiler/package-lock.json
 
-      # The E2E harness (scripts/e2e-harness.mts) builds and boots the real
-      # glp-server Go binary as the backend under test — the Node backend it
-      # used to require() in-process is gone (3.0.0, #1028).
+      # demo:fixtures boots the real glp-server Go binary through
+      # scripts/e2e-harness.mts to record the API responses.
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
@@ -52,8 +51,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Own job (not a step in `test` above) so a Chromium download never
-      # slows the unit test job — see #798.
+      # demo:fixtures drives headless Chromium through every view.
       - name: Install Playwright Chromium
         # apt-get (triggered by --with-deps) can hang indefinitely when the
         # runner's regional Ubuntu mirror is unreachable (#882) -- a short
