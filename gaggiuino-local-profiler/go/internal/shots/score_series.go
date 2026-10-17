@@ -202,6 +202,20 @@ func decodeFloatArray(r stdjson.RawMessage) []float64 {
 	if len(r) == 0 {
 		return nil
 	}
+	// Fast path (#1616): without a null anywhere in the series, an
+	// all-number array decodes straight into []float64 — the same values
+	// as the []*float64 path, without one pointer allocation per sample.
+	// Anything else (a null, a non-numeric element, not an array) fails
+	// here or is skipped, and takes the exact paths below.
+	if !bytes.Contains(r, []byte("null")) {
+		var vals []float64
+		if err := json.Unmarshal(r, &vals); err == nil {
+			if vals == nil {
+				vals = []float64{}
+			}
+			return vals
+		}
+	}
 	var ptrs []*float64
 	if err := json.Unmarshal(r, &ptrs); err == nil {
 		out := make([]float64, 0, len(ptrs))
@@ -217,6 +231,28 @@ func decodeFloatArray(r stdjson.RawMessage) []float64 {
 		return nil
 	}
 	return floatSlice(anyArr)
+}
+
+// SplitSeries tokenizes a raw datapoints blob into its top-level series
+// with the same decoder scoreSeriesFromRaw uses; a null, non-object or
+// malformed blob yields nil (no series), as DatapointsMap yields an empty
+// map for it.
+func SplitSeries(raw stdjson.RawMessage) map[string]stdjson.RawMessage {
+	if isJSONNull(raw) {
+		return nil
+	}
+	var m map[string]stdjson.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	return m
+}
+
+// DecodeFloatArray is decodeFloatArray for other packages that read a
+// hydrated shot's raw series (internal/achievements, #1616), so they share
+// the exact drop-null/non-number semantics instead of a copy of them.
+func DecodeFloatArray(r stdjson.RawMessage) []float64 {
+	return decodeFloatArray(r)
 }
 
 func divAll(vals []float64, d float64) []float64 {
