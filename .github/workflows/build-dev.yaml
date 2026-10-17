@@ -378,7 +378,9 @@ jobs:
           PROFILE_SRC="main-repo/gaggiuino-local-profiler/apparmor.txt"
           PROFILE_DST="dev-app/gaggiuino_local_profiler_dev/apparmor.txt"
           SYNC_SCRIPT="main-repo/gaggiuino-local-profiler/scripts/sync-dev-config.mts"
-          # #1270 transition: a checkout from before the TypeScript port.
+          # #1444 switched this path to .mts one commit before #1445 added
+          # the .mts file; the .mjs fallback only matters when re-running a
+          # build of that one commit.
           [ -f "$SYNC_SCRIPT" ] || SYNC_SCRIPT="main-repo/gaggiuino-local-profiler/scripts/sync-dev-config.mjs"
 
           # #789: Supervisor reads an add-on's AppArmor profile from the

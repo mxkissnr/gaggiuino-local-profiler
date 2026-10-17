@@ -1,6 +1,6 @@
 // Guided Dial-In wizard (#310) — a step-by-step "set grind → pull shot →
 // evaluate → next grind" loop, built on top of the existing passive dial-in
-// helpers (calcGrindAdvice etc. in ./shots/grind.js) and the existing
+// helpers (calcGrindAdvice etc. in ./shots/grind.ts) and the existing
 // annotate flow (POST api/shots/:id/annotate). The wizard itself never
 // writes shot data directly — it only prefills the same annotate payload
 // the manual panel would send.
@@ -130,7 +130,7 @@ export function openDialinWizard(prefill: DialinPrefill = {}): void {
   wizard.startPoll();
 }
 
-// Bean-card entry point (library.js's start-dialin-from-bean button) —
+// Bean-card entry point (library.ts's start-dialin-from-bean button) —
 // prefills the bean (and its id, #456) and, if known, the grinder from
 // bean.knownGrindSettings.
 export function startDialinFromBean(beanId: number): void {
@@ -195,7 +195,7 @@ async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channelin
   return { secs, channeling, ratio, score };
 }
 
-// ── Actions (data-action wiring, see main.js) ──────────────────────────
+// ── Actions (data-action wiring, see boot/delegation.ts) ──────────────────────────
 
 // Setup step's "Start round 1" reuses the same action as "accept & move
 // to the next round" — both mean "lock in the current grind and start
@@ -280,7 +280,7 @@ export function dialinEnd(): void {
 }
 
 // isMatch: '1' confirms the candidate shot as this round's dial-in shot,
-// '0' dismisses it (Max sometimes pulls shots for guests mid-session — no
+// '0' dismisses it (the maintainer sometimes pulls shots for guests mid-session — no
 // silent auto-matching, see plan).
 export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promise<void> {
   const s = wizard.session();

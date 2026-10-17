@@ -1,5 +1,5 @@
 // URL import, import-provider settings and barcode/QR scanner sections of the
-// Library view, split out of views/library.js. Pure move + type port
+// Library view, split out of views/library.ts. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import type { AppState, BarcodeDetectorLike } from '../../state/index.js';
@@ -13,7 +13,7 @@ import { parseGlpQrParams } from '../../glp-qr.js';
 import type { BarcodeFormat } from 'barcode-detector/ponyfill';
 import * as libraryView from '../library.js';
 
-// Circular with library.js (it re-exports this module): the bean-form helpers
+// Circular with library.ts (it re-exports this module): the bean-form helpers
 // are only ever called at run time, never read at module load.
 const library = libraryView;
 

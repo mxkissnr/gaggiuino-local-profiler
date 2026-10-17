@@ -11,7 +11,7 @@
 //
 // cmd/server/smoke_test.go already covers the app side of the three ingress
 // traps from a dev machine. What it cannot exercise is the actual HA
-// Supervisor proxy in front of a real install — this endpoint lets Max hit
+// Supervisor proxy in front of a real install — this endpoint lets the maintainer hit
 // ONE URL through the real HA panel and read back a green/red verdict.
 //
 // Gating matches GET /api/debug/machine exactly: registered only when

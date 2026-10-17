@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// detail-sheet.js pulls in i18n.js/state.js, which read localStorage/navigator
+// detail-sheet.ts pulls in i18n.ts/state.js, which read localStorage/navigator
 // at module load time — the same minimal browser stubs the other component
 // tests use.
 const g = globalThis as unknown as Record<string, unknown>;

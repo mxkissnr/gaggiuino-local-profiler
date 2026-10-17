@@ -695,7 +695,7 @@ const de: Partial<Translations> = {
     profile_send_to_machine:'Auf Maschine speichern',
     profile_utility_badge:'Utility',
 
-    // GaggiMate profile editor (gaggimate-profile-editor.js)
+    // GaggiMate profile editor (gaggimate-profile-editor.ts)
     gm_toast_load_error:'Profil konnte nicht geladen werden',
     gm_toast_name_required:'Profilname ist erforderlich',
     gm_toast_phase_required:'Mindestens eine Phase erforderlich',

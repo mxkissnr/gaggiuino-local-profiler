@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// library.js's import chain touches state.js/i18n.js, which read
+// library.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/library-load-render-race.test.js and
-// test/library-roastdate-esc.test.js).
+// environment (same pattern as test/library-load-render-race.test.ts and
+// test/library-roastdate-esc.test.ts).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
@@ -18,7 +18,7 @@ const { renderBeanCard } = (await import('../public-src/views/library.js')) as u
 // #829: surface the last-used grind setting in the Library bean-list row.
 // Deliberately sourced from S.shots' own annotations, not
 // bean.knownGrindSettings — that array is only written by the Guided
-// Dial-In wizard's explicit "Save known grind" button (dialin-wizard.js),
+// Dial-In wizard's explicit "Save known grind" button (dialin-wizard.ts),
 // so it stays empty for a bean that's only ever been through normal shot
 // annotation, which is the common case. Per the repo's own precedent
 // (#638/#641/#643/#648), a test that only proves the value got *saved*

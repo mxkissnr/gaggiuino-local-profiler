@@ -45,7 +45,7 @@ const CARD_NAME_KEYS: Record<string, string> = {
 // instead — see stampInnerSvg() below. Paths are authored for the 54×54
 // viewBox stampSvg() wraps them in; they are not general-purpose nav icons
 // (no independent viewBox/currentColor sizing), which is why they live here
-// rather than in icons.js alongside the *_ICON_SVG rail-icon exports.
+// rather than in icons.ts alongside the *_ICON_SVG rail-icon exports.
 const ACH_STAMP_MOTIFS: Record<string, Html> = {
   gear:   html`<circle cx="27" cy="26.6" r="3.4"/><path d="M27 17.6v3M27 32.6v3M18 26.6h3M33 26.6h3M20.6 20.2l2.1 2.1M31.3 30.9l2.1 2.1M33.4 20.2l-2.1 2.1M22.7 30.9l-2.1 2.1"/>`,
   scale:  html`<path d="M27 17.4v18.4M20 21.4h14"/><path d="M18.4 21.4 15 28a3.4 3.4 0 0 0 6.8 0z"/><path d="M35.6 21.4 39 28a3.4 3.4 0 0 1-6.8 0z"/>`,
@@ -83,7 +83,7 @@ function stampInnerSvg(stampKey: string): Html {
 }
 
 // A rough double-ring ink stamp, single-instance filter id — this view only
-// ever has one card mounted at a time (unlike machine-icon.js's per-machine
+// ever has one card mounted at a time (unlike machine-icon.ts's per-machine
 // gradients), so a fixed id is safe; still scoped with an ach- prefix so it
 // can never collide with the machine icon's own filter/gradient ids (#87's
 // bug class, per PLAN.md's traps list).
@@ -146,7 +146,7 @@ function badgeMeta(b: Achievement): string {
 
 const _state: { badges: Achievement[]; page: number } = { badges: [], page: 0 };
 
-// Exported for test/achievements-view.test.js: a locked secret badge must
+// Exported for test/achievements-view.test.ts: a locked secret badge must
 // emit neither its name nor its description, and that is the one property of
 // this view worth nailing down at the HTML level rather than trusting
 // badgeName()/badgeDesc() to keep returning null.

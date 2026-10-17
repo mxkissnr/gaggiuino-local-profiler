@@ -337,7 +337,7 @@ jobs:
   version-release-check:
     name: Verify a GitHub release exists for the bumped version
     # Only meaningful on a real push to main (not dev, not PRs) — the workflow-level
-    # `on:` above is shared by all three jobs, so the narrower push-to-main scope that
+    # `on:` above is shared by every job, so the narrower push-to-main scope that
     # version-release-check.yaml used to have via its own trigger is reproduced here as
     # a job-level condition instead. Gitea Actions also auto-detects .github/workflows —
     # skip there too, GitHub-only (this repo's release process only exists on GitHub).

@@ -128,7 +128,7 @@ export async function getMachineProfile(
 
 /**
  * Low-level GET /api/machine/profiles — the raw Response, for the GaggiMate
- * phase-name lookup in views/shots/index.js. That caller retries on a
+ * phase-name lookup in views/shots/index.ts. That caller retries on a
  * transient 5xx (GaggiMate serves one WS request at a time) and inspects
  * `.ok` itself, so it can't go through {@link listMachineProfiles}'s
  * parse-to-null wrapper. Passing `signal` lets the caller time the attempt

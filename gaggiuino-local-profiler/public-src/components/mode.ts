@@ -23,7 +23,7 @@ export function switchMode(mode: string): void {
   // #430: flush any pending debounced annotation save before leaving Shots —
   // the annotation panel (and its auto-save) only exists there, so this is
   // the mode-switch equivalent of the blur/visibilitychange flushes wired in
-  // main.js.
+  // boot/annotation.ts and boot/shell.ts.
   if (S.currentMode === 'shots' && mode !== 'shots' && window.flushAutoSave) window.flushAutoSave();
   S.currentMode = mode;
   (document.getElementById('btnShots') as HTMLElement).classList.toggle('active',       mode === 'shots');
@@ -39,7 +39,7 @@ export function switchMode(mode: string): void {
   // Bottom nav (#403, #443, mobile) — mirrors the rail's active state above.
   // Which bn* id is active vs. which container it's currently rendered in
   // (main bar or "Mehr" sheet) is user-configurable since #443, so this is
-  // delegated to bottom-nav.js's own DOM-containment-based projection
+  // delegated to bottom-nav.ts's own DOM-containment-based projection
   // instead of a hardcoded mode-name list here.
   applyBottomNavActiveState(mode);
 

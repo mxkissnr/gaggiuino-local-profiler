@@ -1,8 +1,8 @@
 # GLP -- standalone Docker install (no Home Assistant Supervisor required).
-# For HA installs that don't have an Add-on Store (HA Container, HA Core,
+# For HA installs without the Supervisor's app store (HA Container, HA Core,
 # Unraid, TrueNAS SCALE, ...). See DOCS.md "Standalone Docker Installation"
 # for the full walkthrough and a feature-parity comparison with the
-# Supervisor add-on.
+# Supervisor app.
 #
 # Usage: docker compose -f docker-compose.standalone.yml up -d
 
@@ -22,19 +22,25 @@ services:
       - ${GLP_STANDALONE_DATA_DIR:-./data}:/data
     environment:
       # All optional -- leave unset (or pass via a sibling .env file /
-      # `VAR=value docker compose ... up`) to keep the add-on's own
+      # `VAR=value docker compose ... up`) to keep the app's own
       # defaults. Left blank, each behaves exactly as if it were unset.
 
-      # Point GLP at your machine directly instead of using the in-app
-      # Settings -> Machines dialog after first start.
+      # Display-only fallback: GET /api/status reports this as the machine
+      # URL while the default machine has no host. It does not configure a
+      # machine -- set the host in Settings -> Machines after first start.
       - MACHINE_URL=${MACHINE_URL:-}
 
-      # App config that the HA Supervisor add-on would normally set via its
+      # App config that the HA Supervisor app would normally set via its
       # own Configuration tab (config.yaml's `options`).
-      - GLP_SYNC_INTERVAL=${GLP_SYNC_INTERVAL:-}      # minutes, 1-60, default 5
-      - GLP_PREHEAT_TIME=${GLP_PREHEAT_TIME:-}        # minutes, 1-120, default 20
+      - GLP_SYNC_INTERVAL=${GLP_SYNC_INTERVAL:-}      # minutes, default 5
+      - GLP_PREHEAT_TIME=${GLP_PREHEAT_TIME:-}        # minutes, default 20
       - GLP_ENABLE_ORDERS=${GLP_ENABLE_ORDERS:-false}
       - GLP_DEBUG_LOGGING=${GLP_DEBUG_LOGGING:-false}
+      # "false" makes GET /api/token refuse callers that don't come through
+      # HA Ingress -- which, without a Supervisor, is every caller. Leave it
+      # unset unless you hand out the token some other way. See DOCS.md
+      # "Trust model".
+      - GLP_EXPOSE_API_PORT=${GLP_EXPOSE_API_PORT:-}
 
       # Only needed when reached under a domain name through a reverse proxy
       # (comma-separated extra allowed Host names).

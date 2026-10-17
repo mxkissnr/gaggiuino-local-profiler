@@ -1,16 +1,16 @@
-// The seam every domain client (`./shots.js`, `./orders.js`, etc.) calls
+// The seam every domain client (`./shots.ts`, `./orders.ts`, etc.) calls
 // through, rather than importing api/transport.ts's apiFetch directly: a
-// test that spies/mocks transport.js's apiFetch still intercepts every
+// test that spies/mocks transport.ts's apiFetch still intercepts every
 // domain request, because the binding read here is the same live module
 // binding as the one the spy patches.
 import { apiFetch as _apiFetch } from './transport.js';
 
 type FetchFn = (url: string, opts?: RequestInit) => Promise<Response>;
 
-// The typed transport handle the domain clients (`./shots.js`, `./orders.js`)
-// call through. Each invocation reads transport.js's apiFetch at call time —
+// The typed transport handle the domain clients (`./shots.ts`, `./orders.ts`)
+// call through. Each invocation reads transport.ts's apiFetch at call time —
 // `_apiFetch` is never snapshotted into a local at import time — so a stub
-// installed on transport.js's apiFetch intercepts the domain clients'
+// installed on transport.ts's apiFetch intercepts the domain clients'
 // requests too.
 export const apiFetch: FetchFn = (url, opts) =>
   opts === undefined ? _apiFetch(url) : _apiFetch(url, opts);

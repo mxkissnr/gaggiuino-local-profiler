@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-// library.js's import chain touches state/index.ts, which reads
+// library.ts's import chain touches state/index.ts, which reads
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-frozen-portion-age-badge.test.ts).

@@ -1,5 +1,5 @@
 // #610: in-app "What's New" changelog data
-// (public-src/shared/whats-new.js). Pure data + getter, no DOM deps, so
+// (public-src/shared/whats-new.ts). Pure data + getter, no DOM deps, so
 // it's tested directly.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';

@@ -154,8 +154,8 @@ function _watchBeanShelfColumns(): void {
 }
 
 // Bean photos need the auth token, so <img src> can't point at the API
-// (see bean-image.js). Load them directly here rather than through
-// views/library.js, whose loadBeanThumbnails would pull in the whole
+// (see bean-image.ts). Load them directly here rather than through
+// views/library.ts, whose loadBeanThumbnails would pull in the whole
 // Library module (and its lightbox) just to fill these tiles.
 function _loadBeanShelfThumbnails(): void {
   document.querySelectorAll<HTMLImageElement>('#beanShelf .lib-shelf-img[data-bean-id]').forEach(img => {

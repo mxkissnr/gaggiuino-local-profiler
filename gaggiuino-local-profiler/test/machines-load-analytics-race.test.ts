@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// machines-settings.js's restoreActiveMachine() IIFE reads localStorage at
+// machines-settings.ts's restoreActiveMachine() IIFE reads localStorage at
 // *module import time* — set a persisted activeMachineId before the first
 // import below, to simulate the returning-user case (#526) where
 // S.activeMachineId is already set from a previous session, not left at

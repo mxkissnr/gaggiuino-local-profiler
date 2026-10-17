@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { installFakeOptionDom } from './helpers/fake-option-dom.js';
 import type { FakeOption, FakeSelect } from './helpers/fake-option-dom.js';
 
-// Same module-load stubbing as annotation-basket-puckscreen-save.test.js —
-// annotation.js imports state.js, which reads localStorage/navigator at
+// Same module-load stubbing as annotation-basket-puckscreen-save.test.ts —
+// annotation.ts imports state/index.ts, which reads localStorage/navigator at
 // module load time.
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// Same module-load stubbing as annotation-basket-puckscreen-save.test.js —
-// annotation.js imports state.js, which reads localStorage/navigator at
+// Same module-load stubbing as annotation-basket-puckscreen-save.test.ts —
+// annotation.ts imports state/index.ts, which reads localStorage/navigator at
 // module load time.
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge test/annotation-basket-puckscreen-save.ts

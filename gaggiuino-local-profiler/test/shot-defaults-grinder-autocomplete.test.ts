@@ -1,9 +1,9 @@
 // #691: Settings -> "Shot logging defaults" grinder field (#sdGrinder) was a
 // plain text input with no suggestions, unlike the real annotation panel's
 // #annGrinder (which has attachAutocomplete() wired to S.coffeeLibrary.grinders,
-// see main.js). renderShotDefaultsSettingsCard() now attaches the same
+// see main.ts). renderShotDefaultsSettingsCard() now attaches the same
 // autocomplete. Mocks attachAutocomplete itself rather than rebuilding its
-// internal fake-DOM harness (see test/autocomplete.test.js for that) -- this
+// internal fake-DOM harness (see test/autocomplete.test.ts for that) -- this
 // test only needs to prove the wiring, not attachAutocomplete's own behavior.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { CoffeeLibrary } from '../public-src/state/index.js';

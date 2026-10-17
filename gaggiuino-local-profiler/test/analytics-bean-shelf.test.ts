@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 
-// The shelf loads its photos itself, straight from bean-image.js — never through
-// views/library.js (whose namespace isn't initialised yet when analytics
+// The shelf loads its photos itself, straight from bean-image.ts — never through
+// views/library.ts (whose namespace isn't initialised yet when analytics
 // renders). Mock the loader so the behavioural test below can assert it is what
 // fills the shelf tiles.
 const imageMocks = vi.hoisted(() => ({ loadBeanImageBlobUrl: vi.fn(() => Promise.resolve('blob:fake')) }));
@@ -14,8 +14,8 @@ async function flushPromises(times = 10): Promise<void> {
   for (let i = 0; i < times; i += 1) await Promise.resolve();
 }
 
-// Same harness as analytics-new-charts.test.js: analytics.js pulls in
-// state.js/i18n.js (localStorage/navigator at module load) and calls
+// Same harness as analytics-new-charts.test.ts: analytics.ts pulls in
+// state/index.ts/i18n.ts (localStorage/navigator at module load) and calls
 // window.calcShotScore at runtime, so stub a minimal scoring window.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let _computeBeanRanking: Analytics['_computeBeanRanking'];

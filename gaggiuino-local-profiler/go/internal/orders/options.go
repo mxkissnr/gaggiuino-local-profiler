@@ -13,9 +13,7 @@ import (
 // of #1622 slice 6 it delegates to internal/config's shared, mtime-cached
 // Options() reader, the same one cmd/server uses for allowed_hosts and the
 // debug_logging gate uses -- so the read+parse+fallback chain exists once
-// instead of once per package. The rest of options.json's fields (sync_interval,
-// preheat_time, expose_api_port, machine_* legacy fields) still belong to the
-// system domain (see go/internal/system/doc.go).
+// instead of once per package.
 func isOrdersEnabled() bool {
 	return config.Options().EnableOrders
 }

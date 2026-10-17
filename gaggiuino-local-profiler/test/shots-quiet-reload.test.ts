@@ -7,7 +7,7 @@ import type { ShotMeta } from '../public-src/state/index.js';
 // stay visible until the walk confirms them, and a quiet reload started mid-walk
 // still loads every page.
 //
-// shots/index.js's import chain touches state/i18n and reads localStorage/
+// shots/index.ts's import chain touches state/i18n and reads localStorage/
 // navigator at load, so the minimum browser globals are stubbed (same pattern as
 // test/shots-load-data-race.test.ts); sidebar rendering is mocked so the walk's
 // DOM rebuild is countable without a real sidebar.

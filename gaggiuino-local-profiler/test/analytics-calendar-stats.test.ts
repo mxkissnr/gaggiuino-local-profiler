@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
-// analytics.js's import chain reads localStorage/navigator at module load and
+// analytics.ts's import chain reads localStorage/navigator at module load and
 // zrender's env detection wants a Node.js UA (same stubs as
-// analytics-new-charts.test.js). computeCalendarStats() itself is pure.
+// analytics-new-charts.test.ts). computeCalendarStats() itself is pure.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let computeCalendarStats: Analytics['computeCalendarStats'];
 let renderStreaks: Analytics['_renderStreaks'];

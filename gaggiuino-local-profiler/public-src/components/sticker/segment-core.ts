@@ -1,7 +1,7 @@
 /**
  * Sticker cut-out model runtime, worker-safe.
  *
- * This is the onnxruntime-web half of the cut-out: it loads the bundled ONNX
+ * This is the onnxruntime-web half of the cut-out: it fetches the pinned ONNX
  * models, runs them and returns plain mask buffers. It is imported by
  * segment.worker.ts and runs inside a Web Worker, so it must never touch
  * `document` — callers pass the models base URL in. The pure tensor/mask maths

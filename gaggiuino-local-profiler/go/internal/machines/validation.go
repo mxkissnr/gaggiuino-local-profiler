@@ -39,8 +39,7 @@ type PhaseStopConditionsInput struct {
 
 // PhaseInput is one phase of a profile. Type has no pointer/omitempty —
 // it's required — but a JSON body that omits it entirely decodes to the Go
-// zero value (proto.PhaseFlow) rather than a validation error; see doc.go
-// for this documented, minor validation gap.
+// zero value (proto.PhaseFlow) rather than a validation error.
 type PhaseInput struct {
 	Name             *string                   `json:"name"`
 	Type             proto.PhaseType           `json:"type"`

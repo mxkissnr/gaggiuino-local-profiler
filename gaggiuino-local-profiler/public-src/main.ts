@@ -87,7 +87,7 @@ function showToast(msg: string, duration = 3000) {
   toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
 
-// #1018: live re-resolution while 'auto' is selected -- see theme.js.
+// #1018: live re-resolution while 'auto' is selected -- see theme.ts.
 watchSystemTheme();
 
 // ── Cross-module entry points on window ───────────────────────────────────
@@ -106,10 +106,10 @@ Object.assign(window, {
     // #1021: this dispatch is what applies it -- the onThemeChange()
     // listener registered below already calls applyActiveMachineAccentTheme()
     // synchronously in response, so no separate direct call is needed here.
-    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see theme.js's applyTheme()
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT));  // #814, see theme.ts's applyTheme()
     // Still recorded on <html> even though no CSS reads it any more (#1019
     // retired the [data-accent] selectors) -- shareCard() (views/shots/
-    // index.js, #462) reads this to match the exported card to whatever
+    // index.ts, #462) reads this to match the exported card to whatever
     // preset the user actually picked, independent of this DOM attribute's
     // now-defunct original CSS purpose.
     document.documentElement.dataset.accent = name;
@@ -151,7 +151,7 @@ Object.assign(window, {
   renderMachinesList,
   renderDialin,
   closeBeanSheet,
-  // #1543: mode.js closes the wheel on a tab switch; exposed here like the
+  // #1543: mode.ts closes the wheel on a tab switch; exposed here like the
   // sheet's own close so the components/ tree never imports the view graph.
   closeFlavorWheel,
 

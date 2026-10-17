@@ -50,7 +50,7 @@ const { refreshShots, loadData, shotsLoadInProgress } = await import('../public-
 const { annotationBusy, scheduleAutoSave, flushAutoSave } = await import('../public-src/views/shots/annotation.js');
 const { initLiveSync, handleDataChanged, resyncAll } = await import('../public-src/live-sync.js');
 // Imported at module load, before any test installs its fake `document`: the
-// handler map pulls in views/library.js, whose bags.ts registers a pointerdown
+// handler map pulls in views/library.ts, whose bags.ts registers a pointerdown
 // listener at load only when `document` exists.
 const { createLiveSyncHandlers } = await import('../public-src/live-sync-handlers.js');
 

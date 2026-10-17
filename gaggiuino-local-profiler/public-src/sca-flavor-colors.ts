@@ -1,6 +1,6 @@
 // Real per-node colors from the official SCA/WCR Coffee Taster's Flavor
 // Wheel (2016) artwork, keyed to our own FLAVOR_WHEEL node ids (see
-// flavor-data.js) — not the source's own tree structure, just its
+// flavor-data.ts) — not the source's own tree structure, just its
 // hand-picked hex values matched onto our nodes by English label.
 //
 // Source: github.com/hc-oss/coffee-flavor-wheel, coffee-flavors.ts (MIT

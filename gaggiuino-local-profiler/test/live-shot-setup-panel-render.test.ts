@@ -72,8 +72,8 @@ describe('renderLiveShotSetupPanel()', () => {
 
   // renderLiveShotSetupPanel wires its DOM listeners exactly once per
   // module instance (the _lsWired module-level guard). vi.resetModules()
-  // plus a fresh dynamic import of both live.js AND state/index.js gives
-  // each test its own _lsWired and its own S — re-importing only live.js
+  // plus a fresh dynamic import of both live.ts AND state/index.ts gives
+  // each test its own _lsWired and its own S — re-importing only live.ts
   // would leave it reading a stale S instance from before the reset,
   // silently no-op-ing every S.activeMachineId assignment a test makes.
   beforeEach(async () => {

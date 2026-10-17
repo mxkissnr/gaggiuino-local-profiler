@@ -16,7 +16,7 @@ interface StatusLike {
 
 // ── "Machine unreachable" banner ────────────────────────────────────────
 // Dismissible per session (sessionStorage), styled the same way as the
-// update-available banner (components/update-check.js) so both can coexist
+// update-available banner (components/update-check.ts) so both can coexist
 // stacked at the top of the page.
 export function updateMachineBanner(status: StatusLike | null = null): void {
   // status is optional: callers that just want to re-evaluate the banner after

@@ -272,7 +272,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// live-data state (a growing datapoints array — see
 			// system.buildLiveDataResponse), so replaying the intermediate
 			// ones one-by-one just makes the chart trail the clock by up to
-			// subscriberBuffer ticks (#901, the ~14s lag Max saw). Drain
+			// subscriberBuffer ticks (#901, the ~14s lag the maintainer saw). Drain
 			// whatever else is buffered right now and drop all but the
 			// newest live-snapshot; every other event type stays in order.
 			batch, closed := drainBuffered(sub, ev)

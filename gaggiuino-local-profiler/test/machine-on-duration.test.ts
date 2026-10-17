@@ -3,7 +3,7 @@
 // it's been on instead ("on Xh Ym"/"on Xm"), falling back to the previous
 // last-sync display whenever the machine is off (or the response predates
 // these additive fields). Same fake-document/fetch harness as
-// test/status-update-machine-id.test.js.
+// test/status-update-machine-id.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose

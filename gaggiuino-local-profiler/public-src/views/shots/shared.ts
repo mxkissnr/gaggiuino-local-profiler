@@ -53,7 +53,7 @@ export function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, 
 }
 
 // #635: baskets/puck screens are pure ID-based library selections (see
-// annotation.js's _renderBasketSelect/_renderPuckScreenSelect) — this
+// annotation.ts's _renderBasketSelect/_renderPuckScreenSelect) — this
 // resolves an annotation's basketId/puckScreenId to the current library
 // entry's name for display/export, the same way ann.coffee already carries
 // the bean's name directly (no lookup needed there since beans store the

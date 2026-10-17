@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ShotMeta } from '../public-src/state/index.js';
 
-// shots/index.js's import chain touches state.js/i18n.js, which read
+// shots/index.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/api-port-closed-notice.test.ts). vitest's
@@ -17,7 +17,7 @@ g.window       ??= {};
 // background walk — mock it out so the assertions below can count calls
 // without needing a real DOM (the module import chain would otherwise
 // require stubbing everything _buildShotWrapper() touches, same concern
-// test/sidebar-lazy-month-groups.test.js takes on separately).
+// test/sidebar-lazy-month-groups.test.ts takes on separately).
 const renderSidebarSpy = vi.fn();
 vi.mock('../public-src/components/sidebar.js', () => ({ renderSidebar: renderSidebarSpy }));
 

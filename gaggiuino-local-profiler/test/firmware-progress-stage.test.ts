@@ -15,7 +15,7 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.window ??= globalThis;
 
-// machines-settings.js reaches for the DOM at import time (element lookups in
+// machines-settings.ts reaches for the DOM at import time (element lookups in
 // its module-level wiring); the same minimal fake the other machines-settings
 // tests use is enough here, since only the pure label helper is exercised.
 g.document = { getElementById: () => undefined, querySelectorAll: () => [] };

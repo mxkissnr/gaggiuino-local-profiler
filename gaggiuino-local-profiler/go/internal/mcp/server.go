@@ -129,7 +129,7 @@ type MachineTrafficSource interface {
 }
 
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
-// server and an Origin (DNS-rebinding) check. The endpoint has no limiter of
+// server and a cross-origin check (sameOrigin). The endpoint has no limiter of
 // its own — mounted on the same mux as every other /api/* route, its requests
 // count against the app-wide rate limiter. The settings source is consulted
 // per request, so a disabled server answers 404 (exactly like an unmounted
@@ -244,9 +244,12 @@ func newServer(deps Deps, allowWrite, allowDeveloperTools bool) *mcpsdk.Server {
 }
 
 // sameOrigin rejects any request whose Origin header is present and does not
-// match the request Host — the MCP spec's DNS-rebinding MUST. A request with
-// no Origin (every non-browser client, including the SDK's own client) is
-// allowed through; the SDK's localhost Host protection stays enabled too.
+// match the request Host. That stops cross-origin browser requests but not
+// DNS rebinding (a rebound name sends a matching Origin and Host); the
+// rebinding defense is auth.RequireKnownHost's Host allowlist, plus the SDK's
+// own check for requests arriving on a localhost address. A request with no
+// Origin (every non-browser client, including the SDK's own client) is
+// allowed through.
 func sameOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if origin := r.Header.Get("Origin"); origin != "" && !sameOriginHost(origin, r.Host) {

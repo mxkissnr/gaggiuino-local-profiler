@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// analytics.js pulls in state.js/i18n.js (localStorage/navigator at module
+// analytics.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module
 // load) and zrender's env detection wants a Node.js UA — the same stubs the
 // other analytics tests use. trendDailyBand() and isLongTrendPeriod() are pure.
 type Analytics = typeof import('../public-src/views/analytics.js');

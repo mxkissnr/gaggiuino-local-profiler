@@ -76,7 +76,7 @@ describe('dev-build banner (#683)', () => {
     expect(devBannerHeight()).toBe(32);
   });
 
-  // Reported by Max on GLP DEV: the banner sat on top of (not above) the
+  // Reported by the maintainer on GLP DEV: the banner sat on top of (not above) the
   // topbar/menus, hiding them entirely instead of just occupying its own
   // strip at the top of the page.
   it('pushes page content down by the banner height instead of overlaying it', () => {

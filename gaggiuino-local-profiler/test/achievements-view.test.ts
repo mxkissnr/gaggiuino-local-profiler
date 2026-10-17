@@ -1,4 +1,4 @@
-// #812: the achievements ("stamp card") view — public-src/views/achievements.js.
+// #812: the achievements ("stamp card") view — public-src/views/achievements.ts.
 //
 // These cover the four properties of the view that can break silently, i.e.
 // without any visible error: a secret badge leaking its copy before it is
@@ -6,11 +6,11 @@
 // the wrong unit, and a category name that only exists in German.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// state.js reads localStorage/navigator at module-load time, so the stubs have
+// state/index.ts reads localStorage/navigator at module-load time, so the stubs have
 // to exist before its import is evaluated — vi.hoisted() runs ahead of the
 // hoisted import statements below. Same reason as test/api-token-client-
-// storage.test.js's import-time stubbing. (navigator already exists in this
-// runtime as a getter-only global, so state.js's navigator.language read
+// storage.test.ts's import-time stubbing. (navigator already exists in this
+// runtime as a getter-only global, so state/index.ts's navigator.language read
 // needs no stub.)
 vi.hoisted(() => {
   // vitest's node environment has no browser globals; stub localStorage
@@ -35,7 +35,7 @@ import nl from '../public-src/i18n/nl.js';
 import { S } from '../public-src/state/index.js';
 import { askewDeg, formatStampedOn, isCardFull, fieldHtml } from '../public-src/views/achievements.js';
 
-// views/achievements.js's Achievement interface isn't exported; derive it from
+// views/achievements.ts's Achievement interface isn't exported; derive it from
 // the functions under test so the fixtures stay shape-checked against it.
 type Achievement = Parameters<typeof fieldHtml>[0];
 

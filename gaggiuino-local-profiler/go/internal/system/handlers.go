@@ -66,7 +66,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/token", h.getToken)
 	mux.HandleFunc("GET /api/status", h.getStatus)
 
-	// The remaining endpoints the embedded Vite frontend / glp-integration call
+	// The remaining endpoints the embedded frontend / glp-integration call
 	// — see switch.go, openapi.go, sync.go.
 	mux.HandleFunc("GET /api/switch", h.getSwitch)
 	mux.HandleFunc("POST /api/switch/toggle", h.postSwitchToggle)
@@ -201,23 +201,12 @@ func (h *Handlers) postDemoEnd(w http.ResponseWriter, r *http.Request) {
 // tokenRateLimitDirect is the original 10/min-per-IP cap, still applied to
 // non-Ingress (direct-port/LAN) callers — see getToken's doc comment.
 //
-// tokenRateLimitIngress is a Go-rewrite-only carve-out (#901 live bug, found
-// via real multi-page browser navigation through a prefix-stripping Ingress
-// proxy, not curl/smoke tests): this Go rewrite is a traditional multi-page
-// app — every nav-link click is a full page reload, re-running
-// templates/layout.templ's glp-token.js and re-fetching GET /api/token on
-// every single page. Worse, HA Ingress proxies every request from one shared
-// internal address (see auth.IsSupervisorIP's #801 comment and
-// internal/ratelimit/doc.go's own note on "the single shared Supervisor-Ingress
-// address"), so the token:<ip> bucket this rate limit keys on is shared across
-// every browser tab and every user of the same HA instance, not scoped per
-// visitor the way it would be for a direct-port LAN caller. 10/min was
-// never enough headroom for that: a single person clicking through this
-// app's SPA routes (served by internal/webapp) inside a minute exhausts the
-// budget for the whole household. Kept meaningfully lower than the app-wide
-// 600/min backstop (ratelimit.DefaultMax) so this endpoint specifically still
-// bounds a runaway client/bug, just no longer at a threshold ordinary MPA
-// browsing trips by accident.
+// tokenRateLimitIngress applies to HA Ingress callers (#901). Every Ingress
+// request arrives from the one shared Supervisor address (see
+// auth.IsSupervisorIP), so the token:<ip> bucket is shared by every browser
+// tab and user of the same HA instance, and each SPA load fetches the token
+// once. 10/min was too tight for that; 120/min still bounds a runaway client
+// well below the app-wide 600/min backstop (ratelimit.DefaultMax).
 const (
 	tokenRateLimitDirect  = 10
 	tokenRateLimitIngress = 120
@@ -271,13 +260,12 @@ func (h *Handlers) getToken(w http.ResponseWriter, r *http.Request) {
 //
 // Sensitive fields (machineUrl/machineHostname/lastSyncError/
 // lastMachineError/switchEntity/isDemo) are only included when the request
-// carries a valid X-GLP-Token — recomputed here independent of Ingress: the
-// token is checked from the header alone, and HA Ingress making the middleware
-// let the request through does NOT make it authenticated.
+// carries a valid X-GLP-Token header — checked here independently of the
+// middleware, so an HA Ingress request without the header is not treated as
+// authenticated.
 //
-// lastSync/lastSyncError come from POST /api/sync's manual pull loop (sync.go),
-// so GET /api/status reports real values once a sync has run (null until
-// then).
+// lastSync/lastSyncError come from the default machine's shot-history pull
+// (sync.go — manual, post-brew and scheduled), null until one has run.
 //
 // #1201, follow-up on PR #1221: GET /api/status's `machines[]` array now
 // reports each machine's own reachable/firmwareVersion (buildStatusMachines,

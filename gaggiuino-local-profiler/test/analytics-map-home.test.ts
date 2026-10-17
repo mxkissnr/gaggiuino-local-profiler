@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// analytics.js pulls in state.js/i18n.js (localStorage/navigator at module
+// analytics.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module
 // load) — same minimal stub other analytics test files use (see
-// world-map-antimeridian.test.js, world-map-theme-colors.test.js).
+// world-map-antimeridian.test.ts, world-map-theme-colors.test.ts).
 let homeCountryFromLocale: (typeof import('../public-src/views/analytics.js'))['homeCountryFromLocale'];
 let featureLabelPoint: (typeof import('../public-src/views/analytics.js'))['featureLabelPoint'];
 let greatCircleKm: (typeof import('../public-src/views/analytics.js'))['greatCircleKm'];

@@ -51,7 +51,7 @@ describe('dev-stats aiModelInChunk (#1597)', () => {
     });
 });
 
-// billingTypeFor() distinguishes Max's flat-rate Claude Pro subscription
+// billingTypeFor() distinguishes the maintainer's flat-rate Claude Pro subscription
 // (no per-model API cost derivable from git history) from usage-billed
 // models like DeepSeek, so the cost section never claims a flat-rate
 // subscription covers a model it doesn't.

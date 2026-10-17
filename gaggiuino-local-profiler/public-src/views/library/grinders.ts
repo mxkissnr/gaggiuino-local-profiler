@@ -1,5 +1,5 @@
 // Grinder list + grinder form sections of the Library view, split out of
-// views/library.js. Pure move + type port (Part of #1115); no behavior change.
+// views/library.ts. Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
@@ -14,7 +14,7 @@ import { currentGrinderZeroPoint } from '../../grind-zero.js';
 import type { Grinder } from '../../api/types.js';
 import * as libraryView from '../library.js';
 
-// Circular with library.js (it re-exports this module): only ever touched at
+// Circular with library.ts (it re-exports this module): only ever touched at
 // call time, never read at module load.
 const library = libraryView;
 
@@ -24,10 +24,9 @@ const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" widt
 // <datalist> markup in index.html).
 const BURR_TYPE_SUGGESTIONS = ['Konisch Stahl', 'Konisch Keramik', 'Flach Stahl', 'Flach Keramik'];
 
-// The generated Grinder schema lags the backend: wear is really
-// { shotsSinceBurrs, gramsSinceBurrs } (go/internal/library/handlers.go) and
-// zeroPointHistory entries always carry both fields. This names what the
-// runtime actually sends.
+// Narrows the generated Grinder schema to what the runtime sends:
+// zeroPointHistory entries always carry both fields (the spec marks neither
+// required), and wear is always { shotsSinceBurrs, gramsSinceBurrs }.
 export type GrinderRow = Omit<Grinder, 'wear' | 'zeroPointHistory'> & {
   zeroPointHistory?: { zeroPoint: number; since: number }[];
   wear?: { shotsSinceBurrs: number; gramsSinceBurrs: number } | undefined;
@@ -105,7 +104,7 @@ function formatWearGrams(g: number): string {
 }
 
 // Grinder images need the auth token, so <img src> can't point at the API
-// directly (see bean-image.js) — set the blob-url src async after render.
+// directly (see bean-image.ts) — set the blob-url src async after render.
 // #441: click opens the fullscreen lightbox, same as bean photos (#440).
 function loadGrinderThumbnails(): void {
   document.querySelectorAll<HTMLImageElement>('.lib-grinder-thumb[data-grinder-id]').forEach(img => {

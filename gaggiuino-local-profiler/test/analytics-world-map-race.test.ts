@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
-// analytics.js pulls in state.js (localStorage/navigator at module load) —
-// same minimal stub other analytics test files use (analytics-new-charts.test.js,
-// world-map-antimeridian.test.js, library-load-render-race.test.js).
+// analytics.ts pulls in state/index.ts (localStorage/navigator at module load) —
+// same minimal stub other analytics test files use (analytics-new-charts.test.ts,
+// world-map-antimeridian.test.ts, library-load-render-race.test.ts).
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge test/shots-load-all-meta-throttle.test.ts
 // uses) so the minimal fakes below need not satisfy the full DOM shapes.
@@ -14,8 +14,8 @@ const { S } = await import('../public-src/state/index.js');
 const { buildWorldMap } = await import('../public-src/views/analytics.js');
 
 // #648: buildWorldMap()'s countries-110m.json fetch had no request-generation-
-// token guard, unlike library-profile-editor.js's loadMachineProfileList() or
-// shots/index.js's loadData() (#644). This exercises the fetch *rejects*
+// token guard, unlike library-profile-editor.ts's loadMachineProfileList() or
+// shots/index.ts's loadData() (#644). This exercises the fetch *rejects*
 // branch deliberately, not the success branch: it needs no echarts/topojson/
 // canvas setup, and it's the branch that actually writes to the DOM
 // (wrap.innerHTML) on the "no cached topology yet" path, which is what the
@@ -24,7 +24,7 @@ const { buildWorldMap } = await import('../public-src/views/analytics.js');
 // headlessly (no jsdom/canvas in this suite) — verified manually instead
 // (see PR description) that the same token-capture/check placement guards
 // it too, mirroring loadData()'s already-tested pattern (#644,
-// test/shots-load-data-race.test.js).
+// test/shots-load-data-race.test.ts).
 function fakeWrap() {
   let html = '';
   return {

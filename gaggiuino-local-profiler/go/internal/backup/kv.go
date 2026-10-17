@@ -8,9 +8,8 @@ import (
 
 // This file holds a narrow get/save round trip for the two settings blobs
 // GET/POST /api/backup's `kv` block needs (MQTT transport config and
-// import-provider toggles) — the same "duplicate a small slice rather than
-// block on a whole domain" trade-off internal/orders/options.go already made
-// for isOrdersEnabled().
+// import-provider toggles). It reads and writes the kv rows directly rather
+// than going through internal/mqtt or internal/importer.
 
 // mqttDefaults is the default MQTT settings blob.
 func mqttDefaults() map[string]any {

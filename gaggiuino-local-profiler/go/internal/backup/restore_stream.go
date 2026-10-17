@@ -25,8 +25,8 @@ var restoreTempDir = os.TempDir
 // generous abuse guard, not a memory cap — the body never lands in a slice
 // and POST /api/backup streams every image with no cap of its own); for the
 // legacy JSON form it stays the historical restoreJSONBodyLimit, since that
-// form decodes its inline images into memory. Both limits are package-level
-// vars (restoreZipBodyLimit in handlers.go) so tests can shrink them. Returns
+// form decodes its inline images into memory. restoreZipBodyLimit
+// (handlers.go) is a var so tests can shrink it. Returns
 // the temp path and a cleanup func; the caller re-opens the file for random
 // access (zip) or a fresh stream (legacy JSON).
 func streamRestoreBodyToTemp(body io.Reader, isZip bool) (string, func(), error) {

@@ -1,7 +1,7 @@
 // #1383: a preheat event carries no reachability of its own, so it must not
 // drop the last live message and re-light the machine icon while the machine
-// is known to be off. Covers the Live view's own wiring (views/live.js);
-// the topbar instance is covered in topbar-machine-icon-selected-machine.test.js.
+// is known to be off. Covers the Live view's own wiring (views/live.ts);
+// the topbar instance is covered in topbar-machine-icon-selected-machine.test.ts.
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose

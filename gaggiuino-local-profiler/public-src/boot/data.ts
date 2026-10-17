@@ -98,8 +98,8 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
         onEvent(EVENTS.PREHEAT_UPDATE, data => handlePreheatUpdateEvent(data as Parameters<typeof handlePreheatUpdateEvent>[0]));
         // #837: the topbar's ambient machine icon -- a second, independent
         // listener for the same two event types (see components/
-        // topbar-machine-icon.js's module doc comment for why it doesn't just
-        // reuse live.js's own handlers).
+        // topbar-machine-icon.ts's module doc comment for why it doesn't just
+        // reuse live.ts's own handlers).
         onEvent(EVENTS.LIVE_SNAPSHOT, handleTopbarLiveSnapshotEvent);
         onEvent(EVENTS.PREHEAT_UPDATE, handleTopbarPreheatUpdateEvent);
         // #1539 slice 3: react to the server's data-changed pushes. Registered
@@ -177,7 +177,7 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
     { name: 'machine profiles', requires: ['machines'], after: ['shots'], run: loadMachineProfileList },
     // #750: the setup-wizard check below waits for this so the installId
     // comparison inside updateStatus() -> syncInstallId() has a chance to
-    // clear a stale setup-wizard-completed flag first -- see utils.js's
+    // clear a stale setup-wizard-completed flag first -- see utils.ts's
     // syncInstallId() comment. Ordered after the shots and machines loads as
     // before (it reads S.primaryShotId and S.activeMachineId), but not
     // dependent on them succeeding.

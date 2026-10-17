@@ -7,8 +7,7 @@ import type { UiPrefs } from './types.js';
 // routes that package registers outside dedicated feature packages) plus the
 // remaining small domains: status, switch/preheat/live-data, version, menu,
 // achievements, import, demo, backup and the Dev Tools debug endpoints.
-// Package A3d of the TS migration (#1110), the final sweep before api.js is
-// retired.
+// Package A3d of the TS migration (#1110).
 //
 // Two shapes, chosen per call site exactly as in A3b/A3c:
 //   - a helper returns the raw Response when the caller inspects `ok`/status
@@ -156,7 +155,7 @@ export function requestBackup({ sections, passphrase, onProgress }: BackupReques
 /**
  * The restore result shape: a real Response for the JSON/dry-run paths, or
  * the `{ ok, status, json() }` facade apiUpload is adapted into for the
- * progress-reporting zip upload — the shape backup-modal.js already expects.
+ * progress-reporting zip upload — the shape backup-modal.ts already expects.
  */
 export type RestoreResponse = {
   ok: boolean;

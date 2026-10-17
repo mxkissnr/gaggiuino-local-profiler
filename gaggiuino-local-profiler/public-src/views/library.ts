@@ -40,11 +40,11 @@ export async function loadLibrary(): Promise<void> {
     renderMilkList();
     renderBasketList();
     renderPuckScreenList();
-    // #526: this fetch is fired unawaited from main.js's init sequence, racing
-    // switchMode('library') (mode.js), which renders the bean/grinder lists
+    // #526: this fetch is fired unawaited from the boot data chain (boot/data.ts), racing
+    // switchMode('library') (mode.ts), which renders the bean/grinder lists
     // straight off S.coffeeLibrary the moment the user opens Library — before
     // this promise resolves, that render sees the still-empty default
-    // ({ beans: [], grinders: [] }, state.js) and, since nothing re-renders it
+    // ({ beans: [], grinders: [] }, state/index.ts) and, since nothing re-renders it
     // afterwards, the flavor-wheel button (and everything else data-dependent)
     // stays invisible for the rest of the session even once the data arrives.
     // Re-render here too so a load that finishes after the user is already on
@@ -58,8 +58,8 @@ export async function loadLibrary(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// Bean/grinder names feed the annGrinder (main.js) and recipeFormBean
-// autocompletes (components/autocomplete.js) — both read S.coffeeLibrary
+// Bean/grinder names feed the annGrinder (boot/annotation.ts) and recipeFormBean
+// autocompletes (components/autocomplete.ts) — both read S.coffeeLibrary
 // live, so nothing needs to be "populated" ahead of time. This just
 // re-renders whichever of those is currently open, so a save/delete
 // elsewhere in the library shows up immediately if the user has one open.
@@ -100,7 +100,7 @@ function shelfPrefs(): ShelfPrefs {
   return (_shelfPrefsLazy ??= loadShelfPrefs());
 }
 
-// #1375: main.ts calls this once the shared choices fetched from the server
+// #1375: boot/data.ts calls this once the shared choices fetched from the server
 // have replaced the local cache, so an already-rendered shelf re-reads them.
 // #1539: the live path passes keepQuery, because the shelf search is
 // session-only and a remote change must not wipe what the user is typing.
@@ -273,9 +273,9 @@ export function renderBeanList(): void {
 }
 
 // Bean images need the auth token, so <img src> can't point at the API
-// directly (see bean-image.js) — set the blob-url src async after render.
+// directly (see bean-image.ts) — set the blob-url src async after render.
 // #440: click opens the same fullscreen lightbox already used for shot
-// photos (sidebar.js) — stopPropagation mirrors that pattern in case a
+// photos (sidebar.ts) — stopPropagation mirrors that pattern in case a
 // parent click handler is ever added to .lib-item.
 export function loadBeanThumbnails() {
   document.querySelectorAll<HTMLImageElement>('.lib-bean-thumb[data-bean-id], .lib-shelf-img[data-bean-id]').forEach(img => {
@@ -293,7 +293,7 @@ export function loadBeanThumbnails() {
 }
 
 // Clicking a bean's name in the Library sets the sidebar's structured bean
-// filter (state.js S.beanFilter / sidebar.js setBeanFilter()) and jumps to
+// filter (state/index.ts S.beanFilter / sidebar.ts setBeanFilter()) and jumps to
 // the Shots tab so the filtered history is immediately visible.
 export function filterShotsByBean(id: number): void {
   const bean = _beanList().find(b => b.id === id);
@@ -303,7 +303,7 @@ export function filterShotsByBean(id: number): void {
 }
 
 // Section symbols moved to ./library/* — re-exported so existing importers
-// of views/library.js (main.ts et al.) keep working.
+// of views/library.ts (main.ts et al.) keep working.
 export { openBeanSheet, closeBeanSheet, requestCloseBeanSheet, beanSheetRestoredScroll, toggleBeanActive } from './library/bean-sheet.js';
 export { openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean } from './library/bean-form-sheet.js';
 export { renderBeanCard, safeHttpUrl, openNewBagForm, closeNewBagForm, deleteBag, saveNewBag, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, toggleBeanQR } from './library/bean-card.js';

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// library.js's import chain touches state.js/i18n.js, which read
+// library.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/library-roastdate-esc.test.js).
+// environment (same pattern as test/library-roastdate-esc.test.ts).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
@@ -19,7 +19,7 @@ const { renderBeanCard, togglePastBags } = (await import('../public-src/views/li
 // "toggle-past-bags") but the click dispatcher in main.ts had no case for
 // it, so the section could never open. togglePastBags itself flips the
 // per-bean expansion state and re-renders; this pins that state transition
-// (the open/closed state lives in library.js, which is what main.ts's new
+// (the open/closed state lives in library.ts, which is what main.ts's new
 // case calls into).
 interface FakeDocument {
   elements: { beanListUI: { innerHTML: string } };

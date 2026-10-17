@@ -4,7 +4,7 @@
 // become a shared package once both exist") and adds the #961 optimize
 // pipeline: every stored bean / grinder / basket / puck-screen / shot photo
 // is decoded, downscaled to at most MaxEdge on its long edge, re-encoded
-// without metadata (no EXIF / GPS), and written alongside a MaxEdge-capped
+// without metadata (no EXIF / GPS), and written alongside a ThumbEdge-capped
 // thumbnail (<prefix><id>.thumb.<ext>).
 //
 // The single source of truth now lives here:

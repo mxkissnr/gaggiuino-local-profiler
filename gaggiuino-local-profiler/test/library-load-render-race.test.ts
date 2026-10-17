@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// library.js's import chain touches state.js/i18n.js, which read
+// library.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/sidebar-month-toggle.test.js and
-// test/library-profile-editor.test.js).
+// environment (same pattern as test/sidebar-month-toggle.test.ts and
+// test/library-profile-editor.test.ts).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
@@ -16,8 +16,8 @@ interface LibraryModule {
 }
 const { loadLibrary, renderBeanCard } = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
-// #526: loadLibrary()'s fetch is fired unawaited from main.js's init
-// sequence and races switchMode('library') (mode.js), which renders the
+// #526: loadLibrary()'s fetch is fired unawaited from main.ts's init
+// sequence and races switchMode('library') (mode.ts), which renders the
 // bean list straight off S.coffeeLibrary the moment the view opens. If that
 // happens before this fetch resolves, the render sees the still-empty
 // default and — before this fix — nothing re-rendered it afterwards, so a

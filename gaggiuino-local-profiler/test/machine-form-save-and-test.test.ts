@@ -3,12 +3,11 @@
 // "Speichern" button) and, only on success, immediately tests the connection
 // against the now-known id, showing the result inline. The previous
 // standalone "Speichern und testen" button/action is gone (merged into this
-// one), see machines-settings.js.
+// one), see machines-settings.ts.
 //
-// #731: that implicit save must not itself start a shot import (only an
-// explicit "Speichern" click should) -- so testMachineForm()'s POST/PUT
-// carry a `?sync=0` query param the plain saveMachineForm() path doesn't,
-// see test/machines-api.test.js's sync-on-save suite for the server side.
+// #731: testMachineForm()'s POST/PUT carry a `?sync=0` query param the plain
+// saveMachineForm() path doesn't. The Go backend ignores it (a machine save
+// never starts a shot import).
 //
 // #733: #729 originally auto-closed the form after a 1200ms dwell, matching
 // Save's behavior -- live testing found that confusing for a *test* action
@@ -55,7 +54,7 @@ g.document = { getElementById: fakeElement };
 const { S } = await import('../public-src/state/index.js');
 // Node's own built-in `navigator` global (present since Node 21) reflects the
 // host OS locale rather than a fixed 'en-US' -- S.currentLang's own
-// navigator.language-based default (state.js) is therefore host-locale-
+// navigator.language-based default (state/index.ts) is therefore host-locale-
 // dependent unless forced here, which would make this file's t()-derived
 // assertions non-portable across machines.
 S.currentLang = 'en';
@@ -88,7 +87,7 @@ describe('testMachineForm (#729/#733)', () => {
     g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
       // #731: the implicit save behind "Test connection" carries ?sync=0 so
-      // the server doesn't start an import for it -- see machines-settings.js.
+      // the server doesn't start an import for it -- see machines-settings.ts.
       if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
       }

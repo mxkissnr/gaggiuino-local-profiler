@@ -14,9 +14,9 @@ import (
 
 // This file handles the barcode-scan endpoint: a server-side proxy to Open Food
 // Facts (the browser can't call it directly — the app's CSP pins connect-src
-// to 'self'), guarded by an SSRF check (assertPublicHost, ssrf.go) before
-// ever dialing out, even though the target host is a fixed literal (DNS
-// rebinding defense, not user-input validation — see ssrf.go's doc comment).
+// to 'self'). The fixed target host is pre-checked with assertPublicHost
+// (ssrf.go) before the request; scanHTTPClient resolves it again when it
+// dials, so this does not stop DNS rebinding.
 
 const offHost = "world.openfoodfacts.org"
 

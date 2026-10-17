@@ -15,7 +15,7 @@ vi.mock('../public-src/api/library.js', async (importOriginal) => {
   return { ...actual, scanBarcode: api.scanBarcode };
 });
 
-// library.js is huge and only openBeanForm() is reachable from the scan paths,
+// library.ts is huge and only openBeanForm() is reachable from the scan paths,
 // so stand it in (same as library-scan-detector.test.ts).
 vi.mock('../public-src/views/library.js', () => ({ openBeanForm: vi.fn() }));
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// views/library.js's import chain (bags.js -> views/library.js -> state/i18n)
+// views/library.ts's import chain (bags.ts -> views/library.ts -> state/i18n)
 // reads localStorage/navigator at module load time — stub the browser globals
 // so the module graph can be imported under vitest's node environment (same
 // pattern as test/library-shelf-classify.test.ts).

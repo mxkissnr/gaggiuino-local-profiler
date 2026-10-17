@@ -721,7 +721,7 @@ const en: Translations = {
     profile_send_to_machine:'Save to machine',
     profile_utility_badge:'Utility',
 
-    // GaggiMate profile editor (gaggimate-profile-editor.js)
+    // GaggiMate profile editor (gaggimate-profile-editor.ts)
     gm_toast_load_error:'Could not load profile',
     gm_toast_name_required:'Profile name is required',
     gm_toast_phase_required:'At least one phase is required',

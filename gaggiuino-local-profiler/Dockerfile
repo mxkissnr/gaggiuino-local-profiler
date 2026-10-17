@@ -106,7 +106,7 @@ FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cab
 # Empty by default -- only .github/workflows/build-dev.yaml passes this
 # build-arg (as dev-<run_number>); the release build (build.yaml) never sets
 # it, so GLP_DEV_BUILD stays unset in every image users install and the UI's
-# dev-build badge (public-src/components/status.js) never appears for them.
+# dev-build badge (public-src/components/status.ts) never appears for them.
 ARG GLP_DEV_BUILD=""
 ENV GLP_DEV_BUILD=${GLP_DEV_BUILD}
 

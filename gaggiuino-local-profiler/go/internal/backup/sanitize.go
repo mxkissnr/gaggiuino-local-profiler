@@ -8,9 +8,8 @@ import (
 func nowMillis() int64 { return time.Now().UnixMilli() }
 
 // This file holds the restore-time row sanitizers: sanitizeMaintenanceRow,
-// sanitizeMaintenanceLogRow, sanitizeOrderRow, and the image
-// path-traversal/integrity guard (validateEntityImages /
-// validateRestoredLibraryImages).
+// sanitizeMaintenanceLogRow and sanitizeOrderRow. The image
+// path-traversal/integrity guard is in image.go.
 
 // sanitizeMaintenanceRow loosely validates one raw `maintenance` export row
 // ({machineId, key, data}). Returns (nil, false) for anything that doesn't
@@ -95,8 +94,9 @@ func sanitizeMaintenanceLogRow(r map[string]any) (map[string]any, bool) {
 	}, true
 }
 
-// zodString implements a z.string().min(min).max(max).optional().default(def)
-// field: absent/nil -> (def, true); present but not a string, or a string
+// zodString validates an optional string field with a default (the name
+// dates from the former Zod schema): absent/nil -> (def, true); present but
+// not a string, or a string
 // outside [min,max] -> (_, false). Unlike trimMax's silent truncation
 // elsewhere in this codebase, an over-length value is rejected rather than
 // truncated.

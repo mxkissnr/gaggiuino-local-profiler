@@ -13,7 +13,7 @@ import type { ShotDatapoints } from '../utils.js';
 
 // Re-exported so call sites importing the API domain types have one surface;
 // the datapoints shape itself lives in utils.ts (kept there because
-// shot-curves.js maps lazy-fetched curves through it without an import cycle).
+// shot-curves.ts maps lazy-fetched curves through it without an import cycle).
 export type { ShotDatapoints };
 
 /** A shot's user-supplied annotation (`shot.annotation`), per openapi.yaml's Annotation. */
@@ -155,7 +155,7 @@ export type Machine = components['schemas']['Machine'];
  * A machine profile as GET/POST/PUT /api/machine/profile[/{id}] carries it.
  * Covers both shapes the app touches: the Gaggiuino one
  * (name/phases/recipe/globalStopConditions/...) and the GaggiMate one
- * gaggimate-profile-editor.js uses (label/description/temperature/phases).
+ * gaggimate-profile-editor.ts uses (label/description/temperature/phases).
  */
 export type MachineProfile = components['schemas']['MachineProfile'];
 

@@ -33,8 +33,7 @@ type LiveTransport interface {
 
 // This file implements the 1s live-polling loop plus
 // checkAndApplyMachinePower/backgroundHaCheck, the 30s HA-switch-state watcher
-// that starts/stops it. See doc.go for what is deliberately not implemented
-// (the shot-sync triggers, connectivity-stats logging, MQTT transport).
+// that starts/stops it. The shot-sync triggers are in sync_triggers.go.
 
 // liveDatapoints is the fixed set of per-tenth-second arrays the brew
 // accumulator fills during a brew — the exact shape GET /api/shots/:id already

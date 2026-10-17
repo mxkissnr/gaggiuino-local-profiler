@@ -19,7 +19,7 @@ import { textEntryFocused } from '../live-sync.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
 // use-beans/use-milks toggle buttons and their inline notes below.
-// BEAN_ICON_SVG now lives in ../icons.js (also used by main.js's bean-age
+// BEAN_ICON_SVG now lives in ../icons.ts (also used by boot/annotation.ts's bean-age
 // hint, #419 follow-up); MILK_ICON_SVG moved there too once the library
 // and annotation milk pickers reused it as their no-emoji fallback (#1328).
 import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
@@ -51,7 +51,7 @@ function _onAsync(el: Element | null | undefined, type: string, fn: () => Promis
 // settings[key] === false (absent/true both mean "on") so pre-#603 installs
 // keep sending every notification they already were.
 // #614: notify_preheat_ready/notify_low_stock moved to the always-visible
-// Settings page card (components/notify-settings.js) — they fire regardless
+// Settings page card (components/notify-settings.ts) — they fire regardless
 // of enable_orders, so this
 // panel (which only exists when Orders is enabled) is the wrong home for
 // them. Only the genuinely Orders-only types stay here.

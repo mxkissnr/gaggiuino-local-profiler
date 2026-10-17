@@ -72,7 +72,7 @@ interface MaintLogEntry {
 type MaintScope = string | number;
 
 // ── Task icons (#393) — plain inline SVG line icons, no emoji, matching the
-// Dashboard mockup Max picked. Purely decorative; task identity always comes
+// Dashboard mockup the maintainer picked. Purely decorative; task identity always comes
 // from MAINT_META's translation key (or the grinder's own name), never the
 // icon alone, so a missing/unmapped icon never loses information.
 const TASK_ICON_PATHS: Record<string, Html> = {

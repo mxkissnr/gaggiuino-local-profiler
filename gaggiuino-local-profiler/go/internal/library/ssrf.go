@@ -7,16 +7,14 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/netguard"
 )
 
-// This file provides assertPublicHost — used by the barcode-scan endpoint
-// (scan.go) as a DNS-rebinding guard on world.openfoodfacts.org: that
-// hostname is a fixed literal, not user input, but a compromised/rebound DNS
-// answer for it could still point at an internal address, so every resolved
-// address is checked before the request is allowed to proceed. The machines
-// domain's looser loopback/link-local-only variant lives in
-// internal/machines. The actual resolve-then-check plumbing lives in
-// internal/netguard (#901 code review) — this file keeps only what's
-// genuinely specific to this package's threat model: the private/public IP
-// predicate and the lookupIPAddr test seam.
+// This file provides assertPublicHost, the pre-flight SSRF check the
+// library's outbound fetches (scan.go, image.go, geo.go) run before their
+// request: it resolves the hostname and rejects it if any address is
+// private/loopback/link-local. It does NOT pin the later connection to the
+// checked address — the request's http.Client resolves the hostname again
+// when it dials, so a DNS answer that changes between the two lookups is not
+// caught. internal/importer pins its dial with netguard.GuardedDialer
+// instead. The resolve-then-check plumbing lives in internal/netguard.
 
 // lookupIPAddr is a package-level var (not a bare net.DefaultResolver call)
 // so tests can substitute a fake resolver instead of depending on real DNS

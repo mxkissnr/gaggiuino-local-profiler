@@ -28,7 +28,7 @@ interface SidebarShot extends ShotMeta {
 }
 
 // These are imported lazily via window to avoid circular dependencies
-// updateView is on window, calcShotScore/getShotData are set from shots.js
+// updateView is on window, calcShotScore/getShotData are set from shots.ts
 
 // #969: collapsed month groups render lazily — instead of building (and
 // running window.calcShotScore for) every wrapper in a multi-year history up
@@ -158,7 +158,7 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     // #816: the bean-photo/avatar circle (.shot-thumb) is gone — the
     // prototype's rail-item mockup is text-only, no image or colored circle
     // (Border-Diät extends to photos, not just boxes). The photo itself is
-    // still viewable from the annotation panel (shots/annotation.js), which
+    // still viewable from the annotation panel (shots/annotation.ts), which
     // is a separate, unrelated element.
     divShot.innerHTML = html`
       <div class="shot-row">
@@ -255,7 +255,7 @@ export function updateSidebarHighlighting(): void {
 }
 
 // Bean filter (shot history) — set via a bean click in the Library view
-// (library.js filterShotsByBean()). Structured, ANDed with the free-text
+// (library.ts filterShotsByBean()). Structured, ANDed with the free-text
 // search below rather than replacing it, mirroring how the machine filter
 // (filterShotsByMachine, state/index.ts) sits alongside search instead of
 // competing with it. Indicator lives in the sidebar's search area.
@@ -451,7 +451,7 @@ export function updateMobileShotSidebarVisibility() {
   }
   const inShotsMode = S.currentMode === 'shots';
   sidebar.style.display = 'none';
-  // #410: mode.js already set #shots-view to display:flex for mode==='shots'
+  // #410: mode.ts already set #shots-view to display:flex for mode==='shots'
   // (side-by-side with the sidebar on desktop) — on mobile it's the only
   // full-screen view for the Shots tab, so make sure it's shown.
   if (shotsView && inShotsMode) shotsView.style.display = 'flex';
@@ -471,7 +471,7 @@ export function openShotDrawer(): void {
   const btn = document.getElementById('mobileDrawerBtn');
   if (!sidebar || window.innerWidth > 768) return;
   // #446: the drawer used to just toggle visibility, trusting the 30s
-  // status.js poll to keep S.shots fresh — but that poll can lag or get
+  // status.ts poll to keep S.shots fresh — but that poll can lag or get
   // throttled while the tab is backgrounded, so a shot finished just before
   // opening the drawer could be missing. Refresh on open instead of waiting.
   if (window.loadData) void window.loadData();

@@ -5,11 +5,11 @@ import { apiFetch, jsonBody } from './fetch.js';
 // Package A3d of the TS migration (#1110).
 //
 // Every helper returns the raw Response. The call sites key their rendering
-// off `.ok`/status and parse the JSON themselves (see views/maintenance.js),
+// off `.ok`/status and parse the JSON themselves (see views/maintenance.ts),
 // so handing the Response back unchanged is what preserves their existing
 // error handling — the same convention api/shots.ts's listShots established.
 //
-// The concrete `machineId` is resolved by the caller: views/maintenance.js's
+// The concrete `machineId` is resolved by the caller: views/maintenance.ts's
 // _writeMachineId() owns the local view scope and the 'all' → first-machine
 // fallback, so these helpers only build the URL.
 

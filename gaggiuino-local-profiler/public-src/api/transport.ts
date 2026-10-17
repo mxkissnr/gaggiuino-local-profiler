@@ -175,7 +175,7 @@ export function apiUpload(
 
 // #807: "this session can't talk to the API because expose_api_port is off".
 // Both inputs are already client-side: S.apiPortExposed mirrors the add-on
-// option via the deliberately-public /api/status (components/status.js), and
+// option via the deliberately-public /api/status (components/status.ts), and
 // an empty S.glpToken means initToken()'s /api/token fetch was refused for
 // this (non-Ingress) session. Callers pass the failed response's status so a
 // plain 401/403 from any other cause still surfaces as itself; omitting it

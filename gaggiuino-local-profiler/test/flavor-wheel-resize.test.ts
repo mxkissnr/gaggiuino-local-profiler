@@ -44,7 +44,7 @@ class FakeResizeObserver {
   disconnect(): void { this.disconnected = true; }
 }
 
-// flavor-wheel.js's import chain reads localStorage at module load — stub the
+// flavor-wheel.ts's import chain reads localStorage at module load — stub the
 // minimum browser globals (same pattern as the other frontend tests).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };

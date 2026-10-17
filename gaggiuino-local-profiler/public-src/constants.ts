@@ -23,7 +23,7 @@ export const TRANSLATIONS: Record<string, unknown> = { de, en, it, fr, es, nl };
 // `LOCALE_MAP[S.currentLang] || 'de-DE'`, which meant an unsupported/unknown
 // S.currentLang silently rendered dates/numbers in German for every user,
 // not just German ones. Falls back to English instead, matching the same
-// fallback fix applied to S.currentLang itself (state.js) and t() (i18n.js).
+// fallback fix applied to S.currentLang itself (state/index.ts) and t() (i18n.ts).
 export function localeFor(lang: string): string {
   return LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
 }
@@ -104,7 +104,7 @@ export function countryName(code: string | null | undefined, lang?: string): str
 // rendered countryName() immediately after it, so nothing is lost.
 
 // #417 sweep: the `icon` emoji fields these entries used to carry were dead
-// data — no consumer ever read MAINT_META[task].icon, since maintenance.js's
+// data — no consumer ever read MAINT_META[task].icon, since maintenance.ts's
 // own taskIconSvg()/TASK_ICON_PATHS (#393) already renders the real stroke-SVG
 // task icons. Dropped rather than replaced.
 export const MAINT_META: Record<string, { key: string }> = {

@@ -3,7 +3,7 @@
 // (or null for 'all'/unset/non-numeric).
 import { describe, it, expect } from 'vitest';
 
-// vitest's node environment has no browser globals; state/index.js reads
+// vitest's node environment has no browser globals; state/index.ts reads
 // localStorage/navigator at module load — same stub bridge the sibling state
 // tests use.
 const g = globalThis as unknown as Record<string, unknown>;
