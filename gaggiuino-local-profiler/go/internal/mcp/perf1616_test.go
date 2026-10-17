@@ -30,3 +30,26 @@ func BenchmarkGetLibraryTool(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkListShotsSince measures a list_shots-style scan bounded below
+// by since (2025-06-01, the newest part of the #1616 dataset) with a limit
+// the window cannot fill, so the scan has to decide when to stop.
+func BenchmarkListShotsSince(b *testing.B) {
+	sqlDB, _ := perfseed.OpenSeeded(b, perfseed.Default)
+	svc := shots.NewService(shots.NewRepository(sqlDB))
+	filters := shotFilters{Lo: 1748736000}
+	if _, err := scanShots(svc, filters, 5000, func(shots.PageRow) {}); err != nil { // warm the score cache
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		n := 0
+		if _, err := scanShots(svc, filters, 5000, func(shots.PageRow) { n++ }); err != nil {
+			b.Fatal(err)
+		}
+		if n == 0 {
+			b.Fatal("no shots in the window")
+		}
+	}
+}
