@@ -486,7 +486,10 @@
         }
         /* #1467: one column of boxless sections; the desktop media query below
            lays the few visible sections out in two columns. */
-        .analytics-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); width: 100%; }
+        /* #1741: the coffee-year card spans the whole grid, so the grid's inline
+           size is the card's width. The card's own two-column switch queries
+           this ancestor because an element cannot query its own size. */
+        .analytics-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); width: 100%; container-type: inline-size; }
         .analytics-sec { min-width: 0; }
         /* The verdict is the page's one emphasised block, so it keeps a surface. */
         .analytics-verdict-card { background: var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); }
@@ -617,9 +620,17 @@
         .cal-legend-part { display: inline-flex; align-items: center; gap: var(--sp-1); }
         .cal-legend-swatches { display: inline-flex; align-items: center; gap: 3px; }
         .cal-legend-swatch { display: inline-block; width: 12px; height: 12px; }
-        @media (min-width: 900px) {
+        /* #1741: the coffee-year card is a query container, so the calendar
+           grid and the streak figures are laid out by the card's width, not the
+           viewport. Two columns fit at 53 weeks x 15px + 53 x 3px gaps + 26px
+           weekday column + 12px margin (992px), a 10rem streak column and the
+           24px gap; below that the card stays one column. The grid rules query
+           .analytics-container, the card's ancestor: an element cannot query
+           its own size, and the card spans the full container. */
+        .cal-card { container-type: inline-size; }
+        @container (min-width: 1176px) {
             .cal-wrapper { --cal-cell: 15px; }
-            .cal-card { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--sp-5); align-items: start; }
+            .cal-card { display: grid; grid-template-columns: auto minmax(10rem, 1fr); column-gap: var(--sp-5); align-items: start; }
             .cal-card > .analytics-section-title { grid-column: 1 / -1; }
             .cal-streaks { margin-top: 0; }
         }
