@@ -1,10 +1,13 @@
         :root {
-            /* ── Radius ── #811: two radii, not eight. --radius-sm is for
-               controls (inputs, chips, small buttons), --radius for
-               containers. Anything that reached for a third value was
-               picking a number, not making a decision. */
+            /* ── Radius ── #811: a short scale, not eight values.
+               --radius-sm is for controls (inputs, chips, small
+               buttons), --radius for containers. #1618 adds the third
+               step those always implied: --radius-lg, for sheets and
+               popovers that sit above a container. A value off this
+               scale is a regression, not a nuance. */
             --radius: 10px;
             --radius-sm: 4px;
+            --radius-lg: 16px;
 
             /* ── Type scale ── #811: six steps, replacing 53 distinct
                font-size literals that stepped in 0.02rem increments. A size
