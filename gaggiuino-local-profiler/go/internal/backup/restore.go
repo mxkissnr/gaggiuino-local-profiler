@@ -124,7 +124,9 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		_, tsOK := m["timestamp"].(float64)
 		metas = append(metas, shotMeta{id: id, idOK: idOK && id > 0, tsOK: tsOK})
 		// Shot image validation happens here (one image body in memory at
-		// most). Discarded below if the shots section isn't in scope.
+		// most). Its cleared `.image` field only affects this in-memory
+		// copy: pass 2 re-parses the raw entry, so the stored row is
+		// sanitised by shots.shotInsertArgs instead.
 		validateEntityImages([]map[string]any{m}, "shot-", images, &shotPending)
 		return nil
 	})

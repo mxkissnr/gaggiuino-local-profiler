@@ -86,7 +86,7 @@ func Save(dir, prefix string, id int64, data []byte, contentType string, mode Mo
 // bytes are written as-is — with a JPEG's APP1/APP13 segments stripped by hand
 // when the stream parses, and left raw with a logged warning when it does not.
 func WriteOptimized(path string, data []byte, srcExt string) (finalExt string, err error) {
-	if !knownExt(srcExt) || len(data) == 0 || len(data) > MaxBytes {
+	if !KnownExt(srcExt) || len(data) == 0 || len(data) > MaxBytes {
 		return "", os.WriteFile(path, data, 0o644)
 	}
 	res, oerr := Optimize(data, srcExt, ModePreserve)

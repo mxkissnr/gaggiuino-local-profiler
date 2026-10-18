@@ -17,6 +17,7 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
@@ -863,4 +864,57 @@ func (b *failIfReadBody) Read([]byte) (int, error) {
 	b.read = true
 	b.t.Errorf("request body read on a request that should have been rejected before reading")
 	return 0, io.EOF
+}
+
+// TestRestore_DropsUnknownShotImageExtension pins that a restored shot's
+// photo extension is filtered when the row is stored: pass 2 re-parses the
+// raw entry, so validateEntityImages' cleared copy never reaches the DB.
+// The second half proves a legacy caller holding the old value still cannot
+// delete a file outside the image directory.
+func TestRestore_DropsUnknownShotImageExtension(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seedShot(t, deps, 1)
+
+	rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("parsing export: %v", err)
+	}
+	shotEntries, _ := bundle["shots"].([]any)
+	if len(shotEntries) != 1 {
+		t.Fatalf("exported shots = %d, want 1", len(shotEntries))
+	}
+	shotEntry, _ := shotEntries[0].(map[string]any)
+	if shotEntry == nil {
+		t.Fatalf("exported shot is not an object: %#v", shotEntries[0])
+	}
+	shotEntry["image"] = "x/../../victim"
+
+	rec = doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	restored, err := deps.ShotsRepo.FindByID(1)
+	if err != nil || restored == nil {
+		t.Fatalf("restored shot 1 not found: err=%v shot=%v", err, restored)
+	}
+	if ext, ok := restored["image"]; ok {
+		t.Fatalf("restored shot 1 kept image = %v, want no image key", ext)
+	}
+
+	dir := useImageDir(t)
+	victim := filepath.Join(filepath.Dir(dir), "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	img.Delete(dir, 1, "x/../../victim", "shot-")
+
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatalf("victim outside image dir was removed: %v", err)
+	}
 }
