@@ -32,9 +32,10 @@ contributors pick `dev` as the PR base by hand.
 
 Branch protection enforces these bases. `dev` and `feature/**` require the CI checks
 **Test and build**, **Go backend test/vet/build/vuln gate** and **E2E smoke test**; `dev`
-additionally requires **CodeQL** and **PR AI disclosure**. `main` and `release/**` additionally
-require the three Docker image smoke tests (`Docker image build+smoke test` per architecture).
-Force-pushes and branch deletion are blocked on protected branches.
+additionally requires **Analyze (go)**, **Analyze (javascript-typescript)** and **AI
+assistance disclosure present**. `main` and `release/**` additionally require the three
+Docker image smoke tests (`Docker image build+smoke test` per architecture). Force-pushes
+and branch deletion are blocked on protected branches.
 
 ## Pull requests
 
