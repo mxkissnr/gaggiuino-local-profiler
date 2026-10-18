@@ -53,7 +53,7 @@ const NAMED_COLOURS = new Set(
     'salmon sandybrown seagreen seashell sienna silver skyblue slateblue ' +
     'slategray slategrey snow springgreen steelblue tan teal thistle tomato ' +
     'turquoise violet wheat white whitesmoke yellow yellowgreen'
-  ).split(' '),
+  ).split(/\s+/),
 );
 
 function offendersIn(decl: { value: string }): string[] {
@@ -62,7 +62,7 @@ function offendersIn(decl: { value: string }): string[] {
   const value = decl.value.replace(/url\((?:[^()]|\([^()]*\))*\)/gi, 'url()');
   const found: string[] = [];
   if (LITERAL_HEX.test(value) || LITERAL_FUNCTION.test(value)) found.push(value);
-  for (const token of value.split(/[\s,/()]+/)) {
+  for (const token of value.split(/[\s,()]+/)) {
     const lower = token.toLowerCase();
     if (NAMED_COLOURS.has(lower) && !ALLOWED.has(lower)) found.push(value);
   }
