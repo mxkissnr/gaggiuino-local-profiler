@@ -7,24 +7,20 @@ import (
 )
 
 // TestDelete_IgnoresUnknownExtensions pins that a stored extension outside
-// the whitelist never becomes a filesystem path. Each case creates the
-// intermediate directory the traversed path needs to resolve, so the old
-// unchecked Delete would have removed the victim.
+// the whitelist never becomes a filesystem path. Path builds the target with
+// filepath.Join, so it is cleaned lexically to the victim location the old
+// unchecked Delete would have removed.
 func TestDelete_IgnoresUnknownExtensions(t *testing.T) {
 	cases := []struct {
-		name         string
-		ext          string
-		intermediate string
+		name string
+		ext  string
 	}{
-		{"parent traversal", "x/../../victim", "shot-1.x"},
-		{"bare traversal", "../victim", "shot-1..."},
+		{"parent traversal", "x/../../victim"},
+		{"bare traversal", "../victim"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "images")
-			if err := os.MkdirAll(filepath.Join(dir, tc.intermediate), 0o755); err != nil {
-				t.Fatal(err)
-			}
 			victim := filepath.Clean(Path(dir, 1, tc.ext, "shot-"))
 			if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
 				t.Fatal(err)

@@ -169,27 +169,22 @@ func TestMoveMisfiledShot_TargetTakenLeavesBoth(t *testing.T) {
 	}
 }
 
-// TestMoveShotImageFiles_IgnoresUnknownExtension pins that an extension
-// outside the whitelist never turns into a rename, even when the traversed
-// path resolves to a real file next to the photo directory.
+// TestMoveShotImageFiles_IgnoresUnknownExtension pins that an unknown
+// extension is not renamed: the old `ext == ""` guard would have moved
+// shot-1.jpeg to shot-2.jpeg.
 func TestMoveShotImageFiles_IgnoresUnknownExtension(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "images")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "shot-1.jpeg")
+	if err := os.WriteFile(src, []byte("keep"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	victim := filepath.Join(dir, "victim")
-	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"shot-1...", "shot-2..."} {
-		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
 
-	MoveShotImageFiles(dir, 1, 2, "../victim")
+	MoveShotImageFiles(dir, 1, 2, "jpeg")
 
-	if data, err := os.ReadFile(victim); err != nil || string(data) != "keep" {
-		t.Fatalf("victim at traversed path was renamed or removed: data=%q err=%v", data, err)
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("shot-1.jpeg was renamed or removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "shot-2.jpeg")); !os.IsNotExist(err) {
+		t.Fatalf("shot-2.jpeg should not exist (err=%v)", err)
 	}
 }

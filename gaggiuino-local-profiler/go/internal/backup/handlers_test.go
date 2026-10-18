@@ -907,9 +907,6 @@ func TestRestore_DropsUnknownShotImageExtension(t *testing.T) {
 	}
 
 	dir := useImageDir(t)
-	if err := os.MkdirAll(filepath.Join(dir, "shot-1..."), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	victim := filepath.Join(filepath.Dir(dir), "victim")
 	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
 		t.Fatal(err)
