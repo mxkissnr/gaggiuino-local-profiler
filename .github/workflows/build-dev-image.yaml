@@ -1,0 +1,125 @@
+# Called by build-dev.yaml, once per architecture (#1596: replaces two
+# near-identical job bodies and four copies of the build-push step).
+name: Build dev channel image (one architecture)
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      platform:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ inputs.arch }}
+    # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Merge dev-channel features
+        env:
+          DEV_FEATURES: ${{ vars.DEV_FEATURES }}
+        run: .github/scripts/merge-dev-features.sh
+
+      # Only the emulated architectures need QEMU.
+      - name: Set up QEMU
+        if: inputs.platform != 'linux/amd64'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # #809: the push (not the build) has hit ghcr.io's secondary rate limit
+      # -- the arch jobs push the same image set concurrently, so a 403
+      # "exceeded a secondary rate limit" fails the whole run and, since
+      # publish-manifest is gated on the amd64 job, silently leaves the dev
+      # manifest pointing at the previous build. First attempt is allowed to
+      # fail and is retried once below after a pause. A first-attempt
+      # failure still shows in the run's step list, so a systematic problem
+      # stays visible instead of being masked.
+      - name: Build and push
+        id: push
+        continue-on-error: true
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ./gaggiuino-local-profiler
+          platforms: ${{ inputs.platform }}
+          push: true
+          build-args: |
+            GLP_DEV_BUILD=${{ inputs.version }}
+          # Separate cache scope from the release build so a dev build can
+          # never poison the cache the release build restores from.
+          cache-from: type=gha,scope=dev-${{ inputs.arch }}
+          cache-to: type=gha,mode=max,scope=dev-${{ inputs.arch }}
+          tags: |
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ inputs.arch }}:${{ inputs.version }}
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ inputs.arch }}:dev
+          labels: |
+            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
+            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
+            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.licenses=GPL-3.0-only
+            io.hass.version=${{ inputs.version }}
+            io.hass.type=addon
+            io.hass.arch=${{ inputs.arch }}
+            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
+
+      - name: Wait out the registry rate limit
+        if: steps.push.outcome == 'failure'
+        run: sleep 120
+
+      - name: Build and push (retry)
+        if: steps.push.outcome == 'failure'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ./gaggiuino-local-profiler
+          platforms: ${{ inputs.platform }}
+          push: true
+          build-args: |
+            GLP_DEV_BUILD=${{ inputs.version }}
+          cache-from: type=gha,scope=dev-${{ inputs.arch }}
+          cache-to: type=gha,mode=max,scope=dev-${{ inputs.arch }}
+          tags: |
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ inputs.arch }}:${{ inputs.version }}
+            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ inputs.arch }}:dev
+          labels: |
+            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
+            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
+            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.licenses=GPL-3.0-only
+            io.hass.version=${{ inputs.version }}
+            io.hass.type=addon
+            io.hass.arch=${{ inputs.arch }}
+            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)

@@ -76,10 +76,16 @@ jobs:
 
             start=$(date +%s%3N)
             cid=$(docker run -d --name "glp-$side" -p 127.0.0.1:8099:8099 "glp-perf:$side")
+            ready=""
             for _ in $(seq 1 120); do
-              curl -sf -o /dev/null http://127.0.0.1:8099/api/status && break
+              curl -sf -o /dev/null http://127.0.0.1:8099/api/status && ready=1 && break
               sleep 0.25
             done
+            if [ -z "$ready" ]; then
+              echo "::error::$side ($ref) did not become ready within 30 s"
+              docker logs --tail 50 "$cid" || true
+              exit 1
+            fi
             startup_ms=$(( $(date +%s%3N) - start ))
 
             docker cp "$cid:/data/api_token.txt" "$RUNNER_TEMP/token-$side"
