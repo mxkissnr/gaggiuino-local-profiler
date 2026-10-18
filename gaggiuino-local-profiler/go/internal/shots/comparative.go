@@ -1,7 +1,6 @@
 package shots
 
 import (
-	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -135,8 +134,9 @@ func (m *comparativeMatch) grindOf(s Shot) (float64, bool) {
 }
 
 // advice ranks the comparable shots' grind settings and phrases the result
-// relative to the reference shot's own setting; nil when nothing compares.
-func (m *comparativeMatch) advice(comparable []comparableSibling) *ComparativeGrindAdvice {
+// in lang, relative to the reference shot's own setting; nil when nothing
+// compares.
+func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *ComparativeGrindAdvice {
 	if len(comparable) < 1 {
 		return nil
 	}
@@ -188,7 +188,7 @@ func (m *comparativeMatch) advice(comparable []comparableSibling) *ComparativeGr
 	if !m.hasCurrentGrind {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",
-			Text:        comparativeOkText(n, bestSetting, bestScore),
+			Text:        cardTextf(lang, "compare_ok", n, bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
@@ -196,26 +196,22 @@ func (m *comparativeMatch) advice(comparable []comparableSibling) *ComparativeGr
 	if abs(diff) < 0.6 {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",
-			Text:        comparativeOkText(n, bestSetting, bestScore),
+			Text:        cardTextf(lang, "compare_ok", n, bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
 	if diff > 0 {
 		return &ComparativeGrindAdvice{
 			Type: "finer", Icon: "📊",
-			Text:        fmt.Sprintf("%d comparable shots: grind %g → score %d — grind finer", n, bestSetting, bestScore),
+			Text:        cardTextf(lang, "compare_finer", n, bestSetting, bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
 	return &ComparativeGrindAdvice{
 		Type: "coarser", Icon: "📊",
-		Text:        fmt.Sprintf("%d comparable shots: grind %g → score %d — grind coarser", n, bestSetting, bestScore),
+		Text:        cardTextf(lang, "compare_coarser", n, bestSetting, bestScore),
 		SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 	}
-}
-
-func comparativeOkText(n int, bestSetting float64, bestScore int) string {
-	return fmt.Sprintf("%d comparable shots confirm your grind setting (avg score %d)", n, bestScore)
 }
 
 // annotationStr reads ann[key] as a string, or "" if absent/not a string.

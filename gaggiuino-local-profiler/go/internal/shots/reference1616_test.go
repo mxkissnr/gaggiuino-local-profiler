@@ -36,5 +36,5 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 		}
 		comparable = append(comparable, comparableSibling{grind: g, score: *score})
 	}
-	return m.advice(comparable)
+	return m.advice(comparable, "en")
 }
