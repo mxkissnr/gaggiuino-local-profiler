@@ -1272,7 +1272,9 @@
         .lib-inv-pct { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); min-width: 3ch; text-align: right; }
         .lib-inv-pct.low { color: var(--err); }
         .lib-inv-nums { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-1); }
-        .lib-inv-remaining { color: var(--gray-300); font-weight: 600; }
+        /* #1618: the removed legacy rule came later and won here, so keep
+           its colour rather than the earlier --gray-300. */
+        .lib-inv-remaining { color: var(--gray-500); font-weight: 600; }
         .lib-inv-remaining.low { color: var(--err); }
         .lib-inv-consumed { color: var(--gray-500); }
         .lib-inv-sep { color: var(--gray-700); }
