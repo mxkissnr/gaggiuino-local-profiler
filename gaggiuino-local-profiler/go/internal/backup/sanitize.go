@@ -3,7 +3,12 @@ package backup
 import (
 	"regexp"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 )
+
+// orderIDRe matches the order ids PlaceOrder generates (ord_<ms>_<token>).
+var orderIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
 
 func nowMillis() int64 { return time.Now().UnixMilli() }
 
@@ -127,7 +132,7 @@ func sanitizeOrderRow(o map[string]any) (map[string]any, bool) {
 	}
 	id, _ := o["id"].(string)
 	id = trimString(id)
-	if id == "" || len([]rune(id)) > 100 {
+	if !orderIDRe.MatchString(id) {
 		return nil, false
 	}
 	status, _ := o["status"].(string)
@@ -141,7 +146,7 @@ func sanitizeOrderRow(o map[string]any) (map[string]any, bool) {
 		"note":     strOrDefault(o["note"], 200, ""),
 	}
 	out["variant"] = strOrNilPtr(o["variant"], 50)
-	out["notifyService"] = strOrNilPtr(o["notifyService"], 100)
+	out["notifyService"] = orders.NormalizeNotifyService(o["notifyService"])
 	out["declineReason"] = strOrNilPtr(o["declineReason"], 200)
 	out["haUserId"] = strOrNilPtr(o["haUserId"], 100)
 	out["machine"] = strOrNilPtr(o["machine"], 100)

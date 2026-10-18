@@ -20,9 +20,21 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
+)
+
+// notifyServiceNameRe and entityIDRe validate the two values this package
+// interpolates into an HA REST path: a notify.<service> call and a states/<id>
+// lookup. A restored order, a stored notify_mapping or a settings blob is
+// untrusted input, so none of them may pick the path segment freely.
+var (
+	notifyServiceNameRe = regexp.MustCompile(`^[a-z0-9_]+$`)
+	entityIDRe          = regexp.MustCompile(`^[a-z_]+\.[a-z0-9_]+$`)
 )
 
 // Client carries the HA API base and token as instance fields instead of
@@ -70,16 +82,19 @@ func (c *Client) enabled() bool { return c.token != "" }
 // nicht konfiguriert" 400).
 func (c *Client) Enabled() bool { return c.enabled() }
 
-// SendNotify posts to HA's notify.<service> service call. Best-effort —
-// a failure is logged here (once, for every call site) and also returned, so
-// a caller that ignores the error still leaves a trace rather than failing
-// the caller's HTTP response.
+// SendNotify posts to HA's notify.<service> service call. Only a `notify`
+// domain with a plain service name is accepted; anything else is skipped and
+// reported at debug level, so no stored value can reach another service.
+// Best-effort — a failure is logged here (once, for every call site) and also
+// returned, so a caller that ignores the error still leaves a trace rather
+// than failing the caller's HTTP response.
 func (c *Client) SendNotify(ctx context.Context, service, title, message, tag string) error {
 	if !c.enabled() || service == "" {
 		return nil
 	}
 	domain, svcName, ok := strings.Cut(service, ".")
-	if !ok {
+	if !ok || domain != "notify" || !notifyServiceNameRe.MatchString(svcName) {
+		config.DebugLogf("ha: ignoring notify call for non-notify service %q", service)
 		return nil
 	}
 	body := map[string]any{
@@ -107,11 +122,15 @@ func nullableString(s string) any {
 }
 
 // GetSwitchState returns the switch state for entity: nil means "unknown" —
-// no token configured, no entity given, or the call failed — which every
-// caller (poll.go's checkAndApplyMachinePower) treats as "skip this tick,
-// don't act on it".
+// no token configured, no entity given, the entity id is malformed, or the
+// call failed — which every caller (poll.go's checkAndApplyMachinePower)
+// treats as "skip this tick, don't act on it".
 func (c *Client) GetSwitchState(ctx context.Context, entity string) *bool {
 	if !c.enabled() || entity == "" {
+		return nil
+	}
+	if !entityIDRe.MatchString(entity) {
+		config.DebugLogf("ha: ignoring switch state request for invalid entity id %q", entity)
 		return nil
 	}
 	var st struct {

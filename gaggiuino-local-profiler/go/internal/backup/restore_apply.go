@@ -126,7 +126,7 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 	if m, ok := kv["notify_mapping"].(map[string]any); ok {
 		mapping := orders.NotifyMapping{}
 		for k, v := range m {
-			if s, ok := v.(string); ok {
+			if s, ok := orders.NormalizeNotifyService(v).(string); ok {
 				mapping[k] = s
 			}
 		}

@@ -59,6 +59,45 @@ func TestGetSwitchState_Disabled_ReturnsNil(t *testing.T) {
 	}
 }
 
+func TestSendNotify_NonNotifyServicesSendNothing(t *testing.T) {
+	calls := 0
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusOK)
+	})
+	for _, service := range []string{"script.x", "light.turn_on", "notify.a/../b", "notify.Bad-Name"} {
+		if err := c.SendNotify(context.Background(), service, "title", "message", "tag"); err != nil {
+			t.Errorf("SendNotify(%q): %v", service, err)
+		}
+	}
+	if calls != 0 {
+		t.Errorf("requests = %d, want 0", calls)
+	}
+}
+
+func TestSendNotify_NotifyServiceSends(t *testing.T) {
+	var gotPath string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+	if err := c.SendNotify(context.Background(), "notify.mobile_app_x", "title", "message", "tag"); err != nil {
+		t.Fatalf("SendNotify: %v", err)
+	}
+	if gotPath != "/api/services/notify/mobile_app_x" {
+		t.Errorf("path = %q, want /api/services/notify/mobile_app_x", gotPath)
+	}
+}
+
+func TestGetSwitchState_InvalidEntitySendsNothing(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request for %s", r.URL.Path)
+	})
+	if got := c.GetSwitchState(context.Background(), "switch.a/../b"); got != nil {
+		t.Errorf("GetSwitchState = %v, want nil", got)
+	}
+}
+
 func TestCallHaService_Success(t *testing.T) {
 	var gotBody map[string]any
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
