@@ -983,4 +983,3 @@ func TestRestore_RejectsUnsafeOrderAndNotifyServiceValues(t *testing.T) {
 		t.Errorf("ha-user-2 mapping = %q, want notify.mobile_app_x", got)
 	}
 }
-
