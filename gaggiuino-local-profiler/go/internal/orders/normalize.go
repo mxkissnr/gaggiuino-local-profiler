@@ -1,9 +1,19 @@
 package orders
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+)
+
+// menuIDRe and notifyServiceRe guard values that end up in a URL path or an
+// HA service call. Both accept only the shapes the app itself generates
+// (`m_<ms>`, `ord_<ms>_<token>`, `notify.<service>`), so a restored bundle
+// cannot widen them.
+var (
+	menuIDRe        = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
+	notifyServiceRe = regexp.MustCompile(`^notify\.[a-z0-9_]+$`)
 )
 
 // NormalizeMenuItem builds a canonical MenuItem from a raw map, applying the
@@ -19,7 +29,7 @@ func NormalizeMenuItem(raw map[string]any) (MenuItem, bool) {
 		return nil, false
 	}
 	id, _ := raw["id"].(string)
-	if id == "" {
+	if !menuIDRe.MatchString(id) {
 		id = "m_" + strconv.FormatInt(time.Now().UnixMilli(), 10)
 	}
 	createdAt, ok := raw["createdAt"].(float64)
@@ -54,7 +64,7 @@ func NormalizeSettings(raw map[string]any) Settings {
 		s["enabled"] = v
 	}
 	if v, present := raw["baristaNotifyService"]; present {
-		s["baristaNotifyService"] = normalizeBaristaNotifyService(v)
+		s["baristaNotifyService"] = NormalizeNotifyService(v)
 	}
 	for _, key := range notifyToggleKeys {
 		if v, ok := raw[key].(bool); ok {
@@ -81,11 +91,18 @@ func normalizeRecipients(raw any) []any {
 	return out
 }
 
-// normalizeBaristaNotifyService keeps a `notify.*` service string trimmed to
-// 100 runes; anything else collapses to nil.
-func normalizeBaristaNotifyService(v any) any {
-	if str, ok := v.(string); ok && strings.HasPrefix(str, "notify.") {
-		return trimMax(str, 100)
+// NormalizeNotifyService keeps a `notify.<service>` string whose service name
+// is plain lowercase letters, digits and underscores, at most 100 runes;
+// anything else collapses to nil. The backup restore and the settings handlers
+// both go through it, so a stored value always names a notify service.
+func NormalizeNotifyService(v any) any {
+	str, ok := v.(string)
+	if !ok {
+		return nil
 	}
-	return nil
+	str = strings.TrimSpace(str)
+	if len([]rune(str)) > 100 || !notifyServiceRe.MatchString(str) {
+		return nil
+	}
+	return str
 }

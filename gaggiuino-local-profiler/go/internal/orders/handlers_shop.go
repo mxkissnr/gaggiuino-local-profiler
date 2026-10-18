@@ -145,7 +145,7 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		s["broadcastRecipients"] = normalizeRecipients(body["broadcastRecipients"])
 	}
 	if v, present := body["baristaNotifyService"]; present {
-		s["baristaNotifyService"] = normalizeBaristaNotifyService(v)
+		s["baristaNotifyService"] = NormalizeNotifyService(v)
 	}
 	for _, key := range notifyToggleKeys {
 		if v, ok := body[key].(bool); ok {

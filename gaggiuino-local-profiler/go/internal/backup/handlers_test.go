@@ -918,3 +918,70 @@ func TestRestore_DropsUnknownShotImageExtension(t *testing.T) {
 		t.Fatalf("victim outside image dir was removed: %v", err)
 	}
 }
+
+func TestRestore_RejectsUnsafeOrderAndNotifyServiceValues(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	bundle := map[string]any{
+		"glp_backup": true,
+		"shots":      []any{},
+		"sections":   []any{"orders", "settings"},
+		"orders": []any{
+			map[string]any{"id": "ord_1_a", "status": "pending", "item": "Espresso", "customer": "Max", "notifyService": "script.x"},
+			map[string]any{"id": "../x", "status": "pending", "item": "Espresso", "customer": "Max"},
+			map[string]any{"id": "ord_2_b", "status": "pending", "item": "Latte", "customer": "Eva", "notifyService": "notify.mobile_app_x"},
+		},
+		"kv": map[string]any{
+			"notify_mapping": map[string]any{
+				"ha-user-1": "script.x",
+				"ha-user-2": "notify.mobile_app_x",
+			},
+		},
+	}
+	rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rows, err := deps.OrdersRepo.FindAll()
+	if err != nil {
+		t.Fatalf("FindAll: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("restored orders = %+v, want the two valid rows", rows)
+	}
+	byID := map[string]orders.Order{}
+	for _, row := range rows {
+		id, _ := row["id"].(string)
+		byID[id] = row
+	}
+	if _, ok := byID["../x"]; ok {
+		t.Error("order with id ../x was restored")
+	}
+	first, ok := byID["ord_1_a"]
+	if !ok {
+		t.Fatal("order ord_1_a was not restored")
+	}
+	if got := first["notifyService"]; got != nil {
+		t.Errorf("ord_1_a notifyService = %v, want nil", got)
+	}
+	second, ok := byID["ord_2_b"]
+	if !ok {
+		t.Fatal("order ord_2_b was not restored")
+	}
+	if got := second["notifyService"]; got != "notify.mobile_app_x" {
+		t.Errorf("ord_2_b notifyService = %v, want notify.mobile_app_x", got)
+	}
+
+	mapping, err := deps.OrdersRepo.GetNotifyMapping()
+	if err != nil {
+		t.Fatalf("GetNotifyMapping: %v", err)
+	}
+	if _, ok := mapping["ha-user-1"]; ok {
+		t.Error("notify_mapping entry with value script.x was kept")
+	}
+	if got := mapping["ha-user-2"]; got != "notify.mobile_app_x" {
+		t.Errorf("ha-user-2 mapping = %q, want notify.mobile_app_x", got)
+	}
+}
