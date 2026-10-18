@@ -899,7 +899,7 @@ export function handleLiveData(msg: LiveMessage): void {
     metaEl.textContent = msg.profileName || '–';
   } else {
     setLiveBadge('idle');
-    metaEl.textContent = (msg.profileName || '–') + ' · abgeschlossen';
+    metaEl.textContent = t('live_profile_finished', msg.profileName || '–');
   }
 
   if (lastIdx >= 0) {

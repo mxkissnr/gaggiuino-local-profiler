@@ -29,6 +29,8 @@ env:
 
 jobs:
   watch:
+    # Forks and mirrors would open issues against themselves.
+    if: github.repository == 'mxkissnr/gaggiuino-local-profiler' && github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:
       - name: Ensure label
@@ -54,7 +56,7 @@ jobs:
             echo
             for f in websocket-api.yaml shot-notes-api.md; do
               echo "### \`docs/$f\` since $old"
-              d=$(diff -u <(spec "$f" "$old") <(spec "$f" "$new") | tail -n +3 | head -c 25000 || true)
+              d=$(diff -u <(spec "$f" "$old") <(spec "$f" "$new") | tail -n +3 | head -c 20000 || true)
               if [ -z "$d" ]; then echo "Unchanged."; else printf '%sdiff\n%s\n%s\n' "$fence" "$d" "$fence"; fi
               echo
             done
@@ -88,7 +90,7 @@ jobs:
               gh api "repos/$up/commits/$sha" -q '.commit.message' | sed 's/^/> /'
               echo
               printf '%sdiff\n%s\n%s\n' "$fence" "$(gh api "repos/$up/commits/$sha" \
-                -q '.files[] | select(.filename | startswith("docs/rest-api/")) | "--- " + .filename + "\n" + (.patch // "")' | head -c 25000)" "$fence"
+                -q '.files[] | select(.filename | startswith("docs/rest-api/")) | "--- " + .filename + "\n" + (.patch // "")' | head -c 20000)" "$fence"
               echo
               echo "- [ ] Assess the impact on GLP's Gaggiuino client"
               echo "- [ ] Open a fix issue if anything breaks"
@@ -117,7 +119,11 @@ jobs:
           {
             echo "Gaggiuino [$tag](https://github.com/$up/releases/tag/$tag) mentions an API change in its release notes:"
             echo
-            sed 's/^/> /' notes.md
+            # Tildes: the notes may themselves contain backtick fences.
+            echo '~~~~text'
+            head -c 20000 notes.md
+            [ "$(wc -c < notes.md)" -gt 20000 ] && printf '\n[truncated]\n'
+            echo '~~~~'
             echo
             echo "- [ ] Assess the impact on GLP's Gaggiuino client"
             echo "- [ ] Run the acceptance cases on the real machine with this firmware"
