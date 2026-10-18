@@ -181,7 +181,7 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
     ? html`<span class="lib-bag-drag-handle" data-bag-drag-handle data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_reorder_handle')}">⠿</span>`
     : esc('');
   return html`<div class="lib-bag-card${esc(state === 'current' ? ' active' : '')}${esc(expanded ? ' expanded' : '')}" data-bag-card data-bag-id="${esc(bg.id)}">
-    <div class="lib-bag-card-header" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}" data-action="toggle-bag-card" data-bag-id="${esc(bg.id)}">
+    <div class="lib-bag-card-header" role="button" tabindex="0" aria-expanded="${esc(expanded ? 'true' : 'false')}" data-action="toggle-bag-card" data-bag-id="${esc(bg.id)}">
       ${dragHandle}
       <span class="lib-bag-date">${bg.roastDate ? esc(bg.roastDate) : tHtml('lib_bag_no_roast_date')}</span>
       ${stateBadge}
