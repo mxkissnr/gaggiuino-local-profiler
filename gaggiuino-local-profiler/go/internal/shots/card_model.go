@@ -385,7 +385,7 @@ func (c *cardModel) svg() string {
 	}
 	if len(doseParts) > 0 {
 		doseY := subY + 14
-			s.text(cardPX, doseY, 22, false, p.textMute, "", cardText(c.lang, "dose"))
+		s.text(cardPX, doseY, 22, false, p.textMute, "", cardText(c.lang, "dose"))
 		s.text(cardPX+78, doseY, 22, true, p.text, "", strings.Join(doseParts, "  "))
 		subY = doseY
 	}
