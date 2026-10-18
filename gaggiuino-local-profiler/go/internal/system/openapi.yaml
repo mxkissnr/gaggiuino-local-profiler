@@ -1318,6 +1318,7 @@ paths:
         - { name: format, in: query, schema: { type: string, enum: [square, story], default: square } }
         - { name: accent, in: query, schema: { type: string }, description: "Hex accent color override" }
         - { name: theme, in: query, schema: { type: string }, description: "UI theme name override" }
+        - { name: lang, in: query, schema: { type: string }, description: "UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en)" }
       responses:
         "200": { description: PNG image, content: { image/png: { schema: { type: string, format: binary } } } }
         "400": { description: Invalid shot ID }

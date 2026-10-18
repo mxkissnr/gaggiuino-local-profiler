@@ -251,6 +251,23 @@ describe('release-check screenshot freshness (#537)', () => {
         const failures = checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots');
         expect(failures).toEqual([]);
     });
+
+    it('does not flag a reworded multi-line TS block comment (.ts is a stripped source type)', () => {
+        const repo = makeRepo();
+        seedRepo(repo, '<html></html>\n', {
+            'main.ts': '/*\n * old explanation\n * across lines\n */\nconsole.log("hi");\n',
+        });
+
+        writeFile(
+            repo,
+            'main.ts',
+            '/*\n * new explanation\n * still across lines\n */\nconsole.log("hi");\n'
+        );
+        commitAll(repo, 'reword a multi-line ts comment');
+
+        const failures = checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots');
+        expect(failures).toEqual([]);
+    });
 });
 
 // Pure comment strippers used by the commit-relevance scan above. No git

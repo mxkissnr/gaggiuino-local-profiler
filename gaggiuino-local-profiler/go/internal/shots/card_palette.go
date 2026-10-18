@@ -207,19 +207,19 @@ func scoreColor(score *int, p palette) string {
 	}
 }
 
-// scoreTierPhrase returns the German tier phrase for score.
-func scoreTierPhrase(score *int) string {
+// scoreTierPhrase returns the localized tier phrase for score.
+func scoreTierPhrase(score *int, lang string) string {
 	if score == nil {
 		return ""
 	}
 	switch {
 	case *score >= 90:
-		return "Herausragender Shot"
+		return cardText(lang, "tier_top")
 	case *score >= 80:
-		return "Richtig gut getroffen"
+		return cardText(lang, "tier_great")
 	case *score >= 60:
-		return "Solider Shot"
+		return cardText(lang, "tier_solid")
 	default:
-		return "Dial-in lohnt sich noch"
+		return cardText(lang, "tier_dialin")
 	}
 }

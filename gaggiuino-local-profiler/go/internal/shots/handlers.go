@@ -421,8 +421,9 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	}
 	accent := r.URL.Query().Get("accent")
 	theme := r.URL.Query().Get("theme")
+	lang := r.URL.Query().Get("lang")
 
-	png, err := renderShareCard(shot, h.service.ComputeScore(shot), format, accent, theme, h.card)
+	png, err := renderShareCard(shot, h.service.ComputeScore(shot), format, accent, theme, lang, h.card)
 	if err != nil {
 		log.Printf("shots: share-card render for shot %d failed: %v", id, err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")

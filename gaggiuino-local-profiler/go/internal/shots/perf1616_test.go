@@ -90,7 +90,7 @@ func BenchmarkComparativeGrindAdvice(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := env.svc.GetComparativeGrindAdvice(shot); err != nil {
+		if _, err := env.svc.GetComparativeGrindAdvice(shot, "en"); err != nil {
 			b.Fatal(err)
 		}
 	}

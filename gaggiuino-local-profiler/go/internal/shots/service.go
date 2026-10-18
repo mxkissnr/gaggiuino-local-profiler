@@ -134,7 +134,7 @@ func (s *Service) GetPreviousByProfile(shot Shot) (Shot, error) {
 // hydrates only the comparable shots and takes their scores from the score
 // cache: a cached score is CalcShotScoreDetail's score against the same
 // bean target, guarded by the same fingerprint GET /api/shots trusts.
-func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice, error) {
+func (s *Service) GetComparativeGrindAdvice(shot Shot, lang string) (*ComparativeGrindAdvice, error) {
 	if shot == nil {
 		return nil, nil
 	}
@@ -158,7 +158,7 @@ func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice,
 		}
 		comparable = append(comparable, comparableSibling{grind: g, score: *c.score})
 	}
-	return m.advice(comparable), nil
+	return m.advice(comparable, lang), nil
 }
 
 // AnnotationValidationError reports that a merged annotation failed

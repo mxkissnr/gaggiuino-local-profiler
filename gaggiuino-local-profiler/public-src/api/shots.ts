@@ -119,14 +119,16 @@ export interface ShotCardOptions {
   accent: string;
   /** "dark" | "light". */
   theme: string;
+  /** Viewer's UI language (de/en/es/fr/it/nl); the backend falls back to English. */
+  lang: string;
 }
 
 /**
  * GET /api/shots/{id}/card — the rendered PNG. Returns the raw Response: the
  * caller streams the body as a Blob and reads the JSON error on a non-ok.
  */
-export function getShotCard(id: number, { format, accent, theme }: ShotCardOptions): Promise<Response> {
-  const params = new URLSearchParams({ format, accent, theme });
+export function getShotCard(id: number, { format, accent, theme, lang }: ShotCardOptions): Promise<Response> {
+  const params = new URLSearchParams({ format, accent, theme, lang });
   return apiFetch(`api/shots/${id}/card?${params}`);
 }
 
