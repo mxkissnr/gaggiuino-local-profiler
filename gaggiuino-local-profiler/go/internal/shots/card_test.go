@@ -3,8 +3,10 @@ package shots
 import (
 	"bytes"
 	"image/png"
+	"math"
 	"net/http"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -46,6 +48,50 @@ func cardShotData() map[string]any {
 			"coffee": "Colombia Huila", "dose": 18.0, "totalWeight": 40.0,
 			"rating": 4.0, "machine": "Lelit Bianca",
 		},
+	}
+}
+
+// cardSVGWith builds a card from cardShotData with the given duration and a
+// constant temperature series, and renders it.
+func cardSVGWith(duration any, temp float64) string {
+	data := cardShotData()
+	data["duration"] = duration
+	data["datapoints"].(map[string]any)["temperature"] = floatSeq(200, func(int) float64 { return temp })
+	return newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
+}
+
+func countXTicks(svg string) int {
+	return strings.Count(svg, `stroke-dasharray="2,4"`)
+}
+
+// TestCardSVG_BoundsAxisTicks covers #1747: a shot whose duration or
+// temperature is absurd must not turn the axis tick loops into unbounded SVG
+// output. Ordinary shots keep exactly the same tick count as before.
+func TestCardSVG_BoundsAxisTicks(t *testing.T) {
+	const ordinaryXTicks = 6 // 28s shot, 5s tick step
+	if got := countXTicks(cardSVGWith(int64(280), 930)); got != ordinaryXTicks {
+		t.Fatalf("ordinary shot x ticks = %d, want %d", got, ordinaryXTicks)
+	}
+
+	for _, tc := range []struct {
+		name     string
+		duration any
+		temp     float64
+	}{
+		{"huge duration", 1e15, 930},
+		{"infinite duration", math.Inf(1), 930},
+		{"NaN duration", math.NaN(), 930},
+		{"huge temperature", int64(280), 1e300},
+		{"infinite temperature", int64(280), math.Inf(1)},
+		{"NaN temperature", int64(280), math.NaN()},
+	} {
+		svg := cardSVGWith(tc.duration, tc.temp)
+		if got := countXTicks(svg); got > cardAxisMaxTicks {
+			t.Errorf("%s: x ticks = %d, want <= %d", tc.name, got, cardAxisMaxTicks)
+		}
+		if got := strings.Count(svg, "<text"); got > 500 {
+			t.Errorf("%s: text elements = %d, want a bounded count", tc.name, got)
+		}
 	}
 }
 
