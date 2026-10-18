@@ -266,6 +266,8 @@ export interface paths {
                     accent?: string;
                     /** @description UI theme name override */
                     theme?: string;
+                    /** @description UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en) */
+                    lang?: string;
                 };
                 header?: never;
                 path: {

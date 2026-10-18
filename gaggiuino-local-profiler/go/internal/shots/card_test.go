@@ -200,7 +200,7 @@ func TestInstallCodeFor_StableAndWellFormed(t *testing.T) {
 func TestCardAndDetailShareYieldAndPhases(t *testing.T) {
 	shot := Shot(cardShotData())
 	m := ComputeShotMetrics(shot)
-	fig := newCardModel(shot, nil, "square", "", "dark", cardDeps{}).figures(
+	fig := newCardModel(shot, nil, "square", "", "dark", "en", cardDeps{}).figures(
 		DatapointsMap(shot))
 
 	if !m.HasYield || !fig.hasYield {

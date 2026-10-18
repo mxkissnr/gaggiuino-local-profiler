@@ -90,7 +90,7 @@ func TestEquivalence1616_ComparativeAdvice(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			advice, err := env.svc.GetComparativeGrindAdvice(shot)
+			advice, err := env.svc.GetComparativeGrindAdvice(shot, "en")
 			if err != nil {
 				t.Fatal(err)
 			}

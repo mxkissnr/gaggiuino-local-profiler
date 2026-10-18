@@ -228,7 +228,7 @@ export async function shareCard(format = 'square'): Promise<void> {
     // user's actual Farbschema pick.
     const accent = document.documentElement.dataset.accent || 'amber-americano';
     const theme  = document.documentElement.dataset.theme  || 'dark';
-    const r = await getShotCard(shotId, { format, accent, theme });
+    const r = await getShotCard(shotId, { format, accent, theme, lang: S.currentLang });
     if (!r.ok) {
       const err = await r.json().catch(() => ({})) as { error?: string };
       throw new Error(err.error || r.statusText);
