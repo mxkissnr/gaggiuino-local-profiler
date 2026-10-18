@@ -6,8 +6,6 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 
-const { activateActionFromKeyboard } = await import('../public-src/boot/delegation.js');
-
 interface FakeActionEl {
   dataset: Record<string, string>;
   click: ReturnType<typeof vi.fn>;
@@ -138,6 +136,7 @@ function makeDocument(): { doc: FakeDoc; modal: FakeEl; confirm: FakeEl; listene
 g.window ??= {};
 g.sessionStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 g.document = makeDocument().doc;
+const { activateActionFromKeyboard } = await import('../public-src/boot/delegation.js');
 const { openBackupExportModal, closeBackupModal } = await import('../public-src/components/backup-modal.js');
 
 describe('backup modal dialog keyboard (#1619)', () => {
