@@ -54,6 +54,8 @@ function showUpdateBanner({ current, latest, release_url }: { current: string; l
     });
 
     const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute?.('aria-label', t('lib_sheet_close'));
     closeBtn.innerHTML = CLOSE_ICON_SVG;
     Object.assign(closeBtn.style, {
         background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--accent-text)', padding: '0 2px',

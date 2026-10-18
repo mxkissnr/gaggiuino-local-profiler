@@ -4,6 +4,8 @@
 // JPEG blob that feeds into the existing upload flow unchanged.
 import { t } from '../i18n.js';
 import { esc, html } from '../utils.js';
+import { attachDialogKeyboard } from './dialog-a11y.js';
+import type { DialogKeyboardHandle } from './dialog-a11y.js';
 
 // 'square' is the historical 1:1 crop (grinders, baskets, puck screens, shots);
 // 'portrait' is the 3:4 bag shape bean photos are shown at on the shelf (#1346).
@@ -83,9 +85,12 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
   const canvasClass = `crop-editor-canvas crop-editor-canvas-${guideClass}${portraitClass}`;
   const overlay = document.createElement('div');
   overlay.className = 'crop-editor-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'cropEditorTitle');
   overlay.innerHTML = html`
     <div class="crop-editor-modal">
-      <h3 class="crop-editor-title">${esc(t('crop_editor_title'))}</h3>
+      <h3 class="crop-editor-title" id="cropEditorTitle">${esc(t('crop_editor_title'))}</h3>
       <canvas class="${esc(canvasClass)}"
               width="${esc(previewW)}" height="${esc(previewH)}"></canvas>
       <div class="crop-editor-zoom-row">
@@ -210,7 +215,10 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
   canvas.addEventListener('pointercancel', endPointer);
 
   // ── Apply / Cancel ────────────────────────────────────────────────────
+  let dialog: DialogKeyboardHandle | null = null;
   function close(result: Blob | null): void {
+    dialog?.release();
+    dialog = null;
     overlay.remove();
     resolve(result);
   }
@@ -232,4 +240,6 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
     outCtx.drawImage(img, exportOffsetX, exportOffsetY, naturalW * scale * exportScaleX, naturalH * scale * exportScaleY);
     outCanvas.toBlob((blob) => close(blob), 'image/jpeg', 0.9);
   });
+
+  dialog = attachDialogKeyboard(overlay, () => close(null), { initialFocus: slider });
 }

@@ -95,6 +95,7 @@ const de: Partial<Translations> = {
     btn_fullscreen_close:`${CLOSE_ICON_SVG} Schließen`, btn_fullscreen_tooltip:'Vollbild',
     btn_compare_tooltip:'Als Vergleichs-Shot (B) wählen. Tipp: Klick auf den Namen wählt Shot A.', btn_delete_tooltip:'Shot löschen',
     ann_title:'Notizen & Bewertung',    ann_coffee:'Kaffee / Bohne',
+    ann_rating_star:(n)=>`${n} von 5 Sternen`,
     ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
     ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'z.B. 18',

@@ -49,6 +49,15 @@ describe('backup modal: secrets checkbox markup', () => {
     });
 });
 
+describe('backup modal: dialog semantics (#1619)', () => {
+    it('is a labelled modal dialog', () => {
+        const tag = html.match(/<div id="backupModal"[^>]*>/)?.[0];
+        expect(tag).toContain('role="dialog"');
+        expect(tag).toContain('aria-modal="true"');
+        expect(tag).toContain('aria-labelledby="backupModalTitle"');
+    });
+});
+
 describe('backup modal: progress row markup (#960)', () => {
     it('has a #backupModalProgress element inside the #backupModal block', () => {
         const modalBlock = html.slice(html.indexOf('id="backupModal"'), html.indexOf('<script type="module"'));

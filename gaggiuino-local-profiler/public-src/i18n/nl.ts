@@ -95,6 +95,7 @@ const nl: Partial<Translations> = {
     btn_fullscreen_close:`${CLOSE_ICON_SVG} Sluiten`, btn_fullscreen_tooltip:'Volledig scherm',
     btn_compare_tooltip:'Selecteer als vergelijkingsshot (B). Tip: klik op de naam voor Shot A.', btn_delete_tooltip:'Shot verwijderen',
     ann_title:'Notities & Beoordeling', ann_coffee:'Koffie / Boon',
+    ann_rating_star:(n)=>`${n} van 5 sterren`,
     ann_grinder:'Molen', ann_grinder_ph:'bijv. Niche Zero',
     ann_grind_setting:'Maalgraad', ann_grind_ph:'bijv. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'bijv. 18',

@@ -589,7 +589,9 @@ export function _renderRecipeSelect(selectedId: number | null, fieldId = 'recipe
 
 export function renderStars(rating: number): void {
   document.querySelectorAll<HTMLElement>('#starRating .star').forEach(s => {
-    s.classList.toggle('active', parseInt(s.dataset.val as string) <= rating);
+    const on = parseInt(s.dataset.val as string) <= rating;
+    s.classList.toggle('active', on);
+    s.setAttribute('aria-pressed', String(on));
   });
 }
 

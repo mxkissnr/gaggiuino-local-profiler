@@ -9,6 +9,8 @@ import { initToken } from '../api/transport.js';
 import { requestBackup, postRestore } from '../api/system.js';
 import { esc, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
 import type { Html } from '../utils.js';
+import { attachDialogKeyboard } from './dialog-a11y.js';
+import type { DialogKeyboardHandle } from './dialog-a11y.js';
 
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
 
@@ -72,6 +74,7 @@ let previewDebounce: ReturnType<typeof setTimeout> | null = null;
 // earlier dry-run cannot overwrite the preview of a later checkbox/passphrase
 // state (or paint into a modal that was closed meanwhile).
 let _previewSeq = 0;
+let _dialogKeyboard: DialogKeyboardHandle | null = null;
 
 // Enter in the passphrase/confirm-passphrase input has no default browser
 // behavior to fall back on here -- the modal is deliberately not a <form>
@@ -180,8 +183,18 @@ function setError(msg: string): void {
     error.style.display = msg ? '' : 'none';
 }
 
+// The modal is static markup in index.html, so the dialog attributes live
+// there; this only owns the focus/Escape lifecycle (#1619).
+function openModal(modal: HTMLElement): void {
+    modal.classList.add('open');
+    _dialogKeyboard?.release();
+    _dialogKeyboard = attachDialogKeyboard(modal, closeBackupModal);
+}
+
 function closeBackupModal(): void {
     const { modal, passInput, passConfirm } = els();
+    _dialogKeyboard?.release();
+    _dialogKeyboard = null;
     modal.classList.remove('open');
     hideProgress();
     setBusy(false);
@@ -280,7 +293,7 @@ export function openBackupExportModal(): void {
     preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_export_confirm');
-    modal.classList.add('open');
+    openModal(modal);
 
     els().secretsCb.onchange = () => { passRow.style.display = els().secretsCb.checked ? '' : 'none'; passConfirmRow.style.display = els().secretsCb.checked ? '' : 'none'; };
     cancelBtn.onclick = closeBackupModal;
@@ -404,7 +417,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
     preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_restore_confirm');
-    modal.classList.add('open');
+    openModal(modal);
 
     for (const cb of document.querySelectorAll<HTMLInputElement>('.backup-section-cb')) cb.onchange = scheduleRestorePreview;
     els().secretsCb.onchange = () => { passRow.style.display = els().secretsCb.checked ? '' : 'none'; scheduleRestorePreview(); };

@@ -73,11 +73,15 @@ describe('togglePastBags (#1122 bag queue)', () => {
 
     renderCard();
     expect(elements.beanListUI.innerHTML).toContain('data-action="toggle-past-bags"');
+    // #1619: the chip is a real button, so Enter/Space work natively.
+    expect(elements.beanListUI.innerHTML).toContain('<button type="button" class="lib-bag-history-toggle');
+    expect(elements.beanListUI.innerHTML).toContain('aria-expanded="false"');
     expect(elements.beanListUI.innerHTML).not.toContain('2019-01-01');
 
     togglePastBags(1);
     renderCard();
     expect(elements.beanListUI.innerHTML).toContain('2019-01-01');
+    expect(elements.beanListUI.innerHTML).toContain('aria-expanded="true"');
 
     togglePastBags(1);
     renderCard();

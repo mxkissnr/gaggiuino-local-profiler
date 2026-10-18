@@ -740,6 +740,7 @@ export async function updateView(): Promise<void> {
   if (fwEl) {
     const fw = !shotB && shotA.glpFirmwareVersion;
     fwEl.textContent = fw ? `· fw ${fw}` : '';
+    fwEl.setAttribute('aria-label', fw ? t('settings_machine_firmware_badge_current', fw) : '');
     fwEl.style.display = fw ? '' : 'none';
   }
 
@@ -884,7 +885,7 @@ export async function updateView(): Promise<void> {
         const dur   = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
         const cls   = scoreClass(score);
         const chart = _miniShotChart(s);
-        return html`<div class="comp-thumb" data-action="goto-shot" data-id="${esc(s.id)}" title="Shot ${esc(s.id)} — ${esc(date)}">
+        return html`<div class="comp-thumb" role="button" tabindex="0" data-action="goto-shot" data-id="${esc(s.id)}" title="Shot ${esc(s.id)} — ${esc(date)}">
           <div class="comp-thumb-chart">${chart}</div>
           <div class="comp-thumb-meta">
             <span class="comp-shot-date">${esc(date)}</span>
