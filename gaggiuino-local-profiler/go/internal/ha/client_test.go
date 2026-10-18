@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -60,9 +61,9 @@ func TestGetSwitchState_Disabled_ReturnsNil(t *testing.T) {
 }
 
 func TestSendNotify_NonNotifyServicesSendNothing(t *testing.T) {
-	calls := 0
+	var calls atomic.Int32
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		calls++
+		calls.Add(1)
 		w.WriteHeader(http.StatusOK)
 	})
 	for _, service := range []string{"script.x", "light.turn_on", "notify.a/../b", "notify.Bad-Name"} {
@@ -70,8 +71,8 @@ func TestSendNotify_NonNotifyServicesSendNothing(t *testing.T) {
 			t.Errorf("SendNotify(%q): %v", service, err)
 		}
 	}
-	if calls != 0 {
-		t.Errorf("requests = %d, want 0", calls)
+	if got := calls.Load(); got != 0 {
+		t.Errorf("requests = %d, want 0", got)
 	}
 }
 
