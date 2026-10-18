@@ -74,246 +74,51 @@ jobs:
           done
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
-  # #705: split off from the armv7/aarch64 matrix below and NOT in
-  # publish-manifest's `needs` -- amd64 is the maintainer's own daily HAOS
-  # box (per this workflow's original single-arch design), so the update
-  # banner shouldn't wait on two QEMU-emulated architectures (armv7 alone
-  # ran 15-20+ min in the first #702 builds) that box never uses.
+  # #705: amd64 is the maintainer's own daily HAOS box and gates
+  # publish-manifest; armv7/aarch64 (QEMU-emulated, 15-20+ min) run in
+  # parallel but do NOT gate it. Accepted trade-off: someone on those
+  # architectures who updates before their arch's job finishes gets a pull
+  # failure until it catches up. The `arch:` list in glp-dev-app's
+  # config.yaml must keep agreeing with these three jobs.
+  # #1596: one reusable workflow instead of duplicated job bodies.
   build-amd64:
     name: Build amd64
     needs: prep
-    # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
-    if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: dev
-          fetch-depth: 0
+    uses: ./.github/workflows/build-dev-image.yaml
+    with:
+      arch: amd64
+      platform: linux/amd64
+      version: ${{ needs.prep.outputs.version }}
 
-      # #1557: dev plus the listed feature branches. A conflict fails the
-      # build and names the branch instead of publishing a half-merged image.
-      - name: Merge dev-channel features
-        env:
-          DEV_FEATURES: ${{ vars.DEV_FEATURES }}
-        run: |
-          set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for b in $DEV_FEATURES; do
-            git fetch --no-tags origin "$b"
-            git merge --no-edit FETCH_HEAD || {
-              echo "::error::$b does not merge cleanly onto dev -- merge dev into $b first"
-              exit 1
-            }
-          done
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # #809: the push (not the build) has hit ghcr.io's secondary rate limit
-      # -- all three arch jobs push the same image set concurrently, so a
-      # 403 "exceeded a secondary rate limit" fails the whole run and, since
-      # publish-manifest is gated on this job, silently leaves the dev
-      # manifest pointing at the previous build. First attempt is allowed to
-      # fail and is retried once below after a pause. A first-attempt
-      # failure still shows in the run's step list, so a systematic problem
-      # stays visible instead of being masked.
-      - name: Build and push
-        id: push
-        continue-on-error: true
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: ./gaggiuino-local-profiler
-          platforms: linux/amd64
-          push: true
-          build-args: |
-            GLP_DEV_BUILD=${{ needs.prep.outputs.version }}
-          cache-from: type=gha,scope=dev-amd64
-          cache-to: type=gha,mode=max,scope=dev-amd64
-          tags: |
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:${{ needs.prep.outputs.version }}
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:dev
-          labels: |
-            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
-            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
-            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=GPL-3.0-only
-            io.hass.version=${{ needs.prep.outputs.version }}
-            io.hass.type=addon
-            io.hass.arch=amd64
-            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
-
-      - name: Wait out the registry rate limit
-        if: steps.push.outcome == 'failure'
-        run: sleep 120
-
-      - name: Build and push (retry)
-        if: steps.push.outcome == 'failure'
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: ./gaggiuino-local-profiler
-          platforms: linux/amd64
-          push: true
-          build-args: |
-            GLP_DEV_BUILD=${{ needs.prep.outputs.version }}
-          cache-from: type=gha,scope=dev-amd64
-          cache-to: type=gha,mode=max,scope=dev-amd64
-          tags: |
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:${{ needs.prep.outputs.version }}
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:dev
-          labels: |
-            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
-            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
-            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=GPL-3.0-only
-            io.hass.version=${{ needs.prep.outputs.version }}
-            io.hass.type=addon
-            io.hass.arch=amd64
-            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
-
-  # #705: runs in parallel with build-amd64 but does NOT gate
-  # publish-manifest -- these two architectures are occasional testing, not
-  # the primary box this channel exists for. Accepted trade-off: someone on
-  # armv7/aarch64 who updates in the window before their own arch's job here
-  # finishes gets a pull failure until it catches up.
-  build-other-archs:
-    name: Build ${{ matrix.arch }}
+  build-armv7:
+    name: Build armv7
     needs: prep
-    # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
-    if: github.server_url == 'https://github.com'
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    uses: ./.github/workflows/build-dev-image.yaml
+    with:
+      arch: armv7
+      platform: linux/arm/v7
+      version: ${{ needs.prep.outputs.version }}
 
-    # The `arch:` list in glp-dev-app's config.yaml must keep agreeing with
-    # this matrix plus build-amd64 above.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: armv7
-            platform: linux/arm/v7
-          - arch: aarch64
-            platform: linux/arm64
+  build-aarch64:
+    name: Build aarch64
+    needs: prep
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-dev-image.yaml
+    with:
+      arch: aarch64
+      platform: linux/arm64
+      version: ${{ needs.prep.outputs.version }}
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: dev
-          fetch-depth: 0
-
-      # #1557: dev plus the listed feature branches. A conflict fails the
-      # build and names the branch instead of publishing a half-merged image.
-      - name: Merge dev-channel features
-        env:
-          DEV_FEATURES: ${{ vars.DEV_FEATURES }}
-        run: |
-          set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for b in $DEV_FEATURES; do
-            git fetch --no-tags origin "$b"
-            git merge --no-edit FETCH_HEAD || {
-              echo "::error::$b does not merge cleanly onto dev -- merge dev into $b first"
-              exit 1
-            }
-          done
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # #809: same retry as build-amd64 above -- see its comment.
-      - name: Build and push
-        id: push
-        continue-on-error: true
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: ./gaggiuino-local-profiler
-          platforms: ${{ matrix.platform }}
-          push: true
-          build-args: |
-            GLP_DEV_BUILD=${{ needs.prep.outputs.version }}
-          # Separate cache scope from the release build so a dev build can
-          # never poison the cache the release build restores from.
-          cache-from: type=gha,scope=dev-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=dev-${{ matrix.arch }}
-          tags: |
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:${{ needs.prep.outputs.version }}
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:dev
-          labels: |
-            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
-            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
-            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=GPL-3.0-only
-            io.hass.version=${{ needs.prep.outputs.version }}
-            io.hass.type=addon
-            io.hass.arch=${{ matrix.arch }}
-            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
-
-      - name: Wait out the registry rate limit
-        if: steps.push.outcome == 'failure'
-        run: sleep 120
-
-      - name: Build and push (retry)
-        if: steps.push.outcome == 'failure'
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: ./gaggiuino-local-profiler
-          platforms: ${{ matrix.platform }}
-          push: true
-          build-args: |
-            GLP_DEV_BUILD=${{ needs.prep.outputs.version }}
-          # Separate cache scope from the release build so a dev build can
-          # never poison the cache the release build restores from.
-          cache-from: type=gha,scope=dev-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=dev-${{ matrix.arch }}
-          tags: |
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:${{ needs.prep.outputs.version }}
-            ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:dev
-          labels: |
-            org.opencontainers.image.title=GLP DEV — Gaggiuino Local Profiler (unstable)
-            org.opencontainers.image.description=Unstable dev build of GLP — maintainer testing only
-            org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ needs.prep.outputs.version }}
-            org.opencontainers.image.licenses=GPL-3.0-only
-            io.hass.version=${{ needs.prep.outputs.version }}
-            io.hass.type=addon
-            io.hass.arch=${{ matrix.arch }}
-            io.hass.name=GLP DEV — Gaggiuino Local Profiler (unstable)
-
-  # #705: gated on build-amd64 only, not build-other-archs -- see that job's
-  # comment for why. Pointing the manifest at a version whose armv7/aarch64
+  # #705: gated on build-amd64 only, not the armv7/aarch64 jobs -- see the comment
+  # above the build jobs for why. Pointing the manifest at a version whose armv7/aarch64
   # images aren't up yet is an accepted, bounded window (see #705's issue),
   # not the "broken on every other arch" failure mode the original
   # all-archs gate was guarding against when this channel was amd64-only.
@@ -329,11 +134,21 @@ jobs:
       # fetch-depth 100 is generous headroom for "commits since the last dev
       # push" in normal use; if that's ever exceeded the log just shows what
       # fits rather than failing, see the fallback below.
+      # #1596: the manifest, translations and AppArmor profile come from the
+      # same merged tree the images were built from, so the full history is
+      # needed for the feature merges.
       - name: Checkout main repo (for the commit log)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: dev
           path: main-repo
-          fetch-depth: 100
+          fetch-depth: 0
+
+      - name: Merge dev-channel features
+        working-directory: main-repo
+        env:
+          DEV_FEATURES: ${{ vars.DEV_FEATURES }}
+        run: .github/scripts/merge-dev-features.sh
 
       - name: Checkout dev manifest repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

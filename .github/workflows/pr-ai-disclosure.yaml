@@ -44,7 +44,7 @@ jobs:
 
           if grep -qE '^[[:space:]]*-[[:space:]]*\[[xX]\][[:space:]]*\*\*none\*\*' "$body_file"; then
             if git log --format='%B' "${BASE_SHA}..${HEAD_SHA}" \
-                 | grep -qiE 'Co-Authored-By:.*(Claude|Copilot|Cursor|Codeium|Windsurf|Devin|Gemini|ChatGPT|GPT-|noreply@anthropic)'; then
+                 | grep -qiE 'Co-Authored-By:.*(Claude|DeepSeek|OpenHands|ppops-oh|Copilot|Cursor|Codeium|Windsurf|Devin|Gemini|ChatGPT|GPT-|noreply@anthropic|noreply@deepseek)'; then
               echo "::error::Commits carry an AI Co-Authored-By trailer, but the PR discloses 'none'."
               exit 1
             fi
