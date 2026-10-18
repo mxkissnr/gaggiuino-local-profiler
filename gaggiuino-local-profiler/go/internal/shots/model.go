@@ -37,10 +37,7 @@ const (
 // globally-unique synthetic ids stored internally (machine 1 keeps its native
 // ids; any other machine's shots live at machineID*MachineIDOffset+nativeID).
 // Exported because internal/system/sync.go uses it too, to scope a machine's
-// blocklist range to that machine's own ids (#1147); the machines domain has
-// no home for it yet (internal/machines is still a placeholder), so the small
-// amount of arithmetic this package needs from it (toNativeShotID/
-// ownerOfShotID) stays duplicated here rather than imported.
+// blocklist range to that machine's own ids (#1147).
 const MachineIDOffset = 10_000_000
 
 // toNativeShotID converts a globally-unique synthetic id back to the
@@ -264,4 +261,18 @@ func decodeDatapoints(raw []byte) map[string]any {
 		return map[string]any{}
 	}
 	return m
+}
+
+// decodeJSONValue decodes one JSON value SQLite's -> operator returned
+// (SQL NULL for a missing key), the same decoder hydrateFields uses, so the
+// value has the exact Go shape a hydrated shot would hold.
+func decodeJSONValue(v sql.NullString) any {
+	if !v.Valid {
+		return nil
+	}
+	var out any
+	if err := json.Unmarshal([]byte(v.String), &out); err != nil {
+		return nil
+	}
+	return out
 }

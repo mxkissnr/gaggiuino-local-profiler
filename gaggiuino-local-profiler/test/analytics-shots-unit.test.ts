@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import de from '../public-src/i18n/de.js';
 import en from '../public-src/i18n/en.js';
 
-// analytics.js's import chain reads localStorage/navigator at module load (same
-// stubs as analytics-calendar-stats.test.js); _monthLabelsToDraw() itself is pure.
+// analytics.ts's import chain reads localStorage/navigator at module load (same
+// stubs as analytics-calendar-stats.test.ts); _monthLabelsToDraw() itself is pure.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let monthLabelsToDraw: Analytics['_monthLabelsToDraw'];
 

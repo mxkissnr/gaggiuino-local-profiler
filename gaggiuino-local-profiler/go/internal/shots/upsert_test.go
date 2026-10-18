@@ -9,7 +9,7 @@ import "testing"
 // The shot's stored data must still update, the annotation must survive and
 // the trash entry must remain.
 func TestUpsert_PreservesAnnotationAndTrash(t *testing.T) {
-	_, repo, _ := newTestHandlers(t)
+	_, repo, sqlDB := newTestHandlers(t)
 
 	if err := repo.Upsert(Shot{"id": int64(5), "timestamp": int64(1000), "datapoints": []any{}}); err != nil {
 		t.Fatalf("Upsert(5): %v", err)
@@ -35,9 +35,7 @@ func TestUpsert_PreservesAnnotationAndTrash(t *testing.T) {
 		t.Fatalf("annotation after re-upsert = %#v, want rating 8 / notes tasty", ann)
 	}
 
-	if _, ok, err := repo.GetTrashEntry(5); err != nil {
-		t.Fatalf("GetTrashEntry(5): %v", err)
-	} else if !ok {
+	if _, ok := trashEntry(t, sqlDB, 5); !ok {
 		t.Fatalf("trash entry for shot 5 was deleted by the re-upsert")
 	}
 

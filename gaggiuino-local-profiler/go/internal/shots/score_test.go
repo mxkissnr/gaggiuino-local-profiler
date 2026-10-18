@@ -278,3 +278,183 @@ func TestCalcShotScoreDetail_NilScoreHasNilComponents(t *testing.T) {
 		t.Errorf("insufficient-pressure components = %v, want nil", got)
 	}
 }
+
+// ── #1538: sub-5-bar shots ────────────────────────────────────────────────
+
+// profileWithPhases builds the embedded-profile shape hydrateRow produces for
+// a Gaggiuino shot (a map[string]any), one phase per given type in order.
+func profileWithPhases(types ...string) map[string]any {
+	phases := make([]any, len(types))
+	for i, name := range types {
+		phases[i] = map[string]any{"type": name}
+	}
+	return map[string]any{"phases": phases}
+}
+
+// sub5Shot builds a shot whose flat pressure never reaches 5 bar: every
+// sample records barTenths with targetTenths as its target and phaseIdx as
+// its phase. profile is attached only when non-nil.
+func sub5Shot(barTenths, targetTenths float64, phaseIdx []float64, profile map[string]any) Shot {
+	n := len(phaseIdx)
+	pressure := make([]any, n)
+	target := make([]any, n)
+	idx := make([]any, n)
+	for i := 0; i < n; i++ {
+		pressure[i] = barTenths
+		target[i] = targetTenths
+		idx[i] = phaseIdx[i]
+	}
+	shot := Shot{
+		"duration": 300.0, // 30 s, so the duration part also scores
+		"datapoints": map[string]any{
+			"pressure":       pressure,
+			"targetPressure": target,
+			"phaseIndex":     idx,
+		},
+	}
+	if profile != nil {
+		shot["profile"] = profile
+	}
+	return shot
+}
+
+// #1538 (a): a shot that reaches 5 bar must score exactly as before and carry
+// no pressure note.
+func TestCalcShotScoreDetail_HighPressureUnchanged(t *testing.T) {
+	detail := CalcShotScoreDetail(fullScoreShot(300), nil)
+	if detail.Score == nil || *detail.Score != 100 {
+		t.Fatalf("score = %v, want 100", detail.Score)
+	}
+	if detail.PressureNote != "" {
+		t.Errorf("pressure note = %q, want empty for a >=5-bar shot", detail.PressureNote)
+	}
+	p := componentByName(t, detail.Components, "pressure")
+	if p.Target != "generic" || p.Inputs["avg_pressure_bar"] != 8 {
+		t.Errorf("pressure = %+v, want the fixed generic band on 8 bar", p)
+	}
+}
+
+// #1538 (b): a flat 4-bar profile that hits its own 4-bar target gets full
+// marks on pressure, measured only over its PRESSURE-phase samples.
+func TestCalcShotScoreDetail_Sub5BarProfileHit(t *testing.T) {
+	shot := sub5Shot(40, 40, []float64{0, 1, 1, 1, 1, 1, 1, 1}, profileWithPhases("FLOW", "PRESSURE"))
+	detail := CalcShotScoreDetail(shot, nil)
+	if detail.Score == nil {
+		t.Fatal("expected a score for a flat 4-bar shot")
+	}
+	if detail.PressureNote != PressureNoteProfile {
+		t.Errorf("pressure note = %q, want %q", detail.PressureNote, PressureNoteProfile)
+	}
+	p := componentByName(t, detail.Components, "pressure")
+	if p.Target != "profile" || p.Score != 100 {
+		t.Errorf("pressure = %+v, want profile target at 100 (perfect tracking)", p)
+	}
+	if got := p.Inputs["pressure_mae_bar"]; got != 0 {
+		t.Errorf("pressure_mae_bar = %v, want 0", got)
+	}
+	if got := p.Inputs["samples"]; got != 7 {
+		t.Errorf("samples = %v, want 7 (the FLOW-phase sample is excluded)", got)
+	}
+}
+
+// #1538 (c): an 8-bar pressure target the shot only reaches 4.5 bar on scores
+// low: MAE 3.5 bar -> 100 - 20*(3.5-0.5) = 40.
+func TestCalcShotScoreDetail_Sub5BarProfileMiss(t *testing.T) {
+	shot := sub5Shot(45, 80, []float64{0, 1, 1, 1, 1, 1}, profileWithPhases("FLOW", "PRESSURE"))
+	detail := CalcShotScoreDetail(shot, nil)
+	if detail.Score == nil {
+		t.Fatal("expected a score")
+	}
+	p := componentByName(t, detail.Components, "pressure")
+	if p.Score != 40 {
+		t.Errorf("pressure score = %d, want 40", p.Score)
+	}
+	if got := p.Inputs["pressure_mae_bar"]; got != 3.5 {
+		t.Errorf("pressure_mae_bar = %v, want 3.5", got)
+	}
+	if detail.PressureNote != PressureNoteProfile {
+		t.Errorf("pressure note = %q, want %q", detail.PressureNote, PressureNoteProfile)
+	}
+}
+
+// #1538 (d): a FLOW-only profile (lever/flow style) is not penalised against
+// a limit: targetPressure in a FLOW phase is a ceiling, so pressure is left
+// out and the remaining weights redistribute.
+func TestCalcShotScoreDetail_Sub5BarFlowOnlyOmitsPressure(t *testing.T) {
+	shot := sub5Shot(40, 80, []float64{0, 1, 1, 1, 1}, profileWithPhases("FLOW", "FLOW"))
+	detail := CalcShotScoreDetail(shot, nil)
+	if detail.Score == nil {
+		t.Fatal("expected a score even without a pressure part")
+	}
+	if detail.PressureNote != PressureNoteOmitted {
+		t.Errorf("pressure note = %q, want %q", detail.PressureNote, PressureNoteOmitted)
+	}
+	for _, c := range detail.Components {
+		if c.Name == "pressure" {
+			t.Fatalf("expected no pressure component against a FLOW limit, got %+v", c)
+		}
+	}
+}
+
+// #1538 (e): a sub-5-bar shot with no phase data at all still scores, with
+// the pressure part left out and the reason recorded.
+func TestCalcShotScoreDetail_Sub5BarNoPhaseDataOmitsPressure(t *testing.T) {
+	shot := Shot{
+		"duration":   300.0,
+		"datapoints": map[string]any{"pressure": mkPoints(40, 40, 40, 40, 40, 40)},
+	}
+	detail := CalcShotScoreDetail(shot, nil)
+	if detail.Score == nil {
+		t.Fatal("expected a score for a sub-5-bar shot with a pressure curve")
+	}
+	if detail.PressureNote != PressureNoteOmitted {
+		t.Errorf("pressure note = %q, want %q", detail.PressureNote, PressureNoteOmitted)
+	}
+	for _, c := range detail.Components {
+		if c.Name == "pressure" {
+			t.Fatalf("expected no pressure component without phase data, got %+v", c)
+		}
+	}
+}
+
+// #1538: the gate is "is there a pressure curve", not "did it reach 5 bar".
+func TestCalcShotScoreDetail_GateIsAnyPressureCurve(t *testing.T) {
+	three := Shot{"datapoints": map[string]any{"pressure": mkPoints(40, 40, 40)}}
+	if got := CalcShotScoreDetail(three, nil).Score; got != nil {
+		t.Errorf("3 samples -> score %d, want nil", *got)
+	}
+	four := Shot{
+		"duration":   300.0,
+		"datapoints": map[string]any{"pressure": mkPoints(40, 40, 40, 40)},
+	}
+	if got := CalcShotScoreDetail(four, nil).Score; got == nil {
+		t.Error("4 sub-5-bar samples should score, got nil")
+	}
+}
+
+// #1688: a failed thermocouple read is stored as exactly 0, so a stable series
+// with isolated zero samples must still score the temperature part full marks.
+func TestCalcShotScoreDetail_TemperatureDropoutsIgnored(t *testing.T) {
+	shot := fullScoreShot(300)
+	shot["datapoints"].(map[string]any)["temperature"] = mkPoints(900, 0, 900, 900, 0, 900, 900, 900, 0, 900)
+	detail := CalcShotScoreDetail(shot, nil)
+	if detail.Score == nil || *detail.Score != 100 {
+		t.Fatalf("score = %v, want 100", detail.Score)
+	}
+	if temp := componentByName(t, detail.Components, "temperature"); temp.Score != 100 {
+		t.Errorf("temperature component = %d, want 100", temp.Score)
+	}
+}
+
+// #1688: once the zero dropouts are dropped, fewer than 6 valid temperature
+// samples remain, so the temperature part is left out (the existing > 5 gate).
+func TestCalcShotScoreDetail_TemperatureOmittedWhenTooManyDropouts(t *testing.T) {
+	shot := fullScoreShot(300)
+	shot["datapoints"].(map[string]any)["temperature"] = mkPoints(900, 0, 0, 900, 0, 900, 0, 900, 0, 900)
+	detail := CalcShotScoreDetail(shot, nil)
+	for _, c := range detail.Components {
+		if c.Name == "temperature" {
+			t.Fatalf("expected no temperature component, got %+v", c)
+		}
+	}
+}

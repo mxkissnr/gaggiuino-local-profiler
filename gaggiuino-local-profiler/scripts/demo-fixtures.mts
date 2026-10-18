@@ -396,6 +396,9 @@ function attachRecorder(page: Page): Promise<void>[] {
         }
         if (!pathname.startsWith('/api/')) return;
         if (pathname === '/api/token') return;
+        // #1626: a stream ticket is a one-off secret, and the demo service
+        // worker answers this route itself, so there is nothing to record.
+        if (pathname === '/api/events/ticket') return;
         const contentType = (response.headers()['content-type'] || '').toLowerCase();
         if (contentType.includes('text/event-stream')) return;
         const method = response.request().method();
@@ -605,6 +608,11 @@ async function tryFetch(baseUrl: string, apiToken: string, urlPath: string): Pro
 // exactly as the SPA would request it (same limit, same cursor chain).
 const SHOTS_PAGE_LIMIT = 60;
 
+// Upper bound on the list walk: a keyset-paginated server that never reports
+// hasMore=false (or a recorded fixture with a bad cursor chain) would otherwise
+// loop forever. Stop and warn past this many pages.
+const MAX_SHOT_LIST_PAGES = 1000;
+
 // Phase A only ever loads the first `GET /api/shots` page, so the expansion
 // source for `/api/shots/{id}` would otherwise miss every older shot the
 // dial-in, analytics, achievements and comparison views link to (#1511). Walk
@@ -612,8 +620,9 @@ const SHOTS_PAGE_LIMIT = 60;
 // same recordResponse() path as the other fetches so the ids and the fixtures
 // both exist. The already-recorded first page is reused, not refetched.
 async function recordAllShotListPages(baseUrl: string, apiToken: string): Promise<void> {
+    const seenCursors = new Set<string>();
     let cursor: string | null = null;
-    for (;;) {
+    for (let pageCount = 0; ; pageCount += 1) {
         const query = new URLSearchParams({ limit: String(SHOTS_PAGE_LIMIT) });
         if (cursor) query.set('cursor', cursor);
         const concrete = `${ID_SOURCES.shots.listPath}?${query.toString()}`;
@@ -628,6 +637,17 @@ async function recordAllShotListPages(baseUrl: string, apiToken: string): Promis
         const next = page?.['nextCursor'];
         cursor = page?.['hasMore'] === true && typeof next === 'string' ? next : null;
         if (!cursor) return;
+        // A server or recorded fixture that hands back the same cursor again
+        // would spin forever; stop on the first repeat (#1597).
+        if (seenCursors.has(cursor)) {
+            console.warn(`demo-fixtures: shot-list walk saw cursor ${cursor} twice, stopping`);
+            return;
+        }
+        seenCursors.add(cursor);
+        if (pageCount + 1 >= MAX_SHOT_LIST_PAGES) {
+            console.warn(`demo-fixtures: shot-list walk stopped after ${MAX_SHOT_LIST_PAGES} pages`);
+            return;
+        }
     }
 }
 

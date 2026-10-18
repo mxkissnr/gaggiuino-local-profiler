@@ -109,11 +109,75 @@ func TestGeocodeBean_WritesLocation(t *testing.T) {
 	}
 }
 
+// TestGeocodeBean_ReportsStoredChange guards #1580: GeocodeBean's bool is what
+// main.go uses to decide whether to publish a `library` data-changed event, so
+// it must be true only when a non-nil location was committed.
+func TestGeocodeBean_ReportsStoredChange(t *testing.T) {
+	hit, _ := newTestGeocoder(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"lat":"6.16","lon":"38.20"}]`))
+	})
+	lib, err := hit.repo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = append(lib.Beans, Entity{"id": int64(2001), "name": "Yirg", "region": "Yirgacheffe", "origin": "ET"})
+	if err := hit.repo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	if !hit.GeocodeBean(context.Background(), 2001) {
+		t.Fatal("GeocodeBean stored coordinates but reported false")
+	}
+
+	// A bean that no longer exists cannot have coordinates stored.
+	if hit.GeocodeBean(context.Background(), 999999) {
+		t.Fatal("GeocodeBean for a missing bean reported a stored change")
+	}
+
+	// A Nominatim miss stores nil, not coordinates — must report false.
+	miss, _ := newTestGeocoder(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	})
+	lib, err = miss.repo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = append(lib.Beans, Entity{"id": int64(2002), "name": "Nowhere", "region": "Nowhere-At-All", "origin": "ET"})
+	if err := miss.repo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	if miss.GeocodeBean(context.Background(), 2002) {
+		t.Fatal("a geocode miss reported a stored change")
+	}
+}
+
 func TestCountryNameForCode(t *testing.T) {
 	if got := countryNameForCode("ET"); got != "Ethiopia" {
 		t.Errorf("countryNameForCode(ET) = %q", got)
 	}
 	if got := countryNameForCode("zz"); got != "" {
 		t.Errorf("countryNameForCode(zz) = %q, want empty", got)
+	}
+}
+
+// TestGeocodeRegion_UserAgentCarriesBuildVersion: the User-Agent sent to
+// Nominatim carries the version NewGeocoder was built with (#1727), not a
+// hard-coded one that lags behind releases.
+func TestGeocodeRegion_UserAgentCarriesBuildVersion(t *testing.T) {
+	var gotUA string
+	g, _ := newTestGeocoder(t, func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	})
+	g.userAgent = NewGeocoder(g.repo, "9.8.7").userAgent
+
+	if _, err := g.GeocodeRegion(context.Background(), "Huila", "Colombia"); err != nil {
+		t.Fatalf("GeocodeRegion: %v", err)
+	}
+	want := "GLP/9.8.7 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
+	if gotUA != want {
+		t.Fatalf("User-Agent = %q, want %q", gotUA, want)
 	}
 }

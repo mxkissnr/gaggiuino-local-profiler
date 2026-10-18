@@ -5,26 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/url"
 	"time"
 
 	"github.com/coder/websocket"
 )
 
-// This file holds the short-lived-connection-per-call JSON WebSocket client
-// for GaggiMate machines: request() and waitForStatus(). Protocol shape: one
-// WebSocket at ws://<host>/ws, JSON frames with a `tp` (type) field;
-// requests are `req:<name>` (optionally carrying an `rid` for correlation),
-// answered by a `res:<name>` frame; the server also pushes unsolicited
-// `evt:status` frames on its own cadence.
+// This file holds the short-lived-connection-per-call JSON WebSocket helper
+// for GaggiMate machines: waitForStatus(). Protocol shape: one WebSocket at
+// ws://<host>/ws, JSON frames with a `tp` (type) field; the server pushes
+// unsolicited `evt:status` frames on its own cadence.
 //
-// The GaggiMateLiveClient (a third, persistent-connection pattern) lives in
+// The GaggiMateLiveClient (the persistent-connection pattern) lives in
 // gaggimate_live.go (#952): GaggiMateAdapter.GetStatus reads its cache and
 // only falls back to gaggimateWaitForStatus below when the cache has no
 // fresh frame yet.
-
-const gaggimateWSTimeout = 8 * time.Second
 
 func gaggimateWSURL(baseURL string) (string, error) {
 	u, err := url.Parse(baseURL)
@@ -38,60 +33,8 @@ func gaggimateWSURL(baseURL string) (string, error) {
 	return fmt.Sprintf("%s://%s/ws", scheme, u.Host), nil
 }
 
-// gaggimateRequest sends one `req:<name>` frame with a request id for
-// correlation and resolves with the payload of the first matching
-// `res:<name>` frame that echoes the same rid. GaggiMate firmware echoes
-// rid back as a string even though it's sent as a number (#342,
-// live-verified) — the comparison below is type-tolerant (string(rid)
-// either way).
-func gaggimateRequest(ctx context.Context, baseURL, reqType string, payload map[string]any) (map[string]any, error) {
-	if len(reqType) < 4 || reqType[:4] != "req:" {
-		return nil, fmt.Errorf("not a request type: %s", reqType)
-	}
-	resType := "res:" + reqType[4:]
-	rid := rand.Intn(1_000_000_000)
-
-	conn, ctx, cancel, err := wsConnect(ctx, baseURL, gaggimateWSURL, gaggimateWSTimeout)
-	if err != nil {
-		return nil, err
-	}
-	defer cancel()
-	defer conn.CloseNow()
-
-	frame := map[string]any{"tp": reqType, "rid": rid}
-	for k, v := range payload {
-		frame[k] = v
-	}
-	body, err := json.Marshal(frame)
-	if err != nil {
-		return nil, err
-	}
-	if err := conn.Write(ctx, websocket.MessageText, body); err != nil {
-		return nil, fmt.Errorf("sending request: %w", err)
-	}
-
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return nil, fmt.Errorf("timed out waiting for %q from the machine", resType)
-			}
-			return nil, fmt.Errorf("waiting for %q from the machine: %w", resType, err)
-		}
-		var msg map[string]any
-		if err := json.Unmarshal(data, &msg); err != nil {
-			continue
-		}
-		if msg["tp"] != resType {
-			continue
-		}
-		if msgRID, ok := msg["rid"]; ok && fmt.Sprint(msgRID) != fmt.Sprint(rid) {
-			continue
-		}
-		conn.Close(websocket.StatusNormalClosure, "")
-		return msg, nil
-	}
-}
+// maxGaggiMateStatusKeys bounds the merged status map so a device sending ever-new keys can't grow it without limit.
+const maxGaggiMateStatusKeys = 128
 
 // mergeGaggiMateStatus merges one evt:status frame onto a previous status map
 // and returns a NEW map. Since firmware v1.9.0 frames are partial: a key that
@@ -106,6 +49,9 @@ func mergeGaggiMateStatus(prev, frame map[string]any) map[string]any {
 	for k, v := range frame {
 		if v == nil {
 			delete(merged, k)
+			continue
+		}
+		if _, exists := merged[k]; !exists && len(merged) >= maxGaggiMateStatusKeys {
 			continue
 		}
 		merged[k] = v
@@ -127,6 +73,8 @@ func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Du
 	defer cancel()
 	defer conn.CloseNow()
 
+	host := hostFromBaseURL(baseURL)
+
 	merged := map[string]any{}
 	for {
 		_, data, err := conn.Read(ctx)
@@ -136,6 +84,7 @@ func gaggimateWaitForStatus(ctx context.Context, baseURL string, timeout time.Du
 			}
 			return nil, fmt.Errorf("waiting for evt:status from the machine: %w", err)
 		}
+		countMachineWSMessage(host)
 		var msg map[string]any
 		if err := json.Unmarshal(data, &msg); err != nil {
 			continue

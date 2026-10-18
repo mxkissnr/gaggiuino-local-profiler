@@ -192,7 +192,17 @@ func (r *reader) float() (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return float64(math.Float32frombits(bits)), nil
+	v := float64(math.Float32frombits(bits))
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		// A NaN/±Inf would make json.Marshal fail for the whole response, so report zero instead of erroring and losing the rest of the message.
+		return 0, nil
+	}
+	return v, nil
+}
+
+func (r *reader) bool() (bool, error) {
+	v, err := r.varint()
+	return v != 0, err
 }
 
 // skip discards one field's value for a wire type this package's schema

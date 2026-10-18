@@ -255,7 +255,7 @@ func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots
 		RoastLevel: entityStr(bean, "roastType"),
 		Active:     entityActive(bean),
 	}
-	if roastDate := beanRoastDate(bean); roastDate != "" {
+	if roastDate := beanRoastDate(bean, doseRows, allBeans); roastDate != "" {
 		out.RoastDate = roastDate
 		if days, ok := daysSinceDate(roastDate, now); ok {
 			out.DaysSinceRoast = &days
@@ -264,7 +264,7 @@ func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots
 	if remaining, ok := library.ComputeBeanRemaining(bean, doseRows, allBeans); ok {
 		out.RemainingG = &remaining
 	}
-	if grams, count, ok := frozenPortionTotals(bean); ok {
+	if grams, count, ok := frozenPortionTotals(bean, doseRows, allBeans); ok {
 		out.FrozenPortionsG = &grams
 		out.FrozenPortionsCount = &count
 	}
@@ -294,9 +294,9 @@ func getLibrary(deps Deps, in getLibraryInput) (libraryOutput, error) {
 		Milks:       []milkInfo{},
 		Recipes:     []recipeInfo{},
 	}
-	var allShots []shots.Shot
+	var uses []shots.GrinderUse
 	if (section == "" || section == "grinders") && deps.Shots != nil {
-		allShots, err = deps.Shots.GetAll()
+		uses, err = deps.Shots.GrinderUses()
 		if err != nil {
 			log.Printf("mcp: get_library: reading shots for grinder wear: %v", err)
 			return libraryOutput{}, fmt.Errorf("could not read the coffee library; try again")
@@ -304,7 +304,7 @@ func getLibrary(deps Deps, in getLibraryInput) (libraryOutput, error) {
 	}
 	if section == "" || section == "grinders" {
 		for _, g := range lib.Grinders {
-			out.Grinders = append(out.Grinders, toGrinderInfo(g, allShots))
+			out.Grinders = append(out.Grinders, toGrinderInfo(g, uses))
 		}
 	}
 	if section == "" || section == "baskets" {
@@ -356,7 +356,7 @@ func validLibrarySection(s string) bool {
 	return false
 }
 
-func toGrinderInfo(g library.Entity, allShots []shots.Shot) grinderInfo {
+func toGrinderInfo(g library.Entity, uses []shots.GrinderUse) grinderInfo {
 	out := grinderInfo{
 		ID:           entityID(g),
 		Name:         entityStr(g, "name"),
@@ -364,13 +364,13 @@ func toGrinderInfo(g library.Entity, allShots []shots.Shot) grinderInfo {
 		PurchaseDate: entityStr(g, "purchaseDate"),
 		BurrsResetAt: entityStr(g, "burrsResetAt"),
 	}
-	if zp, ok := grinderZeroPoint(g); ok {
+	if zp, ok := library.CurrentGrinderZeroPoint(g); ok {
 		out.ZeroPoint = &zp
 	}
-	// allShots is nil when the section wasn't requested or the shots service
-	// is unwired: report zero wear rather than guessing.
-	if allShots != nil {
-		shotsSince, grams := library.ComputeGrinderWearFrom(allShots, g)
+	// uses is nil when the section wasn't requested, the shots service is
+	// unwired or the history is empty: report zero wear rather than guessing.
+	if uses != nil {
+		shotsSince, grams := library.ComputeGrinderWearFromUses(uses, g)
 		out.ShotsSinceBurrs = shotsSince
 		out.GramsSinceBurrs = grams
 	}
@@ -408,35 +408,8 @@ func toRecipeInfo(r library.Entity) recipeInfo {
 	return out
 }
 
-// grinderZeroPoint reads the most recently activated zero point from the
-// grinder's zeroPointHistory, mirroring library.currentGrinderZeroPoint
-// (unexported there).
-func grinderZeroPoint(g library.Entity) (float64, bool) {
-	raw, _ := g["zeroPointHistory"].([]any)
-	var (
-		best      float64
-		bestSince int64 = -1
-		found     bool
-	)
-	for _, item := range raw {
-		m, _ := item.(map[string]any)
-		if m == nil {
-			continue
-		}
-		zp, ok := entityFloat(m, "zeroPoint")
-		if !ok {
-			continue
-		}
-		since, _ := entityInt(m, "since")
-		if !found || since >= bestSince {
-			best, bestSince, found = zp, since, true
-		}
-	}
-	return best, found
-}
-
-func frozenPortionTotals(bean library.Entity) (grams float64, count int64, ok bool) {
-	bag := activeBagOf(bean)
+func frozenPortionTotals(bean library.Entity, doseRows []shots.AnnotatedDose, allBeans []library.Entity) (grams float64, count int64, ok bool) {
+	bag := library.CurrentBag(bean, doseRows, allBeans)
 	if bag == nil {
 		return 0, 0, false
 	}
@@ -508,8 +481,8 @@ func grindSettingString(v any) string {
 	}
 }
 
-func beanRoastDate(bean library.Entity) string {
-	if bag := activeBagOf(bean); bag != nil {
+func beanRoastDate(bean library.Entity, doseRows []shots.AnnotatedDose, allBeans []library.Entity) string {
+	if bag := library.CurrentBag(bean, doseRows, allBeans); bag != nil {
 		if v := entityStr(bag, "roastDate"); v != "" {
 			return v
 		}
@@ -526,20 +499,30 @@ func beanMatchesQuery(bean library.Entity, query string) bool {
 	return false
 }
 
+// tracksStock reports whether the bean has any stock to track -- bean-level
+// stock_g, or any bag's own stock_g. Both the remaining-stock maths and the
+// current-bag simulation need the annotated doses, so either shape means this
+// page's beans need them loaded.
 func tracksStock(bean library.Entity) bool {
-	v, ok := entityFloat(bean, "stock_g")
-	return ok && v > 0
+	if v, ok := entityFloat(bean, "stock_g"); ok && v > 0 {
+		return true
+	}
+	bags, _ := bean["bags"].([]any)
+	for _, raw := range bags {
+		bag, _ := raw.(map[string]any)
+		if v, ok := entityFloat(bag, "stock_g"); ok && v > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func daysSinceDate(date string, now time.Time) (int, bool) {
-	t, err := time.Parse("2006-01-02", date)
-	if err != nil {
-		t, err = time.Parse(time.RFC3339, date)
-		if err != nil {
-			return 0, false
-		}
+	ms, ok := library.ParseJSDate(date)
+	if !ok {
+		return 0, false
 	}
-	days := int(now.Sub(t).Hours() / 24)
+	days := int(now.Sub(time.UnixMilli(ms)).Hours() / 24)
 	if days < 0 {
 		days = 0
 	}
@@ -632,13 +615,4 @@ func entityActive(e library.Entity) bool {
 	default:
 		return true
 	}
-}
-
-func activeBagOf(bean library.Entity) library.Entity {
-	bags, _ := bean["bags"].([]any)
-	if len(bags) == 0 {
-		return nil
-	}
-	m, _ := bags[len(bags)-1].(map[string]any)
-	return m
 }

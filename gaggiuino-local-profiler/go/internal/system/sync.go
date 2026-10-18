@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -34,13 +35,13 @@ import (
 // reachability/error/firmware state (#1201) but never the default-only
 // lastSyncTime/lastSyncError.
 //
+// syncNativeMaintenance() (#578/#1639) is called here too: after a Gaggiuino
+// machine's shots are pulled, its native service log is mirrored onto the
+// descale/backflush maintenance tasks (maintenance_sync.go).
+//
 // Deliberately still NOT implemented here (see doc.go's "Deliberately not
 // implemented"):
 //
-//   - syncNativeMaintenance() (#578) — needs a maintenance-domain sync.
-//   - syncRetryCount — the scheduled loop (sync_triggers.go) retries with
-//     backoff but tracks it locally, so GET /api/status's syncRetryCount
-//     stays 0.
 //   - syncProgress — the backfill still runs, but nothing tracks or streams
 //     its progress, so there is no progress bar.
 
@@ -214,6 +215,8 @@ func (p *Poller) backfillShots(
 		if !keep {
 			continue
 		}
+		// Annotations are app-owned; a machine payload must never replace them.
+		delete(shot, "annotation")
 		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
 			return true, uerr
 		}
@@ -359,6 +362,7 @@ func (p *Poller) syncDefaultMachineShotsOnce(ctx context.Context) error {
 		}
 		return err
 	}
+	p.syncNativeMaintenance(ctx, machine)
 	p.recordSyncSuccess()
 	return nil
 }
@@ -477,6 +481,7 @@ func (p *Poller) syncGaggiuinoMachineShots(ctx context.Context, machine *machine
 		}
 		return err
 	}
+	p.syncNativeMaintenance(ctx, machine)
 	return nil
 }
 
@@ -574,6 +579,13 @@ func (p *Poller) fetchLatestShotID(ctx context.Context, machineURL string) (*int
 	}
 	id, ok := jsNumberToInt64(rows[0]["lastShotId"])
 	if !ok {
+		return nil, nil
+	}
+	// A bogus/corrupted id from the machine would send backfillShots looping
+	// over millions of ids (blocklisting each 404), and a native id >=
+	// MachineIDOffset would collide with another machine's global id range.
+	if id < 0 || id >= shots.MachineIDOffset {
+		log.Printf("system: sync: machine reported out-of-range lastShotId %d — ignored", id)
 		return nil, nil
 	}
 	debugLogf("/latest lastShotId=%d", id)
@@ -684,7 +696,7 @@ func (p *Poller) recordSyncSuccess() {
 func (p *Poller) recordMachineError(machineID int64, err error) {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
-	msg := redactURLs(err.Error())
+	msg := redact.Redact(err.Error())
 	ms := p.state.machine(machineID)
 	reachable := false
 	ms.reachable = &reachable
@@ -697,7 +709,7 @@ func (p *Poller) recordMachineError(machineID int64, err error) {
 func (p *Poller) recordSyncError(machineID int64, err error) {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
-	msg := redactURLs(err.Error())
+	msg := redact.Redact(err.Error())
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	p.state.lastSyncError = &msg
 	p.state.lastSyncTime = &now

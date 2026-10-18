@@ -5,6 +5,7 @@ import it from './i18n/it.js';
 import fr from './i18n/fr.js';
 import es from './i18n/es.js';
 import nl from './i18n/nl.js';
+import { themeColor } from './utils.js';
 
 // The corsair crosshair plugin stashes its transient {x,y,draw} state directly
 // on the chart instance, which Chart.js's own type has no member for.
@@ -23,7 +24,7 @@ export const TRANSLATIONS: Record<string, unknown> = { de, en, it, fr, es, nl };
 // `LOCALE_MAP[S.currentLang] || 'de-DE'`, which meant an unsupported/unknown
 // S.currentLang silently rendered dates/numbers in German for every user,
 // not just German ones. Falls back to English instead, matching the same
-// fallback fix applied to S.currentLang itself (state.js) and t() (i18n.js).
+// fallback fix applied to S.currentLang itself (state/index.ts) and t() (i18n.ts).
 export function localeFor(lang: string): string {
   return LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
 }
@@ -104,7 +105,7 @@ export function countryName(code: string | null | undefined, lang?: string): str
 // rendered countryName() immediately after it, so nothing is lost.
 
 // #417 sweep: the `icon` emoji fields these entries used to carry were dead
-// data — no consumer ever read MAINT_META[task].icon, since maintenance.js's
+// data — no consumer ever read MAINT_META[task].icon, since maintenance.ts's
 // own taskIconSvg()/TASK_ICON_PATHS (#393) already renders the real stroke-SVG
 // task icons. Dropped rather than replaced.
 export const MAINT_META: Record<string, { key: string }> = {
@@ -344,11 +345,23 @@ export const phasePlugin: Plugin<ChartType, PhasePluginOptions> = {
 };
 
 // ── Mobile: clear tooltip + crosshair on touchend ─────────────────────────
+// #1615: the shot chart's canvas is reused for every rebuild, so one listener
+// per canvas reads whichever chart is current at touch time. Adding one per
+// build piled up listeners whose closures kept every destroyed chart alive.
+// A destroyed chart (Chart.js nulls its canvas) is skipped until the next
+// build registers its replacement.
+const _touchEndChart = new WeakMap<HTMLCanvasElement, Chart>();
 export function clearChartOnTouchEnd(chart: Chart): void {
-  chart.canvas.addEventListener('touchend', () => {
-    if (chart.corsair) chart.corsair = { draw: false };
-    chart.tooltip?.setActiveElements([], { x: 0, y: 0 });
-    chart.update('none');
+  const canvas = chart.canvas;
+  const wired = _touchEndChart.has(canvas);
+  _touchEndChart.set(canvas, chart);
+  if (wired) return;
+  canvas.addEventListener('touchend', () => {
+    const current = _touchEndChart.get(canvas);
+    if (!current?.canvas) return;
+    if (current.corsair) current.corsair = { draw: false };
+    current.tooltip?.setActiveElements([], { x: 0, y: 0 });
+    current.update('none');
   }, { passive: true });
 }
 
@@ -359,11 +372,21 @@ interface CorsairOptions {
   dash: number[];
 }
 
+// #1618: the crosshair used to be a fixed white, which disappears on the
+// light theme's near-white chart surface. themeColor() (utils.ts) resolves it
+// from the live theme at draw time, so a theme switch is picked up by the next
+// render.
 export const corsairPlugin: Plugin<ChartType, CorsairOptions> = {
   id: 'corsair',
-  defaults: { width: 1, color: 'rgba(255,255,255,0.35)', dash: [4,4] },
+  defaults: { width: 1, color: '', dash: [4,4] },
   afterInit:  c => { c.corsair = { x: 0, y: 0 }; },
-  afterEvent: (c, args) => { c.corsair = { x: args.event.x ?? 0, y: args.event.y ?? 0, draw: args.inChartArea }; c.draw(); },
+  // #1618: Chart.js renders after afterEvent itself. Asking for that render
+  // (args.changed) replaces the extra draw() that painted the chart a second
+  // time on every pointer move.
+  afterEvent: (c, args) => {
+    c.corsair = { x: args.event.x ?? 0, y: args.event.y ?? 0, draw: args.inChartArea };
+    args.changed = true;
+  },
   beforeDatasetsDraw: (c, _a, opts) => {
     if (!c.corsair) return;
     const { ctx } = c;
@@ -372,7 +395,9 @@ export const corsairPlugin: Plugin<ChartType, CorsairOptions> = {
     if (!draw) return;
     ctx.save();
     ctx.beginPath();
-    ctx.lineWidth = opts.width; ctx.strokeStyle = opts.color; ctx.setLineDash(opts.dash);
+    ctx.lineWidth = opts.width;
+    ctx.strokeStyle = opts.color || themeColor('--gray-500', 'rgba(255,255,255,0.35)');
+    ctx.setLineDash(opts.dash);
     ctx.moveTo(x, bottom); ctx.lineTo(x, top); ctx.stroke();
     ctx.restore();
   }

@@ -1,6 +1,9 @@
 package shots
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func hasIssue(issues []ValidationIssue, path string) bool {
 	for _, i := range issues {
@@ -89,6 +92,36 @@ func TestValidateAnnotation_NonNullableRejectsNull(t *testing.T) {
 	issues := ValidateAnnotation(map[string]any{"coffee": nil})
 	if !hasIssue(issues, "coffee") {
 		t.Errorf("expected explicit null on non-nullable coffee to fail, got %+v", issues)
+	}
+}
+
+// #1620: length limits count characters, not bytes. "ü" is two bytes in
+// UTF-8, so a byte count rejected a 200-umlaut coffee name at half its limit.
+func TestValidateLengthLimitsCountCharacters(t *testing.T) {
+	cases := []struct {
+		name     string
+		validate func(map[string]any) []ValidationIssue
+		key      string
+		max      int
+	}{
+		{"annotation coffee", ValidateAnnotation, "coffee", 200},
+		{"annotation grindSetting", ValidateAnnotation, "grindSetting", 50},
+		{"annotation notes", ValidateAnnotation, "notes", 2000},
+		{"annotation drinkType", ValidateAnnotation, "drinkType", 50},
+		{"defaults coffee", ValidateShotDefaults, "coffee", 200},
+		{"defaults drinkType", ValidateShotDefaults, "drinkType", 50},
+		{"defaults grinder", ValidateShotDefaults, "grinder", 200},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			atLimit := strings.Repeat("ü", tc.max)
+			if issues := tc.validate(map[string]any{tc.key: atLimit}); hasIssue(issues, tc.key) {
+				t.Errorf("%d umlauts (%d bytes) should fit a %d-character limit, got %+v", tc.max, len(atLimit), tc.max, issues)
+			}
+			if issues := tc.validate(map[string]any{tc.key: atLimit + "ö"}); !hasIssue(issues, tc.key) {
+				t.Errorf("%d umlauts should exceed a %d-character limit", tc.max+1, tc.max)
+			}
+		})
 	}
 }
 

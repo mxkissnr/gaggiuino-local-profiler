@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -28,7 +29,7 @@ func TestBackup_BundlesReferencedImagesOnly(t *testing.T) {
 		write(name)
 	}
 
-	h, deps, _ := newTestHandlers(t)
+	h, deps, sqlDB := newTestHandlers(t)
 	if err := deps.LibRepo.SaveLibrary(library.Library{
 		Beans: []library.Entity{{"id": int64(1), "name": "B", "image": "jpg"}},
 	}); err != nil {
@@ -46,9 +47,7 @@ func TestBackup_BundlesReferencedImagesOnly(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := deps.ShotsRepo.SetTrashEntry(43, 1234567); err != nil {
-		t.Fatal(err)
-	}
+	insertTrashEntry(t, sqlDB, 43, 1234567)
 
 	rec := doJSON(t, newMux(h), http.MethodPost, "/api/backup", nil)
 	if rec.Code != http.StatusOK {
@@ -74,6 +73,47 @@ func TestBackup_BundlesReferencedImagesOnly(t *testing.T) {
 	}
 }
 
+// TestBundledImageEntries (#1602): the single image walk every export path now
+// shares returns the referenced image and reports the unreferenced app-named
+// file as skipped — its ".thumb." sibling and a subdirectory are neither
+// bundled nor counted.
+func TestBundledImageEntries(t *testing.T) {
+	dir := useImageDir(t)
+	for _, name := range []string{"1.jpg", "99.jpg", "99.thumb.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte{0x01, 0x02, 0x03, 0x04}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, skipped, err := bundledImageEntries(map[string]struct{}{"1.jpg": {}})
+	if err != nil {
+		t.Fatalf("bundledImageEntries: %v", err)
+	}
+	if skipped != 1 {
+		t.Errorf("skipped = %d; want 1", skipped)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if len(names) != 1 || names[0] != "1.jpg" {
+		t.Errorf("bundled entries = %v; want [1.jpg]", names)
+	}
+
+	// A nil set means the reference lookup failed: every app-named file must
+	// still be bundled, so a transient DB error never drops a photo.
+	all, _, err := bundledImageEntries(nil)
+	if err != nil {
+		t.Fatalf("bundledImageEntries(nil): %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("nil referenced bundled %d entries; want 2 (1.jpg, 99.jpg)", len(all))
+	}
+}
+
 // TestRemoveUnreferencedImages (#1525): app-named orphans are removed with
 // their thumbnails, a referenced image and its thumbnail stay, and a foreign
 // file name (or a directory) is never touched.
@@ -82,6 +122,12 @@ func TestRemoveUnreferencedImages(t *testing.T) {
 	write := func(name string, n int) {
 		t.Helper()
 		if err := os.WriteFile(filepath.Join(dir, name), bytes.Repeat([]byte{0x7f}, n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// Age past orphanGracePeriod so the sweep treats these as established
+		// orphans, not fresh uploads (see the grace-period test below).
+		old := time.Now().Add(-11 * time.Minute)
+		if err := os.Chtimes(filepath.Join(dir, name), old, old); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -118,8 +164,13 @@ func TestRemoveUnreferencedImages(t *testing.T) {
 // bean still refers to survives while an app-named orphan is deleted.
 func TestCleanupOrphanedImages_BuildsSetFromDB(t *testing.T) {
 	dir := t.TempDir()
+	old := time.Now().Add(-11 * time.Minute)
 	for _, name := range []string{"1.jpg", "1.thumb.jpg", "2.jpg"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte{0x01}, 0o644); err != nil {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte{0x01}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, old, old); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -159,5 +210,34 @@ func TestCleanupOrphanedImages_ReferenceLookupFailureRemovesNothing(t *testing.T
 
 	if _, err := os.Stat(filepath.Join(dir, "2.jpg")); err != nil {
 		t.Errorf("a failed reference lookup must remove nothing, but 2.jpg is gone: %v", err)
+	}
+}
+
+// TestRemoveUnreferencedImages_GracePeriod (#1603): an unreferenced app-named
+// image written just now is kept, because an upload writes the file before the
+// entry row that refers to it is saved; the same file aged past
+// orphanGracePeriod is removed.
+func TestRemoveUnreferencedImages_GracePeriod(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "2.jpg")
+	if err := os.WriteFile(path, []byte{0x01}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if removed, _ := removeUnreferencedImages(dir, map[string]struct{}{}, t.Logf); removed != 0 {
+		t.Fatalf("removed = %d, want 0 (a fresh orphan is inside the grace period)", removed)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("fresh orphan must be kept: %v", err)
+	}
+
+	old := time.Now().Add(-11 * time.Minute)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if removed, _ := removeUnreferencedImages(dir, map[string]struct{}{}, t.Logf); removed != 1 {
+		t.Fatalf("removed = %d, want 1 (an expired orphan must be removed)", removed)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expired orphan must be removed (err=%v)", err)
 	}
 }

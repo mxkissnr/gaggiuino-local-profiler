@@ -36,20 +36,24 @@ interface FakeElement {
   addEventListener: (type: string, cb: () => void) => void;
   removeEventListener: () => void;
   _fire: (type: string) => void;
+  _listenerCount: (type: string) => number;
 }
 
 function makeFakeDocument() {
   const registry = new Map<string, FakeElement>();
   function makeElement(): FakeElement {
-    const listeners: Record<string, () => void> = {};
+    const listeners: Record<string, Array<() => void>> = {};
     return {
       className: '', textContent: '', style: {}, value: '',
       classList: { add() {}, remove() {}, contains: () => false, toggle() {} },
       querySelector: () => null,
       selectedOptions: [],
-      addEventListener(type, cb) { listeners[type] = cb; },
+      // Keep every listener per event type rather than overwriting the previous
+      // one, so a double-wired field (a broken _lsWired guard) is observable.
+      addEventListener(type, cb) { (listeners[type] ??= []).push(cb); },
       removeEventListener() {},
-      _fire(type) { listeners[type]?.(); },
+      _fire(type) { listeners[type]?.forEach(cb => cb()); },
+      _listenerCount(type) { return listeners[type]?.length ?? 0; },
     };
   }
   return {
@@ -68,8 +72,8 @@ describe('renderLiveShotSetupPanel()', () => {
 
   // renderLiveShotSetupPanel wires its DOM listeners exactly once per
   // module instance (the _lsWired module-level guard). vi.resetModules()
-  // plus a fresh dynamic import of both live.js AND state/index.js gives
-  // each test its own _lsWired and its own S — re-importing only live.js
+  // plus a fresh dynamic import of both live.ts AND state/index.ts gives
+  // each test its own _lsWired and its own S — re-importing only live.ts
   // would leave it reading a stale S instance from before the reset,
   // silently no-op-ing every S.activeMachineId assignment a test makes.
   beforeEach(async () => {
@@ -115,6 +119,8 @@ describe('renderLiveShotSetupPanel()', () => {
     renderLiveShotSetupPanel(); // second render must not double-wire
 
     const grindEl = doc.getElementById('lsGrindSetting');
+    expect(grindEl._listenerCount('input')).toBe(1);
+
     grindEl.value = '5.0';
     grindEl._fire('input');
 
@@ -122,6 +128,29 @@ describe('renderLiveShotSetupPanel()', () => {
     if (raw === undefined) throw new Error('draft not persisted');
     const saved = JSON.parse(raw) as { grindSetting?: string };
     expect(saved.grindSetting).toBe('5.0');
+  });
+
+  it('wires every setup field exactly once, even across re-renders', () => {
+    renderLiveShotSetupPanel();
+    renderLiveShotSetupPanel(); // second render must not add a second listener
+
+    // Double-wiring would be invisible to a fake that overwrote the previous
+    // callback; the counting fake above makes it fail here instead.
+    const wired: Array<[string, string]> = [
+      ['lsToggle', 'click'],
+      ['lsBean', 'change'],
+      ['lsGrinder', 'change'],
+      ['lsGrinderOther', 'input'],
+      ['lsGrindSetting', 'input'],
+      ['lsDose', 'input'],
+      ['lsBasket', 'change'],
+      ['lsPuckScreen', 'change'],
+      ['lsRecipe', 'change'],
+      ['lsReset', 'click'],
+    ];
+    for (const [id, type] of wired) {
+      expect(doc.getElementById(id)._listenerCount(type)).toBe(1);
+    }
   });
 
   it('scopes the draft storage key to the active machine', () => {

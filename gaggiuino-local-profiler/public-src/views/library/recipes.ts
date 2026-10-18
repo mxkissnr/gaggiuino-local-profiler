@@ -1,17 +1,16 @@
-// Recipes section of the Library view, split out of views/library.js.
+// Recipes section of the Library view, split out of views/library.ts.
 // Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml } from '../../utils.js';
+import { esc, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
-import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG } from '../../icons.js';
+import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
 import type { Recipe } from '../../api/types.js';
 import type { ShotMeta } from '../../state/index.js';
 
 const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
 // state/index.ts's CoffeeLibrary types the recipe collection as Recipe[] but
 // has no recipeEditId (unlike the basket/puck-screen edit ids); this section
@@ -77,12 +76,16 @@ export function renderRecipeList(): void {
       : html``;
     const linkedShots = _shots().filter(s => s.annotation?.recipeId === r.id);
     const shotCount   = linkedShots.length;
-    const avgScore    = shotCount > 0
-      ? (linkedShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / shotCount).toFixed(1)
+    // #1625: only scored shots count towards the average — an unscored shot is
+    // not a 0 and must not drag it down. The badge still shows every linked shot.
+    const scoredShots = linkedShots.filter(s => typeof s.score === 'number' && Number.isFinite(s.score));
+    const avgScore    = scoredShots.length > 0
+      ? (scoredShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / scoredShots.length).toFixed(1)
       : null;
     const shotsBadge  = shotCount > 0
-      ? html`<span class="lib-recipe-shots-badge">${esc(shotCount)} Shot${shotCount !== 1 ? html`s` : html``}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
+      ? html`<span class="lib-recipe-shots-badge">${tHtml('lib_recipe_shots', shotCount)}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
       : html``;
+    const sourceHref = safeHttpUrl(r.sourceUrl);
     return html`<div class="lib-item">
       <div class="lib-item-info">
         <div class="lib-item-name">${brewLabel}${esc(r.name)}${shotsBadge}</div>
@@ -90,7 +93,7 @@ export function renderRecipeList(): void {
         ${params.length ? html`<div class="lib-recipe-params">${joinHtml(params.map(p => html`<span>${p}</span>`))}</div>` : html``}
         ${stepsHtml}
         ${r.notes ? html`<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : html``}
-        ${r.sourceUrl ? html`<div class="lib-item-source"><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">${LINK_ICON_SVG} Quelle</a></div>` : html``}
+        ${sourceHref ? html`<div class="lib-item-source"><a href="${esc(sourceHref)}" target="_blank" rel="noopener">${LINK_ICON_SVG} ${tHtml('lib_recipe_source_link')}</a></div>` : html``}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
@@ -110,8 +113,8 @@ function _renderStepRows(steps: Recipe['steps']): void {
 function _stepRowHtml(i: number, text: string | undefined = '', dur: number | string | null | undefined = ''): Html {
   return html`<div class="lib-step-row" id="recipeStep${esc(i)}">
     <span class="lib-step-num">${esc(i + 1)}</span>
-    <input class="lib-step-text" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
-    <input class="lib-step-dur" type="number" min="0" step="1" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
+    <input class="lib-step-text" aria-label="${tHtml('lib_recipe_step_ph')}" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
+    <input class="lib-step-dur" type="number" min="0" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
     <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}">${ICON_TRASH}</button>
   </div>`;
 }

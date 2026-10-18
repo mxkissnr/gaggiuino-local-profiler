@@ -2,9 +2,9 @@ package system
 
 import "sync"
 
-// RuntimeState holds per-machine polling/preheat state. #549's
-// hard-single-machine assumption holds throughout this package: Poller only
-// ever drives one instance, obtained once at construction.
+// RuntimeState holds the default machine's polling/preheat state; Poller
+// owns exactly one instance. Per-machine state for every machine lives in
+// pollGlobalState (poll.go), keyed by machine id.
 //
 // Every field is unexported and reached only through the locked methods
 // below, because Poller's 1s poll tick, the 30s HA-check tick, the 30s

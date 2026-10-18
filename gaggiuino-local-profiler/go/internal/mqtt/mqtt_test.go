@@ -86,6 +86,89 @@ func TestOpenGuardedMQTTConnection_BlocksSSRFHost(t *testing.T) {
 	}
 }
 
+// fakePahoClient is the newPahoClient seam's stand-in: the embedded nil
+// paho.Client satisfies the rest of the interface as long as no other method
+// runs, and Connect is recorded so a test can prove connect() did — or did not
+// — start the client.
+type fakePahoClient struct {
+	paho.Client
+	connectCalls int
+}
+
+func (f *fakePahoClient) Connect() paho.Token { f.connectCalls++; return nil }
+
+func (f *fakePahoClient) Disconnect(_ uint) {}
+
+// TestConnect_EnablesConnectRetry is the #1604 regression test: without
+// SetConnectRetry(true) paho's first Connect() gives up for good when the
+// broker is unreachable, leaving MQTT dead until an app restart.
+func TestConnect_EnablesConnectRetry(t *testing.T) {
+	c := NewClient()
+	var opts *paho.ClientOptions
+	c.newPahoClient = func(o *paho.ClientOptions) paho.Client {
+		opts = o
+		return &fakePahoClient{}
+	}
+	c.connect(Conn{Host: "192.168.1.50", Port: 1883, Prefix: "gaggiuino"})
+	if opts == nil {
+		t.Fatal("connect() built no paho options")
+	}
+	if !opts.ConnectRetry {
+		t.Fatal("paho ConnectRetry is false; a broker down at startup would stay unreachable")
+	}
+}
+
+// TestConnect_IPv6BrokerURL is the #1604 regression test: an IPv6 literal must
+// be bracketed in the broker URL, or paho can't parse the address at all.
+func TestConnect_IPv6BrokerURL(t *testing.T) {
+	c := NewClient()
+	var opts *paho.ClientOptions
+	c.newPahoClient = func(o *paho.ClientOptions) paho.Client {
+		opts = o
+		return &fakePahoClient{}
+	}
+	c.connect(Conn{Host: "fd00::1", Port: 1883, Prefix: "gaggiuino"})
+	if opts == nil {
+		t.Fatal("connect() built no paho options")
+	}
+	if len(opts.Servers) != 1 || opts.Servers[0].String() != "tcp://[fd00::1]:1883" {
+		t.Fatalf("broker URL = %v, want tcp://[fd00::1]:1883", opts.Servers)
+	}
+}
+
+// TestConnect_DisconnectAllDuringConnect is the #1604 regression test:
+// DisconnectAll running while connect() is between the SSRF guard and storing
+// the client (the guard holds no session lock while it resolves DNS) must not
+// leave a started client reconnecting to the old broker forever.
+func TestConnect_DisconnectAllDuringConnect(t *testing.T) {
+	c := NewClient()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	fake := &fakePahoClient{}
+	c.newPahoClient = func(*paho.ClientOptions) paho.Client {
+		close(entered)
+		<-release
+		return fake
+	}
+
+	done := make(chan *session, 1)
+	go func() { done <- c.connect(Conn{Host: "192.168.1.50", Port: 1883, Prefix: "gaggiuino"}) }()
+	<-entered
+	c.DisconnectAll()
+	close(release)
+	s := <-done
+
+	if fake.connectCalls != 0 {
+		t.Fatalf("connect() started a client on an orphaned session (%d Connect calls)", fake.connectCalls)
+	}
+	s.mu.Lock()
+	got := s.client
+	s.mu.Unlock()
+	if got != nil {
+		t.Fatal("session kept a client after DisconnectAll")
+	}
+}
+
 // ── validation ─────────────────────────────────────────────────────────
 
 func TestParseSettings(t *testing.T) {
@@ -104,6 +187,20 @@ func TestParseSettings(t *testing.T) {
 		if _, err := parseSettings(bad); err == nil {
 			t.Errorf("expected error for %v", bad)
 		}
+	}
+}
+
+// TestParseSettings_RejectsWildcardPrefix is the #1604 regression test: a
+// prefix carrying MQTT wildcards (or a NUL) makes every subscription a
+// wildcard, and the message handler then drops every message.
+func TestParseSettings_RejectsWildcardPrefix(t *testing.T) {
+	for _, bad := range []string{"gaggiuino/#", "a/+/b", "gaggiuino\x00"} {
+		if _, err := parseSettings(map[string]any{"transport": "mqtt", "prefix": bad}); err == nil {
+			t.Errorf("expected error for prefix %q", bad)
+		}
+	}
+	if s, err := parseSettings(map[string]any{"transport": "mqtt", "prefix": "gaggiuino"}); err != nil || s.Prefix != "gaggiuino" {
+		t.Errorf("valid prefix rejected: %+v, %v", s, err)
 	}
 }
 
@@ -141,7 +238,11 @@ func TestToSysState(t *testing.T) {
 
 func TestTransport_Eligibility(t *testing.T) {
 	repo, _ := testRepo(t)
-	tr := NewTransport(NewClient(), repo)
+	c := NewClient()
+	// The MQTT-active branch below would otherwise have SystemState drive the
+	// real paho client to dial 192.168.1.50; the fake keeps the test offline.
+	c.newPahoClient = func(*paho.ClientOptions) paho.Client { return &fakePahoClient{} }
+	tr := NewTransport(c, repo)
 
 	// websocket default -> not MQTT
 	if _, ok := tr.SensorSnapshot(true); ok {
@@ -539,5 +640,71 @@ func TestRoute_ApplyToMachine_NoProxy(t *testing.T) {
 	repo.SaveSettings(Settings{Transport: TransportMQTT, Host: "h", Prefix: "gaggiuino"})
 	if rec := do(t, m, http.MethodPost, "/api/mqtt/apply-to-machine", ""); rec.Code != 501 {
 		t.Fatalf("expected 501, got %d", rec.Code)
+	}
+}
+
+// TestOnMessage_DropsOversizedPayload is the #1601 regression test: a payload
+// over maxMQTTPayload must be dropped before parsing, so a large retained
+// message on the broker can't be decoded on every delivery, while a normal
+// payload still updates the live snapshot.
+func TestOnMessage_DropsOversizedPayload(t *testing.T) {
+	c := NewClient()
+	s := &session{}
+	conn := Conn{Host: "192.168.1.50", Prefix: "gaggiuino"}
+	topic := conn.prefix() + "/sensors"
+
+	c.onMessage(conn, s, topic, []byte(`{"temperature":92.5}`))
+	normal := s.sensorSnap
+	if normal == nil || normal.Temperature != 92.5 {
+		t.Fatalf("normal payload did not update the snapshot: %+v", normal)
+	}
+
+	// Valid JSON, so without the cap it would parse and replace the snapshot.
+	big := []byte(`{"temperature":1,"pad":"` + strings.Repeat("a", 65<<10) + `"}`)
+	if len(big) <= maxMQTTPayload {
+		t.Fatalf("test payload is not oversized: %d bytes", len(big))
+	}
+	c.onMessage(conn, s, topic, big)
+	if s.sensorSnap != normal {
+		t.Fatalf("oversized payload replaced the snapshot: %+v", s.sensorSnap)
+	}
+}
+
+// TestRoute_SettingsPost_BrokerChangeDropsStoredPassword binds a stored
+// password to its broker: a POST naming a different host without a password
+// must not forward the old one, while a new host that also supplies a new
+// password stores the new value.
+func TestRoute_SettingsPost_BrokerChangeDropsStoredPassword(t *testing.T) {
+	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("x")})
+	if _, err := repo.SaveSettings(Settings{
+		Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+		Username: "u", Password: "super-secret", Prefix: "gaggiuino",
+	}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	rec := do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.51","port":1883,"username":"u","prefix":"gaggiuino"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if body := decode(t, rec); body["hasPassword"] != false {
+		t.Fatalf("response hasPassword = %v, want false", body["hasPassword"])
+	}
+	stored := repo.GetSettings()
+	if stored.Password != "" {
+		t.Fatalf("broker change kept the stored password: %+v", stored)
+	}
+	if stored.Host != "192.168.1.51" {
+		t.Fatalf("host = %q, want 192.168.1.51", stored.Host)
+	}
+
+	rec = do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.51","port":1883,"username":"u","password":"new-secret","prefix":"gaggiuino"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := repo.GetSettings().Password; got != "new-secret" {
+		t.Fatalf("new password = %q, want new-secret", got)
 	}
 }

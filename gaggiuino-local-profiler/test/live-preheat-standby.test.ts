@@ -1,5 +1,5 @@
 // #1498: a GaggiMate in standby is off, so the Live view must not count down
-// to "ready" with a cold boiler. Covers the widget/DOM wiring in views/live.js
+// to "ready" with a cold boiler. Covers the widget/DOM wiring in views/live.ts
 // and the shared icon-state translation it drives.
 import { describe, it, expect, beforeEach } from 'vitest';
 

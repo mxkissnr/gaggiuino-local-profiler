@@ -39,18 +39,19 @@
 # Node source was removed from the tree in 3.0.0, #1028):
 #   - Base image alpine:3.22 running the Go backend (go/) — see the
 #     repo-root Dockerfile. No s6-overlay, init: false (config.yaml).
-#     docker-entrypoint.sh starts as root, `chown -R glp:glp /data` (the
-#     bind mount's owning UID varies per install, see #271), then
-#     `exec su-exec glp "$@"` to run `glp-server` unprivileged for the rest
-#     of the process lifetime. No node_modules/native-addon tree exists
+#     docker-entrypoint.sh starts as root, fixes /data ownership (the bind
+#     mount's owning UID varies per install, see #271) with `chown -R
+#     glp:glp /data` -- only when something under it isn't already owned by
+#     glp, so the common boot writes nothing -- then `exec su-exec glp "$@"`
+#     to run `glp-server` unprivileged for the rest of the process lifetime.
+#     No node_modules/native-addon tree exists
 #     (modernc.org/sqlite and the Go stdlib are pure Go, no CGo), and the
 #     shell/exec chain is Alpine's busybox (/bin, /sbin) rather than
 #     Debian's coreutils/dash — the broad `file,`/`ix` rules below cover
 #     both but were not narrowed to busybox specifically.
 #   - All persistent state lives under /data: the SQLite DB (glp.db, plus
 #     its -wal/-shm files — go/internal/db opens with `PRAGMA journal_mode
-#     = WAL`), a one-time glp.db.pre-go-backup
-#     snapshot (see docker-entrypoint.sh), legacy per-entity JSON files
+#     = WAL`), legacy per-entity JSON files
 #     kept only as one-time migration sources, api_token.txt,
 #     preheat_state.json, options.json, profiles_cache.json, and
 #     bean-images/ (bean photos, downloaded from an allow-listed set of
@@ -98,9 +99,10 @@ profile gaggiuino_local_profiler flags=(attach_disconnected,mediate_deleted) {
   # embed.FS, not an on-disk code/node_modules tree.
   file,
 
-  # Boot-time privilege drop performed by docker-entrypoint.sh: chown -R on
-  # the /data bind mount, then su-exec (setuid/setgid) from root to the glp
-  # user for the rest of the process's life.
+  # Boot-time privilege drop performed by docker-entrypoint.sh: a chown -R of
+  # the /data bind mount when its ownership is wrong, then su-exec
+  # (setuid/setgid) from root to the glp user for the rest of the process's
+  # life.
   capability chown,
   capability dac_override,
   capability fowner,

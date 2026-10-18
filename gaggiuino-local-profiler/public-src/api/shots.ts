@@ -1,10 +1,9 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, pathSeg } from './fetch.js';
 import type { HydratedShot, ShotAnnotationInput, ShotDefaults } from './types.js';
 
 // Typed client for the `shots` domain (go/internal/shots — every route that
 // package registers: /shots.json plus /api/shots*). Package A3b of the TS
-// migration (#1110); the remaining domains stay on the api.js shim until
-// their own runs.
+// migration (#1110).
 //
 // URL building lives here so the views never assemble an endpoint string or
 // repeat the JSON-headers boilerplate. Helpers whose result the caller
@@ -26,8 +25,8 @@ export interface ListShotsParams {
  * GET /api/shots — one page of shot METADATA (no `datapoints`), newest-first.
  * Body: `{ shots: HydratedShot[]; nextCursor: string | null; hasMore: boolean }`.
  *
- * Returns the raw Response because the caller keys the pre-#957 Node-backend
- * fallback off a 404 and reports the failing status through the page state.
+ * Returns the raw Response because the caller reports the failing status
+ * through the page state.
  */
 export function listShots({ limit, cursor, trash = false }: ListShotsParams): Promise<Response> {
   const params = new URLSearchParams({ limit: String(limit) });
@@ -37,22 +36,13 @@ export function listShots({ limit, cursor, trash = false }: ListShotsParams): Pr
 }
 
 /**
- * GET /shots.json — the full dump (timestamp-ASC, `datapoints` inline) the
- * frozen Node backend still serves. Body: `HydratedShot[]`. Only reached when
- * {@link listShots} answers 404.
- */
-export function listShotsDump({ trash = false }: { trash?: boolean } = {}): Promise<Response> {
-  return apiFetch(trash ? 'shots.json?trash=1' : 'shots.json');
-}
-
-/**
  * GET /api/shots/{id} — the full hydrated shot including `datapoints` and the
  * previous same-profile shot. Resolves to null when the shot isn't there (or
  * the request is otherwise rejected with a status), so the curve cache can
  * treat it as transient and retry later.
  */
 export async function getShot(id: number): Promise<HydratedShot | null> {
-  const r = await apiFetch(`api/shots/${id}`);
+  const r = await apiFetch(`api/shots/${pathSeg(id)}`);
   return r.ok ? ((await r.json()) as HydratedShot) : null;
 }
 
@@ -62,12 +52,12 @@ export async function getShot(id: number): Promise<HydratedShot | null> {
  * `<img src>`.
  */
 export function shotImageUrl(id: number): string {
-  return `api/shots/${id}/image`;
+  return `api/shots/${pathSeg(id)}/image`;
 }
 
 /** POST /api/shots/{id}/annotate — upsert the shot's annotation. */
 export function annotateShot(id: number, annotation: ShotAnnotationInput): Promise<Response> {
-  return apiFetch(`api/shots/${id}/annotate`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/annotate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(annotation),
@@ -99,7 +89,7 @@ export async function saveShotDefaults(defaults: ShotDefaults): Promise<ShotDefa
 
 /** POST /api/shots/{id}/trash — soft-delete. */
 export function sendShotToTrash(id: number): Promise<Response> {
-  return apiFetch(`api/shots/${id}/trash`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/trash`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -107,7 +97,7 @@ export function sendShotToTrash(id: number): Promise<Response> {
 
 /** POST /api/shots/{id}/restore — undo {@link sendShotToTrash}. */
 export function restoreShotFromTrash(id: number): Promise<Response> {
-  return apiFetch(`api/shots/${id}/restore`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -115,7 +105,7 @@ export function restoreShotFromTrash(id: number): Promise<Response> {
 
 /** POST /api/shots/{id}/delete — permanently delete an already-trashed shot. */
 export function deleteShotPermanently(id: number): Promise<Response> {
-  return apiFetch(`api/shots/${id}/delete`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -129,15 +119,17 @@ export interface ShotCardOptions {
   accent: string;
   /** "dark" | "light". */
   theme: string;
+  /** Viewer's UI language (de/en/es/fr/it/nl); the backend falls back to English. */
+  lang: string;
 }
 
 /**
  * GET /api/shots/{id}/card — the rendered PNG. Returns the raw Response: the
  * caller streams the body as a Blob and reads the JSON error on a non-ok.
  */
-export function getShotCard(id: number, { format, accent, theme }: ShotCardOptions): Promise<Response> {
-  const params = new URLSearchParams({ format, accent, theme });
-  return apiFetch(`api/shots/${id}/card?${params}`);
+export function getShotCard(id: number, { format, accent, theme, lang }: ShotCardOptions): Promise<Response> {
+  const params = new URLSearchParams({ format, accent, theme, lang });
+  return apiFetch(`api/shots/${pathSeg(id)}/card?${params}`);
 }
 
 /** POST /api/shots/{id}/image — upload a (cropped) shot photo. */

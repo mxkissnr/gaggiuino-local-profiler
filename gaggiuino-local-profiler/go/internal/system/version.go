@@ -7,25 +7,29 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"testing"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // This file implements the GitHub-release version check for GET /api/version.
-// GLP_VERSION is shared across the whole repo (the release process isn't
-// per-binary). Not used: the achievements up_to_date badge's cached-value path
-// (achievements isn't implemented yet — see go/README.md's domain list;
-// nothing in this Go binary calls checkForUpdate() except this endpoint
-// itself, which is why the cache exists).
+// Its result is cached so repeated GET /api/version calls do not hit GitHub
+// each time.
 const versionCacheTTL = time.Hour
+
+// versionFailureBackoff bounds how long a failed release lookup is
+// remembered before GitHub is asked again (#1616). Without it every
+// GET /api/version during a GitHub outage or rate limit started a fresh
+// request of up to 8 s; the response is the same either way (whatever is
+// cached, possibly nothing).
+const versionFailureBackoff = time.Minute
 
 // glpVersion is the GLP version this binary reports from GET /api/version.
 // config.yaml's `version:` is canonical; this const must match it and is
 // bumped alongside it at release time (CLAUDE.md's Versioning section).
 // Enforced by test/version-sync.test.ts and scripts/release-check.mts.
-// Duplicated rather than imported — no shared "constants" package exists in
-// this Go port; every domain package that needs a version-shaped value
-// defines its own, see internal/db's schema version handling.
-const glpVersion = "3.4.0"
+const glpVersion = "3.5.0"
 
 // Version returns the GLP version this binary reports from GET /api/version,
 // for callers that need the same value (the MCP server identity, #1196).
@@ -49,18 +53,32 @@ type VersionInfo struct {
 // construct one pointed at a fake GitHub API instead of relying on
 // process-wide state.
 type versionChecker struct {
-	mu       sync.Mutex
-	cache    *string
-	cacheAt  time.Time
+	mu      sync.Mutex
+	cache   *string
+	cacheAt time.Time
+	// failedAt is when the last lookup failed (zero after a success).
+	failedAt time.Time
+	// flight collapses concurrent lookups into a single GitHub request
+	// (#1616).
+	flight   singleflight.Group
 	http     *http.Client
 	apiURL   string // overridable in tests
 	devBuild bool   // GLP_DEV_BUILD set — see #704's dev-channel guard below
 }
 
 func newVersionChecker() *versionChecker {
+	// A test binary must not dial GitHub: every Go test that builds the system
+	// handlers (GET /api/version, and the server package's full-app tests)
+	// would otherwise make a real HTTPS request. An empty apiURL makes
+	// fetchLatestTag a no-op, so the "keep whatever's cached" path applies.
+	// Tests that need a fetch point apiURL at an httptest server themselves.
+	apiURL := "https://api.github.com/repos/mxkissnr/gaggiuino-local-profiler/releases/latest"
+	if testing.Testing() {
+		apiURL = ""
+	}
 	return &versionChecker{
 		http:     &http.Client{Timeout: 8 * time.Second},
-		apiURL:   "https://api.github.com/repos/mxkissnr/gaggiuino-local-profiler/releases/latest",
+		apiURL:   apiURL,
 		devBuild: os.Getenv("GLP_DEV_BUILD") != "",
 	}
 }
@@ -68,23 +86,41 @@ func newVersionChecker() *versionChecker {
 // CheckForUpdate fetches the latest GitHub release tag at most once per
 // versionCacheTTL, then returns result()'s shape either way (a fetch failure
 // just means "keep whatever's cached, possibly nil").
+//
+// Concurrent stale callers share one fetch, which runs detached from any
+// one caller's cancellation (the client timeout still bounds it), and a
+// failed fetch is not retried for versionFailureBackoff (#1616).
 func (v *versionChecker) CheckForUpdate(ctx context.Context) VersionInfo {
 	v.mu.Lock()
 	stale := v.cache == nil || time.Since(v.cacheAt) > versionCacheTTL
+	backingOff := !v.failedAt.IsZero() && time.Since(v.failedAt) < versionFailureBackoff
 	v.mu.Unlock()
 
-	if stale {
-		if tag, ok := v.fetchLatestTag(ctx); ok {
+	if stale && !backingOff {
+		fetchCtx := context.WithoutCancel(ctx)
+		_, _, _ = v.flight.Do("latest", func() (any, error) {
+			tag, ok := v.fetchLatestTag(fetchCtx)
 			v.mu.Lock()
-			v.cache = &tag
-			v.cacheAt = time.Now()
-			v.mu.Unlock()
-		}
+			defer v.mu.Unlock()
+			if ok {
+				v.cache = &tag
+				v.cacheAt = time.Now()
+				v.failedAt = time.Time{}
+			} else {
+				v.failedAt = time.Now()
+			}
+			return nil, nil
+		})
 	}
 	return v.result()
 }
 
 func (v *versionChecker) fetchLatestTag(ctx context.Context) (string, bool) {
+	// No apiURL means "don't fetch at all" (a test binary, see
+	// newVersionChecker): report not-ok without issuing any request.
+	if v.apiURL == "" {
+		return "", false
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.apiURL, nil)
 	if err != nil {
 		return "", false

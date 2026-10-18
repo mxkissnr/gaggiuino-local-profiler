@@ -1,12 +1,12 @@
 package library
 
 import (
-	"regexp"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/jsnum"
 )
 
 // Entity is one library item (bean/grinder/basket/puckScreen/recipe/milk),
@@ -102,38 +102,8 @@ func idOf(e Entity, key string) (int64, bool) {
 	return 0, false
 }
 
-// jsParseInt implements JS's parseInt(s, 10) — see shots/handlers.go's copy
-// of the same function for the full rationale. Duplicated rather than shared
-// across internal/shots and internal/library, same call as shots' own
-// toNativeShotID duplication (see shots/model.go): these are small enough
-// that a shared package isn't worth the coupling yet.
-func jsParseInt(s string) (int64, bool) {
-	i, n := 0, len(s)
-	for i < n {
-		switch s[i] {
-		case ' ', '\t', '\n', '\r', '\v', '\f':
-			i++
-			continue
-		}
-		break
-	}
-	start := i
-	if i < n && (s[i] == '+' || s[i] == '-') {
-		i++
-	}
-	digitsStart := i
-	for i < n && s[i] >= '0' && s[i] <= '9' {
-		i++
-	}
-	if i == digitsStart {
-		return 0, false
-	}
-	v, err := strconv.ParseInt(s[start:i], 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return v, true
-}
+// jsParseInt mirrors JS's parseInt(s, 10); see jsnum.ParseInt.
+var jsParseInt = jsnum.ParseInt
 
 // parseIDParam parses the route's {id} parameter as a base-10 integer —
 // unlike shots' parseID, there's no MAX_SHOT_ID range check or "invalid id
@@ -151,35 +121,8 @@ func parseIDParam(param string) (id int64, noMatch bool) {
 	return v, false
 }
 
-var leadingFloatRe = regexp.MustCompile(`^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?`)
-
-// jsParseFloat implements JS's parseFloat(v): a number is returned as-is
-// (NaN is "not ok", mirroring parseFloat(NaN) -> NaN); a string is parsed
-// against its longest leading float literal ("12.5abc" -> 12.5, ok);
-// anything else (including a JSON null, bool, object, array) is "not ok",
-// same as parseFloat(non-string-non-number) coercing its argument to a
-// NaN-yielding string.
-func jsParseFloat(v any) (float64, bool) {
-	switch t := v.(type) {
-	case float64:
-		if t != t { // NaN
-			return 0, false
-		}
-		return t, true
-	case string:
-		trimmed := strings.TrimLeft(t, " \t\n\r\v\f")
-		m := leadingFloatRe.FindString(trimmed)
-		if m == "" {
-			return 0, false
-		}
-		f, err := strconv.ParseFloat(m, 64)
-		if err != nil {
-			return 0, false
-		}
-		return f, true
-	}
-	return 0, false
-}
+// jsParseFloat mirrors JS's parseFloat(v); see jsnum.ParseFloat.
+var jsParseFloat = jsnum.ParseFloat
 
 // jsParseIntLoose implements JS's parseInt(v, 10) where v may already be a
 // number (altitude_m/holeCount-style fields the frontend can send as either

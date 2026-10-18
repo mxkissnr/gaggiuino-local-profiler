@@ -17,6 +17,8 @@ export interface paths {
                 query?: {
                     /** @description Set to "1" to return trashed shots instead of active shots */
                     trash?: "0" | "1";
+                    /** @description Return only the newest N active shots, still oldest first (the last N entries of the full list). Absent, zero, negative or non-numeric means no limit; ignored with trash=1. (#1616) */
+                    limit?: number;
                 };
                 header?: never;
                 path?: never;
@@ -27,6 +29,8 @@ export interface paths {
                 /** @description Array of shots */
                 200: {
                     headers: {
+                        /** @description Number of active shots (every machine) stamped on the server's local calendar day. A header because the body is a bare array. (#1616) */
+                        "X-Shots-Today"?: number;
                         [name: string]: unknown;
                     };
                     content: {
@@ -262,6 +266,8 @@ export interface paths {
                     accent?: string;
                     /** @description UI theme name override */
                     theme?: string;
+                    /** @description UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en) */
+                    lang?: string;
                 };
                 header?: never;
                 path: {
@@ -397,6 +403,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description Rate limit exceeded — per-IP image upload limit, 30/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         /** Remove a shot's uploaded photo */
@@ -525,6 +538,15 @@ export interface paths {
                 };
                 /** @description Invalid shot ID */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Shot not found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -766,7 +788,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP library create limit, 30/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -1430,6 +1452,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description Rate limit exceeded — per-IP image upload limit, 30/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -1490,7 +1519,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP library create limit, 30/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -1838,6 +1867,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description Rate limit exceeded — per-IP image upload limit, 30/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -1930,7 +1966,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP library create limit, 30/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -2111,6 +2147,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description Rate limit exceeded — per-IP image upload limit, 30/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -2200,7 +2243,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP library create limit, 30/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -2378,6 +2421,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description Rate limit exceeded — per-IP image upload limit, 30/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -2472,7 +2522,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP library create limit, 30/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -2720,7 +2770,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP library create limit, 30/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -2868,7 +2918,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP barcode lookup limit, 20/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -3303,7 +3353,7 @@ export interface paths {
         };
         /**
          * List orders (most recent first, max 100)
-         * @description Requires `enable_orders: true` in add-on config, otherwise returns 404.
+         * @description Requires `enable_orders: true` in the app configuration, otherwise returns 404.
          */
         get: {
             parameters: {
@@ -3385,7 +3435,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded — per-IP order limit, 10/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -4101,7 +4151,7 @@ export interface paths {
         put?: never;
         /**
          * Enable or disable the orders feature, and configure notification toggles/recipients
-         * @description Toggling `enabled` broadcasts a shop-open/shop-closed notification to `broadcastRecipients` (filtered to devices currently home, when HA person data is available), unless `notify_shop_state` is false.
+         * @description `enabled` is optional; omitting it keeps the stored value and skips the shop-open/shop-closed broadcast. When present, a change in `enabled` broadcasts a shop-open/shop-closed notification to `broadcastRecipients` (filtered to devices currently home, when HA person data is available), unless `notify_shop_state` is false.
          */
         post: {
             parameters: {
@@ -4125,7 +4175,7 @@ export interface paths {
                         "application/json": components["schemas"]["OrdersSettings"];
                     };
                 };
-                /** @description enabled (boolean) required */
+                /** @description enabled must be a boolean */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -4248,7 +4298,7 @@ export interface paths {
         };
         /**
          * Retrieve the API token
-         * @description Rate-limited (10/min per IP). Reverses the older HA-internal-only restriction (#533): a direct-port caller (not via HA Ingress) is rejected with 403 only when the add-on option `expose_api_port` has been explicitly set to `false` (default `true`, matching the historical always-open behavior — see #803 and the config.yaml option comment).
+         * @description Rate-limited per IP: 10/min for direct-port callers, 120/min via HA Ingress. Reverses the older HA-internal-only restriction (#533): a direct-port caller (not via HA Ingress) is rejected with 403 only when the app option `expose_api_port` has been explicitly set to `false` (default `true`, matching the historical always-open behavior — see #803 and the config.yaml option comment).
          */
         get: {
             parameters: {
@@ -4298,8 +4348,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Add-on status (public — no auth required)
-         * @description `?machineId=<id>` for a non-default machine scopes machineHostname/lastSync/lastSyncError/machineReachable to that machine via a live reachability probe, instead of describing the default machine (#464). Omitted, or a machineId that resolves back to the default machine, keeps the default-machine behavior byte-for-byte.
+         * App status (public — no auth required)
+         * @description `?machineId=<id>` for a non-default machine scopes machineHostname/machineReachable/lastMachineError to that machine via a live reachability probe, instead of describing the default machine (#464). Omitted, or a machineId that resolves back to the default machine, keeps the default-machine behavior. The live probe only runs for a caller with a valid `X-GLP-Token` or one arriving through HA Ingress (#1626); any other caller gets that machine's last polled reachability instead.
          */
         get: {
             parameters: {
@@ -4668,7 +4718,7 @@ export interface paths {
                         /** @description Profile name — required unless `id` is given */
                         option?: string;
                         /** @description Profile id — takes precedence over `option` if both given */
-                        id?: number;
+                        id?: string | number;
                         machineId?: number;
                     };
                 };
@@ -4725,7 +4775,8 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    id: number;
+                    /** @description Machine-assigned id, or a "local:<n>" placeholder until first synced */
+                    id: string;
                 };
                 cookie?: never;
             };
@@ -4755,7 +4806,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    id: number;
+                    id: string;
                 };
                 cookie?: never;
             };
@@ -4776,7 +4827,7 @@ export interface paths {
                         "application/json": components["schemas"]["Ok"];
                     };
                 };
-                /** @description invalid profile (Zod validation failure — details include the issue list) */
+                /** @description Invalid profile — the error message names the failing field */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -4809,7 +4860,7 @@ export interface paths {
                 };
                 header?: never;
                 path: {
-                    id: number;
+                    id: string;
                 };
                 cookie?: never;
             };
@@ -4875,7 +4926,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description invalid profile (Zod validation failure — details include the issue list) */
+                /** @description Invalid profile — the error message names the failing field */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -6134,7 +6185,7 @@ export interface paths {
         post: {
             parameters: {
                 query?: {
-                    /** @description Pass sync=0 to suppress the catch-up shot-history sync this save would otherwise trigger (#731 — used by the 'Verbindung testen' implicit save) */
+                    /** @description Accepted for compatibility and ignored: a save does not start a shot-history sync */
                     sync?: "0" | "false";
                 };
                 header?: never;
@@ -6183,7 +6234,7 @@ export interface paths {
         put: {
             parameters: {
                 query?: {
-                    /** @description Pass sync=0 to suppress the catch-up shot-history sync this save would otherwise trigger (#731) */
+                    /** @description Accepted for compatibility and ignored: a save does not start a shot-history sync */
                     sync?: "0" | "false";
                 };
                 header?: never;
@@ -6496,7 +6547,7 @@ export interface paths {
         };
         /**
          * Server-Sent Events stream multiplexing every push event type over one connection (#735/#736)
-         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, the token as a `?token=` query parameter — EventSource can't set custom headers, so this is the one exception to header-only auth.
+         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus), `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write bumped a data kind's revision). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, a short-lived single-use `?ticket=` from `POST /api/events/ticket` (#1626) — EventSource can't set custom headers, so this is the one exception to header-only auth. The long-lived token as `?token=` is still accepted but deprecated.
          */
         get: {
             parameters: {
@@ -6520,6 +6571,48 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a short-lived ticket for the /api/events stream (#1626)
+         * @description Trades the API token (sent as the usual `X-GLP-Token` header) for a random ticket the client puts in the `GET /api/events?ticket=` URL instead of the token. A ticket is valid for 30 seconds and authenticates one connection; ask for a new one before every (re)connect.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The ticket */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -6570,8 +6663,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Add-on version and whether an update is available
-         * @description Cached/rate-limited — see also the `up_to_date` achievement badge.
+         * App version and whether an update is available
+         * @description The GitHub release lookup is cached for an hour; after a failed lookup GitHub is not asked again for a minute. See also the `up_to_date` achievement badge.
          */
         get: {
             parameters: {
@@ -6954,7 +7047,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Download a full backup of all add-on data
+         * Download a full backup of all app data
          * @description Always the unscoped, all-sections, secrets-free export — for the selective/encrypted export, use the POST variant below. Kept as GET for any existing bookmark/tooling.
          */
         get: {
@@ -6974,6 +7067,13 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["BackupBundle"];
                     };
+                };
+                /** @description Rate limit exceeded — per-IP backup download limit, 5/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -7011,6 +7111,13 @@ export interface paths {
                         "application/zip": string;
                     };
                 };
+                /** @description Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626) */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -7029,8 +7136,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restore add-on data from a backup bundle, or preview what a restore would do
-         * @description Body limit is 50 MB. Rate-limited to 3 requests per minute per IP (a dry run is bucketed separately at 30/min, since the modal fires one per section-checkbox toggle). **Overwrites the sections selected by `sections` (or every section present in the file, if `sections` is omitted).** A section not selected is left completely untouched, not wiped. Accepts either the legacy self-contained `application/json` body (BackupBundle, images embedded as base64 — every backup before #658 used this shape, and it must keep working), or an `application/zip` body (the shape POST /api/backup produces) — for the zip form, `sections`/`dryRun`/`passphrase` travel as the `X-GLP-Sections` (JSON-encoded array), `X-GLP-Dry-Run` (`"true"`) and `X-GLP-Passphrase` headers respectively, never in the (binary) body or as query parameters.
+         * Restore app data from a backup bundle, or preview what a restore would do
+         * @description Body limit: 2 GiB for the zip form (the request body is spooled to disk, not held in memory), 50 MB for the legacy JSON form. Rate-limited per IP: 30 uploads per minute overall, of which at most 3 per minute may be real restores (a dry run is bucketed separately at 30/min, since the modal fires one per section-checkbox toggle). **Overwrites the sections selected by `sections` (or every section present in the file, if `sections` is omitted).** A section not selected is left completely untouched, not wiped. Accepts either the legacy self-contained `application/json` body (BackupBundle, images embedded as base64 — every backup before #658 used this shape, and it must keep working), or an `application/zip` body (the shape POST /api/backup produces) — for the zip form, `sections`/`dryRun`/`passphrase` travel as the `X-GLP-Sections` (JSON-encoded array), `X-GLP-Dry-Run` (`"true"`) and `X-GLP-Passphrase-B64` (standard base64 of the passphrase's UTF-8 bytes — a header value can only carry ISO-8859-1 bytes, so a passphrase with umlauts or other non-ASCII characters must be base64-encoded) headers respectively, never in the (binary) body or as query parameters. `X-GLP-Passphrase` is still accepted for ASCII passphrases (older clients and scripts).
          */
         post: {
             parameters: {
@@ -7063,6 +7170,10 @@ export interface paths {
                             ok?: boolean;
                             /** @description Number of shots restored (real restore only) */
                             shots?: number;
+                            /** @description Number of backup images actually written to disk */
+                            images?: number;
+                            /** @description Number of backup images that could not be written (see the app log) */
+                            imagesFailed?: number;
                             /** @description Whether the file had a `secrets` block and it was in the requested sections */
                             secretsPresent?: boolean;
                             /** @description Whether the given passphrase actually decrypted it */
@@ -7098,7 +7209,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded */
+                /** @description Rate limit exceeded (see the limits above) */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -7362,7 +7473,7 @@ export interface components {
             /** @description Computed 0-100 score after the change; null when the shot has too little data to score */
             score: number | null;
         };
-        /** @description Raw shot record from the Gaggiuino machine, enriched with annotation and trash metadata by the add-on. */
+        /** @description Raw shot record from the Gaggiuino machine, enriched with annotation and trash metadata by the app. */
         Shot: {
             /** @description Unique shot ID */
             id: number;
@@ -7383,7 +7494,7 @@ export interface components {
             machineId: number | null;
             /** @description Machine-local shot number (toNativeShotID) — global id minus the machine offset */
             nativeId: number;
-            /** @description Machine-reported curve series: an open-ended map of series name to samples. Deliberately an open object (additionalProperties: true) because the machine payload is a cross-repo contract the add-on passes through without knowing every field. Present on GET /api/shots/{id} and /shots.json; stripped from the GET /api/shots metadata list. */
+            /** @description Machine-reported curve series: an open-ended map of series name to samples. Deliberately an open object (additionalProperties: true) because the machine payload is a cross-repo contract the app passes through without knowing every field. Present on GET /api/shots/{id} and /shots.json; stripped from the GET /api/shots metadata list. */
             datapoints?: {
                 [key: string]: unknown;
             };
@@ -7521,8 +7632,8 @@ export interface components {
             }[];
             /** @description Computed burr-wear stats (shots/grams since burrsResetAt), added on read. */
             wear?: {
-                shots?: number;
-                grams?: number | null;
+                shotsSinceBurrs?: number;
+                gramsSinceBurrs?: number;
             };
         };
         /** @description Portafilter basket (#635). */
@@ -7727,13 +7838,11 @@ export interface components {
         NotifyMapping: {
             [key: string]: string;
         };
-        /** @description Public fields are always present; the block below marked "authenticated only" is omitted entirely (H1) unless the request carries a valid X-GLP-Token or arrives via HA Ingress. */
+        /** @description Public fields are always present; the block below marked "authenticated only" is omitted entirely (H1) unless the request carries a valid X-GLP-Token header. Arriving via HA Ingress is not enough. */
         Status: {
             shotCount?: number;
             /** Format: date-time */
             lastSync?: string | null;
-            /** @description Current retry attempt (0 = normal schedule, 1–3 = backing off) */
-            syncRetryCount?: number;
             machineVersion?: string | null;
             /** @description Minutes */
             syncInterval?: number;
@@ -7742,7 +7851,7 @@ export interface components {
             /** @description Only present on the dev-channel image build (GLP_DEV_BUILD build-arg) */
             devBuild?: string;
             ordersFeature?: boolean;
-            /** @description add-on's expose_api_port option (#803) — whether GET /api/token answers direct-port callers */
+            /** @description the app's expose_api_port option (#803) — whether GET /api/token answers direct-port callers */
             exposeApiPort?: boolean;
             machineReachable?: boolean | null;
             /** @description Unix ms of the last successful poll of the default machine */
@@ -7751,10 +7860,14 @@ export interface components {
             machineOn?: boolean | null;
             /** @description Unix ms the default machine last switched on */
             machineOnSince?: number | null;
-            /** @description True while the default machine still has an unconfirmed legacy machine_host/switch_entity add-on option (#662) */
-            legacyMachineOptionsPending?: boolean;
             /** @description Stable per-database identity (#751) — changes only when glp.db is freshly (re)created */
             installId?: string;
+            /** @description Server data-revision epoch (#1539); changes when the process restarts and resets dataRevs, telling a client to drop the revisions it has seen */
+            dataEpoch?: string;
+            /** @description Per-kind write revisions (#1539); a client refetches a kind whose revision advanced since it last polled */
+            dataRevs?: {
+                [key: string]: number;
+            };
             /** @description All configured machines (#317). The fields above always describe the default machine, unchanged, for backward compatibility. */
             machines?: {
                 id?: number;
@@ -7772,8 +7885,12 @@ export interface components {
                 /** @description Machine name set in the machine's firmware, when it reports one (#1454) */
                 firmwareName?: string | null;
                 on?: boolean | null;
-                /** @description #701 accent color, synced from Settings → Machines */
-                theme?: string | null;
+                /** @description #701 accent color, synced from Settings → Machines — either {preset} or {a,b} hex colors */
+                theme?: {
+                    preset?: string;
+                    a?: string;
+                    b?: string;
+                } | null;
             }[];
             machineUrl?: string;
             machineHostname?: string;
@@ -7825,6 +7942,8 @@ export interface components {
             pct?: number;
             /** @description Configured preheat time in minutes */
             preheatTime?: number;
+            /** @description True when preheat finished early because the boiler temperature had stabilised at the target. Omitted when the machine is off or was never switched on. */
+            stabilityReady?: boolean;
             /** @description Current boiler temperature °C */
             temp?: number | null;
             /** @description Target boiler temperature °C */

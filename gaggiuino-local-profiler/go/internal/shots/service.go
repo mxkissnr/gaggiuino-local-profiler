@@ -12,10 +12,9 @@ import (
 )
 
 // This file is the shot service: the DB-facing operations the HTTP handlers
-// call. importShots/upsertShot (sync/import call sites) are deliberately not
-// here — nothing in the current HTTP surface reaches them; add them alongside
-// the sync/import domain that does. Trash purging (#1152) is: see
-// PurgeExpiredTrash/StartTrashPurge below, wired into cmd/server's startup.
+// call. The shot-history sync writes through Repository.Upsert directly.
+// Trash purging (#1152): see PurgeExpiredTrash/StartTrashPurge below, wired
+// into cmd/server's startup.
 
 // ErrShotNotFound is the 404 returned when a shot does not exist. The trash
 // handler has no existence check of its own, so this error comes from the
@@ -36,10 +35,20 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo, imageDir: DefaultImageDir}
 }
 
-// GetAll returns every non-trashed shot (no machineId filter — see
-// Repository's type doc comment).
-func (s *Service) GetAll() ([]Shot, error) {
-	return s.repo.FindAllExcludingTrash()
+// GetAllScored returns every non-trashed shot (or, with limit > 0, only the newest
+// limit of them, still oldest first) with each shot's score taken from the
+// score cache — the same values ComputeScoreDetail yields, without
+// rescoring the whole history on every GET /shots.json (#1616).
+func (s *Service) GetAllScored(limit int) ([]PageRow, error) {
+	return s.repo.FindAllScoredExcludingTrash(limit, loadBeanLookup())
+}
+
+// CountToday counts the non-trashed shots (every machine) stamped on now's
+// local calendar day, server time.
+func (s *Service) CountToday(now time.Time) (int, error) {
+	y, m, d := now.Date()
+	start := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	return s.repo.CountExcludingTrashBetween(start.Unix(), start.AddDate(0, 0, 1).Unix())
 }
 
 // DefaultPageLimit / MaxPageLimit bound GET /api/shots's ?limit= (#957).
@@ -61,6 +70,12 @@ func ClampPageLimit(limit int) int {
 	return limit
 }
 
+// GrinderUses returns every non-trashed shot's grinder-wear input without
+// hydrating the history — see Repository.GrinderUses.
+func (s *Service) GrinderUses() ([]GrinderUse, error) {
+	return s.repo.GrinderUses()
+}
+
 // GetPage serves the GET /api/shots list (#957): one keyset page of
 // non-trashed shot metadata, newest first, each row carrying a
 // cache-resolved score. machineID == 0 lists every machine. limit is
@@ -79,10 +94,9 @@ func (s *Service) GetByID(id int64) (Shot, error) {
 	return s.repo.FindByID(id)
 }
 
-// GetLast returns the newest non-trashed shot — GET /api/shots/last reads the
-// full list and keeps the last element; this fetches only that shot (see
-// Repository.FindLastExcludingTrash). Returns (nil, nil) for an empty shot
-// history.
+// GetLast returns the newest non-trashed shot for GET /api/shots/last,
+// fetching only that row (see Repository.FindLastExcludingTrash). Returns
+// (nil, nil) for an empty shot history.
 func (s *Service) GetLast() (Shot, error) {
 	return s.repo.FindLastExcludingTrash()
 }
@@ -109,19 +123,42 @@ func (s *Service) GetPreviousByProfile(shot Shot) (Shot, error) {
 
 // GetComparativeGrindAdvice is the history-aware call path for the comparative
 // grind advice (#901, design pass 4 follow-up — see comparative.go's own doc
-// comment for why this needs the full shot history): loads every other shot on
-// shot's own machine, then runs the pure comparison. Returns nil, nil (not an
-// error) whenever ComputeComparativeGrindAdvice itself would — no comparable
-// shots, no coffee/grinder set; nil is a legitimate, common answer.
-func (s *Service) GetComparativeGrindAdvice(shot Shot) (*ComparativeGrindAdvice, error) {
+// comment for why this needs the full shot history): compares shot against
+// every other shot on its own machine. Returns nil, nil (not an error)
+// when there are no comparable shots or no coffee/grinder is set; nil is
+// a legitimate, common answer.
+//
+// It returns exactly what scoring every comparable shot of the machine's
+// fully hydrated history would (the pre-#1616 path, kept as the test
+// reference ComputeComparativeGrindAdvice in reference1616_test.go), but
+// hydrates only the comparable shots and takes their scores from the score
+// cache: a cached score is CalcShotScoreDetail's score against the same
+// bean target, guarded by the same fingerprint GET /api/shots trusts.
+func (s *Service) GetComparativeGrindAdvice(shot Shot, lang string) (*ComparativeGrindAdvice, error) {
 	if shot == nil {
 		return nil, nil
 	}
-	all, err := s.repo.FindAllExcludingTrashByMachine(shot.machineID())
+	m := newComparativeMatch(shot)
+	if m == nil {
+		return nil, nil
+	}
+	keep := func(c Shot) bool {
+		_, ok := m.grindOf(c)
+		return ok
+	}
+	candidates, err := s.repo.comparativeCandidates(shot.machineID(), keep, loadBeanLookup())
 	if err != nil {
 		return nil, err
 	}
-	return ComputeComparativeGrindAdvice(shot, all), nil
+	var comparable []comparableSibling
+	for _, c := range candidates {
+		g, _ := m.grindOf(c.light)
+		if c.score == nil {
+			continue
+		}
+		comparable = append(comparable, comparableSibling{grind: g, score: *c.score})
+	}
+	return m.advice(comparable, lang), nil
 }
 
 // AnnotationValidationError reports that a merged annotation failed
@@ -161,26 +198,36 @@ func SetAnnotationStockHook(fn func(prev, next map[string]any) error) {
 }
 
 // PatchAnnotation merges patch into the shot's stored annotation (#1273):
-// every remaining top-level key of patch overwrites the stored value, a key
-// present as JSON null or "" clears the field, and keys absent from patch
-// are kept. Server-owned keys are ignored. The merged result is validated
-// before it is written; an invalid merge returns *AnnotationValidationError
-// and leaves the stored annotation untouched. Returns the saved annotation.
-// The installed annotation stock hook (see SetAnnotationStockHook) runs once
-// the merge is saved, in the same locked save.
+// every remaining top-level key of patch whose value is neither JSON null nor
+// "" is set on the stored annotation, a key present as JSON null or "" is
+// deleted, and keys absent from patch are kept. Server-owned keys are ignored.
+// Only the keys the patch actually sets are validated, so an older stored
+// value the current rules no longer accept (an over-long notes, an
+// out-of-range rating) cannot block an unrelated edit. The patched keys are
+// validated before the write; an invalid patch returns
+// *AnnotationValidationError and leaves the stored annotation untouched.
+// Returns the saved annotation. The installed annotation stock hook (see
+// SetAnnotationStockHook) runs once the merge is saved, in the same locked
+// save.
 func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[string]any, error) {
 	var after func(prev, next map[string]any) error
 	if h := annotationStockHook.Load(); h != nil {
 		after = *h
 	}
 	return s.repo.updateAnnotation(shotID, func(ann map[string]any) error {
+		applied := make(map[string]any, len(patch))
 		for k, v := range patch {
 			if serverOwnedAnnotationKeys[k] {
 				continue
 			}
+			if v == nil || v == "" {
+				delete(ann, k)
+				continue
+			}
 			ann[k] = v
+			applied[k] = v
 		}
-		if issues := ValidateAnnotation(ann); len(issues) > 0 {
+		if issues := ValidateAnnotation(applied); len(issues) > 0 {
 			return &AnnotationValidationError{Issues: issues}
 		}
 		return nil
@@ -215,9 +262,12 @@ func (s *Service) RestoreShot(id int64) error {
 	return s.repo.RestoreFromTrash(id)
 }
 
-// PermanentDelete deletes the shot and its annotation permanently.
+// PermanentDelete deletes the shot and its annotation permanently, adding its
+// id to the blocklist in the same transaction (Repository.DeleteAndBlocklist)
+// so a sync racing the delete can never re-import the shot in the window where
+// the row is gone but the blocklist entry is not yet written (#1609).
 func (s *Service) PermanentDelete(id int64) error {
-	return s.repo.DeleteByID(id)
+	return s.repo.DeleteAndBlocklist(id)
 }
 
 // PurgeExpiredTrash permanently deletes every shot whose trash entry is older
@@ -262,13 +312,6 @@ func StartTrashPurge(ctx context.Context, svc *Service, interval time.Duration) 
 			}
 		}
 	}()
-}
-
-// AppendToBlocklist atomically adds a single value to the blocklist — see
-// Repository.AppendToBlocklist's doc comment for why the delete handler
-// uses this instead of a GetBlocklist+SaveBlocklist read-modify-write.
-func (s *Service) AppendToBlocklist(value string) error {
-	return s.repo.AppendToBlocklist(value)
 }
 
 // ComputeScoreDetail scores shot against its own library bean's

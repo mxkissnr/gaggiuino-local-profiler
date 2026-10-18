@@ -5,18 +5,18 @@ import { seedDemoData, endDemoData } from '../api/system.js';
 import { devBannerHeight } from './dev-banner.js';
 import { themeColor } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
+import { safeSessionStorage } from '../storage.js';
 
 const DISMISS_KEY = 'glp_onboarding_banner_dismissed';
 
 interface StatusLike {
   machineReachable?: boolean | null;
   machineHostname?: string | null;
-  legacyMachineOptionsPending?: boolean;
 }
 
 // ── "Machine unreachable" banner ────────────────────────────────────────
 // Dismissible per session (sessionStorage), styled the same way as the
-// update-available banner (components/update-check.js) so both can coexist
+// update-available banner (components/update-check.ts) so both can coexist
 // stacked at the top of the page.
 export function updateMachineBanner(status: StatusLike | null = null): void {
   // status is optional: callers that just want to re-evaluate the banner after
@@ -26,7 +26,7 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
   if (status) S.machineReachable = status.machineReachable ?? null;
 
   const existing = document.getElementById('glpOnboardingBanner');
-  const shouldShow = S.shots.length === 0 && S.machineReachable === false && !sessionStorage.getItem(DISMISS_KEY);
+  const shouldShow = S.shots.length === 0 && S.machineReachable === false && !safeSessionStorage.getItem(DISMISS_KEY);
 
   if (!shouldShow) {
     existing?.remove();
@@ -47,7 +47,7 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
     fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
   });
 
-  const host = status?.machineHostname || 'configured host';
+  const host = status?.machineHostname || t('onboarding_banner_host_fallback');
   const msg = document.createElement('span');
   msg.style.flex = '1';
   msg.textContent = t('onboarding_banner_msg', host);
@@ -60,68 +60,16 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
   Object.assign(wikiLink.style, { color: themeColor('--gray-200', '#e4e4e7'), fontSize: '.8rem', textDecoration: 'underline', whiteSpace: 'nowrap' });
 
   const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.setAttribute?.('aria-label', t('lib_sheet_close'));
   closeBtn.innerHTML = CLOSE_ICON_SVG;
   Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7'), padding: '0 2px' });
   closeBtn.addEventListener('click', () => {
-    sessionStorage.setItem(DISMISS_KEY, '1');
+    safeSessionStorage.setItem(DISMISS_KEY, '1');
     banner.remove();
   });
 
   banner.append(msg, wikiLink, closeBtn);
-  document.body.insertAdjacentElement('afterbegin', banner);
-}
-
-// ── "Legacy add-on machine options" banner (#662) ───────────────────────
-// machine_host/switch_entity were removed from config.yaml's schema --
-// shown once per session on an upgrading install that still has one of
-// them sitting unconfirmed in its (now frozen) options.json, pointing at
-// Settings -> Machines. Server-side hasUnconfirmedLegacyMachineOptions()
-// (options-adoption.js) already stops reporting this the moment the user
-// edits the field there, so this banner naturally stops reappearing across
-// sessions too, without any dismiss-state of its own needed for that case
-// -- sessionStorage here only covers "seen it, don't need it again today."
-const LEGACY_DISMISS_KEY = 'glp_legacy_machine_options_banner_dismissed';
-
-export function updateLegacyMachineOptionsBanner(status: StatusLike | null = null): void {
-  if (status) S.legacyMachineOptionsPending = !!status.legacyMachineOptionsPending;
-
-  const existing = document.getElementById('glpLegacyMachineOptionsBanner');
-  const shouldShow = S.legacyMachineOptionsPending && !sessionStorage.getItem(LEGACY_DISMISS_KEY);
-
-  if (!shouldShow) {
-    existing?.remove();
-    return;
-  }
-  if (existing) return; // already shown this session
-
-  const banner = document.createElement('div');
-  banner.id = 'glpLegacyMachineOptionsBanner';
-  Object.assign(banner.style, {
-    position: 'fixed', left: '0', right: '0', zIndex: '9996',
-    top: `${devBannerHeight()
-      + (document.getElementById('glpUpdateBanner')?.offsetHeight || 0)
-      + (document.getElementById('glpOnboardingBanner')?.offsetHeight || 0)}px`,
-    // #814: was a hardcoded dark surface + light text, so these banners
-  // stayed dark-on-dark chips on a light page. --raised/--gray-200 are the
-  // themed equivalents of exactly those two values.
-  background: themeColor('--raised', '#3f3f46'), color: themeColor('--gray-200', '#e4e4e7'),
-    padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px',
-    fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
-  });
-
-  const msg = document.createElement('span');
-  msg.style.flex = '1';
-  msg.textContent = t('legacy_machine_options_banner_msg');
-
-  const closeBtn = document.createElement('button');
-  closeBtn.innerHTML = CLOSE_ICON_SVG;
-  Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7'), padding: '0 2px' });
-  closeBtn.addEventListener('click', () => {
-    sessionStorage.setItem(LEGACY_DISMISS_KEY, '1');
-    banner.remove();
-  });
-
-  banner.append(msg, closeBtn);
   document.body.insertAdjacentElement('afterbegin', banner);
 }
 

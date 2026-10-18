@@ -3,12 +3,11 @@
 // "Speichern" button) and, only on success, immediately tests the connection
 // against the now-known id, showing the result inline. The previous
 // standalone "Speichern und testen" button/action is gone (merged into this
-// one), see machines-settings.js.
+// one), see machines-settings.ts.
 //
-// #731: that implicit save must not itself start a shot import (only an
-// explicit "Speichern" click should) -- so testMachineForm()'s POST/PUT
-// carry a `?sync=0` query param the plain saveMachineForm() path doesn't,
-// see test/machines-api.test.js's sync-on-save suite for the server side.
+// #731/#1727: testMachineForm()'s POST/PUT go to the same plain URLs as
+// saveMachineForm() -- the dead `?sync=0` param is gone (a machine save never
+// starts a shot import, the backend never read it).
 //
 // #733: #729 originally auto-closed the form after a 1200ms dwell, matching
 // Save's behavior -- live testing found that confusing for a *test* action
@@ -55,7 +54,7 @@ g.document = { getElementById: fakeElement };
 const { S } = await import('../public-src/state/index.js');
 // Node's own built-in `navigator` global (present since Node 21) reflects the
 // host OS locale rather than a fixed 'en-US' -- S.currentLang's own
-// navigator.language-based default (state.js) is therefore host-locale-
+// navigator.language-based default (state/index.ts) is therefore host-locale-
 // dependent unless forced here, which would make this file's t()-derived
 // assertions non-portable across machines.
 S.currentLang = 'en';
@@ -87,9 +86,7 @@ describe('testMachineForm (#729/#733)', () => {
     const calls: FetchCall[] = [];
     g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
-      // #731: the implicit save behind "Test connection" carries ?sync=0 so
-      // the server doesn't start an import for it -- see machines-settings.js.
-      if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
+      if (String(url) === 'api/machines' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
@@ -103,7 +100,7 @@ describe('testMachineForm (#729/#733)', () => {
     await testMachineForm();
 
     expect(calls).toEqual([
-      { url: 'api/machines?sync=0', method: 'POST' },
+      { url: 'api/machines', method: 'POST' },
       { url: 'api/machines/42/test', method: 'POST' },
       { url: 'api/machines', method: undefined }, // loadMachines() refresh
     ]);
@@ -117,7 +114,7 @@ describe('testMachineForm (#729/#733)', () => {
     const calls: FetchCall[] = [];
     g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
-      if (String(url) === 'api/machines/9?sync=0' && opts?.method === 'PUT') {
+      if (String(url) === 'api/machines/9' && opts?.method === 'PUT') {
         return okJson({ id: 9, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/9/test' && opts?.method === 'POST') {
@@ -130,7 +127,7 @@ describe('testMachineForm (#729/#733)', () => {
     await testMachineForm();
 
     expect(calls).toEqual([
-      { url: 'api/machines/9?sync=0', method: 'PUT' },
+      { url: 'api/machines/9', method: 'PUT' },
       { url: 'api/machines/9/test', method: 'POST' },
       { url: 'api/machines', method: undefined },
     ]);
@@ -149,7 +146,7 @@ describe('testMachineForm (#729/#733)', () => {
 
     await testMachineForm();
 
-    expect(calls).toEqual([{ url: 'api/machines?sync=0', method: 'POST' }]);
+    expect(calls).toEqual([{ url: 'api/machines', method: 'POST' }]);
     expect(fakeElement('machineFormTestResult').textContent).toBe('Error: host not allowed');
     expect(fakeElement('machineFormCard').style.display).toBe(''); // still open
   });
@@ -175,10 +172,10 @@ describe('testMachineForm (#729/#733)', () => {
     let calls: FetchCall[] = [];
     g.fetch = (url: string, opts?: RequestInit) => {
       calls.push({ url: String(url), method: opts?.method });
-      if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
+      if (String(url) === 'api/machines' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
       }
-      if (String(url) === 'api/machines/42?sync=0' && opts?.method === 'PUT') {
+      if (String(url) === 'api/machines/42' && opts?.method === 'PUT') {
         return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
@@ -195,7 +192,7 @@ describe('testMachineForm (#729/#733)', () => {
     // double-click, or simply testing again, triggers).
     calls = [];
     await testMachineForm();
-    expect(calls[0]).toEqual({ url: 'api/machines/42?sync=0', method: 'PUT' });
+    expect(calls[0]).toEqual({ url: 'api/machines/42', method: 'PUT' });
   });
 
   // #730 review: the button itself is also disabled for the whole
@@ -205,7 +202,7 @@ describe('testMachineForm (#729/#733)', () => {
   it('#730 regression guard: disables the test button for the whole in-flight window, re-enabling once it settles', async () => {
     setFormFields({ id: '' });
     g.fetch = (url: string, opts?: RequestInit) => {
-      if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
+      if (String(url) === 'api/machines' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {
@@ -235,7 +232,7 @@ describe('testMachineForm (#729/#733)', () => {
     let resolveTest!: (value: unknown) => void;
     const pendingTest = new Promise(res => { resolveTest = res; });
     g.fetch = (url: string, opts?: RequestInit) => {
-      if (String(url) === 'api/machines/9?sync=0' && opts?.method === 'PUT') {
+      if (String(url) === 'api/machines/9' && opts?.method === 'PUT') {
         return okJson({ id: 9, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/9/test' && opts?.method === 'POST') return pendingTest;
@@ -267,7 +264,7 @@ describe('testMachineForm (#729/#733)', () => {
   it('#748: does NOT set S.machineExplicitSave (implicit save-before-test stays distinct from an explicit save)', async () => {
     setFormFields({ id: '' });
     g.fetch = (url: string, opts?: RequestInit) => {
-      if (String(url) === 'api/machines?sync=0' && opts?.method === 'POST') {
+      if (String(url) === 'api/machines' && opts?.method === 'POST') {
         return okJson({ id: 42, name: 'Test Machine' });
       }
       if (String(url) === 'api/machines/42/test' && opts?.method === 'POST') {

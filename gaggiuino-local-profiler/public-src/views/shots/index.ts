@@ -3,71 +3,39 @@ import { S, filterShotsByMachine }                            from '../../state/
 import * as chartRegistry                                     from '../../state/charts.js';
 import { t, tHtml }                                           from '../../i18n.js';
 import { isApiPortBlocked }                                   from '../../api/transport.js';
-import { listShots, listShotsDump, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShotCard } from '../../api/shots.js';
+import { listShots, sendShotToTrash, restoreShotFromTrash, deleteShotPermanently, getShot } from '../../api/shots.js';
 import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../../api/machines.js';
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges, buildRecordedGmPhaseRanges, exitReasonKey } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
-  stddev, detectPhases, detectChanneling, scoreClass, scoreColor, shareOrDownloadBlob,
+  stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
   chartColors, html, joinHtml
 } from '../../utils.js';
-import { renderSidebar }                                      from '../../components/sidebar.js';
+import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { calcShotScore, shotUsedBeanTarget, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
-import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData, evictCurve, primeCurve } from '../../shot-curves.js';
+import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
-import { renderAnnotationPanel }                              from './annotation.js';
+import { renderAnnotationPanel, annotationBusy }              from './annotation.js';
+import { markDirty }                                          from '../../live-sync.js';
 import { updatePQChart }                                      from './charts.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
-import { loadShotImageBlobUrl }                               from '../../bean-image.js';
+import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
-import type { ShotMeta } from '../../state/index.js';
-import type { ShotDatapoints, ShotSeries, Html } from '../../utils.js';
+import { showToast }                                          from '../../components/toast.js';
+import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
+import { _shots }                                             from './shared.js';
+import type { ShotRow }                                       from './shared.js';
+import { safeLocalStorage } from '../../storage.js';
 
-// state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
-// an index signature); this view reads the annotation/curve fields, so these
-// local aliases name them — same pattern as views/shots/utils.ts and
-// views/shots/annotation.ts.
-interface ShotAnnotationData {
-  rating?: number | null;
-  coffee?: string | null;
-  beanId?: number | null;
-  basketId?: number | null;
-  puckScreenId?: number | null;
-  grinder?: string | null;
-  grindSetting?: string | number | null;
-  dose?: number | null;
-  tds?: number | null;
-  notes?: string | null;
-  drinkType?: string | null;
-  milkType?: number | string | null;
-  recipeId?: number | null;
-  frozenPortionId?: number | null;
-  roastDate?: string | null;
-  beanAgeDays?: number | null;
-  orderedBy?: { customer?: string; item?: string; variant?: string; note?: string } | null;
-}
-
-interface ShotRow extends ShotMeta {
-  profileName?: string | null;
-  profile?: { name?: string | null; phases?: unknown[]; [key: string]: unknown } | null;
-  nativeId?: number | null;
-  duration?: number | null;
-  score?: number | null;
-  image?: string | null;
-  glpFirmwareVersion?: string | null;
-  trashedAt?: number;
-  hasChartData?: boolean;
-  usedBeanTarget?: boolean;
-  datapoints?: ShotDatapoints;
-  annotation?: ShotAnnotationData | null;
-}
+export { _equipmentName } from './shared.js';
+export { exportAllCSV, exportCSV, exportProfile, exportShot, shareCard } from './export.js';
 
 // fetchShotsPage()'s normalised page: either a page of rows, or a transport
-// error code the callers surface (#957's Node-backend 404 fallback included).
+// error code the callers surface.
 interface ShotsPage { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean; error?: number }
 
 type GmPhaseRanges = ReturnType<typeof buildGmPhaseRanges>;
@@ -81,34 +49,27 @@ interface GmPhasesOption {
 // ── Data loading ──────────────────────────────────────────────────────────
 
 // Guards against overlapping calls (loadData() is fired unawaited from at
-// least 6 independent triggers — main.js init, the reload-data button, live.js's
-// post-brew setTimeout, status.js, sidebar.js, onboarding.js — with no
+// least 6 independent triggers — the boot data chain, the reload-data button, live.ts's
+// post-brew setTimeout, status.ts, sidebar.ts, onboarding.ts — with no
 // coordination between them): a monotonic token is captured before the fetch
 // and only the call that is still the latest one when its response lands is
 // allowed to write state, same pattern as loadMachineProfileList() in
-// library-profile-editor.js (#521, #644).
+// library-profile-editor.ts (#521, #644).
 let _loadDataReqToken = 0;
+// True while a loadData() request is in flight. A live-sync reload defers on
+// shotsLoadInProgress() so it never starts mid-walk and truncates S.allShots
+// back to the first page.
+let _loadDataInFlight = false;
 
 // GaggiMate phase-name lookup cache, keyed by `${machineId}:${profileName}`.
 // Invalidated by invalidateGmPhaseCache() after a profile save.
 const _gmPhaseCache = new Map<string, GmPhaseRanges>();
-
-// state/index.ts types shot rows as metadata-only ShotMeta; this view reads the
-// annotation/curve/profile fields, so the row arrays are re-typed once here
-// instead of at every read (same convention as views/shots/annotation.ts).
-function _shots(): ShotRow[] { return S.shots; }
 
 // getElementById() returns HTMLElement|null and every id in this view is a
 // static element from index.html, so it is asserted once here rather than at
 // each of the ~40 lookups (the genuinely optional elements — trash section,
 // shot photo, fw badge — still keep their own `if (el)` guards).
 const _el = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
-
-// CoffeeLibrary (state/index.ts) only declares beans/grinders; loadLibrary()
-// adds the basket/puck-screen collections this file reads for export labels.
-function _libCollection(name: 'baskets' | 'puckScreens'): Record<string, unknown>[] | undefined {
-  return S.coffeeLibrary[name];
-}
 
 export function invalidateGmPhaseCache(machineId: number): void {
   const prefix = `${machineId}:`;
@@ -154,23 +115,12 @@ async function _loadGmPhases(shotA: ShotRow, token: number): Promise<GmPhaseRang
   return gmPhases;
 }
 
-// #635: baskets/puck screens are pure ID-based library selections (see
-// annotation.js's _renderBasketSelect/_renderPuckScreenSelect) — this
-// resolves an annotation's basketId/puckScreenId to the current library
-// entry's name for display/export, the same way ann.coffee already carries
-// the bean's name directly (no lookup needed there since beans store the
-// name on the annotation itself).
-export function _equipmentName(list: Record<string, unknown>[] | null | undefined, id: number | null | undefined): string | null {
-  if (id == null) return null;
-  return ((list || []).find(e => e.id === id)?.name as string | undefined) || null;
-}
-
 // #957: GET /api/shots is keyset-paginated and metadata-only (no curve
 // blobs). loadData() paints from page 1; loadAllShotMeta() then walks every
 // following page in the background so S.allShots ends up holding the full
 // shot-metadata history the non-visual consumers (analytics, dial-in
 // wizards, per-machine counts, findPreviousShot) still expect. Curve data is
-// fetched per shot on demand via shot-curves.js.
+// fetched per shot on demand via shot-curves.ts.
 const SHOTS_PAGE_LIMIT = 60;
 
 // #969: renderSidebar() rebuilds a DOM wrapper for every visible shot, so
@@ -179,47 +129,43 @@ const SHOTS_PAGE_LIMIT = 60;
 // work. Rebuild at most once per this interval during the walk instead.
 const RENDER_THROTTLE_MS = 400;
 
-// #957: GET /api/shots is Go-only. The shared frontend also runs against the
-// (frozen, bugfix-only) Node backend during the migration, which serves the
-// old full /shots.json dump and no paginated route — so on a 404 we fall
-// back to that dump, seeding the curve cache from the datapoints it carries
-// so the lazy per-shot loader is a pure cache hit there. `trash` toggles the
-// trashed list on either backend. Returns a normalised page:
+// `trash` toggles the trashed list. Returns a normalised page:
 // { shots: <newest-first, metadata-only>, nextCursor, hasMore }.
 async function fetchShotsPage({ cursor = null, trash = false }: { cursor?: string | null; trash?: boolean } = {}): Promise<ShotsPage> {
   const r = await listShots({ limit: SHOTS_PAGE_LIMIT, cursor, trash });
-  if (r.status === 404) {
-    const fb = await listShotsDump({ trash });
-    if (!fb.ok) return { error: fb.status };
-    const dump = await fb.json() as unknown;     // full ASC array, datapoints inline
-    const shots = (Array.isArray(dump) ? dump : []) as ShotRow[];
-    for (const s of shots) {
-      if (s && s.datapoints) {
-        // Seed the curve cache so the lazy per-shot loader is a pure cache
-        // hit on Node. The row keeps its datapoints (Node's existing shape),
-        // so the metadata-only readers just ignore the extra key.
-        primeCurve(s.id, s.datapoints);
-        s.hasChartData = (s.datapoints.timeInShot?.length || s.datapoints.pressure?.length || 0) > 0;
-      }
-    }
-    shots.reverse();                            // normalise to newest-first
-    return { shots, nextCursor: null, hasMore: false };
-  }
   if (!r.ok) return { error: r.status };
   const page = await r.json() as { shots?: ShotRow[]; nextCursor?: string | null; hasMore?: boolean };
   return { shots: page.shots || [], nextCursor: page.nextCursor ?? null, hasMore: !!page.hasMore };
 }
 
-export async function loadData(): Promise<void> {
+// `quiet` skips the "Loading…" placeholder: the live-sync refresh calls it to
+// re-fetch the list behind an already-painted sidebar, where flashing the
+// placeholder would read as a reload.
+export async function loadData(opts?: { quiet?: boolean }): Promise<void> {
   const token = ++_loadDataReqToken;
+  _loadDataInFlight = true;
+  try {
+    await _loadDataBody(opts, token);
+  } finally {
+    // A superseded call must not clear the flag a newer loadData() still owns.
+    if (token === _loadDataReqToken) _loadDataInFlight = false;
+  }
+}
+
+// The body of loadData(), separated so the in-flight flag above is cleared on
+// every early return too.
+async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: number): Promise<void> {
   const shotsEl = _el('shots');
-  shotsEl.innerHTML = html`<div class="loading-state">${tHtml('loading')}</div>`;
+  if (!opts?.quiet) shotsEl.innerHTML = html`<div class="loading-state">${tHtml('loading')}</div>`;
 
   let fetched;
   try {
     const page = await fetchShotsPage();
     if (token !== _loadDataReqToken) return;
     if (page.error != null) {
+      // A quiet reload is best-effort: keep the painted sidebar/list untouched
+      // rather than replacing them with an error card.
+      if (opts?.quiet) return;
       // #807: Shots is the landing view, so a session that arrived on the
       // direct port with expose_api_port off sees this 401 before it ever
       // sees the Settings card that explains it. Everything needed to
@@ -236,6 +182,7 @@ export async function loadData(): Promise<void> {
     S.allShotsLoaded  = !page.hasMore;
   } catch {
     if (token !== _loadDataReqToken) return;
+    if (opts?.quiet) return;
     shotsEl.innerHTML = joinHtml([
       // #814: was a hardcoded #ef4444 (the pre-redesign err value) and an
       // untranslated German string in an otherwise six-language app.
@@ -251,9 +198,18 @@ export async function loadData(): Promise<void> {
   // Multi-machine filtering (#325): S.allShots is the true unfiltered
   // fetch; S.shots (what every existing view already reads) becomes the
   // machine-filtered projection, re-derived whenever the active machine
-  // changes (see applyActiveMachineChange() in components/machines-settings.js).
-  S.allShots = fetched;
-  S.shots = filterShotsByMachine(fetched, S.activeMachineId);
+  // changes (see applyActiveMachineChange() in components/machines-settings.ts).
+  //
+  // A quiet reload re-fetches only the newest pages, so it would briefly drop
+  // every older shot the sidebar already shows. Keep the already-loaded entries
+  // older than this page's oldest id appended for now; the walk below drops the
+  // ones the fresh pages no longer contain once it finishes (#1614 slice 4).
+  const oldestFetchedId = fetched[0]?.id;
+  const olderEntries = opts?.quiet && oldestFetchedId != null
+    ? (S.allShots as ShotRow[]).filter(s => Number(s.id) < Number(oldestFetchedId))
+    : [];
+  S.allShots = [...olderEntries, ...fetched];
+  S.shots = filterShotsByMachine(S.allShots, S.activeMachineId);
   renderSidebar();
   void loadTrashData();
 
@@ -262,13 +218,13 @@ export async function loadData(): Promise<void> {
   if (S.shots.length > 0) {
     empty.style.display     = 'none';
     chartArea.style.display = 'flex';
-    const savedCompare = parseInt(localStorage.getItem('glp_compareShotId') as string);
+    const savedCompare = parseInt(safeLocalStorage.getItem('glp_compareShotId') as string);
     // #431: the mobile Shots tab now opens straight to a shot's detail (no
     // list step in between), so the initial selection needs to actually
     // honor the last-selected shot (persisted on every selection, see
     // selectShot()/the sidebar row click handler) rather than always
     // resetting to the newest one.
-    const savedPrimary = parseInt(localStorage.getItem('glp_primaryShotId') as string);
+    const savedPrimary = parseInt(safeLocalStorage.getItem('glp_primaryShotId') as string);
     S.primaryShotId = (savedPrimary && S.shots.find(s => s.id === savedPrimary))
       ? savedPrimary
       : (S.shots.at(-1)?.id ?? null);
@@ -286,9 +242,71 @@ export async function loadData(): Promise<void> {
   updateMachineBanner();
 
   // Background: pull every remaining page of shot metadata so S.allShots
-  // holds the full history for analytics / dial-in wizards / per-machine
-  // counts / findPreviousShot, without blocking first paint.
-  void loadAllShotMeta(token, S.shotsPageCursor);
+  // holds the full history for analytics / dial-in wizard / per-machine
+  // counts / findPreviousShot, without blocking first paint. A quiet reload
+  // that kept older entries uses replaceOlder so the walk commits the full
+  // fresh list once instead of prepending page by page.
+  void loadAllShotMeta(token, S.shotsPageCursor, { replaceOlder: olderEntries.length > 0, fetched });
+}
+
+// #1539 slice 4: refetch the shots a live-sync `shot`/`shots` event dirtied and
+// patch the already-loaded rows in place, so another device's annotation (or
+// photo) lands without a full list reload. No library reload is needed here:
+// the server publishes `library` together with `shot` for an annotation, which
+// covers the derived stock/wear change.
+//  - null, or more than REFRESH_INLINE_MAX ids, is not worth a per-shot fetch,
+//    so the list is re-fetched quietly (no loading placeholder).
+//  - an id the server no longer has (trashed/deleted between the event and the
+//    fetch) falls back to the quiet list reload, since the row left the page.
+//  - an id outside S.allShots (older than the loaded window) is ignored.
+//  - otherwise every field the detail returns is patched: annotation, score,
+//    usedBeanTarget, and the image (deleted when the payload no longer has one,
+//    i.e. a removed photo). The cached photo/thumbnail is dropped, the sidebar
+//    and its highlighting re-render once after the loop, and the open shot's
+//    panel refreshes once. The scheduler's canRun held this run back while an
+//    edit or save was pending, so it cannot clobber one; and because the loop's
+//    sequential fetches give an edit time to start mid-run, the guard is
+//    re-checked for the open shot right before it is patched (see below).
+const REFRESH_INLINE_MAX = 5;
+
+export async function refreshShots(ids: string[] | null): Promise<void> {
+  if (!ids || ids.length > REFRESH_INLINE_MAX) {
+    await loadData({ quiet: true });
+    return;
+  }
+  let changed = false;
+  let openEntry: ShotRow | null = null;
+  for (const raw of ids) {
+    const id = Number(raw);
+    const shot = await getShot(id);
+    if (!shot) {
+      await loadData({ quiet: true });
+      return;
+    }
+    const entry = (S.allShots as ShotRow[]).find(s => s.id === id);
+    if (!entry) continue;
+    // The `shot` handler's canRun checked the edit guard once before this loop
+    // started, but up to five sequential getShot round-trips can elapse before
+    // this id is reached. If the user began editing the open shot meanwhile,
+    // patching it now would clobber that edit: leave it untouched and re-dirty
+    // it so the scheduler retries once the edit clears.
+    if (id === S.primaryShotId && annotationBusy()) {
+      markDirty('shot', [String(id)]);
+      continue;
+    }
+    entry.annotation = shot.annotation ?? null;
+    entry.score = shot.score;
+    entry.usedBeanTarget = shot.usedBeanTarget;
+    if (shot.image) entry.image = shot.image;
+    else delete entry.image;
+    invalidateShotImage(id);
+    changed = true;
+    if (id === S.primaryShotId) openEntry = entry;
+  }
+  if (!changed) return;
+  renderSidebar();
+  updateSidebarHighlighting();
+  if (openEntry) renderAnnotationPanel(openEntry);
 }
 
 // loadAllShotMeta walks api/shots page by page (oldest direction) from
@@ -298,13 +316,42 @@ export async function loadData(): Promise<void> {
 // driven entirely by the local `cursor` (never re-read from S across an
 // await), and every S write takes its value from the just-fetched page, so
 // there is no read-then-write race on S.
-let _metaWalkActive = false;
+// Walk ownership is keyed by that same token rather than a single boolean: a
+// walk for the SAME token is already running (the no-op guard below), but a
+// walk for an OLDER token is already exiting on its own token check, so a newer
+// loadData() (or a live-sync quiet reload) starts its own walk instead of
+// returning early and leaving the list cut to page 1 (#1614 slice 4). null when
+// no walk is running.
+let _metaWalkToken: number | null = null;
 
-export async function loadAllShotMeta(token: number, startCursor: string | null): Promise<void> {
-  if (_metaWalkActive) return;
-  _metaWalkActive = true;
+// True while the shots list is being (re)loaded: a loadData() request is in
+// flight, or loadAllShotMeta() is still walking older pages. The live-sync
+// `shots` handler's canRun defers a reload until this clears, so a quiet
+// reload cannot cut S.allShots back to the first page mid-walk.
+export function shotsLoadInProgress(): boolean {
+  return _loadDataInFlight || _metaWalkToken !== null;
+}
+
+// `replaceOlder` is the quiet-reload mode: the caller already painted
+// [...older entries, ...page 1] optimistically, so this walk collects the
+// remaining pages locally and commits [...collected, ...fetched] only once it
+// finishes, dropping any older shot the fresh pages no longer contain and
+// letting a superseded walk write nothing. Non-quiet loads (and loadMoreShots)
+// keep the per-page prepend instead.
+export async function loadAllShotMeta(
+  token: number,
+  startCursor: string | null,
+  opts?: { replaceOlder?: boolean; fetched?: ShotRow[] },
+): Promise<void> {
+  if (_metaWalkToken === token) return;
+  _metaWalkToken = token;
+  const replaceOlder = !!opts?.replaceOlder;
+  const fetched = opts?.fetched ?? [];
+  const collected: ShotRow[] = [];
   let cursor = startCursor;
-  let done = false;
+  // With replaceOlder and no cursor there are no pages to walk, yet the
+  // optimistic older entries still have to be dropped: treat the walk as done.
+  let done = replaceOlder && !startCursor;
   // #969: per-page state (S.allShots/S.shots/S.shotsPageCursor/S.shotsHasMore)
   // still updates every page — cheap. Only the DOM rebuild is throttled;
   // renderedSinceStart tracks whether the trailing render below has anything
@@ -322,31 +369,46 @@ export async function loadAllShotMeta(token: number, startCursor: string | null)
       if (page.error != null) break;
 
       // Each page is newest-first and older than everything already loaded —
-      // reverse it to oldest-first and prepend.
-      const merged = [...[...(page.shots || [])].reverse(), ...S.allShots];
+      // reverse it to oldest-first.
+      const older = [...(page.shots || [])].reverse();
       cursor = page.hasMore ? (page.nextCursor ?? null) : null;
       done = !page.hasMore;
-      S.allShots        = merged;
-      S.shots           = filterShotsByMachine(merged, S.activeMachineId);
-      S.shotsPageCursor = cursor;
-      S.shotsHasMore    = !!page.hasMore;
-      renderedSinceStart = true;
-      const now = Date.now();
-      if (now - lastRenderAt >= RENDER_THROTTLE_MS) {
-        renderSidebar();
-        lastRenderAt = now;
+      if (replaceOlder) {
+        collected.unshift(...older);
+      } else {
+        const merged = [...older, ...S.allShots];
+        S.allShots        = merged;
+        S.shots           = filterShotsByMachine(merged, S.activeMachineId);
+        S.shotsPageCursor = cursor;
+        S.shotsHasMore    = !!page.hasMore;
+        renderedSinceStart = true;
+        const now = Date.now();
+        if (now - lastRenderAt >= RENDER_THROTTLE_MS) {
+          renderSidebar();
+          lastRenderAt = now;
+        }
       }
     }
     if (token === _loadDataReqToken && done) {
-      S.shotsHasMore   = false;
+      if (replaceOlder) {
+        const merged = [...collected, ...fetched];
+        S.allShots        = merged;
+        S.shots           = filterShotsByMachine(merged, S.activeMachineId);
+        S.shotsPageCursor = cursor;
+        S.shotsHasMore    = false;
+        renderedSinceStart = true;
+      } else {
+        S.shotsHasMore = false;
+      }
       S.allShotsLoaded = true;
       // Analytics gates its builders on S.allShotsLoaded — let it re-run now
       // that the full history is in memory.
       window.onAllShotMetaLoaded?.();
     }
   } finally {
-    // single-flight guard; last-writer-wins reset is correct once no walk is in flight (same pattern as status.js triggerSync)
-    _metaWalkActive = false;
+    // Release ownership only if this walk still holds it; a newer walk that
+    // took over (different token) clears its own.
+    if (_metaWalkToken === token) _metaWalkToken = null;
     // #969: a trailing render covers both the throttle window swallowing the
     // final page's paint, and the loop exiting early (superseded token or a
     // fetch error) after it already mutated S.allShots/S.shots — but only
@@ -367,8 +429,7 @@ export async function loadMoreShots(): Promise<void> {
 
 export async function loadTrashData(): Promise<void> {
   try {
-    // The trash TTL is 30 days, so a single page is plenty in practice. On
-    // the Node backend this falls back to shots.json?trash=1 (#957).
+    // The trash TTL is 30 days, so a single page is plenty in practice.
     const page = await fetchShotsPage({ trash: true });
     if (page.error != null) return;
     S.trashedShots = page.shots || [];
@@ -410,27 +471,77 @@ export function toggleTrash(): void {
   _el('trash-list').style.display = S.trashOpen ? 'block' : 'none';
 }
 
+// How long the "moved to trash" toast keeps its Undo button (#1716).
+const TRASH_UNDO_MS = 6000;
+
 export async function trashShot(id: number): Promise<void> {
   try {
     const r = await sendShotToTrash(id);
     if (!r.ok) throw new Error(await r.text());
     evictCurve(id);
+    const row = (S.allShots as ShotRow[]).find(s => s.id === id) ?? (S.shots as ShotRow[]).find(s => s.id === id);
+    const wasPrimary = S.primaryShotId === id;
+    // #1625: pick the neighbour of the trashed shot before removing it — the
+    // next newer one if there is one, otherwise the next older one. S.shots is
+    // oldest-first, so a higher index is newer; null when nothing is left.
+    const idx = S.shots.findIndex(s => s.id === id);
+    const neighbourId = idx === -1 ? null : (S.shots[idx + 1] ?? S.shots[idx - 1] ?? null)?.id ?? null;
     S.shots = S.shots.filter(s => s.id !== id);
     S.allShots = (S.allShots || []).filter(s => s.id !== id);
     if (S.primaryShotId === id) {
-      S.primaryShotId = S.shots[0]?.id || null;
-      if (S.primaryShotId) localStorage.setItem('glp_primaryShotId', String(S.primaryShotId));
-      else localStorage.removeItem('glp_primaryShotId');
+      S.primaryShotId = neighbourId;
+      if (S.primaryShotId) safeLocalStorage.setItem('glp_primaryShotId', String(S.primaryShotId));
+      else safeLocalStorage.removeItem('glp_primaryShotId');
     }
     if (S.compareShotId === id) {
       S.compareShotId = null;
-      localStorage.removeItem('glp_compareShotId');
+      safeLocalStorage.removeItem('glp_compareShotId');
+    }
+    renderSidebar();
+    void updateView();
+    // #1716: a single click trashes, so offer a short Undo instead of a
+    // confirm dialog. One toast element: trashing another shot replaces it,
+    // and the earlier one stays restorable from the trash section.
+    if (row) {
+      showToast(t('trash_moved_toast'), {
+        duration: TRASH_UNDO_MS,
+        action: { label: t('trash_undo_label'), onClick: () => { void undoTrashShot(row, wasPrimary); } },
+      });
+    }
+    await loadTrashData();
+  } catch (e) {
+    alert(t('error_generic', (e as Error).message));
+  }
+}
+
+// Undo for trashShot() (#1716): restore through the existing endpoint, put the
+// saved row back at its place in the oldest-first lists and reselect it when it
+// was the open shot. The restore route has no existence check, so a shot that
+// was permanently deleted meanwhile is confirmed gone with getShot() and left
+// out; one already restored elsewhere (a live-sync reload put it back) is not
+// inserted twice. Failures only show the generic error toast.
+export async function undoTrashShot(row: ShotRow, wasPrimary: boolean): Promise<void> {
+  const id = row.id;
+  try {
+    const r = await restoreShotFromTrash(id);
+    if (!r.ok) throw new Error(await r.text());
+    if (!(await getShot(id))) { await loadTrashData(); return; }
+    if (!(S.allShots as ShotRow[]).some(s => s.id === id)) {
+      const all = S.allShots as ShotRow[];
+      const at = all.findIndex(s => Number(s.id) > Number(id));
+      S.allShots = at === -1 ? [...all, row] : [...all.slice(0, at), row, ...all.slice(at)];
+      S.shots = filterShotsByMachine(S.allShots, S.activeMachineId);
+    }
+    if (wasPrimary && S.shots.some(s => s.id === id)) {
+      S.primaryShotId = id;
+      if (S.compareShotId === id) S.compareShotId = null;
+      safeLocalStorage.setItem('glp_primaryShotId', String(id));
     }
     renderSidebar();
     void updateView();
     await loadTrashData();
   } catch (e) {
-    alert(t('error_generic', (e as Error).message));
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 
@@ -522,7 +633,7 @@ export async function updateView(): Promise<void> {
   }
 
   // machineSubtitle (#344): make it reflect the machine that actually owns
-  // the shot being viewed, not the global default machine from status.js's
+  // the shot being viewed, not the global default machine from status.ts's
   // periodic poll — see that file's updateStatus() for the corresponding
   // guard (`!S.primaryShotId`) that keeps it from clobbering this back.
   // In compare mode there's no single "owning" machine worth naming, so it
@@ -629,11 +740,12 @@ export async function updateView(): Promise<void> {
   if (fwEl) {
     const fw = !shotB && shotA.glpFirmwareVersion;
     fwEl.textContent = fw ? `· fw ${fw}` : '';
+    fwEl.setAttribute('aria-label', fw ? t('settings_machine_firmware_badge_current', fw) : '');
     fwEl.style.display = fw ? '' : 'none';
   }
 
   // Shot photo (#448, #850): reuses the same image the annotation panel
-  // uploads/shows (_renderShotPhoto() in annotation.js) — the small circular
+  // uploads/shows (_renderShotPhoto() in annotation.ts) — the small circular
   // thumb fills the empty space next to the machine/freshness line on
   // mobile, and the large hero panel (floated top-right of #chart-area)
   // fills the unused desktop space above the chart. Both show the same
@@ -729,9 +841,17 @@ export async function updateView(): Promise<void> {
     // #457: compact hint icon when the score was weighed against the bean's
     // own brewTempC/brewRatio recommendation (#450) rather than the generic
     // fallback band — native title tooltip, no new permanent header text.
-    const beanTargetHint: Html = shotUsedBeanTarget(shotA)
-      ? html`<span class="verdict-bean-target-hint" title="${tHtml('verdict_bean_target_hint')}">${TARGET_ICON_SVG}</span>` : html``;
-    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${beanTargetHint}`;
+    // #1538/#1628: a sub-5-bar shot's pressure scored against the profile's
+    // own target (or left out) shares the same icon — one icon, every
+    // applicable reason in its tooltip, never two identical icons side by side.
+    const pressureNote = shotPressureNote(shotA, rawA);
+    const hintTitles = [
+      shotUsedBeanTarget(shotA) ? t('verdict_bean_target_hint') : '',
+      pressureNote ? t(pressureNote === 'profile' ? 'verdict_pressure_profile_hint' : 'verdict_pressure_omitted_hint') : '',
+    ].filter(Boolean);
+    const scoreHint: Html = hintTitles.length
+      ? html`<span class="verdict-bean-target-hint" title="${esc(hintTitles.join('\n'))}">${TARGET_ICON_SVG}</span>` : html``;
+    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${scoreHint}`;
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process-zone pressure card, so repeating them here was pure duplication.
@@ -765,7 +885,7 @@ export async function updateView(): Promise<void> {
         const dur   = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
         const cls   = scoreClass(score);
         const chart = _miniShotChart(s);
-        return html`<div class="comp-thumb" data-action="goto-shot" data-id="${esc(s.id)}" title="Shot ${esc(s.id)} — ${esc(date)}">
+        return html`<div class="comp-thumb" role="button" tabindex="0" data-action="goto-shot" data-id="${esc(s.id)}" title="Shot ${esc(s.id)} — ${esc(date)}">
           <div class="comp-thumb-chart">${chart}</div>
           <div class="comp-thumb-meta">
             <span class="comp-shot-date">${esc(date)}</span>
@@ -934,221 +1054,3 @@ export async function updateView(): Promise<void> {
     });
   }
 }
-
-// ── CSV Export ────────────────────────────────────────────────────────────
-
-// d is the mapped XY curve bundle for this shot (from the curve cache) — the
-// caller fetches it via getShotCurve() first, since list rows no longer carry
-// datapoints (#957).
-function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
-  const ann    = shot.annotation || {};
-  const avgP   = avgActive(d.pressure.map(p => p.y), 1.5);
-  const finalW = max(d.weight.map(p => p.y));
-  const avgT   = avg(d.temp.map(p => p.y));
-  const secs   = ((shot.duration || 0) / 10).toFixed(1);
-  const ratio  = (ann.dose && finalW) ? `1:${(finalW / ann.dose).toFixed(1)}` : '';
-  const date   = new Date(shot.timestamp * 1000).toLocaleString(localeFor(S.currentLang));
-  return [
-    shot.id, date,
-    shot.profile?.name || shot.profileName || '',
-    secs,
-    avgP   != null ? avgP.toFixed(2)   : '',
-    finalW != null ? finalW.toFixed(1) : '',
-    ann.dose || '', ratio,
-    avgT   != null ? avgT.toFixed(1)   : '',
-    ann.rating || '', ann.coffee || '', ann.grinder || '',
-    ann.grindSetting || '',
-    _equipmentName(_libCollection('baskets'), ann.basketId) || '',
-    _equipmentName(_libCollection('puckScreens'), ann.puckScreenId) || '',
-    (ann.notes || '').replace(/\n/g, ' ')
-  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-}
-
-async function downloadCSV(rows: string[], filename: string): Promise<void> {
-  const header = ['Shot ID','Date','Profile','Duration (s)','Avg Pressure (bar)','Max Weight (g)',
-                  'Dose (g)','Ratio','Avg Temp (C)','Rating','Coffee','Grinder','Grind Setting',
-                  'Basket','Puck Screen','Notes'];
-  const csv  = [header.join(','), ...rows].join('\r\n');
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-  await shareOrDownloadBlob(blob, filename, { title: t('export_csv_title') });
-}
-
-export async function exportCSV(): Promise<void> {
-  const shot = _shots().find(s => s.id === S.primaryShotId);
-  if (!shot) return;
-  await getShotCurve(shot.id);
-  const date    = new Date(shot.timestamp * 1000).toISOString().slice(0, 10);
-  const profile = (shot.profile?.name || shot.profileName || 'shot').replace(/[^a-z0-9]/gi, '_');
-  await downloadCSV([shotToCSVRow(shot, getCachedShotData(shot.id) || mapShotDatapoints({}))], `glp_shot_${date}_${profile}.csv`);
-}
-
-export async function exportAllCSV(): Promise<void> {
-  // Rare, explicit user action — pull every shot's curve (bounded concurrency
-  // inside ensureCurves) before building the rows.
-  const list = _shots();
-  await ensureCurves(list.map(s => s.id));
-  await downloadCSV(list.map(s => shotToCSVRow(s, getCachedShotData(s.id) || mapShotDatapoints({}))), 'glp_all_shots.csv');
-}
-
-// ── .shot export ──────────────────────────────────────────────────────────
-
-export async function exportShot(): Promise<void> {
-  const shot = _shots().find(s => s.id === S.primaryShotId);
-  if (!shot) return;
-  const d   = await getShotCurve(shot.id);
-  const ann = shot.annotation || {};
-  const timeArr = d.timeInShot || [];
-
-  const tcl = (arr: unknown[] | null | undefined): string => arr?.length ? `{${arr.map(v => ((v as number) / 10).toFixed(2)).join(' ')}}` : '{}';
-
-  const finalWeight = d.shotWeight || d.weight || [];
-  const lastW = finalWeight.length ? ((finalWeight.at(-1) ?? 0) / 10).toFixed(1) : '0.0';
-  const date  = new Date(shot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19);
-  const basketName     = _equipmentName(_libCollection('baskets'), ann.basketId);
-  const puckScreenName = _equipmentName(_libCollection('puckScreens'), ann.puckScreenId);
-
-  const lines = [
-    `clock ${shot.timestamp}`,
-    `date ${date}`,
-    `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
-    ann.coffee       ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
-    ann.grinder      ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
-    ann.grindSetting ? `grinder_setting {${(ann.grindSetting as string).replace(/[{}]/g, '')}}` : '',
-    basketName       ? `basket {${basketName.replace(/[{}]/g, '')}}` : '',
-    puckScreenName   ? `puck_screen {${puckScreenName.replace(/[{}]/g, '')}}` : '',
-    ann.dose         ? `bean_weight ${ann.dose}` : '',
-    ann.notes        ? `espresso_notes {${ann.notes.replace(/[{}]/g, '')}}` : '',
-    `espresso_elapsed ${tcl(timeArr)}`,
-    `espresso_pressure ${tcl(d.pressure)}`,
-    `espresso_flow ${tcl(d.pumpFlow)}`,
-    `espresso_weight ${tcl(d.shotWeight || d.weight)}`,
-    `espresso_flow_weight ${tcl(d.weightFlow)}`,
-    `espresso_temperature_goal ${tcl(d.targetTemperature)}`,
-    `espresso_temperature_mix ${tcl(d.temperature)}`,
-    `espresso_water_dispensed ${lastW}`,
-  ].filter(Boolean).join('\n');
-
-  await _downloadJSON_blob(lines, `shot_${shot.id}_${date.slice(0, 10)}.shot`, 'text/plain;charset=utf-8;');
-}
-
-// ── Profile export ────────────────────────────────────────────────────────
-
-export async function exportProfile(): Promise<void> {
-  const shot = _shots().find(s => s.id === S.primaryShotId);
-  if (!shot) return;
-
-  const profile = shot.profile;
-  if (profile && Array.isArray(profile.phases) && profile.phases.length > 0) {
-    const out = JSON.parse(JSON.stringify(profile)) as { recipe?: Record<string, number>; name?: string } & Record<string, unknown>;
-    const ann = shot.annotation || {};
-    if (!out.recipe) out.recipe = {};
-    if (ann.dose) out.recipe.coffeeIn = parseFloat(String(ann.dose));
-    if (!out.recipe.coffeeOut && ann.dose) out.recipe.coffeeOut = parseFloat(String(ann.dose)) * 2;
-    if (out.recipe.coffeeIn && out.recipe.coffeeOut)
-      out.recipe.ratio = Math.round(Number(out.recipe.coffeeOut) / Number(out.recipe.coffeeIn) * 100) / 100;
-    await _downloadJSON(out, (out.name || shot.profileName || `shot_${shot.id}`).replace(/[^a-z0-9_-]/gi, '_') + '.json');
-    return;
-  }
-
-  const d    = await getShotCurve(shot.id);
-  const rawT = d.timeInShot     || [];
-  const rawTP = d.targetPressure || [];
-
-  if (rawT.length === 0 || rawTP.length === 0) {
-    alert(t('profile_export_no_data'));
-    return;
-  }
-
-  const times  = rawT.map(v => v / 10);
-  const tPress = rawTP.map(v => v / 10);
-  const totalMs = Math.round((times.at(-1) ?? NaN) * 1000);
-  const ann     = shot.annotation || {};
-
-  const PREINF_THRESHOLD = 6;
-  let preinfEndIdx = tPress.findIndex(p => p >= PREINF_THRESHOLD);
-  if (preinfEndIdx < 0) preinfEndIdx = 0;
-  const preinfMs = preinfEndIdx > 0 ? Math.round((times[preinfEndIdx] ?? NaN) * 1000) : 0;
-
-  const phases = [];
-  if (preinfMs > 500) {
-    const preinfTarget = Math.round(Math.max(...tPress.slice(0, preinfEndIdx)) * 10) / 10 || 4;
-    phases.push({
-      type: 0,
-      target: { start: 0, end: preinfTarget, curve: 1, time: preinfMs },
-      restriction: 0,
-      stopConditions: { time: preinfMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: 0 }
-    });
-  }
-
-  const extractionSlice = tPress.slice(preinfEndIdx || 0);
-  const avgExtraction   = extractionSlice.length
-    ? Math.round(extractionSlice.reduce((a, b) => a + b, 0) / extractionSlice.length * 10) / 10
-    : 9;
-  const extractionMs = totalMs - preinfMs;
-  const yieldG = ann.dose ? parseFloat(String(ann.dose)) * 2 : 36;
-
-  phases.push({
-    type: 0,
-    target: { start: avgExtraction, end: avgExtraction, curve: 0, time: extractionMs },
-    restriction: 0,
-    stopConditions: { time: extractionMs, pressureAbove: 0, pressureBelow: 0, flowAbove: 0, flowBelow: 0, weight: yieldG }
-  });
-
-  const out = {
-    id: shot.id,
-    name: shot.profileName || `Shot ${shot.id}`,
-    phases,
-    globalStopConditions: { time: 0, weight: yieldG, waterPumped: 0 },
-    recipe: {
-      coffeeIn:  ann.dose ? parseFloat(String(ann.dose)) : 18,
-      coffeeOut: yieldG,
-      ratio:     ann.dose ? Math.round(yieldG / parseFloat(String(ann.dose)) * 100) / 100 : 2
-    }
-  };
-  await _downloadJSON(out, (out.name).replace(/[^a-z0-9_-]/gi, '_') + '.json');
-}
-
-async function _downloadJSON(obj: unknown, filename: string): Promise<void> {
-  await _downloadJSON_blob(JSON.stringify(obj, null, 2), filename, 'application/json');
-}
-
-async function _downloadJSON_blob(content: string, filename: string, mime: string): Promise<void> {
-  const blob = new Blob([content], { type: mime });
-  await shareOrDownloadBlob(blob, filename, { title: filename });
-}
-
-// ── Share card ────────────────────────────────────────────────────────────
-
-export async function shareCard(format = 'square'): Promise<void> {
-  const shotId = S.primaryShotId;
-  if (!shotId) return;
-  try {
-    // #462: the card should visually match whatever accent/theme the user
-    // is actually looking at, not a hardcoded snapshot — same attributes
-    // main.js applies to <html> (dataset.accent/dataset.theme), same
-    // defaults ('amber-americano'/'dark', see applyTheme()/_savedAccent in
-    // main.js). #1019: dataset.accent no longer drives any CSS itself (the
-    // [data-accent] rules it used to key are retired), but is still set on
-    // every setAccentTheme() call purely so this stays in sync with the
-    // user's actual Farbschema pick.
-    const accent = document.documentElement.dataset.accent || 'amber-americano';
-    const theme  = document.documentElement.dataset.theme  || 'dark';
-    const r = await getShotCard(shotId, { format, accent, theme });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({})) as { error?: string };
-      throw new Error(err.error || r.statusText);
-    }
-    const blob     = await r.blob();
-    const filename = `glp-shot-${shotId}-${format}.png`;
-    await shareOrDownloadBlob(blob, filename, { title: t('share_card_title'), fallbackOnError: false });
-  } catch (e) {
-    if ((e as Error).name !== 'AbortError') alert(t('error_generic', (e as Error).message));
-  }
-}
-
-// ── Backup / Restore ──────────────────────────────────────────────────────
-
-// Backup export/restore is a modal flow (section picker, passphrase for the
-// encrypted API-token/MQTT block, a dry-run preview before anything is
-// written) — see public-src/components/backup-modal.js, wired directly from
-// main.js's event listeners rather than through this file.

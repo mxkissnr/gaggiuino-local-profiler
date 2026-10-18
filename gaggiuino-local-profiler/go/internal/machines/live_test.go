@@ -124,6 +124,8 @@ func (f *countingWSServer) dropConns() {
 // started failing validation — the next reconnect attempt must NOT dial.
 func TestGaggiuinoLiveClient_ReconnectRevalidatesHost(t *testing.T) {
 	allowLoopbackMachineHost(t)
+	origDelay := liveReconnectDelay.set(20 * time.Millisecond)
+	t.Cleanup(func() { liveReconnectDelay.set(origDelay) })
 	fake := newCountingWSServer()
 	defer fake.Close()
 
@@ -135,15 +137,29 @@ func TestGaggiuinoLiveClient_ReconnectRevalidatesHost(t *testing.T) {
 	c.GetLiveSensorSnapshot(base) // opens the session, first dial happens
 	waitUntil(t, time.Second, func() bool { return fake.conns.Load() >= 1 })
 
+	// Refuse the host from now on and record every guard call, so the test can
+	// observe the reconnect loop re-validating the host instead of sleeping for
+	// the real reconnect delay.
+	guardCalls := make(chan struct{}, 8)
 	orig := machineHostGuard.set(func(ctx context.Context, hostname string) error {
+		select {
+		case guardCalls <- struct{}{}:
+		default:
+		}
 		return errors.New("host no longer valid")
 	})
 	t.Cleanup(func() { machineHostGuard.set(orig) })
 
 	fake.dropConns()
-	// liveReconnectDelay (3s) plus margin — long enough for run() to have
-	// attempted (and, pre-fix, succeeded at) at least one more reconnect.
-	time.Sleep(liveReconnectDelay + 2*time.Second)
+	// Two refused guard calls prove run() looped and re-ran the host guard on
+	// every reconnect attempt, never dialing again — no fixed sleep.
+	for i := 0; i < 2; i++ {
+		select {
+		case <-guardCalls:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("reconnect loop did not re-run the host guard (call %d of 2) within 2s", i+1)
+		}
+	}
 	if got := fake.conns.Load(); got != 1 {
 		t.Fatalf("connectOnce dialed after the host started failing validation: conns=%d, want 1", got)
 	}

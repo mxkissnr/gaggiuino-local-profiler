@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calcShotScore, calcShotScoreDetail } from '../public-src/shared/score.js';
+import { calcShotScore, calcShotScoreDetail, parseBrewRatio } from '../public-src/shared/score.js';
+import { detectChanneling } from '../public-src/utils.js';
 
 describe('calcShotScore', () => {
     it('returns null for a shot with no datapoints', () => {
@@ -11,9 +12,20 @@ describe('calcShotScore', () => {
     });
 
     it('returns a number between 0 and 100 for a valid annotated shot', () => {
+        // Build the per-curve object datapoint shape calcShotScore actually
+        // scores (the same one the #450 / #457 / #1538 tests below use). The old
+        // array-of-arrays fixture made calcShotScore return null, and the
+        // `if (score !== null)` guard then silently skipped every assertion.
+        const N = 30;
         const shot = {
-            datapoints: new Array(200).fill([0, 93, 9, 0]),
-            duration:   250,
+            datapoints: {
+                pressure:          new Array(N).fill(85),
+                temperature:       new Array(N).fill(905),
+                targetTemperature: new Array(N).fill(0),
+                timeInShot:        Array.from({ length: N }, (_, i) => i * 10),
+                shotWeight:        Array.from({ length: N }, (_, i) => Math.round((i / (N - 1)) * 396)),
+            },
+            duration:   300,
             annotation: {
                 coffee:       'Test Bean',
                 grindSetting: '12',
@@ -23,10 +35,9 @@ describe('calcShotScore', () => {
             },
         };
         const score = calcShotScore(shot);
-        if (score !== null) {
-            expect(score).toBeGreaterThanOrEqual(0);
-            expect(score).toBeLessThanOrEqual(100);
-        }
+        expect(score).not.toBeNull();
+        expect(score!).toBeGreaterThanOrEqual(0);
+        expect(score!).toBeLessThanOrEqual(100);
     });
 
     it('returns null when shot is null', () => {
@@ -121,12 +132,172 @@ describe('calcShotScoreDetail — usedBeanTarget flag (#457)', () => {
     });
 
     it('is false for a shot that scores null', () => {
-        expect(calcShotScoreDetail({ datapoints: [] }, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false });
-        expect(calcShotScoreDetail(null, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false });
+        expect(calcShotScoreDetail({ datapoints: [] }, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false, pressureNote: null });
+        expect(calcShotScoreDetail(null, { brewTempC: 93 })).toEqual({ score: null, usedBeanTarget: false, pressureNote: null });
     });
 
     it('calcShotScore stays a thin wrapper returning exactly calcShotScoreDetail(...).score', () => {
         expect(calcShotScore(baseShot, { brewTempC: 93 })).toBe(calcShotScoreDetail(baseShot, { brewTempC: 93 }).score);
         expect(calcShotScore(baseShot, null)).toBe(calcShotScoreDetail(baseShot, null).score);
+    });
+});
+
+// #1538: a sub-5-bar shot now scores — its pressure part against the profile's
+// own targetPressure when it has a PRESSURE phase, or left out when it doesn't.
+describe('calcShotScoreDetail — sub-5-bar pressure (#1538)', () => {
+    const phases = (types: string[]) => ({ phases: types.map(type => ({ type })) });
+
+    it('still scores a >=5-bar shot on the fixed band, with no pressure note', () => {
+        const detail = calcShotScoreDetail({
+            datapoints: { pressure: new Array(20).fill(80) },
+            duration: 300,
+        });
+        expect(detail.score).not.toBeNull();
+        expect(detail.pressureNote).toBeNull();
+    });
+
+    it('scores a flat 4-bar shot that hits its own 4-bar target full marks', () => {
+        const detail = calcShotScoreDetail({
+            profile: phases(['FLOW', 'PRESSURE']),
+            datapoints: {
+                pressure:       new Array(8).fill(40),
+                targetPressure: new Array(8).fill(40),
+                phaseIndex:     [0, 1, 1, 1, 1, 1, 1, 1],
+            },
+            duration: 300,
+        });
+        expect(detail.pressureNote).toBe('profile');
+        expect(detail.score).toBe(100);
+    });
+
+    it('scores an 8-bar target the shot only reaches 4.5 bar on low', () => {
+        const detail = calcShotScoreDetail({
+            profile: phases(['FLOW', 'PRESSURE']),
+            datapoints: {
+                pressure:       new Array(6).fill(45),
+                targetPressure: new Array(6).fill(80),
+                phaseIndex:     [0, 1, 1, 1, 1, 1],
+            },
+        });
+        // MAE 3.5 bar -> 100 - 20*(3.5-0.5) = 40, which drags the score down.
+        expect(detail.pressureNote).toBe('profile');
+        expect(detail.score).toBeLessThan(70);
+    });
+
+    it('leaves pressure out for a FLOW-only profile instead of penalising its limit', () => {
+        const detail = calcShotScoreDetail({
+            profile: phases(['FLOW', 'FLOW']),
+            datapoints: {
+                pressure:       new Array(5).fill(40),
+                targetPressure: new Array(5).fill(80),
+                phaseIndex:     [0, 1, 1, 1, 1],
+            },
+            duration: 300,
+        });
+        expect(detail.pressureNote).toBe('omitted');
+        expect(detail.score).not.toBeNull();
+    });
+
+    it('scores a sub-5-bar shot with no phase data at all, pressure left out', () => {
+        const detail = calcShotScoreDetail({
+            datapoints: { pressure: new Array(6).fill(40) },
+            duration: 300,
+        });
+        expect(detail.pressureNote).toBe('omitted');
+        expect(detail.score).not.toBeNull();
+    });
+
+    it('needs at least 4 samples above 0 to score at all', () => {
+        expect(calcShotScoreDetail({ datapoints: { pressure: [40, 40, 40] } }).score).toBeNull();
+        expect(calcShotScoreDetail({ datapoints: { pressure: [40, 40, 40, 40] }, duration: 300 }).score).not.toBeNull();
+    });
+});
+
+// #1622: the profile-suggestion and dial-in-wizard copies of the ratio parser
+// disagreed with this one (which mirrors Go's parseBrewRatioTarget). They now
+// delegate here; pin the inputs where they used to differ so a future
+// "cleanup" cannot silently change the chosen behaviour.
+describe('parseBrewRatio (#1622 single parser)', () => {
+    it('parses the canonical 1:<number> forms', () => {
+        expect(parseBrewRatio('1:2')).toBe(2);
+        expect(parseBrewRatio('1 : 2.5')).toBe(2.5);
+        expect(parseBrewRatio(' 1:2 ')).toBe(2);
+        expect(parseBrewRatio('1:2.50')).toBe(2.5);
+    });
+
+    it('accepts a zero right-hand side, unlike the removed copies', () => {
+        expect(parseBrewRatio('1:0')).toBe(0);    // old copies: null / 2
+        expect(parseBrewRatio('1:0.0')).toBe(0);  // old copies: null / 2
+        expect(parseBrewRatio('1:00')).toBe(0);   // old copies: null / 2
+    });
+
+    it('rejects malformed numbers the old permissive regex accepted', () => {
+        expect(parseBrewRatio('1:2.')).toBeNull();     // old copies: 2
+        expect(parseBrewRatio('1:.5')).toBeNull();     // old copies: 0.5
+        expect(parseBrewRatio('1:5.')).toBeNull();     // old copies: 5
+        expect(parseBrewRatio('1:2.5.6')).toBeNull();  // old copies: 2.5
+        expect(parseBrewRatio('1:2..3')).toBeNull();   // old copies: 2
+    });
+
+    it('rejects anything that is not 1:<number>', () => {
+        for (const bad of ['', 'not a ratio', '2:1', '1:', 'ratio 1:2', '1,2']) {
+            expect(parseBrewRatio(bad)).toBeNull();
+        }
+        expect(parseBrewRatio(undefined)).toBeNull();
+        expect(parseBrewRatio(null)).toBeNull();
+        expect(parseBrewRatio(2.5)).toBeNull();
+    });
+});
+
+// #1622: shared/score.ts now scores channeling through this single detector.
+// Pinned because the removed private copy lacked the out-of-range guard and
+// could false-positive when the time axis is shorter than the pressure axis.
+describe('detectChanneling (#1622 single detector)', () => {
+    it('flags a >1.5 bar drop over a 0-3 s step once pressure is above 5 bar', () => {
+        expect(detectChanneling([0, 1, 2, 3, 4], [50, 60, 70, 66, 65])).toBe(true);
+    });
+
+    it('ignores out-of-range time samples instead of false-positiving', () => {
+        // 70 -> 63.5 bar is a 6.5 bar drop, but there is no time sample there.
+        expect(detectChanneling([0], [70, 63.5, 60, 55, 50])).toBe(false);
+    });
+});
+
+// #1688: a failed thermocouple read arrives as exactly 0 °C; a stable series
+// with isolated dropouts must score the same as the shot without them.
+describe('calcShotScore — 0.0 °C thermocouple dropouts (#1688)', () => {
+    const N = 30;
+    const clean = {
+        datapoints: {
+            pressure:          new Array(N).fill(85),
+            temperature:       new Array(N).fill(930), // steady 93.0 °C
+            targetTemperature: new Array(N).fill(0),   // none recorded -> generic band
+            timeInShot:        Array.from({ length: N }, (_, i) => i * 10),
+            shotWeight:        Array.from({ length: N }, (_, i) => Math.round((i / (N - 1)) * 450)),
+        },
+        duration: 300, // 30 s -> top duration band
+        annotation: { dose: 18 },
+    };
+
+    it('scores a stable series with isolated 0.0 samples like the same shot without them', () => {
+        const dropouts = {
+            ...clean,
+            datapoints: {
+                ...clean.datapoints,
+                temperature: clean.datapoints.temperature.map((v: number, i: number) => (i % 7 === 3 ? 0 : v)),
+            },
+        };
+        expect(calcShotScore(dropouts)).toBe(calcShotScore(clean));
+    });
+
+    it('leaves the temperature part out once fewer than 6 samples survive', () => {
+        const sparse = {
+            ...clean,
+            datapoints: {
+                ...clean.datapoints, // 5 non-zero samples -> temperature dropped
+                temperature: [930, 0, 0, 930, 0, 930, 0, 930, 0, 930],
+            },
+        };
+        expect(calcShotScore(sparse)).toBe(calcShotScore(clean));
     });
 });

@@ -5,6 +5,7 @@
     "dev"
   ],
   "schedule": ["before 6am on monday"],
+  "minimumReleaseAge": "3 days",
   "semanticCommits": "enabled",
   "lockFileMaintenance": {
     "enabled": true,
@@ -30,6 +31,12 @@
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["major"],
       "groupName": "dev-dependencies"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["lit", "lit-html", "lit-element"],
+      "description": "Lit is bundled into the shipped SPA (it is not a dev-only tool), so it must never automerge even if it appears as a devDependency.",
+      "automerge": false
     },
     {
       "matchManagers": ["npm"],

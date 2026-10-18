@@ -4,6 +4,7 @@
 // round-trip. Pure function — no DOM deps. Inputs are the raw shot object
 // (×10 integer curves).
 
+import { detectChanneling } from '../utils.js';
 import type { ShotDatapoints } from '../utils.js';
 
 /**
@@ -15,6 +16,18 @@ interface ScorableShot {
   datapoints?: ShotDatapoints;
   duration?: number | null;
   annotation?: { dose?: number | null; tds?: number | null } | null;
+  profile?: { phases?: Array<{ type?: string }> } | null;
+}
+
+/** Why the pressure part was scored the way it was (#1538). */
+export type PressureNote = 'profile' | 'omitted';
+
+/** calcShotScoreDetail's result — the score, the bean-target flag and, for a
+ *  sub-5-bar shot, why the pressure part looks the way it does (#1538). */
+export interface ScoreDetailResult {
+  score: number | null;
+  usedBeanTarget: boolean;
+  pressureNote: PressureNote | null;
 }
 
 /** The bean fields (#450) the scorer reads — a CoffeeLibrary row, untyped. */
@@ -29,28 +42,58 @@ function _stddev(vals: number[]): number {
   return Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length);
 }
 
-function _detectChanneling(times: number[], pressures: number[]): boolean {
-  if (!times || !times.length || pressures.length < 5) return false;
-  for (let i = 1; i < pressures.length; i++) {
-    const prev = pressures[i - 1];
-    const cur = pressures[i];
-    if (prev === undefined || cur === undefined) continue;
-    if (prev < 5) continue;
-    const dt = (times[i] ?? NaN) - (times[i - 1] ?? NaN);
-    if (dt <= 0 || dt > 3) continue;
-    if (prev - cur > 1.5) return true;
-  }
-  return false;
-}
-
-// "1:2.4" -> 2.4 — the bean form's own brewRatio convention (see
-// sanitize-bean.js). Anything that doesn't match (empty, freeform notes,
+// "1:2.4" -> 2.4 — the bean form's own brewRatio convention. Anything that doesn't match (empty, freeform notes,
 // old data predating the field) yields null so callers fall back cleanly.
-function _parseBrewRatioTarget(brewRatio: string | number | null | undefined): number | null {
+// This is the single brew-ratio parser (#1622): it must stay in parity with
+// Go's parseBrewRatioTarget (go/internal/shots/score.go), so the profile
+// suggestion and dial-in wizard reuse it rather than carrying their own.
+export function parseBrewRatio(brewRatio: string | number | null | undefined): number | null {
   if (!brewRatio) return null;
   const m = String(brewRatio).match(/^\s*1\s*:\s*(\d+(?:\.\d+)?)\s*$/);
   const captured = m?.[1];
   return captured !== undefined ? parseFloat(captured) : null;
+}
+
+// #1538: maps the mean absolute error (bar) between a shot's pressure and its
+// own targetPressure to a 0-100 part score: within 0.5 bar is full marks, then
+// -20 per further bar, floored at 20. Mirrors Go's profilePressureScore.
+function _profilePressureScore(mae: number): number {
+  if (mae <= 0.5) return 100;
+  return Math.max(20, 100 - 20 * (mae - 0.5));
+}
+
+// #1538: mean absolute error (bar) between the recorded pressure and the
+// shot's own targetPressure, over the samples in a PRESSURE-type phase only (a
+// FLOW phase's targetPressure is a limit, not a target). Returns null when
+// there is no usable phase metadata, and the caller then leaves pressure out.
+function _profilePressureMAE(
+  d: ShotDatapoints,
+  profile: ScorableShot['profile'],
+  p: number[],
+): { mae: number; samples: number } | null {
+  const phases = profile?.phases;
+  if (!phases || !phases.length) return null;
+  const pressurePhases = new Set<number>();
+  phases.forEach((ph, i) => { if (ph?.type === 'PRESSURE') pressurePhases.add(i); });
+  if (!pressurePhases.size) return null;
+  const target = d.targetPressure || [];
+  const phaseIndex = d.phaseIndex || [];
+  if (!target.length || !phaseIndex.length) return null;
+  const n = Math.min(p.length, target.length, phaseIndex.length);
+  let sum = 0, samples = 0;
+  for (let i = 0; i < n; i++) {
+    const phase = phaseIndex[i];
+    const t = target[i];
+    const actual = p[i];
+    if (phase === undefined || t === undefined || actual === undefined) continue;
+    // Go truncates phaseIndex toward zero with int(phaseIdx[i]); mirror that
+    // exactly (real data is integral, but the parity must not silently drift).
+    if (!pressurePhases.has(Math.trunc(phase)) || t <= 0) continue;
+    sum += Math.abs(actual - t / 10);
+    samples++;
+  }
+  if (!samples) return null;
+  return { mae: sum / samples, samples };
 }
 
 // Weighted: pressure 25, temp stability 20, duration 20, brew ratio 20, channeling 15.
@@ -69,25 +112,47 @@ function _parseBrewRatioTarget(brewRatio: string | number | null | undefined): n
 // against this bean's target" hint. calcShotScore stays a thin wrapper
 // around it so every existing caller that only wants the number (there are
 // many, across both backend and frontend) is untouched.
-function calcShotScoreDetail(shot: unknown, bean?: unknown): { score: number | null; usedBeanTarget: boolean } {
-  if (!shot) return { score: null, usedBeanTarget: false };
+function calcShotScoreDetail(shot: unknown, bean?: unknown): ScoreDetailResult {
+  if (!shot) return { score: null, usedBeanTarget: false, pressureNote: null };
   const sh = shot as ScorableShot;
   const beanRec = bean as ScorableBean | null | undefined;
   const d = sh.datapoints || {};
   const p = (d.pressure || []).map(v => v / 10);
   const pVals = p.filter(v => v >= 5);
-  if (pVals.length <= 3) return { score: null, usedBeanTarget: false };
+  // #1538: scoreable as soon as there is a pressure curve at all. A shot that
+  // never reaches 5 bar is scored too — its pressure part against the profile's
+  // own target when it has one, or left out when it doesn't. A shot with >=4
+  // samples at/above 5 bar takes the unchanged fixed-band path.
+  if (p.filter(v => v > 0).length < 4) return { score: null, usedBeanTarget: false, pressureNote: null };
 
   const scores: number[] = [], weights: number[] = [];
   let usedBeanTarget = false;
+  let pressureNote: PressureNote | null = null;
+  let s: number;
 
-  const avgP = pVals.reduce((a, b) => a + b, 0) / pVals.length;
-  let s = avgP >= 7 && avgP <= 9.5 ? 100
-        : avgP < 7                  ? Math.max(20, 100 - (7 - avgP) * 22)
-                                    : Math.max(20, 100 - (avgP - 9.5) * 28);
-  scores.push(Math.round(s)); weights.push(25);
+  if (pVals.length > 3) {
+    const avgP = pVals.reduce((a, b) => a + b, 0) / pVals.length;
+    s = avgP >= 7 && avgP <= 9.5 ? 100
+      : avgP < 7                  ? Math.max(20, 100 - (7 - avgP) * 22)
+                                  : Math.max(20, 100 - (avgP - 9.5) * 28);
+    scores.push(Math.round(s)); weights.push(25);
+  } else {
+    const tracked = _profilePressureMAE(d, sh.profile, p);
+    if (tracked) {
+      scores.push(Math.round(_profilePressureScore(tracked.mae))); weights.push(25);
+      pressureNote = 'profile';
+    } else {
+      pressureNote = 'omitted';
+    }
+  }
 
-  const tVals = (d.temperature || []).map(v => v / 10);
+  // #1688: a failed thermocouple read is stored as exactly 0 (there is no
+  // per-sample validity flag), so an isolated dropout would otherwise swing
+  // stddev and the mean by tens of degrees. A brew path cannot change by
+  // 90 C in one sample interval, so drop exact zeros before scoring. With
+  // fewer than 6 valid samples left, the temperature part is left out (the
+  // same > 5 gate, now applied to the cleaned series).
+  const tVals = (d.temperature || []).map(v => v / 10).filter(v => v !== 0);
   if (tVals.length > 5) {
     const sd = _stddev(tVals) || 0;
     const stab = sd <= 0.3 ? 100 : sd <= 0.7 ? 90 : sd <= 1.5 ? 72
@@ -131,7 +196,7 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): { score: number | n
     const r = finalW / ann.dose;
     // Bean's own brewRatio recommendation (#450) replaces the generic
     // 1.8–2.5 band as the target when set.
-    const beanRatioTarget = beanRec ? _parseBrewRatioTarget(beanRec.brewRatio as string | number | undefined) : null;
+    const beanRatioTarget = beanRec ? parseBrewRatio(beanRec.brewRatio as string | number | undefined) : null;
     if (beanRatioTarget != null) {
       const dev = Math.abs(r - beanRatioTarget);
       s = dev <= 0.35 ? 100 : dev <= 0.75 ? 75 : Math.max(15, 75 - (dev - 0.75) * 30);
@@ -156,11 +221,13 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): { score: number | n
   }
 
   const times = (d.timeInShot || []).map(v => v / 10);
-  scores.push(_detectChanneling(times, p) ? 20 : 100); weights.push(15);
+  // Channeling uses the shared utils.detectChanneling — the one copy that
+  // matches Go's sample-skipping on out-of-range times (#1622).
+  scores.push(detectChanneling(times, p) ? 20 : 100); weights.push(15);
 
   const tw = weights.reduce((a, b) => a + b, 0);
   const score = tw ? Math.round(scores.reduce((acc, v, i) => acc + v * (weights[i] ?? 0), 0) / tw) : null;
-  return { score, usedBeanTarget: score !== null && usedBeanTarget };
+  return { score, usedBeanTarget: score !== null && usedBeanTarget, pressureNote: score !== null ? pressureNote : null };
 }
 
 function calcShotScore(shot: unknown, bean?: unknown): number | null {

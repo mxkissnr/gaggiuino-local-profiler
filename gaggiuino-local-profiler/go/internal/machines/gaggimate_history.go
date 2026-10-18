@@ -37,6 +37,11 @@ const (
 	// entry size (~2.44MB) -- an index that size dwarfs anything
 	// gaggiMateIndexMaxEntries above would ever legitimately produce.
 	gaggiMateIndexMaxBytes = gaggiMateIndexHdrBytes + gaggiMateIndexMaxEntries*gaggiMateIndexEntBytes
+
+	// gaggiMateSlogMaxSamples caps the header-announced sample count before
+	// the sample slice is preallocated. A 20-minute 250 ms shot is ~4,800
+	// samples, so 200,000 is far beyond any legitimate history.
+	gaggiMateSlogMaxSamples = 200_000
 )
 
 // v5+ slog header phase-transition slots, per upstream shot_log_format.h
@@ -194,7 +199,14 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 		s.sampleIntervalMs = 100
 	}
 	fieldsMask := binary.LittleEndian.Uint32(data[12:16])
-	sampleCountHdr := int(binary.LittleEndian.Uint32(data[16:20]))
+	if fieldsMask == 0 {
+		return nil, fmt.Errorf("gaggimate: .slog header has empty fieldsMask")
+	}
+	sampleCountRaw := binary.LittleEndian.Uint32(data[16:20])
+	if sampleCountRaw > gaggiMateSlogMaxSamples {
+		return nil, fmt.Errorf("gaggimate: .slog sample count %d exceeds limit %d", sampleCountRaw, gaggiMateSlogMaxSamples)
+	}
+	sampleCountHdr := int(sampleCountRaw)
 	s.durationMs = binary.LittleEndian.Uint32(data[20:24])
 	s.timestamp = binary.LittleEndian.Uint32(data[24:28])
 	if len(data) >= 60 {
@@ -271,8 +283,14 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 	if sampleSize < computedSampleSize {
 		sampleSize = computedSampleSize
 	}
+	// A stride under 2 bytes cannot hold even one uint16 field, so it would
+	// turn the length-derived sample count (and its preallocation) into a
+	// multiple of the body size (#1747).
+	if sampleSize < 2 {
+		return nil, fmt.Errorf("gaggimate: .slog sample size %d below minimum 2", sampleSize)
+	}
 
-	if sampleSize > 0 && hdrSize < len(data) {
+	if hdrSize < len(data) {
 		dataStart := hdrSize
 		available := (len(data) - dataStart) / sampleSize
 		maxSamples := sampleCountHdr

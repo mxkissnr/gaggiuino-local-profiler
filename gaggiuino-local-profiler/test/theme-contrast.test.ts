@@ -17,11 +17,11 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// #1021: resolveAccentInk() (components/machines-settings.js) is the module
+// #1021: resolveAccentInk() (components/machines-settings.ts) is the module
 // under test for the "accent used as text" describe block below -- that
 // module's own top-level IIFE reads localStorage on import (restoreActive
 // Machine()), so it needs the same minimal fake-DOM globals
-// test/machine-accent-theme.test.js already sets up, imported here first.
+// test/machine-accent-theme.test.ts already sets up, imported here first.
 const g = globalThis as unknown as Record<string, unknown>;
 
 const _localStorageStore: Record<string, string> = {};
@@ -103,7 +103,8 @@ const VARIANTS = {
 };
 
 const TEXT_ROLES    = ['--gray-100', '--gray-200', '--gray-300', '--gray-400',
-                       '--gray-500', '--gray-600', '--ok', '--warn', '--err'];
+                       '--gray-500', '--gray-600', '--ok', '--score-good', '--warn',
+                       '--score-low', '--err'];
 const SURFACE_ROLES = ['--gray-950', '--gray-900', '--gray-800', '--raised'];
 const AA = 4.5;
 
@@ -143,7 +144,7 @@ describe('design token contrast (#811)', () => {
   // these tokens as text ON a surface, never as a surface UNDER text, and
   // white-on-fill measured 2.37:1 in the dark theme before --on-fill existed.
   describe('text on a semantic fill (--on-fill)', () => {
-    const FILL_ROLES = ['--ok', '--warn', '--err', '--gray-600'];
+    const FILL_ROLES = ['--ok', '--score-good', '--warn', '--score-low', '--err', '--gray-600'];
     for (const [name, tokens] of Object.entries(VARIANTS)) {
       it(`${name}: --on-fill is readable on every semantic fill`, () => {
         expect(tokens['--on-fill'], `${name} has no --on-fill`).toBeDefined();
@@ -159,7 +160,7 @@ describe('design token contrast (#811)', () => {
   // #1021: successor to the #1019-removed "accent used as text
   // (--accent-ink)" block above (see git blame on this file around that
   // merge) -- redone for the 8 new THEME_PRESETS against resolveAccentInk()
-  // (components/machines-settings.js) instead of the old per-accent
+  // (components/machines-settings.ts) instead of the old per-accent
   // [data-accent="..."] CSS selectors, which stay retired. Reads the four
   // light surfaces straight from the already-parsed `light` VARIANTS tokens
   // above, so this stays correct if the surface values themselves ever move.

@@ -1,13 +1,13 @@
 import { S }                              from '../../state/index.js';
 import type { LibraryRow, ShotMeta } from '../../state/index.js';
 import { t, tHtml }                       from '../../i18n.js';
-import { getMenu }                        from '../../api/system.js';
+import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import type { AnnotateResult, ShotDefaults } from '../../api/types.js';
-import { esc, germanToIso, html, joinHtml } from '../../utils.js';
+import { esc, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
-import { calcBeanAgeAtShot, _roastDateFromLibrary } from './utils.js';
+import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
 import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
@@ -105,6 +105,18 @@ type BeanRow = LibraryRow & { remainingG?: number | null };
 // ── Auto-save ─────────────────────────────────────────────────────────────
 
 let _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+// Number of POST /annotate requests in flight. A counter, not a flag: a flush
+// that lands while the debounce's own save is still running must not clear
+// annotationBusy() while that first save is still writing.
+let _saveCount = 0;
+
+// True while this page has an annotation change that has not reached the
+// server yet: the 1 s autosave debounce is pending, or a save request is in
+// flight. The live-sync `shot` handler's canRun defers its refresh until this
+// clears, so a remote change never overwrites an edit this page is saving.
+export function annotationBusy(): boolean {
+  return _autoSaveTimer !== null || _saveCount > 0;
+}
 
 // #1411: the server books milk stock and frozen-portion counts while it
 // saves; the library only needs a reload when a field it books from changed.
@@ -188,6 +200,7 @@ async function _performAnnotationSave(): Promise<void> {
   const shot = _shots().find(s => s.id === id);
   const prev = shot?.annotation;
   const payload = _buildAnnotationPayload(shot);
+  _saveCount++;
   try {
     const r = await annotateShot(id, payload);
     if (r.ok) {
@@ -207,8 +220,13 @@ async function _performAnnotationSave(): Promise<void> {
       _setAutoSaveStatus('saved');
     } else {
       _setAutoSaveStatus('idle');
+      window.showToast?.(t('error_generic', r.status));
     }
-  } catch { _setAutoSaveStatus('idle'); }
+  } catch {
+    _setAutoSaveStatus('idle');
+    window.showToast?.(t('error_generic', ''));
+  }
+  finally { _saveCount--; }
 }
 
 export function scheduleAutoSave(): void {
@@ -235,15 +253,14 @@ export function flushAutoSave(): void {
 
 export async function loadDrinkMenu(): Promise<void> {
   try {
-    const r = await getMenu();
-    if (r.ok) S.drinkMenu = await r.json() as LibraryRow[];
+    S.drinkMenu = await getMenu();
   } catch { /* non-critical */ }
 }
 
 // #654: optional per-install defaults auto-prefilled into a brand-new shot's
-// annotation panel — loaded once at app init (main.js), same as
+// annotation panel — loaded once at app init (boot/data.ts), same as
 // loadDrinkMenu()/loadMilkTypes() above, and refreshed by
-// components/shot-defaults-settings.js whenever the Settings card saves.
+// components/shot-defaults-settings.ts whenever the Settings card saves.
 export async function loadShotDefaults(): Promise<void> {
   try {
     const defaults = await getShotDefaults();
@@ -324,7 +341,7 @@ export function selectMilkType(id: string): void {
 // ── Frozen-portion pill (which pool of this bean's stock a shot used) ──────
 
 // Bags/portions active as of a given shot's timestamp — mirrors the
-// activeBag resolution in main.js's annCoffee change handler (openedAt <=
+// activeBag resolution in boot/annotation.ts's annCoffee change handler (openedAt <=
 // shotMs, most recent first), so the frozen-portion choices reflect what
 // was actually in the freezer at brew time, not just "now". Only portions
 // with remaining stock are offered (a fully-thawed one has nothing left to
@@ -338,15 +355,17 @@ function _activeFrozenPortionsForBean(bean: LibraryRow | null | undefined, shotM
 }
 
 // #502: an explicit "not frozen" pill is always offered alongside any active
-// frozen batches — Max wants that to be a deliberate recorded choice, not
+// frozen batches — the maintainer wants that to be a deliberate recorded choice, not
 // just the absence of a selection. The whole field hides when the bean has
 // no active frozen stock at all, since there'd be nothing to choose between.
-export function _renderFrozenPortionPills(beanName: string | null, shotMs: number, selectedId: number | string | null | undefined): void {
+export function _renderFrozenPortionPills(beanName: string | null, shotMs: number, selectedId: number | string | null | undefined, beanId?: number | null): void {
   const field     = document.getElementById('frozenPortionField');
   const container = document.getElementById('frozenPortionPillsContainer');
   const hidden    = document.getElementById('annFrozenPortionId') as HTMLInputElement | null;
   if (!field || !container || !hidden) return;
-  const bean = beanName ? S.coffeeLibrary?.beans?.find(b => b.name === beanName) : null;
+  // #1625: link the pills to the bean by its stable id when the annotation has
+  // one, so a renamed bean still offers the same frozen batches.
+  const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary?.beans);
   const portions = _activeFrozenPortionsForBean(bean, shotMs ?? Date.now());
   if (!portions.length) { field.style.display = 'none'; container.innerHTML = html``; hidden.value = ''; return; }
   field.style.display = '';
@@ -370,9 +389,14 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
 export function selectFrozenPortion(id: string | null | undefined): void {
   const hidden = document.getElementById('annFrozenPortionId');
   if (!hidden) return;
-  const beanName = (document.getElementById('annCoffee') as HTMLInputElement | null)?.value?.trim() || null;
+  const coffeeSelect = document.getElementById('annCoffee') as HTMLSelectElement | null;
+  const beanName = coffeeSelect?.value?.trim() || null;
+  // #456: the select's chosen option carries data-bean-id (see _renderBeanSelect),
+  // so a renamed bean still resolves to the same frozen batches.
+  const beanIdAttr = coffeeSelect ? coffeeSelect.selectedOptions[0]?.dataset.beanId : undefined;
+  const beanId = beanIdAttr ? parseInt(beanIdAttr, 10) : null;
   const shot     = S.primaryShotId ? S.shots.find(s => s.id === S.primaryShotId) : null;
-  _renderFrozenPortionPills(beanName, shot ? shot.timestamp * 1000 : Date.now(), id || null);
+  _renderFrozenPortionPills(beanName, shot ? shot.timestamp * 1000 : Date.now(), id || null, beanId);
   scheduleAutoSave();
 }
 
@@ -405,14 +429,14 @@ export function _updateMilkFieldVisibility(): void {
 
 // Ported from PR #1120 (contributor branch origin/ppops-src/live-shot-setup)
 // onto this TypeScript module by the ppops/port-1120-live-shot-setup branch:
-// dev no longer has the contributor's public-src/views/shots/annotation.js,
+// dev no longer has the contributor's public-src/views/shots/annotation.ts,
 // so the three grinder-field helpers below and the selectId/fieldId arguments
 // on the render helpers further down live here instead.
 //
-// Same select-with-"other"-fallback grinder field as dialin-wizard.js's
+// Same select-with-"other"-fallback grinder field as dialin-wizard.ts's
 // _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
 // existing <select>/<input> pair by id) instead of returning an HTML
-// string, since live.js's pre-shot setup panel's markup is static in
+// string, since live.ts's pre-shot setup panel's markup is static in
 // index.html rather than re-rendered from a template each time.
 export function renderGrinderField(selectId: string, otherId: string, currentValue: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
@@ -427,6 +451,7 @@ export function renderGrinderField(selectId: string, otherId: string, currentVal
   if (other) {
     other.style.display = isOther ? '' : 'none';
     other.value = isOther ? currentValue : '';
+    other.setAttribute('aria-label', t('dialin_wizard_grinder_other_ph'));
   }
 }
 
@@ -441,7 +466,7 @@ export function getGrinderFieldValue(selectId: string, otherId: string): string 
 }
 
 // Toggles the free-text fallback input's visibility on select change —
-// mirrors dialin-wizard.js's dialinGrinderChange.
+// mirrors dialin-wizard.ts's dialinGrinderChange.
 export function handleGrinderFieldChange(selectId: string, otherId: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   const other  = document.getElementById(otherId) as HTMLInputElement | null;
@@ -453,7 +478,7 @@ export function handleGrinderFieldChange(selectId: string, otherId: string): voi
 // a bean rename, name does not. Without it (or when it no longer resolves
 // in the current library — e.g. a deleted bean), falls back to matching by
 // name, same as before this second parameter existed.
-// selectId defaults to the annotation panel's own #annCoffee — views/live.js's
+// selectId defaults to the annotation panel's own #annCoffee — views/live.ts's
 // pre-shot setup panel passes '#lsBean' to reuse this same in-stock/exhausted
 // bean-listing logic instead of duplicating it.
 export function _renderBeanSelect(selectedName: string | null, selectedBeanId: number | null, selectId = 'annCoffee'): void {
@@ -527,7 +552,7 @@ function _fillIdSelect(select: HTMLSelectElement, noneLabel: string, items: Libr
 // data-basket-id/data-puckscreen-id both carry the id, mirroring
 // _renderBeanSelect's data-attribute pattern for _buildAnnotationPayload.
 // selectId/fieldId default to the annotation panel's own elements —
-// views/live.js's pre-shot setup panel (#lsBasket/#lsPuckScreen/#lsRecipe)
+// views/live.ts's pre-shot setup panel (#lsBasket/#lsPuckScreen/#lsRecipe)
 // passes its own ids to reuse this same library-backed population logic
 // instead of duplicating it.
 export function _renderBasketSelect(selectedId: number | null, selectId = 'annBasket'): void {
@@ -564,7 +589,9 @@ export function _renderRecipeSelect(selectedId: number | null, fieldId = 'recipe
 
 export function renderStars(rating: number): void {
   document.querySelectorAll<HTMLElement>('#starRating .star').forEach(s => {
-    s.classList.toggle('active', parseInt(s.dataset.val as string) <= rating);
+    const on = parseInt(s.dataset.val as string) <= rating;
+    s.classList.toggle('active', on);
+    s.setAttribute('aria-pressed', String(on));
   });
 }
 
@@ -572,17 +599,7 @@ export function updateDegassing(val: string | null | undefined): void {
   const tracker = document.getElementById('degassingTracker') as HTMLElement;
   const fill    = document.getElementById('degassingFill') as HTMLElement;
   const label   = document.getElementById('degassingLabel') as HTMLElement;
-  const parseDMY = (s: string | null | undefined): Date | null => {
-    if (!s) return null;
-    const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
-    if (!m) return null;
-    const [, dayRaw, monthRaw, yearRaw] = m;
-    if (dayRaw === undefined || monthRaw === undefined || yearRaw === undefined) return null;
-    const y = yearRaw.length === 2 ? 2000 + parseInt(yearRaw) : parseInt(yearRaw);
-    const d = new Date(y, parseInt(monthRaw) - 1, parseInt(dayRaw));
-    return isNaN(d.getTime()) ? null : d;
-  };
-  const date = parseDMY(val);
+  const date = parseRoastDate(val);
   if (!date) { tracker.style.display = 'none'; return; }
   const days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
@@ -676,9 +693,9 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   _renderBeanSelect(ann.coffee || null, ann.beanId ?? null);
   _renderBasketSelect(ann.basketId ?? null);
   _renderPuckScreenSelect(ann.puckScreenId ?? null);
-  _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null);
+  _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null, ann.beanId ?? null);
   (document.getElementById('annGrinder') as HTMLInputElement).value      = ann.grinder      || '';
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting || '');
+  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting ?? '');
   (document.getElementById('annDose') as HTMLInputElement).value         = String(ann.dose        || '');
   updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '');
   (document.getElementById('annTds') as HTMLInputElement).value          = String(ann.tds         || '');
@@ -743,7 +760,7 @@ export function quickClone(): void {
   _renderRecipeSelect(ann.recipeId || null);
   // Frozen-portion choice is per-shot, not carried over from prev — a clone
   // starts unset (like milk above), even if prev used a frozen portion.
-  _renderFrozenPortionPills(beanName, currentShot?.timestamp ? currentShot.timestamp * 1000 : Date.now(), null);
+  _renderFrozenPortionPills(beanName, currentShot?.timestamp ? currentShot.timestamp * 1000 : Date.now(), null, beanId);
   // #430: quickClone sets field values programmatically (no 'input' event
   // fires), so it must schedule the save itself — there's no explicit Save
   // button left to catch this otherwise.

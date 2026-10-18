@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"encoding/json"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -18,12 +19,24 @@ import (
 const (
 	DefaultWindow = 60 * time.Second
 	DefaultMax    = 600
+
+	// ingressUserIDHeader is the per-user header HA Ingress requests carry when
+	// the Supervisor forwards it. Only trusted on auth.IsIngressRequest requests.
+	ingressUserIDHeader = "X-Remote-User-Id"
+	// maxIngressUserIDLen bounds a header value so a crafted id cannot bloat the
+	// unbounded bucket map.
+	maxIngressUserIDLen  = 64
+	ingressUserKeyPrefix = "ingress-user:"
 )
+
+// ingressHeaderLogged makes the "is the per-user header forwarded?" check a
+// one-time, startup-adjacent log line instead of one per request.
+var ingressHeaderLogged sync.Once
 
 // Limiter holds one token bucket per client key, created lazily on first
 // use and never evicted — bounded in practice by the number of distinct
-// socket addresses (LAN clients + the single shared Supervisor-Ingress
-// address) that ever reach this process, an unbounded-but-small-in-practice
+// socket addresses and forwarded Ingress user ids (each capped at 64 printable
+// ASCII bytes) that ever reach this process, an unbounded-but-small-in-practice
 // memory profile.
 type Limiter struct {
 	mu      sync.Mutex
@@ -34,6 +47,14 @@ type Limiter struct {
 
 // New creates a Limiter allowing up to max requests per window, per key.
 func New(window time.Duration, max int) *Limiter {
+	// Tolerate a caller's bad setting rather than panic or silently disable
+	// limiting: max < 1 divides by zero below, window <= 0 yields rate.Inf.
+	if max < 1 {
+		max = 1
+	}
+	if window <= 0 {
+		window = DefaultWindow
+	}
 	return &Limiter{
 		buckets: make(map[string]*rate.Limiter),
 		rate:    rate.Every(window / time.Duration(max)),
@@ -76,14 +97,16 @@ func bucketKey(ip string) string {
 
 // Middleware applies the app-wide rate limit: same key (auth.RemoteIP — raw
 // socket address only, IPv6-/64-normalized via bucketKey, see doc.go), same
-// /assets/* exemption, same 429 JSON error shape.
+// /assets/* exemption, same 429 JSON error shape. Ingress requests with a
+// forwarded per-user header are keyed per Home Assistant user instead, so they
+// do not all share the Supervisor's single address bucket.
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/assets/") {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !l.Allow(bucketKey(auth.RemoteIP(r))) {
+		if !l.Allow(requestKey(r)) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			json.NewEncoder(w).Encode(map[string]string{"error": "Too many requests"})
@@ -91,4 +114,46 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// requestKey returns the rate-limit bucket key for r. Non-Ingress requests
+// keep the raw socket-address key exactly as before: a LAN client on the
+// exposed port could set X-Remote-User-Id itself, so the header is only read
+// when auth.IsIngressRequest proves the request came from the Supervisor. An
+// Ingress request without a usable header falls back to the same shared
+// Supervisor key, preserving the previous behavior if the header is absent.
+func requestKey(r *http.Request) string {
+	fallback := bucketKey(auth.RemoteIP(r))
+	if !auth.IsIngressRequest(r) {
+		return fallback
+	}
+	id := strings.TrimSpace(r.Header.Get(ingressUserIDHeader))
+	ingressHeaderLogged.Do(func() {
+		present := "no"
+		if id != "" {
+			present = "yes"
+		}
+		// Deliberately no id in the log: the live check only needs presence.
+		log.Printf("ratelimit: ingress user header present: %s", present)
+	})
+	if !validIngressUserID(id) {
+		return fallback
+	}
+	return ingressUserKeyPrefix + id
+}
+
+// validIngressUserID reports whether id is safe to append to a bucket key:
+// non-empty and at most maxIngressUserIDLen printable ASCII bytes. Rejecting
+// anything else keeps a header from creating arbitrary-sized or non-printable
+// map keys.
+func validIngressUserID(id string) bool {
+	if id == "" || len(id) > maxIngressUserIDLen {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if id[i] < ' ' || id[i] > '~' {
+			return false
+		}
+	}
+	return true
 }

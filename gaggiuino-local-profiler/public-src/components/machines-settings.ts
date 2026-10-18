@@ -16,10 +16,11 @@ import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-pre
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
-import { esc as escapeHtml, html, joinHtml } from '../utils.js';
+import { esc as escapeHtml, html, joinHtml, safeHttpUrl } from '../utils.js';
 import type { Html } from '../utils.js';
 import type { MachineRecord } from '../state/index.js';
 import type { FirmwareVersion, MachineSaveInput } from '../api/types.js';
+import { safeLocalStorage } from '../storage.js';
 
 // The edit form's theme selection (a preset key, or custom {a,b} stops), the
 // theme preset shape resolveTheme()/getThemePreset() hand back, and the
@@ -57,22 +58,28 @@ let _selectedTheme: ThemeSelection | null = null;
 // category, as last fetched by loadReleaseChannel() -- kept so
 // _saveReleaseChannel() can post the whole object back with only
 // releaseChannel changed (see that function's own comment for why a full
-// round trip, not a bare {releaseChannel} partial).
+// round trip, not a bare {releaseChannel} partial). Null while a fetch is in
+// flight or after a failed one.
 let _machineSystemSettings: Record<string, unknown> | null = null;
+// The machine id those settings belong to. _saveReleaseChannel() refuses to
+// post when it does not match the machine being saved (or is null), so a fast
+// switch from machine A to machine B can never write A's settings under B.
+let _machineSystemSettingsMachineId: number | null = null;
+// Bumped on every loadReleaseChannel() call so an in-flight response for a
+// machine the form no longer shows is dropped instead of filling its fields.
+let _releaseChannelReqSeq = 0;
 
 (function restoreActiveMachine() {
   // #1375: the selection now lives in the shared ui_prefs store (key
   // machine.active); read the old per-device key once and migrate it up.
   let stored = getUiPref<number | 'all'>('machine.active');
   if (stored === undefined) {
-    try {
-      const legacy = localStorage.getItem('glp_active_machine');
-      if (legacy) {
-        stored = legacy === 'all' ? 'all' : parseInt(legacy, 10);
-        setUiPref('machine.active', stored);
-      }
-      localStorage.removeItem('glp_active_machine');
-    } catch { /* ignore */ }
+    const legacy = safeLocalStorage.getItem('glp_active_machine');
+    if (legacy) {
+      stored = legacy === 'all' ? 'all' : parseInt(legacy, 10);
+      setUiPref('machine.active', stored);
+    }
+    safeLocalStorage.removeItem('glp_active_machine');
   }
   if (stored !== undefined) S.activeMachineId = stored;
 })();
@@ -96,7 +103,7 @@ export function resolveActiveMachineId(id: number | 'all'): number | 'all' {
 }
 
 // The default machine's id, or null before /api/machines has ever loaded —
-// used by views/live.js to decide whether the currently active machine has
+// used by views/live.ts to decide whether the currently active machine has
 // real live-polling support (only the default machine does, in this round).
 export function getDefaultMachineId(): number | null {
   return (S.machines || []).find(m => m.isDefault)?.id ?? null;
@@ -104,7 +111,7 @@ export function getDefaultMachineId(): number | null {
 
 // #1019: resolves the currently ACTIVE machine object (topbar switcher,
 // S.activeMachineId) rather than always the default one -- same
-// null/'all'-means-default fallback semantics as views/live.js's
+// null/'all'-means-default fallback semantics as views/live.ts's
 // _isActiveMachineLiveCapable(), plus falling back to the default machine
 // when a stale/removed id no longer matches anything. Reads S.machines/
 // S.activeMachineId live on every call, never cached, since both can change
@@ -148,7 +155,7 @@ function relativeLuminance({ r, g, b }: { r: number; g: number; b: number }): nu
 // that actually fail as raw hex get an entry here; ruby-ristretto (8.01:1
 // on --raised) and mulberry-mocha (7.18:1) already clear the floor
 // unmodified and are absent deliberately, not by oversight — see
-// test/theme-contrast.test.js.
+// test/theme-contrast.test.ts.
 const LIGHT_ACCENT_INK_OVERRIDES: Record<string, string> = {
   'amber-americano':   '#905c06',
   'copper-cortado':    '#975730',
@@ -158,7 +165,7 @@ const LIGHT_ACCENT_INK_OVERRIDES: Record<string, string> = {
   'frosty-flat-white': '#0f736b',
 };
 
-// Pure lookup (no DOM) so test/theme-contrast.test.js can assert the table
+// Pure lookup (no DOM) so test/theme-contrast.test.ts can assert the table
 // above against the four light surfaces directly, the same way it already
 // asserts the base token scale straight from style.css. `presetKey` is
 // whichever THEME_PRESETS key is actually driving the current accent (see
@@ -186,7 +193,7 @@ export function resolveAccentInk(presetKey: string | null, accentHex: string, is
 // stylesheet rule regardless of cascade order — same "inline style wins"
 // pattern glp-card.js's _applySemanticColorContrast() uses. When the active
 // machine has no theme of its own, falls back to resolving the user's own
-// persisted Farbschema pick (post-migration, see theme.js's
+// persisted Farbschema pick (post-migration, see theme.ts's
 // migrateLegacyAccent()) instead of just clearing the vars — there is no
 // [data-accent] stylesheet fallback to catch that any more.
 //
@@ -219,7 +226,7 @@ export function applyActiveMachineAccentTheme(): void {
   // getThemePreset('amber-americano') is a hardcoded, always-present
   // THEME_PRESETS entry, so this chain always resolves — there is no
   // "no accent at all" case left to handle.
-  const savedKey = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  const savedKey = migrateLegacyAccent(safeLocalStorage.getItem('glp_accent_theme')) || 'amber-americano';
   const resolved = (machineTheme || getThemePreset(savedKey) || getThemePreset('amber-americano')) as ThemePreset;
   const rgbA = hexToRgb(resolved.a);
   const rgbB = hexToRgb(resolved.b);
@@ -432,15 +439,15 @@ function renderThemeSwatches(): void {
 // preset), replacing the old, unrelated 6-swatch static buttons that used
 // to live directly in index.html. Marks whichever preset is currently
 // persisted to localStorage as .active and wires each button straight to
-// window.setAccentTheme() -- there's nothing static left for main.js to
+// window.setAccentTheme() -- there's nothing static left for main.ts to
 // delegate a single click listener from, unlike the old swatches.
 export function renderAccentSwatches(): void {
   const wrap = document.getElementById('accentSwatches');
   if (!wrap) return;
-  const current = migrateLegacyAccent(localStorage.getItem('glp_accent_theme')) || 'amber-americano';
+  const current = migrateLegacyAccent(safeLocalStorage.getItem('glp_accent_theme')) || 'amber-americano';
   wrap.innerHTML = joinHtml(THEME_PRESETS.map(p => html`<button type="button" class="accent-swatch${current === p.key ? html` active` : html``}" data-preset-key="${escapeHtml(p.key)}" style="${p.a === p.b ? html`background-color:${escapeHtml(p.a)}` : html`background-image:linear-gradient(135deg,${escapeHtml(p.a)},${escapeHtml(p.b)})`}" title="${escapeHtml(t(presetLabelKey(p.key)))}" aria-label="${escapeHtml(t(presetLabelKey(p.key)))}"></button>`));
   wrap.querySelectorAll<HTMLElement>('[data-preset-key]').forEach(btn => {
-    // setAccentTheme is assigned onto window in main.js (Object.assign).
+    // setAccentTheme is assigned onto window in main.ts (Object.assign).
     btn.addEventListener('click', () => window.setAccentTheme?.(btn.dataset.presetKey ?? ''));
   });
 }
@@ -472,8 +479,8 @@ function syncThemeFormUI(): void {
 }
 
 // Static custom-colour input wiring (#machineThemeCustomA/B, the gradient
-// toggle) — called once from main.js's DOMContentLoaded handler, same
-// pattern as the other machine form buttons wired there.
+// toggle) — wired once from boot/settings.ts, same pattern as
+// the other machine form buttons wired there.
 export function onThemeCustomColorAChange(): void {
   if (!_selectedTheme || _selectedTheme.preset) return;
   const aInput = document.getElementById('machineThemeCustomA') as HTMLInputElement;
@@ -533,11 +540,18 @@ export function onMachineTypeChange(): void {
 async function loadReleaseChannel(machineId: number): Promise<void> {
   const select = document.getElementById('machineFormReleaseChannel') as HTMLSelectElement | null;
   if (!select) return;
+  const seq = ++_releaseChannelReqSeq;
+  _machineSystemSettings = null;
+  _machineSystemSettingsMachineId = null;
   try {
     const settings = await machinesApi.getMachineSettings(machineId, 'system');
+    // The form may have been switched to another machine (or closed) while
+    // this was in flight; a later call bumped the counter, so drop the answer.
+    if (seq !== _releaseChannelReqSeq) return;
     if (!settings) return;
     const sys = settings as Record<string, unknown>;
     _machineSystemSettings = sys;
+    _machineSystemSettingsMachineId = machineId;
     const ch = Number(sys.releaseChannel);
     select.value = [0, 1, 2].includes(ch) ? String(ch) : '0';
   } catch { /* offline/unreachable -- leave the select at its default */ }
@@ -552,8 +566,12 @@ async function _saveReleaseChannel(machineId: string | number): Promise<void> {
   const row = document.getElementById('machineReleaseChannelRow');
   const select = document.getElementById('machineFormReleaseChannel') as HTMLSelectElement | null;
   if (!row || !select || row.style.display === 'none') return;
+  // Post only the settings fetched for the machine actually being saved --
+  // after a fast form switch the held object (or null) belongs to another
+  // machine, and posting it would overwrite that machine's channel here.
+  if (!_machineSystemSettings || _machineSystemSettingsMachineId !== Number(machineId)) return;
   const channel = parseInt(select.value, 10);
-  const payload = { ...(_machineSystemSettings || {}), machineId: Number(machineId), releaseChannel: channel };
+  const payload = { ..._machineSystemSettings, machineId: Number(machineId), releaseChannel: channel };
   try {
     await machinesApi.saveMachineSettings('system', payload);
   } catch { /* best-effort -- the main machine record already saved either way */ }
@@ -605,7 +623,7 @@ async function loadFirmwareStatus(machineId: number, row: HTMLElement): Promise<
 // update is actually available, lazily inserts the expand panel (update
 // banner + trigger button + progress bar) right after it -- most rows never
 // need that markup at all, since most machines are already up to date.
-function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVersion | null): void {
+export function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVersion | null): void {
   const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
   if (!badge) return; // row was already replaced by a later renderMachinesList() call
   let panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
@@ -629,7 +647,7 @@ function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVe
     const msgEl = panel.querySelector('.machine-firmware-update-msg');
     const linkEl = panel.querySelector<HTMLAnchorElement>('.machine-firmware-changelog-link');
     if (msgEl) msgEl.textContent = t('settings_machine_firmware_update_available', data.latest);
-    if (linkEl) linkEl.href = data.releaseUrl || '#';
+    if (linkEl) linkEl.href = safeHttpUrl(data.releaseUrl) ?? '#';
   } else {
     badge.textContent = t('settings_machine_firmware_badge_current', data.installed);
     badge.title = t('settings_machine_firmware_installed', data.installed);
@@ -788,6 +806,8 @@ function renderFirmwareProgressBar(row: HTMLElement, progress: FirmwareProgress 
   bar.style.display = '';
 }
 
+// #1547: the machine form's fields are static in index.html; this module only
+// reads/writes them, so it renders no field and has no accessible name to add.
 export function openMachineForm(machine?: MachineView | null): void {
   const card = document.getElementById('machineFormCard');
   if (!card) return;
@@ -841,14 +861,9 @@ function themeForSave(theme: ThemeSelection | null): NonNullable<MachineSaveInpu
 // callers that need to distinguish "failed" from "nothing to save" can
 // inspect the DOM themselves, neither existing caller needs to.
 //
-// #731: triggerSync defaults to true (saveMachineForm()'s explicit "Speichern"
-// still fires the post-save shot sync) but testMachineForm() passes false —
-// "Verbindung testen" needs a saved machine id to test against, but that
-// implicit save must not itself start an import. Carried to the server as
-// a `?sync=0` query param rather than a body field: machineSchema/
-// machineSchema.partial() validate the body strictly, so an extra JSON
-// field would be unclean at best.
-async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = {}): Promise<string | number | null> {
+// #731: no machine save starts a shot-history sync, the poller's regular
+// sync picks the machine up -- so both callers save the same way.
+async function _saveMachine(): Promise<string | number | null> {
   const id = (document.getElementById('machineFormId') as HTMLInputElement).value;
   const type = (document.getElementById('machineFormType') as HTMLSelectElement).value as 'gaggiuino' | 'gaggimate';
   const payload: MachineSaveInput = {
@@ -861,7 +876,7 @@ async function _saveMachine({ triggerSync = true }: { triggerSync?: boolean } = 
   };
   if (!payload.name || !payload.host) return null;
   const resultEl = document.getElementById('machineFormTestResult');
-  const r = await machinesApi.saveMachine(id || null, payload, { triggerSync });
+  const r = await machinesApi.saveMachine(id || null, payload);
   if (r.ok) {
     const data = await r.json().catch(() => ({})) as { error?: string; id?: number; reachable?: boolean };
     return id || data?.id || null;
@@ -919,7 +934,7 @@ export async function saveMachineForm(): Promise<void> {
 }
 
 // #753: reassigns the default machine, then reloads so both this list's
-// badge/actions and getDefaultMachineId() consumers (views/live.js,
+// badge/actions and getDefaultMachineId() consumers (views/live.ts,
 // applyDefaultMachineAccentTheme() below) pick up the change.
 export async function setDefaultMachine(id: number): Promise<void> {
   const r = await machinesApi.setDefaultMachine(id);
@@ -932,7 +947,7 @@ export async function setDefaultMachine(id: number): Promise<void> {
 // Both cases can still be rejected by the backend (still-default after a
 // stale read, or the last remaining machine) -- that error is surfaced via
 // showToast rather than silently doing nothing, same as the sync-failed
-// toast pattern in components/status.js.
+// toast pattern in components/status.ts.
 export async function deleteMachine(id: number, isDefault?: boolean): Promise<void> {
   const confirmKey = isDefault ? 'settings_machine_delete_default_confirm' : 'settings_machine_delete_confirm';
   if (!confirm(t(confirmKey))) return;
@@ -952,9 +967,8 @@ export async function deleteMachine(id: number, isDefault?: boolean): Promise<vo
 // originally auto-closed it to mirror Save, but that turned out to be
 // confusing for a *test* action; only the explicit Save button closes now.
 //
-// #731: this save is only a means to get a testable id -- it must not start
-// a shot import the way an explicit "Speichern" does, so triggerSync:false
-// is passed through to _saveMachine() (server-side gate in go/internal/machines).
+// #731: this save is only a means to get a testable id; like every machine
+// save it does not start a shot import.
 //
 // #730 review: the form stays open (and clickable) while the request is in
 // flight -- a double-click used to re-enter _saveMachine() with
@@ -967,7 +981,7 @@ export async function deleteMachine(id: number, isDefault?: boolean): Promise<vo
 export async function testMachineForm(): Promise<void> {
   const btn = document.getElementById('machineFormTestBtn') as HTMLButtonElement | null;
   if (btn) btn.disabled = true;
-  const id = await _saveMachine({ triggerSync: false });
+  const id = await _saveMachine();
   if (id === null) {
     if (btn) btn.disabled = false;
     return;

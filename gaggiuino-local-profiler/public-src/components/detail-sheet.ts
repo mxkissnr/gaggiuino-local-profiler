@@ -9,6 +9,8 @@ import { esc, html } from '../utils.js';
 import type { Html } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
 import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, isPhoneSheetWidth, settleSheetOut, startSheetEnter } from './sheet-swipe.js';
+import { attachDialogKeyboard } from './dialog-a11y.js';
+import type { DialogKeyboardHandle } from './dialog-a11y.js';
 
 // A viewport-coordinate point (e.g. the clicked point on a chart); positioned
 // like a zero-size rect, for when there is no element to anchor the popover to.
@@ -24,8 +26,7 @@ export interface DetailSheetOptions {
   anchor?: HTMLElement | DetailAnchorPoint | null;
 }
 
-let _returnFocus: HTMLElement | null = null;
-let _keyWired = false;
+let _dialogKeyboard: DialogKeyboardHandle | null = null;
 
 function _host(): HTMLElement | null {
   return typeof document !== 'undefined' ? document.getElementById('detailSheet') : null;
@@ -35,25 +36,6 @@ function _isDesktop(): boolean {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
     && !isPhoneSheetWidth();
-}
-
-function _onKeydown(e: KeyboardEvent): void {
-  if (e.key !== 'Escape') return;
-  e.preventDefault();
-  requestCloseDetailSheet();
-}
-
-function _wireKeys(): void {
-  if (_keyWired || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
-  document.addEventListener('keydown', _onKeydown);
-  _keyWired = true;
-}
-
-function _unwireKeys(): void {
-  const wired = _keyWired;
-  _keyWired = false;
-  if (!wired || typeof document === 'undefined' || typeof document.removeEventListener !== 'function') return;
-  document.removeEventListener('keydown', _onKeydown);
 }
 
 function _isPointAnchor(anchor: HTMLElement | DetailAnchorPoint): anchor is DetailAnchorPoint {
@@ -97,12 +79,6 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
   const host = _host();
   if (!host) return;
 
-  // Only the first open captures the return target; a second open replaces the
-  // content in place, so restoring must still land on the original element.
-  if (!host.classList?.contains?.('open')) {
-    _returnFocus = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
-  }
-
   const anchor = opts.anchor ?? null;
   const desktop = _isDesktop() && anchor !== null;
 
@@ -131,8 +107,10 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
   backdrop?.addEventListener?.('click', requestCloseDetailSheet);
   closeBtn?.addEventListener?.('click', requestCloseDetailSheet);
 
-  _wireKeys();
-  closeBtn?.focus?.();
+  // Only the first open attaches the keyboard handler (and captures the
+  // return target); a second open replaces the content in place.
+  if (_dialogKeyboard) closeBtn?.focus?.();
+  else _dialogKeyboard = attachDialogKeyboard(host, requestCloseDetailSheet, { initialFocus: closeBtn });
 }
 
 // Every user close (X, backdrop tap, Esc, swipe) slides the sheet out first;
@@ -146,17 +124,12 @@ export function requestCloseDetailSheet(): void {
 }
 
 export function closeDetailSheet(): void {
-  _unwireKeys();
+  _dialogKeyboard?.release();
+  _dialogKeyboard = null;
   const host = _host();
   if (host) {
     host.innerHTML = html``;
     host.classList?.remove('open');
   }
   if (typeof document !== 'undefined') document.body?.classList?.remove('lib-sheet-open');
-  const back = _returnFocus;
-  _returnFocus = null;
-  if (back && typeof back.focus === 'function'
-    && typeof document !== 'undefined' && typeof document.contains === 'function' && document.contains(back)) {
-    back.focus();
-  }
 }

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // This file provides the #620 firmware-update check: queries
@@ -30,7 +32,9 @@ var releasesAPI = "https://api.github.com/repos/Zer0-bit/gaggiuino/releases"
 // host ever reaches it, and firmware_check_test.go's fake GitHub server
 // intentionally binds to 127.0.0.1, which machineHostGuardResolved would
 // reject).
-var firmwareHTTPClient = &http.Client{}
+// A Timeout bounds a GitHub that accepts the connection and then stalls,
+// without cutting off a normal lookup (well under firmwareFetchTimeout).
+var firmwareHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // firmwareCacheTTL bounds how long a successful lookup is cached —
 // unauthenticated GitHub API calls are rate-limited to 60 req/hr, so this
@@ -78,16 +82,33 @@ type firmwareCacheEntry struct {
 	result    *FirmwareRelease
 }
 
+// firmwareFailureBackoff bounds how long a failed lookup (network error,
+// rate limit, non-2xx) is remembered before GitHub is asked again (#1616):
+// a burst of callers during an outage or a 403 rate limit — which every
+// extra request only prolongs — then costs one lookup a minute instead of
+// up to firmwareMaxPages requests per call. The failure stays an error (or
+// the last known good result); it is never cached as a "no release" nil.
+const firmwareFailureBackoff = time.Minute
+
+type firmwareFailure struct {
+	at  time.Time
+	err error
+}
+
 // FirmwareChecker holds the per-channel cache and lookup as a struct
 // rather than leaning on package-level mutable state, same reasoning as
 // gaggiuinoLiveClient.
 type FirmwareChecker struct {
-	mu    sync.Mutex
-	cache map[int]firmwareCacheEntry
+	mu       sync.Mutex
+	cache    map[int]firmwareCacheEntry
+	failures map[int]firmwareFailure
+	// flight collapses concurrent lookups of one channel into a single
+	// GitHub fetch (#1616).
+	flight singleflight.Group
 }
 
 func NewFirmwareChecker() *FirmwareChecker {
-	return &FirmwareChecker{cache: make(map[int]firmwareCacheEntry)}
+	return &FirmwareChecker{cache: make(map[int]firmwareCacheEntry), failures: make(map[int]firmwareFailure)}
 }
 
 type githubRelease struct {
@@ -187,8 +208,10 @@ func fetchLatestRelease(ctx context.Context, prefix string) (*githubRelease, err
 }
 
 // GetLatestFirmwareRelease returns nil (not an error) if no matching
-// release was found — that's "unknown", not "no update available". Cached
-// per channel for firmwareCacheTTL.
+// release was found — that's "unknown", not "no update available". Results
+// are cached per channel (firmwareCacheTTL, or firmwareNegativeCacheTTL for
+// a nil result); a failed fetch serves the last good result if there is one
+// and is retried only after firmwareFailureBackoff.
 func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel *int) (*FirmwareRelease, error) {
 	ch := defaultFirmwareChannel
 	if channel != nil {
@@ -211,11 +234,19 @@ func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel 
 		}
 	}
 
-	// #1037: detach from the caller's request deadline (it's near-exhausted
-	// on a slow poll) but keep values so an outer cancel still propagates.
-	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), firmwareFetchTimeout)
-	defer cancel()
-	release, err := fetchLatestRelease(fetchCtx, prefix)
+	c.mu.Lock()
+	failure, failed := c.failures[ch]
+	c.mu.Unlock()
+	if failed && time.Since(failure.at) < firmwareFailureBackoff {
+		if ok && entry.result != nil {
+			return entry.result, nil
+		}
+		return nil, failure.err
+	}
+
+	v, err, _ := c.flight.Do(strconv.Itoa(ch), func() (any, error) {
+		return c.fetch(ctx, ch, prefix)
+	})
 	if err != nil {
 		// Serve the last known good result rather than propagating -- a
 		// transient GitHub failure (rate limit, network, timeout) must not
@@ -225,6 +256,24 @@ func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel 
 		if ok && entry.result != nil {
 			return entry.result, nil
 		}
+		return nil, err
+	}
+	return v.(*FirmwareRelease), nil
+}
+
+// fetch is one channel's GitHub lookup behind the single-flight group:
+// it stores a success in the cache (clearing any remembered failure) and
+// remembers a failure for firmwareFailureBackoff.
+func (c *FirmwareChecker) fetch(ctx context.Context, ch int, prefix string) (*FirmwareRelease, error) {
+	// #1037: detach from the caller's request deadline (it's near-exhausted
+	// on a slow poll) but keep values so an outer cancel still propagates.
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), firmwareFetchTimeout)
+	defer cancel()
+	release, err := fetchLatestRelease(fetchCtx, prefix)
+	if err != nil {
+		c.mu.Lock()
+		c.failures[ch] = firmwareFailure{at: time.Now(), err: err}
+		c.mu.Unlock()
 		return nil, err
 	}
 	var result *FirmwareRelease
@@ -245,6 +294,7 @@ func (c *FirmwareChecker) GetLatestFirmwareRelease(ctx context.Context, channel 
 	}
 	c.mu.Lock()
 	c.cache[ch] = firmwareCacheEntry{fetchedAt: time.Now(), result: result}
+	delete(c.failures, ch)
 	c.mu.Unlock()
 	return result, nil
 }

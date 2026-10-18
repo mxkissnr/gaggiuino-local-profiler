@@ -12,10 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
@@ -66,6 +69,60 @@ func TestGetBackup_RateLimited(t *testing.T) {
 	}
 	if rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("request %d: status = %d, want 429", backupRateLimitPerMin, rec.Code)
+	}
+}
+
+// TestPostBackup_RateLimited (#1626): the zip export gets the same per-IP
+// ceiling as GET /api/backup, under its own key — a tripped POST bucket
+// leaves the GET budget untouched.
+func TestPostBackup_RateLimited(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	for i := 0; i < backupRateLimitPerMin; i++ {
+		if rec := doJSON(t, mux, http.MethodPost, "/api/backup", nil); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200 (limiter not yet tripped); body=%s", i, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := doJSON(t, mux, http.MethodPost, "/api/backup", nil); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d: status = %d, want 429", backupRateLimitPerMin, rec.Code)
+	}
+	if rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil); rec.Code != http.StatusOK {
+		t.Fatalf("GET after a tripped POST bucket: status = %d, want 200", rec.Code)
+	}
+}
+
+// TestGetBackupJSON_SkipsUnreferencedImages (#1602): the legacy GET /api/backup
+// JSON export bundles only images a row still refers to, like the zip export —
+// its inline images map carries the referenced bean photo but not an app-named
+// orphan.
+func TestGetBackupJSON_SkipsUnreferencedImages(t *testing.T) {
+	imgDir := useImageDir(t)
+	for _, name := range []string{"1.jpg", "77.jpg"} {
+		if err := os.WriteFile(filepath.Join(imgDir, name), []byte{0x01, 0x02, 0x03, 0x04}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h, deps, _ := newTestHandlers(t)
+	if err := deps.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{{"id": int64(1), "name": "B", "image": "jpg"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, newMux(h), http.MethodGet, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	images, ok := decodeBody(t, rec.Body.Bytes())["images"].(map[string]any)
+	if !ok {
+		t.Fatalf("images is not a JSON object")
+	}
+	if _, ok := images["1.jpg"]; !ok {
+		t.Errorf("referenced image 1.jpg missing from JSON backup; images=%v", images)
+	}
+	if _, ok := images["77.jpg"]; ok {
+		t.Errorf("unreferenced image 77.jpg bundled into JSON backup; images=%v", images)
 	}
 }
 
@@ -279,7 +336,7 @@ func seedOrder(t *testing.T, deps Dependencies) orders.Order {
 		"note": "", "variant": nil, "notifyService": nil, "declineReason": nil,
 		"haUserId": nil, "machine": nil, "eta": nil, "beanId": nil, "shotId": nil,
 	}
-	if err := deps.OrdersRepo.SaveAll([]orders.Order{order}); err != nil {
+	if err := deps.OrdersRepo.Insert(order); err != nil {
 		t.Fatalf("seeding order: %v", err)
 	}
 	return order
@@ -395,7 +452,7 @@ func TestRestore_RoundTrip_ToFreshInstall(t *testing.T) {
 	mux1 := newMux(h1)
 	seedShot(t, deps1, 42)
 	seedOrder(t, deps1)
-	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "test note", "gaggiuino.local", 5, 1); err != nil {
+	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "test note", "gaggiuino.local", 5, 1, time.Now()); err != nil {
 		t.Fatalf("seeding maintenance log: %v", err)
 	}
 	if err := deps1.LibRepo.SaveLibrary(library.Library{
@@ -613,4 +670,515 @@ func (spaceReader) Read(p []byte) (int, error) {
 		p[i] = ' '
 	}
 	return len(p), nil
+}
+
+// withZipBodyLimit temporarily shrinks restoreZipBodyLimit so a test can
+// exercise the compressed-body cap with a few-KB zip instead of 2 GiB.
+// Restored via t.Cleanup so it never leaks into other tests.
+func withZipBodyLimit(t *testing.T, limit int64) {
+	t.Helper()
+	prev := restoreZipBodyLimit
+	restoreZipBodyLimit = limit
+	t.Cleanup(func() { restoreZipBodyLimit = prev })
+}
+
+// TestRestore_ZipBodyLimitEnforced (#1602): restoreZipBodyLimit is the exact
+// compressed-body cap the route enforces — a body one byte over it is
+// rejected, a body exactly at it is accepted. The limit is shrunk to the size
+// of a real exported zip so the test stays a few KB instead of 2 GiB.
+func TestRestore_ZipBodyLimitEnforced(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 42)
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d", recExp.Code)
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+	zipLen := int64(len(zipBytes))
+
+	withZipBodyLimit(t, zipLen)
+	h2, _, _ := newTestHandlersInDir(t)
+	if rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil); rr.Code != http.StatusOK {
+		t.Fatalf("at-limit restore status = %d; want 200; body=%s", rr.Code, rr.Body.String())
+	}
+
+	withZipBodyLimit(t, zipLen-1)
+	h3, _, _ := newTestHandlersInDir(t)
+	if rr := doZip(t, newMux(h3), "/api/restore", zipBytes, nil); rr.Code != http.StatusBadRequest {
+		t.Fatalf("over-limit restore status = %d; want 400; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestRestoreLimits_ProductionValues (#1602): the shipped caps must stay high
+// enough that a normal photo library restores (>= 2 GiB compressed), and the
+// decompression budget must exceed the compressed cap.
+func TestRestoreLimits_ProductionValues(t *testing.T) {
+	if restoreZipBodyLimit < 2<<30 {
+		t.Errorf("restoreZipBodyLimit = %d; want >= 2 GiB", restoreZipBodyLimit)
+	}
+	if restoreUnzipTotalLimit < restoreZipBodyLimit {
+		t.Errorf("restoreUnzipTotalLimit = %d < restoreZipBodyLimit = %d", restoreUnzipTotalLimit, restoreZipBodyLimit)
+	}
+}
+
+// TestApplyKVSettings_NormalizesMenuAndSettings pins the restore path through
+// the same checks the orders API applies (#1603): a damaged menu item
+// (variants as a string, or no name at all) can no longer reach the stored
+// menu, and only valid settings fields survive.
+func TestApplyKVSettings_NormalizesMenuAndSettings(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	// m2 has no name and "not-a-map" is not an object: both must be skipped.
+	kv := map[string]any{}
+	kv["menu"] = []any{
+		map[string]any{"id": "m1", "name": "Latte", "variants": "x", "bogus": 1},
+		map[string]any{"id": "m2", "emoji": "☕"},
+		"not-a-map",
+	}
+	kv["orders_settings"] = map[string]any{
+		"enabled":             true,
+		"broadcastRecipients": []any{"notify.phone", "bogus"},
+		"notify_low_stock":    "yes",
+	}
+	if err := h.applyKVSettings(kv); err != nil {
+		t.Fatalf("applyKVSettings: %v", err)
+	}
+
+	menu, err := h.deps.OrdersRepo.GetMenu()
+	if err != nil {
+		t.Fatalf("GetMenu: %v", err)
+	}
+	if len(menu) != 1 {
+		t.Fatalf("menu length = %d; want 1 (invalid items skipped)", len(menu))
+	}
+	if variants, ok := menu[0]["variants"].([]any); !ok || len(variants) != 0 {
+		t.Errorf("variants = %#v; want an empty array", menu[0]["variants"])
+	}
+	if _, present := menu[0]["bogus"]; present {
+		t.Errorf("unknown menu key survived restore: %#v", menu[0])
+	}
+
+	s, err := h.deps.OrdersRepo.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	recipients, _ := s["broadcastRecipients"].([]any)
+	if len(recipients) != 1 || recipients[0] != "notify.phone" {
+		t.Errorf("broadcastRecipients = %#v; want just notify.phone", recipients)
+	}
+	if _, present := s["notify_low_stock"]; present {
+		t.Errorf("non-bool toggle survived restore: %#v", s)
+	}
+}
+
+// TestKnownBundleKeys_CoversEveryExportedKey (#1601) is the guard that a
+// future exporter key can never be silently dropped by restore's unknown-key
+// skip: every top-level key the export writes must be in knownBundleKeys. It
+// checks both the full legacy JSON export (which extra-carries `images`) and
+// a scoped zip export (which extra-carries `sections`).
+func TestKnownBundleKeys_CoversEveryExportedKey(t *testing.T) {
+	useImageDir(t)
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seedShot(t, deps, 1)
+	seedOrder(t, deps)
+
+	check := func(label string, b map[string]any) {
+		t.Helper()
+		if len(b) == 0 {
+			t.Fatalf("%s: exported bundle has no top-level keys", label)
+		}
+		for k := range b {
+			if !knownBundleKeys[k] {
+				t.Errorf("%s: exported key %q is not in knownBundleKeys — restore would silently drop it", label, k)
+			}
+		}
+	}
+
+	rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("full export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var full map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &full); err != nil {
+		t.Fatalf("decoding full export: %v", err)
+	}
+	check("full legacy JSON export", full)
+	if _, ok := full["images"]; !ok {
+		t.Errorf("full legacy JSON export should carry `images`")
+	}
+
+	rec = doJSON(t, mux, http.MethodPost, "/api/backup", mustMarshal(t, map[string]any{"sections": []string{"shots"}}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("scoped export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zr, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatalf("zip.NewReader: %v", err)
+	}
+	scoped := readBackupJSON(t, zr)
+	check("scoped zip export", scoped)
+	if _, ok := scoped["sections"]; !ok {
+		t.Errorf("scoped zip export should carry `sections`")
+	}
+}
+
+// TestRestoreUpload_RateLimitedBeforeBodyRead (#1601): the coarse
+// restore-upload:<ip> token is taken before the body is spooled, so the 31st
+// upload from one IP within the window is answered 429 without the request
+// body ever being read.
+func TestRestoreUpload_RateLimitedBeforeBodyRead(t *testing.T) {
+	h, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	// 30 uploads exhaust the coarse bucket. The bodies are deliberately
+	// unparseable (a 400) so they never reach the finer post-parse limit.
+	for i := 0; i < 30; i++ {
+		rec := doJSON(t, mux, http.MethodPost, "/api/restore", []byte("not-json"))
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("upload %d answered 429 before the coarse limit was exhausted", i+1)
+		}
+	}
+
+	body := &failIfReadBody{t: t}
+	r := httptest.NewRequest(http.MethodPost, "/api/restore", body)
+	r.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, r)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("31st upload status = %d, want 429; body=%s", rec.Code, rec.Body.String())
+	}
+	if body.read {
+		t.Errorf("the handler read the request body before rejecting the over-limit upload")
+	}
+}
+
+// failIfReadBody fails the test if its Read is ever called — proving a
+// rejected request never had its body touched.
+type failIfReadBody struct {
+	t    *testing.T
+	read bool
+}
+
+func (b *failIfReadBody) Read([]byte) (int, error) {
+	b.read = true
+	b.t.Errorf("request body read on a request that should have been rejected before reading")
+	return 0, io.EOF
+}
+
+// TestRestore_DropsUnknownShotImageExtension pins that a restored shot's
+// photo extension is filtered when the row is stored: pass 2 re-parses the
+// raw entry, so validateEntityImages' cleared copy never reaches the DB.
+// The second half proves a legacy caller holding the old value still cannot
+// delete a file outside the image directory.
+func TestRestore_DropsUnknownShotImageExtension(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seedShot(t, deps, 1)
+
+	rec := doJSON(t, mux, http.MethodGet, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("parsing export: %v", err)
+	}
+	shotEntries, _ := bundle["shots"].([]any)
+	if len(shotEntries) != 1 {
+		t.Fatalf("exported shots = %d, want 1", len(shotEntries))
+	}
+	shotEntry, _ := shotEntries[0].(map[string]any)
+	if shotEntry == nil {
+		t.Fatalf("exported shot is not an object: %#v", shotEntries[0])
+	}
+	shotEntry["image"] = "x/../../victim"
+
+	rec = doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	restored, err := deps.ShotsRepo.FindByID(1)
+	if err != nil || restored == nil {
+		t.Fatalf("restored shot 1 not found: err=%v shot=%v", err, restored)
+	}
+	if ext, ok := restored["image"]; ok {
+		t.Fatalf("restored shot 1 kept image = %v, want no image key", ext)
+	}
+
+	dir := useImageDir(t)
+	victim := filepath.Join(filepath.Dir(dir), "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	img.Delete(dir, 1, "x/../../victim", "shot-")
+
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatalf("victim outside image dir was removed: %v", err)
+	}
+}
+
+func TestRestore_RejectsUnsafeOrderAndNotifyServiceValues(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	bundle := map[string]any{
+		"glp_backup": true,
+		"shots":      []any{},
+		"sections":   []any{"orders", "settings"},
+		"orders": []any{
+			map[string]any{"id": "ord_1_a", "status": "pending", "item": "Espresso", "customer": "Max", "notifyService": "script.x"},
+			map[string]any{"id": "../x", "status": "pending", "item": "Espresso", "customer": "Max"},
+			map[string]any{"id": "ord_2_b", "status": "pending", "item": "Latte", "customer": "Eva", "notifyService": "notify.mobile_app_x"},
+		},
+		"kv": map[string]any{
+			"notify_mapping": map[string]any{
+				"ha-user-1": "script.x",
+				"ha-user-2": "notify.mobile_app_x",
+			},
+		},
+	}
+	rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rows, err := deps.OrdersRepo.FindAll()
+	if err != nil {
+		t.Fatalf("FindAll: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("restored orders = %+v, want the two valid rows", rows)
+	}
+	byID := map[string]orders.Order{}
+	for _, row := range rows {
+		id, _ := row["id"].(string)
+		byID[id] = row
+	}
+	if _, ok := byID["../x"]; ok {
+		t.Error("order with id ../x was restored")
+	}
+	first, ok := byID["ord_1_a"]
+	if !ok {
+		t.Fatal("order ord_1_a was not restored")
+	}
+	if got := first["notifyService"]; got != nil {
+		t.Errorf("ord_1_a notifyService = %v, want nil", got)
+	}
+	second, ok := byID["ord_2_b"]
+	if !ok {
+		t.Fatal("order ord_2_b was not restored")
+	}
+	if got := second["notifyService"]; got != "notify.mobile_app_x" {
+		t.Errorf("ord_2_b notifyService = %v, want notify.mobile_app_x", got)
+	}
+
+	mapping, err := deps.OrdersRepo.GetNotifyMapping()
+	if err != nil {
+		t.Fatalf("GetNotifyMapping: %v", err)
+	}
+	if _, ok := mapping["ha-user-1"]; ok {
+		t.Error("notify_mapping entry with value script.x was kept")
+	}
+	if got := mapping["ha-user-2"]; got != "notify.mobile_app_x" {
+		t.Errorf("ha-user-2 mapping = %q, want notify.mobile_app_x", got)
+	}
+}
+
+func TestRestore_MqttSettingsBrokerChangeDropsStoredCredentials(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seed := func() {
+		t.Helper()
+		if err := saveMqttSettings(deps.DB, map[string]any{
+			"transport": "mqtt", "host": "192.168.1.50", "port": float64(1883),
+			"username": "old-user", "password": "old-pass", "prefix": "gaggiuino",
+		}); err != nil {
+			t.Fatalf("saveMqttSettings: %v", err)
+		}
+	}
+	restoreMqtt := func(host string) map[string]any {
+		t.Helper()
+		bundle := map[string]any{
+			"glp_backup": true, "shots": []any{},
+			"sections": []any{"settings"},
+			"kv": map[string]any{"mqtt_settings": map[string]any{
+				"transport": "mqtt", "host": host, "port": float64(1883),
+				"username": "", "password": "", "prefix": "gaggiuino",
+			}},
+		}
+		rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+		}
+		stored, err := getMqttSettings(deps.DB)
+		if err != nil {
+			t.Fatalf("getMqttSettings: %v", err)
+		}
+		return stored
+	}
+
+	seed()
+	stored := restoreMqtt("192.168.1.51")
+	if pw, _ := stored["password"].(string); pw != "" {
+		t.Fatalf("broker change kept the stored password: %v", stored)
+	}
+	if user, _ := stored["username"].(string); user != "" {
+		t.Fatalf("broker change kept the stored username: %v", stored)
+	}
+	if host, _ := stored["host"].(string); host != "192.168.1.51" {
+		t.Fatalf("host = %v, want 192.168.1.51", stored["host"])
+	}
+
+	seed()
+	stored = restoreMqtt("192.168.1.50")
+	if pw, _ := stored["password"].(string); pw != "old-pass" {
+		t.Fatalf("same broker lost the stored password: %v", stored)
+	}
+	if user, _ := stored["username"].(string); user != "old-user" {
+		t.Fatalf("same broker lost the stored username: %v", stored)
+	}
+}
+
+func TestRestore_RejectsMalformedAPIToken(t *testing.T) {
+	cases := []struct {
+		name  string
+		token string
+	}{
+		{"too short", "short"},
+		{"below minimum", strings.Repeat("a", restoredTokenMinLen-1)},
+		{"invalid character", strings.Repeat("a", restoredTokenMinLen-1) + "!"},
+		{"base64 padding", strings.Repeat("a", restoredTokenMinLen) + "="},
+	}
+	const current = "current-api-token-value"
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, deps, _ := newTestHandlers(t)
+			if err := os.WriteFile(deps.TokenFile, []byte(current), 0o600); err != nil {
+				t.Fatalf("seeding token file: %v", err)
+			}
+			enc, err := EncryptSecrets(map[string]any{"apiToken": tc.token}, "hunter2")
+			if err != nil {
+				t.Fatalf("EncryptSecrets: %v", err)
+			}
+			bundle := map[string]any{
+				"glp_backup": true, "shots": []any{},
+				"sections": []any{"secrets"}, "passphrase": "hunter2", "secrets": enc,
+			}
+			rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+			}
+			if result := decodeBody(t, rec.Body.Bytes()); result["secretsRestored"] != false {
+				t.Fatalf("secretsRestored = %v, want false", result["secretsRestored"])
+			}
+			got, err := os.ReadFile(deps.TokenFile)
+			if err != nil {
+				t.Fatalf("reading token file: %v", err)
+			}
+			if string(got) != current {
+				t.Fatalf("token file = %q, want the current token unchanged", got)
+			}
+		})
+	}
+}
+
+func TestRestore_ValidAPITokenRestoredWhenSecretsSelected(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	if err := os.WriteFile(deps.TokenFile, []byte("current-api-token-value"), 0o600); err != nil {
+		t.Fatalf("seeding token file: %v", err)
+	}
+	token := strings.Repeat("0123456789abcdef", 4)
+	enc, err := EncryptSecrets(map[string]any{"apiToken": token}, "hunter2")
+	if err != nil {
+		t.Fatalf("EncryptSecrets: %v", err)
+	}
+	bundle := map[string]any{
+		"glp_backup": true, "shots": []any{},
+		"sections": []any{"secrets"}, "passphrase": "hunter2", "secrets": enc,
+	}
+	rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if result := decodeBody(t, rec.Body.Bytes()); result["secretsRestored"] != true {
+		t.Fatalf("secretsRestored = %v, want true", result["secretsRestored"])
+	}
+	got, err := os.ReadFile(deps.TokenFile)
+	if err != nil {
+		t.Fatalf("reading token file: %v", err)
+	}
+	if string(got) != token {
+		t.Fatalf("token file = %q, want %q", got, token)
+	}
+}
+
+func TestRestore_APITokenIgnoredWhenSecretsNotSelected(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	const current = "current-api-token-value"
+	if err := os.WriteFile(deps.TokenFile, []byte(current), 0o600); err != nil {
+		t.Fatalf("seeding token file: %v", err)
+	}
+	token := strings.Repeat("0123456789abcdef", 4)
+	enc, err := EncryptSecrets(map[string]any{"apiToken": token}, "hunter2")
+	if err != nil {
+		t.Fatalf("EncryptSecrets: %v", err)
+	}
+	bundle := map[string]any{
+		"glp_backup": true, "shots": []any{},
+		"sections": []any{"settings"}, "passphrase": "hunter2", "secrets": enc,
+	}
+	rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if result := decodeBody(t, rec.Body.Bytes()); result["secretsRestored"] != false {
+		t.Fatalf("secretsRestored = %v, want false", result["secretsRestored"])
+	}
+	got, err := os.ReadFile(deps.TokenFile)
+	if err != nil {
+		t.Fatalf("reading token file: %v", err)
+	}
+	if string(got) != current {
+		t.Fatalf("token file = %q, want the current token unchanged", got)
+	}
+}
+
+// A secrets block that carries a username with an empty password must clear
+// the stored password on the same broker: the empty value is sent on purpose,
+// not omitted, so keeping p2 would pair it with a different account name.
+func TestRestore_SecretsEmptyPasswordClearsStoredPassword(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	if err := saveMqttSettings(deps.DB, map[string]any{
+		"transport": "mqtt", "host": "192.168.1.50", "port": float64(1883),
+		"username": "u2", "password": "p2", "prefix": "gaggiuino",
+	}); err != nil {
+		t.Fatalf("saveMqttSettings: %v", err)
+	}
+	enc, err := EncryptSecrets(map[string]any{
+		"mqtt": map[string]any{"username": "u", "password": ""},
+	}, "hunter2")
+	if err != nil {
+		t.Fatalf("EncryptSecrets: %v", err)
+	}
+	bundle := map[string]any{
+		"glp_backup": true, "shots": []any{},
+		"sections": []any{"secrets"}, "passphrase": "hunter2", "secrets": enc,
+	}
+	rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	stored, err := getMqttSettings(deps.DB)
+	if err != nil {
+		t.Fatalf("getMqttSettings: %v", err)
+	}
+	if user, _ := stored["username"].(string); user != "u" {
+		t.Fatalf("username = %q, want u", user)
+	}
+	if pw, _ := stored["password"].(string); pw != "" {
+		t.Fatalf("password = %q, want it cleared", pw)
+	}
 }

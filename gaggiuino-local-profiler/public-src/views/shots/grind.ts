@@ -66,7 +66,7 @@ export interface GrindSuggestion {
 
 // ── Mini chart thumbnail ───────────────────────────────────────────────────
 
-// #957: curves are lazy — callers (index.js updateView) ensureCurves() for
+// #957: curves are lazy — callers (index.ts updateView) ensureCurves() for
 // every comparable shot before rendering the panel, so the cache read is
 // synchronous here; a still-missing curve falls back to the shot's own
 // datapoints (synthetic/demo) and finally to the no-data placeholder.
@@ -98,8 +98,12 @@ export function _miniShotChart(shot: GrindShot): Html {
 // ── Grind setting parser ───────────────────────────────────────────────────
 
 export function _parseGrindNum(s: string | number | null | undefined): number | null {
-  if (!s) return null;
-  const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
+  // Only null/undefined and empty/whitespace strings mean "no value" — a
+  // grind setting of 0 is a real setting and must survive.
+  if (s === null || s === undefined) return null;
+  if (typeof s === 'number') return Number.isFinite(s) ? s : null;
+  if (s.trim() === '') return null;
+  const m = s.match(/(\d+(?:[.,]\d+)?)/);
   const captured = m?.[1];
   return captured !== undefined ? parseFloat(captured.replace(',', '.')) : null;
 }
@@ -131,7 +135,7 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
 }
 
 // Parses a shot's own recorded grindSetting and normalizes it to what it
-// would read on the grinder TODAY (see grind-zero.js) — so a comparison or
+// would read on the grinder TODAY (see grind-zero.ts) — so a comparison or
 // average built across shots straddling a zero-point reset (e.g. after
 // cleaning) stays meaningful, without any past shot's recorded value
 // needing to be rewritten. A no-op when the shot's grinder never tracked a
@@ -260,7 +264,7 @@ export function calcBestGrindCombosForBean(
 }
 
 // ── Bean-aware grinder/grind/dose suggestion ───────────────────────────────
-// Same priority order as dialin-wizard.js's _suggestStartGrind (best
+// Same priority order as dialin-wizard.ts's _suggestStartGrind (best
 // historical combo, then knownGrindSettings), extended with a "last shot
 // with this exact bean" fallback for dose — neither memory source above
 // tracks dose. Used to prefill the annotation panel per-bean instead of

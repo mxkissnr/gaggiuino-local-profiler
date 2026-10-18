@@ -18,6 +18,7 @@ import { machineWarningLabel, renderMachineControl } from '../components/machine
 import { localeFor } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
+import { safeLocalStorage } from '../storage.js';
 
 // GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
 // view reads off the poll payload. Named locally rather than reusing
@@ -127,7 +128,7 @@ let _liveSessionIsBrew: boolean | null = null;
 // same bean/grinder/basket) and gets written onto the next shot's annotation
 // automatically once that shot finishes syncing (see fetchLiveData's "brew
 // just ended" branch below) — same POST api/shots/{id}/annotate endpoint and
-// field shape shots/annotation.js's own auto-save uses, just triggered from
+// field shape shots/annotation.ts's own auto-save uses, just triggered from
 // here instead of from the annotation panel's own fields.
 function _liveSetupStorageKey(): string {
   return `glp_live_shot_setup_${S.activeMachineId ?? 'default'}`;
@@ -184,7 +185,7 @@ export function renderLiveShotSetupPanel(): void {
     const opt = beanSelect.selectedOptions[0];
     d.beanId = opt?.dataset.beanId ? parseInt(opt.dataset.beanId, 10) : null;
     // Prefill grinder/grind setting from the bean's known-grind-setting
-    // record (dial-in-wizard's own prefill source, see library.js) — only
+    // record (dial-in-wizard's own prefill source, see library.ts) — only
     // when the user hasn't already typed something into those fields, so
     // this never clobbers a manual override.
     if (!d.grinder && !d.grindSetting && d.beanId != null) {
@@ -237,7 +238,7 @@ export function renderLiveShotSetupPanel(): void {
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsReset')?.addEventListener('click', () => {
-    localStorage.removeItem(_liveSetupStorageKey());
+    safeLocalStorage.removeItem(_liveSetupStorageKey());
     renderLiveShotSetupPanel();
   });
 }
@@ -314,12 +315,10 @@ export function initLiveChart(): void {
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      ...chartRegistry.chartBaseOptions(),
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
+        legend: { labels: chartRegistry.chartLegendLabels(C.text) },
         tooltip: { callbacks: { title: (ctx: { parsed: { x: number } }[]) => t('chart_time', formatTimeLabel(ctx[0]?.parsed.x ?? 0)) } }
       },
       scales: {
@@ -357,6 +356,7 @@ function _applyRefDatasets(d: ShotSeries): void {
 export function populateRefSelector(): void {
   const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
   if (!sel) return;
+  sel.setAttribute('aria-label', t('ref_label'));
   const prev = sel.value;
   sel.innerHTML = html`<option value="">${tHtml('ref_none')}</option>`;
   S.shots.filter(s => s.hasChartData)
@@ -445,15 +445,15 @@ export function connectLiveStream(): void {
   void fetchLiveData();
   void fetchPreheatData();
   // #736 review: SSE push (handleLiveSnapshotEvent/handlePreheatUpdateEvent,
-  // wired once in main.js's bootstrap) covers both once connected -- these
+  // wired once in boot/data.ts) covers both once connected -- these
   // polling intervals are only needed as the fallback for whenever SSE
   // hasn't (yet, or ever) taken over for this session. A one-time
   // `if (!S.sseActive)` check here (at the moment the tab opens) isn't
-  // enough: EventSource can take up to sse.js's WATCHDOG_MS (8s, longer
+  // enough: EventSource can take up to sse.ts's WATCHDOG_MS (8s, longer
   // still over HA Ingress per #738/#740) to actually open, so S.sseActive
   // can still be null/false right now even though it flips true moments
   // later -- these intervals must always start, and instead self-correct on
-  // every tick, same convention as status.js's own 30s updateStatus()
+  // every tick, same convention as status.ts's own 30s updateStatus()
   // interval, which likewise always fires rather than deciding once at
   // startup.
   timerRegistry.set('livePollInterval',    setInterval(() => { if (!S.sseActive) void fetchLiveData(); }, 1000));
@@ -492,8 +492,8 @@ function machineIconEl(): HTMLElement | null {
 let _lastPreheat: PreheatData | null = null;
 
 // #837: raw-data-to-icon-state translation itself now lives in
-// resolveMachineIconState() (machine-icon.js) — shared with the topbar's
-// own ambient icon instance (components/topbar-machine-icon.js) — this stays
+// resolveMachineIconState() (machine-icon.ts) — shared with the topbar's
+// own ambient icon instance (components/topbar-machine-icon.ts) — this stays
 // the Live view's own wiring: which element to drive and which preheat
 // snapshot to translate against.
 // #1383: a preheat event carries no reachability of its own, so remember the
@@ -575,54 +575,6 @@ export async function fetchLiveData(): Promise<void> {
       setLiveBadge('ready');
     }
 
-    // #1120 review: record whether this live session is a brew, so the
-    // draft-apply branch below only ever fires for a finished brew. A brew is
-    // msg.isLive; steam/flush/descale sessions (msg.isSteaming/isFlushing/
-    // isDescaling) are a different mode and must never seed the draft.
-    const liveMode = msg.isLive ? 'brew'
-      : (msg.isSteaming || msg.isFlushing || msg.isDescaling) ? 'other'
-      : null;
-    if (liveMode) _liveSessionIsBrew = liveMode === 'brew';
-    // Brew just started → auto-select last same-profile shot as reference
-    if (!S.liveWasLive && msg.isLive && msg.profileName) {
-      autoApplyRefShot(msg.profileName);
-    }
-
-    // Brew just ended → reload shot list after sync delay, then write the
-    // pre-shot setup panel's draft (bean/dose/grinder/grind/basket/
-    // puckscreen/recipe) onto the freshly-synced shot. Snapshotting via
-    // _applyLiveSetupToShot's own read happens after loadData resolves, not
-    // captured here, since a sticky draft is expected to still be current a
-    // few seconds later — see that function's own doc comment.
-    //
-    // The target shot is picked by machine + id, not S.shots[length-1]:
-    // machineId is captured now (S.activeMachineId can change during the
-    // 4s wait in a multi-machine setup — the draft that's about to be
-    // applied belongs to whichever machine was live when the brew ended,
-    // not whichever machine happens to be selected when the timer fires),
-    // and priorNewestId is the highest id already synced for that machine
-    // before this brew — after loadData() reloads, the highest id above
-    // that watermark is unambiguously "the shot this brew produced", never
-    // an older shot the sync happened to reorder and never a steam/flush
-    // session (those never create shots.Shot rows at all, so they can't
-    // satisfy `id > priorNewestId` regardless of timing).
-    // Explicit brew-only gate: `_liveSessionIsBrew !== false` is false after a
-    // steam/flush/descale session, so its finish can never apply the draft
-    // even if S.liveWasLive was somehow set.
-    if (S.liveWasLive && !msg.isLive && _liveSessionIsBrew !== false && msg.seq !== S.liveLastSeq) {
-      S.liveLastSeq = msg.seq!;
-      const machineId = S.activeMachineId;
-      const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
-      setTimeout(() => { void (async () => {
-        if (window.loadData) await window.loadData();
-        const newest = S.shots
-          .filter(s => s.machineId === machineId && s.id > priorNewestId)
-          .sort((a, b) => b.id - a.id)[0];
-        if (newest) void _applyLiveSetupToShot(newest.id);
-      })(); }, 4000);
-    }
-    S.liveWasLive = msg.isLive!;
-
     handleLiveData(msg);
   } catch {
     // #913: a network-level failure (e.g. the machine lost power and dropped
@@ -703,7 +655,7 @@ function stopElapsedTimer(elId: string | null, finalElapsedSec: number | null): 
   }
 }
 
-// #736: SSE push handlers -- registered once in main.js's bootstrap
+// #736: SSE push handlers -- registered once in boot/data.ts
 // (connectEvents()/onEvent()), independent of whichever view is currently
 // open. Both payloads are already the identical shape their REST
 // counterparts (GET /api/live/data, GET /api/preheat) return -- so these
@@ -725,7 +677,65 @@ function idlePhase(): 'standby' | 'warming' | 'ready' {
   return 'ready';
 }
 
+// #1613: the live-session transitions (reference-shot auto-apply at brew
+// start, pre-shot draft apply after brew end, and the _liveSessionIsBrew /
+// S.liveWasLive bookkeeping they depend on) used to live only in
+// fetchLiveData's polling path, so with SSE (the default) they never ran.
+// handleLiveData now runs them first, before rendering, for both paths.
+function handleLiveTransitions(msg: LiveMessage): void {
+  // A network blip routes through handleLiveData({ machineReachable: false }) with no isLive; without this guard it would clear S.liveWasLive and fire the brew-end draft apply.
+  if (msg.machineReachable === false || msg.isLive === undefined) return;
+  // #1120 review: record whether this live session is a brew, so the
+  // draft-apply branch below only ever fires for a finished brew. A brew is
+  // msg.isLive; steam/flush/descale sessions (msg.isSteaming/isFlushing/
+  // isDescaling) are a different mode and must never seed the draft.
+  const liveMode = msg.isLive ? 'brew'
+    : (msg.isSteaming || msg.isFlushing || msg.isDescaling) ? 'other'
+    : null;
+  if (liveMode) _liveSessionIsBrew = liveMode === 'brew';
+  // Brew just started → auto-select last same-profile shot as reference
+  if (!S.liveWasLive && msg.isLive && msg.profileName) {
+    autoApplyRefShot(msg.profileName);
+  }
+
+  // Brew just ended → reload shot list after sync delay, then write the
+  // pre-shot setup panel's draft (bean/dose/grinder/grind/basket/
+  // puckscreen/recipe) onto the freshly-synced shot. Snapshotting via
+  // _applyLiveSetupToShot's own read happens after loadData resolves, not
+  // captured here, since a sticky draft is expected to still be current a
+  // few seconds later — see that function's own doc comment.
+  //
+  // The target shot is picked by machine + id, not S.shots[length-1]:
+  // machineId is captured now (S.activeMachineId can change during the
+  // 4s wait in a multi-machine setup — the draft that's about to be
+  // applied belongs to whichever machine was live when the brew ended,
+  // not whichever machine happens to be selected when the timer fires),
+  // and priorNewestId is the highest id already synced for that machine
+  // before this brew — after loadData() reloads, the highest id above
+  // that watermark is unambiguously "the shot this brew produced", never
+  // an older shot the sync happened to reorder and never a steam/flush
+  // session (those never create shots.Shot rows at all, so they can't
+  // satisfy `id > priorNewestId` regardless of timing).
+  // Explicit brew-only gate: `_liveSessionIsBrew !== false` is false after a
+  // steam/flush/descale session, so its finish can never apply the draft
+  // even if S.liveWasLive was somehow set.
+  if (S.liveWasLive && !msg.isLive && _liveSessionIsBrew !== false && msg.seq !== S.liveLastSeq) {
+    S.liveLastSeq = msg.seq!;
+    const machineId = S.activeMachineId;
+    const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
+    setTimeout(() => { void (async () => {
+      if (window.loadData) await window.loadData();
+      const newest = S.shots
+        .filter(s => s.machineId === machineId && s.id > priorNewestId)
+        .sort((a, b) => b.id - a.id)[0];
+      if (newest) void _applyLiveSetupToShot(newest.id);
+    })(); }, 4000);
+  }
+  S.liveWasLive = msg.isLive;
+}
+
 export function handleLiveData(msg: LiveMessage): void {
+  handleLiveTransitions(msg);
   // #1449: while a non-default machine is selected, the backend still pushes
   // the default machine's readings -- don't render them under the banner.
   if (!_isActiveMachineLiveCapable()) return;
@@ -889,7 +899,7 @@ export function handleLiveData(msg: LiveMessage): void {
     metaEl.textContent = msg.profileName || '–';
   } else {
     setLiveBadge('idle');
-    metaEl.textContent = (msg.profileName || '–') + ' · abgeschlossen';
+    metaEl.textContent = t('live_profile_finished', msg.profileName || '–');
   }
 
   if (lastIdx >= 0) {

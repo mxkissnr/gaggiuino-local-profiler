@@ -59,7 +59,7 @@ func milkStockOf(t *testing.T, repo *Repository, id int64) float64 {
 	if err != nil {
 		t.Fatalf("GetLibrary: %v", err)
 	}
-	idx := findMilkIndex(lib, id)
+	idx := findEntityIndex(lib.Milks, id)
 	if idx == -1 {
 		t.Fatalf("milk %d not found", id)
 	}
@@ -195,7 +195,7 @@ func TestApplyAnnotationStock(t *testing.T) {
 			seed: func(t *testing.T, repo *Repository) {
 				seedStockLibrary(t, repo)
 				if err := repo.Update(func(lib *Library) error {
-					lib.Milks[findMilkIndex(*lib, 1)]["stockMl"] = float64(100)
+					lib.Milks[findEntityIndex(lib.Milks, 1)]["stockMl"] = float64(100)
 					return nil
 				}); err != nil {
 					t.Fatalf("lowering milk stock: %v", err)

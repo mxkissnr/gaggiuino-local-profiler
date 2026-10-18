@@ -1,7 +1,7 @@
 // #zero-point: frontend port of go/internal/library/zero_point_test.go's
 // scenarios — same history-lookup convention, inline grinder objects
-// instead of a DB round trip, since grind-zero.js is a pure ESM module.
-import { describe, it, expect } from 'vitest';
+// instead of a DB round trip, since grind-zero.ts is a pure ESM module.
+import { describe, it, expect, beforeAll } from 'vitest';
 import { currentGrinderZeroPoint, normalizeGrindToNow } from '../public-src/grind-zero.js';
 
 describe('currentGrinderZeroPoint', () => {
@@ -50,5 +50,43 @@ describe('normalizeGrindToNow', () => {
 
   it('matches grinder names case-insensitively, trimmed', () => {
     expect(normalizeGrindToNow(grinders, '  niche zero  ', 20, 1500)).toBe(22);
+  });
+});
+
+// #1625: a grind setting of 0 is a real setting, not "unset" — the old
+// `if (!s)` guard turned the number 0 (and "0") into null.
+type GrindModule = typeof import('../public-src/views/shots/grind.js');
+let _parseGrindNum: GrindModule['_parseGrindNum'];
+
+beforeAll(async () => {
+  // shots/grind.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module
+  // load), so stub the minimum browser globals before importing — same
+  // approach as best-grind-combo.test.ts.
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: { getItem: () => null, setItem: () => {} },
+    configurable: true, writable: true,
+  });
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { language: 'en' },
+    configurable: true, writable: true,
+  });
+  ({ _parseGrindNum } = await import('../public-src/views/shots/grind.js'));
+});
+
+describe('_parseGrindNum keeps a grind setting of 0', () => {
+  it('returns the number 0 as-is', () => {
+    expect(_parseGrindNum(0)).toBe(0);
+    expect(_parseGrindNum('0')).toBe(0);
+  });
+
+  it('treats a blank value as no setting', () => {
+    expect(_parseGrindNum('')).toBeNull();
+    expect(_parseGrindNum('   ')).toBeNull();
+    expect(_parseGrindNum(null)).toBeNull();
+    expect(_parseGrindNum(undefined)).toBeNull();
+  });
+
+  it('still parses a comma decimal', () => {
+    expect(_parseGrindNum('12,5')).toBe(12.5);
   });
 });

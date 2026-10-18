@@ -1,9 +1,9 @@
 // #614: notify_preheat_ready/notify_low_stock moved from the Orders admin
 // panel (only rendered when enable_orders: true) to an always-visible
 // "Notifications" Settings card. This tests that the card reads/writes the
-// same /api/orders/settings blob independently of views/orders.js — same
-// apiFetch-spy pattern as test/milk-deduct-gate.test.js, same fake-DOM
-// pattern as test/machines-settings-theme-form.test.js.
+// same /api/orders/settings blob independently of views/orders.ts — same
+// apiFetch-spy pattern as the other settings-card tests, same fake-DOM
+// pattern as test/machines-settings-theme-form.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose
@@ -42,6 +42,8 @@ class FakeButton {
   innerHTML = '';
 }
 
+const showToast = vi.fn();
+
 let list: FakeList | undefined;
 let btn: FakeButton;
 g.document = {
@@ -57,20 +59,22 @@ const { loadNotifySettingsCard, saveNotifySettings } = await import('../public-s
 beforeEach(() => {
   S.currentLang = 'en';
   fetchSpy.mockReset();
+  showToast.mockReset();
+  g.window = { showToast };
   list = new FakeList(['notify_preheat_ready', 'notify_low_stock']);
   btn = new FakeButton();
 });
 
 describe('loadNotifySettingsCard', () => {
   it('checks both boxes when the settings blob has no explicit false (undefined == on, #603 convention)', async () => {
-    fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ enabled: true }) } as unknown as Response);
+    fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve({ enabled: true }) } as unknown as Response);
     await loadNotifySettingsCard();
     expect(list!.querySelector('[data-notify-key="notify_preheat_ready"]').checked).toBe(true);
     expect(list!.querySelector('[data-notify-key="notify_low_stock"]').checked).toBe(true);
   });
 
   it('unchecks a box whose key is explicitly false in the settings blob', async () => {
-    fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ enabled: true, notify_low_stock: false }) } as unknown as Response);
+    fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve({ enabled: true, notify_low_stock: false }) } as unknown as Response);
     await loadNotifySettingsCard();
     expect(list!.querySelector('[data-notify-key="notify_preheat_ready"]').checked).toBe(true);
     expect(list!.querySelector('[data-notify-key="notify_low_stock"]').checked).toBe(false);
@@ -84,39 +88,45 @@ describe('loadNotifySettingsCard', () => {
 });
 
 describe('saveNotifySettings', () => {
-  it('POSTs both toggle keys plus the existing enabled flag to /api/orders/settings', async () => {
+  it('POSTs only the two toggle keys — no settings GET and no enabled round-trip', async () => {
     list!.querySelector('[data-notify-key="notify_preheat_ready"]').checked = true;
     list!.querySelector('[data-notify-key="notify_low_stock"]').checked = false;
-    fetchSpy
-      .mockResolvedValueOnce({ json: () => Promise.resolve({ enabled: true, broadcastRecipients: ['x'] }) } as unknown as Response) // GET before save
-      .mockResolvedValueOnce({ json: () => Promise.resolve({}) } as unknown as Response); // POST response
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response);
 
     await saveNotifySettings();
 
-    expect(fetchSpy).toHaveBeenNthCalledWith(2, 'api/orders/settings', {
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, 'api/orders/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: true, notify_preheat_ready: true, notify_low_stock: false }),
+      body: JSON.stringify({ notify_preheat_ready: true, notify_low_stock: false }),
     });
   });
 
-  it('does not clobber unrelated settings keys — only sends enabled + the two toggle keys', async () => {
-    fetchSpy
-      .mockResolvedValueOnce({ json: () => Promise.resolve({ enabled: false, baristaNotifyService: 'notify.x' }) } as unknown as Response)
-      .mockResolvedValueOnce({ json: () => Promise.resolve({}) } as unknown as Response);
+  it('does not clobber unrelated settings keys — only sends the two toggle keys', async () => {
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response);
 
     await saveNotifySettings();
 
-    const postCall = fetchSpy.mock.calls[1];
+    const postCall = fetchSpy.mock.calls[0];
     const postBody = JSON.parse(postCall?.[1]?.body as string) as Record<string, unknown>;
-    expect(postBody).toEqual({ enabled: false, notify_preheat_ready: false, notify_low_stock: false });
+    expect(postBody).toEqual({ notify_preheat_ready: false, notify_low_stock: false });
   });
 
   it('shows the saved confirmation as a drawn icon plus text, not a baked-in glyph (#811)', async () => {
-    fetchSpy.mockResolvedValue({ json: () => Promise.resolve({ enabled: true }) } as unknown as Response);
+    fetchSpy.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) } as unknown as Response);
     await saveNotifySettings();
     expect(btn.innerHTML).toContain('Saved');
     expect(btn.innerHTML).toContain('<svg');
     expect(btn.innerHTML).not.toContain('✓'); // no leftover '✓' glyph
+  });
+
+  it('shows the error toast and not the saved state when the POST fails', async () => {
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({}) } as unknown as Response);
+
+    await saveNotifySettings();
+
+    expect(showToast).toHaveBeenCalledWith('Error: 500');
+    expect(btn.innerHTML).not.toContain('Saved');
   });
 });

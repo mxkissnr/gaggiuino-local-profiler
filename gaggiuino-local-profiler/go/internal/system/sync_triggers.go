@@ -26,8 +26,8 @@ import (
 //     catch up immediately instead of waiting for the next scheduled pull.
 //
 // syncOtherMachines (#1146) rides along with the scheduled loop (and with the
-// manual trigger) — see sync.go; native-maintenance sync and syncProgress stay
-// unimplemented (see sync.go + doc.go). The post-brew and reachability-recovery
+// manual trigger) — see sync.go; syncProgress stays unimplemented (see
+// sync.go). The post-brew and reachability-recovery
 // catch-up paths deliberately stay default-only: they pull the default machine
 // alone.
 
@@ -74,6 +74,19 @@ func (p *Poller) syncCtx() context.Context {
 	return context.Background()
 }
 
+// goBackground runs fn in a fire-and-forget goroutine that is both panic-safe
+// (via httputil.SafeGo) and registered with the poller's bg WaitGroup, so a
+// test can join it through waitBackground before its DB/temp dirs are closed.
+// Used only for the trigger methods below; the long-lived Start() loops are
+// deliberately not tracked (waitBackground would otherwise never return).
+func (p *Poller) goBackground(logCtx string, fn func()) {
+	p.bg.Add(1)
+	httputil.SafeGo(logCtx, func() {
+		defer p.bg.Done()
+		fn()
+	})
+}
+
 // scheduleSyncAfterBrew is fired from the brew-finished branch: wait 3s (the
 // machine needs a moment to persist the shot), then pull, logging the new shot
 // id(s). Single-flight is handled inside syncDefaultMachineShots
@@ -83,19 +96,29 @@ func (p *Poller) scheduleSyncAfterBrew() {
 		return
 	}
 	ctx := p.syncCtx()
-	httputil.SafeGo("system: post-brew sync", func() {
+	p.goBackground("system: post-brew sync", func() {
 		select {
 		case <-time.After(syncAfterBrewDelay):
 		case <-ctx.Done():
 			return
 		}
-		prevMax, _ := p.shots.MaxNativeShotID(1)
+		// Compare against the registry's default machine, not a hard-coded
+		// machine 1: syncOnce pulls the default machine's shots, so comparing
+		// against a fixed id would report the wrong "caught up" shot (or none)
+		// as soon as the default machine is not #1.
+		defaultID, haveDefault := p.defaultMachineID()
+		prevMax := int64(0)
+		if haveDefault {
+			prevMax, _ = p.shots.MaxNativeShotID(defaultID)
+		}
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: post-brew sync failed: %v", err)
 			return
 		}
-		if newMax, _ := p.shots.MaxNativeShotID(1); newMax > prevMax {
-			log.Printf("system: post-brew sync: caught up to new shot #%d", newMax)
+		if haveDefault {
+			if newMax, _ := p.shots.MaxNativeShotID(defaultID); newMax > prevMax {
+				log.Printf("system: post-brew sync: caught up to new shot #%d", newMax)
+			}
 		}
 		// A shot just finished syncing, so the machine is definitely
 		// reachable right now — cheap opportunity to also flush any
@@ -115,7 +138,7 @@ func (p *Poller) scheduleSyncSoonAfterPowerOn() {
 		return
 	}
 	ctx := p.syncCtx()
-	httputil.SafeGo("system: power-on sync", func() {
+	p.goBackground("system: power-on sync", func() {
 		select {
 		case <-time.After(syncAfterPowerOnDelay):
 		case <-ctx.Done():
@@ -139,7 +162,7 @@ func (p *Poller) SyncAfterShotSaved() {
 		return
 	}
 	ctx := p.syncCtx()
-	httputil.SafeGo("system: shot-saved sync", func() {
+	p.goBackground("system: shot-saved sync", func() {
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: shot-saved sync failed: %v", err)
 		}
@@ -181,7 +204,7 @@ func (p *Poller) maybeCatchUpAfterRecovery(prevReachable *bool) {
 		return
 	}
 	ctx := p.syncCtx()
-	httputil.SafeGo("system: catch-up sync", func() {
+	p.goBackground("system: catch-up sync", func() {
 		if err := p.syncOnce(ctx); err != nil {
 			log.Printf("system: catch-up sync after reachability recovery failed: %v", err)
 		}

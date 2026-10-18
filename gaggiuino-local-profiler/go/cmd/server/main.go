@@ -22,14 +22,15 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -52,6 +53,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mqtt"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
@@ -97,29 +99,10 @@ func configFromEnv() appConfig {
 		dbPath:          getEnv("GLP_DB_PATH", db.DefaultPath),
 		tokenPath:       getEnv("GLP_TOKEN_FILE", auth.DefaultTokenFile),
 		port:            getEnv("GLP_PORT", defaultPort),
-		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond))) * time.Millisecond,
-		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax))),
-		allowedHosts:    auth.ParseAllowedHosts(readAllowedHostsOption() + " " + os.Getenv("GLP_ALLOWED_HOSTS")),
+		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond), 1)) * time.Millisecond,
+		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax), 1)),
+		allowedHosts:    auth.ParseAllowedHosts(config.Options().AllowedHosts + " " + os.Getenv("GLP_ALLOWED_HOSTS")),
 	}
-}
-
-// readAllowedHostsOption reads options.json's allowed_hosts string (the
-// Supervisor-written add-on option, see config.yaml). A missing file,
-// unparseable JSON or an absent key all yield "" — the same
-// fail-open-to-empty behaviour the other option readers rely on, so an
-// install with no extra hosts behaves exactly as before #1430.
-func readAllowedHostsOption() string {
-	data, err := os.ReadFile(config.OptionsFile)
-	if err != nil {
-		return ""
-	}
-	var opts struct {
-		AllowedHosts string `json:"allowed_hosts"`
-	}
-	if err := json.Unmarshal(data, &opts); err != nil {
-		return ""
-	}
-	return opts.AllowedHosts
 }
 
 func main() {
@@ -137,25 +120,62 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	baseCtx, cancelBase := context.WithCancel(context.Background())
+	defer cancelBase()
+
 	addr := ":" + cfg.port
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("listening on %s: %v", addr, err)
 	}
 
-	srv := &http.Server{Handler: handler}
+	// ReadHeaderTimeout stops a slowloris client that dribbles headers forever;
+	// IdleTimeout reaps idle keep-alive connections. ReadTimeout/WriteTimeout are
+	// deliberately unset so large backup uploads and the SSE streams can run long.
+	//
+	// BaseContext derives every request's context from baseCtx, so cancelling
+	// baseCtx on shutdown unblocks long-lived handlers — the SSE stream selects
+	// on r.Context().Done() — that would otherwise hold the drain open until
+	// shutdownTimeout.
+	srv := &http.Server{
+		Handler:           handler,
+		BaseContext:       func(net.Listener) context.Context { return baseCtx },
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	// Graceful shutdown: docker stop sends SIGTERM to this process directly
 	// (docker-entrypoint.sh execs it via su-exec, so there's no intermediate
 	// shell to relay the signal) and waits a grace period before SIGKILL.
-	// Catch it and drain in-flight requests via srv.Shutdown instead of
-	// letting the process die mid-request; sqlDB.Close() (deferred above)
-	// then runs once Serve returns below.
+	// serveUntilStopped drains in-flight requests on that signal and returns
+	// only once the drain has finished, so the deferred sqlDB.Close() above
+	// runs after the last request has been served — not, as returning on
+	// Serve's own http.ErrServerClosed would, while requests are still draining.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+
+	log.Printf("GLP Go server listening on port %s", cfg.port)
+	if err := serveUntilStopped(srv, tcpNoDelayListener{ln}, sigCh, cancelBase); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("server error: %v", err)
+	}
+}
+
+// serveUntilStopped serves srv on ln and, when a signal arrives on stop,
+// cancels baseCancel and calls srv.Shutdown with a shutdownTimeout deadline. It
+// returns only after Serve has returned AND that Shutdown has completed, so the
+// caller's deferred DB close runs after every in-flight request has finished.
+// That wait is the whole point: srv.Serve returns http.ErrServerClosed the
+// instant Shutdown begins, well before the drain finishes.
+func serveUntilStopped(srv *http.Server, ln net.Listener, stop <-chan os.Signal, baseCancel context.CancelFunc) error {
+	shutdownDone := make(chan struct{})
 	go func() {
-		sig := <-sigCh
+		defer close(shutdownDone)
+		sig := <-stop
 		log.Printf("received %s, shutting down gracefully", sig)
+		// Cancel the base context so long-lived handlers (notably the SSE
+		// stream, which selects on r.Context().Done()) end immediately rather
+		// than holding Shutdown open until the deadline.
+		baseCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
@@ -163,10 +183,14 @@ func main() {
 		}
 	}()
 
-	log.Printf("GLP Go server listening on port %s", cfg.port)
-	if err := srv.Serve(tcpNoDelayListener{ln}); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server error: %v", err)
+	err := srv.Serve(ln)
+	// ErrServerClosed means Shutdown (or Close) began; wait for the drain to
+	// finish before returning. Any other error is fatal to the listener and the
+	// goroutine is still blocked on stop, so returning straight away is correct.
+	if err == http.ErrServerClosed {
+		<-shutdownDone
 	}
+	return err
 }
 
 // onMux lets tests inspect the fully-registered mux (openapi_routes_test.go).
@@ -196,6 +220,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	}
 
 	hub := sse.NewHub()
+	// #1539: publish one data-changed event after every successful write, driven
+	// by the dataRoutes table in datachanged.go.
+	changes := sse.NewDataChanges(hub, dataKinds)
 	sseHandler := &sse.Handler{Hub: hub}
 	// Prime is wired below, once poller exists: it primes a newly-connected
 	// client with the current preheat-update/live-snapshot snapshot
@@ -206,6 +233,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/events", sseHandler)
+	// #1626: the short-lived ?ticket= a client puts in the /api/events URL
+	// instead of the API token (see auth.RequireToken).
+	sseTickets := auth.NewTicketStore()
+	mux.Handle("POST /api/events/ticket", auth.TicketHandler(sseTickets))
 
 	shotsRepo := shots.NewRepository(sqlDB)
 	shotsHandlers := shots.NewHandlers(shotsRepo)
@@ -266,10 +297,26 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// Fire-and-forget bean-region geocoding: library.CreateBean/UpdateBean
 	// call library.GeocodeHook without waiting when a bean's region is
 	// set/changed. Set here (nil in tests) to keep those functions'
-	// signatures unchanged.
-	geocoder := library.NewGeocoder(libRepo)
+	// signatures unchanged. #1580: the geocode runs after the create/update
+	// response (and its route-table data-changed event) has already been
+	// written; when it actually stored new coordinates, publish `library`
+	// again with no src, so every open page — the writing one included —
+	// picks up the new map position.
+	geocoder := library.NewGeocoder(libRepo, system.Version())
 	library.GeocodeHook = func(beanID int64, _, _ string) {
-		geocoder.GeocodeBean(context.Background(), beanID)
+		if geocoder.GeocodeBean(context.Background(), beanID) {
+			changes.Publish("library", "", "")
+		}
+	}
+
+	// #1580: the bean photo download runs after POST /api/library/bean has
+	// answered, so the route-table `library` event fires before the image
+	// exists. When SetBeanImage has actually stored the extension, publish
+	// `library-image` for that bean's cache key (bean:<id>) with no src, so
+	// the creating page refreshes too — the same shape the
+	// POST /api/library/bean/{id}/image route already produces.
+	library.BeanImageHook = func(beanID int64) {
+		changes.Publish("library-image", "bean:"+strconv.FormatInt(beanID, 10), "")
 	}
 
 	// The bean-import domain — GET /api/import/url plus GET/POST
@@ -286,6 +333,13 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	importerHandlers.RegisterRoutes(mux)
 
 	registry := machines.NewRegistry(sqlDB)
+	// The machine-traffic counter backs the get_perf_stats developer MCP tool.
+	// Installed before any machine traffic starts — the poller below is the
+	// first caller — so every outbound HTTP round trip and every WebSocket
+	// message read is counted per machine host, and each host's HTTP traffic is
+	// split into the idle and brewing buckets by the brew state it last reported.
+	machineCounter := perfstats.NewMachineCounter()
+	machines.SetMachineTrafficCounter(machineCounter)
 	// Startup logRegistrySnapshot() (#714) — behind debug_logging (#977
 	// follow-up), so it's a no-op unless that option is on. Nothing has
 	// necessarily called EnsureDefaultMachine yet at this point (it's a lazy,
@@ -300,11 +354,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// The debug domain — GET /api/debug/export-db, POST /api/debug/import-db,
 	// GET /api/debug/machine, and GET /api/debug/ingress (+ /sse-probe), a
 	// Go-only HA-ingress self-diagnostic for opening through the real HA
-	// panel. All of them (and the two ingress routes below) are gated on
-	// GLP_DEV_BUILD (#1051: previously /api/debug/machine and the ingress
-	// routes used a NODE_ENV != production check instead, but nothing in the
-	// shipped image ever sets NODE_ENV, so they were live on every real
-	// install). importDB's own http.MaxBytesReader is the route-scoped 500 MB
+	// panel. /api/debug/machine and the two ingress routes are registered only
+	// on a dev build (GLP_DEV_BUILD, #1051); export-db/import-db are always
+	// registered, behind the token like every other /api route. importDB's own http.MaxBytesReader is the route-scoped 500 MB
 	// body ceiling — see the handler-chain comment below and
 	// go/internal/debug/debug.go.
 	debug.NewHandlers(sqlDB, dbPath, registry).RegisterRoutes(mux)
@@ -317,6 +369,59 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// SetBeanSource.
 	shots.SetAnnotationStockHook(func(prev, next map[string]any) error {
 		return library.ApplyAnnotationStock(libRepo, ordersRepo.GetMenu, prev, next)
+	})
+	// baristaNotify sends an automatic notification through the configured
+	// barista device. It is off when the per-notification toggle is explicitly
+	// false or no baristaNotifyService is set (an absent toggle counts as on);
+	// it reports whether the push was delivered so a caller can retry or latch
+	// on it. Errors are logged here, never returned to an HTTP client.
+	baristaNotify := func(ctx context.Context, toggleKey, title, body, tag string) bool {
+		settings, err := ordersRepo.GetSettings()
+		if err != nil {
+			log.Printf("main: reading orders settings for %s: %v", toggleKey, err)
+			return false
+		}
+		if v, ok := settings[toggleKey].(bool); ok && !v {
+			return false
+		}
+		svc, _ := settings["baristaNotifyService"].(string)
+		if svc == "" {
+			return false
+		}
+		if err := haClient.SendNotify(ctx, svc, title, body, tag); err != nil {
+			log.Printf("main: %s notification failed: %v", toggleKey, err)
+			return false
+		}
+		return true
+	}
+	// #1671: annotating a shot can drop its bean below the low-stock threshold;
+	// the check runs off the annotation-saved hook (fire-and-forget, never
+	// blocking the save) and is gated on notify_low_stock/baristaNotifyService.
+	shots.SetAnnotationSavedHook(func(shotID int64) {
+		ctx := context.Background()
+		ann, err := shotsRepo.GetAnnotation(shotID)
+		if err != nil {
+			log.Printf("main: low-stock: reading annotation for shot %d: %v", shotID, err)
+			return
+		}
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			log.Printf("main: low-stock: reading library: %v", err)
+			return
+		}
+		beanID := library.ResolveLowStockBeanID(shots.Shot{"annotation": ann}, lib.Beans)
+		if beanID == 0 {
+			return
+		}
+		if err := library.CheckLowStock(libRepo, shotsRepo.GetAnnotatedDoses, beanID, func(name string, remainingG int64) bool {
+			lang := haClient.GetHaLanguage(ctx)
+			return baristaNotify(ctx, "notify_low_stock",
+				ha.NotifyText(lang, "low_stock_title"),
+				ha.NotifyText(lang, "low_stock_body", name, remainingG),
+				fmt.Sprintf("glp_low_stock_%d", beanID))
+		}); err != nil {
+			log.Printf("main: low-stock notification for shot %d failed: %v", shotID, err)
+		}
 	})
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
 	ordersHandlers.RegisterRoutes(mux)
@@ -339,13 +444,37 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// would otherwise leave the preheat countdown stuck at the full window;
 	// reset the poller's preheat session for the new default.
 	machinesHandlers.SetOnDefaultChanged(poller.HandleDefaultMachineChange)
+	// #1572: the profiles and firmware-version handlers answer instantly from
+	// local state when the poller already knows the machine is offline — either
+	// its last poll reported the machine unreachable, or the default machine's
+	// switch is configured and reads off (so live polling never started).
+	// Unknown state (no poll observed yet, no switch, or the machine just
+	// switched on) counts as not offline, so the machine is tried live.
+	machinesHandlers.SetKnownUnreachable(poller.MachineKnownOffline)
 	// POST /api/sync's manual shot-history pull loop persists through
 	// shotsRepo — see go/internal/system/sync.go.
 	poller.SetShotsRepo(shotsRepo)
+	// #1671: the machine finished preheating -> one push to the barista device
+	// per preheat run, gated on notify_preheat_ready/baristaNotifyService. The
+	// callback returns whether the push was delivered, so an HA failure is
+	// retried on the next preheat-watch tick rather than swallowed.
+	poller.SetPreheatReadyNotifier(func(ctx context.Context) bool {
+		lang := haClient.GetHaLanguage(ctx)
+		return baristaNotify(ctx, "notify_preheat_ready",
+			ha.NotifyText(lang, "preheat_title"),
+			ha.NotifyText(lang, "preheat_body"),
+			"glp_preheat_ready")
+	})
 	// Offline profile editor (2026-09-09): pushes locally-saved profile
 	// edits to the machine on reconnect/after a brew/periodically — see
 	// go/internal/system/profile_sync.go.
 	poller.SetProfilesRepo(profilesRepo)
+	// #1539 slice 5: the profile-sync sweep can change a row's sync status with
+	// no request of its own, so wire its hook to publish the "profiles" kind —
+	// every open page then refetches and the pending badge clears everywhere.
+	// Profile writes already publish it through the route table in
+	// datachanged.go; only the out-of-band sweep needs this.
+	poller.SetOnProfilesChanged(func() { changes.Publish("profiles", "", "") })
 
 	// MQTT live-data transport (#608). mqttRepo is the Settings-page toggle +
 	// broker connection (kv.key = 'mqtt_settings', no migration needed).
@@ -372,6 +501,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	demoService := system.NewDemoService(sqlDB, shotsRepo, libRepo)
 	systemHandlers := system.NewHandlers(poller, demoService, token)
+	// #1539 slice 2: GET /api/status reports the data-change tracker's epoch and
+	// per-kind revisions so a client that reconnects (or falls back to polling)
+	// can resync only the kinds it missed.
+	systemHandlers.SetDataRevs(changes.Revs)
 	systemHandlers.RegisterRoutes(mux)
 
 	// #1375: per-install UI choices (view/filter/sort) that follow the user
@@ -390,6 +523,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	}
 
 	maintenanceRepo := maintenance.NewRepository(sqlDB, libRepo)
+	// #1639: the sync loop mirrors a Gaggiuino's native service log onto the
+	// descale/backflush tasks — see go/internal/system/maintenance_sync.go.
+	poller.SetMaintenanceRepo(maintenanceRepo)
 	maintenanceHandlers := maintenance.NewHandlers(maintenanceRepo, shotsRepo, libRepo, registry)
 	maintenanceHandlers.RegisterRoutes(mux)
 	// Deleting a grinder now also removes its `grinder_{id}` maintenance-table
@@ -408,9 +544,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	machinesHandlers.SetOnFirmwareUpdate(func(m *machines.Machine, from, to string) error {
 		notes := maintenance.FirmwareUpdateNote(from, to)
 		shotCount := maintenance.ShotCountFor(shotsRepo, "firmware_update", m.ID)
-		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID)
+		_, err := maintenanceRepo.AddMaintenanceLogEntry("firmware_update", notes, m.Host, shotCount, m.ID, time.Now())
 		return err
 	})
+
+	// The request-timing recorder backs the get_perf_stats developer MCP tool.
+	// It wraps the mux as the innermost layer of the chain below, so it reads
+	// the route pattern net/http's ServeMux matched — never the raw path.
+	recorder := perfstats.New()
 
 	// MCP (#1196, #1288): the Model Context Protocol server is always mounted
 	// under /api/ so auth.RequireToken guards it with X-GLP-Token like every
@@ -422,19 +563,21 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// read-only library/status/analytics tools get their dependencies.
 	mcpRepo := mcp.NewRepository(sqlDB)
 	mux.Handle(mcp.Path, mcp.NewHandler(mcp.Deps{
-		Shots:           shots.NewService(shotsRepo),
-		ShotsRepo:       shotsRepo,
-		Library:         libRepo,
-		Maintenance:     maintenanceRepo,
-		Registry:        registry,
-		Poller:          poller,
-		Logs:            cfg.logs,
-		Sync:            poller,
-		Preheat:         poller,
-		Version:         system.Version(),
-		RateLimitWindow: rateLimitWindow,
-		RateLimitMax:    rateLimitMax,
-		Settings:        mcpRepo,
+		Shots:         shots.NewService(shotsRepo),
+		ShotsRepo:     shotsRepo,
+		Library:       libRepo,
+		Maintenance:   maintenanceRepo,
+		Registry:      registry,
+		Poller:        poller,
+		Logs:          cfg.logs,
+		Sync:          poller,
+		Preheat:       poller,
+		Recorder:      recorder,
+		Machines:      machineCounter,
+		DBPath:        dbPath,
+		Version:       system.Version(),
+		Settings:      mcpRepo,
+		OnDataChanged: func(k, id string) { changes.Publish(k, id, "") },
 	}))
 	mcp.NewSettingsHandlers(mcpRepo).RegisterRoutes(mux)
 
@@ -453,6 +596,28 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		VersionFn: func() achievements.VersionCache {
 			latest, updateAvailable := systemHandlers.CachedVersion()
 			return achievements.VersionCache{Latest: latest, UpdateAvailable: updateAvailable}
+		},
+		// RevsFn folds sse.DataChanges.Revs() into the achievements change
+		// fingerprint: ChangeFingerprint's COUNT/MAX/LENGTH aggregates miss an
+		// edit that keeps byte counts equal (a rating 3 -> 4, an equal-length
+		// machine host change) or a photo upload, so the per-kind revision
+		// counters are the signal that still re-runs the evaluator.
+		RevsFn: func() string {
+			epoch, revs := changes.Revs()
+			kinds := make([]string, 0, len(revs))
+			for k := range revs {
+				kinds = append(kinds, k)
+			}
+			sort.Strings(kinds)
+			var b strings.Builder
+			b.WriteString(epoch)
+			for _, k := range kinds {
+				b.WriteByte(';')
+				b.WriteString(k)
+				b.WriteByte('=')
+				b.WriteString(strconv.FormatInt(revs[k], 10))
+			}
+			return b.String()
 		},
 	})
 	achievements.NewHandlers(achievementsSvc).RegisterRoutes(mux)
@@ -502,8 +667,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		}
 	})
 
-	// The production frontend. internal/webapp embeds and serves the existing
-	// Vite SPA bundle (gaggiuino-local-profiler/public-src, built to public/)
+	// The production frontend. internal/webapp embeds and serves the SPA
+	// bundle cmd/frontend-build builds from gaggiuino-local-profiler/public-src
 	// — REST+SSE only, all relative paths. Registered last so its catch-all
 	// "GET /" only ever runs for paths no more-specific pattern (every /api/*
 	// route, /shots.json) claimed. Same registration-outside-/api/ auth model
@@ -525,15 +690,21 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	// The middleware order: security headers, then the known-host check, then
 	// the app-level rate limiter (deliberately ahead of auth so it also caps
-	// unauthenticated login/token-probing traffic), then token auth. Read from
-	// the innermost handler outward, this chain applies auth first, rate-limit
-	// second, the known-host check third and security headers last, which is
-	// the correct nesting to make requests experience them in that order.
+	// unauthenticated login/token-probing traffic), then token auth, and
+	// innermost the perfstats recorder. Read from the innermost handler outward,
+	// this chain applies the recorder first, auth second, rate-limit third, the
+	// known-host check fourth and security headers last, which is the correct
+	// nesting to make requests experience them in that order.
 	//
 	// auth.RequireKnownHost sits ahead of the rate limiter on purpose: a
 	// request for an unknown Host is refused with 421 before it costs a
 	// rate-limit slot or reaches any handler, including the public
 	// GET /api/token.
+	//
+	// The perfstats recorder wraps the mux directly, so after each response it
+	// reads the route pattern net/http's ServeMux wrote onto the request and
+	// records one timing per matched route, never the raw path; that is what the
+	// get_perf_stats developer MCP tool reports.
 	//
 	// There is no global body-parser step to slot in here: net/http reads a
 	// request body lazily per-handler, not through a chained global
@@ -543,7 +714,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	handler := auth.SecurityHeaders(
 		auth.RequireKnownHost(cfg.allowedHosts)(
 			limiter.Middleware(
-				auth.RequireToken(token)(mux),
+				auth.RequireToken(token, sseTickets)(recorder.Middleware(changes.Middleware(dataRoutes)(mux))),
 			),
 		),
 	)
@@ -561,14 +732,21 @@ func getEnv(name, def string) string {
 // getEnvNumber parses GLP_RATE_LIMIT_WINDOW_MS/GLP_RATE_LIMIT_MAX: an unset
 // env var, one that fails to parse as a number, or one that parses to 0 all
 // fall back to def, including that a literal "0" override is treated the same
-// as no override.
-func getEnvNumber(name string, def float64) float64 {
+// as no override. A value below min, or one that parses to NaN/Inf, also falls
+// back to def (with a log line naming the variable): a sub-1 GLP_RATE_LIMIT_MAX
+// truncates to 0 in ratelimit.New and panics on a divide by zero, and a
+// non-positive window would disable limiting entirely.
+func getEnvNumber(name string, def float64, min float64) float64 {
 	v, ok := os.LookupEnv(name)
 	if !ok {
 		return def
 	}
 	n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 	if err != nil || n == 0 {
+		return def
+	}
+	if math.IsNaN(n) || math.IsInf(n, 0) || n < min {
+		log.Printf("ignoring out-of-range %s=%q, using default %v", name, v, def)
 		return def
 	}
 	return n

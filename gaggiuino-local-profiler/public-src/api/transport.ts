@@ -1,9 +1,33 @@
 import { S } from '../state/index.js';
+import { safeLocalStorage } from '../storage.js';
+
+// #1539: a random per-page id sent as X-GLP-Client so the server can attach it
+// to the data-changed event a write produced (DataChanged.src) and this page
+// can skip reacting to its own write. 16 bytes of crypto.getRandomValues, hex —
+// deliberately not randomUUID(), which is unavailable on plain-http LAN pages
+// (window.crypto.randomUUID is only exposed in secure contexts).
+function _makeClientId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export const CLIENT_ID = _makeClientId();
+
+// #1539 slice 3: the time of this page's most recent mutating request, or null
+// before the first one. The status poll (live-sync's noteServerRevs) reads it so
+// the revision this page's own write produced does not mark the kind dirty
+// again before that write's SSE echo lands -- the echo records the revision.
+let _lastWriteAt: number | null = null;
+
+export function lastWriteAt(): number | null {
+  return _lastWriteAt;
+}
 
 export async function initToken(): Promise<void> {
   // Migration for pre-#522 installs: the token used to be cached in
   // localStorage under this key. Idempotent no-op once the key is gone.
-  localStorage.removeItem('glp_token');
+  safeLocalStorage.removeItem('glp_token');
   try {
     // /api/token answers any caller that can reach the port by default (#533),
     // so a fresh token is normally available on every load — no need to
@@ -28,8 +52,26 @@ export async function initToken(): Promise<void> {
   } catch { /* ignore */ }
 }
 
+// #1615: a caller's headers as a plain record, whichever HeadersInit form
+// they came in. Spreading a Headers instance (or an entries array) into an
+// object literal silently drops its entries; a plain object passes through
+// unchanged, names and all.
+function _headerRecord(init: HeadersInit | undefined): Record<string, string> {
+  if (init instanceof Headers) return Object.fromEntries(init.entries());
+  if (Array.isArray(init)) return Object.fromEntries(init);
+  return { ...init };
+}
+
 export async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
-  if (S.glpToken) opts = { ...opts, headers: { ...opts.headers, 'X-GLP-Token': S.glpToken } };
+  // #1539: identify this page on writes only (GET/HEAD are not data changes),
+  // so the server can tag the resulting data-changed event with our id and we
+  // skip the echo. Same header merge as the token below.
+  const method = (opts.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    _lastWriteAt = Date.now();
+    opts = { ...opts, headers: { ..._headerRecord(opts.headers), 'X-GLP-Client': CLIENT_ID } };
+  }
+  if (S.glpToken) opts = { ...opts, headers: { ..._headerRecord(opts.headers), 'X-GLP-Token': S.glpToken } };
   return fetch(url, opts);
 }
 
@@ -110,6 +152,9 @@ export function apiUpload(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open(method, url);
+    // #1539: apiUpload is always a write, so it always identifies this page.
+    _lastWriteAt = Date.now();
+    xhr.setRequestHeader('X-GLP-Client', CLIENT_ID);
     if (S.glpToken) xhr.setRequestHeader('X-GLP-Token', S.glpToken);
     for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => {
@@ -121,13 +166,16 @@ export function apiUpload(
       text: xhr.responseText,
     });
     xhr.onerror = () => reject(new Error('network error'));
+    // #1615: an aborted request (e.g. the page navigating away) fires neither
+    // onload nor onerror, so without this the promise never settled.
+    xhr.onabort = () => reject(new Error('upload aborted'));
     xhr.send(body);
   });
 }
 
 // #807: "this session can't talk to the API because expose_api_port is off".
 // Both inputs are already client-side: S.apiPortExposed mirrors the add-on
-// option via the deliberately-public /api/status (components/status.js), and
+// option via the deliberately-public /api/status (components/status.ts), and
 // an empty S.glpToken means initToken()'s /api/token fetch was refused for
 // this (non-Ingress) session. Callers pass the failed response's status so a
 // plain 401/403 from any other cause still surfaces as itself; omitting it

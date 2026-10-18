@@ -12,7 +12,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -58,15 +58,31 @@ type Deps struct {
 	// than a wider MachineStatus so tests can fake history without a live
 	// poller; nil reports that the history is unavailable.
 	Preheat PreheatHistorySource
+	// Recorder is the request-timing snapshot source for the get_perf_stats
+	// developer tool. A separate, nil-safe interface rather than
+	// *perfstats.Recorder so tests can supply a canned snapshot; nil reports
+	// that performance stats are unavailable.
+	Recorder PerfStatsSource
+	// Machines is the machine-traffic snapshot source for the get_perf_stats
+	// developer tool. A separate, nil-safe interface rather than
+	// *perfstats.MachineCounter so tests can supply a canned snapshot; nil
+	// reports an empty machine-traffic section rather than failing the tool
+	// (the routes/process/database sections stay available).
+	Machines MachineTrafficSource
+	// OnDataChanged, when non-nil, is called once after each successful write
+	// tool with the changed data kind and, for a single entity, its id, so the
+	// host can publish a data-changed SSE event. A callback rather than an
+	// internal/sse dependency keeps the MCP package free of the SSE wiring.
+	// Nil-safe: the write tools then publish nothing (every test that does not
+	// set it).
+	OnDataChanged func(kind, id string)
+	// DBPath is the SQLite database file get_perf_stats reports the size of,
+	// together with its -wal sidecar when present. Empty is tolerated and
+	// reports a size of zero.
+	DBPath string
 	// Version is the app version reported as the MCP server identity; mirrors
 	// GET /api/version (internal/system.Version). Empty falls back to "dev".
 	Version string
-	// RateLimitWindow and RateLimitMax mirror the app-level limiter's
-	// configuration (GLP_RATE_LIMIT_WINDOW_MS/_MAX); zero falls back to
-	// internal/ratelimit's defaults. The mux-wide limiter already covers
-	// /api/mcp, so this only matters when the operator has raised the limit.
-	RateLimitWindow time.Duration
-	RateLimitMax    int
 	// Settings supplies the MCP toggles that apply right now: the app-stored
 	// kv row 'mcp_settings' (#1288), with the dev-build rule already applied
 	// (Settings.Effective). Read per request, so enabling MCP or flipping the
@@ -96,13 +112,30 @@ type PreheatHistorySource interface {
 	PreheatHistory() []system.PreheatRun
 }
 
+// PerfStatsSource is the narrow slice of internal/perfstats.Recorder the
+// get_perf_stats developer tool reads: a snapshot of per-route timings and
+// process stats. Nil-safe: without it the tool reports that performance stats
+// are unavailable.
+type PerfStatsSource interface {
+	Snapshot(time.Time) perfstats.Snapshot
+}
+
+// MachineTrafficSource is the narrow slice of *perfstats.MachineCounter the
+// get_perf_stats developer tool reads: per-host traffic resolved to machine
+// ids through resolve, plus one aggregate unknown entry for hosts that do not
+// resolve. Nil-safe: without it the tool reports an empty machines list.
+type MachineTrafficSource interface {
+	Snapshot(time.Time, func(host string) (machineID int64, ok bool)) []perfstats.MachineTrafficSnapshot
+}
+
 // NewHandler builds the stateless Streamable-HTTP MCP endpoint: the SDK
-// server, an Origin (DNS-rebinding) check, and a rate limiter sharing the
-// REST API's defaults. The settings source is consulted per request, so a
-// disabled server answers 404 (exactly like an unmounted route) and a
-// newly-enabled one works without rebuilding the process. One SDK server is
-// cached per (allowWrite, allowDeveloperTools) combination — at most four —
-// and built lazily.
+// server and a cross-origin check (sameOrigin). The endpoint has no limiter of
+// its own — mounted on the same mux as every other /api/* route, its requests
+// count against the app-wide rate limiter. The settings source is consulted
+// per request, so a disabled server answers 404 (exactly like an unmounted
+// route) and a newly-enabled one works without rebuilding the process. One SDK
+// server is cached per (allowWrite, allowDeveloperTools) combination — at most
+// four — and built lazily.
 func NewHandler(deps Deps) http.Handler {
 	opts := &mcpsdk.StreamableHTTPOptions{
 		Stateless:    true,
@@ -110,16 +143,7 @@ func NewHandler(deps Deps) http.Handler {
 	}
 	endpoint := &mcpEndpoint{deps: deps}
 	sdk := mcpsdk.NewStreamableHTTPHandler(endpoint.serverFor, opts)
-	window := deps.RateLimitWindow
-	if window <= 0 {
-		window = ratelimit.DefaultWindow
-	}
-	max := deps.RateLimitMax
-	if max <= 0 {
-		max = ratelimit.DefaultMax
-	}
-	limiter := ratelimit.New(window, max)
-	return sameOrigin(limiter.Middleware(endpoint.gate(sdk)))
+	return sameOrigin(endpoint.gate(sdk))
 }
 
 // mcpEndpoint gates the SDK handler on the current settings and caches one SDK
@@ -195,7 +219,8 @@ func newServer(deps Deps, allowWrite, allowDeveloperTools bool) *mcpsdk.Server {
 			"explain_score breaks a shot's score into its weighted parts and the targets used, " +
 			"export_shots_dataset returns a filtered batch of shots as one flat dataset for comparing a scoring idea against the user's ratings, " +
 			"get_diagnostics returns the app's own recent log lines plus sync and machine-reachability state for bug triage, " +
-			"and get_preheat_history returns the machine's recent preheat runs with their predicted and actual ready times for tuning the preheat and ready-by logic."
+			"get_preheat_history returns the machine's recent preheat runs with their predicted and actual ready times for tuning the preheat and ready-by logic, " +
+			"and get_perf_stats reports the running install's own performance: API response times per route, process memory, database size and requests per minute to each machine split by idle and brewing."
 	}
 	srv := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,
@@ -219,9 +244,12 @@ func newServer(deps Deps, allowWrite, allowDeveloperTools bool) *mcpsdk.Server {
 }
 
 // sameOrigin rejects any request whose Origin header is present and does not
-// match the request Host — the MCP spec's DNS-rebinding MUST. A request with
-// no Origin (every non-browser client, including the SDK's own client) is
-// allowed through; the SDK's localhost Host protection stays enabled too.
+// match the request Host. That stops cross-origin browser requests but not
+// DNS rebinding (a rebound name sends a matching Origin and Host); the
+// rebinding defense is auth.RequireKnownHost's Host allowlist, plus the SDK's
+// own check for requests arriving on a localhost address. A request with no
+// Origin (every non-browser client, including the SDK's own client) is
+// allowed through.
 func sameOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if origin := r.Header.Get("Origin"); origin != "" && !sameOriginHost(origin, r.Host) {

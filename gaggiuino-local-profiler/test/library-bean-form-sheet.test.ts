@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// library.js's import chain touches state.js/i18n.js, which read
+// library.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as the other library tests).
@@ -64,6 +64,7 @@ class FakeElement {
   hidden = false;
   value = '';
   checked = false;
+  disabled = false;
   type = '';
   parentNode: FakeElement | null = null;
   readonly children: FakeElement[] = [];
@@ -251,6 +252,8 @@ interface LibraryModule {
   requestCloseBeanForm: () => boolean;
   discardBeanForm: () => void;
   saveBeanAddBag: () => Promise<void>;
+  saveBeanNoBag: () => Promise<void>;
+  saveBean: () => Promise<void>;
   openNewBagForm: (id: number) => void;
 }
 
@@ -260,6 +263,7 @@ interface Bean {
   roaster: string;
   bags: unknown[];
   flavors: string[];
+  roastDate?: string;
 }
 
 interface StateLike {
@@ -272,11 +276,13 @@ interface StateLike {
 let doc: FakeDocument;
 let library: LibraryModule;
 let S: StateLike;
+let showToast: ReturnType<typeof vi.fn>;
 
 beforeEach(async () => {
   doc = new FakeDocument();
+  showToast = vi.fn();
   g.document = doc;
-  g.window = { matchMedia: () => ({ matches: false }) };
+  g.window = { matchMedia: () => ({ matches: false }), showToast };
   mocks.saveBean.mockReset();
   vi.resetModules();
   ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
@@ -352,12 +358,28 @@ describe('bean form sheet (#1349)', () => {
     expect(sheet?.innerHTML).toContain('Yirgacheffe Chelelektu');
   });
 
-  it('closes after creating without opening a detail sheet', () => {
+  it('creates through the form save action, then closes without a detail sheet', async () => {
     const { home, form } = setupHome();
-    library.openBeanForm();
-    library.closeBeanForm();
+    mocks.saveBean.mockResolvedValue({
+      id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [],
+    });
 
-    expect(form.parentNode).toBe(home);
+    library.openBeanForm();
+    expect(form.parentNode).not.toBe(home);
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+
+    // The form sheet header's Save is the real create submit path (#1489): with
+    // S.beanEditId null it routes to the "save without a bag" create action.
+    const saveBtn = find('lib-sheet-save');
+    expect(saveBtn).not.toBeNull();
+    saveBtn!.dispatch('click');
+
+    await vi.waitFor(() => expect(mocks.saveBean).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(form.parentNode).toBe(home));
+
+    expect(mocks.saveBean.mock.calls[0]?.[0]).toBeNull();
+    expect(mocks.saveBean.mock.calls[0]?.[1]).toMatchObject({ name: 'New Bean' });
+    expect(S.coffeeLibrary.beans.some(b => b.id === 7)).toBe(true);
     expect(doc.body.querySelector('#beanSheet')).toBeNull();
   });
 
@@ -421,3 +443,114 @@ describe('save and add bag (#1398)', () => {
   });
 });
 
+describe('bean roast date follows the current bag (#1606)', () => {
+  it('prefills the form with the current bag roast date, not the bean-level one', () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastDate = '2025-12-31';
+    library.openBeanForm(bean);
+
+    expect(doc.getElementById('beanFormRoastDate')!.value).toBe('2026-01-01');
+  });
+
+  it('editing without touching the roast date sends no roastDate', async () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastDate = '2025-12-31';
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Renamed', roaster: 'Kaffee Braun', bags: bean.bags,
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+
+    await library.saveBean();
+
+    const payload = mocks.saveBean.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect('roastDate' in payload).toBe(false);
+  });
+
+  it('editing the roast date sends the new value', async () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastDate = '2025-12-31';
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bean.bags,
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormRoastDate')!.value = '2026-02-02';
+
+    await library.saveBean();
+
+    const payload = mocks.saveBean.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.roastDate).toBe('2026-02-02');
+  });
+});
+
+describe('double save guard (#1614 slice 4)', () => {
+  it('ignores a second save while the first POST is still pending', async () => {
+    setupHome();
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+
+    let release!: (bean: Bean) => void;
+    mocks.saveBean.mockImplementation(() => new Promise<Bean>(res => { release = res; }));
+
+    const first = library.saveBeanNoBag();
+    // Fired while the first request is still in flight: it must not POST again.
+    const second = library.saveBeanNoBag();
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+
+    release({ id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [] });
+    await first;
+    await second;
+
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('rejected save shows an error (#1761)', () => {
+  const saveButtonIds = ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn'];
+
+  function expectSaveButtonsEnabled(): void {
+    expect(find('lib-sheet-save')?.disabled).toBe(false);
+    for (const id of saveButtonIds) {
+      expect(doc.getElementById(id)?.disabled).toBe(false);
+    }
+  }
+
+  it('create: shows the server message and keeps the form and its values', async () => {
+    const { home, form } = setupHome();
+    mocks.saveBean.mockRejectedValue(new Error('name required'));
+
+    library.openBeanForm();
+    doc.getElementById('beanFormName')!.value = 'Rejected Bean';
+    find('lib-sheet-save')!.dispatch('click');
+
+    await vi.waitFor(() => expect(showToast).toHaveBeenCalledTimes(1));
+
+    expect(showToast.mock.calls[0]?.[0]).toContain('name required');
+    expect(form.parentNode).not.toBe(home);
+    expect(doc.body.querySelector('#beanFormSheet')?.classList.contains('open')).toBe(true);
+    expect(doc.getElementById('beanFormName')!.value).toBe('Rejected Bean');
+    expect(S.coffeeLibrary.beans).toHaveLength(0);
+    expectSaveButtonsEnabled();
+  });
+
+  it('edit: falls back to the HTTP status and leaves the bean unchanged', async () => {
+    setupHome();
+    const bean = addBean();
+    mocks.saveBean.mockRejectedValue(new Error('HTTP 500'));
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    find('lib-sheet-save')!.dispatch('click');
+
+    await vi.waitFor(() => expect(showToast).toHaveBeenCalledTimes(1));
+
+    expect(showToast.mock.calls[0]?.[0]).toContain('HTTP 500');
+    expect(doc.body.querySelector('#beanFormSheet')?.classList.contains('open')).toBe(true);
+    expect(doc.getElementById('beanFormName')!.value).toBe('Renamed');
+    expect(S.coffeeLibrary.beans).toHaveLength(1);
+    expect(S.coffeeLibrary.beans[0]?.name).toBe('Yirgacheffe Chelelektu');
+    expectSaveButtonsEnabled();
+  });
+});

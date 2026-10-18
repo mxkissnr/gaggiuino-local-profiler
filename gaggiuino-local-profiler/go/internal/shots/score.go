@@ -1,19 +1,26 @@
 package shots
 
 import (
-	"bytes"
-	stdjson "encoding/json"
 	"math"
 	"regexp"
 	"strconv"
-
-	json "github.com/goccy/go-json"
 )
 
 // This file computes the canonical shot score (0-100): the weights (pressure
 // 25, temp stability+accuracy 20, duration 20, brew ratio 20, extraction yield
 // 20, channeling 15), thresholds and rounding are the agreed scoring
 // definition, shared with the frontend.
+
+// scoreVersion tags every shot_score_cache fingerprint (see pageColumns in
+// paging.go), so changing it invalidates every cached score at once. Bump it
+// (v3 -> v4, ...) in the same change whenever the score a shot gets can
+// change for the same inputs: weights, thresholds, rounding, what counts as
+// scoreable. Otherwise GET /api/shots and everything else reading the cache
+// keeps serving old scores while the live shot detail shows new ones (#1718).
+// TestScoreVersionPinsParityFixture fails when test/fixtures/score-parity.json's
+// expected scores change without a bump. It is spliced into SQL as a
+// literal, so it must stay a plain [a-z0-9] tag.
+const scoreVersion = "v3"
 
 // Bean is the subset of a library bean's fields the scorer reads
 // (brewTempC/brewRatio) to replace the generic fixed-band targets with the
@@ -29,6 +36,19 @@ type Bean struct {
 	BrewRatio string
 }
 
+// PressureNote values explain the pressure part when it was not scored
+// against the fixed >=5-bar band. See ScoreDetail.PressureNote (#1538).
+const (
+	// PressureNoteProfile: the shot never reached 5 bar, so its pressure was
+	// scored against its own targetPressure curve over the samples that fall
+	// in a PRESSURE-type phase.
+	PressureNoteProfile = "profile"
+	// PressureNoteOmitted: the shot never reached 5 bar and its profile has
+	// no PRESSURE phase to measure against, so the pressure part was left
+	// out and the remaining weights redistribute.
+	PressureNoteOmitted = "omitted"
+)
+
 // ScoreDetail is the score plus whether a bean target was used. Score is nil
 // when there are not enough datapoints to score at all.
 type ScoreDetail struct {
@@ -37,6 +57,13 @@ type ScoreDetail struct {
 	// Components is the per-part breakdown behind Score, in the same order
 	// the parts are combined. It is nil whenever Score is nil.
 	Components []ScoreComponent
+	// PressureNote is "" for the common case (a shot that reaches 5 bar and
+	// is scored against the fixed band). It is PressureNoteProfile when the
+	// pressure part was scored against the shot's own targetPressure, or
+	// PressureNoteOmitted when the part was left out — the sub-5-bar paths
+	// #1538 added. It lets the shot detail and explain_score say why the
+	// pressure part looks the way it does instead of hard-coding one reason.
+	PressureNote string
 }
 
 // ScoreComponent is one weighted part of CalcShotScoreDetail's score.
@@ -54,11 +81,9 @@ type ScoreComponent struct {
 	Target string
 }
 
-// jsRound rounds half-up (towards +Infinity), not Go's math.Round
-// (round-half-away-from-zero) — the two only disagree on negative .5
-// boundaries, which this package's score math never produces, but the
-// distinct name documents the intent instead of leaving a bare math.Round
-// call for a future reader to wonder about.
+// jsRound rounds half-up (towards +Infinity) as math.Floor(x+0.5), not Go's
+// math.Round (half away from zero). The two differ on negative .5 values,
+// which the score math never produces.
 func jsRound(x float64) int {
 	return int(math.Floor(x + 0.5))
 }
@@ -139,245 +164,6 @@ func parseBrewRatioTarget(brewRatio string) (float64, bool) {
 	return v, true
 }
 
-func floatSlice(v any) []float64 {
-	arr, ok := v.([]any)
-	if !ok {
-		return nil
-	}
-	out := make([]float64, 0, len(arr))
-	for _, x := range arr {
-		if f, ok := x.(float64); ok {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-// scoreSeries is the small set of datapoint arrays CalcShotScoreDetail and
-// ComputeShotMetrics actually read. hydrateRow keeps a shot's datapoints as
-// raw JSON bytes (see model.go), so the list scorer parses only these five
-// series — typed, never boxed through []any — instead of decoding the whole
-// (much larger) datapoints object per shot (#951).
-type scoreSeries struct {
-	pressure          []float64
-	temperature       []float64
-	targetTemperature []float64
-	timeInShot        []float64
-	// weight follows the `d.shotWeight || d.weight` rule: shotWeight wins
-	// whenever it is present and non-null, even when it is an empty array (in
-	// which case weight is deliberately NOT consulted as a fallback).
-	weight []float64
-}
-
-// extractScoreSeries pulls the scoring series out of a shot's "datapoints"
-// value in whichever shape it arrives: a json.RawMessage (hydrateRow) or a
-// map[string]any (a Shot built by hand in tests / demo seed data).
-func extractScoreSeries(v any) scoreSeries {
-	switch t := v.(type) {
-	case stdjson.RawMessage:
-		return scoreSeriesFromRaw(t)
-	case []byte:
-		return scoreSeriesFromRaw(t)
-	case map[string]any:
-		return scoreSeriesFromMap(t)
-	default:
-		return scoreSeries{}
-	}
-}
-
-func scoreSeriesFromMap(d map[string]any) scoreSeries {
-	s := scoreSeries{
-		pressure:          floatSlice(d["pressure"]),
-		temperature:       floatSlice(d["temperature"]),
-		targetTemperature: floatSlice(d["targetTemperature"]),
-		timeInShot:        floatSlice(d["timeInShot"]),
-	}
-	if v, ok := d["shotWeight"]; ok && v != nil {
-		s.weight = floatSlice(v)
-	} else if v, ok := d["weight"]; ok && v != nil {
-		s.weight = floatSlice(v)
-	}
-	return s
-}
-
-func scoreSeriesFromRaw(raw stdjson.RawMessage) scoreSeries {
-	var s scoreSeries
-	if isJSONNull(raw) {
-		return s
-	}
-	var m map[string]stdjson.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return s
-	}
-	s.pressure = decodeFloatArray(m["pressure"])
-	s.temperature = decodeFloatArray(m["temperature"])
-	s.targetTemperature = decodeFloatArray(m["targetTemperature"])
-	s.timeInShot = decodeFloatArray(m["timeInShot"])
-	if v, ok := m["shotWeight"]; ok && !isJSONNull(v) {
-		s.weight = decodeFloatArray(v)
-	} else if v, ok := m["weight"]; ok && !isJSONNull(v) {
-		s.weight = decodeFloatArray(v)
-	}
-	return s
-}
-
-// hasChartSeries reports whether a shot's "datapoints" value carries a
-// non-empty timeInShot or pressure series — GET /api/shots's hasChartData
-// slim-row bool (the frontend's live ref-overlay picker and any
-// "curves available?" check read it instead of probing datapoints, which
-// the slim row no longer carries). Cheap on both shapes: a hand-built
-// map[string]any is a length check; a hydrateRow RawMessage is one shallow
-// object tokenize (no per-sample number parsing), materially cheaper than
-// the full extractScoreSeries decode the scorer does.
-func hasChartSeries(v any) bool {
-	switch t := v.(type) {
-	case map[string]any:
-		return len(floatSlice(t["timeInShot"])) > 0 || len(floatSlice(t["pressure"])) > 0
-	case stdjson.RawMessage:
-		return rawHasNonEmptyArray(t)
-	case []byte:
-		return rawHasNonEmptyArray(t)
-	default:
-		return false
-	}
-}
-
-func rawHasNonEmptyArray(raw []byte) bool {
-	if isJSONNull(raw) {
-		return false
-	}
-	var m map[string]stdjson.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return false
-	}
-	for _, k := range [...]string{"timeInShot", "pressure"} {
-		v := bytes.TrimSpace(m[k])
-		if len(v) >= 2 && v[0] == '[' && string(v) != "[]" {
-			return true
-		}
-	}
-	return false
-}
-
-// tempStabilityDev is the mean absolute deviation of the temperature series
-// from its target, in °C (both series are the ×10-scaled GLP convention,
-// hence the /10). Returned per GET /api/shots row as `tempStabilityDev` so
-// the Analytics machine-comparison's "Ø stability" column doesn't need every
-// shot's curve client-side (#957 decision 3 / step 13). nil when the shot has
-// no usable temp+target pair.
-func tempStabilityDev(v any) *float64 {
-	var temp, target []float64
-	switch t := v.(type) {
-	case map[string]any:
-		temp, target = floatSlice(t["temperature"]), floatSlice(t["targetTemperature"])
-	case stdjson.RawMessage:
-		temp, target = tempTargetFromRaw(t)
-	case []byte:
-		temp, target = tempTargetFromRaw(t)
-	default:
-		return nil
-	}
-	n := len(temp)
-	if len(target) < n {
-		n = len(target)
-	}
-	var sum float64
-	var count int
-	for i := 0; i < n; i++ {
-		if target[i] == 0 {
-			continue
-		}
-		d := temp[i] - target[i]
-		if d < 0 {
-			d = -d
-		}
-		sum += d / 10
-		count++
-	}
-	if count == 0 {
-		return nil
-	}
-	dev := sum / float64(count)
-	return &dev
-}
-
-func tempTargetFromRaw(raw []byte) (temp, target []float64) {
-	if isJSONNull(raw) {
-		return nil, nil
-	}
-	var m map[string]stdjson.RawMessage
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, nil
-	}
-	return decodeFloatArray(m["temperature"]), decodeFloatArray(m["targetTemperature"])
-}
-
-func isJSONNull(r stdjson.RawMessage) bool {
-	t := bytes.TrimSpace(r)
-	return len(t) == 0 || string(t) == "null"
-}
-
-// decodeFloatArray parses a JSON number array, dropping any null element —
-// byte-for-byte matching the map/[]any path's floatSlice, which skips
-// anything that isn't a float64 (a JSON null decodes to a nil interface and
-// is skipped there). Decoding straight into []float64 would instead turn a
-// null into a 0, so a shot with a stray null in a series would score
-// differently on /shots.json (this path) than in the detail view
-// (DatapointsMap -> floatSlice). Decoding into []*float64 keeps the fast,
-// unboxed path while preserving the drop-null semantics; a non-numeric
-// element (string/bool) still errors and falls back to the lenient []any
-// parse.
-func decodeFloatArray(r stdjson.RawMessage) []float64 {
-	if len(r) == 0 {
-		return nil
-	}
-	var ptrs []*float64
-	if err := json.Unmarshal(r, &ptrs); err == nil {
-		out := make([]float64, 0, len(ptrs))
-		for _, p := range ptrs {
-			if p != nil {
-				out = append(out, *p)
-			}
-		}
-		return out
-	}
-	var anyArr []any
-	if err := json.Unmarshal(r, &anyArr); err != nil {
-		return nil
-	}
-	return floatSlice(anyArr)
-}
-
-func divAll(vals []float64, d float64) []float64 {
-	out := make([]float64, len(vals))
-	for i, v := range vals {
-		out[i] = v / d
-	}
-	return out
-}
-
-func toMap(v any) map[string]any {
-	m, _ := v.(map[string]any)
-	return m
-}
-
-// toFloat accepts both float64 (every number decoded from the shot's own
-// JSON `data`/`annotation` blob, e.g. ann.dose/ann.tds) and int64 (the
-// fixed `duration` column hydrateRow scans as an int64, not a float64) —
-// shot["duration"] is the only field CalcShotScoreDetail reads that can
-// arrive as either, depending on whether the caller built the Shot via
-// hydrateRow or by hand (as this package's own tests do).
-func toFloat(v any) (float64, bool) {
-	switch n := v.(type) {
-	case float64:
-		return n, true
-	case int64:
-		return float64(n), true
-	default:
-		return 0, false
-	}
-}
-
 // CalcShotScoreDetail scores a shot, operating on the Shot map hydrateRow
 // produces (a shot's "datapoints"/"duration"/"annotation" fields).
 //
@@ -395,42 +181,85 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 
 	p := divAll(ss.pressure, 10)
 	var pVals []float64
+	nonzero := 0
 	for _, v := range p {
+		if v > 0 {
+			nonzero++
+		}
 		if v >= 5 {
 			pVals = append(pVals, v)
 		}
 	}
-	if len(pVals) <= 3 {
+	// #1538: "not enough data" means there is no pressure curve at all, not
+	// "the curve never reached 5 bar". A shot with >=4 recorded samples that
+	// stays below 5 bar (a flat lever profile, a choked grind) is scored — its
+	// pressure part against the profile's own target when it has one, or left
+	// out when it doesn't. Any shot with >=4 samples at/above 5 bar takes the
+	// unchanged fixed-band path below, byte-for-byte as before #1538.
+	if nonzero < 4 {
 		return ScoreDetail{}
 	}
 
 	var scores []int
 	var weights []int
 	var components []ScoreComponent
+	var pressureNote string
 	usedBeanTarget := false
 
-	avgP := avg(pVals)
-	var sPressure float64
-	switch {
-	case avgP >= 7 && avgP <= 9.5:
-		sPressure = 100
-	case avgP < 7:
-		sPressure = math.Max(20, 100-(7-avgP)*22)
-	default:
-		sPressure = math.Max(20, 100-(avgP-9.5)*28)
+	if len(pVals) > 3 {
+		avgP := avg(pVals)
+		var sPressure float64
+		switch {
+		case avgP >= 7 && avgP <= 9.5:
+			sPressure = 100
+		case avgP < 7:
+			sPressure = math.Max(20, 100-(7-avgP)*22)
+		default:
+			sPressure = math.Max(20, 100-(avgP-9.5)*28)
+		}
+		pressureScore := jsRound(sPressure)
+		scores = append(scores, pressureScore)
+		weights = append(weights, 25)
+		components = append(components, ScoreComponent{
+			Name:   "pressure",
+			Score:  pressureScore,
+			Weight: 25,
+			Inputs: map[string]float64{"avg_pressure_bar": avgP},
+			Target: "generic",
+		})
+	} else if mae, samples, ok := profilePressureMAE(shot, p); ok {
+		// A sub-5-bar shot whose profile has a PRESSURE phase: score how
+		// closely it tracked its own target instead of the unreachable band.
+		pressureScore := jsRound(profilePressureScore(mae))
+		scores = append(scores, pressureScore)
+		weights = append(weights, 25)
+		components = append(components, ScoreComponent{
+			Name:   "pressure",
+			Score:  pressureScore,
+			Weight: 25,
+			Inputs: map[string]float64{"pressure_mae_bar": mae, "samples": float64(samples)},
+			Target: "profile",
+		})
+		pressureNote = PressureNoteProfile
+	} else {
+		// Sub-5-bar shot with no pressure target to compare against (no
+		// embedded phases, or only FLOW phases whose targetPressure is a
+		// limit): leave the part out; the other weights redistribute.
+		pressureNote = PressureNoteOmitted
 	}
-	pressureScore := jsRound(sPressure)
-	scores = append(scores, pressureScore)
-	weights = append(weights, 25)
-	components = append(components, ScoreComponent{
-		Name:   "pressure",
-		Score:  pressureScore,
-		Weight: 25,
-		Inputs: map[string]float64{"avg_pressure_bar": avgP},
-		Target: "generic",
-	})
 
-	tVals := divAll(ss.temperature, 10)
+	// #1688: a failed thermocouple read is stored as exactly 0 (there is no
+	// per-sample validity flag), so an isolated dropout would otherwise swing
+	// stddev and the mean by tens of degrees. A brew path cannot change by
+	// 90 C in one sample interval, so drop exact zeros before scoring. With
+	// fewer than 6 valid samples left, the temperature part is left out (the
+	// same > 5 gate, now applied to the cleaned series).
+	var tVals []float64
+	for _, v := range divAll(ss.temperature, 10) {
+		if v != 0 {
+			tVals = append(tVals, v)
+		}
+	}
 	if len(tVals) > 5 {
 		sd := stddev(tVals)
 		var stab float64
@@ -670,10 +499,10 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 		weighted += float64(s * weights[i])
 	}
 	score := jsRound(weighted / float64(totalWeight))
-	return ScoreDetail{Score: &score, UsedBeanTarget: usedBeanTarget, Components: components}
-}
-
-// CalcShotScore is the score-only wrapper every non-detail caller uses.
-func CalcShotScore(shot Shot, bean *Bean) *int {
-	return CalcShotScoreDetail(shot, bean).Score
+	return ScoreDetail{
+		Score:          &score,
+		UsedBeanTarget: usedBeanTarget,
+		Components:     components,
+		PressureNote:   pressureNote,
+	}
 }

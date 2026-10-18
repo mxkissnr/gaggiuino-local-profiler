@@ -1,10 +1,11 @@
-// Theme resolution + application (#1018). Split out of main.js so this
-// logic can be unit tested directly -- main.js's own import chain has heavy
+// Theme resolution + application (#1018). Split out of main.ts so this
+// logic can be unit tested directly -- main.ts's own import chain has heavy
 // side effects at load time (service worker registration, a DOMContentLoaded
 // bootstrap touching dozens of element ids) that make importing it in a test
 // impractical; this module has none.
 import { THEME_CHANGE_EVENT } from './utils.js';
 import { THEME_PRESET_KEYS } from './shared/theme-presets.js';
+import { safeLocalStorage } from './storage.js';
 
 export const THEME_STORAGE_KEY: string = 'glp_theme';
 
@@ -75,7 +76,7 @@ export function applyTheme(theme: string, { doc = document, win = window }: { do
 // attaching/detaching one on every setTheme() call, and costs nothing while
 // idle. Returns the MediaQueryList (or undefined in an environment without
 // matchMedia) mainly so tests can drive it directly.
-export function watchSystemTheme({ win = window, storage = localStorage }: { win?: Window & typeof globalThis; storage?: Storage } = {}): MediaQueryList | undefined {
+export function watchSystemTheme({ win = window, storage = safeLocalStorage }: { win?: Window & typeof globalThis; storage?: Pick<Storage, 'getItem'> } = {}): MediaQueryList | undefined {
   const mq = win.matchMedia?.('(prefers-color-scheme: dark)');
   mq?.addEventListener('change', () => {
     if ((storage.getItem(THEME_STORAGE_KEY) || 'dark') === 'auto') applyTheme('auto', { win });

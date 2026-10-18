@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
@@ -29,13 +28,11 @@ import (
 // This file implements the backup/restore routes (GET/POST /api/backup,
 // POST /api/restore) on Go 1.22+'s method-and-wildcard http.ServeMux.
 
-// restoreJSONBodyLimit/restoreZipBodyLimit cap the restore upload body. With
-// #959's true streaming (the body goes to a temp file, never a slice) these
-// are a zip-bomb / abuse guard on the compressed upload, no longer a memory
-// guard — kept at their current values.
+// restoreJSONBodyLimit caps the legacy self-contained JSON restore body. That
+// form decodes its inline images into memory, so it stays at its historical
+// value; the zip form's cap (restoreZipBodyLimit, below) is a var.
 const (
 	restoreJSONBodyLimit = 50 * 1024 * 1024
-	restoreZipBodyLimit  = 50 * 1024 * 1024
 	postBackupBodyLimit  = 16 * 1024 // POST /api/backup's own body is tiny (sections+passphrase).
 )
 
@@ -53,17 +50,21 @@ const (
 	perShotEstimateBytes        = 4 * 1024 // rough deflated size of one hydrated shot's JSON
 )
 
-// restoreUnzipEntryLimit/restoreUnzipTotalLimit bound how much
-// *decompressed* data the restore path will read out of a single zip
-// entry, and cumulatively across every entry it reads. restoreZipBodyLimit
-// only caps the compressed request body; without this a small,
-// highly-compressible entry (a "zip bomb") could still inflate past memory
-// as it is streamed through the JSON decoder / image validator (#901 code
-// review). Package-level vars (not consts) so tests can shrink them to a
-// few KB instead of deflating hundreds of MB per run.
+// restoreZipBodyLimit/restoreUnzipEntryLimit/restoreUnzipTotalLimit bound the
+// zip restore upload. restoreZipBodyLimit caps the *compressed* request body;
+// since the export streams every referenced image with no cap of its own and
+// #959 spools the body to a temp file (never a slice), this is no longer a
+// memory guard — only an abuse / zip-bomb guard on an authenticated route — so
+// it is deliberately generous. restoreUnzipEntryLimit/restoreUnzipTotalLimit
+// bound the *decompressed* data read out of a single zip entry, and
+// cumulatively across every entry, so a small highly-compressible entry (a "zip
+// bomb") cannot inflate past memory as it is streamed through the JSON decoder
+// / image validator (#901 code review). Package-level vars (not consts) so
+// tests can shrink them to a few KB instead of moving hundreds of MB per run.
 var (
+	restoreZipBodyLimit    int64 = 2 * 1024 * 1024 * 1024
 	restoreUnzipEntryLimit int64 = 100 * 1024 * 1024
-	restoreUnzipTotalLimit int64 = 300 * 1024 * 1024
+	restoreUnzipTotalLimit int64 = 4 * 1024 * 1024 * 1024
 )
 
 // Dependencies wires every cross-domain repository this package's export/
@@ -162,9 +163,11 @@ func backupTimestamp() string {
 // image on every hit — strictly more than GET /api/debug/export-db, which
 // only streams the raw SQLite file and is already limited to 5/min (#999,
 // security audit #977 round 3 finding 3.2) — so it gets the same feature
-// limiter on top of the app-wide 600/min backstop. This is DELIBERATELY
-// STRICTER than the image-upload routes, which rely on the shared backstop
-// alone.
+// limiter on top of the app-wide 600/min backstop, stricter than the
+// image-upload routes' 30/min. #1626: POST /api/backup (the zip export,
+// which streams the same data) gets the same ceiling under its own
+// "backup-zip:<ip>" key, so it never eats into the GET budget the HA
+// integration's backup service uses.
 const backupRateLimitPerMin = 5
 
 // ── GET /api/backup ──────────────────────────────────────────────────────
@@ -183,10 +186,21 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+
+	// #1525/#1602: the legacy JSON export bundles only image files an entry
+	// still refers to, exactly like the zip export. A lookup failure falls
+	// back to bundling every image (a superset) rather than risk dropping a
+	// referenced photo.
+	referenced, err := referencedImageNames(h.deps.LibRepo, h.deps.ShotsRepo)
+	if err != nil {
+		log.Printf("backup: building referenced image set: %v (bundling all images)", err)
+		referenced = nil
+	}
+
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="glp-backup-%s.json"`, backupTimestamp()))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := h.deps.writeBundleJSON(w, small, nil, true); err != nil {
+	if err := h.deps.writeBundleJSON(w, small, nil, true, referenced); err != nil {
 		log.Printf("backup: streaming legacy JSON export failed mid-response: %v", err)
 		return
 	}
@@ -202,6 +216,10 @@ func (h *Handlers) getBackup(w http.ResponseWriter, r *http.Request) {
 // the stream ends and treat a missing/zero/non-numeric header as
 // indeterminate (a missing header is unknown, not zero).
 func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
+	if !h.rl.Allow("backup-zip:"+auth.RemoteIP(r), backupRateLimitPerMin) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, postBackupBodyLimit)
 	var body struct {
 		Passphrase string `json:"passphrase"`
@@ -259,7 +277,7 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 		log.Printf("backup: creating backup.json zip entry: %v", err)
 		return
 	}
-	if err := h.deps.writeBundleJSON(jw, small, sec, false); err != nil {
+	if err := h.deps.writeBundleJSON(jw, small, sec, false, referenced); err != nil {
 		log.Printf("backup: streaming backup.json failed mid-response: %v", err)
 		return
 	}
@@ -278,9 +296,9 @@ func (h *Handlers) postBackup(w http.ResponseWriter, r *http.Request) {
 // backupSizeEstimate computes the X-GLP-Backup-Estimate value for a given
 // section scope. It is stat-only: it counts shot rows and sums the on-disk
 // size of the image files streamImagesIntoZip would bundle, without opening
-// a single image or hydrating a single shot. The image filter mirrors
-// streamImagesIntoZip exactly (skip directories and *.thumb.* files, and —
-// per referenced — skip app-named files no entry refers to). A
+// a single image or hydrating a single shot. It walks the images through the
+// same bundledImageEntries filter streamImagesIntoZip and the inline JSON
+// export use, so the estimate can never diverge from what is streamed. A
 // missing/unreadable image directory is treated as "no images" rather than
 // an error; only a DB failure counting shots propagates (still pre-header,
 // so a clean 500).
@@ -297,17 +315,11 @@ func (h *Handlers) backupSizeEstimate(sec sections, referenced map[string]struct
 	}
 	est += int64(n) * perShotEstimateBytes
 
-	entries, err := os.ReadDir(imageDir)
+	entries, _, err := bundledImageEntries(referenced)
 	if err != nil {
 		return est, nil
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
-			continue
-		}
-		if !imageBundled(entry.Name(), referenced) {
-			continue
-		}
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -324,19 +336,11 @@ func (h *Handlers) backupSizeEstimate(sec sections, referenced map[string]struct
 // Best-effort per file: one unreadable file must not abort the archive. The
 // count of skipped app-named orphans is logged once.
 func streamImagesIntoZip(zw *zip.Writer, referenced map[string]struct{}) {
-	entries, err := os.ReadDir(imageDir)
+	entries, skipped, err := bundledImageEntries(referenced)
 	if err != nil {
 		return
 	}
-	skipped := 0
 	for _, entry := range entries {
-		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
-			continue // thumbnails are regenerated on restore, not bundled
-		}
-		if !imageBundled(entry.Name(), referenced) {
-			skipped++
-			continue
-		}
 		f, err := os.Open(filepath.Join(imageDir, entry.Name()))
 		if err != nil {
 			continue

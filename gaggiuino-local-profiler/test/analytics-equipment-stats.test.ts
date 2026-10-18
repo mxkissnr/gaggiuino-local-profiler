@@ -6,13 +6,13 @@ function at<T>(arr: readonly T[], i: number): T {
   return v;
 }
 
-// Same window/localStorage/navigator stubbing as analytics-new-charts.test.js
-// — analytics.js calls window.calcShotScore/window.getShotData at runtime
-// (main.js's real window-exposure pattern) and pulls in echarts transitively.
+// Same window/localStorage/navigator stubbing as analytics-new-charts.test.ts
+// — analytics.ts calls window.calcShotScore/window.getShotData at runtime
+// (main.ts's real window-exposure pattern) and pulls in echarts transitively.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let _computeEquipmentStats: Analytics['_computeEquipmentStats'];
 
-// views/analytics.js's ShotRow interface isn't exported; derive it from the
+// views/analytics.ts's ShotRow interface isn't exported; derive it from the
 // helper under test so the fixtures stay shape-checked against it.
 type ShotRow = Parameters<Analytics['_computeEquipmentStats']>[0][number];
 
@@ -61,7 +61,7 @@ const puckScreens = [{ id: 5, name: 'Slayer mesh' }];
 const duplicateNameBaskets = [{ id: 10, name: 'Standard' }, { id: 11, name: 'Standard' }];
 
 // #674: helpers mirroring buildBasketStats()/buildPuckScreenStats()'s own
-// getKey/getName pair (views/analytics.js), so these tests exercise the
+// getKey/getName pair (views/analytics.ts), so these tests exercise the
 // same shape real callers use rather than a bespoke test-only convention.
 const basketStats     = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.basketId, id => baskets.find(b => b.id === Number(id))?.name || null);
 const puckScreenStats = (shots: ShotRow[]) => _computeEquipmentStats(shots, s => s.annotation?.puckScreenId, id => puckScreens.find(p => p.id === Number(id))?.name || null);
@@ -116,10 +116,21 @@ describe('_computeEquipmentStats (#668, generalized in #674 for grinder too)', (
     expect(rows[0]).toMatchObject({ count: 1, avgScore: null, bestScore: null, avgDuration: null });
   });
 
-  it('never touches calcShotScore\'s own formula — reuses it as-is via window.calcShotScore', () => {
-    const shots = [shot({ basketId: 1, score: 77 })];
-    const rows = basketStats(shots);
-    expect(at(rows, 0).avgScore).toBe(77);
+  it('uses the value window.calcShotScore returns, not the shot\'s stored score', () => {
+    const win = globalThis as unknown as {
+      window: { calcShotScore: (s: ShotRow) => number | null };
+    };
+    const original = win.window.calcShotScore;
+    // The fixture's stored score is 77, but the stub answers 42: the row must
+    // carry the stub's value, so a module that read shot.score directly (or
+    // recomputed its own formula) would fail this instead of passing by luck.
+    win.window.calcShotScore = () => 42;
+    try {
+      const rows = basketStats([shot({ basketId: 1, score: 77 })]);
+      expect(at(rows, 0).avgScore).toBe(42);
+    } finally {
+      win.window.calcShotScore = original;
+    }
   });
 
   it('keeps two same-named baskets as separate cards, grouped by id not by name', () => {

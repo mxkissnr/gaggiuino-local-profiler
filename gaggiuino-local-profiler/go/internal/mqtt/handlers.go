@@ -26,6 +26,11 @@ type AdapterProvider interface {
 	GetAdapter(m *machines.Machine) (machines.Adapter, error)
 }
 
+// errApplyToMachine is the fixed client-facing message for a failed
+// apply-to-machine step: the raw adapter error is logged but never echoed, so
+// it can't leak machine/adapter internals back to the caller.
+const errApplyToMachine = "applying the MQTT settings to the machine failed"
+
 // Handlers wires the MQTT routes.
 type Handlers struct {
 	repo      *Repository
@@ -112,8 +117,9 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		// #1050: getSettings never echoes the real password back (see above),
 		// so the Settings UI's re-submitted form has no way to send it back
 		// unchanged — an absent password field means "keep the stored one",
-		// not "clear it".
-		parsed.Password = h.repo.GetSettings().Password
+		// not "clear it". The password is only reused while the host and port
+		// still name the same broker; a different broker gets no credentials.
+		parsed = MergeCredentials(h.repo.GetSettings(), parsed)
 	}
 	// #988: reject a broker host the SSRF guard would refuse to dial, same
 	// threat model as a machine's own host (client.go's connect() re-checks
@@ -170,7 +176,7 @@ func (h *Handlers) applyToMachine(w http.ResponseWriter, r *http.Request) {
 	currentRaw, err := adapter.GetSettings(r.Context(), machine, "system")
 	if err != nil {
 		log.Printf("Applying MQTT settings to machine failed: %v", err)
-		httputil.WriteError(w, http.StatusBadGateway, err.Error())
+		httputil.WriteError(w, http.StatusBadGateway, errApplyToMachine)
 		return
 	}
 	var current map[string]any
@@ -192,7 +198,7 @@ func (h *Handlers) applyToMachine(w http.ResponseWriter, r *http.Request) {
 	result, err := adapter.UpdateSettings(r.Context(), machine, "system", merged)
 	if err != nil {
 		log.Printf("Applying MQTT settings to machine failed: %v", err)
-		httputil.WriteError(w, http.StatusBadGateway, err.Error())
+		httputil.WriteError(w, http.StatusBadGateway, errApplyToMachine)
 		return
 	}
 	log.Printf("Applied broker connection to machine #%d %q's own MQTT client settings", machine.ID, machine.Name)

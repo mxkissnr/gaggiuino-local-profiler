@@ -14,9 +14,9 @@ import (
 
 // This file handles the barcode-scan endpoint: a server-side proxy to Open Food
 // Facts (the browser can't call it directly — the app's CSP pins connect-src
-// to 'self'), guarded by an SSRF check (assertPublicHost, ssrf.go) before
-// ever dialing out, even though the target host is a fixed literal (DNS
-// rebinding defense, not user-input validation — see ssrf.go's doc comment).
+// to 'self'). The fixed target host is pre-checked with assertPublicHost
+// (ssrf.go) before the request, and scanHTTPClient's dial is pinned to the
+// checked address (newGuardedTransport, #1626).
 
 const offHost = "world.openfoodfacts.org"
 
@@ -33,7 +33,8 @@ var barcodeRe = regexp.MustCompile(`^(\d{8}|\d{12}|\d{13}|\d{14})$`)
 const scanFetchMaxBytes = 1 * 1024 * 1024
 
 var scanHTTPClient = &http.Client{
-	Timeout: 8 * time.Second,
+	Timeout:   8 * time.Second,
+	Transport: newGuardedTransport(),
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse // maxRedirects: 0
 	},
@@ -46,7 +47,7 @@ func (h *Handlers) registerScanRoute(mux *http.ServeMux) {
 // scanBarcode handles GET /api/library/scan/:barcode.
 func (h *Handlers) scanBarcode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if !h.limiter.allow("scan:"+auth.RemoteIP(r), 20) {
+	if !h.limiter.Allow("scan:"+auth.RemoteIP(r), 20) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited")
 		return
 	}

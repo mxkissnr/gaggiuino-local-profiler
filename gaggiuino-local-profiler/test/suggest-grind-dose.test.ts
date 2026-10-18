@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { GrindShot } from '../public-src/views/shots/grind.js';
 
-// Same stubbing approach as best-grind-combo.test.js: grind.js pulls in
-// state.js/i18n.js which need localStorage/navigator at module load.
+// Same stubbing approach as best-grind-combo.test.ts: grind.ts pulls in
+// state/index.ts/i18n.ts which need localStorage/navigator at module load.
 let suggestGrindDoseForBean: (typeof import('../public-src/views/shots/grind.js'))['suggestGrindDoseForBean'];
 
 beforeAll(async () => {

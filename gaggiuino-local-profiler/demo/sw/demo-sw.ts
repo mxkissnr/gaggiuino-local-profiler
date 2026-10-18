@@ -261,6 +261,8 @@ async function handle(request: Request, event: FetchEvent): Promise<Response> {
             return jsonResponse(DEMO_TOKEN);
         case 'sse':
             return sseResponse();
+        case 'sse-ticket':
+            return jsonResponse({ ticket: 'demo' });
         case 'fixture': {
             // Elapsed time since the fixtures were recorded: every wall-clock
             // timestamp in a JSON fixture is moved forward by this much, so a

@@ -2,6 +2,7 @@ package machines
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -266,14 +267,12 @@ func TestResolveMachine(t *testing.T) {
 		t.Fatalf("ResolveMachine(second.ID) = %+v, want id %d", resolved, second.ID)
 	}
 
-	// Unknown id -> falls back to the default machine.
+	// Unknown id -> ErrUnknownMachine, not a silent fallback to the default
+	// machine (#1605): only an ABSENT machineId means "the default machine",
+	// so a mutating caller can tell an explicit-but-wrong id apart from no id.
 	unknown := int64(999)
-	resolved, err = reg.ResolveMachine(&unknown)
-	if err != nil {
-		t.Fatalf("ResolveMachine(999): %v", err)
-	}
-	if !resolved.IsDefault {
-		t.Fatalf("ResolveMachine(999) = %+v, want the default machine (fallback)", resolved)
+	if _, err := reg.ResolveMachine(&unknown); !errors.Is(err, ErrUnknownMachine) {
+		t.Fatalf("ResolveMachine(999) err = %v, want ErrUnknownMachine", err)
 	}
 }
 
@@ -446,5 +445,19 @@ func TestRestoreMachines_ClearsMachineProfiles(t *testing.T) {
 	}
 	if got := countProfiles(); got != 1 {
 		t.Fatalf("machine_profiles after an all-invalid restore = %d, want 1 (untouched)", got)
+	}
+}
+
+// TestCountRestorableMachines (#1603): the dry-run preview's machine count
+// must be what RestoreMachines would actually insert — a valid entry counts,
+// while an id of 0 and an unrecognized type are skipped.
+func TestCountRestorableMachines(t *testing.T) {
+	in := []Machine{
+		{ID: 1, Name: "Kitchen", Type: "gaggiuino", Host: "kitchen.local"},
+		{ID: 0, Name: "No id", Type: "gaggiuino", Host: "no-id.local"},
+		{ID: 2, Name: "Bad type", Type: "not-a-real-type", Host: "bad.local"},
+	}
+	if got := CountRestorableMachines(in); got != 1 {
+		t.Fatalf("CountRestorableMachines = %d, want 1", got)
 	}
 }

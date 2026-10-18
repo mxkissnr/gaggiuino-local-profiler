@@ -3,6 +3,8 @@ package backup
 import (
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -96,6 +98,44 @@ func imageBundled(name string, referenced map[string]struct{}) bool {
 	return !img.KnownImageName(name)
 }
 
+// bundledImageEntries returns the image files in the package image directory
+// that a backup should bundle: every regular file that is not a ".thumb."
+// sibling and that imageBundled accepts (referenced, or a foreign name no
+// entry can refer to). It also reports how many app-named files were skipped
+// because nothing refers to them, so the caller can log the same one line.
+// A missing directory is "no images" — an empty list and a nil error — which
+// the export paths have always treated that way. All three export walks
+// (#1602) share this so their filters can never drift apart again.
+func bundledImageEntries(referenced map[string]struct{}) ([]os.DirEntry, int, error) {
+	entries, err := os.ReadDir(imageDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, 0, nil
+		}
+		return nil, 0, err
+	}
+	bundled := make([]os.DirEntry, 0, len(entries))
+	skipped := 0
+	for _, entry := range entries {
+		if entry.IsDir() || strings.Contains(entry.Name(), ".thumb.") {
+			continue // thumbnails are regenerated on restore, not bundled
+		}
+		if !imageBundled(entry.Name(), referenced) {
+			skipped++
+			continue
+		}
+		bundled = append(bundled, entry)
+	}
+	return bundled, skipped, nil
+}
+
+// orphanGracePeriod is how long an unreferenced app-named image must have
+// existed before removeUnreferencedImages deletes it. An upload writes the
+// image before saving the entry row that refers to it, so a sweep running in
+// that window would otherwise delete a just-uploaded photo; skipping fresh
+// files closes that race.
+var orphanGracePeriod = 10 * time.Minute
+
 // removeUnreferencedImages deletes every app-named image file in dir that no
 // entry refers to, together with its ".thumb." sibling: a name whose full
 // image is not in referenced is removed whether it is the full image itself
@@ -122,6 +162,9 @@ func removeUnreferencedImages(dir string, referenced map[string]struct{}, logf f
 		info, err := entry.Info()
 		if err != nil {
 			continue
+		}
+		if time.Since(info.ModTime()) < orphanGracePeriod {
+			continue // possibly an upload in flight — its entry row may not be saved yet
 		}
 		if err := os.Remove(filepath.Join(dir, name)); err != nil {
 			if !os.IsNotExist(err) {

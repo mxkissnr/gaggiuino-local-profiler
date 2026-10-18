@@ -1,30 +1,20 @@
 package backup
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 )
 
 // This file implements POST /api/restore: the largest handler, split
-// across a few helper functions the handler (postRestore, in handlers.go)
-// composes, following a top-to-bottom structure (parse request -> validate
+// across a few helper functions the handler (postRestore, below) composes, following a top-to-bottom structure (parse request -> validate
 // -> sanitize/preview -> [dry-run: return] -> apply -> side effects ->
 // respond).
 //
@@ -51,8 +41,7 @@ import (
 // a failure after the shots tx commits but during, say, the maintenance write
 // leaves shots restored and maintenance not. Threading a shared *sql.Tx
 // through every repository across five packages (the only way to close that
-// last gap in-process) remains out of scope. Flagged again in doc.go and
-// go/README.md.
+// last gap in-process) remains out of scope. Flagged again in doc.go.
 const maxShotID = shots.MaxShotID
 
 // shotMeta is the per-shot validation state pass 1 collects while
@@ -71,6 +60,14 @@ type shotMeta struct {
 func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	isZip := strings.HasPrefix(contentType, "application/zip")
+
+	// #1601: one coarse per-IP token for the upload itself, taken before the
+	// body is spooled/unzipped/parsed — the finer dry-run/apply checks below
+	// run only after parsing, since dryRun lives inside the body.
+	if !h.rl.Allow("restore-upload:"+auth.RemoteIP(r), 30) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
 
 	tmpPath, cleanup, err := streamRestoreBodyToTemp(r.Body, isZip)
 	if err != nil {
@@ -127,7 +124,9 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		_, tsOK := m["timestamp"].(float64)
 		metas = append(metas, shotMeta{id: id, idOK: idOK && id > 0, tsOK: tsOK})
 		// Shot image validation happens here (one image body in memory at
-		// most). Discarded below if the shots section isn't in scope.
+		// most). Its cleared `.image` field only affects this in-memory
+		// copy: pass 2 re-parses the raw entry, so the stored row is
+		// sanitised by shots.shotInsertArgs instead.
 		validateEntityImages([]map[string]any{m}, "shot-", images, &shotPending)
 		return nil
 	})
@@ -147,7 +146,18 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 			}
 			b["sections"] = sec
 		}
-		if pass := r.Header.Get("X-GLP-Passphrase"); pass != "" {
+		if passB64 := r.Header.Get("X-GLP-Passphrase-B64"); passB64 != "" {
+			decoded, err := base64.StdEncoding.DecodeString(passB64)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "Invalid X-GLP-Passphrase-B64 header")
+				return
+			}
+			b["passphrase"] = string(decoded)
+		} else if pass := r.Header.Get("X-GLP-Passphrase"); pass != "" {
+			// Legacy header: browsers can only carry ISO-8859-1 bytes in a
+			// header value, so a non-ASCII passphrase arrives mangled (or makes
+			// fetch throw). Kept so older clients and scripts sending an ASCII
+			// passphrase keep working.
 			b["passphrase"] = pass
 		}
 	} else {
@@ -196,6 +206,10 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	plan := buildRestorePlan(b, images, shotCount)
+	if plan.planErr != nil {
+		writeError(w, http.StatusBadRequest, plan.planErr.Error())
+		return
+	}
 	if wantsShots {
 		plan.pending = append(plan.pending, shotPending...)
 	}
@@ -227,15 +241,19 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.applyRestoredToken(plan.restoredToken)
-	h.writePendingImages(plan.images, plan.pending)
+	if !h.applyRestoredToken(plan.restoredToken) {
+		plan.secretsRestored = false
+	}
+	written, failed := h.writePendingImages(plan.images, plan.pending)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "shots": shotCount * boolToInt(wantsShots),
-		// images mirrors preview()'s `images` count so a caller (the E2E /
+		// images is how many queued images were actually written and
+		// imagesFailed how many could not be — so a caller (the E2E /
 		// screenshot harness in particular) can verify the queued images were
-		// actually written instead of silently screenshotting 404s (#1185).
-		"images":         len(plan.pending),
+		// really written instead of silently screenshotting 404s (#1185).
+		"images":         written,
+		"imagesFailed":   failed,
 		"secretsPresent": plan.secretsPresent, "secretsRestored": plan.secretsRestored,
 	})
 }
@@ -249,6 +267,11 @@ func boolToInt(b bool) int {
 
 var errBodyTooLarge = fmt.Errorf("request entity too large")
 
+// errLibraryEncode rejects a restore whose coffee library cannot be encoded
+// for storage: the library would otherwise be silently skipped while the
+// preview still promised it.
+var errLibraryEncode = fmt.Errorf("Backup coffee library could not be encoded")
+
 // cappedReadCloser adds Close (delegating to the underlying zip entry
 // reader) to a newCappedReader-wrapped stream.
 type cappedReadCloser struct {
@@ -257,556 +280,3 @@ type cappedReadCloser struct {
 }
 
 func (r cappedReadCloser) Close() error { return r.c.Close() }
-
-// restorePlan is every "what would actually be written" computation —
-// identical whether this is a dry run or a real restore, so preview counts
-// and applied counts can never drift apart.
-type restorePlan struct {
-	b          map[string]any
-	sec        sections
-	wantsShots bool
-	shotCount  int
-
-	images restoreImages
-
-	sanitizedLib map[string]any // nil if not restoring a library
-	libraryJSON  []byte         // marshalled library.Library for RestoreShots; nil = don't touch
-	pending      []pendingImageWrite
-
-	// pre-validated shots-section side data, applied inside RestoreShots' tx
-	validAnnotations map[string]map[string]any
-	validTrash       map[string]int64
-	blocklist        []string // non-nil (possibly empty) = wipe+rewrite the blocklist
-
-	// achievements belong to the shots section; ReplaceAll runs in its own tx
-	// after RestoreShots. restoreAchievements is false when the key is absent
-	// (old backup) or present-but-entirely-unusable.
-	restoreAchievements bool
-	validAchievements   []achievements.Row
-
-	validMaintenance    []maintenance.RawRow
-	maintenanceTotal    int
-	validMaintenanceLog []maintenance.RawLogRow
-	maintenanceLogTotal int
-
-	validOrders []orders.Order
-	ordersTotal int
-
-	wantsMachines    bool
-	restoredMachines []machines.Machine
-
-	wantsSettings bool
-
-	secretsPresent   bool
-	secretsRestored  bool
-	decryptedSecrets map[string]any
-	restoredToken    string
-}
-
-// buildRestorePlan computes everything that would actually be written for
-// POST /api/restore, from `sections := normaliseSections(...)` through
-// `restoredToken`.
-func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) restorePlan {
-	sec := normaliseSections(b["sections"])
-	wantsShots := sec.has("shots")
-
-	plan := restorePlan{b: b, sec: sec, wantsShots: wantsShots, shotCount: shotCount, images: images}
-
-	wantsSecrets := sec.has("secrets")
-	passphrase, _ := b["passphrase"].(string)
-	secretsBlob, hasSecretsField := b["secrets"].(map[string]any)
-	plan.secretsPresent = wantsSecrets && hasSecretsField
-	if plan.secretsPresent && passphrase != "" {
-		if enc := decodeEncryptedSecrets(secretsBlob); enc != nil {
-			plan.decryptedSecrets = DecryptSecrets(enc, passphrase)
-		}
-	}
-	plan.secretsRestored = plan.decryptedSecrets != nil
-
-	if wantsShots {
-		if rawLib, ok := b["coffee_library"].(map[string]any); ok {
-			sanitized := map[string]any{}
-			for k, v := range rawLib {
-				sanitized[k] = v
-			}
-			validateRestoredLibraryImages(sanitized, images, &plan.pending)
-			plan.sanitizedLib = sanitized
-			if jb, err := json.Marshal(mapToLibrary(sanitized)); err == nil {
-				plan.libraryJSON = jb
-			}
-		}
-		if ann, ok := b["annotations"].(map[string]any); ok {
-			plan.validAnnotations = map[string]map[string]any{}
-			for idStr, raw := range ann {
-				m, ok := raw.(map[string]any)
-				if !ok {
-					continue
-				}
-				if issues := shots.ValidateAnnotation(m); len(issues) > 0 {
-					continue
-				}
-				if _, err := strconv.ParseInt(idStr, 10, 64); err != nil {
-					continue
-				}
-				plan.validAnnotations[idStr] = m
-			}
-		}
-		if trash, ok := b["trash"].(map[string]any); ok {
-			plan.validTrash = map[string]int64{}
-			for idStr, raw := range trash {
-				if _, err := strconv.ParseInt(idStr, 10, 64); err != nil {
-					continue
-				}
-				deletedAt, ok := jsFiniteNumber(raw)
-				if !ok {
-					deletedAt = float64(nowMillis())
-				}
-				plan.validTrash[idStr] = int64(deletedAt)
-			}
-		}
-		if arr, ok := b["blocklist"].([]any); ok {
-			list := make([]string, 0, len(arr))
-			for _, v := range arr {
-				if n, ok := jsFiniteNumber(v); ok {
-					list = append(list, formatBlocklistValue(n))
-				} else if s, ok := v.(string); ok {
-					list = append(list, s)
-				}
-			}
-			plan.blocklist = list
-		}
-		if arr, ok := b["achievements"].([]any); ok {
-			valid := make([]achievements.Row, 0, len(arr))
-			for _, v := range arr {
-				m, ok := v.(map[string]any)
-				if !ok {
-					continue
-				}
-				if row, ok := sanitizeAchievementRow(m); ok {
-					valid = append(valid, row)
-				}
-			}
-			// Skip, don't destroy: a present-but-entirely-unusable array must
-			// not wipe the target's achievements (an empty array is a real
-			// "no badges" source and does clear them).
-			if len(arr) == 0 || len(valid) > 0 {
-				plan.restoreAchievements = true
-				plan.validAchievements = valid
-			}
-		}
-	}
-
-	if sec.has("maintenance") {
-		if arr, ok := b["maintenance"].([]any); ok {
-			plan.maintenanceTotal = len(arr)
-			for _, v := range arr {
-				m, _ := v.(map[string]any)
-				if sanitized, ok := sanitizeMaintenanceRow(m); ok {
-					plan.validMaintenance = append(plan.validMaintenance, toRawRow(sanitized))
-				}
-			}
-		}
-		if arr, ok := b["maintenance_log"].([]any); ok {
-			plan.maintenanceLogTotal = len(arr)
-			for _, v := range arr {
-				m, _ := v.(map[string]any)
-				if sanitized, ok := sanitizeMaintenanceLogRow(m); ok {
-					plan.validMaintenanceLog = append(plan.validMaintenanceLog, toRawLogRow(sanitized))
-				}
-			}
-		}
-	}
-
-	if sec.has("orders") {
-		if arr, ok := b["orders"].([]any); ok {
-			plan.ordersTotal = len(arr)
-			for _, v := range arr {
-				m, _ := v.(map[string]any)
-				if sanitized, ok := sanitizeOrderRow(m); ok {
-					plan.validOrders = append(plan.validOrders, orders.Order(sanitized))
-				}
-			}
-		}
-	}
-
-	if arr, ok := b["machines"].([]any); ok && sec.has("machines") {
-		plan.wantsMachines = true
-		var list []machines.Machine
-		if err := reDecode(arr, &list); err == nil {
-			plan.restoredMachines = list
-		}
-	}
-
-	plan.wantsSettings = sec.has("settings")
-
-	if s, ok := plan.decryptedSecrets["apiToken"].(string); ok {
-		plan.restoredToken = sanitizeToken(s)
-	}
-
-	return plan
-}
-
-func decodeEncryptedSecrets(m map[string]any) *EncryptedSecrets {
-	var enc EncryptedSecrets
-	if err := reDecode(m, &enc); err != nil {
-		return nil
-	}
-	return &enc
-}
-
-// sanitizeToken strips CR/LF/NUL from the token, trims it, and caps it at
-// 200 chars.
-func sanitizeToken(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		if r == '\r' || r == '\n' || r == 0 {
-			continue
-		}
-		out = append(out, r)
-	}
-	trimmed := trimString(string(out))
-	return truncateRunes(trimmed, 200)
-}
-
-// maxAchievementIDLen bounds a restored badge id, matching the id lengths the
-// achievements registry uses.
-const maxAchievementIDLen = 64
-
-// sanitizeAchievementRow validates one entry of a restored backup's
-// `achievements` array, returning ok=false so the caller can skip it. The id
-// must be a non-empty string of at most 64 bytes; unlockedAt and progress must
-// each be absent/null or a finite, non-negative integer — a restored bundle is
-// untrusted input.
-func sanitizeAchievementRow(m map[string]any) (achievements.Row, bool) {
-	id, _ := m["id"].(string)
-	if id == "" || len(id) > maxAchievementIDLen {
-		return achievements.Row{}, false
-	}
-	unlockedAt, ok := optionalNonNegativeInt(m["unlockedAt"])
-	if !ok {
-		return achievements.Row{}, false
-	}
-	progress, ok := optionalNonNegativeInt(m["progress"])
-	if !ok {
-		return achievements.Row{}, false
-	}
-	return achievements.Row{ID: id, UnlockedAt: unlockedAt, Progress: progress}, true
-}
-
-// optionalNonNegativeInt decodes an optional JSON number that must be absent
-// or null, or a finite non-negative integer — the shape of an achievement's
-// unlockedAt/progress. A present-but-invalid value returns ok=false.
-func optionalNonNegativeInt(v any) (*int64, bool) {
-	if v == nil {
-		return nil, true
-	}
-	n, ok := jsIntStrict(v)
-	if !ok || n < 0 {
-		return nil, false
-	}
-	return &n, true
-}
-
-func toRawRow(m map[string]any) maintenance.RawRow {
-	machineID, _ := m["machineId"].(int64)
-	key, _ := m["key"].(string)
-	data, _ := json.Marshal(m["data"])
-	return maintenance.RawRow{MachineID: machineID, Key: key, Data: data}
-}
-
-func toRawLogRow(m map[string]any) maintenance.RawLogRow {
-	get := func(k string) int64 { v, _ := m[k].(int64); return v }
-	getS := func(k string) string { v, _ := m[k].(string); return v }
-	return maintenance.RawLogRow{
-		ID: get("id"), TS: get("ts"), Date: getS("date"), Task: getS("task"),
-		Machine: getS("machine"), ShotCount: get("shotCount"), Notes: getS("notes"),
-		MachineID: get("machineId"),
-	}
-}
-
-// reDecode round-trips v (already-decoded generic JSON values) through
-// encoding/json into a specifically-typed out — used where a typed
-// destination (machines.Machine, EncryptedSecrets) is easier to populate
-// via a second decode pass than by hand-picking fields out of a
-// map[string]any, the same trade-off shots.Shot/library.Entity/
-// orders.Order's own "just use the generic map" choice makes in the other
-// direction for shapes with no fixed structure.
-func reDecode(v any, out any) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, out)
-}
-
-// preview builds the dry-run response's `preview` object.
-func (p restorePlan) preview() map[string]any {
-	shotsCount := 0
-	if p.wantsShots {
-		shotsCount = p.shotCount
-	}
-	return map[string]any{
-		"shots":               shotsCount,
-		"library":             p.wantsShots && p.sanitizedLib != nil,
-		"maintenance":         len(p.validMaintenance),
-		"maintenanceTotal":    p.maintenanceTotal,
-		"maintenanceLog":      len(p.validMaintenanceLog),
-		"maintenanceLogTotal": p.maintenanceLogTotal,
-		"orders":              len(p.validOrders),
-		"ordersTotal":         p.ordersTotal,
-		"machines":            machineCountForPreview(p),
-		"settings":            p.wantsSettings && p.b["kv"] != nil,
-		"images":              len(p.pending),
-		"secretsPresent":      p.secretsPresent,
-		"secretsRestored":     p.secretsRestored,
-		"sectionsPresent":     sectionsPresent(p.b),
-	}
-}
-
-func machineCountForPreview(p restorePlan) int {
-	if !p.wantsMachines {
-		return 0
-	}
-	if arr, ok := p.b["machines"].([]any); ok {
-		return len(arr)
-	}
-	return 0
-}
-
-// sectionsPresent returns the section names for which any presence key is
-// present in b.
-func sectionsPresent(b map[string]any) []string {
-	out := []string{}
-	for _, name := range sectionOrder {
-		for _, key := range sectionPresenceBundleKeys[name] {
-			if _, ok := b[key]; ok {
-				out = append(out, name)
-				break
-			}
-		}
-	}
-	return out
-}
-
-// applyRestore performs the real (non-dry-run) restore. The shots section
-// (wipe + every shot upsert + annotations + trash + blocklist + library)
-// commits as ONE transaction via shots.Repository.RestoreShots (#959); the
-// remaining sections stay their own internal txs — see this file's header
-// comment for the narrowed atomicity gap.
-func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Shot) error) error) error {
-	d := h.deps
-	if p.wantsShots {
-		if err := d.ShotsRepo.RestoreShots(shots.RestoreInput{
-			Shots:       shotIter,
-			Annotations: p.validAnnotations,
-			Trash:       p.validTrash,
-			Blocklist:   p.blocklist,
-			LibraryJSON: p.libraryJSON,
-		}); err != nil {
-			return err
-		}
-		if p.restoreAchievements {
-			if err := d.AchievementsRepo.ReplaceAll(p.validAchievements); err != nil {
-				return err
-			}
-		}
-	}
-
-	if p.sec.has("maintenance") {
-		if _, ok := p.b["maintenance"].([]any); ok {
-			if err := d.MaintenanceRepo.RestoreMaintenanceRaw(p.validMaintenance); err != nil {
-				return err
-			}
-		}
-		if _, ok := p.b["maintenance_log"].([]any); ok {
-			if err := d.MaintenanceRepo.RestoreMaintenanceLogRaw(p.validMaintenanceLog); err != nil {
-				return err
-			}
-		}
-	}
-
-	if p.sec.has("orders") {
-		if _, ok := p.b["orders"].([]any); ok {
-			if err := d.OrdersRepo.ReplaceAll(p.validOrders); err != nil {
-				return err
-			}
-		}
-	}
-
-	if p.wantsMachines {
-		if _, err := d.Registry.RestoreMachines(p.restoredMachines); err != nil {
-			return err
-		}
-	}
-
-	if p.wantsSettings {
-		if kv, ok := p.b["kv"].(map[string]any); ok {
-			if err := h.applyKVSettings(kv); err != nil {
-				return err
-			}
-		}
-	}
-
-	if mqtt, ok := p.decryptedSecrets["mqtt"].(map[string]any); ok {
-		username, _ := mqtt["username"].(string)
-		password, _ := mqtt["password"].(string)
-		if err := saveMqttSettings(d.DB, map[string]any{
-			"username": truncateRunes(username, 200), "password": truncateRunes(password, 500),
-		}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func formatBlocklistValue(n float64) string {
-	if n == float64(int64(n)) {
-		return strconv.FormatInt(int64(n), 10)
-	}
-	return strconv.FormatFloat(n, 'f', -1, 64)
-}
-
-func (h *Handlers) applyKVSettings(kv map[string]any) error {
-	d := h.deps
-	if arr, ok := kv["menu"].([]any); ok {
-		menu := make([]orders.MenuItem, 0, len(arr))
-		for _, v := range arr {
-			if m, ok := v.(map[string]any); ok {
-				menu = append(menu, orders.MenuItem(m))
-			}
-		}
-		if err := d.OrdersRepo.SaveMenu(menu); err != nil {
-			return err
-		}
-	}
-	if s, ok := kv["orders_settings"].(map[string]any); ok {
-		if err := d.OrdersRepo.SaveSettings(orders.Settings(s)); err != nil {
-			return err
-		}
-	}
-	if m, ok := kv["notify_mapping"].(map[string]any); ok {
-		mapping := orders.NotifyMapping{}
-		for k, v := range m {
-			if s, ok := v.(string); ok {
-				mapping[k] = s
-			}
-		}
-		if err := d.OrdersRepo.SaveNotifyMapping(mapping); err != nil {
-			return err
-		}
-	}
-	if s, ok := kv["shot_defaults"].(map[string]any); ok {
-		if defaults, ok := shots.SanitizeShotDefaultsForRestore(s); ok {
-			if err := d.ShotsRepo.SaveShotDefaults(defaults); err != nil {
-				return err
-			}
-		}
-	}
-	if s, ok := kv["ui_prefs"].(map[string]any); ok {
-		if prefs, issues := uiprefs.Sanitize(s); len(issues) == 0 {
-			if err := uiprefs.NewRepository(d.DB).Save(prefs); err != nil {
-				return err
-			}
-		}
-	}
-	if s, ok := kv["import_settings"].(map[string]any); ok {
-		if err := saveImportSettings(d.DB, s); err != nil {
-			return err
-		}
-	}
-	if s, ok := kv["mqtt_settings"].(map[string]any); ok {
-		rest := map[string]any{}
-		for k, v := range s {
-			if k == "username" || k == "password" {
-				continue
-			}
-			rest[k] = v
-		}
-		if err := saveMqttSettings(d.DB, rest); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// mapToLibrary converts a generic decoded coffee_library object into a
-// typed library.Library — see restore.go's header comment on reDecode for
-// why a typed destination is used here, and library.Entity's `= map[string]
-// any` alias definition (library/model.go) for why the []any -> []Entity
-// element conversion below needs no per-element type conversion syntax.
-// mapToLibrary converts the generic decoded coffee_library object into a
-// typed library.Library, THEN re-sanitizes every entity's fields via
-// SanitizeLibraryForRestore — which must run on every restored library
-// regardless of section scope, since a restored library bypasses the regular
-// POST/PUT bean/grinder/recipe routes entirely (see restore_sanitize.go's
-// doc comment).
-func mapToLibrary(m map[string]any) library.Library {
-	raw := library.Library{
-		Beans: entityList(m["beans"]), Grinders: entityList(m["grinders"]),
-		Recipes: entityList(m["recipes"]), Milks: entityList(m["milks"]),
-		Baskets: entityList(m["baskets"]), PuckScreens: entityList(m["puckScreens"]),
-	}
-	return library.SanitizeLibraryForRestore(raw)
-}
-
-// entityList converts a generic decoded JSON array (`[]any` of
-// `map[string]any` elements) into `[]library.Entity` — no per-element
-// conversion needed since `library.Entity = map[string]any` is a type
-// alias, not a distinct named type.
-func entityList(v any) []library.Entity {
-	arr, ok := v.([]any)
-	if !ok {
-		return nil
-	}
-	out := make([]library.Entity, 0, len(arr))
-	for _, item := range arr {
-		if m, ok := item.(map[string]any); ok {
-			out = append(out, m)
-		}
-	}
-	return out
-}
-
-// applyRestoredToken persists a restored API token to disk. See
-// Dependencies.Token's doc comment: this does NOT take effect in the
-// already-running process (internal/auth.RequireToken closes over a fixed
-// token string at startup) until the process restarts — a documented,
-// deliberate gap.
-func (h *Handlers) applyRestoredToken(token string) {
-	if token == "" {
-		return
-	}
-	tmp := h.deps.TokenFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(token), 0o600); err != nil {
-		return
-	}
-	_ = os.Rename(tmp, h.deps.TokenFile)
-}
-
-// writePendingImages streams each validated image from the restore image
-// source to its final path after the DB tx has committed (unchanged
-// ordering). The bytes are re-read from the zip entry here, one at a time,
-// rather than held in the plan since a heavily-illustrated library would
-// otherwise sum every image body in memory (#959).
-//
-// Each image is run through img.WriteOptimized (ModePreserve): a JPEG/PNG
-// is downscaled + metadata-stripped, a WebP/GIF is written byte-identical,
-// and a ".thumb" sibling is generated. The stored extension is never
-// changed, so the DB row written in the restore transaction stays
-// consistent (#961 decision 6).
-func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImageWrite) {
-	for _, w := range pending {
-		buf, ok := imgs.getForWrite(w.srcName)
-		if !ok || len(buf) == 0 || len(buf) > imageMaxBytes {
-			log.Printf("backup: restore skipped image %s (source %q unreadable/empty/oversized)", w.path, w.srcName)
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
-			log.Printf("backup: restore skipped image %s (mkdir: %v)", w.path, err)
-			continue
-		}
-		srcExt := strings.TrimPrefix(filepath.Ext(w.path), ".")
-		_, _ = img.WriteOptimized(w.path, buf, srcExt)
-	}
-}

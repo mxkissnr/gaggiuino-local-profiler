@@ -9,6 +9,8 @@ import { initToken } from '../api/transport.js';
 import { requestBackup, postRestore } from '../api/system.js';
 import { esc, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
 import type { Html } from '../utils.js';
+import { attachDialogKeyboard } from './dialog-a11y.js';
+import type { DialogKeyboardHandle } from './dialog-a11y.js';
 
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
 
@@ -61,12 +63,18 @@ interface BackupRestoreResult {
     secretsPresent?: boolean;
     secretsRestored?: boolean;
     shots?: number;
+    imagesFailed?: number;
 }
 
 let mode: 'export' | 'restore' | null = null;
 let restoreBundle: Record<string, unknown> | null = null;    // legacy .json restore: the parsed bundle
 let restoreZipBytes: ArrayBuffer | null = null;  // .zip restore: the raw file bytes -- mutually exclusive with restoreBundle
 let previewDebounce: ReturnType<typeof setTimeout> | null = null;
+// Bumped by every preview request and whenever the modal closes, so a slower
+// earlier dry-run cannot overwrite the preview of a later checkbox/passphrase
+// state (or paint into a modal that was closed meanwhile).
+let _previewSeq = 0;
+let _dialogKeyboard: DialogKeyboardHandle | null = null;
 
 // Enter in the passphrase/confirm-passphrase input has no default browser
 // behavior to fall back on here -- the modal is deliberately not a <form>
@@ -175,14 +183,28 @@ function setError(msg: string): void {
     error.style.display = msg ? '' : 'none';
 }
 
+// The modal is static markup in index.html, so the dialog attributes live
+// there; this only owns the focus/Escape lifecycle (#1619).
+function openModal(modal: HTMLElement): void {
+    modal.classList.add('open');
+    _dialogKeyboard?.release();
+    _dialogKeyboard = attachDialogKeyboard(modal, closeBackupModal);
+}
+
 function closeBackupModal(): void {
     const { modal, passInput, passConfirm } = els();
+    _dialogKeyboard?.release();
+    _dialogKeyboard = null;
     modal.classList.remove('open');
     hideProgress();
     setBusy(false);
     mode = null;
     restoreBundle = null;
     restoreZipBytes = null;
+    // Any dry-run still in flight belongs to the modal being closed; bumping
+    // the sequence makes its response a no-op instead of painting a stale
+    // preview (or one into a later re-opened modal).
+    _previewSeq++;
     if (previewDebounce != null) clearTimeout(previewDebounce);
     // A passphrase typed in one open of the modal must never survive into
     // the next -- otherwise a cancelled/completed export leaves its
@@ -195,6 +217,10 @@ function closeBackupModal(): void {
     passConfirm.value = '';
 }
 
+// #1547: the only form control this module renders is the section checkbox
+// below, created inside its own <label> whose text is the control's accessible
+// name. The passphrase/confirm and secrets fields are static in index.html, so
+// there is no unlabelled field to name here.
 function renderSectionCheckboxes(presentSections: Set<string> | null): void {
     const { sectionsBox } = els();
     sectionsBox.innerHTML = html``;
@@ -219,12 +245,17 @@ function renderSectionCheckboxes(presentSections: Set<string> | null): void {
 // out of sync with what actually gets applied.
 async function refreshRestorePreview(): Promise<void> {
     if (mode !== 'restore' || (!restoreBundle && !restoreZipBytes)) return;
+    const seq = ++_previewSeq;
     const { preview } = els();
     const sections = checkedSections();
     const passphrase = els().secretsCb.checked ? els().passInput.value : undefined;
     try {
         const r = await postRestore({ bundle: restoreBundle ?? undefined, zipBytes: restoreZipBytes, sections, passphrase, dryRun: true });
+        // A newer preview started, or the modal left restore mode (closed and
+        // possibly reopened): this answer is stale, leave the preview alone.
+        if (seq !== _previewSeq || mode !== 'restore') return;
         const body = await r.json() as { preview?: BackupPreview };
+        if (seq !== _previewSeq || mode !== 'restore') return;
         if (!r.ok || !body.preview) { preview.textContent = ''; return; }
         const p = body.preview;
         const lines: Html[] = [];
@@ -240,7 +271,7 @@ async function refreshRestorePreview(): Promise<void> {
                 : tHtml('backup_preview_secrets_none'));
         }
         preview.innerHTML = joinHtml(lines.map(l => html`<div>${l}</div>`));
-    } catch { preview.textContent = ''; }
+    } catch { if (seq === _previewSeq && mode === 'restore') preview.textContent = ''; }
 }
 
 function scheduleRestorePreview(): void {
@@ -262,7 +293,7 @@ export function openBackupExportModal(): void {
     preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_export_confirm');
-    modal.classList.add('open');
+    openModal(modal);
 
     els().secretsCb.onchange = () => { passRow.style.display = els().secretsCb.checked ? '' : 'none'; passConfirmRow.style.display = els().secretsCb.checked ? '' : 'none'; };
     cancelBtn.onclick = closeBackupModal;
@@ -386,7 +417,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
     preview.innerHTML = html``;
     setError('');
     confirmBtn.textContent = t('backup_modal_restore_confirm');
-    modal.classList.add('open');
+    openModal(modal);
 
     for (const cb of document.querySelectorAll<HTMLInputElement>('.backup-section-cb')) cb.onchange = scheduleRestorePreview;
     els().secretsCb.onchange = () => { passRow.style.display = els().secretsCb.checked ? '' : 'none'; scheduleRestorePreview(); };
@@ -423,9 +454,14 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
             if (window.showToast) window.showToast(t('backup_progress_done'));
             input.value = '';
             closeBackupModal();
-            alert(res.secretsPresent
+            const restoredMsg = res.secretsPresent
                 ? (res.secretsRestored ? t('backup_restored_with_secrets', res.shots) : t('backup_restored_secrets_failed', res.shots))
-                : t('backup_restored', res.shots));
+                : t('backup_restored', res.shots);
+            // #1602: the server counted the photos it could not write; say so
+            // instead of letting the restore look complete.
+            alert(res.imagesFailed && res.imagesFailed > 0
+                ? `${restoredMsg}\n${t('backup_restored_images_failed', res.imagesFailed)}`
+                : restoredMsg);
             // #684: a restore can touch library/machines/settings/menu/etc,
             // not just shots -- window.loadData() only ever refreshed shots,
             // leaving everything else stale until a manual reload. A full

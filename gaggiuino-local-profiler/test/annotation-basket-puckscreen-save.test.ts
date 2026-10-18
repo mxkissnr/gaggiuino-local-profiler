@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// annotation.js imports state.js, which reads localStorage/navigator at
-// module load time — same stubbing approach as milk-deduct-gate.test.js.
+// annotation.ts imports state/index.ts, which reads localStorage/navigator at
+// module load time — same stubbing approach as annotation-milk-field-visibility.test.ts.
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge test/helpers/fake-option-dom.ts uses).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
+// _performAnnotationSave() now reports a rejected save through window.showToast,
+// so the toast bridge must exist (empty is enough — the optional call short-
+// circuits); same stub as test/live-sync-shots.test.ts.
+g.window       ??= {};
 
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');

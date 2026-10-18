@@ -3,13 +3,13 @@
 // (GET/POST/PUT/DELETE /api/machine/profile[/:id]).
 //
 // Phase editing follows the same DOM-as-state pattern as the recipe-step
-// editor in library.js (_renderStepRows/addRecipeStep/removeRecipeStep/
+// editor in library.ts (_renderStepRows/addRecipeStep/removeRecipeStep/
 // _collectSteps): the rows in #profilePhaseList are the source of truth at
 // save time, no separate JS array is kept in sync. removeProfilePhase()
 // renumbers all remaining rows/ids/data-idx after a removal, same as
 // removeRecipeStep().
 import Chart from 'chart.js/auto';
-import { S } from '../state/index.js';
+import { S, concreteActiveMachineId } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
@@ -18,10 +18,9 @@ import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { suggestProfileFromBean } from '../profile-suggestion.js';
 import type { ProfileSuggestion } from '../profile-suggestion.js';
-import { TARGET_ICON_SVG } from '../icons.js';
+import { TARGET_ICON_SVG, ICON_TRASH } from '../icons.js';
 
 const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 const ICON_COPY: Html   = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M19,21H8V7H19V21Z"/></svg>`;
 
 const PHASE_TYPES = ['FLOW', 'PRESSURE', 'MANUAL'];
@@ -79,6 +78,12 @@ interface SeriesPoint {
 // still the latest one when its response lands is allowed to write state.
 let _profileListReqToken = 0;
 
+// The machine the profile form was opened for, captured at open so a topbar
+// machine switch mid-edit cannot retarget the save (#1605). null = no explicit
+// machine ('all'/none selected), so the save sends no machineId and the
+// backend uses the default machine.
+let _formMachineId: number | null = null;
+
 // Kept as its own (non-async) function so the read of S.activeMachineId
 // happens in a separate code path from loadMachineProfileList's own —
 // otherwise eslint's require-atomic-updates can't tell that the later
@@ -99,7 +104,7 @@ export async function loadMachineProfileList(): Promise<void> {
   updateProfileDatalist();
 }
 
-// recipeFormProfile's autocomplete (components/autocomplete.js, library.js)
+// recipeFormProfile's autocomplete (components/autocomplete.ts, library.ts)
 // reads S.machineProfiles live — this just re-renders it if it's currently
 // open, so a profile list refresh elsewhere shows up immediately.
 export function updateProfileDatalist(): void {
@@ -158,6 +163,7 @@ export async function deleteMachineProfile(id: string): Promise<void> {
 
 // ── Editor modal ──────────────────────────────────────────────────────
 export function openProfileForm(profile?: MachineProfile | null, beanId?: string | number | null): void {
+  _formMachineId      = concreteActiveMachineId();
   S.profileEditId     = (profile?.id ?? null) as number | null;
   S.profileEditBeanId = (beanId ?? null) as number | null;
   (document.getElementById('profileFormName') as HTMLInputElement).value       = profile?.name ?? '';
@@ -175,6 +181,7 @@ export function openProfileForm(profile?: MachineProfile | null, beanId?: string
 }
 
 export function closeProfileForm(): void {
+  _formMachineId      = null;
   S.profileEditId     = null;
   S.profileEditBeanId = null;
   (document.getElementById('profileEditorModal') as HTMLElement).classList.remove('open');
@@ -187,7 +194,7 @@ export function openNewProfileForm(): void {
 }
 
 // Opened from a bean card's "Create profile" button — empty editor with the
-// bean's suggestion pre-filled, so Max never has to re-type Sertao's shape.
+// bean's suggestion pre-filled, so the maintainer never has to re-type Sertao's shape.
 export function createProfileFromBean(beanId: number): void {
   const bean = S.coffeeLibrary.beans.find(b => b.id === beanId);
   if (!bean) return;
@@ -213,7 +220,7 @@ function _applySuggestion(suggestion: ProfileSuggestion): void {
   renderProfilePreviewChart();
 }
 
-// ── Phase editor (DOM-as-state, mirrors library.js's recipe-step editor) ──
+// ── Phase editor (DOM-as-state, mirrors library.ts's recipe-step editor) ──
 // Accepts either the API's phase shape or a suggestion's — both are only
 // read field-by-field with `?? ''` fallbacks (see Phase).
 function _renderPhaseRows(phases: unknown[] | null | undefined): void {
@@ -230,8 +237,8 @@ function _phaseRowHtml(i: number, p: Phase = {}): Html {
   return html`<div class="pp-row" id="profilePhase${esc(i)}">
     <div class="pp-header">
       <span class="pp-num">${esc(i + 1)}</span>
-      <input class="pp-name" placeholder="${tHtml('profile_phase_name')}" value="${esc(p.name || '')}">
-      <select class="pp-type">
+      <input class="pp-name" aria-label="${tHtml('profile_phase_name')}" placeholder="${tHtml('profile_phase_name')}" value="${esc(p.name || '')}">
+      <select class="pp-type" aria-label="${tHtml('profile_phase_type')}">
         ${joinHtml(PHASE_TYPES.map(pt => html`<option value="${esc(pt)}" ${pt === type ? html`selected` : html``}>${tHtml('phase_type_' + pt.toLowerCase())}</option>`))}
       </select>
       <label class="lib-check-label pp-skip-label">
@@ -241,22 +248,22 @@ function _phaseRowHtml(i: number, p: Phase = {}): Html {
       <button class="lib-btn-sm del lib-btn-icon" data-action="remove-profile-phase" data-idx="${esc(i)}">${ICON_TRASH}</button>
     </div>
     <div class="pp-grid">
-      <div class="pp-field"><label>${tHtml('profile_phase_target_start')}</label><input type="number" step="0.1" class="pp-target-start" value="${esc(target.start ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_end')}</label><input type="number" step="0.1" class="pp-target-end" value="${esc(target.end ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_curve')}</label>
-        <select class="pp-target-curve">${joinHtml(CURVES.map(c => html`<option value="${esc(c)}" ${c === curve ? html`selected` : html``}>${tHtml('curve_' + c.toLowerCase())}</option>`))}</select>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-start">${tHtml('profile_phase_target_start')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-target-start" class="pp-target-start" value="${esc(target.start ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-end">${tHtml('profile_phase_target_end')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-target-end" class="pp-target-end" value="${esc(target.end ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-curve">${tHtml('profile_phase_target_curve')}</label>
+        <select class="pp-target-curve" id="profilePhase${esc(i)}-target-curve">${joinHtml(CURVES.map(c => html`<option value="${esc(c)}" ${c === curve ? html`selected` : html``}>${tHtml('curve_' + c.toLowerCase())}</option>`))}</select>
       </div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_time')}</label><input type="number" step="1" class="pp-target-time" value="${esc(target.time ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_target_volume')}</label><input type="number" step="0.1" class="pp-target-volume" value="${esc(target.volume ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_restriction')}</label><input type="number" step="0.1" class="pp-restriction" value="${esc(p.restriction ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_phase_water_temperature')}</label><input type="number" step="0.1" class="pp-water-temp" value="${esc(p.waterTemperature ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_time')}</label><input type="number" step="1" class="pp-stop-time" value="${esc(stop.time ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_pressure_above')}</label><input type="number" step="0.1" class="pp-stop-pressure-above" value="${esc(stop.pressureAbove ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_pressure_below')}</label><input type="number" step="0.1" class="pp-stop-pressure-below" value="${esc(stop.pressureBelow ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_flow_above')}</label><input type="number" step="0.1" class="pp-stop-flow-above" value="${esc(stop.flowAbove ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_flow_below')}</label><input type="number" step="0.1" class="pp-stop-flow-below" value="${esc(stop.flowBelow ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_weight')}</label><input type="number" step="0.1" class="pp-stop-weight" value="${esc(stop.weight ?? '')}"></div>
-      <div class="pp-field"><label>${tHtml('profile_stop_water_pumped')}</label><input type="number" step="0.1" class="pp-stop-water-pumped" value="${esc(stop.waterPumpedInPhase ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-time">${tHtml('profile_phase_target_time')}</label><input type="number" step="1" id="profilePhase${esc(i)}-target-time" class="pp-target-time" value="${esc(target.time ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-target-volume">${tHtml('profile_phase_target_volume')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-target-volume" class="pp-target-volume" value="${esc(target.volume ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-restriction">${tHtml('profile_phase_restriction')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-restriction" class="pp-restriction" value="${esc(p.restriction ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-water-temp">${tHtml('profile_phase_water_temperature')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-water-temp" class="pp-water-temp" value="${esc(p.waterTemperature ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-time">${tHtml('profile_stop_time')}</label><input type="number" step="1" id="profilePhase${esc(i)}-stop-time" class="pp-stop-time" value="${esc(stop.time ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-pressure-above">${tHtml('profile_stop_pressure_above')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-pressure-above" class="pp-stop-pressure-above" value="${esc(stop.pressureAbove ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-pressure-below">${tHtml('profile_stop_pressure_below')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-pressure-below" class="pp-stop-pressure-below" value="${esc(stop.pressureBelow ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-flow-above">${tHtml('profile_stop_flow_above')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-flow-above" class="pp-stop-flow-above" value="${esc(stop.flowAbove ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-flow-below">${tHtml('profile_stop_flow_below')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-flow-below" class="pp-stop-flow-below" value="${esc(stop.flowBelow ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-weight">${tHtml('profile_stop_weight')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-weight" class="pp-stop-weight" value="${esc(stop.weight ?? '')}"></div>
+      <div class="pp-field"><label for="profilePhase${esc(i)}-stop-water-pumped">${tHtml('profile_stop_water_pumped')}</label><input type="number" step="0.1" id="profilePhase${esc(i)}-stop-water-pumped" class="pp-stop-water-pumped" value="${esc(stop.waterPumpedInPhase ?? '')}"></div>
     </div>
   </div>`;
 }
@@ -272,7 +279,7 @@ export function removeProfilePhase(i: number): void {
   const row = document.getElementById(`profilePhase${i}`);
   if (row) row.remove();
   // Re-number remaining rows — same detail as removeRecipeStep() in
-  // library.js: ids and the delete button's data-idx must stay in sync
+  // library.ts: ids and the delete button's data-idx must stay in sync
   // with DOM order since the DOM is the only source of truth.
   document.querySelectorAll<HTMLElement>('#profilePhaseList .pp-row').forEach((row, idx) => {
     row.id = `profilePhase${idx}`;
@@ -280,6 +287,16 @@ export function removeProfilePhase(i: number): void {
     const delBtn = row.querySelector('.lib-btn-sm.del') as HTMLElement;
     delBtn.dataset.action = 'remove-profile-phase';
     delBtn.dataset.idx = String(idx);
+    // The labelled fields' ids (and their labels' `for`) are keyed off this
+    // row's index as well, so renumber them too — otherwise a later
+    // addProfilePhase() would generate an id a shifted row still carries.
+    row.querySelectorAll<HTMLElement>('[id^="profilePhase"]').forEach(el => {
+      el.id = el.id.replace(/^profilePhase\d+/, `profilePhase${idx}`);
+    });
+    row.querySelectorAll<HTMLElement>('label[for^="profilePhase"]').forEach(el => {
+      const forAttr = el.getAttribute('for') ?? '';
+      el.setAttribute('for', forAttr.replace(/^profilePhase\d+/, `profilePhase${idx}`));
+    });
   });
   renderProfilePreviewChart();
 }
@@ -357,14 +374,18 @@ export async function sendProfileToMachine(): Promise<void> {
   if (!profile.phases.length) { window.showToast?.(t('profile_no_phases_error')); return; }
   if (!confirm(t('profile_confirm_send'))) return;
 
-  const r = await machinesApi.saveMachineProfile(S.profileEditId ?? null, { ...profile, machineId: S.activeMachineId });
+  // Target the machine the form was opened for, not whatever is active now
+  // (#1605). With none captured, send no machineId so the backend uses the
+  // default machine.
+  const body = _formMachineId != null ? { ...profile, machineId: _formMachineId } : { ...profile };
+  const r = await machinesApi.saveMachineProfile(S.profileEditId ?? null, body);
   if (!r.ok) {
     const body: unknown = await r.json().catch(() => null);
     const err = (body as { error?: string } | null)?.error;
     window.showToast?.(t('profile_send_error') + (err ? `: ${err}` : ''));
     return;
   }
-  // Same offline-editor contract as gaggimate-profile-editor.js's
+  // Same offline-editor contract as gaggimate-profile-editor.ts's
   // saveGaggiMateProfile: the backend saved locally first, this 200 might
   // just mean "queued, machine unreachable right now" — surface that
   // distinctly from a silent success.
@@ -381,7 +402,7 @@ export async function sendProfileToMachine(): Promise<void> {
 // Synthesizes a time series from the phase list — pro-Phase target.curve
 // interpolation from start→end over target.time ms — and draws it exactly
 // like the shot-detail chart draws its dashed target-curves (destroy-before-
-// recreate, see public-src/views/shots/index.js's espressoShotChart setup).
+// recreate, see public-src/views/shots/index.ts's espressoShotChart setup).
 function _curveInterpolate(curve: string | number | undefined, frac: number): number {
   switch (curve) {
     case 'INSTANT': return 1;

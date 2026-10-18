@@ -9,7 +9,7 @@ vi.mock('echarts', () => ({
   init: () => ({ dispose: () => {}, setOption: () => {}, dispatchAction: () => {}, off: () => {}, on: () => {} }),
 }));
 
-// flavor-wheel.js's import chain reads localStorage/navigator at module load —
+// flavor-wheel.ts's import chain reads localStorage/navigator at module load —
 // stub the minimum browser globals (same pattern as the other frontend tests).
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };

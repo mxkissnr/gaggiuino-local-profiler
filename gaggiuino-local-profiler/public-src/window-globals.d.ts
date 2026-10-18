@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-// Ambient declarations for the cross-module entry points main.js wires onto
+// Ambient declarations for the cross-module entry points main.ts wires onto
 // `window` (kept off direct imports to avoid circular deps). i18n.ts declares
 // the translation/view entry points in its own `declare global` block; these
 // are the remaining ones the components/ tree calls.
@@ -15,7 +15,6 @@ interface Window {
   closeFlavorWheel?: () => void;
   connectLiveStream?: () => void;
   disconnectLiveStream?: () => void;
-  updateFlapCounter?: (count: number) => void;
   trashShot?: (id: number) => void;
   selectShot?: (id: number) => void;
   startOrdersPolling?: () => void;

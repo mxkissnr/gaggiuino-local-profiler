@@ -78,7 +78,7 @@ export async function ensureCurves(ids: (number | null | undefined)[] | null | u
 }
 
 // primeCurve(id, datapoints) -> seed the cache from a full shot object
-// already in hand (live.js post-brew, a detail fetch's previousShot).
+// already in hand (live.ts post-brew, a detail fetch's previousShot).
 export function primeCurve(id: number | null | undefined, datapoints: ShotDatapoints | null | undefined): void {
   if (id == null) return;
   void _store(id, Promise.resolve(datapoints || {}));

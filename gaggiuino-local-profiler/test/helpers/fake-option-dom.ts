@@ -1,4 +1,4 @@
-// #946: annotation.js's library <select>s (bean/basket/puck screen/recipe)
+// #946: annotation.ts's library <select>s (bean/basket/puck screen/recipe)
 // are built with `new Option()` + DocumentFragment + replaceChildren instead
 // of an innerHTML string, so CodeQL no longer re-raises js/xss-through-dom on
 // every code move. The Node test env has no DOM; these fakes capture the

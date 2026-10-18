@@ -39,15 +39,71 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 		t = Task{}
 	}
 	// new Date().toISOString() — millisecond-precision UTC timestamp.
-	t["lastDate"] = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	lastDate := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	t["lastDate"] = lastDate
 	maint[task] = t
-	if err := repo.SaveMaintenance(maint, machineID); err != nil {
+	// Save only this task's lastDate; the in-memory map above already carries
+	// it for the stats computed below, and writing the one row (rather than
+	// the whole snapshot) keeps a concurrent edit to another task intact.
+	if err := repo.SaveTask(machineID, task, Task{"lastDate": lastDate}); err != nil {
 		return nil, err
 	}
-	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID); err != nil {
+	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, time.Now()); err != nil {
 		return nil, err
 	}
 	return ComputeMaintenanceStats(shotsRepo, maint, machineID)
+}
+
+// ApplyMachineServiceLog applies one machine-recorded service event (#1639) to
+// a maintenance task: task must be "descaling" or "backflush", and at is the
+// machine's own timestamp for that event. The task's machineSyncedAt guards
+// against applying the same event twice: a zero at, or one no newer than the
+// last synced machine time, is a no-op. Otherwise machineSyncedAt is always
+// advanced to at, and lastDate (plus one back-dated log entry) is moved to at
+// only when that is later than the stored lastDate — so a newer manual "done"
+// is never overwritten and lastDate never moves backwards. Returns whether
+// the task was marked done.
+func ApplyMachineServiceLog(repo *Repository, shotsRepo *shots.Repository, registry *machines.Registry, machineID int64, task string, at time.Time) (bool, error) {
+	if task != "descaling" && task != "backflush" {
+		return false, ErrUnknownTask
+	}
+	if at.IsZero() {
+		return false, nil
+	}
+	at = at.UTC()
+	atMs := at.UnixMilli()
+
+	maint, err := repo.GetMaintenance(machineID)
+	if err != nil {
+		return false, err
+	}
+	t := maint[task]
+	if t == nil {
+		t = Task{}
+	}
+	if synced, ok := jsPositiveInt(t["machineSyncedAt"]); ok && atMs <= synced {
+		return false, nil
+	}
+
+	save := Task{"machineSyncedAt": atMs}
+	marked := false
+	if lastDate, _ := t["lastDate"].(string); lastDate == "" {
+		marked = true
+	} else if lastTs, err := parseJSDate(lastDate); err != nil || atMs > lastTs {
+		marked = true
+	}
+	if marked {
+		save["lastDate"] = at.Format("2006-01-02T15:04:05.000Z")
+	}
+	if err := repo.SaveTask(machineID, task, save); err != nil {
+		return false, err
+	}
+	if marked {
+		if _, err := repo.AddMaintenanceLogEntry(task, "Auto-synced from machine", machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, at); err != nil {
+			return false, err
+		}
+	}
+	return marked, nil
 }
 
 // Stat is one task's computed maintenance-due state — Task's fields plus
@@ -61,11 +117,13 @@ type Stat = map[string]any
 // machine; waterfilter/grinder_* (shared equipment, #338) count shots
 // across every machine.
 func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task, machineID int64) (map[string]Stat, error) {
-	globalShots, err := shotsRepo.FindAllExcludingTrash()
+	// Only each shot's timestamp is read below, so load just those instead
+	// of every shot with its curve blob (#1616).
+	globalShots, err := shotsRepo.TimestampsExcludingTrash()
 	if err != nil {
 		return nil, err
 	}
-	scopedShots, err := shotsRepo.FindAllExcludingTrashByMachine(machineID)
+	scopedShots, err := shotsRepo.TimestampsExcludingTrashByMachine(machineID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +160,7 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 			daysSince = jsFloorDivDays(now - lastTs)
 		}
 		var shotsSince int
-		for _, s := range shotList {
-			ts, _ := s["timestamp"].(int64)
+		for _, ts := range shotList {
 			if ts*1000 > lastTs {
 				shotsSince++
 			}

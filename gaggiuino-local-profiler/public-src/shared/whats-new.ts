@@ -21,6 +21,14 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.5.0', date: '2026-10-18', highlights: [
+        'Open pages pick up changes made on another device within seconds, without a reload.',
+        'A backflush or descale recorded by your Gaggiuino now ticks off the matching maintenance task automatically.',
+        'Pages and the Home Assistant integration load much faster on small devices with a long shot history, and shot scores use one five-step colour scale everywhere.',
+        'Backups and restores are more reliable: large backups with many photos restore again, and a restore tells you when photos could not be written.',
+        'Fixed: several-machine setups keep profile edits and maintenance entries on the machine they belong to, and saves the server rejects now show an error.',
+        'Security: a round of hardening for photos, imports, notifications and Home Assistant ingress handling.',
+    ] },
     { version: '3.4.0', date: '2026-10-09', highlights: [
         'Before you update: GLP now refuses requests for unknown host names. The Home Assistant sidebar, IP addresses and local names such as .local or .fritz.box keep working. If you open GLP under your own domain, for example through a reverse proxy, add that domain to the new allowed_hosts option right after updating.',
         'A new coffee library: your beans stand on a shelf as bag photos with a stock bar, every bean opens a detail sheet with bags and actions, and bag photos can be cut out as stickers right on your device.',
@@ -62,14 +70,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'The add-on now runs on a Go backend instead of Node.js, with no visible change in behaviour. Back up Home Assistant before updating.',
         'armv7 (32-bit ARM) is no longer deprecated — the Go backend builds a static armv7 image again.',
         'First-class GaggiMate support: foundational integration across the stack plus a full Standard/Pro profile editor, saved straight to the machine. Thanks to @Paul-Lukas.',
-    ] },
-    { version: '2.36.0', date: '2026-08-24', highlights: [
-        'The Live tab now shows current temperature/target, pressure and water level even while idle, instead of just "Ready to brew".',
-        'Steam and flush mode now get the same live treatment as brewing: a timer, live readouts, a badge and the animated machine icon.',
-        'Fixed: the power toggle is now reachable on mobile from the topbar, not just the (mobile-hidden) sidebar.',
-        'Fixed: exhausted beans (zero stock) no longer show up in the shot-annotation bean picker.',
-        'Fixed: the Live tab no longer keeps showing stale readings after the machine loses power or drops off the network.',
-        'Fixed: the Live tab\'s shot timer no longer keeps counting after a BREW_AUTO shot has actually finished.',
     ] },
 ];
 

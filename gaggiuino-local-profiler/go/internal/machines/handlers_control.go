@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -45,9 +46,30 @@ func (h *Handlers) registerControlRoutes(mux *http.ServeMux) {
 }
 
 // resolveWithAdapter performs the repeated resolve-machine + get-adapter
-// pair every route in this file (and handlers_profiles.go) opens with.
-func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, machineID *int64) (*Machine, Adapter, bool) {
+// pair every route in this file (and handlers_profiles.go, machine_control.go)
+// opens with. valid is false when a machineId was given but could not be
+// parsed (see queryMachineID); an explicit id that names no machine is
+// ErrUnknownMachine. Both are rejected on mutating requests -- only GET keeps
+// the old lenient "fall back to the default machine" behavior, because the
+// frontend still sends machineId=all to some GET routes.
+func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, r *http.Request, machineID *int64, valid bool) (*Machine, Adapter, bool) {
+	lenient := r.Method == http.MethodGet
+	if !valid {
+		if !lenient {
+			writeError(w, http.StatusBadRequest, "Invalid machineId")
+			return nil, nil, false
+		}
+		machineID = nil
+	}
 	machine, err := h.registry.ResolveMachine(machineID)
+	if errors.Is(err, ErrUnknownMachine) {
+		if lenient {
+			machine, err = h.registry.GetDefaultMachine()
+		} else {
+			writeError(w, http.StatusNotFound, "Unknown machine")
+			return nil, nil, false
+		}
+	}
 	if err != nil {
 		internalError(w, err)
 		return nil, nil, false
@@ -61,7 +83,8 @@ func (h *Handlers) resolveWithAdapter(w http.ResponseWriter, machineID *int64) (
 }
 
 func (h *Handlers) getSettings(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -97,7 +120,7 @@ func (h *Handlers) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -121,7 +144,7 @@ func (h *Handlers) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.Unmarshal(rawBody, &body) // best-effort: only used to resolve the machine
 
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -199,7 +222,7 @@ func (h *Handlers) setOperationMode(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -224,7 +247,7 @@ func (h *Handlers) tare(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -246,7 +269,7 @@ func (h *Handlers) serviceTest(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -271,7 +294,7 @@ func (h *Handlers) saveActiveProfile(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -286,7 +309,8 @@ func (h *Handlers) saveActiveProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) firmwareProgress(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -310,7 +334,7 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -392,41 +416,58 @@ func (h *Handlers) firmwareFromTo(ctx context.Context, machine *Machine, adapter
 	return from, to
 }
 
+// errMachineOffline marks the firmwareVersion fast path where the poller already
+// knows the machine is unreachable (#1572). It only exists to drive the handler
+// into its existing "settings fetches failed" branch; it is never surfaced to
+// the client, which sees the ordinary unknown-version 200.
+var errMachineOffline = errors.New("machine known offline")
+
 // firmwareVersion serves GET /api/machine/firmware/version (#620).
 func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
 	if !requireSettingsProxySupport(w, adapter, machine) {
 		return
 	}
-	// The "versions" and "system" settings reads are independent (#901 code
-	// review), so fetch them concurrently instead of paying two round-trips
-	// back to back.
 	var versionsRaw, systemRaw json.RawMessage
 	var versionsErr, systemErr error
 	var versionsPanicked bool
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if httputil.SafeCall("machines: firmware version fetch", func() {
-			versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
-		}) {
-			versionsErr = fmt.Errorf("internal error fetching versions settings")
-			versionsPanicked = true
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		if httputil.SafeCall("machines: firmware version fetch", func() {
-			systemRaw, systemErr = adapter.GetSettings(r.Context(), machine, "system")
-		}) {
-			systemErr = fmt.Errorf("internal error fetching system settings")
-		}
-	}()
-	wg.Wait()
+	if h.machineKnownOffline(machine.ID) {
+		// #1572: the poller already knows this machine is unreachable, so skip
+		// both live settings fetches and fall through to the existing
+		// versionsErr branch below. That branch already writes exactly the
+		// "unknown" response (installed/latest null, updateAvailable false)
+		// this endpoint gives when the settings reads fail.
+		versionsErr = errMachineOffline
+		systemErr = errMachineOffline
+	} else {
+		// The "versions" and "system" settings reads are independent (#901 code
+		// review), so fetch them concurrently instead of paying two round-trips
+		// back to back.
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if httputil.SafeCall("machines: firmware version fetch", func() {
+				versionsRaw, versionsErr = adapter.GetSettings(r.Context(), machine, "versions")
+			}) {
+				versionsErr = fmt.Errorf("internal error fetching versions settings")
+				versionsPanicked = true
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if httputil.SafeCall("machines: firmware version fetch", func() {
+				systemRaw, systemErr = adapter.GetSettings(r.Context(), machine, "system")
+			}) {
+				systemErr = fmt.Errorf("internal error fetching system settings")
+			}
+		}()
+		wg.Wait()
+	}
 	// #1037: a recovered panic is a genuine backend bug, not a routine
 	// offline machine -- keep surfacing that as 502 (see
 	// TestFirmwareVersion_PanicDuringSettingsFetchReturns502).
@@ -495,7 +536,8 @@ func nullOr(s *string) any {
 // system-state pushes from the machine's persistent WebSocket session
 // (live.go) — null until the first push arrives.
 func (h *Handlers) machineLive(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}

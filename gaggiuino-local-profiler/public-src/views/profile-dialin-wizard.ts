@@ -1,20 +1,19 @@
-// Profile Dial-In wizard (#313) — sibling to dialin-wizard.js (the grind
+// Profile Dial-In wizard (#313) — sibling to dialin-wizard.ts (the grind
 // wizard), same session/polling/candidate-confirm architecture, adapted for
 // tuning a machine profile's phases instead of a single grind number.
 //
-// v1 SCOPE (see ~/.claude/plans/glp-profile-dialin-phase2.md): the primary
-// tuning signal is a manual taste-symptom pick per round (sour/balanced/
-// bitter/watery/channeling), mapped to a concrete phase/field adjustment via
-// profile-dialin-convergence.js's symptom table (itself grounded in the
-// coffee-expert skill). calcShotScore is the objective secondary signal,
-// used only for convergence detection. shot.profile.phases is intentionally
-// NOT parsed here — its field shape is unverified against real hardware.
+// v1 SCOPE: the primary tuning signal is a manual taste-symptom pick per
+// round (sour/balanced/bitter/watery/channeling), mapped to a concrete
+// phase/field adjustment via profile-dialin-convergence.ts's symptom table.
+// calcShotScore is the objective secondary signal, used only for convergence
+// detection. shot.profile.phases is intentionally NOT parsed here — its field
+// shape is unverified against real hardware.
 //
 // Every accepted round PUTs the updated profile straight back to the
 // machine (api/machine/profile/:id) before the next round starts waiting —
 // there's no separate "save" step, the machine is always in sync with the
 // session's current profile.
-import { S }             from '../state/index.js';
+import { S, concreteActiveMachineId } from '../state/index.js';
 import { t, tHtml }        from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
 import { esc, html, joinHtml, scoreColor } from '../utils.js';
@@ -25,6 +24,7 @@ import { _miniShotChart } from './shots/grind.js';
 import { suggestPhaseAdjustment, applyPhaseAdjustment, isProfileDialinConverged, profileDialinConvergenceReason }
   from '../profile-dialin-convergence.js';
 import type { ProfileSuggestion } from '../profile-dialin-convergence.js';
+import { bestRound, checkForCandidate, createWizardSession, renderChips } from './wizard-session.js';
 
 // state/index.ts types the session as Record<string, unknown> and shot rows
 // as metadata-only ShotMeta; these aliases name the fields this wizard
@@ -58,6 +58,9 @@ interface ProfileDialinSession extends Record<string, unknown> {
   id: number;
   startedAt: number;
   profileId: string | number;
+  // The machine the dial-in was started for; null/undefined means "no explicit
+  // machine" ('all'/none selected), so the backend targets the default machine.
+  machineId?: number | null;
   profileName: string;
   profile: DialinProfile;
   rounds: ProfileDialinRound[];
@@ -70,46 +73,25 @@ interface ProfileDialinSession extends Record<string, unknown> {
   _profileReqToken?: number;
 }
 
-const POLL_MS = 3000;
-let _pollTimer: ReturnType<typeof setInterval> | null = null;
-
-function _session(): ProfileDialinSession | null {
-  return S.profileDialinSession as ProfileDialinSession | null;
-}
-
-function _shots(): ProfileDialinShotRow[] {
-  return S.shots;
-}
-
-function _persist(): void {
-  if (S.profileDialinSession) localStorage.setItem('glp_profile_dialin_session', JSON.stringify(S.profileDialinSession));
-  else localStorage.removeItem('glp_profile_dialin_session');
-}
-
-function _startPoll(): void {
-  _stopPoll();
-  _pollTimer = setInterval(() => {
-    if (!S.profileDialinSession || S.profileDialinSession.status !== 'active') return;
-    renderProfileDialinWizard();
-  }, POLL_MS);
-}
-
-function _stopPoll(): void {
-  if (_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = null;
-}
+const wizard = createWizardSession<ProfileDialinSession, ProfileDialinShotRow>({
+  stateKey: 'profileDialinSession',
+  storageKey: 'glp_profile_dialin_session',
+  overrideInputId: 'pdwOverrideInput',
+  onTick: renderProfileDialinWizard,
+});
 
 // ── Open / close ────────────────────────────────────────────────────────
 
 // profile: the full profile object as returned by GET /api/machine/profile/:id
 // (must include a real `id` — dial-in PUTs updates back to that id).
-export function openProfileDialinWizard(profile: DialinProfile | null | undefined): void {
+export function openProfileDialinWizard(profile: DialinProfile | null | undefined, machineId?: number | null): void {
   if (!profile?.id) return;
   if (!S.profileDialinSession || S.profileDialinSession.status !== 'active' || S.profileDialinSession.profileId !== profile.id) {
     S.profileDialinSession = {
       id: Date.now(),
       startedAt: Date.now(),
       profileId: profile.id,
+      machineId: machineId ?? null,
       profileName: profile.name || '',
       profile,
       rounds: [],
@@ -120,44 +102,45 @@ export function openProfileDialinWizard(profile: DialinProfile | null | undefine
       awaitingShotSince: Math.floor(Date.now() / 1000),
       status: 'active',
     };
-    _persist();
+    wizard.persist();
   }
   const modal = document.getElementById('profileDialinWizardModal') as HTMLElement;
   modal.classList.add('open');
   modal.style.display = 'flex';
   renderProfileDialinWizard();
-  _startPoll();
+  wizard.startPoll();
 }
 
 // Profile-list entry point ("🎯" row action) — fetches the full profile
 // (the list only holds {id, name}) before opening, since dial-in needs the
 // real phases to compute suggestions against.
 export async function startProfileDialinFromList(id: string | number): Promise<void> {
-  const profile = await machinesApi.getMachineProfile(id);
+  const machineId = concreteActiveMachineId();
+  const profile = await machinesApi.getMachineProfile(id, machineId ?? undefined);
   if (!profile) { window.showToast?.(t('profile_load_error')); return; }
-  openProfileDialinWizard(profile);
+  openProfileDialinWizard(profile, machineId);
 }
 
 export function closeProfileDialinWizard(): void {
   const modal = document.getElementById('profileDialinWizardModal') as HTMLElement;
   modal.classList.remove('open');
   modal.style.display = 'none';
-  _stopPoll();
+  wizard.stopPoll();
 }
 
 export function profileDialinClose(): void {
   closeProfileDialinWizard();
 }
 
-// ── Actions (data-action wiring, see main.js) ──────────────────────────
+// ── Actions (data-action wiring, see boot/delegation.ts) ──────────────────────────
 
 // Toggles a symptom in the current round's pending pick set. "balanced" is
 // exclusive with every other symptom (matches the priority table in
-// profile-dialin-convergence.js, where balanced only ever wins alone).
+// profile-dialin-convergence.ts, where balanced only ever wins alone).
 export function profileDialinToggleSymptom(symptom: string | undefined): void {
-  const s = _session();
+  const s = wizard.session();
   if (!s || !s.reviewRound) return;
-  // The symptom buttons always carry data-symptom (see main.ts's [data-action]
+  // The symptom buttons always carry data-symptom (see boot/delegation.ts's [data-action]
   // handler), so this narrows to the value the untyped .js already handled.
   const sym = symptom as string;
   let picks = s.pendingSymptoms || [];
@@ -168,7 +151,7 @@ export function profileDialinToggleSymptom(symptom: string | undefined): void {
   }
   s.pendingSymptoms = picks;
   s.reviewRound.suggestion = picks.length ? suggestPhaseAdjustment(picks, s.profile, s.rounds) : null;
-  _persist();
+  wizard.persist();
   renderProfileDialinWizard();
 }
 
@@ -182,7 +165,11 @@ export function profileDialinToggleSymptom(symptom: string | undefined): void {
 async function _sendUpdatedProfile(s: ProfileDialinSession, nextProfile: DialinProfile): Promise<boolean> {
   const token = (s._profileReqToken || 0) + 1;
   s._profileReqToken = token;
-  const r = await machinesApi.saveMachineProfile(s.profileId, nextProfile);
+  // Target the machine the session was opened for, not whatever is active now
+  // (#1605). With none captured, send no machineId so the backend uses the
+  // default machine.
+  const requestBody = s.machineId != null ? { ...nextProfile, machineId: s.machineId } : nextProfile;
+  const r = await machinesApi.saveMachineProfile(s.profileId, requestBody);
   if (!r.ok) {
     const body = await r.json().catch(() => ({})) as { error?: string };
     window.showToast?.(t('profile_send_error') + (body.error ? `: ${body.error}` : ''));
@@ -194,7 +181,7 @@ async function _sendUpdatedProfile(s: ProfileDialinSession, nextProfile: DialinP
 }
 
 export async function profileDialinAcceptNext(): Promise<void> {
-  const s = _session();
+  const s = wizard.session();
   if (!s || !s.reviewRound || !s.reviewRound.suggestion) return;
 
   const sug = s.reviewRound.suggestion;
@@ -218,12 +205,12 @@ export async function profileDialinAcceptNext(): Promise<void> {
 
   if (isProfileDialinConverged(s.rounds)) {
     s.status = 'converged';
-    _persist();
+    wizard.persist();
     renderProfileDialinWizard();
     return;
   }
   s.awaitingShotSince = Math.floor(Date.now() / 1000);
-  _persist();
+  wizard.persist();
   renderProfileDialinWizard();
 }
 
@@ -231,7 +218,7 @@ export async function profileDialinAcceptNext(): Promise<void> {
 // algorithm suggested, rather than accepting its computed step — mirrors
 // the grind wizard's override (a manual number, not a different strategy).
 export async function profileDialinOverride(): Promise<void> {
-  const s = _session();
+  const s = wizard.session();
   if (!s || !s.reviewRound || !s.reviewRound.suggestion || s.reviewRound.suggestion.type !== 'adjust') return;
   const input = document.getElementById('pdwOverrideInput') as HTMLInputElement | null;
   const val = parseFloat(input?.value as string);
@@ -251,58 +238,48 @@ export async function profileDialinOverride(): Promise<void> {
 
   if (isProfileDialinConverged(s.rounds)) {
     s.status = 'converged';
-    _persist();
+    wizard.persist();
     renderProfileDialinWizard();
     return;
   }
   s.awaitingShotSince = Math.floor(Date.now() / 1000);
-  _persist();
+  wizard.persist();
   renderProfileDialinWizard();
 }
 
 export function profileDialinEnd(): void {
-  const s = _session();
+  const s = wizard.session();
   if (!s) return;
   s.status = 'ended';
   s.candidateShotId = null;
-  _persist();
+  wizard.persist();
   renderProfileDialinWizard();
 }
 
 // isMatch: '1' confirms the candidate as this round's dial-in shot, '0'
 // dismisses it — no silent auto-matching, same reasoning as the grind
-// wizard (Max sometimes pulls shots for guests mid-session).
+// wizard (the maintainer sometimes pulls shots for guests mid-session).
 export function profileDialinConfirmShot(shotId: number, isMatch: boolean): void {
-  const s = _session();
+  const s = wizard.session();
   if (!s || s.status !== 'active') return;
 
   if (!isMatch) {
     s.dismissedShotIds = s.dismissedShotIds || [];
     s.dismissedShotIds.push(shotId);
     s.candidateShotId = null;
-    _persist();
+    wizard.persist();
     renderProfileDialinWizard();
     return;
   }
 
-  const shot = _shots().find(sh => sh.id === shotId);
+  const shot = wizard.shots().find(sh => sh.id === shotId);
   if (!shot) return;
   const score = calcShotScore(shot); // #957: server score on the metadata row, no curve fetch
   s.reviewRound = { shotId, score, suggestion: null };
   s.pendingSymptoms = [];
   s.candidateShotId = null;
-  _persist();
+  wizard.persist();
   renderProfileDialinWizard();
-}
-
-function _checkForCandidate(s: ProfileDialinSession): void {
-  if (!s.awaitingShotSince) return;
-  const dismissed = new Set(s.dismissedShotIds || []);
-  const already   = new Set((s.rounds || []).map(r => r.shotId));
-  const candidate = [..._shots()]
-    .filter(sh => !sh._trashed && (sh.timestamp as number) >= s.awaitingShotSince! && !dismissed.has(sh.id as number) && !already.has(sh.id as number))
-    .sort((a, b) => (a.timestamp as number) - (b.timestamp as number))[0];
-  if (candidate) s.candidateShotId = candidate.id as number;
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────
@@ -310,7 +287,7 @@ function _checkForCandidate(s: ProfileDialinSession): void {
 const SYMPTOMS = ['balanced', 'sour', 'bitter', 'watery', 'channeling'];
 
 export function renderProfileDialinWizard(): void {
-  const s = _session();
+  const s = wizard.session();
   const body = document.getElementById('pdwBody');
   if (!body) return;
   if (!s) { body.innerHTML = html``; return; }
@@ -318,7 +295,7 @@ export function renderProfileDialinWizard(): void {
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   if (s.status === 'converged' || s.status === 'ended') { body.innerHTML = _renderSummary(s); return; }
 
-  if (!s.candidateShotId && !s.reviewRound) _checkForCandidate(s);
+  if (!s.candidateShotId && !s.reviewRound) checkForCandidate(s, wizard.shots());
   // #957: the candidate mini-chart needs its curve — fetch then re-render.
   if (s.candidateShotId && window.getRawCurve && !window.getRawCurve(s.candidateShotId)) {
     const pendingId = s.candidateShotId;
@@ -332,7 +309,7 @@ export function renderProfileDialinWizard(): void {
 
 function _renderRound(s: ProfileDialinSession): Html {
   const roundNum = s.rounds.length + 1;
-  const chips = _renderChips(s.rounds);
+  const chips = renderChips(s.rounds, r => tHtml('profile_dialin_symptom_' + String(r.symptom)));
 
   if (s.reviewRound) {
     const rr = s.reviewRound;
@@ -347,7 +324,7 @@ function _renderRound(s: ProfileDialinSession): Html {
           <div class="dw-actions">
             <button class="lib-save-btn" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button>
             <div class="dw-override-row">
-              <input type="number" step="0.1" id="pdwOverrideInput" placeholder="${esc(sug.newValue)}">
+              <input type="number" step="0.1" id="pdwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${esc(sug.newValue)}">
               <button class="lib-btn-sm" data-action="profile-dialin-override">${tHtml('dialin_wizard_override')}</button>
             </div>
           </div>`;
@@ -370,7 +347,7 @@ function _renderRound(s: ProfileDialinSession): Html {
     </div>`;
   }
 
-  const candidate = s.candidateShotId ? _shots().find(sh => sh.id === s.candidateShotId) : null;
+  const candidate = s.candidateShotId ? wizard.shots().find(sh => sh.id === s.candidateShotId) : null;
 
   return html`<div class="dw-round">
     <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
@@ -390,7 +367,7 @@ function _renderRound(s: ProfileDialinSession): Html {
 }
 
 function _renderSummary(s: ProfileDialinSession): Html {
-  const best = _bestRound(s.rounds);
+  const best = bestRound(s.rounds);
   const title = s.status === 'converged' ? t('dialin_wizard_converged_title') : t('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length ? t(profileDialinConvergenceReason(s.rounds)) : '';
   return html`<div class="dw-summary">
@@ -404,17 +381,7 @@ function _renderSummary(s: ProfileDialinSession): Html {
       ${best ? html`<button class="lib-btn-sm" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
       <button class="lib-btn-sm" data-action="profile-dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
-    ${_renderChips(s.rounds)}
+    ${renderChips(s.rounds, r => tHtml('profile_dialin_symptom_' + String(r.symptom)))}
   </div>`;
 }
 
-function _renderChips(rounds: ProfileDialinRound[]): Html {
-  if (!rounds?.length) return html``;
-  return html`<div class="dw-chip-strip">${joinHtml(rounds.map(r =>
-    html`<div class="dw-chip" style="border-color:${esc(scoreColor(r.score))}">${tHtml('profile_dialin_symptom_' + String(r.symptom))} → ${esc(r.score ?? '–')}</div>`
-  ))}</div>`;
-}
-
-function _bestRound(rounds: ProfileDialinRound[]): ProfileDialinRound | null {
-  return [...(rounds || [])].filter(r => r.score != null).sort((a, b) => (b.score as number) - (a.score as number))[0] || null;
-}

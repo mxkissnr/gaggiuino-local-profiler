@@ -119,8 +119,17 @@ func hasPressurePlateau(times, pressures []float64, windowSec, tolerance float64
 }
 
 // datapointsScaled reads shot.datapoints[key] as a []float64 with each value
-// divided by div.
+// divided by div. newCurveStats passes a *shotSeries (the curve decoded once,
+// #1616); any other shot is decoded here.
 func datapointsScaled(shot shots.Shot, key string, div float64) []float64 {
+	if ss, ok := shot["datapoints"].(*shotSeries); ok {
+		vals := ss.samples(key)
+		out := make([]float64, len(vals))
+		for i, f := range vals {
+			out[i] = f / div
+		}
+		return out
+	}
 	dp := shots.DatapointsMap(shot)
 	arr, _ := dp[key].([]any)
 	out := make([]float64, 0, len(arr))
@@ -134,6 +143,9 @@ func datapointsScaled(shot shots.Shot, key string, div float64) []float64 {
 
 // finalWeightG returns the max of shotWeight (or weight), tenths -> grams.
 func finalWeightG(shot shots.Shot) float64 {
+	if cs := curveOf(shot); cs != nil {
+		return cs.finalWeightG
+	}
 	w := datapointsScaled(shot, "shotWeight", 10)
 	if len(w) == 0 {
 		w = datapointsScaled(shot, "weight", 10)
@@ -145,6 +157,34 @@ func finalWeightG(shot shots.Shot) float64 {
 		}
 	}
 	return mx
+}
+
+// isTempStable is the temp_stable test: more than 5 temperature samples
+// with a standard deviation within tempStableToleranceC.
+func isTempStable(shot shots.Shot) bool {
+	if cs := curveOf(shot); cs != nil {
+		return cs.tempStable
+	}
+	t := datapointsScaled(shot, "temperature", 10)
+	return len(t) > 5 && stddev(t) <= tempStableToleranceC
+}
+
+// hasShotPressurePlateau is the pressure_flat test on one shot.
+func hasShotPressurePlateau(shot shots.Shot) bool {
+	if cs := curveOf(shot); cs != nil {
+		return cs.pressurePlateau
+	}
+	times := datapointsScaled(shot, "timeInShot", 10)
+	pressures := datapointsScaled(shot, "pressure", 10)
+	return hasPressurePlateau(times, pressures, pressurePlateauWindowS, pressurePlateauToleranceBar)
+}
+
+// shotPreinfusionSeconds is detectPreinfusionSeconds on one shot's curve.
+func shotPreinfusionSeconds(shot shots.Shot) *float64 {
+	if cs := curveOf(shot); cs != nil {
+		return cs.preinfusionSeconds
+	}
+	return detectPreinfusionSeconds(datapointsScaled(shot, "timeInShot", 10), datapointsScaled(shot, "pressure", 10))
 }
 
 // totalYieldG sums every shot's final weight, in grams.
@@ -228,31 +268,25 @@ func bagAtShotTime(bean library.Entity, shotTimestampSec int64) library.Entity {
 	return best
 }
 
-// currentDayStreak returns the longest run of consecutive local calendar days
-// in dateSet ending today or yesterday.
+// currentDayStreak returns the length of the run of consecutive local
+// calendar days in dateSet that ends today or yesterday. Days are the
+// server's local calendar days (time.Local), the same day the shot list's
+// today-count uses (#1727), matching shotDaySet's keys.
 func currentDayStreak(dateSet map[string]bool, nowMS int64) int {
-	const dayMS = int64(86_400_000)
-	now := time.UnixMilli(nowMS).UTC()
-	todayKey := now.Format("2006-01-02")
-	yesterdayKey := time.UnixMilli(nowMS - dayMS).UTC().Format("2006-01-02")
-
-	var cursor time.Time
-	switch {
-	case dateSet[todayKey]:
-		cursor = now
-	case dateSet[yesterdayKey]:
-		cursor = time.UnixMilli(nowMS - dayMS).UTC()
-	default:
-		return 0
+	now := time.UnixMilli(nowMS).In(time.Local)
+	// Step from local noon with AddDate so a DST change never skips or
+	// repeats a calendar day.
+	cursor := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.Local)
+	if !dateSet[cursor.Format("2006-01-02")] {
+		cursor = cursor.AddDate(0, 0, -1)
+		if !dateSet[cursor.Format("2006-01-02")] {
+			return 0
+		}
 	}
 	streak := 0
-	for {
-		key := cursor.Format("2006-01-02")
-		if !dateSet[key] {
-			break
-		}
+	for dateSet[cursor.Format("2006-01-02")] {
 		streak++
-		cursor = cursor.Add(-24 * time.Hour)
+		cursor = cursor.AddDate(0, 0, -1)
 	}
 	return streak
 }

@@ -1,6 +1,7 @@
 package img
 
 import (
+	"encoding/binary"
 	"log"
 	"os"
 )
@@ -13,10 +14,17 @@ import (
 // content-type's extension when Optimize converted the format (mode
 // ModeUpload only) — so the caller persists the right value.
 //
-// On a decode/re-encode failure of an otherwise magic-valid blob the
-// original bytes are stored as-is, a warning is logged, and no thumbnail is
-// written — no regression versus the pre-#961 behaviour, which always
-// stored the raw upload.
+// On a decode/re-encode failure of an otherwise magic-valid JPEG the raw
+// bytes are stored, but with their APP1 (EXIF/XMP) and APP13 (IPTC) segments
+// stripped by hand first, so location data never survives an upload; a JPEG
+// whose segment stream cannot be parsed at all is rejected ("", false). For
+// every other format the original bytes are stored untouched, so metadata is
+// only ever stripped when Optimize succeeded on a JPEG/PNG or when a JPEG fell
+// back to the hand-stripped path. The byte-identical cases are the GIF
+// passthrough, the WebP passthrough in ModePreserve, and the raw fallback of a
+// non-JPEG on Optimize failure. No thumbnail is written on any fallback path,
+// and any stale thumbnail for the stored extension is removed so ServePath
+// falls back to the new full image.
 func Save(dir, prefix string, id int64, data []byte, contentType string, mode Mode) (ext string, ok bool) {
 	srcExt, known := ContentTypeKnown(contentType)
 	if !known || len(data) == 0 || len(data) > MaxBytes {
@@ -31,10 +39,18 @@ func Save(dir, prefix string, id int64, data []byte, contentType string, mode Mo
 
 	res, err := Optimize(data, srcExt, mode)
 	if err != nil {
+		if srcExt == "jpg" {
+			stripped, sok := stripJPEGMetadata(data)
+			if !sok {
+				return "", false
+			}
+			data = stripped
+		}
 		if werr := os.WriteFile(Path(dir, id, srcExt, prefix), data, 0o644); werr != nil {
 			return "", false
 		}
 		log.Printf("img: %s%d: storing raw, could not optimize: %v", prefix, id, err)
+		_ = os.Remove(ThumbPath(dir, id, srcExt, prefix))
 		return srcExt, true
 	}
 
@@ -45,6 +61,11 @@ func Save(dir, prefix string, id int64, data []byte, contentType string, mode Mo
 		if err := os.WriteFile(ThumbPath(dir, id, res.ThumbExt, prefix), res.Thumb, 0o644); err != nil {
 			log.Printf("img: %s%d: main written, thumbnail failed: %v", prefix, id, err)
 		}
+	} else {
+		// No new thumbnail for this extension (GIF, WebP passthrough): drop any
+		// left from a previous upload of the same extension so the thumbnail
+		// request serves the new full image instead of the old picture.
+		_ = os.Remove(ThumbPath(dir, id, res.MainExt, prefix))
 	}
 	if res.Converted {
 		_ = os.Remove(Path(dir, id, srcExt, prefix))
@@ -60,16 +81,28 @@ func Save(dir, prefix string, id int64, data []byte, contentType string, mode Mo
 // JPEG/PNG, byte-identical passthrough for WebP/GIF — plus a ".thumb"
 // sibling. The path's extension is never changed, so the in-tx DB reference
 // stays consistent.
+//
+// A restore must never lose the user's own image, so when Optimize fails the
+// bytes are written as-is — with a JPEG's APP1/APP13 segments stripped by hand
+// when the stream parses, and left raw with a logged warning when it does not.
 func WriteOptimized(path string, data []byte, srcExt string) (finalExt string, err error) {
-	if !knownExt(srcExt) || len(data) == 0 || len(data) > MaxBytes {
+	if !KnownExt(srcExt) || len(data) == 0 || len(data) > MaxBytes {
 		return "", os.WriteFile(path, data, 0o644)
 	}
 	res, oerr := Optimize(data, srcExt, ModePreserve)
 	if oerr != nil {
+		if srcExt == "jpg" {
+			if stripped, sok := stripJPEGMetadata(data); sok {
+				data = stripped
+			} else {
+				log.Printf("img: restore %s: could not strip metadata, storing raw: %v", path, oerr)
+			}
+		}
 		if werr := os.WriteFile(path, data, 0o644); werr != nil {
 			return "", werr
 		}
 		log.Printf("img: restore %s: storing raw, could not optimize: %v", path, oerr)
+		_ = os.Remove(thumbPathFor(path, srcExt))
 		return srcExt, nil
 	}
 	if werr := os.WriteFile(path, res.Main, 0o644); werr != nil {
@@ -77,6 +110,52 @@ func WriteOptimized(path string, data []byte, srcExt string) (finalExt string, e
 	}
 	if res.Thumb != nil {
 		_ = os.WriteFile(thumbPathFor(path, res.ThumbExt), res.Thumb, 0o644)
+	} else {
+		_ = os.Remove(thumbPathFor(path, srcExt))
 	}
 	return srcExt, nil
+}
+
+// stripJPEGMetadata copies a JPEG byte-for-byte except for its APP1
+// (EXIF/XMP) and APP13 (IPTC) marker segments, which are dropped. It walks the
+// marker list the same way exifOrientation does: after SOI every segment is
+// 0xFF <marker> <len>, and the entropy-coded scan (from SOS on) is copied
+// verbatim to the end. ok is false when the stream is not a well-formed JPEG
+// segment sequence — a bad marker, a truncated length, or bytes that run out
+// before SOS/EOI — so a caller can tell "stripped" from "could not parse".
+func stripJPEGMetadata(data []byte) (stripped []byte, ok bool) {
+	if len(data) < 2 || data[0] != 0xFF || data[1] != 0xD8 {
+		return nil, false
+	}
+	out := make([]byte, 0, len(data))
+	out = append(out, data[0], data[1]) // SOI
+	i := 2
+	for i+2 <= len(data) {
+		if data[i] != 0xFF {
+			return nil, false
+		}
+		marker := data[i+1]
+		if marker == 0xDA || marker == 0xD9 { // SOS / EOI: copy the rest as-is
+			out = append(out, data[i:]...)
+			return out, true
+		}
+		if marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7) { // TEM / RSTn: no length
+			out = append(out, data[i], data[i+1])
+			i += 2
+			continue
+		}
+		if i+4 > len(data) {
+			return nil, false
+		}
+		segLen := int(binary.BigEndian.Uint16(data[i+2 : i+4]))
+		if segLen < 2 || i+2+segLen > len(data) {
+			return nil, false
+		}
+		if marker != 0xE1 && marker != 0xED {
+			out = append(out, data[i:i+2+segLen]...)
+		}
+		i += 2 + segLen
+	}
+	// Bytes ran out before SOS/EOI: not a whole JPEG.
+	return nil, false
 }

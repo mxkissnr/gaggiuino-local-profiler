@@ -7,7 +7,7 @@ Working rules for this repo. Follow these in every session.
 - **Code, comments, commit messages, GitHub issues, PR descriptions** → always English
 - **DOCS.md, README.md** → English (primary)
 - **DOCS.de.md** → German (supplementary, always kept in sync with DOCS.md)
-- **UI strings in index.html** → translated via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL); add new keys to **all 6 language files** when adding UI text
+- **UI strings** → translated via `t()` from `public-src/i18n/{de,en,it,fr,es,nl}.ts`; add new keys to **all 6 language files** when adding UI text
 - **UI design** → every visible change follows [docs/DESIGN.md](docs/DESIGN.md) (bean-library design language, "nothing twice", desktop layout of its own).
 
 ## Workflow
@@ -122,7 +122,7 @@ together, in one commit:
 
 `test/version-sync.test.ts` fails if any of the latter three drift from
 `config.yaml`; `scripts/release-check.mts` check 1 does the same.
-(`go/internal/library/geo.go`'s `geoUserAgent` carries the version too — cosmetic, bump it along but it isn't gated.)
+(The geocoder's User-Agent is derived from `system.Version()` — nothing to bump there.)
 
 ## Commits
 
@@ -139,13 +139,8 @@ consts) or touch `public-src/shared/whats-new.ts` in a feature/fix commit —
 both happen once, together, at release time (see Versioning above and the
 `glp-release-checklist` skill).
 
-At release time:
-```
-git tag v<version>
-git push origin main
-git push origin v<version>
-gh release create v<version> --title "v<version>" --notes "..."
-```
+Tagging and the GitHub release are part of the release run only (`releaser`
+agent / `glp-release-checklist` skill), never done by hand from a feature round.
 
 ## Release & documentation rules (since 2026-07-05)
 
@@ -189,10 +184,9 @@ README.md                     ← Repo root README (English)
 - **Machine config source of truth**: the `machines` SQLite table
   (`go/internal/machines`, the registry) is the only source of truth for a
   machine's host and switch entity — never `options.json`. `options.json`
-  (the HA app configuration) is a *tracked input*: the registry adopts a
-  changed app option once, at startup; after that the registry's own
-  value (including one intentionally cleared via Settings → Machines) always
-  wins. Read machine config only through the registry's resolver methods
+  (the HA app configuration) carries no machine options (#662): on an empty
+  registry the default machine is seeded unconfigured (empty host, #718)
+  and is then set up via Settings → Machines only. Read machine config only through the registry's resolver methods
   (`machineId = nil`/`0` means the default machine) — never off a raw
   options bag. This exists because #638/#641/#643/#648 were four separate
   bugs from the same copy-pasted `opts`-shaped resolution logic (the Node
@@ -204,7 +198,7 @@ README.md                     ← Repo root README (English)
 - `shot.annotation?.coffee` etc. — annotation fields are optional
 - `calcShotScore(shot, getShotData(shot))` returns null for test/empty shots
 - All fetch calls use relative URLs (no leading `/`) for HA ingress compatibility
-- Chart.js is loaded from CDN; reuse existing chart instances (destroy before re-creating)
+- Chart.js is an npm dependency bundled by Vite; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the app container
 - i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.ts` — each exports a default object; `public-src/constants.ts` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
 - **Go + TypeScript only**: the repository is Go + TypeScript only — the backend is Go, and everything that runs in the browser or as build/dev tooling is TypeScript. No new `.js`/`.mjs`/`.cjs` files may be added: vendored `/vendor/` files are the only exception, enforced by `test/no-javascript-sources.test.ts`. Tooling Node runs directly is `.mts` and runs on Node's built-in type stripping (official Node ≥ 22.18; CI uses 24); `npm run lint` passes ESLint's `unstable_native_nodejs_ts_config` flag. Service workers are `.ts`, bundled to classic scripts and typed by `tsconfig.sw.json`. The SPA under `public-src/` is `.ts`; `tsconfig.json` turns on `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; every `innerHTML` assignment must take an `Html` value, never a raw string — enforced by the local ESLint rule `html-sink`.

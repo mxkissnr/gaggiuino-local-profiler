@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -16,10 +17,6 @@ import (
 
 // Registry is one row per configured espresso machine, backed by the
 // `machines` table internal/db already creates (see internal/db/db.go).
-// RestoreMachines (below) handles the backup-restore path; its legacy-
-// options reconciliation is not implemented (see that method's own doc
-// comment). EnsureDefaultMachine's #718 seed-from-legacy-options behavior
-// is reduced — see its own doc comment below.
 type Registry struct {
 	db *sql.DB
 }
@@ -90,14 +87,9 @@ func scanMachineRow(scanner interface{ Scan(...any) error }) (machineRow, error)
 }
 
 // EnsureDefaultMachine is idempotent: it seeds machine #1 if the registry
-// is still empty. Rather than seeding it from config.yaml's legacy
-// machine_host/switch_entity add-on options (no options.json facade exists
-// here yet), it seeds an empty "not configured yet" machine #1 — empty
-// host/switchEntity, #718's "empty is a valid not-configured state"
-// convention that also applies when no legacy option is set. A future
-// system-domain package can extend this to read real options.json once it
-// exists; no currently-shipped behavior regresses since this binary isn't
-// wired into the add-on yet (see go/README.md).
+// is still empty, as an empty "not configured yet" machine (empty
+// host/switchEntity, #718). options.json carries no machine options any
+// more (#662), so there is nothing to seed from.
 func (r *Registry) EnsureDefaultMachine() error {
 	var count int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM machines`).Scan(&count); err != nil {
@@ -342,33 +334,24 @@ func (r *Registry) DeleteMachine(id int64, onHostEvicted func(host string)) (boo
 	return true, nil
 }
 
-// RestoreMachines (#901) wipes and re-inserts the whole `machines` table
-// from a backup's `machines` array, validating each entry the same way
-// MachineInput.validate does for a live POST/PUT, then enforcing exactly
-// one is_default row (lowest id wins on a tie/absence). Returns the count
-// of entries actually restored (out of len(in)) — an invalid entry (bad id,
-// or a field that fails validation) is skipped, not fatal to the rest of
-// the restore.
-//
-// Deliberately NOT done here (see go/internal/machines/doc.go for the
-// full rationale): evicting the live session for every host that existed
-// before the restore (this package's own live WS sessions reconnect/fail
-// naturally against a host that no longer resolves to any machine, rather
-// than being torn down immediately) and reconciling a restored machine's
-// stale host/switchEntity back to the current legacy add-on options.json
-// (that facade doesn't exist yet, see internal/orders/options.go for the
-// same options.json-facade gap noted elsewhere).
-func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
-	type validated struct {
-		id              int64
-		name, typ, host string
-		switchEntity    *string
-		theme           *string
-		hasWaterSensor  bool
-		isDefault       bool
-		enabled         bool
-		createdAt       int64
-	}
+// validated is one restore-usable machine, decoded from a backup entry by
+// restorableMachines.
+type validated struct {
+	id              int64
+	name, typ, host string
+	switchEntity    *string
+	theme           *string
+	hasWaterSensor  bool
+	isDefault       bool
+	enabled         bool
+	createdAt       int64
+}
+
+// restorableMachines applies RestoreMachines' per-entry rules to a backup's
+// `machines` array: an entry with a non-positive id, a field that fails
+// MachineInput.validate (the same check a live POST/PUT uses), or an
+// unencodable theme is skipped rather than restored.
+func restorableMachines(in []Machine) []validated {
 	valid := make([]validated, 0, len(in))
 	for _, m := range in {
 		if m.ID <= 0 {
@@ -395,6 +378,28 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 			enabled: m.Enabled, createdAt: createdAt,
 		})
 	}
+	return valid
+}
+
+// CountRestorableMachines returns how many entries of a backup's `machines`
+// array RestoreMachines would actually insert. The restore preview reports
+// this so it can never promise machines the restore would skip.
+func CountRestorableMachines(in []Machine) int {
+	return len(restorableMachines(in))
+}
+
+// RestoreMachines (#901) wipes and re-inserts the whole `machines` table
+// from a backup's `machines` array, validating each entry the same way
+// MachineInput.validate does for a live POST/PUT, then enforcing exactly
+// one is_default row (lowest id wins on a tie/absence). Returns the count
+// of entries actually restored (out of len(in)) — an invalid entry (bad id,
+// or a field that fails validation) is skipped, not fatal to the rest of
+// the restore.
+//
+// It does not tear down live sessions for hosts that existed before the
+// restore; they idle out or reconnect on their own.
+func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
+	valid := restorableMachines(in)
 
 	// #901 code review: a backup whose `machines` section is entirely
 	// unusable (every entry fails validate()) must leave the existing
@@ -489,10 +494,19 @@ func (r *Registry) RestoreMachines(in []Machine) (restored int, err error) {
 	return len(valid), nil
 }
 
+// ErrUnknownMachine is returned by ResolveMachine when an explicit machineId
+// names no registered machine -- distinct from "no machineId given", which
+// still resolves to the default machine.
+var ErrUnknownMachine = errors.New("machines: unknown machine")
+
 // ResolveMachine (#679) returns an explicit machineId if it names a known
 // machine, otherwise the default machine. rawId == nil means "no machineId
 // given at all" (query/body param absent), matching every existing call
-// site's convention.
+// site's convention; an explicit id that names no machine is not silently
+// treated as "not given" -- it returns ErrUnknownMachine, so a mutating
+// caller can reject it instead of acting on a different machine than the one
+// asked for. Callers that want the old lenient fallback (GET routes) handle
+// that sentinel themselves.
 func (r *Registry) ResolveMachine(rawID *int64) (*Machine, error) {
 	if err := r.EnsureDefaultMachine(); err != nil {
 		return nil, err
@@ -505,6 +519,7 @@ func (r *Registry) ResolveMachine(rawID *int64) (*Machine, error) {
 		if m != nil {
 			return m, nil
 		}
+		return nil, ErrUnknownMachine
 	}
 	return r.GetDefaultMachine()
 }
@@ -564,12 +579,7 @@ var machineHostGuardResolved = newGuardVar[func(context.Context, string) (net.IP
 // (once per outbound machine call, not a hot loop). Security over
 // performance here.
 func BaseURLFor(ctx context.Context, m *Machine) (string, error) {
-	raw := strings.TrimSpace(m.Host)
-	normalized := raw
-	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
-		normalized = "http://" + raw
-	}
-	u, err := url.Parse(normalized)
+	u, err := parseMachineHost(m.Host)
 	if err != nil {
 		return "", fmt.Errorf("invalid host: %w", err)
 	}
@@ -586,16 +596,39 @@ func BaseURLFor(ctx context.Context, m *Machine) (string, error) {
 // a bare host or one already prefixed with a scheme, and returns just the
 // hostname portion.
 func hostnameOf(host string) (string, error) {
-	normalized := host
-	lower := strings.ToLower(host)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
-		normalized = "http://" + host
-	}
-	u, err := url.Parse(normalized)
+	u, err := parseMachineHost(host)
 	if err != nil || u.Hostname() == "" {
 		return "", fmt.Errorf("invalid host")
 	}
 	return u.Hostname(), nil
+}
+
+// NormalizeMachineHost normalizes a machine Host or a machine-traffic host key
+// to a lowercase host:port and its bare hostname, accepting a bare host as
+// well as one already carrying an http(s) scheme. It applies the same
+// scheme-defaulting parse BaseURLFor and hostnameOf use, so callers outside
+// this package — e.g. the MCP developer tools' traffic-to-machine resolution —
+// can key machine traffic exactly the way the registry builds each machine's
+// base URL. An empty or unparseable input yields ("", "").
+func NormalizeMachineHost(raw string) (host, hostname string) {
+	u, err := parseMachineHost(raw)
+	if err != nil {
+		return "", ""
+	}
+	return strings.ToLower(u.Host), strings.ToLower(u.Hostname())
+}
+
+// parseMachineHost applies this package's one host-normalization step to a
+// machine Host or a machine-traffic host key: trim it, then default a
+// scheme-less host to http:// before parsing. BaseURLFor, hostnameOf and
+// NormalizeMachineHost all go through it, so a stored host and a counted host
+// normalize identically.
+func parseMachineHost(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
+		raw = "http://" + raw
+	}
+	return url.Parse(raw)
 }
 
 func nullableString(s *string) any {

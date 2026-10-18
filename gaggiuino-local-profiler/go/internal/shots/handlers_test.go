@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func doJSON(t testing.TB, mux *http.ServeMux, method, path string, body []byte) *httptest.ResponseRecorder {
@@ -412,7 +413,10 @@ func TestDelete_HappyPathAddsToBlocklistAndNotFound(t *testing.T) {
 	mux := newMux(h)
 
 	dur := int64(300)
-	insertShot(t, sqlDB, 1, 1000, &dur, "V60", nil, nil)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60", nil, map[string]any{"dose": 18.0})
+	if _, err := sqlDB.Exec(`INSERT INTO trash (shot_id, deleted_at) VALUES (?, ?)`, 1, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("trashing shot 1: %v", err)
+	}
 
 	rec := doJSON(t, mux, http.MethodPost, "/api/shots/1/delete", nil)
 	if rec.Code != http.StatusOK {
@@ -425,6 +429,14 @@ func TestDelete_HappyPathAddsToBlocklistAndNotFound(t *testing.T) {
 	}
 	if shot != nil {
 		t.Errorf("expected shot 1 to be permanently gone, got %+v", shot)
+	}
+	// #1609: the handler's single delete+blocklist transaction also drops the
+	// annotation and trash rows, not just the shot.
+	if got := countRows(t, sqlDB, `SELECT COUNT(*) FROM annotations WHERE shot_id = 1`); got != 0 {
+		t.Errorf("annotation count = %d, want 0", got)
+	}
+	if got := countRows(t, sqlDB, `SELECT COUNT(*) FROM trash WHERE shot_id = 1`); got != 0 {
+		t.Errorf("trash count = %d, want 0", got)
 	}
 	blocklist, err := s.GetBlocklist()
 	if err != nil {

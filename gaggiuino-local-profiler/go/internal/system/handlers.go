@@ -11,7 +11,9 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 )
 
 const jsonBodyLimit = 16 * 1024 // 16kb global JSON body limit.
@@ -34,10 +36,24 @@ type Handlers struct {
 	vc     *versionChecker
 	token  string
 	rl     *ratelimit.KeyedLimiter
+
+	// dataRevs, when set, returns the SSE data-change tracker's epoch and a
+	// snapshot of its per-kind revisions for GET /api/status (#1539 slice 2).
+	// A func field rather than a direct *sse.DataChanges so internal/system
+	// does not import internal/sse; nil leaves the status fields empty.
+	dataRevs func() (string, map[string]int64)
 }
 
 func NewHandlers(poller *Poller, demo *DemoService, token string) *Handlers {
 	return &Handlers{poller: poller, demo: demo, vc: newVersionChecker(), token: token, rl: ratelimit.NewKeyed()}
+}
+
+// SetDataRevs wires the SSE data-change tracker's revision snapshot into
+// GET /api/status, so a reconnecting client can compare the server's per-kind
+// revisions with the ones it last saw and refetch only what it missed. Nil (the
+// default) leaves dataEpoch empty and dataRevs an empty object.
+func (h *Handlers) SetDataRevs(fn func() (string, map[string]int64)) {
+	h.dataRevs = fn
 }
 
 // RegisterRoutes registers every route this package owns onto mux.
@@ -52,7 +68,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/token", h.getToken)
 	mux.HandleFunc("GET /api/status", h.getStatus)
 
-	// The remaining endpoints the embedded Vite frontend / glp-integration call
+	// The remaining endpoints the embedded frontend / glp-integration call
 	// — see switch.go, openapi.go, sync.go.
 	mux.HandleFunc("GET /api/switch", h.getSwitch)
 	mux.HandleFunc("POST /api/switch/toggle", h.postSwitchToggle)
@@ -133,6 +149,10 @@ func (h *Handlers) postPreheatReadyBy(w http.ResponseWriter, r *http.Request) {
 		v := int64(n)
 		targetAt = &v
 	}
+	if targetAt != nil && readyByExpired(*targetAt, time.Now()) {
+		writeError(w, http.StatusBadRequest, "targetAt must not be in the past")
+		return
+	}
 	if targetAt != nil {
 		entity := h.poller.defaultSwitchEntity()
 		if !h.poller.ha.Enabled() || entity == "" {
@@ -183,23 +203,12 @@ func (h *Handlers) postDemoEnd(w http.ResponseWriter, r *http.Request) {
 // tokenRateLimitDirect is the original 10/min-per-IP cap, still applied to
 // non-Ingress (direct-port/LAN) callers — see getToken's doc comment.
 //
-// tokenRateLimitIngress is a Go-rewrite-only carve-out (#901 live bug, found
-// via real multi-page browser navigation through a prefix-stripping Ingress
-// proxy, not curl/smoke tests): this Go rewrite is a traditional multi-page
-// app — every nav-link click is a full page reload, re-running
-// templates/layout.templ's glp-token.js and re-fetching GET /api/token on
-// every single page. Worse, HA Ingress proxies every request from one shared
-// internal address (see auth.IsSupervisorIP's #801 comment and
-// internal/ratelimit/doc.go's own note on "the single shared Supervisor-Ingress
-// address"), so the token:<ip> bucket this rate limit keys on is shared across
-// every browser tab and every user of the same HA instance, not scoped per
-// visitor the way it would be for a direct-port LAN caller. 10/min was
-// never enough headroom for that: a single person clicking through this
-// app's SPA routes (served by internal/webapp) inside a minute exhausts the
-// budget for the whole household. Kept meaningfully lower than the app-wide
-// 600/min backstop (ratelimit.DefaultMax) so this endpoint specifically still
-// bounds a runaway client/bug, just no longer at a threshold ordinary MPA
-// browsing trips by accident.
+// tokenRateLimitIngress applies to HA Ingress callers (#901). Every Ingress
+// request arrives from the one shared Supervisor address (see
+// auth.IsSupervisorIP), so the token:<ip> bucket is shared by every browser
+// tab and user of the same HA instance, and each SPA load fetches the token
+// once. 10/min was too tight for that; 120/min still bounds a runaway client
+// well below the app-wide 600/min backstop (ratelimit.DefaultMax).
 const (
 	tokenRateLimitDirect  = 10
 	tokenRateLimitIngress = 120
@@ -253,17 +262,12 @@ func (h *Handlers) getToken(w http.ResponseWriter, r *http.Request) {
 //
 // Sensitive fields (machineUrl/machineHostname/lastSyncError/
 // lastMachineError/switchEntity/isDemo) are only included when the request
-// carries a valid X-GLP-Token — recomputed here independent of Ingress: the
-// token is checked from the header alone, and HA Ingress making the middleware
-// let the request through does NOT make it authenticated.
+// carries a valid X-GLP-Token header — checked here independently of the
+// middleware, so an HA Ingress request without the header is not treated as
+// authenticated.
 //
-// lastSync/lastSyncError come from POST /api/sync's manual pull loop (sync.go),
-// so GET /api/status reports real values once a sync has run (null until
-// then). syncRetryCount stays permanently 0 — the automatic retry/backoff
-// scheduler (scheduleNextSync) is still not implemented, there being no
-// automatic sync loop for it to hang off; it's present in the response
-// (matching openapi.yaml's Status schema) so a client parsing it doesn't
-// break.
+// lastSync/lastSyncError come from the default machine's shot-history pull
+// (sync.go — manual, post-brew and scheduled), null until one has run.
 //
 // #1201, follow-up on PR #1221: GET /api/status's `machines[]` array now
 // reports each machine's own reachable/firmwareVersion (buildStatusMachines,
@@ -302,40 +306,33 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	machineReachable := info.MachineReachable
 	lastMachineError := info.LastMachineError
 
+	// machines[].lastError can embed a machine host, so it is gated the same
+	// way the top-level sensitive block below is: computed once here so
+	// both (and the ?machineId probe gate just below) use the same
+	// authentication decision.
+	authenticated := auth.IsTokenValid(h.token, r.Header.Get("X-GLP-Token"))
+
 	// #464: ?machineId for a non-default machine live-probes THAT machine
 	// (same adapter.GetStatus() call POST /api/machines/:id/test uses)
 	// instead of describing the default one. No machineId, or one that
 	// resolves back to the default machine, keeps the behavior above
 	// unchanged — this endpoint is polled unparameterized by every other
 	// caller (glp-integration included).
+	//
+	// #1626: /api/status answers without a token, but only a caller with the
+	// token, or one arriving through HA Ingress, may make it reach out to a
+	// machine. Anyone else gets that machine's last polled state instead of
+	// a fresh outbound probe.
+	probeAllowed := authenticated || auth.IsIngressRequest(r)
 	if raw := r.URL.Query().Get("machineId"); raw != "" {
 		if id, perr := strconv.ParseInt(raw, 10, 64); perr == nil {
 			if requested, rerr := registry.ResolveMachine(&id); rerr == nil && requested != nil && !requested.IsDefault {
 				machineHostname = hostnameOnly(requested.Host)
-				// A GetAdapter failure (e.g. an orphaned registry row
-				// with an empty/unknown Type from an incomplete
-				// migration) reports as a probe failure for THIS
-				// machine, same as a reachable probe that errors out
-				// -- never silently falls through to leave
-				// machineReachable/lastMachineError describing the
-				// default machine while machineHostname above
-				// already switched to the requested one (#901 code
-				// review).
-				adapter, aerr := h.poller.adapters.GetAdapter(requested)
-				if aerr == nil {
-					ctx, cancel := context.WithTimeout(r.Context(), machineStatusProbeTimeout)
-					_, aerr = adapter.GetStatus(ctx, requested)
-					cancel()
-				}
-				if aerr == nil {
-					reachable := true
-					machineReachable = &reachable
-					lastMachineError = nil
+				if probeAllowed {
+					machineReachable, lastMachineError = h.probeMachine(r.Context(), requested)
 				} else {
-					reachable := false
-					machineReachable = &reachable
-					msg := aerr.Error()
-					lastMachineError = &msg
+					st := h.poller.MachineStatus(requested.ID)
+					machineReachable, lastMachineError = st.Reachable, st.LastError
 				}
 			}
 		}
@@ -346,28 +343,37 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 		machinesList = nil
 	}
 
-	// machines[].lastError can embed a machine host, so it is gated the same
-	// way the top-level sensitive block below is: computed once here so
-	// both use the same authentication decision.
-	authenticated := auth.IsTokenValid(h.token, r.Header.Get("X-GLP-Token"))
+	// #1539 slice 2: the SSE tracker's epoch and per-kind revisions, so a client
+	// that reconnects (or falls back to polling) can compare them with the ones
+	// it last saw and refetch only the kinds that changed. Both stay empty until
+	// cmd/server wires SetDataRevs, and a nil hook reports an empty object rather
+	// than null.
+	dataEpoch := ""
+	dataRevs := map[string]int64{}
+	if h.dataRevs != nil {
+		dataEpoch, dataRevs = h.dataRevs()
+		if dataRevs == nil {
+			dataRevs = map[string]int64{}
+		}
+	}
 
 	resp := map[string]any{
-		"shotCount":                   shotCount,
-		"lastSync":                    nullableStr(syncInfo.LastSync),
-		"syncRetryCount":              0,
-		"machineVersion":              info.CachedMachineVersion,
-		"syncInterval":                loadSyncIntervalMinutes(),
-		"haConnected":                 h.poller.ha.Enabled(),
-		"glpVersion":                  glpVersion,
-		"ordersFeature":               isOrdersEnabled(),
-		"exposeApiPort":               isApiPortExposed(),
-		"machineReachable":            machineReachable,
-		"lastMachineSuccess":          info.LastMachineSuccess,
-		"machineOn":                   snap.MachineOn,
-		"machineOnSince":              snap.SwitchOnAt,
-		"legacyMachineOptionsPending": hasUnconfirmedLegacyMachineOptions(),
-		"installId":                   installID,
-		"machines":                    buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
+		"shotCount":          shotCount,
+		"lastSync":           nullableStr(syncInfo.LastSync),
+		"machineVersion":     info.CachedMachineVersion,
+		"syncInterval":       loadSyncIntervalMinutes(),
+		"haConnected":        h.poller.ha.Enabled(),
+		"glpVersion":         glpVersion,
+		"ordersFeature":      isOrdersEnabled(),
+		"exposeApiPort":      isApiPortExposed(),
+		"machineReachable":   machineReachable,
+		"lastMachineSuccess": info.LastMachineSuccess,
+		"machineOn":          snap.MachineOn,
+		"machineOnSince":     snap.SwitchOnAt,
+		"installId":          installID,
+		"dataEpoch":          dataEpoch,
+		"dataRevs":           dataRevs,
+		"machines":           buildStatusMachines(machinesList, machineReachable, snap.MachineOn, authenticated, h.poller.MachineStatus),
 	}
 	if devBuild := os.Getenv("GLP_DEV_BUILD"); devBuild != "" {
 		resp["devBuild"] = devBuild
@@ -388,6 +394,30 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// probeMachine live-probes one machine for GET /api/status?machineId (#464)
+// and reports its reachability and redacted error. A GetAdapter failure (e.g.
+// an orphaned registry row with an empty/unknown Type from an incomplete
+// migration) reports as a probe failure for THIS machine, same as a reachable
+// probe that errors out -- never silently falls through to leave
+// machineReachable/lastMachineError describing the default machine while
+// machineHostname already switched to the requested one (#901 code review).
+func (h *Handlers) probeMachine(ctx context.Context, m *machines.Machine) (*bool, *string) {
+	adapter, err := h.poller.adapters.GetAdapter(m)
+	if err == nil {
+		probeCtx, cancel := context.WithTimeout(ctx, machineStatusProbeTimeout)
+		_, err = adapter.GetStatus(probeCtx, m)
+		cancel()
+	}
+	reachable := err == nil
+	if reachable {
+		return &reachable, nil
+	}
+	// #1626: the same redaction the poller applies to a recorded machine
+	// error.
+	msg := redact.Redact(err.Error())
+	return &reachable, &msg
 }
 
 // ── response/body helpers (see internal/httputil: WriteJSON/WriteError were

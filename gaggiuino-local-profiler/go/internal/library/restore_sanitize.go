@@ -13,7 +13,9 @@ package library
 
 // SanitizeBeanFields applies every bean field sanitizer, preserving
 // structural fields (id, bags, image, location, source, importedAt, ...)
-// unchanged.
+// unchanged. The user-editable fields come from the same beanFields helper
+// CreateBean uses (#1603); bags get updateBag's per-field rules via
+// sanitizeBag, so a restored bag cannot carry values the edit route rejects.
 func SanitizeBeanFields(bean Entity) Entity {
 	if bean == nil {
 		return nil
@@ -22,60 +24,20 @@ func SanitizeBeanFields(bean Entity) Entity {
 	for k, v := range bean {
 		out[k] = v
 	}
-
-	origins := sanitizeOrigins(bean["origins"])
-	if len(origins) == 0 {
-		if code := sanitizeOrigin(bean["origin"]); code != "" {
-			origins = []any{Entity{"code": code}}
-		}
+	for k, v := range beanFields(bean) {
+		out[k] = v
 	}
-	origin := ""
-	if len(origins) > 0 {
-		if m, ok := origins[0].(Entity); ok {
-			origin, _ = m["code"].(string)
-		}
-	}
-
+	// The `s(x, n) || x` idiom: an empty trimmed name falls back to the raw
+	// value rather than clobbering it with "".
 	out["name"] = orFallback(trimMax(bean["name"], 200), bean["name"])
-	out["roaster"] = trimMax(bean["roaster"], 200)
-	out["roastDate"] = trimMax(bean["roastDate"], 10)
-	out["notes"] = trimMax(bean["notes"], 1000)
-	out["origin"] = origin
-	out["origins"] = origins
-	out["variety"] = trimMax(bean["variety"], 200)
-	out["species"] = sanitizeSpecies(bean["species"])
-	out["category"] = sanitizeCategory(bean["category"])
-	out["process"] = trimMax(bean["process"], 200)
-	out["flavors"] = sanitizeFlavors(bean["flavors"])
-	out["roastType"] = sanitizeRoastType(bean["roastType"])
-	out["region"] = trimMax(bean["region"], 200)
-	out["altitude_m"] = sanitizeAltitude(bean["altitude_m"])
-	out["importer"] = trimMax(bean["importer"], 200)
-	out["harvest"] = trimMax(bean["harvest"], 50)
-	out["price_eur"] = sanitizePrice(bean["price_eur"])
-	out["producer"] = trimMax(bean["producer"], 200)
-	out["certification"] = trimMax(bean["certification"], 200)
-	out["brewTempC"] = sanitizeBrewTemp(bean["brewTempC"])
-	out["brewRatio"] = trimMax(bean["brewRatio"], 20)
-	out["brewTimeS"] = sanitizeBrewTime(bean["brewTimeS"])
-	out["brewNotes"] = trimMax(bean["brewNotes"], 300)
 	out["sourceUrl"] = safeURL(bean["sourceUrl"])
-	out["enabled"] = sanitizeEnabled(bean["enabled"])
 
 	if bags, ok := bean["bags"].([]any); ok {
-		sanitizedBags := make([]any, len(bags))
-		for i, raw := range bags {
-			bag, _ := raw.(Entity)
-			if bag == nil {
-				sanitizedBags[i] = raw
-				continue
+		sanitizedBags := make([]any, 0, len(bags))
+		for _, raw := range bags {
+			if bag, ok := sanitizeBag(raw); ok {
+				sanitizedBags = append(sanitizedBags, bag)
 			}
-			newBag := Entity{}
-			for k, v := range bag {
-				newBag[k] = v
-			}
-			newBag["frozenPortions"] = sanitizeFrozenPortions(bag["frozenPortions"])
-			sanitizedBags[i] = newBag
 		}
 		out["bags"] = sanitizedBags
 	}
@@ -118,11 +80,7 @@ func SanitizeMilkFields(milk Entity) Entity {
 		out[k] = v
 	}
 	out["name"] = orFallback(trimMax(milk["name"], 100), milk["name"])
-	emoji := trimMax(milk["emoji"], 4)
-	if emoji == "" {
-		emoji = "🥛"
-	}
-	out["emoji"] = emoji
+	out["emoji"] = sanitizeMilkEmoji(milk["emoji"])
 	stockMl, ok := jsParseFloat(milk["stockMl"])
 	if !ok || stockMl < 0 {
 		stockMl = 0

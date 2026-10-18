@@ -19,7 +19,7 @@ import (
 const testToken = "test-fixture-token-not-a-real-secret"
 
 func newAuthedHandler() http.Handler {
-	return RequireToken(testToken)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return RequireToken(testToken, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 }
@@ -73,12 +73,23 @@ func TestRequireToken_QueryParamFallbackOnlyAppliesToEvents(t *testing.T) {
 
 func TestRequireToken_IngressBypass(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/shots", nil)
-	req.RemoteAddr = "172.30.1.5:1234"
+	req.RemoteAddr = "172.30.32.2:1234"
 	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/abc123")
 	rec := httptest.NewRecorder()
 	newAuthedHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected genuine Ingress request to bypass auth, got %d", rec.Code)
+	}
+}
+
+func TestRequireToken_OtherSupervisorNetworkHostRejected(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/shots", nil)
+	req.RemoteAddr = "172.30.32.1:1234"
+	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/abc123")
+	rec := httptest.NewRecorder()
+	newAuthedHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected a header from another Supervisor-network host to be rejected, got %d", rec.Code)
 	}
 }
 
@@ -153,7 +164,7 @@ func TestRequireToken_NonAPIWritePathWithTokenPasses(t *testing.T) {
 // the add-on's primary access path is unaffected by this fix.
 func TestRequireToken_NonAPIWritePathIngressBypass(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/shots/1/trash", nil)
-	req.RemoteAddr = "172.30.1.5:1234"
+	req.RemoteAddr = "172.30.32.2:1234"
 	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/abc123")
 	rec := httptest.NewRecorder()
 	newAuthedHandler().ServeHTTP(rec, req)
@@ -188,7 +199,7 @@ func TestRequireToken_ShotsJSONRequiresAuth(t *testing.T) {
 }
 
 func TestRequireToken_EmptyTokenFailsClosed(t *testing.T) {
-	handler := RequireToken("")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RequireToken("", nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler must not run when no token is configured")
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
@@ -206,17 +217,18 @@ func TestIsSupervisorIP(t *testing.T) {
 		ip   string
 		want bool
 	}{
-		{"loopback v4", "127.0.0.1", true},
-		{"loopback v6", "::1", true},
-		{"loopback v4-mapped-v6", "::ffff:127.0.0.1", true},
-		{"loopback block but not exactly 127.0.0.1", "127.0.0.5", false},
-		{"loopback block but not exactly 127.0.0.1 (2)", "127.9.9.9", false},
-		{"supervisor net start", "172.30.0.0", true},
-		{"supervisor net middle", "172.30.55.12", true},
-		{"supervisor net end", "172.30.255.255", true},
-		{"supervisor net v4-mapped-v6", "::ffff:172.30.1.2", true},
+		{"supervisor ingress proxy", "172.30.32.2", true},
+		{"supervisor ingress proxy v4-mapped-v6", "::ffff:172.30.32.2", true},
+		{"supervisor ingress proxy with whitespace", " 172.30.32.2 ", true},
+		{"other host on supervisor net", "172.30.32.1", false},
+		{"supervisor net start", "172.30.0.0", false},
+		{"supervisor net middle", "172.30.55.12", false},
+		{"supervisor net end", "172.30.255.255", false},
+		{"supervisor net v4-mapped-v6", "::ffff:172.30.1.2", false},
 		{"just outside supervisor net (next /16)", "172.31.0.1", false},
-		{"just outside supervisor net (prev /16)", "172.29.255.255", false},
+		{"loopback v4", "127.0.0.1", false},
+		{"loopback v6", "::1", false},
+		{"loopback v4-mapped-v6", "::ffff:127.0.0.1", false},
 		{"unrelated private range", "10.0.0.1", false},
 		{"unrelated public IP", "8.8.8.8", false},
 		{"empty string", "", false},
@@ -241,16 +253,16 @@ func newRequest(remoteAddr, ingressPath string) *http.Request {
 }
 
 func TestIsFromSupervisor(t *testing.T) {
-	if !IsFromSupervisor(newRequest("172.30.1.5:54321", "")) {
-		t.Error("expected supervisor-network RemoteAddr to be trusted")
+	if !IsFromSupervisor(newRequest("172.30.32.2:54321", "")) {
+		t.Error("expected the Supervisor ingress proxy RemoteAddr to be trusted")
 	}
 	if IsFromSupervisor(newRequest("192.168.1.50:54321", "")) {
 		t.Error("expected LAN RemoteAddr to not be trusted")
 	}
 	// RemoteAddr without a port (some test harnesses / fabricated requests)
 	// must still be parsed correctly.
-	if !IsFromSupervisor(newRequest("172.30.1.5", "")) {
-		t.Error("expected bare supervisor IP (no port) to be trusted")
+	if !IsFromSupervisor(newRequest("172.30.32.2", "")) {
+		t.Error("expected a bare Supervisor ingress proxy IP (no port) to be trusted")
 	}
 }
 
@@ -261,12 +273,13 @@ func TestIsIngressRequest(t *testing.T) {
 		ingress    string
 		want       bool
 	}{
-		{"genuine ingress", "172.30.1.5:1234", "/api/hassio_ingress/abc123", true},
-		{"supervisor IP, no ingress header", "172.30.1.5:1234", "", false},
-		{"supervisor IP, wrong prefix", "172.30.1.5:1234", "/not/the/right/prefix", false},
+		{"genuine ingress", "172.30.32.2:1234", "/api/hassio_ingress/abc123", true},
+		{"supervisor IP, no ingress header", "172.30.32.2:1234", "", false},
+		{"supervisor IP, wrong prefix", "172.30.32.2:1234", "/not/the/right/prefix", false},
 		{"spoofed header from LAN client", "192.168.1.50:1234", "/api/hassio_ingress/abc123", false},
 		{"spoofed header from arbitrary WAN IP", "8.8.8.8:1234", "/api/hassio_ingress/abc123", false},
-		{"prefix substring but not real prefix", "172.30.1.5:1234", "/api/hassio_ingress", false},
+		{"other host on supervisor net with valid header", "172.30.32.1:1234", "/api/hassio_ingress/abc123", false},
+		{"prefix substring but not real prefix", "172.30.32.2:1234", "/api/hassio_ingress", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -583,5 +596,45 @@ func TestRequireKnownHost_AllowedHostPasses(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !nextCalled {
 		t.Fatalf("expected an allowed host to pass, got %d (nextCalled=%v)", rec.Code, nextCalled)
+	}
+}
+
+func TestLoadOrCreateToken_EmptyFileGeneratesNewToken(t *testing.T) {
+	for _, content := range []string{"", " \n\t\n  "} {
+		path := filepath.Join(t.TempDir(), "api_token.txt")
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("seeding empty token file: %v", err)
+		}
+		token, err := LoadOrCreateToken(path)
+		if err != nil {
+			t.Fatalf("LoadOrCreateToken: %v", err)
+		}
+		if len(token) != 64 {
+			t.Fatalf("token = %q (len %d), want a 64-char generated token", token, len(token))
+		}
+		if _, err := hex.DecodeString(token); err != nil {
+			t.Fatalf("generated token is not valid hex: %v", err)
+		}
+		written, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading back token file: %v", err)
+		}
+		if got := strings.TrimSpace(string(written)); got != token {
+			t.Errorf("token file = %q, want the generated token %q", got, token)
+		}
+	}
+}
+
+func TestLoadOrCreateToken_KeepsShortToken(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "api_token.txt")
+	if err := os.WriteFile(path, []byte("short-10ch"), 0o644); err != nil {
+		t.Fatalf("seeding short token file: %v", err)
+	}
+	token, err := LoadOrCreateToken(path)
+	if err != nil {
+		t.Fatalf("LoadOrCreateToken: %v", err)
+	}
+	if token != "short-10ch" {
+		t.Fatalf("token = %q, want the 10-char file value kept unchanged", token)
 	}
 }

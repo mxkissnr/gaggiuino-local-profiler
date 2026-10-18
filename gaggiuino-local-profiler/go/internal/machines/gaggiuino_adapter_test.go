@@ -3,10 +3,16 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
@@ -246,5 +252,99 @@ func TestGaggiuinoAdapter_Firmware(t *testing.T) {
 	}
 	if !jsonContains(string(result), `"success":true`) {
 		t.Fatalf("unexpected firmware update result: %s", result)
+	}
+}
+
+// TestWSReadCountsMachineTraffic is the #1568 review fix for the short-lived
+// Gaggiuino WebSocket client: every message read in ws.go must increment the
+// machine-traffic WS counter, the same way the two live clients do.
+func TestWSReadCountsMachineTraffic(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	counter := perfstats.NewMachineCounter()
+	SetMachineTrafficCounter(counter)
+	t.Cleanup(func() { SetMachineTrafficCounter(nil) })
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+
+	host := hostFromBaseURL(fake.URL)
+	if _, err := wsGetProfileByID(context.Background(), fake.URL, 5); err != nil {
+		t.Fatalf("wsGetProfileByID: %v", err)
+	}
+
+	snap := counter.Snapshot(time.Now(), func(h string) (int64, bool) { return 1, h == host })
+	if len(snap) != 1 || snap[0].MachineID != 1 || snap[0].WSMessagesPerMin <= 0 {
+		t.Fatalf("expected the WebSocket response to be counted, got %+v", snap)
+	}
+}
+
+// TestGaggiuinoAdapter_ListProfiles_MalformedResponseErrors pins #1610: a
+// machine that answers GET /api/profiles/all with something that is not a
+// JSON array — a firmware bug, a proxy error page, a truncated body — must
+// surface an error, not be silently reported as an empty profile list. The
+// handler relies on that error to fall back to the local cache instead of
+// pruning every synced local row.
+func TestGaggiuinoAdapter_ListProfiles_MalformedResponseErrors(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/profiles/all" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "not json")
+	}))
+	defer srv.Close()
+
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+	if _, err := a.ListProfiles(context.Background(), testMachine(srv.URL)); err == nil {
+		t.Fatal("ListProfiles with a non-JSON body returned nil error; want an error so the handler keeps the local cache")
+	}
+}
+
+// TestGaggiuinoAdapter_ProfileActionsRejectNonNumericIDs pins #1747: profile
+// ids are unsigned integers on the wire, so a non-numeric id must be rejected
+// before any request reaches the machine.
+func TestGaggiuinoAdapter_ProfileActionsRejectNonNumericIDs(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":5,"name":"REST Profile"}`)
+	}))
+	defer srv.Close()
+
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+	m := testMachine(srv.URL)
+	ctx := context.Background()
+
+	for _, id := range []string{"abc", "1/../x", "-1", "4294967296"} {
+		if _, err := a.GetProfile(ctx, m, id); err == nil {
+			t.Errorf("GetProfile(%q) returned nil error", id)
+		}
+		if _, err := a.DeleteProfile(ctx, m, id); err == nil {
+			t.Errorf("DeleteProfile(%q) returned nil error", id)
+		}
+		if err := a.SelectProfile(ctx, m, id); err == nil {
+			t.Errorf("SelectProfile(%q) returned nil error", id)
+		}
+	}
+	if got := atomic.LoadInt32(&requests); got != 0 {
+		t.Fatalf("machine received %d request(s) for invalid ids; want 0", got)
+	}
+
+	// A numeric id still reaches the machine as before.
+	if _, err := a.GetProfile(ctx, m, "5"); err != nil {
+		t.Fatalf("GetProfile(\"5\"): %v", err)
+	}
+	if err := a.SelectProfile(ctx, m, "5"); err != nil {
+		t.Fatalf("SelectProfile(\"5\"): %v", err)
+	}
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	if _, err := a.DeleteProfile(ctx, testMachine(fake.URL), "5"); err != nil {
+		t.Fatalf("DeleteProfile(\"5\"): %v", err)
 	}
 }

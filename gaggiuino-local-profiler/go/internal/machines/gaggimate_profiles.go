@@ -1,21 +1,18 @@
 package machines
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
-// This file provides thin pass-throughs over gaggimate_ws.go's request()
-// for GaggiMate's own profile JSON shape
-// (req:profiles:list/load/save/delete/select) — save/delete forward
-// straight to the machine (capabilities().profileEdit == true, see
-// gaggimate_adapter.go); GaggiMate itself is the only place these profiles
+// This file holds the parse helpers for GaggiMate's own profile JSON shape
+// (req:profiles:list/load/save/delete/select). The requests themselves go
+// through the live client's Request (gaggimate_live.go), driven from
+// gaggimate_adapter.go — GaggiMate itself is the only place these profiles
 // are stored, GLP keeps no local copy.
 
 // ── parse helpers ────────────────────────────────────────────────────────
-// Used by both the live-client Request path (gaggimate_adapter.go) and the
-// fallback gaggimateRequest path below (live == nil / tests).
 
 // gaggimateParseProfileList reads the profiles:list response entry by entry
 // (rather than unmarshalling the array into a typed slice) so a single entry
@@ -24,13 +21,17 @@ import (
 // "lever", "adapt"), but a numeric id is accepted the same way
 // ProfileSummary.UnmarshalJSON accepts one.
 func gaggimateParseProfileList(res map[string]any) ([]ProfileSummary, error) {
-	raw, err := json.Marshal(res["profiles"])
+	rawProfiles, ok := res["profiles"]
+	if !ok || rawProfiles == nil {
+		return nil, fmt.Errorf("gaggimate: profile list response carries no profiles")
+	}
+	raw, err := json.Marshal(rawProfiles)
 	if err != nil {
-		return []ProfileSummary{}, nil
+		return nil, fmt.Errorf("gaggimate: encoding profile list: %w", err)
 	}
 	var entries []json.RawMessage
 	if err := json.Unmarshal(raw, &entries); err != nil {
-		return []ProfileSummary{}, nil
+		return nil, fmt.Errorf("gaggimate: profile list is not an array: %w", err)
 	}
 	out := make([]ProfileSummary, 0, len(entries))
 	for _, entry := range entries {
@@ -75,49 +76,4 @@ func gaggimateParseProfileSave(res map[string]any) (ProfileSummary, error) {
 		label, _ = body["name"].(string)
 	}
 	return ProfileSummary{ID: id, Name: label}, nil
-}
-
-// ── fallback one-shot helpers (used when live client is nil) ─────────────
-
-func gaggimateListProfiles(ctx context.Context, baseURL string) ([]ProfileSummary, error) {
-	res, err := gaggimateRequest(ctx, baseURL, "req:profiles:list", nil)
-	if err != nil {
-		return nil, err
-	}
-	return gaggimateParseProfileList(res)
-}
-
-func gaggimateLoadProfile(ctx context.Context, baseURL string, id string) (json.RawMessage, error) {
-	res, err := gaggimateRequest(ctx, baseURL, "req:profiles:load", map[string]any{"id": id})
-	if err != nil {
-		return nil, err
-	}
-	return gaggimateParseProfile(res)
-}
-
-// gaggimateSaveProfile is used for both create and update (GaggiMate's own
-// req:profiles:save has no separate create/update distinction). profile is
-// passed through as GaggiMate's own JSON profile shape, not converted
-// through Gaggiuino's ProfileInput/proto.ProfileDto — see
-// gaggimate_adapter.go's CreateProfile/UpdateProfile doc comment.
-func gaggimateSaveProfile(ctx context.Context, baseURL string, profile json.RawMessage) (ProfileSummary, error) {
-	var decoded any
-	if err := json.Unmarshal(profile, &decoded); err != nil {
-		return ProfileSummary{}, err
-	}
-	res, err := gaggimateRequest(ctx, baseURL, "req:profiles:save", map[string]any{"profile": decoded})
-	if err != nil {
-		return ProfileSummary{}, err
-	}
-	return gaggimateParseProfileSave(res)
-}
-
-func gaggimateDeleteProfile(ctx context.Context, baseURL string, id string) error {
-	_, err := gaggimateRequest(ctx, baseURL, "req:profiles:delete", map[string]any{"id": id})
-	return err
-}
-
-func gaggimateSelectProfile(ctx context.Context, baseURL string, id string) error {
-	_, err := gaggimateRequest(ctx, baseURL, "req:profiles:select", map[string]any{"id": id})
-	return err
 }

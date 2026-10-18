@@ -73,10 +73,10 @@ describe('release-check screenshot freshness (#537)', () => {
         writeFileSync(join(repo, 'public-src', relPath), body);
     }
 
-    // extraFiles lets a test seed additional public-src/ files (main.js,
+    // extraFiles lets a test seed additional public-src/ files (main.ts,
     // style.css, ...) in the *same* initial commit as the screenshot, so
     // only the test's own follow-up commit is newer than the screenshot —
-    // otherwise "add main.js" would itself be a brand-new (and correctly
+    // otherwise "add main.ts" would itself be a brand-new (and correctly
     // relevant) file-creation commit newer than the screenshot.
     function seedRepo(repo: string, indexHtmlBody: string, extraFiles: Record<string, string> = {}): void {
         writeFile(repo, 'index.html', indexHtmlBody);
@@ -247,6 +247,23 @@ describe('release-check screenshot freshness (#537)', () => {
             '</div>\n'
         );
         commitAll(repo, 'fix: /api/token direct-port regression comment update');
+
+        const failures = checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots');
+        expect(failures).toEqual([]);
+    });
+
+    it('does not flag a reworded multi-line TS block comment (.ts is a stripped source type)', () => {
+        const repo = makeRepo();
+        seedRepo(repo, '<html></html>\n', {
+            'main.ts': '/*\n * old explanation\n * across lines\n */\nconsole.log("hi");\n',
+        });
+
+        writeFile(
+            repo,
+            'main.ts',
+            '/*\n * new explanation\n * still across lines\n */\nconsole.log("hi");\n'
+        );
+        commitAll(repo, 'reword a multi-line ts comment');
 
         const failures = checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots');
         expect(failures).toEqual([]);

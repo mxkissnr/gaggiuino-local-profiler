@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -174,7 +176,9 @@ func TestFirmwareChecker_CachesPerChannel(t *testing.T) {
 
 // #1037: a GitHub rate-limit / non-2xx must surface as an error (so the
 // caller can fall back to its last known result) and must NOT be cached as
-// a "no matching release" nil.
+// a "no matching release" nil. #1616: within firmwareFailureBackoff the
+// failure is remembered — a second call still errors, without asking
+// GitHub again — and once the backoff has passed the next call retries.
 func TestFirmwareChecker_RateLimitIsAnErrorNotCached(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -190,13 +194,78 @@ func TestFirmwareChecker_RateLimitIsAnErrorNotCached(t *testing.T) {
 	if _, err := c.GetLatestFirmwareRelease(context.Background(), &stable); err == nil {
 		t.Fatal("expected an error on HTTP 403, got nil")
 	}
-	// Not cached: a second call retries the network rather than returning a
-	// cached nil.
+	// Never a cached nil: a second call inside the backoff still errors,
+	// and does not hit GitHub again.
+	if rel, err := c.GetLatestFirmwareRelease(context.Background(), &stable); err == nil {
+		t.Fatalf("expected the second call to still report the failure, got rel=%+v", rel)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 HTTP call inside the failure backoff, got %d", calls)
+	}
+	// Once the backoff has passed, the next call retries the network.
+	c.mu.Lock()
+	f := c.failures[0]
+	f.at = time.Now().Add(-2 * firmwareFailureBackoff)
+	c.failures[0] = f
+	c.mu.Unlock()
 	if _, err := c.GetLatestFirmwareRelease(context.Background(), &stable); err == nil {
-		t.Fatal("expected the second call to retry (not serve a cached failure)")
+		t.Fatal("expected the retry to report the still-failing GitHub")
 	}
 	if calls != 2 {
-		t.Fatalf("expected 2 HTTP calls (failure not cached), got %d", calls)
+		t.Fatalf("expected 2 HTTP calls after the backoff passed, got %d", calls)
+	}
+}
+
+// TestFirmwareChecker_ConcurrentCallsShareOneFetch (#1616): callers that
+// arrive while a channel's lookup is in flight wait for it instead of
+// starting their own.
+func TestFirmwareChecker_ConcurrentCallsShareOneFetch(t *testing.T) {
+	var calls atomic.Int32
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		<-release
+		page := r.URL.Query().Get("page")
+		w.Header().Set("Content-Type", "application/json")
+		if page != "" && page != "1" {
+			w.Write([]byte(`[]`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]githubRelease{{TagName: "main-abc0000", PublishedAt: "2026-01-01T00:00:00Z", HTMLURL: "https://example.com"}})
+	}))
+	t.Cleanup(srv.Close)
+	overrideReleasesAPI(t, srv.URL)
+
+	c := NewFirmwareChecker()
+	stable := 0
+	var wg sync.WaitGroup
+	results := make([]*FirmwareRelease, 8)
+	for i := range results {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rel, err := c.GetLatestFirmwareRelease(context.Background(), &stable)
+			if err != nil {
+				t.Errorf("call %d: %v", i, err)
+			}
+			results[i] = rel
+		}()
+	}
+	// Let every goroutine reach the in-flight lookup before GitHub answers.
+	for calls.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	// One lookup = page 1 plus the empty page 2 that ends the scan.
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("expected one shared lookup (2 page requests), got %d requests", got)
+	}
+	for i, rel := range results {
+		if rel == nil || rel.Hash != "abc0000" {
+			t.Errorf("call %d: rel = %+v, want hash abc0000", i, rel)
+		}
 	}
 }
 

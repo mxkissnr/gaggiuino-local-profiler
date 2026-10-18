@@ -27,9 +27,9 @@
 //
 // # No event bus
 //
-// There is no event bus: GetState() runs a full evaluateAll(nil) pass before
-// every read instead (evaluateAll early-returns the moment no badge is still
-// locked, so a mostly-stamped install pays almost nothing), and cmd/server
+// There is no event bus: GetState() re-runs evaluateAll(nil) when a cheap
+// change fingerprint (or the cached version result) moved since the last
+// pass (see service.go's header), and cmd/server
 // drives the four live-moment badges through explicit Service.EvaluateEvent
 // calls -- machines.Handlers.SetOnProfileSaved runs after a profile
 // create/update succeeds (first_profile/profile_edit, #1286 R1),

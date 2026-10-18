@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -393,7 +394,7 @@ func TestFirmwareUpdate_LogEntryRecordedWithoutDisturbingStats(t *testing.T) {
 	h, repo, _, _ := newTestHandlers(t)
 	mux := newMux(h)
 
-	if _, err := repo.AddMaintenanceLogEntry("firmware_update", "", "192.0.2.10", 0, 1); err != nil {
+	if _, err := repo.AddMaintenanceLogEntry("firmware_update", "", "192.0.2.10", 0, 1, time.Now()); err != nil {
 		t.Fatalf("AddMaintenanceLogEntry: %v", err)
 	}
 
@@ -482,5 +483,80 @@ func TestShotCountFor_ScopesToMachine(t *testing.T) {
 	}
 	if got := ShotCountFor(shotsRepo, "waterfilter", 7); got != 3 {
 		t.Fatalf("ShotCountFor(waterfilter, 7) = %d, want 3 (global)", got)
+	}
+}
+
+// TestMaintenanceLog_PostBackDatedStoresDateAndTS verifies an explicit date
+// actually back-dates the stored entry (#1608): the row keeps the requested
+// "YYYY-MM-DD" and a ts on that day rather than time.Now().
+func TestMaintenanceLog_PostBackDatedStoresDateAndTS(t *testing.T) {
+	h, repo, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/log", mustMarshal(t, map[string]any{
+		"task": "backflush", "date": "2026-01-15",
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	entries, err := repo.GetMaintenanceLog(0)
+	if err != nil {
+		t.Fatalf("GetMaintenanceLog: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 log entry, got %d", len(entries))
+	}
+	if entries[0].Date != "2026-01-15" {
+		t.Errorf("date = %q; want 2026-01-15", entries[0].Date)
+	}
+	if got := time.Unix(entries[0].TS, 0).UTC().Format("2006-01-02"); got != "2026-01-15" {
+		t.Errorf("ts %d formats to %s; want a ts on 2026-01-15", entries[0].TS, got)
+	}
+}
+
+// TestMaintenanceLog_PostFutureDate400 rejects a date later than today UTC.
+func TestMaintenanceLog_PostFutureDate400(t *testing.T) {
+	h, _, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/log", mustMarshal(t, map[string]any{
+		"task": "backflush", "date": tomorrow,
+	}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d; want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestMaintenanceLog_PostNoDateStoresToday: an omitted date logs "now".
+func TestMaintenanceLog_PostNoDateStoresToday(t *testing.T) {
+	h, repo, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/log", mustMarshal(t, map[string]any{"task": "backflush"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	entries, err := repo.GetMaintenanceLog(0)
+	if err != nil {
+		t.Fatalf("GetMaintenanceLog: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 log entry, got %d", len(entries))
+	}
+	if want := time.Now().UTC().Format("2006-01-02"); entries[0].Date != want {
+		t.Errorf("date = %q; want today %q", entries[0].Date, want)
+	}
+}
+
+// TestMaintenanceLog_DeleteUnknownID404: deleting a never-existing id must 404
+// off DeleteMaintenanceLog's row count, without loading the whole log.
+func TestMaintenanceLog_DeleteUnknownID404(t *testing.T) {
+	h, _, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	rec := doJSON(t, mux, http.MethodDelete, "/api/maintenance/log/999999999", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want 404; body=%s", rec.Code, rec.Body.String())
 	}
 }

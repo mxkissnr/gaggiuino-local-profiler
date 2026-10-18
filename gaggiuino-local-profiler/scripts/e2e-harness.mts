@@ -29,8 +29,10 @@ const distDir     = path.join(goDir, 'internal', 'webapp', 'dist');
 
 export const PORT = 8199;
 
-// Throwaway data dir — the Go server writes its SQLite DB and token file
-// here via GLP_DB_PATH / GLP_TOKEN_FILE, never into the real /data.
+// Throwaway data dir — the Go server roots every on-disk path (SQLite DB,
+// token, options, preheat state/history, images) here via GLP_DATA_DIR, never
+// into the real /data. Deleted on process exit (see the exit handler below);
+// a restored backup can leave personal data in it.
 export const tmpDataDir = mkdtempSync(path.join(tmpdir(), 'glp-e2e-'));
 
 // Throwaway image dir — the Go server reads and writes every entity photo
@@ -38,6 +40,17 @@ export const tmpDataDir = mkdtempSync(path.join(tmpdir(), 'glp-e2e-'));
 export const tmpImageDir = path.join(tmpDataDir, 'bean-images');
 
 let serverProc: ChildProcess | null = null;
+
+// Registered once at module load: on exit, stop the server if it is still
+// running and delete the throwaway data dir, which can hold a restored
+// personal backup (DB, photos, API token, MQTT login) and so must not survive
+// the run. Wrapped in try/catch because an exit handler must not throw.
+process.on('exit', () => {
+    try {
+        stopServer();
+        rmSync(tmpDataDir, { recursive: true, force: true, maxRetries: 3 });
+    } catch { /* an exit handler must not throw */ }
+});
 
 interface RestoreResult {
     ok: boolean;
@@ -99,6 +112,7 @@ export async function bootServer(): Promise<string> {
         env: {
             ...process.env,
             GLP_PORT: String(PORT),
+            GLP_DATA_DIR: tmpDataDir,
             GLP_DB_PATH: path.join(tmpDataDir, 'glp.db'),
             GLP_TOKEN_FILE: path.join(tmpDataDir, 'api_token.txt'),
             GLP_IMAGE_DIR: tmpImageDir,
@@ -154,7 +168,12 @@ export async function seed(baseUrl: string): Promise<{ machine2: unknown }> {
 // un-restored instance. The restored token is written to disk but the running
 // process keeps the one it started with (see go/internal/backup/doc.go), so
 // fetching the token before the restore is fine.
-export async function restoreBackup(baseUrl: string, zipPath: string): Promise<RestoreResult> {
+//
+// `token` lets a caller that already holds a token (perf-measure.mts's --token /
+// GLP_PERF_TOKEN) skip GET /api/token, which is refused when the app runs as a
+// plain Docker container outside Home Assistant. Absent, the token is fetched
+// from the already-public GET /api/token as before.
+export async function restoreBackup(baseUrl: string, zipPath: string, token?: string): Promise<RestoreResult> {
     let zip: Buffer;
     try {
         zip = readFileSync(zipPath);
@@ -163,9 +182,12 @@ export async function restoreBackup(baseUrl: string, zipPath: string): Promise<R
         throw new Error(`Cannot read GLP_SCREENSHOT_BACKUP file ${zipPath}: ${message}`, { cause: err });
     }
 
-    // Same auth the SPA and seed() use: the token from the already-public
-    // GET /api/token, sent back as the x-glp-token header.
-    const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken: string };
+    // Same auth the SPA and seed() use, sent back as the x-glp-token header.
+    let apiToken = token;
+    if (apiToken === undefined) {
+        const res = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken?: string };
+        apiToken = res.apiToken ?? '';
+    }
     const headers: Record<string, string> = { 'Content-Type': 'application/zip', 'x-glp-token': apiToken };
     if (process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE) {
         headers['X-GLP-Passphrase'] = process.env.GLP_SCREENSHOT_BACKUP_PASSPHRASE;

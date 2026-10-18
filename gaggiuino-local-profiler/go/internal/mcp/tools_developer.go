@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"regexp"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +14,9 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -119,6 +122,18 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 		out, err := getPreheatHistory(deps, in)
 		return nil, out, err
 	})
+
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name:         "get_perf_stats",
+		Title:        "Get performance stats",
+		Description:  "Report the running install's own performance counters, held only in memory since process start: API request count, median, p95 and max per route pattern over all requests and over the last 15 minutes; process memory, goroutine count, uptime and GC pause p95; the database size and shot count; and outbound machine traffic per machine id, requests and WebSocket messages per minute split by idle and brewing plus the error count, resolved to machine ids so no host is ever returned. Read-only.",
+		Annotations:  readOnlyAnnotations("Get performance stats"),
+		InputSchema:  mustSchema[getPerfStatsInput](),
+		OutputSchema: mustSchema[getPerfStatsOutput](),
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ getPerfStatsInput) (*mcpsdk.CallToolResult, getPerfStatsOutput, error) {
+		out, err := getPerfStats(deps)
+		return nil, out, err
+	})
 }
 
 // get_diagnostics bounds: the log window and the substring filter length.
@@ -134,7 +149,7 @@ type getDiagnosticsInput struct {
 }
 
 type getDiagnosticsOutput struct {
-	LogLines               []string `json:"log_lines" jsonschema:"the app's recent log lines, oldest first, secrets masked"`
+	LogLines               []string `json:"log_lines" jsonschema:"the app's recent log lines, oldest first, with credentials, URLs and host addresses masked"`
 	LastSync               string   `json:"last_sync,omitempty" jsonschema:"RFC 3339 time of the last shot-history sync, when one has run"`
 	LastSyncError          string   `json:"last_sync_error,omitempty" jsonschema:"the last sync error, when the last sync failed"`
 	PolledMachineReachable *bool    `json:"polled_machine_reachable,omitempty" jsonschema:"whether the last poll reached the default machine"`
@@ -162,21 +177,22 @@ func getDiagnostics(deps Deps, in getDiagnosticsInput) (getDiagnosticsOutput, er
 			out.LastSync = *st.LastSync
 		}
 		if st.LastSyncError != nil {
-			out.LastSyncError = *st.LastSyncError
+			out.LastSyncError = redact.Redact(*st.LastSyncError)
 		}
 	}
 	if deps.Poller != nil {
 		info := deps.Poller.StatusInfo()
 		out.PolledMachineReachable = info.MachineReachable
 		if info.LastMachineError != nil {
-			out.LastMachineError = *info.LastMachineError
+			out.LastMachineError = redact.Redact(*info.LastMachineError)
 		}
 	}
 	return out, nil
 }
 
 // recentLogLines returns up to in.Lines of the buffer's most recent lines,
-// oldest first, filtered by in.Contains and with secrets masked. It reads the
+// oldest first, filtered by in.Contains and passed through redact.Redact
+// (credentials, URLs and hosts masked, #1626). It reads the
 // whole kept buffer before applying the limit so a filter matches older lines
 // too, and returns an empty (never nil) slice so JSON gets [] rather than null.
 func recentLogLines(src LogSource, in getDiagnosticsInput) []string {
@@ -210,22 +226,9 @@ func recentLogLines(src LogSource, in getDiagnosticsInput) []string {
 		lines = lines[len(lines)-n:]
 	}
 	for _, line := range lines {
-		out = append(out, maskSecrets(line))
+		out = append(out, redact.Redact(line))
 	}
 	return out
-}
-
-// The two shapes of credential the app might log: an X-GLP-Token header or
-// token= query value, a Bearer token, or user:pass credentials in a URL. The
-// URL pattern requires a trailing "@" so a bare host:port is left alone.
-var (
-	secretTokenPattern = regexp.MustCompile(`(?i)(X-GLP-Token\s*[:=]\s*|token=|Bearer\s+)([^/\s@&]+)`)
-	secretURLPattern   = regexp.MustCompile(`(://[^/\s:@]+:)([^/\s@]+)(@)`)
-)
-
-func maskSecrets(line string) string {
-	line = secretTokenPattern.ReplaceAllString(line, "${1}***")
-	return secretURLPattern.ReplaceAllString(line, "${1}***${3}")
 }
 
 type explainScoreInput struct {
@@ -250,18 +253,37 @@ type explainScoreOutput struct {
 	ShotID         int64                   `json:"shot_id" jsonschema:"the shot's stable id"`
 	Score          *int                    `json:"score,omitempty" jsonschema:"the overall 0-100 score; omitted when there is too little data to score"`
 	UsedBeanTarget bool                    `json:"used_bean_target" jsonschema:"true when the score used a bean-specific target"`
+	PressureNote   string                  `json:"pressure_note,omitempty" jsonschema:"why the pressure part was scored against the profile target or left out; empty for a normal >=5-bar shot"`
 	Components     []scoreComponentOutput  `json:"components" jsonschema:"the weighted parts, in scoring order"`
 	Skipped        []skippedScoreComponent `json:"skipped" jsonschema:"parts that could not be scored, with the reason"`
 }
 
 // skippedScoreParts are the optional parts, in scoring order, with the fixed
-// reason each reports when it is absent. pressure and channeling always score
-// once the shot clears the pressure-samples guard, so they are never listed.
+// reason each reports when it is absent. channeling always scores once the
+// shot clears the pressure-samples guard; pressure does too for a shot that
+// reaches 5 bar, but a sub-5-bar shot can leave it out (#1538) — and then its
+// reason always comes from ScoreDetail.PressureNote below, so the entry
+// carries no fallback text of its own.
 var skippedScoreParts = []skippedScoreComponent{
+	{Name: "pressure"},
 	{Name: "temperature", Reason: "fewer than 6 temperature samples"},
 	{Name: "duration", Reason: "shot shorter than 5 s"},
 	{Name: "ratio", Reason: "no dose annotated or no weight recorded"},
 	{Name: "extraction_yield", Reason: "no TDS annotated (needs dose and weight too)"},
+}
+
+// pressureNoteReason renders a ScoreDetail.PressureNote as the sentence
+// explain_score reports — both surfaces read the same field, so the reason the
+// MCP tool returns can never drift from the shot detail hint.
+func pressureNoteReason(note string) string {
+	switch note {
+	case shots.PressureNoteProfile:
+		return "shot never reached 5 bar; pressure scored against the profile's own target"
+	case shots.PressureNoteOmitted:
+		return "shot never reached 5 bar and no pressure target is known for it, so pressure was left out"
+	default:
+		return ""
+	}
 }
 
 func explainScoreInputSchema() *jsonschema.Schema {
@@ -293,10 +315,11 @@ func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput,
 	detail := svc.ComputeScoreDetail(shot)
 	out.Score = detail.Score
 	out.UsedBeanTarget = detail.UsedBeanTarget
+	out.PressureNote = pressureNoteReason(detail.PressureNote)
 	if detail.Score == nil {
 		out.Skipped = append(out.Skipped, skippedScoreComponent{
 			Name:   "all",
-			Reason: "fewer than 4 pressure samples at or above 5 bar",
+			Reason: "fewer than 4 pressure samples above 0 bar",
 		})
 		return out, nil
 	}
@@ -322,9 +345,17 @@ func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput,
 		})
 	}
 	for _, part := range skippedScoreParts {
-		if !present[part.Name] {
-			out.Skipped = append(out.Skipped, part)
+		if present[part.Name] {
+			continue
 		}
+		reason := part.Reason
+		if part.Name == "pressure" {
+			// pressure has no fallback text: whenever it is absent the score
+			// is non-nil and sub-5-bar, so PressureNote ("omitted") maps to a
+			// reason.
+			reason = pressureNoteReason(detail.PressureNote)
+		}
+		out.Skipped = append(out.Skipped, skippedScoreComponent{Name: part.Name, Reason: reason})
 	}
 	return out, nil
 }
@@ -633,4 +664,89 @@ func toPreheatRunOutput(run system.PreheatRun, includeSamples bool) preheatRunOu
 // same format get_machine_status uses for LastMachineSuccess.
 func formatMillis(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
+}
+
+// get_perf_stats takes no input: it reports whatever the recorder has seen.
+type getPerfStatsInput struct{}
+
+type databaseStats struct {
+	SizeBytes int64 `json:"size_bytes" jsonschema:"the SQLite database file's size on disk plus its -wal sidecar when present, bytes"`
+	ShotCount int   `json:"shot_count" jsonschema:"number of shots stored, including trashed ones"`
+}
+
+type getPerfStatsOutput struct {
+	Routes   []perfstats.RouteSnapshot          `json:"routes" jsonschema:"per-route request timings, busiest first"`
+	Process  perfstats.ProcessStats             `json:"process" jsonschema:"process resource use since start"`
+	Database databaseStats                      `json:"database" jsonschema:"database size and shot count"`
+	Machines []perfstats.MachineTrafficSnapshot `json:"machines" jsonschema:"outbound machine traffic per machine id since start, split by idle and brewing; hosts that did not resolve are one aggregate unknown entry, never a hostname"`
+}
+
+func getPerfStats(deps Deps) (getPerfStatsOutput, error) {
+	if deps.Recorder == nil {
+		return getPerfStatsOutput{}, fmt.Errorf("performance stats are not available")
+	}
+	snap := deps.Recorder.Snapshot(time.Now())
+	out := getPerfStatsOutput{
+		Routes:   snap.Routes,
+		Process:  snap.Process,
+		Database: databaseStats{SizeBytes: dbSizeBytes(deps.DBPath)},
+		Machines: []perfstats.MachineTrafficSnapshot{},
+	}
+	if deps.ShotsRepo != nil {
+		n, err := deps.ShotsRepo.Count()
+		if err != nil {
+			return getPerfStatsOutput{}, err
+		}
+		out.Database.ShotCount = n
+	}
+	if deps.Machines != nil {
+		out.Machines = deps.Machines.Snapshot(time.Now(), machineHostResolver(deps.Registry))
+	}
+	return out, nil
+}
+
+// machineHostResolver maps a traffic-counter host key (a URL host, e.g.
+// "192.168.1.50" or "machine.local:8080") to the registry machine id whose
+// Host normalizes to exactly that host:port. It lists the registry once, so
+// Snapshot's per-host resolve calls never touch the database. A host that is
+// unparseable, or that matches no machine's host:port exactly, maps to
+// (0, false) and folds into the aggregate unknown bucket; a hostname-only
+// fallback is deliberately not attempted.
+func machineHostResolver(registry *machines.Registry) func(host string) (int64, bool) {
+	byHost := map[string]int64{}
+	if registry != nil {
+		list, err := registry.ListMachines()
+		if err != nil {
+			// Do not swallow: without the machine list every traffic host
+			// folds into the aggregate unknown bucket, so a failure to list
+			// them must be visible.
+			log.Printf("mcp: get_perf_stats: listing machines for traffic resolution: %v", err)
+		} else {
+			for _, m := range list {
+				if host, _ := machines.NormalizeMachineHost(m.Host); host != "" {
+					byHost[host] = m.ID
+				}
+			}
+		}
+	}
+	return func(host string) (int64, bool) {
+		full, _ := machines.NormalizeMachineHost(host)
+		id, ok := byHost[full]
+		return id, ok
+	}
+}
+
+// dbSizeBytes totals the SQLite file and its -wal sidecar, skipping whichever
+// is not present.
+func dbSizeBytes(path string) int64 {
+	if path == "" {
+		return 0
+	}
+	var total int64
+	for _, p := range []string{path, path + "-wal"} {
+		if fi, err := os.Stat(p); err == nil {
+			total += fi.Size()
+		}
+	}
+	return total
 }

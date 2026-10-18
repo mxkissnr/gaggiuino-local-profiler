@@ -6,15 +6,17 @@ package main
 // each spec path + method it issues a request through the fully-built handler
 // chain and requires mux.Handler to report that route's pattern.
 //
-// The reverse direction — a route registered on the mux but missing from the
-// spec — is deliberately not checked: net/http exposes no way to enumerate a
-// ServeMux's registered patterns without its unexported internals, so the test
-// cannot see an undocumented route to compare it.
+// TestMuxRoutesAreDocumented checks the reverse direction: every
+// "METHOD /api/..." pattern registered with HandleFunc/Handle in the Go
+// sources must appear in the spec. net/http cannot enumerate a ServeMux's
+// patterns, so it reads the registration literals from the source files.
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -32,7 +34,16 @@ var unregisteredAllowed = map[string]string{
 	"GET /api/debug/machine": "dev-build-only route",
 }
 
+// undocumentedAllowed lists registered routes that are deliberately left out
+// of the spec, keyed "METHOD /path", value = the reason.
+var undocumentedAllowed = map[string]string{
+	"GET /api/debug/ingress":           "dev-build-only diagnostics route",
+	"GET /api/debug/ingress/sse-probe": "dev-build-only diagnostics route",
+}
+
 var openAPIParamRe = regexp.MustCompile(`\{[^}]*\}`)
+
+var routeRegistrationRe = regexp.MustCompile(`\.Handle(?:Func)?\("([A-Z]+ /api/[^"]*)"`)
 
 // canonical splits a mux pattern into its HTTP method (empty for a method-less
 // pattern) and a path normalised for comparison: a trailing {$} is dropped and
@@ -116,6 +127,73 @@ func TestOpenAPIRoutesMatchMux(t *testing.T) {
 	sort.Strings(failures)
 	if len(failures) > 0 {
 		t.Errorf("documented /api routes not served by their own mux pattern:\n  %s",
+			strings.Join(failures, "\n  "))
+	}
+}
+
+// specRoutes returns every documented "METHOD path" in openapi.yaml, with
+// paths normalised by canonical.
+func specRoutes(t *testing.T) map[string]bool {
+	t.Helper()
+	var spec struct {
+		Paths map[string]map[string]any `yaml:"paths"`
+	}
+	specYAML, err := os.ReadFile("../../internal/system/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := yaml.Unmarshal(specYAML, &spec); err != nil {
+		t.Fatalf("parsing openapi.yaml: %v", err)
+	}
+	out := map[string]bool{}
+	for path, operations := range spec.Paths {
+		for method := range operations {
+			m, p := canonical(strings.ToUpper(method) + " " + path)
+			out[m+" "+p] = true
+		}
+	}
+	return out
+}
+
+func TestMuxRoutesAreDocumented(t *testing.T) {
+	documented := specRoutes(t)
+	var failures []string
+	found := 0
+	for _, root := range []string{"../../internal", "."} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			src, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, m := range routeRegistrationRe.FindAllStringSubmatch(string(src), -1) {
+				found++
+				pattern := m[1]
+				if _, ok := undocumentedAllowed[pattern]; ok {
+					continue
+				}
+				method, p := canonical(pattern)
+				if !documented[method+" "+p] {
+					failures = append(failures, pattern+"  ("+path+")")
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if found < 20 {
+		t.Fatalf("only %d route registrations found; the source scan likely broke", found)
+	}
+	sort.Strings(failures)
+	if len(failures) > 0 {
+		t.Errorf("registered /api routes missing from openapi.yaml:\n  %s",
 			strings.Join(failures, "\n  "))
 	}
 }

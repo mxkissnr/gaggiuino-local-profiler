@@ -6,8 +6,9 @@ import {
   addCustomMaintenanceTask, deleteCustomMaintenanceTask,
 } from '../api/maintenance.js';
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
-import { esc, html, joinHtml } from '../utils.js';
+import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
+import { getDefaultMachineId } from '../components/machines-settings.js';
 
 // One task's status block as GET /api/maintenance serves it (flat for a
 // single machine, nested under machines[]/global for the fleet view).
@@ -21,6 +22,7 @@ interface MaintTaskData {
   threshold_g?: number | null;
   gramsSince?: number | null;
   machineSyncedAt?: string | number | null;
+  lastDate?: string | null;
   grinderName?: string | null;
   disabled?: boolean;
   label?: string | null;
@@ -70,7 +72,7 @@ interface MaintLogEntry {
 type MaintScope = string | number;
 
 // ── Task icons (#393) — plain inline SVG line icons, no emoji, matching the
-// Dashboard mockup Max picked. Purely decorative; task identity always comes
+// Dashboard mockup the maintainer picked. Purely decorative; task identity always comes
 // from MAINT_META's translation key (or the grinder's own name), never the
 // icon alone, so a missing/unmapped icon never loses information.
 const TASK_ICON_PATHS: Record<string, Html> = {
@@ -135,14 +137,16 @@ export function setMaintScope(scope: string): void {
 }
 
 // Write routes (done/threshold) always need one concrete machine — 'all'
-// scope has no single target, so falls back to the first registered machine
-// (irrelevant for global tasks anyway: the backend always redirects
-// waterfilter/grinder_* writes to the shared sentinel machine regardless of
-// which machineId is passed).
+// scope has no single target, so it falls back to the default machine (#1605:
+// the manual log entry made in the all-machines view must land on the default
+// machine, not merely the first registered one, which can differ when the
+// machine list is ordered differently). Global tasks are unaffected: the
+// backend always redirects waterfilter/grinder_* writes to the shared sentinel
+// machine regardless of which machineId is passed.
 function _writeMachineId(explicit?: string | number | null): string | number {
   if (explicit !== undefined && explicit !== null && explicit !== '') return explicit;
   const scope = _effectiveScope();
-  return scope === 'all' ? (S.machines?.[0]?.id ?? 1) : scope;
+  return scope === 'all' ? (getDefaultMachineId() ?? S.machines?.[0]?.id ?? 1) : scope;
 }
 
 // ── Data normalization ──────────────────────────────────────────────────────
@@ -294,7 +298,7 @@ function _renderCustomSection(container: HTMLElement | null, scope: MaintScope):
     <details class="maint-custom-add">
       <summary>${esc(t('maint_custom_add_summary'))}</summary>
       <div class="maint-custom-form">
-        <input type="text" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
+        <input type="text" aria-label="${esc(t('maint_custom_label_ph'))}" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
         <div class="maint-custom-thresholds">
           <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> ${esc(t('maint_unit_shots'))}</label>
           <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> ${esc(t('maint_by_days'))}</label>
@@ -337,6 +341,19 @@ function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null
     <span class="spacer"></span>
     <button class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>
   `;
+}
+
+// True only when a task's last done date IS the machine's own service-log
+// timestamp — i.e. a machine-recorded backflush/descale (ApplyMachineServiceLog)
+// moved it. machineSyncedAt alone can't decide this: it is advanced even when a
+// newer manual "done" wins (lastDate unchanged), and a later manual "done"
+// leaves a stale machineSyncedAt in place — so keying the badge off it alone
+// would label a manually completed task "Auto".
+export function isAutoSynced(d: MaintTaskData): boolean {
+  if (d.machineSyncedAt == null || d.lastDate == null) return false;
+  const syncedMs = typeof d.machineSyncedAt === 'number' ? d.machineSyncedAt : Date.parse(d.machineSyncedAt);
+  const lastMs = Date.parse(d.lastDate);
+  return Number.isFinite(syncedMs) && Number.isFinite(lastMs) && syncedMs === lastMs;
 }
 
 function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
@@ -406,7 +423,7 @@ function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
       <div class="maint-card-meta">
         ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
         <span class="maint-card-count">${esc(countText)}</span>
-        ${d.machineSyncedAt ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
+        ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
       </div>
       <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${esc(task)}">${tHtml('maint_tile_details')}</button>
       <div class="detail">
@@ -486,7 +503,8 @@ export async function submitGuidedMaint(): Promise<void> {
 
 export async function markMaintDone(task: string, machineId?: string | number | null): Promise<void> {
   try {
-    await markMaintenanceDone(task, _writeMachineId(machineId));
+    const r = await markMaintenanceDone(task, _writeMachineId(machineId));
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -495,8 +513,22 @@ export async function saveMaintThreshold(task: string, field: string, value: str
   // empty string → null (clears the threshold)
   const parsed = value === '' || value == null ? null : parseInt(value, 10);
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parsed });
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parsed });
+    if (!r.ok) window.showToast?.(t('error_generic', r.status));
   } catch { /* ignore */ }
+}
+
+// Reload the maintenance view while keeping the card the user has expanded
+// open. Capturing the task key before the reload and re-adding .expanded
+// afterwards survives the re-render; every write action and the live refetch
+// go through here so none of them collapses the open detail.
+export async function refreshMaintenanceView(): Promise<void> {
+  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
+  await loadMaintenanceView();
+  if (expandedTask) {
+    document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
+      ?.closest('.maint-card')?.classList.add('expanded');
+  }
 }
 
 export async function setMaintMode(
@@ -507,7 +539,6 @@ export async function setMaintMode(
   currentDays?: string,
   currentG?: string,
 ): Promise<void> {
-  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
   const defShots = parseInt(currentShots ?? '', 10) || 200;
   const defDays  = parseInt(currentDays  ?? '', 10) || 30;
   const defG     = parseInt(currentG     ?? '', 10) || 10000;
@@ -516,18 +547,16 @@ export async function setMaintMode(
              : mode === 'g'     ? { threshold_shots: null,     threshold_days: null, threshold_g: defG }
              :                    { threshold_shots: defShots, threshold_days: defDays, threshold_g: null };
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), body);
-    await loadMaintenanceView();
-    if (expandedTask) {
-      document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
-        ?.closest('.maint-card')?.classList.add('expanded');
-    }
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), body);
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    await refreshMaintenanceView();
   } catch { /* ignore */ }
 }
 
 export async function toggleMaintDisabled(task: string, machineId?: string | number | null, disabled?: boolean): Promise<void> {
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { disabled });
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { disabled });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -543,7 +572,8 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
     threshold_days:  days  ? parseInt(days,  10) : null,
   };
   try {
-    await addCustomMaintenanceTask(_writeMachineId(machineId), body);
+    const r = await addCustomMaintenanceTask(_writeMachineId(machineId), body);
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -551,7 +581,8 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
 export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
   if (!confirm(t('maint_confirm_delete_custom', task.replace('custom_', '')))) return;
   try {
-    await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
+    const r = await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -559,14 +590,10 @@ export async function deleteCustomMaintTask(task: string, machineId?: string | n
 export async function renameCustomMaintTask(task: string, newLabel: string, machineId?: string | number | null): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
-  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
   try {
-    await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
-    await loadMaintenanceView();
-    if (expandedTask) {
-      document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
-        ?.closest('.maint-card')?.classList.add('expanded');
-    }
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    await refreshMaintenanceView();
   } catch { /* ignore */ }
 }
 
@@ -652,8 +679,8 @@ export function openMaintLogForm(): void {
     opt.value = task; opt.textContent = label;
     sel.appendChild(opt);
   }
-  // Set date to today
-  const today = new Date().toISOString().split('T')[0] ?? '';
+  // Set date to today (local, not UTC — see todayIsoDate)
+  const today = todayIsoDate();
   (document.getElementById('maintLogDate') as HTMLInputElement).value = today;
   (document.getElementById('maintLogDate') as HTMLInputElement).max   = today;
   (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value = '';
@@ -671,7 +698,8 @@ export async function submitMaintLogEntry(): Promise<void> {
   const notes = (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value.trim();
   if (!task || !date) return;
   try {
-    await addMaintenanceLogEntry(_writeMachineId(), { task, date, notes });
+    const r = await addMaintenanceLogEntry(_writeMachineId(), { task, date, notes });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     closeMaintLogForm();
     void loadMaintLog();
   } catch { /* ignore */ }
@@ -680,7 +708,8 @@ export async function submitMaintLogEntry(): Promise<void> {
 export async function deleteMaintLogEntry(id: number | string): Promise<void> {
   if (!confirm(t('maint_log_confirm_delete'))) return;
   try {
-    await deleteMaintenanceLogEntry(id);
+    const r = await deleteMaintenanceLogEntry(id);
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     void loadMaintLog();
   } catch { /* ignore */ }
 }

@@ -1,5 +1,5 @@
 // URL import, import-provider settings and barcode/QR scanner sections of the
-// Library view, split out of views/library.js. Pure move + type port
+// Library view, split out of views/library.ts. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import type { AppState, BarcodeDetectorLike } from '../../state/index.js';
@@ -13,7 +13,7 @@ import { parseGlpQrParams } from '../../glp-qr.js';
 import type { BarcodeFormat } from 'barcode-detector/ponyfill';
 import * as libraryView from '../library.js';
 
-// Circular with library.js (it re-exports this module): the bean-form helpers
+// Circular with library.ts (it re-exports this module): the bean-form helpers
 // are only ever called at run time, never read at module load.
 const library = libraryView;
 
@@ -246,7 +246,15 @@ function _applyUrlImport(data: UrlImportData, variant: ImportVariant | null): vo
   }
 }
 
-function openVariantPicker(variants: ImportVariant[], onPick: (variant: ImportVariant) => void): void {
+// The click handler currently bound to #variantPickerConfirm. Kept so a
+// re-open removes the previous one before adding the new one — otherwise
+// opening the picker twice without confirming leaves the first handler attached
+// and one confirm fires onPick several times (#1614 slice 4).
+let _variantPickerConfirmHandler: (() => void) | null = null;
+
+// Exported as a test hook (like _runScanLoop/_submitManualScan below) so the
+// picker's handler management can be exercised directly.
+export function openVariantPicker(variants: ImportVariant[], onPick: (variant: ImportVariant) => void): void {
   const [firstVariant] = variants;
   if (!firstVariant) return;
   const row  = document.getElementById('variantPickerRow');
@@ -259,12 +267,15 @@ function openVariantPicker(variants: ImportVariant[], onPick: (variant: ImportVa
       ${esc(v.title || '?')} — ${esc((v.price / 100).toFixed(2))} €
     </label>`));
   row.style.display = '';
+  if (_variantPickerConfirmHandler) confirmBtn.removeEventListener('click', _variantPickerConfirmHandler);
   const handler = (): void => {
     const idx = Number(list.querySelector<HTMLInputElement>('input[name="variantPick"]:checked')?.value || 0);
     row.style.display = 'none';
     confirmBtn.removeEventListener('click', handler);
+    if (_variantPickerConfirmHandler === handler) _variantPickerConfirmHandler = null;
     onPick(variants[idx] ?? firstVariant);
   };
+  _variantPickerConfirmHandler = handler;
   confirmBtn.addEventListener('click', handler);
 }
 

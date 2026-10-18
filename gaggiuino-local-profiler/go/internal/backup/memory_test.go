@@ -4,7 +4,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -264,4 +266,92 @@ func zipReaderFromBytes(b []byte) ([]string, error) {
 		names = append(names, f.Name)
 	}
 	return names, nil
+}
+
+// TestSkipJSONValue (#1601): the token walk must consume exactly one JSON
+// value — scalar, nested object, nested array, or a string whose contents
+// include the very delimiters it counts — leaving the decoder positioned at
+// whatever follows.
+func TestSkipJSONValue(t *testing.T) {
+	cases := []string{
+		`123`, `-4.5e10`, `"plain"`, `"a]b}c[{d"`, `true`, `false`, `null`, `""`,
+		`{"a":{"b":[1,2,{"c":"}]"}]}}`,
+		`[1,[2,[3,[]]],[],{"x":[]}]`,
+		`[[],[]]`,
+	}
+	for _, c := range cases {
+		dec := json.NewDecoder(strings.NewReader(c))
+		if err := skipJSONValue(dec); err != nil {
+			t.Errorf("skipJSONValue(%q) = %v, want nil", c, err)
+			continue
+		}
+		if _, err := dec.Token(); err != io.EOF {
+			t.Errorf("skipJSONValue(%q) left the decoder mid-value: next Token err = %v, want io.EOF", c, err)
+		}
+	}
+
+	// Truncated / unbalanced input is an error, never a silent stop.
+	for _, bad := range []string{`[1,2`, `{"a":`, `}`, `[{"a":1}`} {
+		if err := skipJSONValue(json.NewDecoder(strings.NewReader(bad))); err == nil {
+			t.Errorf("skipJSONValue(%q) = nil, want an error", bad)
+		}
+	}
+}
+
+// TestParseBundleStream_UnknownKeyBetweenKnownKeys (#1601): skipping an
+// unknown top-level key must not disturb the keys around it — including a
+// known key that follows the skipped value.
+func TestParseBundleStream_UnknownKeyBetweenKnownKeys(t *testing.T) {
+	in := `{"glp_backup":true,"junk":{"a":{"b":[1,2,3]}},"shots":[{"id":1}],"version":"3.4.0"}`
+	var shots int
+	b, n, saw, err := parseBundleStream(strings.NewReader(in), func(json.RawMessage) error {
+		shots++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("parseBundleStream: %v", err)
+	}
+	if _, ok := b["junk"]; ok {
+		t.Errorf("unknown key %q was materialised into the bundle map", "junk")
+	}
+	if b["glp_backup"] != true || b["version"] != "3.4.0" {
+		t.Errorf("known keys around the unknown one lost: %+v", b)
+	}
+	if !saw || n != 1 || shots != 1 {
+		t.Errorf("shots array disturbed by the skip: saw=%v shotCount=%d callbacks=%d", saw, n, shots)
+	}
+}
+
+// TestParseBundleStream_SkipsHugeUnknownKey (#1601): a top-level key the
+// restore does not recognise is skipped, not materialised. The old path
+// decoded it into the bundle map (a 20 MiB value -> a huge Go structure,
+// also on every dry-run preview); the skip must stay far below the payload
+// size. The payload is a ~20 MiB nested array of empty arrays — a shape
+// Decode(&any) would turn into millions of Go slices, while the token walk
+// admits it with only delimiter tokens, which do not allocate.
+func TestParseBundleStream_SkipsHugeUnknownKey(t *testing.T) {
+	const elems = 7_200_000 // "[]" plus its separator == 3 bytes each
+	payload := `{"glp_backup":true,"shots":[],"junk":[` + strings.Repeat("[],", elems) + `[]]}`
+	if len(payload) < 20<<20 {
+		t.Fatalf("test payload is only %d bytes; expected ~20 MiB", len(payload))
+	}
+
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	b, _, _, err := parseBundleStream(strings.NewReader(payload), nil)
+	runtime.ReadMemStats(&after)
+	if err != nil {
+		t.Fatalf("parseBundleStream: %v", err)
+	}
+	if _, ok := b["junk"]; ok {
+		t.Errorf("unknown key %q was materialised into the bundle map", "junk")
+	}
+	if b["glp_backup"] != true {
+		t.Errorf("known key lost: glp_backup = %v", b["glp_backup"])
+	}
+	if alloc := after.TotalAlloc - before.TotalAlloc; alloc > 5<<20 {
+		t.Errorf("parsing a %s unknown value allocated %s — it was buffered, not skipped",
+			human(uint64(len(payload))), human(alloc))
+	}
 }

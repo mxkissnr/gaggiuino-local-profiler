@@ -18,6 +18,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/perfstats"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/system"
 )
@@ -101,7 +102,7 @@ func TestDeveloperToolsHiddenWithoutOptIn(t *testing.T) {
 	session := connect(t, ts.URL+Path)
 	names := toolNames(t, session)
 	listed := "," + strings.Join(names, ",") + ","
-	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset", "get_diagnostics", "get_preheat_history"} {
+	for _, name := range []string{"get_shot_raw", "explain_score", "export_shots_dataset", "get_diagnostics", "get_preheat_history", "get_perf_stats"} {
 		if strings.Contains(listed, ","+name+",") {
 			t.Fatalf("%s is listed without the developer-tools opt-in: %v", name, names)
 		}
@@ -146,7 +147,7 @@ func TestDeveloperToolsKeepWriteTools(t *testing.T) {
 	// than trail; the invariant is that adding the developer tool leaves every
 	// read and write tool registered.
 	names := toolNames(t, session)
-	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_diagnostics,get_library,get_machine_status,get_maintenance_status,get_preheat_history,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
+	want := "annotate_shot,compare_shots,explain_score,export_shots_dataset,get_analytics_summary,get_diagnostics,get_library,get_machine_status,get_maintenance_status,get_perf_stats,get_preheat_history,get_shot,get_shot_raw,list_beans,list_shots,mark_maintenance_done,set_known_grind"
 	if got := strings.Join(names, ","); got != want {
 		t.Fatalf("tool list = %v, want %v", names, want)
 	}
@@ -363,6 +364,85 @@ func TestExplainScoreInsufficientData(t *testing.T) {
 	}
 	if reason, _ := s["reason"].(string); reason == "" {
 		t.Fatalf("skipped reason is empty")
+	}
+}
+
+// #1538: a sub-5-bar shot with a FLOW-only profile scores without the
+// pressure part, and explain_score explains why from the same field the shot
+// detail hint reads.
+func TestExplainScoreSub5BarOmitsPressure(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 44, 1000, map[string]any{
+		"profile": map[string]any{"phases": []any{map[string]any{"type": "FLOW"}}},
+		"datapoints": map[string]any{
+			"pressure":       []any{40.0, 40.0, 40.0, 40.0, 40.0},
+			"targetPressure": []any{80.0, 80.0, 80.0, 80.0, 80.0}, // a FLOW-phase limit
+			"phaseIndex":     []any{0.0, 0.0, 0.0, 0.0, 0.0},
+		},
+	}, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 44}))
+
+	if _, ok := out["score"]; !ok {
+		t.Fatalf("expected a score for a sub-5-bar shot: %v", out)
+	}
+	if note, _ := out["pressure_note"].(string); !strings.Contains(note, "left out") {
+		t.Fatalf("pressure_note = %q, want the left-out reason", note)
+	}
+	for _, raw := range objects(out, "components") {
+		c, _ := raw.(map[string]any)
+		if n, _ := c["name"].(string); n == "pressure" {
+			t.Fatalf("pressure component present for a FLOW-only profile: %v", c)
+		}
+	}
+	skipped := map[string]string{}
+	for _, raw := range objects(out, "skipped") {
+		s, _ := raw.(map[string]any)
+		n, _ := s["name"].(string)
+		r, _ := s["reason"].(string)
+		skipped[n] = r
+	}
+	if _, ok := skipped["pressure"]; !ok {
+		t.Fatalf("pressure not listed as skipped: %v", skipped)
+	}
+}
+
+// #1538: a sub-5-bar shot with a PRESSURE phase is scored against its own
+// target, visible as a profile-target pressure component and a note.
+func TestExplainScoreSub5BarProfileTarget(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 45, 1000, map[string]any{
+		"profile": map[string]any{"phases": []any{
+			map[string]any{"type": "FLOW"},
+			map[string]any{"type": "PRESSURE"},
+		}},
+		"datapoints": map[string]any{
+			"pressure":       []any{40.0, 40.0, 40.0, 40.0, 40.0, 40.0},
+			"targetPressure": []any{0.0, 40.0, 40.0, 40.0, 40.0, 40.0},
+			"phaseIndex":     []any{0.0, 1.0, 1.0, 1.0, 1.0, 1.0},
+		},
+	}, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 45}))
+
+	if _, ok := out["score"]; !ok {
+		t.Fatalf("expected a score for a flat 4-bar shot")
+	}
+	if note, _ := out["pressure_note"].(string); !strings.Contains(note, "profile") {
+		t.Fatalf("pressure_note = %q, want the profile-target reason", note)
+	}
+	var pressure map[string]any
+	for _, raw := range objects(out, "components") {
+		c, _ := raw.(map[string]any)
+		if n, _ := c["name"].(string); n == "pressure" {
+			pressure = c
+		}
+	}
+	if pressure == nil {
+		t.Fatalf("pressure component missing: %v", out)
+	}
+	if target, _ := pressure["target"].(string); target != "profile" {
+		t.Fatalf("pressure target = %q, want profile", target)
 	}
 }
 
@@ -617,6 +697,32 @@ func TestGetDiagnosticsReturnsLogsAndState(t *testing.T) {
 	}
 }
 
+// #1626: the two error fields go through the same redaction as the log
+// lines; reachability itself stays visible.
+func TestGetDiagnosticsRedactsErrorFields(t *testing.T) {
+	syncErr := `Get "https://gaggiuino.local/api/shots/latest": dial tcp 192.168.1.5:443: i/o timeout`
+	reachable := false
+	machineErr := "lookup gaggimate.local on 10.0.0.1:53: no such host"
+	ts, _ := newDeveloperServerFull(t, true, false,
+		fakePoller{reachable: &reachable, lastErr: &machineErr},
+		newLogBuffer(t, 10),
+		fakeSync{lastErr: &syncErr},
+		nil,
+	)
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
+
+	if got, _ := out["last_sync_error"].(string); got != `Get "[url]": dial tcp [host]: i/o timeout` {
+		t.Fatalf("last_sync_error = %q", got)
+	}
+	if got, _ := out["last_machine_error"].(string); got != "lookup [host] on [host]: no such host" {
+		t.Fatalf("last_machine_error = %q", got)
+	}
+	if got, ok := out["polled_machine_reachable"].(bool); !ok || got {
+		t.Fatalf("polled_machine_reachable = %v, want false", out["polled_machine_reachable"])
+	}
+}
+
 func TestGetDiagnosticsOmitsAbsentState(t *testing.T) {
 	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, nil, nil, nil)
 	session := connect(t, ts.URL+Path)
@@ -655,18 +761,22 @@ func TestGetDiagnosticsMasksSecrets(t *testing.T) {
 		"GET /api/shots?token=abc123&limit=5",
 		"Authorization: Bearer eyJhbGciOiJIUzI1",
 		"dialing https://alice:hunter2@example.test/api",
+		"mqtt connect password=hunter3 refused",
+		"poll failed: dial tcp 192.168.1.5:80: connect: connection refused",
+		"gaggimate: ws://gaggimate.local/ws closed",
 	)
 	ts, _ := newDeveloperServerFull(t, true, false, fakePoller{}, buf, nil, nil)
 	session := connect(t, ts.URL+Path)
 	out := structured(t, call(t, session, "get_diagnostics", map[string]any{}))
 	joined := strings.Join(stringList(out, "log_lines"), "\n")
 
-	for _, secret := range []string{"supersecretvalue", "abc123", "eyJhbGciOiJIUzI1", "hunter2"} {
+	// #1626: one redaction function everywhere, so hosts are masked here too.
+	for _, secret := range []string{"supersecretvalue", "abc123", "eyJhbGciOiJIUzI1", "hunter2", "alice", "example.test", "hunter3", "192.168.1.5", "gaggimate.local"} {
 		if strings.Contains(joined, secret) {
 			t.Fatalf("secret %q leaked in %q", secret, joined)
 		}
 	}
-	for _, masked := range []string{"X-GLP-Token: ***", "token=***&limit=5", "Bearer ***", "https://alice:***@example.test/api"} {
+	for _, masked := range []string{"X-GLP-Token: ***", "token=***&limit=5", "Bearer ***", "dialing [url]", "password=*** refused", "dial tcp [host]: connect", "gaggimate: [url] closed"} {
 		if !strings.Contains(joined, masked) {
 			t.Fatalf("expected %q in masked output %q", masked, joined)
 		}
@@ -958,5 +1068,125 @@ func TestGetPreheatHistoryUnavailable(t *testing.T) {
 	}
 	if msg := errorText(t, res); !strings.Contains(msg, "preheat history is not available") {
 		t.Fatalf("nil-source error = %q, want it to say the history is not available", msg)
+	}
+}
+
+// newPerfServer wires the request-timing recorder through the developer MCP
+// server exactly as cmd/server does: the mux is wrapped with the recorder's
+// middleware, so a test's own HTTP requests land in the same snapshot the
+// get_perf_stats tool reads.
+func newPerfServer(t *testing.T, rec *perfstats.Recorder) *httptest.Server {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "glp.db")
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("db.Open: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	shotsRepo := shots.NewRepository(sqlDB)
+	libRepo := library.NewRepository(sqlDB)
+	maintRepo := maintenance.NewRepository(sqlDB, libRepo)
+	registry := machines.NewRegistry(sqlDB)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/shots/{id}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.Handle(Path, NewHandler(Deps{
+		Shots:       shots.NewService(shotsRepo),
+		ShotsRepo:   shotsRepo,
+		Library:     libRepo,
+		Maintenance: maintRepo,
+		Registry:    registry,
+		Poller:      fakePoller{},
+		Recorder:    rec,
+		DBPath:      dbPath,
+		Version:     "test",
+		Settings:    settingsSource(true, false, true),
+	}))
+	ts := httptest.NewServer(rec.Middleware(mux))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func TestGetPerfStatsListedWithOptIn(t *testing.T) {
+	ts := newPerfServer(t, perfstats.New())
+	session := connect(t, ts.URL+Path)
+	tool := listToolsByName(t, session)["get_perf_stats"]
+	if tool == nil {
+		t.Fatalf("get_perf_stats is missing from tools/list with the opt-in")
+	}
+	a := tool.Annotations
+	if a == nil || !a.ReadOnlyHint || !a.IdempotentHint {
+		t.Fatalf("get_perf_stats should be read-only and idempotent")
+	}
+	if a.OpenWorldHint == nil || *a.OpenWorldHint {
+		t.Fatalf("get_perf_stats should be closed-world")
+	}
+	if tool.OutputSchema == nil {
+		t.Fatalf("get_perf_stats has no output schema")
+	}
+	in := asMap(t, tool.InputSchema)
+	if props, _ := in["properties"].(map[string]any); len(props) != 0 {
+		t.Fatalf("get_perf_stats should take no input, got %v", props)
+	}
+}
+
+func TestGetPerfStatsReturnsRecordedRoutes(t *testing.T) {
+	rec := perfstats.New()
+	ts := newPerfServer(t, rec)
+	for i := 0; i < 4; i++ {
+		resp, err := http.Get(ts.URL + "/api/shots/42")
+		if err != nil {
+			t.Fatalf("GET /api/shots/42: %v", err)
+		}
+		resp.Body.Close()
+	}
+
+	session := connect(t, ts.URL+Path)
+	out := structured(t, call(t, session, "get_perf_stats", map[string]any{}))
+
+	var shotsRoute map[string]any
+	for _, raw := range objects(out, "routes") {
+		r, _ := raw.(map[string]any)
+		if r["route"] == "GET /api/shots/{id}" {
+			shotsRoute = r
+		}
+	}
+	if shotsRoute == nil {
+		t.Fatalf("recorded route missing from %v", objects(out, "routes"))
+	}
+	if got := numberField(t, shotsRoute, "count"); got != 4 {
+		t.Fatalf("route count = %v, want 4", got)
+	}
+	if got := numberField(t, shotsRoute, "recent_count"); got != 4 {
+		t.Fatalf("route recent_count = %v, want 4", got)
+	}
+
+	proc := object(out, "process")
+	if _, ok := proc["uptime_s"].(float64); !ok {
+		t.Fatalf("process.uptime_s missing: %v", proc)
+	}
+	if got := numberField(t, proc, "goroutines"); got < 1 {
+		t.Fatalf("process.goroutines = %v, want at least 1", got)
+	}
+
+	database := object(out, "database")
+	if _, ok := database["size_bytes"].(float64); !ok {
+		t.Fatalf("database.size_bytes missing: %v", database)
+	}
+	if got := numberField(t, database, "shot_count"); got != 0 {
+		t.Fatalf("database.shot_count = %v, want 0 for an empty database", got)
+	}
+}
+
+func TestGetPerfStatsUnavailable(t *testing.T) {
+	ts, _ := newDeveloperServer(t, true, false) // Recorder left nil.
+	session := connect(t, ts.URL+Path)
+	res := call(t, session, "get_perf_stats", map[string]any{})
+	if !res.IsError {
+		t.Fatalf("expected isError when the recorder is nil")
+	}
+	if msg := errorText(t, res); !strings.Contains(msg, "performance stats are not available") {
+		t.Fatalf("nil-recorder error = %q, want it to say stats are unavailable", msg)
 	}
 }

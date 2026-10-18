@@ -4,13 +4,11 @@
 // overlay is the DOM shell that drives the slice-2 cut-out runtime
 // (segment.ts) and the slice-1 mask helpers (mask.ts).
 //
-// Nothing imports this module yet — slice 3b wires it into the photo flow — so
-// it never reaches the first-load bundle.
-// mask.ts and segment.ts are the two earlier slices of this epic, already
-// merged to `dev`: mask.ts holds slice 1's pure mask maths (applyTap,
-// paintBrush, featherAlpha) and segment.ts holds slice 2's lazy cut-out runtime
-// (autoCutout, tapMask, resetCutout). This slice is the UI shell around them;
-// segment.ts also forwards the cut-out's progress, which drives the bar below.
+// views/library/bean-sticker.ts loads this module with a dynamic import(), so
+// it never reaches the first-load bundle. mask.ts holds the pure mask maths
+// (applyTap, paintBrush, featherAlpha) and segment.ts the lazy cut-out runtime
+// (autoCutout, tapMask, resetCutout); segment.ts also forwards the cut-out's
+// progress, which drives the bar below.
 import { t } from '../../i18n.js';
 import { applyTap, featherAlpha, paintBrush } from './mask.js';
 import { autoCutout, resetCutout, tapMask, type CutoutProgress } from './segment.js';
@@ -650,18 +648,33 @@ function buildEditor(
     resolve(result);
   }
 
+  // Shows the failure line without changing any editor state. Used by both the
+  // fatal fail() below and a single failed smart tap, which must leave the
+  // mask (current) and undo stack (history) intact so earlier edits survive.
+  function showFailureLine(err: unknown): void {
+    if (err !== undefined) console.error(err);
+    workingLine.textContent = t(failureMessageKey(err));
+    workingLine.classList.add('sticker-failed');
+    workingLine.style.display = '';
+  }
+
+  function clearFailureLine(): void {
+    if (!workingLine.classList.contains('sticker-failed')) return;
+    workingLine.classList.remove('sticker-failed');
+    workingLine.textContent = '';
+    workingLine.style.display = 'none';
+  }
+
   function fail(err?: unknown): void {
     if (closed) {
       resetCutout();
       return;
     }
-    if (err !== undefined) console.error(err);
+    showFailureLine(err);
     working = false;
     busy = false;
     stopProgressTimer();
     progress.style.display = 'none';
-    workingLine.textContent = t(failureMessageKey(err));
-    workingLine.classList.add('sticker-failed');
     tools.style.display = 'none';
     modeGroup.style.display = 'none';
     cancelBtn.style.display = 'none';
@@ -703,6 +716,7 @@ function buildEditor(
 
   function paintAt(clientX: number, clientY: number): void {
     if (!current) return;
+    clearFailureLine();
     showOriginal = false;
     const point = toImagePoint(clientX, clientY);
     current = paintBrush(current, workW, workH, point.x, point.y, brushSize / 2, mode === 'add' ? 1 : 0);
@@ -711,6 +725,7 @@ function buildEditor(
 
   async function handleTap(clientX: number, clientY: number): Promise<void> {
     if (working || busy) return;
+    clearFailureLine();
     busy = true;
     showOriginal = false;
     refreshControls();
@@ -734,7 +749,15 @@ function buildEditor(
       history.push(current);
       draw();
     } catch (err) {
-      fail(err);
+      // A single failed smart tap must not tear the editor down: current and
+      // history are left exactly as they were, so the edits made so far
+      // survive and the user can just tap again. Only the initial automatic
+      // cut-out is fatal (see the fail() call at the end of this function).
+      if (closed) {
+        resetCutout();
+        return;
+      }
+      showFailureLine(err);
     } finally {
       marker.remove();
       busy = false;
@@ -747,6 +770,7 @@ function buildEditor(
     if (working || busy) return;
     const previous = history.undo();
     if (!previous) return;
+    clearFailureLine();
     current = previous;
     refreshControls();
     draw();

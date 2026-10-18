@@ -74,8 +74,7 @@ func buildStatusMachines(list []machines.Machine, defaultReachable *bool, defaul
 // both hostnameOnly and apiURLAndHostnameFor below need to handle identically.
 func normalizeHost(raw string) (*url.URL, error) {
 	withScheme := raw
-	lower := strings.ToLower(raw)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+	if !strings.Contains(raw, "://") {
 		withScheme = "http://" + raw
 	}
 	return url.Parse(withScheme)
@@ -93,29 +92,18 @@ func hostnameOnly(rawHost string) string {
 	return u.Hostname()
 }
 
-// hasUnconfirmedLegacyMachineOptions always returns false and is a stub: the
-// endpoint uses it to show a Settings-UI banner nudging the user to
-// re-confirm a legacy machine_host/switch_entity add-on option that hasn't yet
-// been reconciled into the registry. The real implementation depends on a kv
-// "options.json value as of the last adoption pass" tracking table (the write
-// side of that reconciliation) that this package hasn't built —
-// internal/machines/registry.go's EnsureDefaultMachine doc comment already
-// draws the identical scope boundary for the read side of the same
-// deprecation. Always false here: never shows the nag banner, the safe
-// default — a false negative (missing a legacy option that genuinely needs
-// re-confirming) costs nothing but the banner not appearing; there is no
-// false-positive failure mode since this never returns true.
-func hasUnconfirmedLegacyMachineOptions() bool { return false }
-
 // apiURLAndHostnameFor computes GET /api/status's authenticated-only
 // machineUrl/machineHostname fields — display-only values, never used to
 // actually reach the machine (that's machines.BaseURLFor, which re-validates
 // and SSRF-guards the host on every call; this is pure string formatting with
 // no I/O beyond the env read below). host is the resolved default machine's
 // Host field; an empty host falls back to the MACHINE_URL env var (#764,
-// standalone Docker). Deliberately NOT read here: options.json's deprecated
-// machine_host/machine_url legacy fields (#662 removed them from config.yaml's
-// schema) — same scope boundary internal/machines/registry.go's
+// standalone Docker). A host that still won't parse as an http(s) URL --
+// unparseable, or carrying some other scheme -- yields no machineUrl and no
+// machineHostname (nil, ""), exactly like the no-host case, rather than a
+// built-in placeholder address. Deliberately NOT read here: options.json's
+// deprecated machine_host/machine_url legacy fields (#662 removed them from
+// config.yaml's schema) — same scope boundary internal/machines/registry.go's
 // EnsureDefaultMachine doc comment already draws for the read side of that same
 // deprecation.
 func apiURLAndHostnameFor(host string) (*string, string) {
@@ -128,8 +116,7 @@ func apiURLAndHostnameFor(host string) (*string, string) {
 	}
 	u, err := normalizeHost(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		fallback := "http://gaggia.intern/api/shots"
-		return &fallback, "gaggia.intern"
+		return nil, ""
 	}
 	full := u.Scheme + "://" + u.Host + "/api/shots"
 	return &full, u.Hostname()

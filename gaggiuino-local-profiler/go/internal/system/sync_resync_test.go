@@ -177,3 +177,48 @@ func TestSyncDefaultMachineShots_TruncatedBodyAbortsSync(t *testing.T) {
 		t.Fatalf("MaxNativeShotID(1) = %d, want 1 (sync must stop at the broken shot)", max)
 	}
 }
+
+// TestBackfillShots_MachineAnnotationDoesNotClobberUserNotes (#1603): a machine
+// payload that carries its own `annotation` must never replace the app-owned
+// annotation the user already set on that shot. The shot below already exists
+// (with the user's notes) yet is re-synced — it is filed under another machine
+// id, so the resume high-water mark does not skip it — which is exactly when
+// Upsert would otherwise full-replace the annotation.
+func TestBackfillShots_MachineAnnotationDoesNotClobberUserNotes(t *testing.T) {
+	p, sqlDB := newTestPoller(t, &fakeAdapter{})
+	repo := shots.NewRepository(sqlDB)
+	p.SetShotsRepo(repo)
+
+	globalID := shots.ToGlobalShotID(2, 1)
+	if err := repo.Upsert(shots.Shot{
+		"id": globalID, "timestamp": int64(1000), "datapoints": []any{},
+		"machineId": int64(1), "annotation": map[string]any{"notes": "mine"},
+	}); err != nil {
+		t.Fatalf("seeding user annotation: %v", err)
+	}
+
+	_, err := p.backfillShots(context.Background(), 2, 1,
+		func(_ context.Context, native int64) (map[string]any, int, error) {
+			return map[string]any{
+				"id": native, "timestamp": int64(1000), "datapoints": []any{},
+				"annotation": map[string]any{"notes": "machine"},
+			}, http.StatusOK, nil
+		},
+		func(shot map[string]any, native int64) (bool, error) {
+			shot["id"] = shots.ToGlobalShotID(2, native)
+			shot["machineId"] = int64(2)
+			return true, nil
+		},
+		backfillLogs{prefix: "system: sync", notFoundSuffix: " on machine", invalidReason: "has invalid data"})
+	if err != nil {
+		t.Fatalf("backfillShots: %v", err)
+	}
+
+	ann, err := repo.GetAnnotation(globalID)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if ann["notes"] != "mine" {
+		t.Fatalf("annotation after sync = %#v, want notes \"mine\" (a machine payload must not clobber user notes)", ann)
+	}
+}

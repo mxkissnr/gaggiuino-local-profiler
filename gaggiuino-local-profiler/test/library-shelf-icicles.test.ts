@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// shelf.js's import chain (bags.js -> views/library.js -> state/i18n) reads
+// shelf.ts's import chain (bags.ts -> views/library.ts -> state/i18n) reads
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
 // environment (same pattern as test/library-shelf-classify.test.ts).

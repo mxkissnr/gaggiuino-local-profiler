@@ -1,30 +1,26 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, jsonBody, pathSeg } from './fetch.js';
 
 // Typed client for the `maintenance` domain (go/internal/maintenance — every
 // route that package registers: /api/maintenance plus /api/maintenance/log*).
 // Package A3d of the TS migration (#1110).
 //
 // Every helper returns the raw Response. The call sites key their rendering
-// off `.ok`/status and parse the JSON themselves (see views/maintenance.js),
+// off `.ok`/status and parse the JSON themselves (see views/maintenance.ts),
 // so handing the Response back unchanged is what preserves their existing
 // error handling — the same convention api/shots.ts's listShots established.
 //
-// The concrete `machineId` is resolved by the caller: views/maintenance.js's
+// The concrete `machineId` is resolved by the caller: views/maintenance.ts's
 // _writeMachineId() owns the local view scope and the 'all' → first-machine
 // fallback, so these helpers only build the URL.
 
-function _json(body: unknown): RequestInit {
-  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
-
 /** GET /api/maintenance?machineId=... — task status for one machine, or the whole fleet with `machineId=all`. */
 export function getMaintenance(machineId: string | number): Promise<Response> {
-  return apiFetch(`api/maintenance?machineId=${machineId}`);
+  return apiFetch(`api/maintenance?machineId=${pathSeg(machineId)}`);
 }
 
 /** POST /api/maintenance/{task}/done?machineId=... — mark one task as done. */
 export function markMaintenanceDone(task: string, machineId: string | number): Promise<Response> {
-  return apiFetch(`api/maintenance/${task}/done?machineId=${machineId}`, { method: 'POST' });
+  return apiFetch(`api/maintenance/${pathSeg(task)}/done?machineId=${pathSeg(machineId)}`, { method: 'POST' });
 }
 
 /**
@@ -37,7 +33,7 @@ export function saveMaintenanceThreshold(
   machineId: string | number,
   body: unknown,
 ): Promise<Response> {
-  return apiFetch(`api/maintenance/${task}/threshold?machineId=${machineId}`, _json(body));
+  return apiFetch(`api/maintenance/${pathSeg(task)}/threshold?machineId=${pathSeg(machineId)}`, jsonBody(body));
 }
 
 /** POST /api/maintenance/custom?machineId=... — create a user-defined maintenance task. */
@@ -45,17 +41,17 @@ export function addCustomMaintenanceTask(
   machineId: string | number,
   body: { label: string; threshold_shots: number | null; threshold_days: number | null },
 ): Promise<Response> {
-  return apiFetch(`api/maintenance/custom?machineId=${machineId}`, _json(body));
+  return apiFetch(`api/maintenance/custom?machineId=${pathSeg(machineId)}`, jsonBody(body));
 }
 
 /** DELETE /api/maintenance/custom/{task}?machineId=... — remove a user-defined maintenance task. */
 export function deleteCustomMaintenanceTask(task: string, machineId: string | number): Promise<Response> {
-  return apiFetch(`api/maintenance/custom/${task}?machineId=${machineId}`, { method: 'DELETE' });
+  return apiFetch(`api/maintenance/custom/${pathSeg(task)}?machineId=${pathSeg(machineId)}`, { method: 'DELETE' });
 }
 
 /** GET /api/maintenance/log?machineId=... — the maintenance log rows. */
 export function getMaintenanceLog(machineId: string | number): Promise<Response> {
-  return apiFetch(`api/maintenance/log?machineId=${machineId}`);
+  return apiFetch(`api/maintenance/log?machineId=${pathSeg(machineId)}`);
 }
 
 /** POST /api/maintenance/log?machineId=... — add a manual log entry. */
@@ -63,10 +59,10 @@ export function addMaintenanceLogEntry(
   machineId: string | number,
   entry: { task: string; date: string; notes: string },
 ): Promise<Response> {
-  return apiFetch(`api/maintenance/log?machineId=${machineId}`, _json(entry));
+  return apiFetch(`api/maintenance/log?machineId=${pathSeg(machineId)}`, jsonBody(entry));
 }
 
 /** DELETE /api/maintenance/log/{id} — remove one log entry. */
 export function deleteMaintenanceLogEntry(id: number | string): Promise<Response> {
-  return apiFetch(`api/maintenance/log/${id}`, { method: 'DELETE' });
+  return apiFetch(`api/maintenance/log/${pathSeg(id)}`, { method: 'DELETE' });
 }

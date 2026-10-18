@@ -31,6 +31,10 @@
 //  7. a changelog fragment (changelog.d/*.md other than README.md) is still
 //     on disk — its notes never reached CHANGELOG.md (run
 //     `npm run changelog:collect`)
+//  8. a tracked source file under public-src/, go/, scripts/ or test/
+//     references a private local notes path or an internal-only hostname
+//     (#1624). Example LAN addresses and the gaggiuino.local mDNS name are
+//     deliberately out of scope — tests and docs legitimately use them.
 
 import { existsSync, readFileSync, readdirSync, type Dirent } from 'fs';
 import { execFileSync } from 'child_process';
@@ -56,6 +60,56 @@ export function gitLastCommitTime(gitRoot: string, relPathFromRoot: string): num
     } catch {
         return null;
     }
+}
+
+// Reads a file, returning null when it cannot be read. Callers turn null
+// into a check failure: unreadable input must fail the release gate, never
+// silently skip the comparison (fail closed).
+export function readTextOrNull(filePath: string): string | null {
+    try {
+        return readFileSync(filePath, 'utf8');
+    } catch {
+        return null;
+    }
+}
+
+const CONFIG_VERSION_RE = /^version:\s*"?([^"\n]+?)"?\s*$/m;
+
+export interface VersionSource {
+    label: string;
+    /** File contents, or null when the file could not be read. */
+    source: string | null;
+    re: RegExp;
+}
+
+// Check 1 of the release gate. config.yaml's version: field is canonical;
+// every other version spot must carry the same value. A missing/unreadable
+// source is reported as a failure rather than skipped, so an unreadable
+// file can never make this check pass by omission.
+export function checkVersionMatch(
+    configSource: string | null,
+    sources: VersionSource[]
+): { configVersion: string | null; failures: string[] } {
+    const configVersionMatch = configSource === null ? null : configSource.match(CONFIG_VERSION_RE);
+    const configVersion = configVersionMatch ? configVersionMatch[1]! : null;
+
+    if (!configVersion) {
+        return {
+            configVersion: null,
+            failures: ['Check 1 (version match): could not read the version: field from config.yaml'],
+        };
+    }
+
+    const failures: string[] = [];
+    for (const source of sources) {
+        const match = source.source === null ? null : source.source.match(source.re);
+        if (!match) {
+            failures.push(`Check 1 (version match): could not read a version from ${source.label}`);
+        } else if (match[1] !== configVersion) {
+            failures.push(`Check 1 (version match): ${source.label}="${match[1]!}" does not match config.yaml version="${configVersion}"`);
+        }
+    }
+    return { configVersion, failures };
 }
 
 // Git's well-known empty-tree object — diffing a root commit (no parent)
@@ -259,6 +313,7 @@ const COMMENT_STRIPPERS: Record<string, (src: string) => string> = {
     '.js':  stripJsLikeComments,
     '.mjs': stripJsLikeComments,
     '.cjs': stripJsLikeComments,
+    '.ts':  stripJsLikeComments,
     '.html': stripHtmlComments,
     '.htm':  stripHtmlComments,
     '.css':  stripCssComments,
@@ -440,7 +495,10 @@ export function checkScreenshotFreshness(gitRoot: string, publicSrcRel: string, 
     for (const f of pngFiles) {
         const screenshotRel = path.join(screenshotsDirRel, f);
         const fileTime = gitLastCommitTime(gitRoot, screenshotRel);
-        if (fileTime == null) continue;
+        if (fileTime == null) {
+            failures.push(`Check 3 (screenshot freshness): could not read the last commit time of ${screenshotRel}`);
+            continue;
+        }
 
         const newerRelevant = publicSrcCommits
             .filter((c) => c.time > fileTime && isRelevant(c.hash))
@@ -533,10 +591,12 @@ export function checkAcceptanceProtocol(markdown: string, version: string | null
     }
 
     // Public-content leak check, one failure per finding type, quoting the
-    // match. Only the private ranges are listed (a public address is fine),
-    // and a bare version number like 3.2.0 matches none of these.
+    // match. Only the private ranges are listed (a public address is fine):
+    // RFC1918 IPv4 plus the CGNAT block Tailscale hands out and IPv6 ULA
+    // (fc00::/7), and a bare version number like 3.2.0 matches none of these.
     const leakPatterns = [
-        { type: 'private IPv4 address', re: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/ },
+        { type: 'private IPv4 address', re: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3})\b/ },
+        { type: 'private IPv6 address', re: /\b(?:fc|fd)[0-9a-f]{2}(?::[0-9a-f]{0,4}){2,}\b/i },
         { type: '.local/.lan hostname', re: /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:local|lan)\b/i },
         { type: 'JWT-like string', re: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/ },
         { type: 'GitHub token', re: /\b(?:ghp_|gho_|ghs_|ghu_|ghr_|github_pat_)[A-Za-z0-9_]+/ },
@@ -586,6 +646,89 @@ export function checkChangelogFragments(fragmentsDir: string): string[] {
     return failures;
 }
 
+// ── Check 8: private references in shipped source ───────────────────────
+//
+// Slice 2 of #1624 extends check 6's "keep private infrastructure out of a
+// public file" idea to the source tree itself: `git ls-files` under the
+// shipped directories is read line by line. Only two classes of leak are in
+// scope — references to a private local notes directory and internal-only
+// hostnames — because tests and docs legitimately carry example LAN
+// addresses and the gaggiuino.local mDNS name, so those stay allowed. The
+// scanner is pure: it takes (path, content) pairs and returns one message per
+// finding, so it can be unit-tested without a git checkout.
+export function scanSourceLeaks(files: { path: string; content: string }[]): string[] {
+    const failures: string[] = [];
+    // Assembled from parts so this module does not itself contain the
+    // literals it looks for — the check scans scripts/ and test/ too.
+    const notesDir = '.cl' + 'aude';
+    const internalHost = new RegExp('\\b[a-z0-9-]+\\.' + 'intern\\b', 'i');
+    const patterns: { type: string; matches: (line: string) => boolean }[] = [
+        { type: 'private notes path', matches: (l) => l.includes('~/' + notesDir) },
+        { type: 'private plans path', matches: (l) => l.includes(notesDir + '/plans') },
+        { type: 'private projects path', matches: (l) => l.includes(notesDir + '/projects') },
+        { type: 'internal-only hostname', matches: (l) => internalHost.test(l) },
+    ];
+    for (const file of files) {
+        const lines = file.content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]!;
+            for (const { type, matches } of patterns) {
+                // First match wins: patterns can overlap on one line (e.g. a
+                // notes path also contains the plans-path substring), so
+                // reporting the first avoids duplicate messages for one leak.
+                if (matches(line)) {
+                    failures.push(`Check 8 (source leaks): ${file.path}:${i + 1} matches the ${type} pattern`);
+                    break;
+                }
+            }
+        }
+    }
+    return failures;
+}
+
+// Extensions that are never text — skipped so a binary blob's bytes can't
+// produce a false positive (or a decode error).
+const BINARY_EXTENSIONS = new Set([
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp',
+    '.woff', '.woff2', '.ttf', '.otf', '.eot',
+    '.pdf', '.zip', '.gz', '.tgz', '.tar', '.bz2', '.xz', '.7z',
+    '.wasm', '.mp4', '.webm', '.mov', '.mp3', '.wav', '.ogg', '.flac',
+    '.bin', '.exe', '.dll', '.so', '.dylib', '.o', '.a', '.class', '.jar',
+]);
+
+// Gather the tracked text files the source scan covers: `git ls-files` under
+// the shipped directories, minus testdata/ and known binary types. Returns
+// null when git itself fails, so the caller can fail the check.
+function collectScannedSource(gitRoot: string, pkgRelDir: string): { path: string; content: string }[] | null {
+    const dirs = ['public-src', 'go', 'scripts', 'test'].map((d) => path.join(pkgRelDir, d));
+    let raw: string;
+    try {
+        raw = execFileSync('git', ['ls-files', '-z', '--', ...dirs], { cwd: gitRoot, encoding: 'utf8' });
+    } catch {
+        return null;
+    }
+    const files: { path: string; content: string }[] = [];
+    for (const rel of raw.split('\0')) {
+        if (!rel) continue;
+        if (rel.split('/').includes('testdata')) continue;
+        if (BINARY_EXTENSIONS.has(path.extname(rel).toLowerCase())) continue;
+        try {
+            files.push({ path: rel, content: readFileSync(path.join(gitRoot, rel), 'utf8') });
+        } catch {
+            // Unreadable (e.g. a submodule gitlink) — nothing to scan.
+        }
+    }
+    return files;
+}
+
+function checkSourceLeaks(gitRoot: string, pkgRelDir: string): string[] {
+    const files = collectScannedSource(gitRoot, pkgRelDir);
+    if (files === null) {
+        return ['Check 8 (source leaks): could not list tracked source files with git ls-files'];
+    }
+    return scanSourceLeaks(files);
+}
+
 function main(): void {
     const failures: string[] = [];
 
@@ -595,33 +738,25 @@ function main(): void {
     // stamped into backup bundles must all match it — bumped in exactly
     // these four spots at release time (CLAUDE.md's Versioning section).
     const configPath        = path.join(packageRoot, 'config.yaml');
-    const configSrc         = readFileSync(configPath, 'utf8');
-    const configVersionMatch = configSrc.match(/^version:\s*"?([^"\n]+?)"?\s*$/m);
-    const configVersion     = configVersionMatch ? configVersionMatch[1]! : null;
+    const versionSpots: VersionSource[] = [
+        { label: 'package.json "version"', file: path.join(packageRoot, 'package.json'),
+          re: /"version"\s*:\s*"([^"]+)"/ },
+        { label: 'go/internal/system/version.go glpVersion', file: path.join(packageRoot, 'go', 'internal', 'system', 'version.go'),
+          re: /const\s+glpVersion\s*=\s*"([^"]+)"/ },
+        { label: 'go/internal/backup/bundle.go glpVersion', file: path.join(packageRoot, 'go', 'internal', 'backup', 'bundle.go'),
+          re: /const\s+glpVersion\s*=\s*"([^"]+)"/ },
+    ].map((spot) => {
+        const { file, ...rest } = spot;
+        return { ...rest, source: readTextOrNull(file) };
+    });
+    const { configVersion, failures: versionFailures } = checkVersionMatch(
+        readTextOrNull(configPath),
+        versionSpots
+    );
+    failures.push(...versionFailures);
     // `glpVersion` name kept for checks 2 and 4 below — it is the canonical
     // version they compare against.
     const glpVersion        = configVersion;
-
-    if (!configVersion) {
-        failures.push(`Check 1 (version match): could not find version: field in ${configPath}`);
-    } else {
-        const versionSpots = [
-            { label: 'package.json "version"', file: path.join(packageRoot, 'package.json'),
-              re: /"version"\s*:\s*"([^"]+)"/ },
-            { label: 'go/internal/system/version.go glpVersion', file: path.join(packageRoot, 'go', 'internal', 'system', 'version.go'),
-              re: /const\s+glpVersion\s*=\s*"([^"]+)"/ },
-            { label: 'go/internal/backup/bundle.go glpVersion', file: path.join(packageRoot, 'go', 'internal', 'backup', 'bundle.go'),
-              re: /const\s+glpVersion\s*=\s*"([^"]+)"/ },
-        ];
-        for (const spot of versionSpots) {
-            const m = readFileSync(spot.file, 'utf8').match(spot.re);
-            if (!m) {
-                failures.push(`Check 1 (version match): could not read a version from ${spot.label}`);
-            } else if (m[1] !== configVersion) {
-                failures.push(`Check 1 (version match): ${spot.label}="${m[1]!}" does not match config.yaml version="${configVersion}"`);
-            }
-        }
-    }
 
     // ── Check 2: CHANGELOG heading ───────────────────────────────────────
     const changelogPath = path.join(packageRoot, 'CHANGELOG.md');
@@ -661,7 +796,11 @@ function main(): void {
         failures.push(`Check 4 (dev-stats freshness): ${devStatsPathAbs} does not exist — run node scripts/dev-stats.mts`);
     } else {
         const devStatsTime = gitLastCommitTime(repoRoot, devStatsPathRel);
-        if (devStatsTime != null && latestFeatureTime != null && devStatsTime < latestFeatureTime) {
+        if (devStatsTime == null) {
+            failures.push(`Check 4 (dev-stats freshness): could not read the last commit time of ${devStatsPathRel}`);
+        } else if (latestFeatureTime == null) {
+            failures.push('Check 4 (dev-stats freshness): could not determine the last commit touching go/ or public-src/');
+        } else if (devStatsTime < latestFeatureTime) {
             failures.push(`Check 4 (dev-stats freshness): DEVELOPMENT.md last committed ${fmtTime(devStatsTime)}, older than the most recent feature commit (${latestFeaturePath}, ${fmtTime(latestFeatureTime)}) — run node scripts/dev-stats.mts`);
         }
     }
@@ -703,6 +842,9 @@ function main(): void {
 
     // ── Check 7: leftover changelog fragments ───────────────────────────
     failures.push(...checkChangelogFragments(path.join(packageRoot, 'changelog.d')));
+
+    // ── Check 8: private references in shipped source ───────────────────
+    failures.push(...checkSourceLeaks(repoRoot, pkgRelDir));
 
     // ── Report ───────────────────────────────────────────────────────────
     if (failures.length) {

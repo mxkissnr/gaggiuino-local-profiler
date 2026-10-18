@@ -1,11 +1,11 @@
 // Grinder list + grinder form sections of the Library view, split out of
-// views/library.js. Pure move + type port (Part of #1115); no behavior change.
+// views/library.ts. Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml, toIsoDateInput } from '../../utils.js';
+import { esc, html, joinHtml, toIsoDateInput, localMidnightMs } from '../../utils.js';
 import type { Html } from '../../utils.js';
-import { WRENCH_ICON_SVG } from '../../icons.js';
+import { WRENCH_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
@@ -14,21 +14,24 @@ import { currentGrinderZeroPoint } from '../../grind-zero.js';
 import type { Grinder } from '../../api/types.js';
 import * as libraryView from '../library.js';
 
-// Circular with library.js (it re-exports this module): only ever touched at
+// Circular with library.ts (it re-exports this module): only ever touched at
 // call time, never read at module load.
 const library = libraryView;
 
 const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
-const ICON_TRASH: Html  = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
 
-// Static burr-type suggestions for the grinder form (moved out of the old
-// <datalist> markup in index.html).
-const BURR_TYPE_SUGGESTIONS = ['Konisch Stahl', 'Konisch Keramik', 'Flach Stahl', 'Flach Keramik'];
+// Burr-type suggestions for the grinder form (moved out of the old <datalist>
+// markup in index.html). Resolved on open so they follow a language change.
+function _burrTypeSuggestions(): string[] {
+  return [
+    t('grinder_burr_conical_steel'), t('grinder_burr_conical_ceramic'),
+    t('grinder_burr_flat_steel'), t('grinder_burr_flat_ceramic'),
+  ];
+}
 
-// The generated Grinder schema lags the backend: wear is really
-// { shotsSinceBurrs, gramsSinceBurrs } (go/internal/library/handlers.go) and
-// zeroPointHistory entries always carry both fields. This names what the
-// runtime actually sends.
+// Narrows the generated Grinder schema to what the runtime sends:
+// zeroPointHistory entries always carry both fields (the spec marks neither
+// required), and wear is always { shotsSinceBurrs, gramsSinceBurrs }.
 export type GrinderRow = Omit<Grinder, 'wear' | 'zeroPointHistory'> & {
   zeroPointHistory?: { zeroPoint: number; since: number }[];
   wear?: { shotsSinceBurrs: number; gramsSinceBurrs: number } | undefined;
@@ -46,7 +49,8 @@ function _asRow(grinder: Grinder): GrinderRow {
 }
 
 // Every form field read/written here is an <input>; the shared .value API is
-// all that is used.
+// all that is used. The grinder form's markup is static in index.html, so this
+// module renders no field and has no accessible name to add (#1547).
 function _input(id: string): HTMLInputElement {
   return document.getElementById(id) as HTMLInputElement;
 }
@@ -86,7 +90,7 @@ export function renderGrinderList(): void {
         ${g.notes ? html`<div class="lib-item-sub">${esc(g.notes)}</div>` : html``}
         ${zeroPoint != null ? html`<div class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : html``}
         ${g.wear ? html`<div class="lib-item-sub lib-grinder-wear">
-          <span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, formatWearGrams(g.wear.gramsSinceBurrs))}</span>
+          <span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, esc(formatWearGrams(g.wear.gramsSinceBurrs)))}</span>
           <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${esc(g.id)}">${tHtml('lib_grinder_reset_burrs')}</button>
         </div>` : html``}
       </div>
@@ -105,7 +109,7 @@ function formatWearGrams(g: number): string {
 }
 
 // Grinder images need the auth token, so <img src> can't point at the API
-// directly (see bean-image.js) — set the blob-url src async after render.
+// directly (see bean-image.ts) — set the blob-url src async after render.
 // #441: click opens the fullscreen lightbox, same as bean photos (#440).
 function loadGrinderThumbnails(): void {
   document.querySelectorAll<HTMLImageElement>('.lib-grinder-thumb[data-grinder-id]').forEach(img => {
@@ -124,7 +128,7 @@ export function openGrinderForm(grinder?: GrinderRow | null): void {
   _input('grinderFormName').value  = grinder?.name  || '';
   _input('grinderFormNotes').value = grinder?.notes || '';
   _input('grinderFormBurrType').value     = grinder?.burrType || '';
-  attachAutocomplete(_input('grinderFormBurrType'), () => BURR_TYPE_SUGGESTIONS);
+  attachAutocomplete(_input('grinderFormBurrType'), () => _burrTypeSuggestions());
   _input('grinderFormPurchaseDate').value = toIsoDateInput(grinder?.purchaseDate);
   _el('grinderFormImageField').style.display = grinder ? '' : 'none';
   // Zero-point tracking only makes sense once a grinder already has shot
@@ -198,7 +202,7 @@ export async function saveGrinder(): Promise<void> {
     const sinceRaw = _input('grinderFormZeroPointSince').value.trim();
     if (zpRaw !== '') {
       const zeroPoint = parseFloat(zpRaw);
-      const sinceMs   = sinceRaw ? new Date(sinceRaw).getTime() : 0;
+      const sinceMs   = sinceRaw ? localMidnightMs(sinceRaw) : 0;
       // For "now" inserts (sinceMs=0) the backend deduplicates on value;
       // for retroactive inserts we always send (dedup is on exact since+value pair).
       const isRetroactive = sinceMs > 0;

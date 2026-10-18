@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -90,10 +92,52 @@ func TestPostPreheatReadyBy_NullClears(t *testing.T) {
 	}
 }
 
+// TestPostPreheatReadyBy_RejectsExpiredTargetAt pins #1611: a targetAt already
+// past the grace window is rejected up front and stores nothing, while a future
+// target is still accepted.
+func TestPostPreheatReadyBy_RejectsExpiredTargetAt(t *testing.T) {
+	useTempPreheatStateFile(t)
+	fake := &fakeAdapter{}
+	sqlDB := newTestDB(t)
+	haSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer haSrv.Close()
+	t.Setenv("SUPERVISOR_TOKEN", "")
+	t.Setenv("GLP_HA_URL", haSrv.URL)
+	t.Setenv("GLP_HA_TOKEN", "test-token")
+	haClient := ha.NewClientFromEnv()
+	p := newTestPollerWithHA(t, fake, sqlDB, haClient, "switch.machine")
+	demo := NewDemoService(sqlDB, shots.NewRepository(sqlDB), library.NewRepository(sqlDB))
+	mux := newSystemMux(NewHandlers(p, demo, testAPIToken))
+
+	past := time.Now().UnixMilli() - 60*60_000
+	rec := doPost(mux, "/api/preheat/ready-by", fmt.Sprintf(`{"targetAt":%d}`, past))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("past target status = %d, want 400, body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeMap(t, rec.Body.Bytes())
+	if body["error"] != "targetAt must not be in the past" {
+		t.Errorf("error = %v, want 'targetAt must not be in the past'", body["error"])
+	}
+	p.state.mu.Lock()
+	stored := p.state.readyByTargetAt
+	p.state.mu.Unlock()
+	if stored != nil {
+		t.Errorf("readyByTargetAt = %v, want nil (a rejected target stores nothing)", *stored)
+	}
+
+	future := time.Now().UnixMilli() + 60*60_000
+	rec = doPost(mux, "/api/preheat/ready-by", fmt.Sprintf(`{"targetAt":%d}`, future))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("future target status = %d, want 200, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 // TestGetVersion_ReturnsCurrent exercises GET /api/version against no
-// network access (the GitHub fetch will fail in this sandboxed test — the
-// contract must still degrade to {current, latest: null, update_available:
-// false, release_url}, never an error response).
+// network access (a test binary's checker never fetches — the contract must
+// still degrade to {current, latest: null, update_available: false,
+// release_url}, never an error response).
 func TestGetVersion_ReturnsCurrent(t *testing.T) {
 	_, mux, _ := newFullTestHandlers(t)
 	rec := doGet(mux, "/api/version")
@@ -195,7 +239,7 @@ func TestGetToken_RateLimited(t *testing.T) {
 }
 
 // TestGetToken_IngressGetsHigherRateLimit guards the #901 live-navigation
-// fix: a genuine Ingress caller (Supervisor-network RemoteAddr +
+// fix: a genuine Ingress caller (Supervisor ingress-proxy RemoteAddr +
 // X-Ingress-Path, exactly like auth_test.go's ingress fixtures) shares one
 // token:<ip> bucket across every browser tab/user behind that Ingress
 // session, and this app re-fetches the token on every single page's full
@@ -206,7 +250,7 @@ func TestGetToken_IngressGetsHigherRateLimit(t *testing.T) {
 	ingressGet := func() *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/token", nil)
-		req.RemoteAddr = "172.30.32.1:12345"
+		req.RemoteAddr = "172.30.32.2:12345"
 		req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/faketoken")
 		mux.ServeHTTP(rec, req)
 		return rec
@@ -231,16 +275,15 @@ func TestGetToken_IngressGetsHigherRateLimit(t *testing.T) {
 
 // TestGetToken_DirectPortDeniedWhenExposeApiPortFalse guards #803: a
 // non-Ingress caller (every httptest.NewRequest's default RemoteAddr is
-// outside the Supervisor's 172.30.0.0/16 network, so auth.IsIngressRequest
+// outside the Supervisor's ingress proxy address, so auth.IsIngressRequest
 // is always false here) is rejected with 403 once expose_api_port is
 // explicitly false.
 func TestGetToken_DirectPortDeniedWhenExposeApiPortFalse(t *testing.T) {
-	resetPreheatMinutesCacheForTest(t)
 	path := filepath.Join(t.TempDir(), "options.json")
 	if err := os.WriteFile(path, []byte(`{"expose_api_port":false}`), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	defaultOptionsFile = path
+	pointOptionsAt(t, path)
 
 	_, mux, _ := newFullTestHandlers(t)
 	rec := doGet(mux, "/api/token")
@@ -299,6 +342,51 @@ func TestGetStatus_PublicFieldsAndNoSensitiveLeak(t *testing.T) {
 		if _, present := body[key]; present {
 			t.Errorf("unauthenticated GET /api/status leaked sensitive field %q = %v", key, body[key])
 		}
+	}
+}
+
+// TestGetStatus_DataRevisionsEmptyByDefault pins the #1539 slice-2 contract's
+// default half: GET /api/status always carries dataEpoch and dataRevs — an
+// empty string and an empty object, never null or absent — before cmd/server
+// wires SetDataRevs.
+func TestGetStatus_DataRevisionsEmptyByDefault(t *testing.T) {
+	_, mux, _ := newFullTestHandlers(t)
+	rec := doGet(mux, "/api/status")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeMap(t, rec.Body.Bytes())
+	if body["dataEpoch"] != "" {
+		t.Errorf("dataEpoch = %v, want empty string", body["dataEpoch"])
+	}
+	revs, ok := body["dataRevs"].(map[string]any)
+	if !ok {
+		t.Fatalf("dataRevs = %v, want an object", body["dataRevs"])
+	}
+	if len(revs) != 0 {
+		t.Errorf("dataRevs = %v, want an empty object", revs)
+	}
+}
+
+// TestGetStatus_DataRevisionsReflectHook proves the other half: once
+// SetDataRevs is wired, the response reports the hook's epoch and per-kind
+// revisions.
+func TestGetStatus_DataRevisionsReflectHook(t *testing.T) {
+	h, mux, _ := newFullTestHandlers(t)
+	h.SetDataRevs(func() (string, map[string]int64) {
+		return "epoch-1", map[string]int64{"library": 3, "shot": 1}
+	})
+	rec := doGet(mux, "/api/status")
+	body := decodeMap(t, rec.Body.Bytes())
+	if body["dataEpoch"] != "epoch-1" {
+		t.Errorf("dataEpoch = %v, want epoch-1", body["dataEpoch"])
+	}
+	revs, ok := body["dataRevs"].(map[string]any)
+	if !ok {
+		t.Fatalf("dataRevs = %v, want an object", body["dataRevs"])
+	}
+	if revs["library"] != float64(3) || revs["shot"] != float64(1) {
+		t.Errorf("dataRevs = %v, want library:3 shot:1", revs)
 	}
 }
 

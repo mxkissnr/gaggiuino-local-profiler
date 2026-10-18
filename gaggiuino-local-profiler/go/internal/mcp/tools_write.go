@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
+	"strconv"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -178,6 +178,14 @@ func stringEnum(values []string) []any {
 	return out
 }
 
+// publishDataChanged reports a successful change to the host's hook, if any. A
+// nil hook (every test that does not set one) is a no-op.
+func publishDataChanged(deps Deps, kind, id string) {
+	if deps.OnDataChanged != nil {
+		deps.OnDataChanged(kind, id)
+	}
+}
+
 func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if deps.Shots == nil {
 		return annotateShotOutput{}, fmt.Errorf("shot history is not available")
@@ -229,6 +237,10 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if setting, ok := ann["grindSetting"].(string); ok {
 		out.GrindSetting = &setting
 	}
+	// The annotation itself changes the shot; its dose also drives the library's
+	// derived bag stock, so both kinds changed (#1539 slice 2).
+	publishDataChanged(deps, "shot", strconv.FormatInt(in.ID, 10))
+	publishDataChanged(deps, "library", "")
 	return out, nil
 }
 
@@ -260,6 +272,7 @@ func setKnownGrind(deps Deps, in setKnownGrindInput) (setKnownGrindOutput, error
 		log.Printf("mcp: set_known_grind: updating library: %v", err)
 		return setKnownGrindOutput{}, fmt.Errorf("could not update the coffee library; try again")
 	}
+	publishDataChanged(deps, "library", "")
 	return setKnownGrindOutput{
 		BeanID:             in.BeanID,
 		BeanName:           entityStr(bean, "name"),
@@ -313,6 +326,7 @@ func markMaintenanceDone(deps Deps, in markMaintenanceDoneInput) (markMaintenanc
 	if v, ok := statInt(stat, "daysSince"); ok {
 		out.DaysSince = &v
 	}
+	publishDataChanged(deps, "maintenance", "")
 	return out, nil
 }
 
@@ -324,21 +338,8 @@ func formatValidationIssues(issues []shots.ValidationIssue) string {
 	return strings.Join(parts, "; ")
 }
 
-// annotationRating reads a stored annotation value as a 1-5 rating, rejecting
-// out-of-range and fractional numbers the same way the read tools do.
+// annotationRating reads a stored annotation value as a 1-5 rating through the
+// same ratingValue parser the read tools use (#1622 slice 12).
 func annotationRating(ann map[string]any) (int, bool) {
-	switch v := ann["rating"].(type) {
-	case float64:
-		if !(v >= 1 && v <= 5) || v != math.Trunc(v) {
-			return 0, false
-		}
-		return int(v), true
-	case int:
-		if v < 1 || v > 5 {
-			return 0, false
-		}
-		return v, true
-	default:
-		return 0, false
-	}
+	return ratingValue(ann["rating"])
 }

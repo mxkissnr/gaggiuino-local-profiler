@@ -1,5 +1,5 @@
 // Pure flavor-matching logic — no DOM/state imports so it can be unit-tested
-// directly under Node (see flavor-wheel.js for the rendering/modal side).
+// directly under Node (see flavor-wheel.ts for the rendering/modal side).
 import { FLAVOR_WHEEL, FLAVOR_ALIASES } from './flavor-data.js';
 import type { FlavorNode } from './flavor-data.js';
 import { SCA_FLAVOR_COLORS } from './sca-flavor-colors.js';
@@ -24,6 +24,7 @@ interface IndexEntry {
 
 let _index: IndexEntry[] | null = null; // [{ id, norms: string[] }]
 let _byId: Map<string, FlavorNode> | null = null; // id -> node
+let _aliasByNorm: Map<string, string> | null = null; // normalizeFlavor(key) -> node id
 
 function buildIndex(): void {
   if (_index) return;
@@ -38,6 +39,16 @@ function buildIndex(): void {
   FLAVOR_WHEEL.forEach(walk);
   _index = index;
   _byId = byId;
+
+  // Lookup keys are normalised the same way the input is, so a key that still
+  // carries umlauts ('geröstete mandel') matches its diacritics-stripped input
+  // ('gerostete mandel'). The alias table itself is not edited.
+  const aliasByNorm = new Map<string, string>();
+  for (const [key, id] of Object.entries(FLAVOR_ALIASES)) {
+    const norm = normalizeFlavor(key);
+    if (norm && !aliasByNorm.has(norm)) aliasByNorm.set(norm, id);
+  }
+  _aliasByNorm = aliasByNorm;
 }
 
 // isBoundaryMatch: `needle` occurs in `haystack` with non-letter chars (or
@@ -67,7 +78,7 @@ export function matchFlavors(flavors: unknown): { matched: Set<string>; unmatche
     const exact = _index!.find(e => e.norms.includes(norm));
     if (exact) { matched.add(exact.id); continue; }
 
-    const aliasId = FLAVOR_ALIASES[norm];
+    const aliasId = _aliasByNorm!.get(norm);
     if (aliasId && _byId!.has(aliasId)) { matched.add(aliasId); continue; }
 
     const contained = _index!.find(e => e.norms.some(n => boundaryContains(norm, n)));
@@ -87,7 +98,7 @@ export function markLit(node: FlavorNode, matched: Set<string>): boolean {
 
 // ── Zoom navigation helpers ──────────────────────────────────────────────
 // Pure tree-walking helpers backing the wheel's click-to-zoom + breadcrumb
-// navigation (see flavor-wheel.js) — kept here so they stay unit-testable
+// navigation (see flavor-wheel.ts) — kept here so they stay unit-testable
 // under vitest, same reasoning as the color helpers above.
 
 let _parentOf: Map<string, string | null> | null = null; // id -> parent id, or null for a top-level category
@@ -122,14 +133,14 @@ export function pathToNode(nodeId: string): string[] {
 
 // ── Sunburst color helpers ───────────────────────────────────────────────
 // Pure (no DOM/ECharts dependency), kept here alongside the other
-// wheel-adjacent pure logic so they stay unit-testable — flavor-wheel.js
+// wheel-adjacent pure logic so they stay unit-testable — flavor-wheel.ts
 // imports state/index.ts, which touches localStorage at module scope and can't be
 // imported under vitest's node test environment.
 
 const NEUTRAL_FALLBACK = '#71717a'; // gray-500, only hit if a node id is somehow missing from SCA_FLAVOR_COLORS
 
 // The real per-node SCA/WCR wheel color for a node's fill (see
-// sca-flavor-colors.js) — falls back to a neutral gray for any node id that
+// sca-flavor-colors.ts) — falls back to a neutral gray for any node id that
 // somehow isn't in the map (should not happen; all 111 FLAVOR_WHEEL nodes
 // are covered).
 export function colorForNode(id: string): string {

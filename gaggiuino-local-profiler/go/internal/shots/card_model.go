@@ -5,7 +5,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // card_model.go holds the share card's data extraction (from the shot's
@@ -14,10 +13,16 @@ import (
 
 const cardPX = 52.0 // card design's base px unit
 
+// cardAxisMaxTicks bounds the axis tick loops independently of the values
+// driving them, so a shot with an implausible duration or temperature cannot
+// emit unbounded SVG elements.
+const cardAxisMaxTicks = 200
+
 type cardModel struct {
 	shot   Shot
 	score  *int
 	format string
+	lang   string
 	pal    palette
 	deps   cardDeps
 
@@ -25,11 +30,12 @@ type cardModel struct {
 	scale float64
 }
 
-func newCardModel(shot Shot, score *int, format, accent, theme string, deps cardDeps) *cardModel {
+func newCardModel(shot Shot, score *int, format, accent, theme, lang string, deps cardDeps) *cardModel {
 	c := &cardModel{
 		shot:   shot,
 		score:  score,
 		format: format,
+		lang:   normalizeCardLang(lang),
 		pal:    buildPalette(accent, theme),
 		deps:   deps,
 		w:      1080,
@@ -185,16 +191,28 @@ func lastPositive(vals []float64) (float64, bool) {
 	return 0, false
 }
 
-func detectPreinfusionEnd(pressure []float64) (int, bool) {
-	if len(pressure) < 10 {
-		return 0, false
-	}
-	for i := 5; i < len(pressure)-5; i++ {
-		if pressure[i] >= 5.0 && pressure[i+1] >= 5.0 && pressure[i+2] >= 5.0 {
-			return i, true
-		}
-	}
-	return 0, false
+// cardFigures is the share card's shot-derived summary — the figures it
+// shares with the shot detail view. Resolving them through the same helpers
+// (shotYield, detectPhases) is what keeps the two views from drifting: svg()
+// draws from this struct and the card/detail parity test reads it directly.
+type cardFigures struct {
+	yield       float64
+	hasYield    bool
+	preinfusion float64
+	preEndIdx   int
+	hasPhases   bool
+}
+
+// figures resolves the yield and the preinfusion/extraction boundary from the
+// shot's own datapoints/annotation. preEndIdx is a sample index into the
+// pressure series — the card's x axis is index-based, so the tint and labels
+// need the index, not the seconds.
+func (c *cardModel) figures(dp map[string]any) cardFigures {
+	var f cardFigures
+	f.yield, f.hasYield = shotYield(c.shot)
+	f.preinfusion, _, f.preEndIdx, f.hasPhases = detectPhases(
+		tenthsSeries(dp, "timeInShot"), tenthsSeries(dp, "pressure"))
+	return f
 }
 
 // ── the card itself ────────────────────────────────────────────────────
@@ -203,6 +221,7 @@ func (c *cardModel) svg() string {
 	p := c.pal
 	dp := c.datapoints()
 	ann := c.annotation()
+	fig := c.figures(dp)
 
 	pressure := tenthsSeries(dp, "pressure")
 	flow := tenthsSeries(dp, "pumpFlow")
@@ -221,6 +240,7 @@ func (c *cardModel) svg() string {
 	if d := cardNum(c.shot["duration"]); d != 0 {
 		totalSec = d / 10
 	}
+	totalSec = clampCardRange(totalSec, 1, 3600)
 
 	profileName := firstNonEmpty(
 		mapString(c.shot["profile"], "name"),
@@ -228,7 +248,7 @@ func (c *cardModel) svg() string {
 		strField(c.shot, "profileName"),
 	)
 	if profileName == "" {
-		profileName = "Unknown"
+		profileName = cardText(c.lang, "unknown")
 	}
 	bean := strField(ann, "coffee")
 	machine := firstNonEmpty(strField(ann, "machine"), strField(c.shot, "machine"))
@@ -239,14 +259,8 @@ func (c *cardModel) svg() string {
 		dose = &r
 	}
 	var yieldG *float64
-	if v, ok := numField(ann, "totalWeight"); ok {
-		r := math.Round(v*10) / 10
-		yieldG = &r
-	} else if v, ok := numField(ann, "yield"); ok {
-		r := math.Round(v*10) / 10
-		yieldG = &r
-	} else if len(weight) > 0 {
-		r := math.Round(weight[len(weight)-1]*10) / 10
+	if fig.hasYield {
+		r := math.Round(fig.yield*10) / 10
 		yieldG = &r
 	}
 	ratio := ""
@@ -278,7 +292,7 @@ func (c *cardModel) svg() string {
 		installCode = c.deps.installCode()
 	}
 
-	preEnd, hasPre := detectPreinfusionEnd(pressure)
+	preEnd, hasPre := fig.preEndIdx, fig.hasPhases
 
 	var s svgBuf
 	s.printf(`<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s">`,
@@ -291,12 +305,12 @@ func (c *cardModel) svg() string {
 	headerRight := ""
 	if c.format != "story" {
 		shotID := ""
-		if id := c.shot.id(); id != 0 {
-			shotID = fmt.Sprintf("Shot #%d", id)
+		if id := nativeShotID(c.shot); id != 0 {
+			shotID = cardTextf(c.lang, "shot_id", id)
 		}
 		dateStr := ""
 		if ts := cardNum(c.shot["timestamp"]); ts != 0 {
-			dateStr = germanDate(int64(ts))
+			dateStr = cardDate(c.lang, int64(ts))
 		}
 		headerRight = strings.TrimSpace(strings.Join(nonEmpty(shotID, dateStr), "  ·  "))
 	}
@@ -322,7 +336,7 @@ func (c *cardModel) svg() string {
 	s.text(cardPX+leadW, headlineBaseline, 52, true, p.text, "", headline)
 
 	cursorY := headlineBaseline + 32
-	phrase := scoreTierPhrase(c.score)
+	phrase := scoreTierPhrase(c.score, c.lang)
 	if c.score != nil && phrase != "" {
 		cursorY = headlineBaseline + 78
 		vx := cardPX
@@ -377,7 +391,7 @@ func (c *cardModel) svg() string {
 	}
 	if len(doseParts) > 0 {
 		doseY := subY + 14
-		s.text(cardPX, doseY, 22, false, p.textMute, "", "Dosis")
+		s.text(cardPX, doseY, 22, false, p.textMute, "", cardText(c.lang, "dose"))
 		s.text(cardPX+78, doseY, 22, true, p.text, "", strings.Join(doseParts, "  "))
 		subY = doseY
 	}
@@ -405,10 +419,7 @@ func (c *cardModel) svg() string {
 	plotH := outerH - chartT - chartB - legendH
 
 	leftMax := 12.0
-	tempMax := math.Ceil(cardMaxOr0(temp) + 5)
-	if tempMax == 0 {
-		tempMax = 100
-	}
+	tempMax := clampCardRange(math.Ceil(cardMaxOr0(temp)+5), 1, 300)
 	yLeft := func(v float64) float64 { return plotY + plotH - clamp01(v/leftMax)*plotH }
 	yRight := func(v float64) float64 { return plotY + plotH - clamp01(v/tempMax)*plotH }
 	xTime := func(i int) float64 { return plotX + (float64(i)/math.Max(float64(nPts-1), 1))*plotW }
@@ -433,7 +444,7 @@ func (c *cardModel) svg() string {
 	case tempMax <= 80:
 		rightStep = 20
 	}
-	for v := rightStep; v < tempMax; v += rightStep {
+	for v, i := rightStep, 0; v < tempMax && i < cardAxisMaxTicks; v, i = v+rightStep, i+1 {
 		gy := yRight(v)
 		s.text(outerX+outerW-chartR+5, gy+5, 15, false, p.textMute, "", num1(v))
 	}
@@ -445,7 +456,7 @@ func (c *cardModel) svg() string {
 	case totalSec > 40:
 		xTickStep = 10
 	}
-	for t := 0.0; t <= totalSec; t += xTickStep {
+	for t, i := 0.0, 0; t <= totalSec && i < cardAxisMaxTicks; t, i = t+xTickStep, i+1 {
 		gx := plotX + (t/totalSec)*plotW
 		s.line(gx, plotY, gx, plotY+plotH, p.border, 1, "2,4")
 		m := int(t) / 60
@@ -489,10 +500,10 @@ func (c *cardModel) svg() string {
 		preWidth := pxEnd - plotX
 		extWidth := plotX + plotW - pxEnd
 		if preWidth > 90 {
-			s.text(plotX+6, plotY+19, 13, true, p.cPressure, "", "Preinfusion")
+			s.text(plotX+6, plotY+19, 13, true, p.cPressure, "", cardText(c.lang, "preinfusion"))
 		}
 		if extWidth > 90 {
-			s.text(pxEnd+6, plotY+19, 13, true, p.cFlow, "", "Extraktion")
+			s.text(pxEnd+6, plotY+19, 13, true, p.cFlow, "", cardText(c.lang, "extraction"))
 		}
 	}
 
@@ -503,28 +514,28 @@ func (c *cardModel) svg() string {
 	}
 	var legend []legendItem
 	if len(pressure) > 2 {
-		legend = append(legend, legendItem{p.cPressure, "Druck", false})
+		legend = append(legend, legendItem{p.cPressure, cardText(c.lang, "pressure"), false})
 	}
 	if len(flow) > 2 {
-		legend = append(legend, legendItem{p.cFlow, "Pumpenfluss", false})
+		legend = append(legend, legendItem{p.cFlow, cardText(c.lang, "pump_flow"), false})
 	}
 	if len(weightFlow) > 2 {
-		legend = append(legend, legendItem{p.cWeightFlow, "Gewichtsfluss", false})
+		legend = append(legend, legendItem{p.cWeightFlow, cardText(c.lang, "weight_flow"), false})
 	}
 	if len(weight) > 2 {
-		legend = append(legend, legendItem{p.cWeight, "Gewicht", false})
+		legend = append(legend, legendItem{p.cWeight, cardText(c.lang, "weight"), false})
 	}
 	if len(temp) > 2 {
-		legend = append(legend, legendItem{p.cTemp, "Temperatur", false})
+		legend = append(legend, legendItem{p.cTemp, cardText(c.lang, "temperature"), false})
 	}
 	if len(tgtPress) > 2 {
-		legend = append(legend, legendItem{p.cPressure, "Ziel Druck", true})
+		legend = append(legend, legendItem{p.cPressure, cardText(c.lang, "target_pressure"), true})
 	}
 	if len(tgtFlow) > 2 {
-		legend = append(legend, legendItem{p.cFlow, "Ziel Fluss", true})
+		legend = append(legend, legendItem{p.cFlow, cardText(c.lang, "target_flow"), true})
 	}
 	if len(tgtTemp) > 2 {
-		legend = append(legend, legendItem{p.cTemp, "Ziel Temperatur", true})
+		legend = append(legend, legendItem{p.cTemp, cardText(c.lang, "target_temperature"), true})
 	}
 	if len(legend) > 0 {
 		legY := outerY + outerH - legendH/2
@@ -557,9 +568,9 @@ func (c *cardModel) svg() string {
 
 	pressQual := ""
 	if hasTgtPress && tgtPressVal > 0 {
-		pressQual = "Ziel " + num1(tgtPressVal)
+		pressQual = cardTextf(c.lang, "press_target", num1(tgtPressVal))
 	} else if hasMaxPres {
-		pressQual = "max " + num1(math.Round(maxPres*10)/10)
+		pressQual = cardTextf(c.lang, "press_max", num1(math.Round(maxPres*10)/10))
 	}
 
 	type bandCell struct{ label, value string }
@@ -574,33 +585,33 @@ func (c *cardModel) svg() string {
 		} else {
 			v = num1(*yieldG) + "g"
 		}
-		row1 = append(row1, &bandCell{"Dosis → Ausbeute", v})
+		row1 = append(row1, &bandCell{cardText(c.lang, "dose_yield"), v})
 	} else {
 		row1 = append(row1, nil)
 	}
 	if ratio != "" {
-		row1 = append(row1, &bandCell{"Ratio", ratio})
+		row1 = append(row1, &bandCell{cardText(c.lang, "ratio"), ratio})
 	} else {
 		row1 = append(row1, nil)
 	}
-	row1 = append(row1, &bandCell{"Dauer", fmtDurSec(totalSec)})
+	row1 = append(row1, &bandCell{cardText(c.lang, "duration"), fmtDurSec(totalSec)})
 
 	if hasAvgPres {
-		lbl := "Druck Ø"
+		lbl := cardText(c.lang, "pressure_avg")
 		if pressQual != "" {
-			lbl = "Druck Ø · " + pressQual
+			lbl = cardText(c.lang, "pressure_avg") + " · " + pressQual
 		}
 		row2 = append(row2, &bandCell{lbl, num1(math.Round(avgPres*10)/10) + " bar"})
 	} else {
 		row2 = append(row2, nil)
 	}
 	if hasAvgFlow {
-		row2 = append(row2, &bandCell{"Pumpenfluss Ø", num1(math.Round(avgFlow*10)/10) + " ml/s"})
+		row2 = append(row2, &bandCell{cardText(c.lang, "pump_flow_avg"), num1(math.Round(avgFlow*10)/10) + " ml/s"})
 	} else {
 		row2 = append(row2, nil)
 	}
 	if hasAvgTemp {
-		lbl := "Temperatur Ø"
+		lbl := cardText(c.lang, "temperature_avg")
 		if hasTempSD {
 			lbl += " ±" + num1(tempSD)
 		}
@@ -703,6 +714,18 @@ func clamp01(v float64) float64 {
 	return v
 }
 
+// clampCardRange bounds v to [lo, hi]; NaN and infinities count as out of
+// range, so a malformed shot value falls back to the nearest bound.
+func clampCardRange(v, lo, hi float64) float64 {
+	if math.IsNaN(v) || v < lo {
+		return lo
+	}
+	if math.IsInf(v, 1) || v > hi {
+		return hi
+	}
+	return v
+}
+
 func cardMaxInt(vals ...int) int {
 	m := vals[0]
 	for _, v := range vals[1:] {
@@ -751,9 +774,18 @@ func mapString(v any, key string) string {
 	return ""
 }
 
-// germanDate formats a Unix timestamp as a German date, e.g. "16. Aug. 2026".
-func germanDate(unixSec int64) string {
-	t := time.Unix(unixSec, 0).UTC()
-	months := []string{"Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."}
-	return fmt.Sprintf("%02d. %s %d", t.Day(), months[int(t.Month())-1], t.Year())
+// nativeShotID returns the machine's own shot number when the shot carries
+// one, else the globally unique id.
+func nativeShotID(shot Shot) int64 {
+	switch v := shot["nativeId"].(type) {
+	case int64:
+		if v > 0 {
+			return v
+		}
+	case int:
+		if v > 0 {
+			return int64(v)
+		}
+	}
+	return shot.id()
 }

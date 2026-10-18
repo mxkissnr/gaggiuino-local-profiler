@@ -73,8 +73,9 @@ func Optimize(data []byte, srcExt string, mode Mode) (Result, error) {
 		return Result{}, err
 	}
 
+	orientation := 1
 	if srcExt == "jpg" {
-		src = applyOrientation(src, exifOrientation(data))
+		orientation = exifOrientation(data)
 	}
 
 	alpha := hasAlpha(src)
@@ -88,7 +89,13 @@ func Optimize(data []byte, srcExt string, mode Mode) (Result, error) {
 		}
 	}
 
-	mainImg := scaleDown(src, MaxEdge)
+	// Downscale first, then apply the EXIF orientation to the (at most
+	// MaxEdge) result: the orientation transform is a per-pixel copy, so on
+	// a full-resolution phone photo it cost far more than the scale (#1616).
+	// The scale's target size is symmetric in width and height, so the
+	// output dimensions are the same either way round. A JPEG carries no
+	// alpha, so reading it off the unrotated source is equivalent.
+	mainImg := applyOrientation(scaleDown(src, MaxEdge), orientation)
 	mainBytes, err := encodeImage(mainImg, mainExt)
 	if err != nil {
 		return Result{}, err
@@ -223,14 +230,19 @@ func orientationFromExif(seg []byte) (int, bool) {
 	default:
 		return 0, false
 	}
-	ifdOff := int(bo.Uint32(tiff[4:8]))
-	if ifdOff+2 > len(tiff) {
+	// Keep the offset unsigned all the way through: the value is a 32-bit
+	// field from an attacker-controlled blob, and int is 32-bit on the armv7
+	// boards this runs on — an offset >= 2^31 would go negative, slip past a
+	// signed bounds check, and panic the slice below. Compare as uint64 so an
+	// out-of-range offset fails the check on every word size.
+	ifdOff := uint64(bo.Uint32(tiff[4:8]))
+	if ifdOff+2 > uint64(len(tiff)) {
 		return 0, false
 	}
 	count := int(bo.Uint16(tiff[ifdOff : ifdOff+2]))
 	entry := ifdOff + 2
 	for n := 0; n < count; n++ {
-		if entry+12 > len(tiff) {
+		if entry+12 > uint64(len(tiff)) {
 			return 0, false
 		}
 		tag := bo.Uint16(tiff[entry : entry+2])

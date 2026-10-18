@@ -2,6 +2,7 @@ import { getVersion } from '../api/system.js';
 import { t } from '../i18n.js';
 import { devBannerHeight } from './dev-banner.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
+import { safeHttpUrl } from '../utils.js';
 
 interface UpdateAvailablePayload {
     update_available?: boolean;
@@ -41,22 +42,27 @@ function showUpdateBanner({ current, latest, release_url }: { current: string; l
     msg.style.flex = '1';
     msg.textContent = `${t('update_banner', current, latest)} ${t('update_via_store')}`;
 
+    // #1626: a release URL that is not plain http(s) gets no link at all.
+    const changelogHref = safeHttpUrl(release_url);
     const changelogLink = document.createElement('a');
-    changelogLink.href = release_url;
+    if (changelogHref) changelogLink.href = changelogHref;
     changelogLink.target = '_blank';
     changelogLink.rel = 'noopener';
     changelogLink.textContent = t('update_changelog');
     Object.assign(changelogLink.style, {
-        color: '#1c1917', fontSize: '.8rem', textDecoration: 'underline', whiteSpace: 'nowrap',
+        color: 'var(--accent-text)', fontSize: '.8rem', textDecoration: 'underline', whiteSpace: 'nowrap',
     });
 
     const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute?.('aria-label', t('lib_sheet_close'));
     closeBtn.innerHTML = CLOSE_ICON_SVG;
     Object.assign(closeBtn.style, {
-        background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: '#1c1917', padding: '0 2px',
+        background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--accent-text)', padding: '0 2px',
     });
     closeBtn.addEventListener('click', () => banner.remove());
 
-    banner.append(msg, changelogLink, closeBtn);
+    if (changelogHref) banner.append(msg, changelogLink, closeBtn);
+    else banner.append(msg, closeBtn);
     document.body.insertAdjacentElement('afterbegin', banner);
 }

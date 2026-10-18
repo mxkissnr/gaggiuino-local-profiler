@@ -1,18 +1,18 @@
 // Bean → machine-profile suggestion (#307).
 //
-// Max's own "Sertao Decaf" profile (score-98 shots, already running on his
-// machine) has a structure he explicitly wants reused as-is for every bean:
+// The maintainer's own "Sertao Decaf" profile (score-98 shots, already running on their
+// machine) has a structure they explicitly want reused as-is for every bean:
 // adaptive preinfusion (stops on time/pressure/volume, whichever comes
 // first), a bloom pause, a linear pressure ramp, then a flow-target finish
 // phase (named "Decline Flow" for the pressure trend it produces — see
 // below). Only the *parameters* — temperature, target pressure, preinfusion
 // duration, ratio — vary per bean, never the 4-phase skeleton itself.
 //
-// #328: every phase below is checked field-by-field against Max's actual
+// #328: every phase below is checked field-by-field against the maintainer's actual
 // exported "Sertão Decaf.json" (gentle/decaf reference) and "Adaptive.json"
 // (non-gentle reference) profiles, after #323's "fix" to the Decline Flow
 // phase turned out to be a regression — it assumed a literal high-to-low
-// flow *target* makes a "declining finish", but both of Max's real,
+// flow *target* makes a "declining finish", but both of the maintainer's real,
 // hardware-verified profiles have `target.start: 0` on that phase too. The
 // "Decline" in the name refers to the shot's PRESSURE trend: once the
 // preceding PRESSURE-type Ramp phase hits its peak, this FLOW-type phase
@@ -30,6 +30,8 @@
 // a longer preinfusion (more time to saturate evenly before pressure
 // builds), a lower target ramp pressure, and a lower brew temperature
 // (porous pucks extract faster, so a lower temp avoids over-extraction).
+import { parseBrewRatio } from './shared/score.js';
+
 /** One phase of the suggested profile (phaseSchema-shaped). */
 export interface ProfileSuggestionPhase {
   name: string;
@@ -62,7 +64,7 @@ export interface BeanSuggestionInput {
 export function suggestProfileFromBean(bean: BeanSuggestionInput | null | undefined): ProfileSuggestion {
   const gentle = !!(bean?.decaf || (bean?.process as string | null | undefined)?.toLowerCase() === 'natural');
 
-  const ratio = _parseBrewRatio(bean?.brewRatio as string | number | undefined);
+  const ratio = parseBrewRatio(bean?.brewRatio as string | number | undefined);
   const coffeeIn  = 18;
   const coffeeOut = ratio ? Math.round(coffeeIn * ratio * 10) / 10 : 36;
 
@@ -130,13 +132,3 @@ export function suggestProfileFromBean(bean: BeanSuggestionInput | null | undefi
   };
 }
 
-// bean.brewRatio is a free-text field like "1:2.2" (see beanFormBrewRatio in
-// index.html) — returns the numeric part after the colon, or null if it
-// can't be parsed as "1:<number>".
-function _parseBrewRatio(brewRatio: string | number | null | undefined): number | null {
-  if (!brewRatio) return null;
-  const m = String(brewRatio).trim().match(/^1\s*:\s*([\d.]+)$/);
-  if (!m) return null;
-  const n = parseFloat(m[1] ?? '');
-  return Number.isFinite(n) && n > 0 ? n : null;
-}

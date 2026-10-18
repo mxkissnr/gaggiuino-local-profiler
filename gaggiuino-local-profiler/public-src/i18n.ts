@@ -3,8 +3,9 @@ import { TRANSLATIONS } from './constants.js';
 import { STAR_ICON_SVG } from './icons.js';
 import { html } from './utils.js';
 import type { Html } from './utils.js';
+import { safeLocalStorage } from './storage.js';
 
-// Cross-module entry points main.js wires onto `window` (kept off direct
+// Cross-module entry points main.ts wires onto `window` (kept off direct
 // imports to avoid circular deps); declared so the calls below stay typed.
 declare global {
   interface Window {
@@ -70,18 +71,20 @@ export function t(key: string, ...args: unknown[]): string {
 }
 
 // t() for markup contexts: dictionary entries are bundled at build time and
-// may carry trusted markup (icon SVGs), so the result is Html. Arguments are
-// still the caller's responsibility, esc() them.
-export function tHtml(key: string, ...args: unknown[]): Html {
+// may carry trusted markup (icon SVGs), so the result is Html. #1626: the
+// arguments land in that markup unescaped, so they must be numbers or Html
+// already — a string goes through esc() at the call site, which the type
+// enforces.
+export function tHtml(key: string, ...args: (Html | number | null | undefined)[]): Html {
   return t(key, ...args) as Html; // static dictionaries, never user data
 }
 
 export function setLang(lang: string): void {
   if (!TRANSLATIONS[lang]) return;
   S.currentLang = lang;
-  localStorage.setItem('glp_lang', lang);
+  safeLocalStorage.setItem('glp_lang', lang);
   applyTranslations();
-  // Lazy imports to avoid circular deps — call via window assignments set in main.js
+  // Lazy imports to avoid circular deps — call via window assignments set in main.ts
   if (window.renderSidebar) window.renderSidebar();
   // Shot detail (Chart.js legend, phase tags, grind advice) is rendered to canvas/innerHTML
   // once per shot selection, not scanned by applyTranslations() — must be rebuilt explicitly.
@@ -110,7 +113,7 @@ export function applyTranslations(): void {
     if (el) el.textContent = t(key);
   }
   // sortRating carries a decorative star icon (#417) that plain textContent
-  // can't hold — same pattern setSortMode() (sidebar.js) uses when this
+  // can't hold — same pattern setSortMode() (sidebar.ts) uses when this
   // button is the active sort.
   const sortRatingEl = document.getElementById('sortRating');
   if (sortRatingEl) sortRatingEl.innerHTML = html`${STAR_ICON_SVG} ${tHtml('sort_rating')}`;
@@ -133,8 +136,9 @@ export function applyTranslations(): void {
     const key = el.dataset.i18n;
     if (key) el.textContent = t(key);
   });
-  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-i18n-placeholder]').forEach(el => {
-    const key = el.dataset.i18nPlaceholder;
+  // #1620: index.html also uses the short data-i18n-ph form for placeholders.
+  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-i18n-placeholder], [data-i18n-ph]').forEach(el => {
+    const key = el.dataset.i18nPlaceholder ?? el.dataset.i18nPh;
     if (key) el.placeholder = t(key);
   });
   document.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach(el => {
@@ -151,6 +155,12 @@ export function applyTranslations(): void {
   document.querySelectorAll<HTMLElement>('[data-i18n-html]').forEach(el => {
     const key = el.dataset.i18nHtml;
     if (key) el.innerHTML = tHtml(key);
+  });
+  // #1619: the rating buttons need a parameterised "n of 5" label, which
+  // data-i18n-aria-label cannot build (it calls t() without arguments).
+  document.querySelectorAll<HTMLElement>('#starRating .star').forEach(el => {
+    const n = Number(el.dataset.val);
+    if (Number.isFinite(n)) el.setAttribute('aria-label', t('ann_rating_star', n));
   });
   // The easter-egg close button's aria-label is set by id (#1499); it
   // predates data-i18n-aria-label and its text node is the × glyph.

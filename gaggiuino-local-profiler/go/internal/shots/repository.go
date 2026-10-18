@@ -5,20 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"strconv"
+	"strings"
 	"sync"
-	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // Repository is the SQL DB access for shots, annotations and the related
 // trash/blocklist tables. It grew with the domains that needed it: the
 // machineId-scoped variants, FindAll, GetAnnotatedDoses, GetAnnotation,
-// GetLatestID, GetTrashEntry, SetTrashEntry, WipeAll and Upsert serve the
-// orders/maintenance/backup domains, and Count (#901) serves GET /api/status's
-// shotCount. Deliberately still absent are the import/sync-path helpers (bulk
-// upsert, max-id, all-annotations and machine-id reads) — no HTTP route
-// reaches them yet; add them alongside the sync/import domain that calls
-// them.
+// GetLatestID, MaxNativeShotID and Upsert serve the orders/maintenance/backup
+// domains and internal/system's shot-history sync, and Count (#901) serves
+// GET /api/status's shotCount.
 type Repository struct {
 	db *sql.DB
 }
@@ -67,8 +65,8 @@ func (r *Repository) FindAllExcludingTrash() ([]Shot, error) {
 // keep the list's last element: greatest timestamp and, on a tie, the row
 // SQLite returned last for that ASC scan (greatest id) — so the single-row
 // query is ORDER BY s.timestamp DESC, s.id DESC LIMIT 1, the same ordering
-// GetLatestID uses. Hydrating one row instead of all 213 to discard the rest
-// (#951). Returns (nil, nil) when there are no shots.
+// GetLatestID uses. Hydrates one row instead of the whole history (#951).
+// Returns (nil, nil) when there are no shots.
 func (r *Repository) FindLastExcludingTrash() (Shot, error) {
 	row := r.db.QueryRow(selectBase + ` WHERE s.id NOT IN (SELECT shot_id FROM trash) ORDER BY s.timestamp DESC, s.id DESC LIMIT 1`)
 	shot, err := hydrateRow(row)
@@ -79,6 +77,20 @@ func (r *Repository) FindLastExcludingTrash() (Shot, error) {
 		return nil, fmt.Errorf("shots: finding last shot: %w", err)
 	}
 	return shot, nil
+}
+
+// CountExcludingTrashBetween counts the non-trashed shots (every machine)
+// whose timestamp column lies in [fromSec, toSec) — the shotsToday count
+// GET /shots.json reports (#1616). One indexed range COUNT.
+func (r *Repository) CountExcludingTrashBetween(fromSec, toSec int64) (int, error) {
+	var n int
+	if err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM shots WHERE timestamp >= ? AND timestamp < ? AND id NOT IN (SELECT shot_id FROM trash)`,
+		fromSec, toSec,
+	).Scan(&n); err != nil {
+		return 0, fmt.Errorf("shots: counting shots in range: %w", err)
+	}
+	return n, nil
 }
 
 // FindAllExcludingTrashByMachine returns every non-trashed shot for one
@@ -180,6 +192,107 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 	return out, rows.Err()
 }
 
+// Light reads (#1616) select a shot's timestamp and annotation straight
+// from SQL instead of hydrating it. The timestamp is always the column: a
+// legacy data blob carrying its own top-level "timestamp" key no longer
+// hides the shot from these reads (on a hydrated shot that key replaces the
+// int64 column with a decoded JSON value, so an int64 read used to yield 0
+// — a bug, not behaviour to keep). The annotation keeps hydration's source:
+// the annotations row, else the blob's own "annotation" key (a legacy shot
+// with no annotations row); the instr() pre-check keeps the JSON parse off
+// blobs that cannot hold that key.
+const hydratedAnnotationSQL = `CASE WHEN a.shot_id IS NOT NULL THEN a.data
+	WHEN instr(s.data, '"annotation"') > 0 THEN s.data -> '$.annotation' END`
+
+// TimestampsExcludingTrash returns every non-trashed shot's timestamp
+// column, in FindAllExcludingTrash's order — the light read for
+// the maintenance stats, which only count shots newer than a task's last
+// date (#1616).
+func (r *Repository) TimestampsExcludingTrash() ([]int64, error) {
+	return r.timestamps(``)
+}
+
+// TimestampsExcludingTrashByMachine is TimestampsExcludingTrash scoped to
+// one machine, matching FindAllExcludingTrashByMachine's filter.
+func (r *Repository) TimestampsExcludingTrashByMachine(machineID int64) ([]int64, error) {
+	return r.timestamps(` AND s.machine_id = ?`, machineID)
+}
+
+func (r *Repository) timestamps(filter string, args ...any) ([]int64, error) {
+	rows, err := r.db.Query(`SELECT s.timestamp FROM shots s WHERE s.id NOT IN (SELECT shot_id FROM trash)`+
+		filter+` ORDER BY s.timestamp ASC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing shot timestamps: %w", err)
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var ts int64
+		if err := rows.Scan(&ts); err != nil {
+			return nil, fmt.Errorf("shots: scanning shot timestamp: %w", err)
+		}
+		out = append(out, ts)
+	}
+	return out, rows.Err()
+}
+
+// CountByMachine counts every shot of one machine, trashed ones included —
+// Count's machine-scoped counterpart.
+func (r *Repository) CountByMachine(machineID int64) (int, error) {
+	var n int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots WHERE machine_id = ?`, machineID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("shots: counting machine %d: %w", machineID, err)
+	}
+	return n, nil
+}
+
+// GrinderUse is one non-trashed shot's grinder-wear input, read without
+// hydrating the shot (#1616): the three values the library's burr-wear
+// computation reads.
+type GrinderUse struct {
+	// Timestamp is the shot's timestamp column.
+	Timestamp int64
+	// Grinder is the annotation's "grinder" when that is a JSON string,
+	// else "".
+	Grinder string
+	// Dose is the annotation's "dose" as decoded JSON (nil when absent).
+	Dose any
+}
+
+// GrinderUses returns every non-trashed shot's GrinderUse — the
+// SQL-aggregate replacement for hydrating the whole history just to fold
+// each grinder's wear (GET /api/library, the MCP get_library tool). Rows
+// come in FindAllExcludingTrash's order: the wear sums doses as float64,
+// and a different summation order can change the rounded gram total.
+func (r *Repository) GrinderUses() ([]GrinderUse, error) {
+	rows, err := r.db.Query(`
+		SELECT ts, ann -> '$.grinder', ann -> '$.dose' FROM (
+			SELECT s.timestamp AS ts, ` + hydratedAnnotationSQL + ` AS ann
+			FROM shots s LEFT JOIN annotations a ON a.shot_id = s.id
+			WHERE s.id NOT IN (SELECT shot_id FROM trash)
+		) ORDER BY ts ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("shots: listing grinder uses: %w", err)
+	}
+	defer rows.Close()
+
+	var out []GrinderUse
+	for rows.Next() {
+		var ts int64
+		var grinder, dose sql.NullString
+		if err := rows.Scan(&ts, &grinder, &dose); err != nil {
+			return nil, fmt.Errorf("shots: scanning grinder use: %w", err)
+		}
+		u := GrinderUse{Timestamp: ts}
+		if v, ok := decodeJSONValue(grinder).(string); ok {
+			u.Grinder = v
+		}
+		u.Dose = decodeJSONValue(dose)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // GetAnnotation returns the raw stored annotation object, or {} if none
 // exists — the read half of UpdateAnnotation's locked read-modify-write (see
 // its doc comment), which merges onto whatever annotation already exists
@@ -211,29 +324,22 @@ func (r *Repository) GetAnnotation(shotID int64) (map[string]any, error) {
 // older shot. sinceSec == 0 means no time filter. ok is false when there is no
 // matching shot.
 func (r *Repository) GetLatestID(machineID, sinceSec int64) (id int64, ok bool, err error) {
-	var row *sql.Row
+	// Only literal SQL fragments (never caller input) are concatenated; the
+	// machineID/sinceSec values ride along as bound args.
+	var conds []string
+	var args []any
 	if machineID != 0 {
-		if sinceSec > 0 {
-			row = r.db.QueryRow(
-				`SELECT id FROM shots WHERE machine_id = ? AND timestamp >= ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-				machineID, sinceSec,
-			)
-		} else {
-			row = r.db.QueryRow(
-				`SELECT id FROM shots WHERE machine_id = ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-				machineID,
-			)
-		}
-	} else if sinceSec > 0 {
-		row = r.db.QueryRow(
-			`SELECT id FROM shots WHERE timestamp >= ? AND id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-			sinceSec,
-		)
-	} else {
-		row = r.db.QueryRow(
-			`SELECT id FROM shots WHERE id NOT IN (SELECT shot_id FROM trash) ORDER BY timestamp DESC, id DESC LIMIT 1`,
-		)
+		conds = append(conds, "machine_id = ?")
+		args = append(args, machineID)
 	}
+	if sinceSec > 0 {
+		conds = append(conds, "timestamp >= ?")
+		args = append(args, sinceSec)
+	}
+	conds = append(conds, "id NOT IN (SELECT shot_id FROM trash)")
+	query := "SELECT id FROM shots WHERE " + strings.Join(conds, " AND ") +
+		" ORDER BY timestamp DESC, id DESC LIMIT 1"
+	row := r.db.QueryRow(query, args...)
 	if err := row.Scan(&id); err == sql.ErrNoRows {
 		return 0, false, nil
 	} else if err != nil {
@@ -288,58 +394,15 @@ func (r *Repository) MaxNativeShotID(machineID int64) (int64, error) {
 
 // Count is a plain `SELECT COUNT(*) FROM shots`, deliberately including
 // trashed rows (no `NOT IN (SELECT shot_id FROM trash)` filter, unlike
-// FindAllExcludingTrash). GET /api/status's shotCount field (#901) is its
-// only caller.
+// FindAllExcludingTrash). GET /api/status's shotCount field (#901), the
+// maintenance log's shared-equipment shot count and the demo-mode
+// emptiness check use it.
 func (r *Repository) Count() (int, error) {
 	var n int
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM shots`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("shots: counting: %w", err)
 	}
 	return n, nil
-}
-
-// GetTrashEntry returns a single trash row's deleted_at, or (0, false) if the
-// shot isn't trashed. Used by the backup export, which needs a per-shot
-// timestamp rather than FindTrashed's full hydrated rows.
-func (r *Repository) GetTrashEntry(shotID int64) (deletedAt int64, ok bool, err error) {
-	err = r.db.QueryRow(`SELECT deleted_at FROM trash WHERE shot_id = ?`, shotID).Scan(&deletedAt)
-	if err == sql.ErrNoRows {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, fmt.Errorf("shots: reading trash entry for shot %d: %w", shotID, err)
-	}
-	return deletedAt, true, nil
-}
-
-// SetTrashEntry is the restore-only counterpart to MoveToTrash: it takes the
-// deletedAt timestamp from the backup instead of always stamping time.Now(),
-// so a restored trash entry keeps its original deletion time rather than
-// resetting the 30-day TTL clock.
-func (r *Repository) SetTrashEntry(shotID, deletedAt int64) error {
-	if _, err := r.db.Exec(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`, shotID, deletedAt); err != nil {
-		return fmt.Errorf("shots: setting trash entry for shot %d: %w", shotID, err)
-	}
-	return nil
-}
-
-// WipeAll deletes every shot, annotation and trash row. Used only by the
-// backup domain's restore path, which replaces the whole shots table.
-func (r *Repository) WipeAll() error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("shots: starting wipe tx: %w", err)
-	}
-	for _, stmt := range []string{`DELETE FROM annotations`, `DELETE FROM trash`, `DELETE FROM shot_score_cache`, `DELETE FROM shots`} {
-		if _, err := tx.Exec(stmt); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("shots: wiping (%s): %w", stmt, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("shots: committing wipe: %w", err)
-	}
-	return nil
 }
 
 // Upsert writes the shots row (and, if the shot object carries an `annotation`
@@ -371,6 +434,12 @@ func (r *Repository) Upsert(shot Shot) error {
 	); err != nil {
 		return fmt.Errorf("shots: upserting shot %d: %w", row.id, err)
 	}
+	// A re-synced shot can keep the same data length and timestamp while its
+	// values (or duration) change — the SQL fingerprint the page query
+	// recomputes would then still match, so drop the cached score outright
+	// rather than let it serve the old one (#1609). Same reason saveAnnotation
+	// invalidates on an annotation write.
+	r.InvalidateScoreCache(row.id)
 	if ann, ok := shot["annotation"]; ok {
 		annMap, _ := ann.(map[string]any)
 		if annMap == nil {
@@ -431,6 +500,12 @@ func shotInsertArgs(shot Shot) (shotInsertRow, error) {
 		switch k {
 		case "id", "timestamp", "duration", "profile_name", "profileName", "annotation", "machineId":
 			continue
+		case "image":
+			// The photo extension is used to build file names later (delete,
+			// move), so only a whitelisted value is kept.
+			if ext, ok := v.(string); ok && img.KnownExt(ext) {
+				rest[k] = v
+			}
 		default:
 			rest[k] = v
 		}
@@ -479,16 +554,26 @@ func (r *Repository) FindTrashed() ([]Shot, error) {
 
 // FindPreviousByProfile returns the most recent earlier shot before shotID
 // with the same profileName on the same machine, excluding trashed shots
-// (#402).
+// (#402). "Earlier" orders by (timestamp, id): a shot is previous when its
+// timestamp is older, or when it shares the reference shot's timestamp but has
+// a lower id, so two shots taken in the same second are still ordered
+// deterministically.
 func (r *Repository) FindPreviousByProfile(shotID int64, profileName string, machineID int64) (Shot, error) {
+	var refTimestamp int64
+	if err := r.db.QueryRow(`SELECT timestamp FROM shots WHERE id = ?`, shotID).Scan(&refTimestamp); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("shots: reading timestamp of shot %d: %w", shotID, err)
+	}
 	row := r.db.QueryRow(selectBase+`
 		WHERE s.machine_id = ?
 		  AND s.profile_name = ?
-		  AND s.timestamp < (SELECT timestamp FROM shots WHERE id = ?)
+		  AND (s.timestamp < ? OR (s.timestamp = ? AND s.id < ?))
 		  AND s.id NOT IN (SELECT shot_id FROM trash)
-		ORDER BY s.timestamp DESC
+		ORDER BY s.timestamp DESC, s.id DESC
 		LIMIT 1
-	`, machineID, profileName, shotID)
+	`, machineID, profileName, refTimestamp, refTimestamp, shotID)
 	shot, err := hydrateRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -658,296 +743,5 @@ func (r *Repository) saveAnnotation(shotID int64, annotation map[string]any) err
 	// (18.0 -> 19.0) leaves shot_score_cache's fingerprint unchanged, so
 	// drop the row outright rather than trusting the fingerprint here.
 	r.InvalidateScoreCache(shotID)
-	return nil
-}
-
-// MoveToTrash inserts a trash entry stamped with the current time.
-func (r *Repository) MoveToTrash(shotID int64) error {
-	if _, err := r.db.Exec(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`, shotID, time.Now().UnixMilli()); err != nil {
-		return fmt.Errorf("shots: trashing shot %d: %w", shotID, err)
-	}
-	return nil
-}
-
-// RestoreFromTrash deletes the shot's trash entry — no existence check.
-func (r *Repository) RestoreFromTrash(shotID int64) error {
-	if _, err := r.db.Exec(`DELETE FROM trash WHERE shot_id = ?`, shotID); err != nil {
-		return fmt.Errorf("shots: restoring shot %d: %w", shotID, err)
-	}
-	return nil
-}
-
-// DeleteByID deletes annotations, then trash, then the shot row itself, inside
-// one transaction.
-func (r *Repository) DeleteByID(shotID int64) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("shots: starting delete tx for shot %d: %w", shotID, err)
-	}
-	if _, err := tx.Exec(`DELETE FROM annotations WHERE shot_id = ?`, shotID); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: deleting annotation for shot %d: %w", shotID, err)
-	}
-	if _, err := tx.Exec(`DELETE FROM trash WHERE shot_id = ?`, shotID); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: deleting trash entry for shot %d: %w", shotID, err)
-	}
-	if _, err := tx.Exec(`DELETE FROM shots WHERE id = ?`, shotID); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: deleting shot %d: %w", shotID, err)
-	}
-	if _, err := tx.Exec(`DELETE FROM shot_score_cache WHERE shot_id = ?`, shotID); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: deleting score cache for shot %d: %w", shotID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("shots: committing delete of shot %d: %w", shotID, err)
-	}
-	return nil
-}
-
-// MoveMisfiledShot (#1162) re-keys a shot the old default-machine sync
-// filed under machine 1 with its native id to toMachineID's global id.
-// Before #1162 the default path ran backfillShots(1, ...) and kept each
-// shot's reported native id as shot["id"], so a Gaggiuino set as the
-// default machine whose id is not 1 had its whole history stored as machine
-// 1's shots, mixing the two machines' histories and letting their ids
-// collide. syncDefaultMachineShots now scopes to the default machine's own
-// id range; when it re-imports a shot whose native id still exists locally
-// as a machine-1 row with the same timestamp, that row is the misfiled copy
-// and this method moves it to its correct global id instead of leaving a
-// duplicate behind.
-//
-// nativeID and timestamp identify the misfiled row: a machine-1 row with
-// id == nativeID but a different timestamp is one of machine 1's own shots
-// and is deliberately left untouched. The move runs in one transaction and
-// must insert the copy before re-keying the children: annotations.shot_id
-// REFERENCES shots(id) ON DELETE CASCADE with foreign_keys=ON, so updating
-// the annotation's shot_id while the copy exists satisfies the FK, and
-// deleting the old row afterwards cascades to nothing.
-//
-// Deliberately out of scope for #1162: other stores that reference shot ids
-// inside JSON blobs (orders, achievements) are NOT re-keyed here. The shot's
-// photo files (shot-<id>.<ext> plus its thumbnail) are handled separately by
-// the caller: the moved row still carries its image key, and the sync path
-// reads it back with ImageExtFor and renames the files with MoveShotImageFiles.
-func (r *Repository) MoveMisfiledShot(nativeID, timestamp, toMachineID int64) (moved bool, err error) {
-	if toMachineID == 1 {
-		return false, nil
-	}
-	newID := ToGlobalShotID(toMachineID, nativeID)
-
-	tx, err := r.db.Begin()
-	if err != nil {
-		return false, fmt.Errorf("shots: starting move tx for shot %d -> %d: %w", nativeID, newID, err)
-	}
-
-	var taken int
-	switch err := tx.QueryRow(`SELECT 1 FROM shots WHERE id = ?`, newID).Scan(&taken); err {
-	case nil:
-		// Target id already taken — never clobber it.
-		tx.Rollback()
-		return false, nil
-	case sql.ErrNoRows:
-		// Free to move onto it.
-	default:
-		tx.Rollback()
-		return false, fmt.Errorf("shots: checking target id %d: %w", newID, err)
-	}
-
-	res, err := tx.Exec(
-		`INSERT INTO shots (id, timestamp, duration, profile_name, data, machine_id) `+
-			`SELECT ?, timestamp, duration, profile_name, data, ? FROM shots WHERE id = ? AND machine_id = 1 AND timestamp = ?`,
-		newID, toMachineID, nativeID, timestamp,
-	)
-	if err != nil {
-		tx.Rollback()
-		return false, fmt.Errorf("shots: copying misfiled shot %d to %d: %w", nativeID, newID, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		tx.Rollback()
-		return false, fmt.Errorf("shots: copying misfiled shot %d to %d: %w", nativeID, newID, err)
-	}
-	if n == 0 {
-		// No misfiled copy: the row is gone or its timestamp differs (one of
-		// machine 1's own shots), so there is nothing to move.
-		tx.Rollback()
-		return false, nil
-	}
-
-	if _, err := tx.Exec(`UPDATE annotations SET shot_id = ? WHERE shot_id = ?`, newID, nativeID); err != nil {
-		tx.Rollback()
-		return false, fmt.Errorf("shots: re-keying annotation for shot %d -> %d: %w", nativeID, newID, err)
-	}
-	if _, err := tx.Exec(`UPDATE trash SET shot_id = ? WHERE shot_id = ?`, newID, nativeID); err != nil {
-		tx.Rollback()
-		return false, fmt.Errorf("shots: re-keying trash entry for shot %d -> %d: %w", nativeID, newID, err)
-	}
-	if _, err := tx.Exec(`DELETE FROM shot_score_cache WHERE shot_id = ?`, nativeID); err != nil {
-		tx.Rollback()
-		return false, fmt.Errorf("shots: clearing score cache for shot %d: %w", nativeID, err)
-	}
-	if _, err := tx.Exec(`DELETE FROM shots WHERE id = ? AND machine_id = 1`, nativeID); err != nil {
-		tx.Rollback()
-		return false, fmt.Errorf("shots: deleting misfiled shot %d: %w", nativeID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("shots: committing move of shot %d -> %d: %w", nativeID, newID, err)
-	}
-	return true, nil
-}
-
-// trashTTL is the 30-day trash retention period (the purge cutoff is
-// `deleted_at < now - 30d`). A named constant so the cutoff arithmetic and its
-// tests share one source of truth.
-const trashTTL = 30 * 24 * time.Hour
-
-// PurgedShot is one shot permanently removed by PurgeExpiredTrash: its id and
-// the `image` extension its JSON blob stored ("" when it had no photo), so the
-// caller can remove the photo file alongside the row (#1525).
-type PurgedShot struct {
-	ID  int64
-	Ext string
-}
-
-// PurgeExpiredTrash permanently drops every trash entry older than trashTTL,
-// together with its shot row and annotation, in one transaction (#1152).
-// deleted_at is in milliseconds (MoveToTrash stamps time.Now().UnixMilli), so
-// the cutoff is a strict `<` against now's epoch-millis minus trashTTL.
-//
-// Each purged id is deliberately blocklisted (#1159) so the next sync does not
-// resume below it and re-import the shot from the machine. Image files are not
-// deleted here — the caller (internal/shots' Service.PurgeExpiredTrash) uses
-// the returned extension to delete each photo and its thumbnail, since this
-// package has no image directory. shot_score_cache is likewise cleared
-// (DeleteByID does this, and a purge would otherwise leave orphaned cache rows
-// behind).
-func (r *Repository) PurgeExpiredTrash(now time.Time) ([]PurgedShot, error) {
-	cutoff := now.UnixMilli() - trashTTL.Milliseconds()
-	// LEFT JOIN so a trash entry whose shot row already vanished is still
-	// purged (and blocklisted) exactly as before; its image extension is then
-	// simply absent.
-	rows, err := r.db.Query(
-		`SELECT t.shot_id, json_extract(s.data, '$.image') FROM trash t LEFT JOIN shots s ON s.id = t.shot_id WHERE t.deleted_at < ?`,
-		cutoff,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
-	}
-	var purged []PurgedShot
-	for rows.Next() {
-		var (
-			p   PurgedShot
-			ext sql.NullString
-		)
-		if err := rows.Scan(&p.ID, &ext); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("shots: scanning expired trash row: %w", err)
-		}
-		if ext.Valid {
-			p.Ext = ext.String
-		}
-		purged = append(purged, p)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("shots: listing expired trash: %w", err)
-	}
-	if len(purged) == 0 {
-		return nil, nil
-	}
-
-	tx, err := r.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("shots: starting trash purge tx: %w", err)
-	}
-	for _, p := range purged {
-		// Same order as DeleteByID.
-		for _, stmt := range []string{
-			`DELETE FROM annotations WHERE shot_id = ?`,
-			`DELETE FROM trash WHERE shot_id = ?`,
-			`DELETE FROM shots WHERE id = ?`,
-			`DELETE FROM shot_score_cache WHERE shot_id = ?`,
-		} {
-			if _, err := tx.Exec(stmt, p.ID); err != nil {
-				tx.Rollback()
-				return nil, fmt.Errorf("shots: purging shot %d (%s): %w", p.ID, stmt, err)
-			}
-		}
-		// Blocklist the id so a later sync does not resume below it and
-		// re-import the shot (same statement as AppendToBlocklist;
-		// blocklist.value is UNIQUE).
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, strconv.FormatInt(p.ID, 10)); err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("shots: blocklisting purged shot %d: %w", p.ID, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("shots: committing trash purge: %w", err)
-	}
-	return purged, nil
-}
-
-// GetBlocklist returns the blocklist entries.
-func (r *Repository) GetBlocklist() ([]string, error) {
-	rows, err := r.db.Query(`SELECT value FROM blocklist`)
-	if err != nil {
-		return nil, fmt.Errorf("shots: listing blocklist: %w", err)
-	}
-	defer rows.Close()
-
-	var out []string
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err != nil {
-			return nil, fmt.Errorf("shots: scanning blocklist entry: %w", err)
-		}
-		out = append(out, v)
-	}
-	return out, rows.Err()
-}
-
-// SaveBlocklist replaces the entire table contents inside one transaction.
-func (r *Repository) SaveBlocklist(list []string) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("shots: starting blocklist save tx: %w", err)
-	}
-	if _, err := tx.Exec(`DELETE FROM blocklist`); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: clearing blocklist: %w", err)
-	}
-	stmt, err := tx.Prepare(`INSERT INTO blocklist (value) VALUES (?)`)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("shots: preparing blocklist insert: %w", err)
-	}
-	defer stmt.Close()
-	for _, v := range list {
-		if _, err := stmt.Exec(v); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("shots: inserting blocklist entry %q: %w", v, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("shots: committing blocklist save: %w", err)
-	}
-	return nil
-}
-
-// AppendToBlocklist atomically adds a single value to the blocklist without
-// the read-then-replace round trip SaveBlocklist requires for a single-id add.
-// The handlers run concurrently: two overlapping
-// DELETE /api/shots/{id}/delete requests can each read the same blocklist
-// snapshot via GetBlocklist, append their own id, and then SaveBlocklist —
-// whose DELETE+re-INSERT replaces the whole table — so the second write
-// silently drops the first request's id (#901). blocklist.value has a UNIQUE
-// constraint (see internal/db/db.go), so INSERT OR IGNORE is a single atomic
-// statement with no read step and therefore no lost-update window.
-func (r *Repository) AppendToBlocklist(value string) error {
-	if _, err := r.db.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, value); err != nil {
-		return fmt.Errorf("shots: appending blocklist entry %q: %w", value, err)
-	}
 	return nil
 }

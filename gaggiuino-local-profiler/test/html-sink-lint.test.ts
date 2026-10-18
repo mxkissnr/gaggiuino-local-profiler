@@ -1,6 +1,8 @@
 // #1104 L1: proves the typed `html-sink` ESLint rule (eslint-rules/html-sink.mts)
 // rejects plain-string values at the innerHTML/outerHTML and insertAdjacentHTML
-// sinks and accepts Html-branded ones. It lints the fixture through the project's
+// sinks and accepts Html-branded ones. #1626 adds the further markup sinks
+// (document.write/writeln, parseFromString, createContextualFragment,
+// setHTMLUnsafe, srcdoc) and casts of computed strings to Html. It lints the fixture through the project's
 // real eslint.config.mts (the same typed setup as `npm run lint`), so the rule sees
 // the exact parser services and Html types it does in production. The fixture is
 // globally ignored by that config, so the normal `eslint .` run never trips on its

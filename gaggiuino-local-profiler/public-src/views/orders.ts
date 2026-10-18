@@ -10,15 +10,16 @@ import {
 } from '../api/orders.js';
 import type {
   MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats,
-  OrdersSettings, OrdersSettingsUpdate, QueueEta,
+  OrdersSettings, QueueEta,
 } from '../api/types.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { localeFor } from '../constants.js';
+import { textEntryFocused } from '../live-sync.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
 // use-beans/use-milks toggle buttons and their inline notes below.
-// BEAN_ICON_SVG now lives in ../icons.js (also used by main.js's bean-age
+// BEAN_ICON_SVG now lives in ../icons.ts (also used by boot/annotation.ts's bean-age
 // hint, #419 follow-up); MILK_ICON_SVG moved there too once the library
 // and annotation milk pickers reused it as their no-emoji fallback (#1328).
 import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
@@ -50,7 +51,7 @@ function _onAsync(el: Element | null | undefined, type: string, fn: () => Promis
 // settings[key] === false (absent/true both mean "on") so pre-#603 installs
 // keep sending every notification they already were.
 // #614: notify_preheat_ready/notify_low_stock moved to the always-visible
-// Settings page card (components/notify-settings.js) — they fire regardless
+// Settings page card (components/notify-settings.ts) — they fire regardless
 // of enable_orders, so this
 // panel (which only exists when Orders is enabled) is the wrong home for
 // them. Only the genuinely Orders-only types stay here.
@@ -111,12 +112,29 @@ function _notifyNewOrders(newOrders: Order[]): void {
   _playOrderChime();
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const n = newOrders.length;
-  new Notification(`${n} neue Bestellung${n > 1 ? 'en' : ''}`, {
+  new Notification(t('orders_notification_new', n), {
     body: newOrders.map(o => `${o.customer}: ${o.item}`).join('\n'),
     tag: 'glp-new-order',
     silent: true,
   });
 }
+
+// True while the orders view holds text a background reload would discard: a
+// text field focused inside #orders-view, or a decline-reason input left with a
+// value (its row stays open even without focus, so `textEntryFocused()` alone
+// misses it).
+function _ordersDraftOpen(): boolean {
+  if (textEntryFocused()) {
+    const view = document.getElementById('orders-view');
+    const active = document.activeElement;
+    if (view && active && view.contains(active)) return true;
+  }
+  for (const el of document.querySelectorAll<HTMLInputElement>('[id^="declineReason_"]')) {
+    if (el.value.trim() !== '') return true;
+  }
+  return false;
+}
+export const ordersDraftOpen = _ordersDraftOpen;
 
 export function startOrdersPolling(): void {
   stopOrdersPolling();
@@ -125,7 +143,10 @@ export function startOrdersPolling(): void {
   }
   SO._knownPendingIds = null; // reset so first load doesn't trigger notify
   void loadOrdersView();
-  timerRegistry.set('_ordersPollTimer', setInterval(() => { void loadOrdersView(); }, 10000));
+  timerRegistry.set('_ordersPollTimer', setInterval(() => {
+    if (_ordersDraftOpen()) return;
+    void loadOrdersView();
+  }, 10000));
 }
 
 export function stopOrdersPolling(): void {
@@ -325,7 +346,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
       <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-eta-picker">
         ${joinHtml(etaBtns.map(m => html`<button class="order-eta-btn${selectedEta === m ? html` selected` : html``}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
-        <input class="order-eta-custom" type="number" min="1" max="60" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" placeholder="min">
+        <input class="order-eta-custom" type="number" min="1" max="60" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
         ${queuePos ? html`<span class="order-eta-suggest">${tHtml('orders_suggested_eta', queuePos.suggestedEta)}</span>` : html``}
       </div>
       <div class="order-actions">
@@ -333,7 +354,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
         <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
       ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${tHtml('orders_decline_ph')}">
+        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
         <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>` : html``}
     </div>`;
@@ -354,7 +375,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
         <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
       ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" placeholder="${tHtml('orders_decline_ph')}">
+        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
         <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>` : html``}
     </div>`;
@@ -370,14 +391,15 @@ export function renderOrderCard(o: Order, ctx: string): Html {
         <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${tHtml('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
       </span>
     </div>
-    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <span class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">Shot #${esc(o.shotId)}</span>` : html``}</div>
+    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <button type="button" class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}</div>
   </div>`;
 }
 
 export async function acceptOrder(id: string): Promise<void> {
   const etaCustom = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
   const eta = etaCustom ? (parseInt(etaCustom.value) || S._ordersEtaSelected[_idKey(id)] || 5) : (S._ordersEtaSelected[_idKey(id)] || 5);
-  await postOrderAccept(id, eta);
+  const r = await postOrderAccept(id, eta);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 
@@ -389,13 +411,15 @@ export function toggleDeclineRow(id: string): void {
 export async function submitDecline(id: string): Promise<void> {
   const input  = document.getElementById(`declineReason_${id}`) as HTMLInputElement | null;
   const reason = input ? input.value.trim() : '';
-  await postOrderDecline(id, reason);
+  const r = await postOrderDecline(id, reason);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   delete S._ordersDeclineOpen[_idKey(id)];
   void loadOrdersView();
 }
 
 export async function completeOrder(id: string): Promise<void> {
-  await postOrderComplete(id);
+  const r = await postOrderComplete(id);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 
@@ -414,7 +438,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
       : useMilks
       ? html`<span class="orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
       : html`${chipHtml}
-         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" placeholder="${tHtml('orders_variant_ph')}">
+         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" aria-label="${esc(t('orders_variant_ph'))}" placeholder="${tHtml('orders_variant_ph')}">
          <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
     const milkMl = item.milkMl || '';
     return html`
@@ -429,7 +453,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
       <div class="orders-menu-milk-row">
-        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}"> ${tHtml('orders_milk_per_order')}
+        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
       </div>
     </div>`;
   }));
@@ -537,13 +561,15 @@ export function renderOrdersStats(stats: OrderStats | null | undefined): void {
 }
 
 export async function deleteOrder(id: string): Promise<void> {
-  await deleteOrderById(id);
+  const r = await deleteOrderById(id);
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 
 export async function clearOrderHistory(): Promise<void> {
   if (!confirm(t('orders_confirm_clear_history'))) return;
-  await deleteOrderHistory();
+  const r = await deleteOrderHistory();
+  if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
 
@@ -609,7 +635,7 @@ export async function loadNotifyMappingView(): Promise<void> {
     <div class="orders-broadcast-section">
       <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
       <p class="orders-notify-hint">${tHtml('orders_barista_desc')}</p>
-      <select class="orders-notify-select" id="ordersBaristaSelect">${baristaOptions}</select>
+      <select class="orders-notify-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
       <div class="orders-notify-actions">
         <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
       </div>
@@ -626,7 +652,7 @@ export async function loadNotifyMappingView(): Promise<void> {
         ${joinHtml(haUserIds.map(uid => html`
           <div class="orders-notify-row">
             <span class="orders-notify-customer">${esc(customers[uid])}</span>
-            <select class="orders-notify-select" data-uid="${esc(uid)}">
+            <select class="orders-notify-select" data-uid="${esc(uid)}" aria-label="${esc(t('orders_notify_desc'))}">
               <option value="">${tHtml('orders_notify_no_service')}</option>
               ${serviceOptions}
             </select>
@@ -656,8 +682,8 @@ export async function saveBroadcastRecipients(): Promise<void> {
   if (!list) return;
   const recipients = [...list.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked')]
     .map(cb => cb.dataset.svc).filter(Boolean) as string[];
-  const settings = await _getSettingsOr({});
-  await postOrdersSettings({ enabled: settings.enabled ?? true, broadcastRecipients: recipients });
+  const r = await postOrdersSettings({ broadcastRecipients: recipients });
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('ordersBroadcastSaveBtn');
   if (btn) {
     btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_broadcast_saved')}`;
@@ -668,12 +694,12 @@ export async function saveBroadcastRecipients(): Promise<void> {
 export async function saveNotifyToggles(): Promise<void> {
   const list = document.getElementById('ordersTypesList');
   if (!list) return;
-  const settings = await _getSettingsOr({});
-  const body: Record<string, unknown> = { enabled: settings.enabled ?? true };
+  const body: Record<string, unknown> = {};
   list.querySelectorAll<HTMLInputElement>('[data-notify-key]').forEach(cb => {
     body[cb.dataset.notifyKey as string] = cb.checked;
   });
-  await postOrdersSettings(body as OrdersSettingsUpdate);
+  const r = await postOrdersSettings(body);
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('ordersTypesSaveBtn');
   if (btn) {
     btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_types_saved')}`;
@@ -684,8 +710,8 @@ export async function saveNotifyToggles(): Promise<void> {
 export async function saveBaristaNotify(): Promise<void> {
   const sel = document.getElementById('ordersBaristaSelect') as HTMLSelectElement | null;
   if (!sel) return;
-  const settings = await _getSettingsOr({});
-  await postOrdersSettings({ enabled: settings.enabled ?? true, baristaNotifyService: sel.value || null });
+  const r = await postOrdersSettings({ baristaNotifyService: sel.value || null });
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const btn = document.getElementById('ordersBaristaSaveBtn');
   if (btn) {
     btn.innerHTML = html`${CHECK_ICON_SVG} ${tHtml('orders_barista_saved')}`;

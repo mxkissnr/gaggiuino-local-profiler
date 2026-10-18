@@ -77,13 +77,14 @@ func (d *DemoService) IsDemoActive() bool {
 }
 
 // IsEmpty reports whether there are no shots or library entries yet, so
-// demo seeding never overwrites real data.
+// demo seeding never overwrites real data. Every shot row counts, trashed
+// ones included — a COUNT(*) instead of hydrating the whole history (#1616).
 func (d *DemoService) IsEmpty() (bool, error) {
-	all, err := d.shots.FindAll()
+	n, err := d.shots.Count()
 	if err != nil {
 		return false, err
 	}
-	if len(all) > 0 {
+	if n > 0 {
 		return false, nil
 	}
 	lib, err := d.library.GetLibrary()

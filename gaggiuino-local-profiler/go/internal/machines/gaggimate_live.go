@@ -158,7 +158,7 @@ func (c *gaggiMateLiveClient) run(ctx context.Context, baseURL string, s *gaggiM
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(liveReconnectDelay):
+		case <-time.After(liveReconnectDelay.get()):
 		}
 	}
 }
@@ -183,6 +183,8 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 		return
 	}
 	defer conn.CloseNow()
+
+	host := hostFromBaseURL(baseURL)
 
 	// A new connection starts a new session: drop the status merged from the
 	// previous connection so stale live readings can't survive a reconnect. The
@@ -225,6 +227,7 @@ func (c *gaggiMateLiveClient) connectOnce(ctx context.Context, baseURL string, s
 				}
 				return
 			}
+			countMachineWSMessage(host)
 			select {
 			case readCh <- data:
 			case <-ctx.Done():

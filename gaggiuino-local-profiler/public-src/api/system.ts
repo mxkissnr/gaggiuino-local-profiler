@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, jsonBody } from './fetch.js';
 import { apiFetchToBlob, apiUpload } from './transport.js';
 import type { ApiFetchToBlobResult, ApiUploadResult } from './transport.js';
 import type { UiPrefs } from './types.js';
@@ -7,8 +7,7 @@ import type { UiPrefs } from './types.js';
 // routes that package registers outside dedicated feature packages) plus the
 // remaining small domains: status, switch/preheat/live-data, version, menu,
 // achievements, import, demo, backup and the Dev Tools debug endpoints.
-// Package A3d of the TS migration (#1110), the final sweep before api.js is
-// retired.
+// Package A3d of the TS migration (#1110).
 //
 // Two shapes, chosen per call site exactly as in A3b/A3c:
 //   - a helper returns the raw Response when the caller inspects `ok`/status
@@ -18,10 +17,6 @@ import type { UiPrefs } from './types.js';
 // The progress-aware transfers go through api/transport.ts's
 // apiFetchToBlob/apiUpload, which is why the URL/header building for them
 // lives here rather than in the components.
-
-function _json(body: unknown): RequestInit {
-  return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
 
 // ── Status / power / sync ────────────────────────────────────────────────
 
@@ -71,11 +66,6 @@ export function getVersion(): Promise<Response> {
   return apiFetch('api/version');
 }
 
-/** GET /api/menu — the drink-menu entries the annotation panel's pills read. */
-export function getMenu(): Promise<Response> {
-  return apiFetch('api/menu');
-}
-
 /** GET /api/achievements?lang=... — the badge catalogue, localized. */
 export function getAchievements(lang: string): Promise<Response> {
   return apiFetch(`api/achievements?lang=${encodeURIComponent(lang)}`);
@@ -95,7 +85,7 @@ export function getImportSettings(): Promise<Response> {
 
 /** POST /api/import/settings — save provider toggles / custom domains (a partial body is deliberate). */
 export function saveImportSettings(payload: unknown): Promise<Response> {
-  return apiFetch('api/import/settings', _json(payload));
+  return apiFetch('api/import/settings', jsonBody(payload));
 }
 
 // ── Shared UI preferences (#1375) ────────────────────────────────────────
@@ -165,7 +155,7 @@ export function requestBackup({ sections, passphrase, onProgress }: BackupReques
 /**
  * The restore result shape: a real Response for the JSON/dry-run paths, or
  * the `{ ok, status, json() }` facade apiUpload is adapted into for the
- * progress-reporting zip upload — the shape backup-modal.js already expects.
+ * progress-reporting zip upload — the shape backup-modal.ts already expects.
  */
 export type RestoreResponse = {
   ok: boolean;
@@ -184,6 +174,21 @@ export interface RestoreRequestOptions {
 }
 
 /**
+ * Standard base64 of a passphrase's UTF-8 bytes for the X-GLP-Passphrase-B64
+ * header. A header value can only carry ISO-8859-1 bytes, so a non-ASCII
+ * passphrase (umlauts, €, …) would otherwise arrive mangled or make the
+ * request itself throw; TextEncoder + btoa over the byte string is used
+ * instead of Uint8Array.prototype.toBase64, which older HA companion-app
+ * webviews lack.
+ */
+function passphraseToBase64(passphrase: string): string {
+  const bytes = new TextEncoder().encode(passphrase);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/**
  * POST /api/restore — preview (dryRun) or apply a restore. A zip upload with
  * a progress callback goes through apiUpload (XHR) and is adapted to the
  * Response-like facade; everything else uses apiFetch. Header building for
@@ -195,7 +200,7 @@ export function postRestore({
   if (zipBytes) {
     const headers: Record<string, string> = { 'Content-Type': 'application/zip' };
     if (sections !== undefined) headers['X-GLP-Sections'] = JSON.stringify(sections);
-    if (passphrase !== undefined) headers['X-GLP-Passphrase'] = passphrase;
+    if (passphrase !== undefined) headers['X-GLP-Passphrase-B64'] = passphraseToBase64(passphrase);
     if (dryRun) headers['X-GLP-Dry-Run'] = 'true';
     if (onProgress) {
       return apiUpload('api/restore', { method: 'POST', headers, body: zipBytes, onProgress })

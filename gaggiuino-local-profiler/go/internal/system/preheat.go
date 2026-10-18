@@ -6,24 +6,23 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
-// This file implements the preheat state machine. Deliberately NOT
-// implemented: the barista "preheat ready" HA push notification, gated by
-// orders settings' notify_preheat_ready/baristaNotifyService and its localized
-// text — wiring it would need a read dependency on internal/orders' settings
-// (Repository.GetSettings), and internal/orders already depends on this
-// package's runtime snapshot for its own shop-open/closed broadcast (see
-// internal/orders/doc.go and handlers.go's SetPreheatInfoProvider). Importing
-// internal/orders from here would close that into a package cycle; the
-// orders->system direction is wired via a callback specifically to avoid it,
-// and doing the same symmetrically for this one extra notification is left as
-// a follow-up rather than adding a second callback plumbing pass. The ready-by
-// auto turn-on, self-contained (only needs registry + ha.Client), IS
-// implemented below.
+// This file implements the preheat state machine. The barista "preheat
+// ready" HA push notification (#145, restored in Go for #1671) is sent
+// through the callback installed by SetPreheatReadyNotifier: reading the
+// orders settings (Repository.GetSettings) from here would close a package
+// cycle with internal/orders (which already depends on this package's
+// runtime snapshot for its own shop-open/closed broadcast — see
+// internal/orders/doc.go and handlers.go's SetPreheatInfoProvider), so
+// cmd/server injects the callback instead. The ready-by auto turn-on,
+// self-contained (only needs registry + ha.Client), IS implemented below.
 
 // PreheatStatus is openapi.yaml's PreheatStatus schema — GET /api/preheat and
 // POST /api/preheat/ready-by's shared response shape, built by the single
@@ -74,16 +73,23 @@ func (p *Poller) PreheatInfo() (ready bool, remainingMin int) {
 
 func (p *Poller) defaultSwitchEntity() string {
 	machine, err := p.registry.GetDefaultMachine()
-	if err != nil || machine == nil || machine.SwitchEntity == nil {
+	if err != nil {
 		return ""
 	}
-	return *machine.SwitchEntity
+	return switchEntityOf(machine)
 }
 
 // buildPreheatResponse is shared by GET /api/preheat and
 // POST /api/preheat/ready-by so both return the identical shape, and by every
 // preheat-update SSE push.
 func (p *Poller) buildPreheatResponse() PreheatStatus {
+	return p.buildPreheatResponseFor(p.defaultSwitchEntity())
+}
+
+// buildPreheatResponseFor is buildPreheatResponse for an already-resolved
+// default machine's switch entity ("" for none) — the poll tick passes its
+// own machine's instead of re-querying the registry (#1616).
+func (p *Poller) buildPreheatResponseFor(switchEntity string) PreheatStatus {
 	preheatMins := loadPreheatMinutes()
 	preheatMs := int64(preheatMins) * 60_000
 	snap := p.runtime.Get()
@@ -93,7 +99,7 @@ func (p *Poller) buildPreheatResponse() PreheatStatus {
 	plannedSwitchOnAt := p.state.plannedSwitchOnAt
 	p.state.mu.Unlock()
 
-	machineOff := snap.Standby || (!snap.MachineOn && p.defaultSwitchEntity() != "")
+	machineOff := snap.Standby || (!snap.MachineOn && switchEntity != "")
 	if machineOff || snap.SwitchOnAt == nil {
 		return PreheatStatus{
 			Ready: false, Standby: snap.Standby, Elapsed: 0, Remaining: preheatMins * 60, Pct: 0,
@@ -143,10 +149,29 @@ func (p *Poller) SetReadyByTarget(targetAt *int64) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
+// readyByExpired reports whether a ready-by target is more than readyByGrace
+// in the past — i.e. so stale it must be dropped rather than acted on.
+func readyByExpired(targetAt int64, now time.Time) bool {
+	return now.UnixMilli() > targetAt+readyByGrace.Milliseconds()
+}
+
+// clearReadyByTarget drops a pending ready-by pair, persists the cleared state
+// and pushes the preheat update to open pages. Shared by the two places a
+// target is consumed: after a switch-on, and when a target turns out stale.
+func (p *Poller) clearReadyByTarget() {
+	p.state.mu.Lock()
+	p.state.readyByTargetAt = nil
+	p.state.plannedSwitchOnAt = nil
+	p.state.mu.Unlock()
+	p.savePreheatState()
+	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+}
+
 // checkReadyByPreheat is one-shot: it fires the switch on once the planned
 // time is reached, then clears the target so it never re-fires, cleared
 // regardless of whether the HA call succeeds (a persistently unreachable HA
-// instance shouldn't be hammered every 30s tick).
+// instance shouldn't be hammered every 30s tick). A target that went stale
+// while the app was running is cleared without switching on.
 func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	p.state.mu.Lock()
 	readyByTargetAt := p.state.readyByTargetAt
@@ -158,7 +183,13 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	if p.runtime.Get().MachineOn {
 		return
 	}
-	if time.Now().UnixMilli() < *plannedSwitchOnAt {
+	now := time.Now()
+	if now.UnixMilli() < *plannedSwitchOnAt {
+		return
+	}
+	if readyByExpired(*readyByTargetAt, now) {
+		log.Printf("system: discarded stale ready-by target from %s", time.UnixMilli(*readyByTargetAt).Format(time.RFC3339))
+		p.clearReadyByTarget()
 		return
 	}
 	if entity := p.defaultSwitchEntity(); entity != "" {
@@ -172,19 +203,67 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	// about to start can attribute the ready-by target to itself
 	// (preheat_history.go's lastReadyBy).
 	p.rememberLastReadyBy(readyByTargetAt, plannedSwitchOnAt)
-	p.state.mu.Lock()
-	p.state.readyByTargetAt = nil
-	p.state.plannedSwitchOnAt = nil
-	p.state.mu.Unlock()
-	p.savePreheatState()
+	p.clearReadyByTarget()
+}
+
+// preheatReadyNotifier is the process-wide callback that delivers the
+// preheat-ready push (#1671), installed by cmd/server through
+// SetPreheatReadyNotifier. A package-level pointer (the same pattern as
+// internal/shots' annotation hooks) keeps internal/system free of an
+// internal/orders import; there is one Poller per process, so a single slot
+// is enough.
+var preheatReadyNotifier atomic.Pointer[func(ctx context.Context) bool]
+
+// SetPreheatReadyNotifier installs the preheat-ready notification callback.
+// Passing nil removes it. The callback returns whether the push was
+// delivered; preheatWatchTick latches the one-per-run flag only when it
+// returns true, so a failed push is retried on the next tick.
+func (p *Poller) SetPreheatReadyNotifier(fn func(ctx context.Context) bool) {
+	if fn == nil {
+		preheatReadyNotifier.Store(nil)
+		return
+	}
+	preheatReadyNotifier.Store(&fn)
+}
+
+// preheatWatchTick is the 30s interval body: the ready-by auto turn-on, the
+// one-time preheat-ready notification, then the preheat-update SSE push.
+func (p *Poller) preheatWatchTick(ctx context.Context) {
+	p.checkReadyByPreheat(ctx)
+	p.maybePreheatReadyNotify(ctx)
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
 }
 
-// preheatWatchTick is the 30s interval body, minus the preheat-ready
-// notification (see this file's header comment).
-func (p *Poller) preheatWatchTick(ctx context.Context) {
-	p.checkReadyByPreheat(ctx)
-	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+// maybePreheatReadyNotify sends the preheat-ready push once per preheat run.
+// The run is identified by the SwitchOnAt value it belongs to
+// (pollGlobalState.preheatNotifiedFor): a standby wake-up that keeps the same
+// switch-on is not announced twice, while a fresh switch-on re-arms the push.
+// The run is remembered only after the notifier reports delivery, so a failed
+// push retries on the next tick. Not-ready ticks leave the remembered run
+// untouched.
+func (p *Poller) maybePreheatReadyNotify(ctx context.Context) {
+	h := preheatReadyNotifier.Load()
+	if h == nil {
+		return
+	}
+	if ready, _ := p.PreheatInfo(); !ready {
+		return
+	}
+	snap := p.runtime.Get()
+	if snap.SwitchOnAt == nil {
+		return
+	}
+	p.state.mu.Lock()
+	notifiedFor := p.state.preheatNotifiedFor
+	p.state.mu.Unlock()
+	if notifiedFor == *snap.SwitchOnAt {
+		return
+	}
+	if (*h)(ctx) {
+		p.state.mu.Lock()
+		p.state.preheatNotifiedFor = *snap.SwitchOnAt
+		p.state.mu.Unlock()
+	}
 }
 
 // preheatStateFileShape is the exact JSON preheat_state.json holds —
@@ -197,9 +276,19 @@ type preheatStateFileShape struct {
 	PlannedSwitchOnAt *int64 `json:"plannedSwitchOnAt"`
 }
 
-// savePreheatState uses the write-to-.tmp-then-rename pattern; it is
-// best-effort and swallows errors.
+// preheatSaveMu serializes savePreheatState so two callers can't interleave
+// their temp-file write and rename (an older snapshot renamed last).
+var preheatSaveMu sync.Mutex
+
+// savePreheatState persists the current preheat state. The write goes through
+// a fresh temp file renamed over the target, so a concurrent reader never sees
+// a half-written file; failures are logged rather than swallowed.
 func (p *Poller) savePreheatState() {
+	// Held across the snapshot too: the last writer must write the newest
+	// state, not a stale read taken before an earlier caller's rename.
+	preheatSaveMu.Lock()
+	defer preheatSaveMu.Unlock()
+
 	snap := p.runtime.Get()
 	p.state.mu.Lock()
 	readyByTargetAt := p.state.readyByTargetAt
@@ -211,18 +300,38 @@ func (p *Poller) savePreheatState() {
 		ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt,
 	})
 	if err != nil {
+		log.Printf("system: saving preheat state: %v", err)
 		return
 	}
-	tmp := preheatStateFile + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(preheatStateFile), "preheat_state-*.tmp")
+	if err != nil {
+		log.Printf("system: saving preheat state: %v", err)
 		return
 	}
-	_ = os.Rename(tmp, preheatStateFile)
+	tmp := f.Name()
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		log.Printf("system: saving preheat state: %v", err)
+		return
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		log.Printf("system: saving preheat state: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, preheatStateFile); err != nil {
+		os.Remove(tmp)
+		log.Printf("system: saving preheat state: %v", err)
+		return
+	}
 }
 
 // loadPreheatState, called once from Start(): restores switchOnAt/switchOffAt
 // (only if within preheatStateTTL of now — no reviving a preheat session from
-// days ago) and any pending ready-by target.
+// days ago) and any pending ready-by target, dropping a target that is already
+// stale so an app that was down across the target time never switches the
+// machine on late.
 func (p *Poller) loadPreheatState() {
 	data, err := os.ReadFile(preheatStateFile)
 	if err != nil {
@@ -241,10 +350,17 @@ func (p *Poller) loadPreheatState() {
 		p.runtime.SetSwitchOffAt(s.SwitchOffAt)
 	}
 	if s.ReadyByTargetAt != nil && s.PlannedSwitchOnAt != nil {
-		p.state.mu.Lock()
-		p.state.readyByTargetAt = s.ReadyByTargetAt
-		p.state.plannedSwitchOnAt = s.PlannedSwitchOnAt
-		p.state.mu.Unlock()
+		if readyByExpired(*s.ReadyByTargetAt, time.Now()) {
+			log.Printf("system: discarded stale ready-by target from %s", time.UnixMilli(*s.ReadyByTargetAt).Format(time.RFC3339))
+			// The in-memory pair is left nil; persist that so the stale target
+			// is not reconsidered on the next restart.
+			p.savePreheatState()
+		} else {
+			p.state.mu.Lock()
+			p.state.readyByTargetAt = s.ReadyByTargetAt
+			p.state.plannedSwitchOnAt = s.PlannedSwitchOnAt
+			p.state.mu.Unlock()
+		}
 	}
 	if snap := p.runtime.Get(); snap.SwitchOnAt != nil {
 		log.Printf("system: preheat state restored: started %d min ago", (now-*snap.SwitchOnAt)/60000)

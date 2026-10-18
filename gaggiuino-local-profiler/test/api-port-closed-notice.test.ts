@@ -3,9 +3,9 @@
 // banner), instead of only in the Settings API-token card (#803).
 //
 // The module graph under test touches localStorage/navigator at import time
-// (state.js) and document/sessionStorage at call time, so the browser
-// globals are stubbed the same way test/api-token-client-storage.test.js and
-// test/dev-banner.test.js already do under vitest's node environment.
+// (state/index.ts) and document/sessionStorage at call time, so the browser
+// globals are stubbed the same way test/api-token-client-storage.test.ts and
+// test/dev-banner.test.ts already do under vitest's node environment.
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose
@@ -149,9 +149,15 @@ describe('app-wide banner (#807)', () => {
   it('stays dismissed for the rest of the session, across further status polls', () => {
     S.apiPortExposed = false;
     updateApiPortClosedBanner();
+    // Without these two guards the optional chaining used to swallow a banner
+    // that never rendered or a missing close button, so the dismissal could
+    // "pass" without ever having been clicked.
     const banner = doc.getElementById('glpApiPortClosedBanner');
-    const closeBtn = banner?.children[banner.children.length - 1];
-    closeBtn?._listeners.click?.();
+    expect(banner).toBeDefined();
+    const closeBtn = banner!.children[banner!.children.length - 1];
+    expect(closeBtn).toBeDefined();
+    expect(closeBtn!._listeners.click).toBeTypeOf('function');
+    closeBtn!._listeners.click!();
 
     expect(doc.getElementById('glpApiPortClosedBanner')).toBeUndefined();
     updateApiPortClosedBanner();

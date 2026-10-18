@@ -16,7 +16,10 @@ import (
 // seconds, observed hanging past 60s in the wild) before the offline
 // local-cache fallback below ever gets a chance to run — turning what's
 // supposed to be an instant "stale" response into an apparent total outage.
-const profileLiveFetchTimeout = 5 * time.Second
+// A guardVar (registry.go), not a const, so a test can shrink it to
+// milliseconds — the atomic wrapper keeps a concurrent reassignment
+// race-free under -race. Production value: 5s.
+var profileLiveFetchTimeout = newGuardVar[time.Duration](5 * time.Second)
 
 // profileLiveWriteTimeout bounds every live SelectProfile/CreateProfile/
 // UpdateProfile/DeleteProfile call in this file — and, via its own local copy,
@@ -54,20 +57,14 @@ func (h *Handlers) registerProfileRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
 
-	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
-	defer cancel()
-
-	status, err := adapter.GetStatus(liveCtx, machine)
 	var currentID *int
 	var currentName *string
-	if err == nil {
-		currentID, currentName = status.ProfileID, status.ProfileName
-	} // machine unreachable — profile list can still come from the local cache, current stays nil
 
 	respond := func(rows []ProfileRow, stale bool) {
 		options := make([]string, len(rows))
@@ -88,6 +85,29 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 			"optionsRaw": optionsRaw,
 		})
 	}
+
+	// #1572: when the poller already knows this machine is unreachable, serve
+	// the local cache right away — same shape as the post-failure fallback
+	// below (cached rows, stale: true, no current profile) — instead of paying
+	// the live GetStatus/ListProfiles timeouts. Reachable or unknown machines
+	// fall through to the live path unchanged.
+	if h.machineKnownOffline(machine.ID) {
+		cached, err := h.profilesRepo.ListByMachine(machine.ID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		respond(cached, true)
+		return
+	}
+
+	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout.get())
+	defer cancel()
+
+	status, err := adapter.GetStatus(liveCtx, machine)
+	if err == nil {
+		currentID, currentName = status.ProfileID, status.ProfileName
+	} // machine unreachable — profile list can still come from the local cache, current stays nil
 
 	raw, err := adapter.ListProfiles(liveCtx, machine)
 	if err != nil {
@@ -110,7 +130,12 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 		}
 		remoteIDs[i] = p.ID
 	}
-	if err := h.profilesRepo.PruneStaleSynced(machine.ID, remoteIDs); err != nil {
+	if len(raw) == 0 {
+		// #1610: a machine always has at least one profile, so an empty list is
+		// far more likely a broken or truncated answer than a real state. Pruning
+		// on it would delete every synced local row on one malformed response.
+		slog.Warn("skipping stale-profile prune for an empty machine profile list", "machineId", machine.ID)
+	} else if err := h.profilesRepo.PruneStaleSynced(machine.ID, remoteIDs); err != nil {
 		slog.Warn("pruning stale local profiles failed", "machineId", machine.ID, "err", err)
 	}
 	cached, err := h.profilesRepo.ListByMachine(machine.ID)
@@ -141,7 +166,7 @@ func (h *Handlers) setMachineProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "option or id required")
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, body.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, body.MachineID, true)
 	if !ok {
 		return
 	}
@@ -208,7 +233,8 @@ func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "invalid profile id")
 		return
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, queryMachineID(r))
+	machineID, valid := queryMachineID(r)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}
@@ -229,7 +255,7 @@ func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout)
+	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout.get())
 	defer cancel()
 	profile, err := adapter.GetProfile(liveCtx, machine, id)
 	if err != nil {
@@ -294,7 +320,7 @@ func (h *Handlers) createMachineProfile(w http.ResponseWriter, r *http.Request) 
 		MachineID *int64 `json:"machineId"`
 	}
 	_ = json.Unmarshal(rawBody, &mid)
-	machine, adapter, ok := h.resolveWithAdapter(w, mid.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, mid.MachineID, true)
 	if !ok {
 		return
 	}
@@ -383,7 +409,7 @@ func (h *Handlers) updateMachineProfile(w http.ResponseWriter, r *http.Request) 
 		MachineID *int64 `json:"machineId"`
 	}
 	_ = json.Unmarshal(rawBody, &mid)
-	machine, adapter, ok := h.resolveWithAdapter(w, mid.MachineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, mid.MachineID, true)
 	if !ok {
 		return
 	}
@@ -540,10 +566,11 @@ func (h *Handlers) deleteMachineProfile(w http.ResponseWriter, r *http.Request) 
 		_ = json.Unmarshal(raw, &body)
 	}
 	machineID := body.MachineID
+	valid := true
 	if machineID == nil {
-		machineID = queryMachineID(r)
+		machineID, valid = queryMachineID(r)
 	}
-	machine, adapter, ok := h.resolveWithAdapter(w, machineID)
+	machine, adapter, ok := h.resolveWithAdapter(w, r, machineID, valid)
 	if !ok {
 		return
 	}

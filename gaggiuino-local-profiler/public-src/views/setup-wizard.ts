@@ -1,20 +1,20 @@
 // First-run setup wizard (#744) — a 3-step onboarding modal (welcome ->
 // connect a machine -> done) shown once when the app has zero machines
 // configured. Modeled on the Guided Dial-In wizard's architecture
-// (./dialin-wizard.js: session-state-on-S, open/close/render functions, a
+// (./dialin-wizard.ts: session-state-on-S, open/close/render functions, a
 // modal driven by a CSS class) but simpler — there's no live shot data to
 // poll for, so no timer loop.
 //
 // Step 2 (connect a machine) deliberately does NOT rebuild the add-machine
 // form/test-connect logic: it reparents the real, singleton
-// #machineFormCard node (public-src/components/machines-settings.js) into
+// #machineFormCard node (public-src/components/machines-settings.ts) into
 // its own slot for the duration of that step, then moves it back to its
 // original place in Settings the moment the wizard leaves that step (via
 // _leaveConnectStep(), called at the top of every render()). This means
-// #machineFormSaveBtn/#machineFormTestBtn keep working unmodified (main.js
+// #machineFormSaveBtn/#machineFormTestBtn keep working unmodified (boot/settings.ts
 // wires them once, directly to saveMachineForm()/testMachineForm()) and the
 // SSRF-guard error surfacing, id-rewrite-on-success and staleness guards
-// documented in machines-settings.js all apply here for free.
+// documented in machines-settings.ts all apply here for free.
 import { S, subscribe } from '../state/index.js';
 import type { MachineRecord } from '../state/index.js';
 import { tHtml } from '../i18n.js';
@@ -22,6 +22,7 @@ import { html, COMPLETED_KEY } from '../utils.js';
 import type { Html } from '../utils.js';
 import { openMachineForm } from '../components/machines-settings.js';
 import { loadDemoData } from '../components/onboarding.js';
+import { safeLocalStorage } from '../storage.js';
 
 // Captured once, the first time the wizard ever reaches the connect step —
 // #machineFormCard's original position in the Settings "Machines" card, so
@@ -30,7 +31,7 @@ let _formOrigParent: Node | null = null;
 let _formOrigNextSibling: Node | null = null;
 
 // Pure trigger check (#744) — no DOM/localStorage side effects beyond the
-// read, so main.js's init sequence (and tests) can call it directly against
+// read, so boot/data.ts (and tests) can call it directly against
 // S.machines without needing a real document.
 //
 // #746: triggers on "no machine has a configured host", not "zero machine
@@ -39,13 +40,13 @@ let _formOrigNextSibling: Node | null = null;
 // GET /api/machines, so a real fresh install's S.machines is never actually
 // empty by the time the frontend checks it.
 export function shouldOpenSetupWizard(machines: MachineRecord[] | null | undefined): boolean {
-  return (machines || []).every(m => !m?.host) && !localStorage.getItem(COMPLETED_KEY);
+  return (machines || []).every(m => !m?.host) && !safeLocalStorage.getItem(COMPLETED_KEY);
 }
 
-// #750: syncInstallId() now lives in public-src/utils.js —
-// components/status.js calls it from updateStatus() without importing this
+// #750: syncInstallId() now lives in public-src/utils.ts —
+// components/status.ts calls it from updateStatus() without importing this
 // wizard module back (import-cycle #1102). Re-exported here for existing
-// importers (e.g. test/setup-wizard.test.js).
+// importers (e.g. test/setup-wizard.test.ts).
 export { syncInstallId } from '../utils.js';
 
 export function openSetupWizard(): void {
@@ -62,7 +63,7 @@ export function openSetupWizard(): void {
 // launch; only closing from the done step marks it complete.
 export function closeSetupWizard(): void {
   if (S.setupWizardStep === 'done') {
-    try { localStorage.setItem(COMPLETED_KEY, '1'); } catch { /* ignore */ }
+    safeLocalStorage.setItem(COMPLETED_KEY, '1');
   }
   S.setupWizardOpen = false;
   _leaveConnectStep();
@@ -76,7 +77,7 @@ export function setupWizardGetStarted(): void {
 }
 
 // "I don't have a machine yet, show me demo data" — seeds demo data via the
-// existing onboarding.js helper and skips straight to the done step,
+// existing onboarding.ts helper and skips straight to the done step,
 // regardless of whether a real machine ever gets configured.
 export async function setupWizardSkipToDemo(): Promise<void> {
   await loadDemoData();

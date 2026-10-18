@@ -1,4 +1,4 @@
-// Milk section of the Library view, split out of views/library.js.
+// Milk section of the Library view, split out of views/library.ts.
 // Pure move + type port (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
@@ -45,7 +45,7 @@ export function renderMilkList(): void {
         ${m.stockMl! < 300 ? html`<span style="color:${esc(m.stockMl! <= 0 ? '#ef4444' : '#f59e0b')}">${m.stockMl! <= 0 ? tHtml('lib_milk_empty') : tHtml('lib_milk_low')}</span>` : html``}
       </div>
       <div class="lib-milk-restock-row">
-        <input class="lib-milk-restock-input" type="number" id="milkRestock_${esc(m.id)}" placeholder="ml" min="0" step="50">
+        <input class="lib-milk-restock-input" type="number" aria-label="${tHtml('lib_milk_restock')}" id="milkRestock_${esc(m.id)}" placeholder="ml" min="0" step="50">
         <button class="lib-btn-sm" data-action="restock-milk" data-id="${esc(m.id)}">${tHtml('lib_milk_restock')}</button>
       </div>
     </div>`;

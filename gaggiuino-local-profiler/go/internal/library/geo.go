@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -23,10 +24,9 @@ import (
 // GeocodeHook below is what cmd/server wires createBean/UpdateBean's
 // un-awaited call to.
 //
-// The outbound request goes through assertPublicHost (ssrf.go) exactly like
-// scan.go's Open Food Facts call: nominatimHost is a fixed literal, not user
-// input, but a rebound DNS answer for it could still point at an internal
-// address, so every resolved address is checked before the request runs.
+// The fixed nominatimHost is pre-checked with assertPublicHost (ssrf.go)
+// before the request, like scan.go's Open Food Facts call, and the client's
+// dial is pinned to the checked address (newGuardedTransport, #1626).
 
 const (
 	nominatimHost = "nominatim.openstreetmap.org"
@@ -35,11 +35,15 @@ const (
 	geoMinIntervalMS = 1100
 	geoCacheKey      = "geocode_cache"
 	geoCacheMax      = 500
-	// Cosmetic — Nominatim only needs a stable identifying User-Agent, not
-	// an exact version. Bumped alongside config.yaml at release time (same
-	// convention as internal/system/version.go's glpVersion).
-	geoUserAgent = "GLP/3.2.0 (https://github.com/mxkissnr/gaggiuino-local-profiler)"
 )
+
+// geoUserAgent builds the identifying User-Agent Nominatim's usage policy
+// asks for from the build version (the value GET /api/version reports,
+// passed in by cmd/server — internal/system imports this package, so it
+// cannot be read from there directly).
+func geoUserAgent(version string) string {
+	return "GLP/" + version + " (https://github.com/mxkissnr/gaggiuino-local-profiler)"
+}
 
 // Location is the { lat, lon, label } result shape stored on bean.location
 // and read by the origin-map view.
@@ -60,9 +64,10 @@ type geoCacheEntry struct {
 // timestamp as a struct so cmd/server owns one instance, the same pattern
 // internal/system's Poller / ha.Client use.
 type Geocoder struct {
-	repo   *Repository
-	http   *http.Client
-	apiURL string // overridable in tests
+	repo      *Repository
+	http      *http.Client
+	apiURL    string // overridable in tests
+	userAgent string
 
 	mu          sync.Mutex // serializes requests + guards lastRequestAt
 	lastRequest time.Time
@@ -73,12 +78,14 @@ type Geocoder struct {
 }
 
 // NewGeocoder wires the library Repository (kv-table cache access) into a
-// Geocoder pointed at the real Nominatim endpoint.
-func NewGeocoder(repo *Repository) *Geocoder {
+// Geocoder pointed at the real Nominatim endpoint. version is the GLP build
+// version, sent in the User-Agent.
+func NewGeocoder(repo *Repository, version string) *Geocoder {
 	return &Geocoder{
 		repo:       repo,
-		http:       &http.Client{Timeout: 8 * time.Second},
+		http:       &http.Client{Timeout: 8 * time.Second, Transport: newGuardedTransport()},
 		apiURL:     nominatimURL,
+		userAgent:  geoUserAgent(version),
 		assertHost: assertPublicHost,
 	}
 }
@@ -100,21 +107,25 @@ func maybeGeocode(beanID int64, region, origin string) {
 // GeocodeBean looks the bean up, resolves its region (with the origin country
 // name appended for precision), then writes the result back onto a FRESH
 // library read — the bean may have been edited or deleted while the request
-// was in flight, so a region that no longer matches is discarded.
-func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
+// was in flight, so a region that no longer matches is discarded. It reports
+// whether it stored new coordinates for the bean: true only when the update
+// committed a non-nil location, so the caller can publish a data-changed event
+// on a real change (a cached miss, an unchanged/edited/deleted bean, or an
+// error all report false).
+func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) bool {
 	lib, err := g.repo.GetLibrary()
 	if err != nil {
 		log.Printf("library: geocodeBean: reading library for bean %d: %v", beanID, err)
-		return
+		return false
 	}
-	idx := findBeanIndex(lib, beanID)
+	idx := findEntityIndex(lib.Beans, beanID)
 	if idx == -1 {
-		return
+		return false
 	}
 	bean := lib.Beans[idx]
 	region, _ := bean["region"].(string)
 	if strings.TrimSpace(region) == "" {
-		return
+		return false
 	}
 	origin, _ := bean["origin"].(string)
 	countryName := countryNameForCode(origin)
@@ -122,12 +133,12 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
 	loc, err := g.GeocodeRegion(ctx, region, countryName)
 	if err != nil {
 		log.Printf("library: geocodeBean: geocoding %q for bean %d: %v", region, beanID, err)
-		return
+		return false
 	}
 
 	var name string
 	err = g.repo.Update(func(fresh *Library) error {
-		fi := findBeanIndex(*fresh, beanID)
+		fi := findEntityIndex(fresh.Beans, beanID)
 		if fi == -1 {
 			return ErrSkipSave
 		}
@@ -143,21 +154,24 @@ func (g *Geocoder) GeocodeBean(ctx context.Context, beanID int64) {
 		return nil
 	})
 	if errors.Is(err, ErrSkipSave) {
-		return
+		return false
 	}
 	if err != nil {
 		log.Printf("library: geocodeBean: updating library for bean %d: %v", beanID, err)
-		return
+		return false
 	}
 	if loc != nil {
 		log.Printf("library: geocoded bean %q region %q -> %g,%g", name, region, loc.Lat, loc.Lon)
 	}
+	return loc != nil
 }
 
 // GeocodeRegion returns the cached result (including a cached nil for a known
 // miss) when the lower-cased "region, country" query is already in the kv
 // cache, otherwise makes one rate-limited, SSRF-guarded Nominatim call and
-// caches whatever it produced.
+// caches whatever it produced — except a transient failure, which is
+// returned as an error and deliberately NOT cached, so the region is looked up
+// again on the next call instead of being remembered as a permanent miss.
 func (g *Geocoder) GeocodeRegion(ctx context.Context, region, countryName string) (*Location, error) {
 	region = strings.TrimSpace(region)
 	if region == "" {
@@ -176,17 +190,24 @@ func (g *Geocoder) GeocodeRegion(ctx context.Context, region, countryName string
 	}
 
 	result, reqErr := g.request(ctx, query, region)
+	if reqErr != nil {
+		return nil, reqErr
+	}
 
 	// Re-load: another request may have written meanwhile.
 	fresh := g.loadCache()
 	fresh[key] = geoCacheEntry{Result: result, TS: time.Now().UnixMilli()}
 	g.saveCache(fresh)
-	return result, reqErr
+	return result, nil
 }
 
 // request performs one Nominatim call, serialized with >= geoMinIntervalMS
-// between calls, and SSRF-guarded. A network/parse failure is logged and
-// returns (nil, nil) — a miss, cached like any other.
+// between calls, and SSRF-guarded. A transient failure — a network error,
+// cancellation, a non-200 status, a decode error, or a failed host check that
+// is not an SSRF block — is returned as a non-nil error so the caller can
+// try again later rather than caching it as a miss. The two cases reported as
+// (nil, nil) are a genuine miss (a 200 with no usable hit, or unparsable
+// coordinates) and an SSRF block.
 func (g *Geocoder) request(ctx context.Context, query, region string) (*Location, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -205,8 +226,7 @@ func (g *Geocoder) request(ctx context.Context, query, region string) (*Location
 			log.Printf("library: geocode blocked by SSRF guard: %v", err)
 			return nil, nil
 		}
-		log.Printf("library: geocode host check failed for %q: %v", query, err)
-		return nil, nil
+		return nil, err
 	}
 
 	u, _ := url.Parse(g.apiURL)
@@ -218,19 +238,17 @@ func (g *Geocoder) request(ctx context.Context, query, region string) (*Location
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
-	req.Header.Set("User-Agent", geoUserAgent)
+	req.Header.Set("User-Agent", g.userAgent)
 
 	resp, err := g.http.Do(req)
 	if err != nil {
-		log.Printf("library: geocode failed for %q: %v", query, err)
-		return nil, nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("library: geocode failed for %q: HTTP %d", query, resp.StatusCode)
-		return nil, nil
+		return nil, fmt.Errorf("nominatim: HTTP %d", resp.StatusCode)
 	}
 
 	var hits []struct {
@@ -238,8 +256,7 @@ func (g *Geocoder) request(ctx context.Context, query, region string) (*Location
 		Lon string `json:"lon"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&hits); err != nil {
-		log.Printf("library: geocode failed for %q: %v", query, err)
-		return nil, nil
+		return nil, err
 	}
 	if len(hits) == 0 || hits[0].Lat == "" || hits[0].Lon == "" {
 		return nil, nil

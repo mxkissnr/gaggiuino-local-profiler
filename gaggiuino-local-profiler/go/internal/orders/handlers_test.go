@@ -3,15 +3,19 @@ package orders
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 	"testing"
 )
 
 // TestOrdersDisabled_404 verifies the isOrdersEnabled gate: every
 // /api/orders* route 404s when the feature is off, matching the guard the
-// router applies to the whole subtree.
+// router applies to the whole subtree. Orders is disabled through the shared
+// internal/config seam (a real enable_orders:false for a fresh path, which
+// also busts config.Options' path-keyed cache) rather than the env fallback,
+// so the result does not depend on test order.
 func TestOrdersDisabled_404(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
-	t.Setenv("GLP_ENABLE_ORDERS", "false")
+	pointOptionsAt(t, `{"enable_orders":false}`)
 	mux := newMux(h)
 	rec := doJSON(t, mux, http.MethodGet, "/api/orders", nil)
 	if rec.Code != http.StatusNotFound {
@@ -213,10 +217,56 @@ func TestSettings_GetPost(t *testing.T) {
 	}
 }
 
-func TestSettings_PostRequiresEnabledBoolean(t *testing.T) {
+// TestSettings_PostPartialKeepsEnabled: omitting `enabled` from the POST body
+// keeps whatever is stored (both true and false) and still applies the other
+// fields sent — the fix for #1614, where every unrelated save had to
+// round-trip `enabled` and could reopen the shop when its read failed.
+func TestSettings_PostPartialKeepsEnabled(t *testing.T) {
+	h, repo, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	// The default stored enabled is true; a save that omits it must keep it.
+	rec := doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{
+		"notify_low_stock": false,
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	saved := decodeBody(t, rec.Body.Bytes())
+	if saved["enabled"] != true {
+		t.Errorf("enabled after partial post = %v; want the stored true", saved["enabled"])
+	}
+	if saved["notify_low_stock"] != false {
+		t.Errorf("notify_low_stock = %v; want false", saved["notify_low_stock"])
+	}
+
+	// A stored false must survive a partial save just the same.
+	if err := repo.SaveSettings(Settings{"enabled": false}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	rec = doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{
+		"notify_new_order": true,
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	saved = decodeBody(t, rec.Body.Bytes())
+	if saved["enabled"] != false {
+		t.Errorf("enabled after partial post = %v; want the stored false", saved["enabled"])
+	}
+	if saved["notify_new_order"] != true {
+		t.Errorf("notify_new_order = %v; want true", saved["notify_new_order"])
+	}
+}
+
+// TestSettings_PostNonBooleanEnabled: `enabled` is optional, but when present
+// it must still be a real boolean.
+func TestSettings_PostNonBooleanEnabled(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
-	rec := doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{}))
+	rec := doJSON(t, mux, http.MethodPost, "/api/orders/settings", mustMarshal(t, map[string]any{
+		"enabled": "yes",
+	}))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d; want 400", rec.Code)
 	}
@@ -583,5 +633,70 @@ func TestDeleteHistory_OnlyRemovesCompleted(t *testing.T) {
 	}
 	if arr[0]["id"] != pending["id"] {
 		t.Errorf("remaining order = %+v; want the pending one", arr[0])
+	}
+}
+
+// TestNormalizeMenuItem pins the shared menu normaliser the API and the
+// backup restore both go through: a non-array variants value becomes an empty
+// array (so the Orders view/kiosk/order card can iterate it safely), a long
+// name is trimmed to 200 runes, a nameless item is rejected and unknown keys
+// are dropped.
+func TestNormalizeMenuItem(t *testing.T) {
+	item, ok := NormalizeMenuItem(map[string]any{
+		"id": "m_1", "name": "Latte", "variants": "x", "bogus": true,
+	})
+	if !ok {
+		t.Fatal("NormalizeMenuItem returned false for a named item")
+	}
+	variants, isArr := item["variants"].([]any)
+	if !isArr || len(variants) != 0 {
+		t.Errorf("variants = %#v; want an empty array", item["variants"])
+	}
+	if item["id"] != "m_1" {
+		t.Errorf("id = %v; want the kept id", item["id"])
+	}
+	if _, present := item["bogus"]; present {
+		t.Errorf("unknown key survived normalisation: %#v", item)
+	}
+
+	item, ok = NormalizeMenuItem(map[string]any{"name": strings.Repeat("a", 300)})
+	if !ok {
+		t.Fatal("NormalizeMenuItem returned false for a long name")
+	}
+	if got := item["name"].(string); len([]rune(got)) != 200 {
+		t.Errorf("long name length = %d; want 200", len([]rune(got)))
+	}
+
+	if _, ok := NormalizeMenuItem(map[string]any{"emoji": "☕"}); ok {
+		t.Error("NormalizeMenuItem should reject an item with no name")
+	}
+}
+
+// TestNormalizeSettings pins the shared settings normaliser: only notify.*
+// recipients survive, non-bool notify_* toggles are dropped and unknown keys
+// never make it through (a restore must not inject arbitrary settings).
+func TestNormalizeSettings(t *testing.T) {
+	s := NormalizeSettings(map[string]any{
+		"enabled":             true,
+		"broadcastRecipients": []any{"notify.phone", "bogus"},
+		"notify_low_stock":    "yes",
+		"notify_new_order":    true,
+		"bogus":               "x",
+	})
+	recipients, _ := s["broadcastRecipients"].([]any)
+	if len(recipients) != 1 || recipients[0] != "notify.phone" {
+		t.Errorf("broadcastRecipients = %#v; want just notify.phone", recipients)
+	}
+	if _, present := s["notify_low_stock"]; present {
+		t.Errorf("non-bool toggle should be dropped: %#v", s)
+	}
+	if s["notify_new_order"] != true {
+		t.Errorf("bool toggle = %v; want true", s["notify_new_order"])
+	}
+	if _, present := s["bogus"]; present {
+		t.Errorf("unknown key should be dropped: %#v", s)
+	}
+	if s["enabled"] != true {
+		t.Errorf("enabled = %v; want true", s["enabled"])
 	}
 }

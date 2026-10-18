@@ -17,10 +17,10 @@ import (
 // not on a schedule" signal from the data: it calls
 // Repository.ChangeFingerprint() (a handful of cheap COUNT/MAX aggregates, no
 // datapoints blobs) on every read and only runs the full evaluateAll(nil)
-// pass — buildContext scans every shot's datapoints and re-scores it, ~200ms
-// on a real history (#956) — when that digest, or the cached GitHub-version
-// result, moved since the last pass. A fresh install after an update still
-// pays one retroactive scoring sweep on its first GET /api/achievements;
+// pass — buildContext streams every shot's datapoints, taking its score from
+// the score cache (#956, #1721) — when that digest, or the cached
+// GitHub-version result, moved since the last pass. A cold score cache still
+// costs one retroactive scoring sweep on the first GET /api/achievements;
 // steady-state reads with no new shot/bean/order/maintenance activity pay
 // only the fingerprint query.
 //
@@ -82,6 +82,9 @@ func (s *Service) maybeEvaluate() error {
 		return err
 	}
 	fp += " v=" + versionFingerprint(s.deps.VersionFn)
+	if s.deps.RevsFn != nil {
+		fp += " r=" + s.deps.RevsFn()
+	}
 
 	s.evalMu.Lock()
 	defer s.evalMu.Unlock()

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -186,6 +187,8 @@ func TestGaggiMateLiveClient_ReconnectsAfterDrop(t *testing.T) {
 // TestGaggiuinoLiveClient_ReconnectRevalidatesHost for the full rationale.
 func TestGaggiMateLiveClient_ReconnectRevalidatesHost(t *testing.T) {
 	allowLoopbackMachineHost(t)
+	origDelay := liveReconnectDelay.set(20 * time.Millisecond)
+	t.Cleanup(func() { liveReconnectDelay.set(origDelay) })
 	fake := newStreamingGaggiMate()
 	defer fake.Close()
 
@@ -199,13 +202,29 @@ func TestGaggiMateLiveClient_ReconnectRevalidatesHost(t *testing.T) {
 		t.Fatalf("expected 1 connection after warm-up, got %d", n)
 	}
 
+	// Refuse the host from now on and record every guard call, so the test can
+	// observe the reconnect loop re-validating the host instead of sleeping for
+	// the real reconnect delay.
+	guardCalls := make(chan struct{}, 8)
 	orig := machineHostGuard.set(func(ctx context.Context, hostname string) error {
+		select {
+		case guardCalls <- struct{}{}:
+		default:
+		}
 		return errors.New("host no longer valid")
 	})
 	t.Cleanup(func() { machineHostGuard.set(orig) })
 
 	fake.dropConns()
-	time.Sleep(liveReconnectDelay + 2*time.Second)
+	// Two refused guard calls prove run() looped and re-ran the host guard on
+	// every reconnect attempt, never dialing again — no fixed sleep.
+	for i := 0; i < 2; i++ {
+		select {
+		case <-guardCalls:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("reconnect loop did not re-run the host guard (call %d of 2) within 2s", i+1)
+		}
+	}
 	if n := fake.conns.Load(); n != 1 {
 		t.Fatalf("connectOnce dialed after the host started failing validation: conns=%d, want 1", n)
 	}
@@ -270,6 +289,27 @@ func TestMergeGaggiMateStatus(t *testing.T) {
 	}
 	if _, ok := merged["process"]; !ok {
 		t.Fatalf("clearing mutated the previous map: %+v", merged)
+	}
+}
+
+// TestMergeGaggiMateStatus_CapsKeyCount is the #1601 regression test: a device
+// (or anything on its WebSocket) sending ever-new keys must not grow the cached
+// status map without bound, while a key already present keeps updating.
+func TestMergeGaggiMateStatus_CapsKeyCount(t *testing.T) {
+	merged := map[string]any{}
+	for i := 0; i < 200; i++ {
+		merged = mergeGaggiMateStatus(merged, map[string]any{"k" + strconv.Itoa(i): i})
+	}
+	if len(merged) != maxGaggiMateStatusKeys {
+		t.Fatalf("merged map has %d keys, want %d", len(merged), maxGaggiMateStatusKeys)
+	}
+
+	merged = mergeGaggiMateStatus(merged, map[string]any{"k0": "updated"})
+	if merged["k0"] != "updated" {
+		t.Fatalf("existing key not updated after the cap: %v", merged["k0"])
+	}
+	if len(merged) != maxGaggiMateStatusKeys {
+		t.Fatalf("updating an existing key changed the key count: %d", len(merged))
 	}
 }
 

@@ -8,9 +8,13 @@
 // unmounted route would give — so a real install can't tell it exists. Because
 // it lives under /api/, the existing auth.RequireToken middleware protects it
 // with the same X-GLP-Token header every other /api/* route uses; the
-// static-asset GET bypass deliberately does NOT apply. Requests carrying a
-// foreign Origin header are rejected (DNS-rebinding protection, MCP spec
-// MUST), and tool calls share internal/ratelimit's defaults.
+// static-asset GET bypass deliberately does NOT apply. DNS-rebinding
+// protection (the MCP spec's MUST) comes from the app-wide
+// auth.RequireKnownHost middleware, which refuses an unknown Host header
+// before any handler runs. This package's sameOrigin only rejects a request
+// whose Origin header differs from its Host (a plain cross-origin check; a
+// rebound name sends a matching Origin and Host). Tool calls count against
+// the app-wide rate limiter that already wraps every /api/* route.
 //
 // GET/POST /api/mcp/settings (handlers.go) read and write those toggles, so
 // enabling the server or changing its tool set takes effect on the next

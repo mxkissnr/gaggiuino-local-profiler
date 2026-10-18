@@ -10,13 +10,17 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
+
 	_ "modernc.org/sqlite"
 )
 
-// DefaultPath is the default on-disk location of the database. Callers
-// needing an isolated database (tests, primarily) pass their own path to
-// Open instead.
-const DefaultPath = "/data/glp.db"
+// DefaultPath is the default on-disk location of the database, under
+// datadir.Root (the real data directory in production, a per-test directory
+// under `go test`). A var, not a const, so it is resolved through the data-dir
+// seam. Callers needing an isolated database (tests, primarily) pass their own
+// path to Open instead.
+var DefaultPath = datadir.Path("glp.db")
 
 // Open opens (creating if necessary) the SQLite database at path, brings it
 // to the current schema, and runs the additive migrations needed on every
@@ -335,27 +339,49 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 		if _, err := os.Stat(dbPath); err == nil {
 			backupPath := filepath.Join(filepath.Dir(dbPath),
 				fmt.Sprintf("pre-v2-migration-%d.db", time.Now().UnixMilli()))
-			if err := copyFile(dbPath, backupPath); err != nil {
+			// VACUUM INTO takes a consistent copy through the open connection:
+			// it includes committed WAL content a plain file copy would miss,
+			// and it streams instead of loading the whole database into memory.
+			if _, err := sqlDB.Exec(`VACUUM INTO ?`, backupPath); err != nil {
 				return fmt.Errorf("db: writing pre-migration backup: %w", err)
 			}
 		}
 	}
 
+	// Decide which tables still need the column before opening the transaction:
+	// Open holds this handle to a single connection, so a hasColumn query issued
+	// while the transaction is open would deadlock on that same connection.
+	var missing []string
 	for _, table := range []string{"shots", "orders", "maintenance_log"} {
 		ok, err := hasColumn(sqlDB, table, "machine_id")
 		if err != nil {
 			return err
 		}
 		if !ok {
-			// table is already asserted by the hasColumn call just above.
-			stmt := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN machine_id INTEGER NOT NULL DEFAULT 1`, table)
-			if _, err := sqlDB.Exec(stmt); err != nil {
-				return fmt.Errorf("db: adding machine_id to %s: %w", table, err)
-			}
+			missing = append(missing, table)
 		}
 	}
-	if _, err := sqlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_shots_machine ON shots(machine_id)`); err != nil {
+
+	// The ADD COLUMN statements run in one transaction so a failure part-way
+	// cannot leave some tables migrated and some not.
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return fmt.Errorf("db: starting machine-columns migration tx: %w", err)
+	}
+	for _, table := range missing {
+		// table is already asserted by the hasColumn call above.
+		stmt := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN machine_id INTEGER NOT NULL DEFAULT 1`, table)
+		if _, err := tx.Exec(stmt); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("db: adding machine_id to %s: %w", table, err)
+		}
+	}
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_shots_machine ON shots(machine_id)`); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("db: creating idx_shots_machine: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("db: committing machine-columns migration: %w", err)
 	}
 
 	// shot_score_cache (#957): a Go-only read-through cache for the shot
@@ -580,17 +606,6 @@ func SetKVBool(sqlDB *sql.DB, key string, v bool) error {
 	}
 	_, err = sqlDB.Exec(`INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)`, key, string(encoded))
 	return err
-}
-
-// copyFile is a plain byte-for-byte copy (no fsync/atomic-rename dance —
-// this is a best-effort pre-migration safety snapshot, not a crash-safe write
-// path).
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0o644)
 }
 
 // newUUIDv4 generates a random RFC 4122 version-4 UUID. Implemented directly

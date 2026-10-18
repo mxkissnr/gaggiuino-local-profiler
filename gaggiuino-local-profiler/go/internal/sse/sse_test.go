@@ -165,10 +165,8 @@ func TestHandler_ConnectPrimeAndPublish(t *testing.T) {
 		t.Errorf("expected trailing blank line after primed data, got %q", lines[4])
 	}
 
-	// Give the handler a moment to finish Subscribe()-ing before publishing
-	// — priming and subscribing happen before this call returns control to
-	// the client, but the network round trip above doesn't guarantee it.
-	time.Sleep(50 * time.Millisecond)
+	// Subscribe now happens before priming, so the handler is already
+	// subscribed by the time the primed event above reached us; no sleep needed.
 	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"current": 3, "total": 10}})
 
 	pubLines := readLines(t, reader, 3, 2*time.Second)
@@ -378,5 +376,209 @@ func TestHandler_SlowConsumerGetsOnlyLatestSnapshot(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("handler did not exit after request cancel")
 		}
+	}
+}
+
+// waitForSubscribers blocks until hub has exactly want subscribers, failing the
+// test if that never happens.
+func waitForSubscribers(t *testing.T, hub *Hub, want int) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		hub.mu.Lock()
+		n := len(hub.subs)
+		hub.mu.Unlock()
+		if n == want {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("hub has %d subscribers, want %d", n, want)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
+// waitForBody blocks until the gated writer's body contains want, failing the
+// test if it never does -- used to know the handler has committed to a send and
+// is about to block in its gated Flush.
+func waitForBody(t *testing.T, gw *gatedFlusher, want string) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for !strings.Contains(gw.body(), want) {
+		select {
+		case <-deadline:
+			t.Fatalf("gated writer never wrote %q, body:\n%s", want, gw.body())
+		case <-time.After(2 * time.Millisecond):
+		}
+	}
+}
+
+// TestHandler_DroppedDataChangedEndsStream pins the fix for a dropped
+// data-changed: when a backed-up subscriber's buffer is full, Publish cannot
+// deliver one, so the handler must close the stream -- not fabricate a
+// whole-database change. The frontend applies a kind:"all" event as a page
+// reload, discarding unsaved input, whereas EventSource reconnects on its own
+// and the client's reconnect path resyncs every kind.
+func TestHandler_DroppedDataChangedEndsStream(t *testing.T) {
+	hub := NewHub()
+	h := &Handler{Hub: hub, PingInterval: time.Hour}
+	gw := newGatedFlusher()
+	ctx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+
+	done := make(chan struct{})
+	go func() { h.ServeHTTP(gw, req); close(done) }()
+
+	// Release the padding flush so the handler subscribes and enters its loop.
+	gw.letFlush(1)
+	waitForSubscribers(t, hub, 1)
+
+	// A single snapshot is delivered immediately; the handler then blocks in
+	// Flush, so every event published next piles up on the subscriber channel.
+	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": 0}})
+	// Wait until the handler has written that frame and is about to block in its
+	// gated Flush, so the burst below piles up on the channel instead of being
+	// drained.
+	waitForBody(t, gw, `"seq":0`)
+
+	// Overflow the 16-slot buffer with snapshots (a dropped snapshot is
+	// harmless), then drop a data-changed, which the handler must react to.
+	for i := 0; i < subscriberBuffer+1; i++ {
+		hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": i + 1}})
+	}
+	hub.Publish(Event{Type: EventDataChanged, Data: DataChanged{Kind: "library"}})
+
+	// Feed the handler flushes for the in-flight snapshot and the coalesced
+	// snapshot batch; on reaching the armed resync it must return without
+	// writing another frame.
+	go func() {
+		for i := 0; i < 10; i++ {
+			select {
+			case gw.release <- struct{}{}:
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("handler did not close the stream after a dropped data-changed, body:\n%s", gw.body())
+	}
+
+	body := gw.body()
+	if strings.Contains(body, "event: "+EventDataChanged+"\n") {
+		t.Errorf("a dropped data-changed must not be replaced with a synthetic event, body:\n%s", body)
+	}
+	if strings.Contains(body, `"kind":"all"`) {
+		t.Errorf("handler fabricated a whole-database change (would reload the page), body:\n%s", body)
+	}
+}
+
+// TestHandler_DroppedLiveSnapshotKeepsStreamOpen pins that a dropped
+// live-snapshot does not end the stream: each snapshot carries the full state,
+// so a drop is harmless and the connection keeps serving -- only a dropped
+// data-changed closes it (see TestHandler_DroppedDataChangedEndsStream).
+func TestHandler_DroppedLiveSnapshotKeepsStreamOpen(t *testing.T) {
+	hub := NewHub()
+	h := &Handler{Hub: hub, PingInterval: time.Hour}
+	gw := newGatedFlusher()
+	ctx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+
+	done := make(chan struct{})
+	go func() { h.ServeHTTP(gw, req); close(done) }()
+
+	gw.letFlush(1)
+	waitForSubscribers(t, hub, 1)
+
+	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": 0}})
+	waitForBody(t, gw, `"seq":0`)
+
+	// Overflow the 16-slot buffer with snapshots only -- the newest (seq 16)
+	// survives coalescing, and no event arms the resync channel.
+	for i := 0; i < subscriberBuffer+1; i++ {
+		hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"seq": i + 1}})
+	}
+
+	flushDone := make(chan struct{})
+	go func() {
+		defer close(flushDone)
+		for i := 0; i < 4; i++ {
+			select {
+			case gw.release <- struct{}{}:
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	// The handler must deliver the coalesced snapshot and keep waiting, rather
+	// than return.
+	deadline := time.After(2 * time.Second)
+	for !strings.Contains(gw.body(), `"seq":16`) {
+		select {
+		case <-done:
+			t.Fatalf("a dropped live-snapshot closed the stream; body:\n%s", gw.body())
+		case <-deadline:
+			t.Fatalf("handler never delivered the coalesced snapshot, body:\n%s", gw.body())
+		case <-time.After(2 * time.Millisecond):
+		}
+	}
+	select {
+	case <-done:
+		t.Fatal("a dropped live-snapshot closed the stream")
+	default:
+	}
+
+	cancelReq()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not exit after request cancel")
+	}
+	<-flushDone
+}
+
+// TestHandler_EventPublishedDuringPrimeIsNotLost pins the subscribe-before-prime
+// ordering: an event published while Prime assembles its snapshots must be
+// queued for the connection and delivered, not dropped in the gap.
+func TestHandler_EventPublishedDuringPrimeIsNotLost(t *testing.T) {
+	hub := NewHub()
+	handler := &Handler{
+		Hub: hub,
+		Prime: func() []Event {
+			hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"from": "prime"}})
+			return nil
+		},
+	}
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/api/events")
+	if err != nil {
+		t.Fatalf("GET %s: %v", srv.URL, err)
+	}
+	defer resp.Body.Close()
+
+	reader := bufio.NewReader(resp.Body)
+	// Padding, blank line, then the event published from Prime.
+	lines := readLines(t, reader, 4, 2*time.Second)
+	if lines[2] != "event: "+EventLiveSnapshot+"\n" {
+		t.Fatalf("event line = %q, want %q (published during Prime)", lines[2], "event: "+EventLiveSnapshot+"\n")
+	}
+	if !strings.HasPrefix(lines[3], "data: ") {
+		t.Fatalf("expected a data: line, got %q", lines[3])
+	}
+	var data map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(lines[3], "data: ")), &data); err != nil {
+		t.Fatalf("decoding event data: %v", err)
+	}
+	if data["from"] != "prime" {
+		t.Errorf("event data = %v, want from:prime", data)
 	}
 }

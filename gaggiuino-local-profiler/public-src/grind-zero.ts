@@ -4,7 +4,7 @@
 // when it was pulled) so backend and frontend can never drift apart on
 // which zero point applied when. The backend never sees more than one
 // shot's own annotation payload at save time — this client-side copy is
-// what lets grind.js's suggestion/comparison logic normalize an entire
+// what lets grind.ts's suggestion/comparison logic normalize an entire
 // bean's shot history against S.coffeeLibrary.grinders in one pass.
 
 interface ZeroPointEntry { zeroPoint: number; since: number }

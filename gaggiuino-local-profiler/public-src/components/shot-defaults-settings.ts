@@ -1,7 +1,7 @@
 // Settings → "Shot logging defaults" card (#654): lets the user configure
 // optional default values (Drink Type, Coffee/Bean, Basket, Puck Screen,
 // Grinder, Dose) that get auto-prefilled into a brand-new shot's annotation
-// panel — see views/shots/annotation.js's _applyShotDefaults(), which is the
+// panel — see views/shots/annotation.ts's _applyShotDefaults(), which is the
 // only place that actually applies them. This module only loads/saves the
 // settings themselves and keeps S.shotDefaults (loaded once at app init by
 // loadShotDefaults()) in sync after a save.
@@ -17,7 +17,7 @@ import type { ShotDefaults } from '../api/types.js';
 
 // state/index.ts types these rows loosely as Record<string, unknown>; the
 // lookups below read the same menu/bean/basket/puck-screen entries
-// views/shots/annotation.js and views/library.js populate.
+// views/shots/annotation.ts and views/library.ts populate.
 type DrinkRow = LibraryRow & { id: string; name: string; emoji?: string };
 type CatalogRow = LibraryRow & { id: number; name: string };
 interface CatalogLibrary { beans?: LibraryRow[]; baskets?: LibraryRow[]; puckScreens?: LibraryRow[] }
@@ -63,7 +63,7 @@ export function renderShotDefaultsSettingsCard(): void {
   if (grinderInput) {
     grinderInput.value = d.grinder || '';
     // #691: was a plain text input with no suggestions, unlike the real
-    // annotation panel's #annGrinder (main.js). attachAutocomplete() is a
+    // annotation panel's #annGrinder (boot/annotation.ts). attachAutocomplete() is a
     // no-op if this input already has one attached (guards on
     // input._autocomplete), so calling it on every render here is safe.
     attachAutocomplete(grinderInput, () => S.coffeeLibrary?.grinders?.map(g => g.name) || []);
@@ -73,13 +73,13 @@ export function renderShotDefaultsSettingsCard(): void {
   if (doseInput) doseInput.value = d.dose != null ? String(d.dose) : '';
 }
 
-// #526-style race: loadDrinkMenu() is also fired unawaited from main.js's
-// init sequence (for the annotation panel's drink pills) — awaiting it again
+// #526-style race: loadDrinkMenu() is also fired unawaited from the boot
+// data chain (boot/data.ts) (for the annotation panel's drink pills) — awaiting it again
 // here is a cheap no-op once it's already resolved, and guarantees this
 // card's drink-type options aren't rendered off the still-empty S.drinkMenu
 // default when this runs first. The coffeeLibrary half of the same race
 // (beans/baskets/puckScreens) is covered by the re-render loadLibrary()
-// itself does — see views/library.js.
+// itself does — see views/library.ts.
 export async function loadShotDefaultsSettingsCard(): Promise<void> {
   await Promise.all([loadShotDefaults(), loadDrinkMenu()]);
   renderShotDefaultsSettingsCard();
@@ -100,7 +100,13 @@ export async function saveShotDefaultsSettings(): Promise<void> {
   };
 
   const saved = await saveShotDefaults(body).catch(() => null);
-  if (saved) S.shotDefaults = { ...saved };
+  if (!saved) {
+    // saveShotDefaults() resolves to null on any non-ok (or thrown) response,
+    // so a rejected save must not look successful.
+    window.showToast?.(t('error_generic', ''));
+    return;
+  }
+  S.shotDefaults = { ...saved };
 
   const btn = document.getElementById('shotDefaultsSaveBtn');
   if (btn) {

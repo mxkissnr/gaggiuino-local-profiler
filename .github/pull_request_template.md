@@ -1,3 +1,5 @@
+<!-- Base branch: dev (or the feature/* branch named in the issue), not main. See CONTRIBUTING.md. -->
+
 ## Summary
 
 <!-- What does this PR change and why? -->

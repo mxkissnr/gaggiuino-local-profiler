@@ -25,7 +25,7 @@ var DefaultImageDir = img.DefaultImageDir
 // overwritten, and any other rename failure is logged rather than returned,
 // so a stale photo file can never fail the sync that moved its row.
 func MoveShotImageFiles(dir string, oldID, newID int64, ext string) {
-	if ext == "" || oldID == newID {
+	if !img.KnownExt(ext) || oldID == newID {
 		return
 	}
 	moveShotImageFile(img.Path(dir, oldID, ext, "shot-"), img.Path(dir, newID, ext, "shot-"))

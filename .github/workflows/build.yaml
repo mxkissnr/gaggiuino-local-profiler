@@ -49,11 +49,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # #1596: a manual run from a branch must not publish :latest or a
+      # release version tag. Only a tag whose name matches config.yaml may.
       - name: Extract version from config.yaml
         id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           VERSION=$(grep '^version:' gaggiuino-local-profiler/config.yaml | sed 's/version: *"\(.*\)"/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ "$REF_TYPE" != "tag" ] || [ "$REF_NAME" != "v$VERSION" ]; then
+            echo "::error::Refusing to publish: run from $REF_TYPE '$REF_NAME', but config.yaml says v$VERSION. Dispatch this workflow on the matching release tag."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version $VERSION for ${{ matrix.arch }}"
 
       - name: Build and push
@@ -72,7 +81,7 @@ jobs:
             org.opencontainers.image.description=Local shot profiler for Gaggiuino espresso machine
             org.opencontainers.image.source=https://github.com/mxkissnr/gaggiuino-local-profiler
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.licenses=GPL-3.0-only
             io.hass.version=${{ steps.version.outputs.version }}
             io.hass.type=addon
             io.hass.arch=${{ matrix.arch }}

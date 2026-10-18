@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ApiFetchToBlobResult } from '../public-src/api/transport.js';
 
-// api/transport.js -> state.js touches localStorage/navigator at module-load time —
+// api/transport.ts -> state/index.ts touches localStorage/navigator at module-load time —
 // stub the minimum browser globals so the module graph imports under
-// vitest's node environment (same pattern as api-token-client-storage.test.js).
+// vitest's node environment (same pattern as api-token-client-storage.test.ts).
 const g = globalThis as unknown as Record<string, unknown>;
 const _store = new Map<string, string>();
 g.localStorage = {
@@ -14,7 +14,7 @@ g.localStorage = {
 g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { apiFetchToBlob, apiUpload } = await import('../public-src/api/transport.js');
+const { apiFetchToBlob, apiUpload, CLIENT_ID } = await import('../public-src/api/transport.js');
 
 // apiFetchToBlob's result is a discriminated union; the tests below assert the
 // ok branch before reading .blob, so pin that member of the union for them.
@@ -138,6 +138,7 @@ describe('apiUpload', () => {
     responseText?: string;
     onload?: () => void;
     onerror?: () => void;
+    onabort?: () => void;
     constructor() {
       captureXHR(this);
     }
@@ -167,15 +168,16 @@ describe('apiUpload', () => {
     expect(lastXHR!.method).toBe('POST');
     expect(lastXHR!.url).toBe('api/debug/import-db');
     expect(lastXHR!.headers).toEqual({
+      'X-GLP-Client': CLIENT_ID,
       'X-GLP-Token': 'tok-123',
       'Content-Type': 'application/octet-stream',
     });
     expect(lastXHR!.body).toBe('BYTES');
   });
 
-  it('omits X-GLP-Token when there is no token', async () => {
+  it('omits X-GLP-Token when there is no token but still identifies the client', async () => {
     await apiUpload('api/x', { body: 'x' });
-    expect(lastXHR!.headers).toEqual({});
+    expect(lastXHR!.headers).toEqual({ 'X-GLP-Client': CLIENT_ID });
   });
 
   it('drives onProgress from lengthComputable upload events', async () => {
@@ -195,5 +197,15 @@ describe('apiUpload', () => {
     }
     vi.stubGlobal('XMLHttpRequest', ErrXHR);
     await expect(apiUpload('api/x', { body: 'x' })).rejects.toThrow('network error');
+  });
+
+  // #1615: an aborted XHR fires neither onload nor onerror, so the promise
+  // used to stay pending forever.
+  it('rejects when the request is aborted', async () => {
+    class AbortXHR extends FakeXHR {
+      send() { this.onabort?.(); }
+    }
+    vi.stubGlobal('XMLHttpRequest', AbortXHR);
+    await expect(apiUpload('api/x', { body: 'x' })).rejects.toThrow('upload aborted');
   });
 });

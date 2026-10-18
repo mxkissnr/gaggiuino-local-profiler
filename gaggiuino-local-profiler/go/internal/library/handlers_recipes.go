@@ -12,15 +12,6 @@ var validBrewMethods = map[string]bool{
 	"moka": true, "cold_brew": true, "other": true,
 }
 
-func findRecipeIndex(lib Library, id int64) int {
-	for i, rc := range lib.Recipes {
-		if rid, ok := idOf(rc, "id"); ok && rid == id {
-			return i
-		}
-	}
-	return -1
-}
-
 // parseSteps is the local steps parser: up to 30 {text, duration_s} steps,
 // entries with a blank text dropped entirely.
 func parseSteps(raw any) []any {
@@ -61,7 +52,7 @@ func (h *Handlers) createRecipe(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	recipe, _, err := CreateRecipe(h.repo, body)
+	recipe, err := CreateRecipe(h.repo, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {
@@ -82,7 +73,7 @@ func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	recipe, _, found, err := UpdateRecipe(h.repo, id, body)
+	recipe, found, err := UpdateRecipe(h.repo, id, body)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -96,27 +87,5 @@ func (h *Handlers) updateRecipe(w http.ResponseWriter, r *http.Request) {
 
 // deleteRecipe handles POST /api/library/recipe/:id/delete.
 func (h *Handlers) deleteRecipe(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	err := h.repo.Update(func(lib *Library) error {
-		filtered := make([]Entity, 0, len(lib.Recipes))
-		removed := false
-		for _, rc := range lib.Recipes {
-			rid, ok := idOf(rc, "id")
-			if !noMatch && ok && rid == id {
-				removed = true
-				continue
-			}
-			filtered = append(filtered, rc)
-		}
-		if !removed {
-			return ErrSkipSave
-		}
-		lib.Recipes = filtered
-		return nil
-	})
-	if err != nil && !errors.Is(err, ErrSkipSave) {
-		internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	h.deleteEntity(w, r, recipeKind, nil)
 }

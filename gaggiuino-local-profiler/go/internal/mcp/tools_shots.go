@@ -352,6 +352,12 @@ func scanShots(svc *shots.Service, filters shotFilters, limit int, visit func(sh
 		if count == limit || !page.HasMore {
 			break
 		}
+		// Pages are newest-first (#1616): once this page reaches back past
+		// the since bound, every older shot fails the timestamp filter, so
+		// stop instead of reading the rest of the history.
+		if filters.Lo > 0 && page.NextCursor.Timestamp < filters.Lo {
+			break
+		}
 		pageCursor = page.NextCursor
 	}
 	if count < limit {
@@ -399,7 +405,7 @@ func getShot(svc *shots.Service, in getShotInput) (getShotOutput, error) {
 	if ann := annotationMap(shot); len(ann) > 0 {
 		out.Annotation = ann
 	}
-	if advice, aerr := svc.GetComparativeGrindAdvice(shot); aerr == nil && advice != nil {
+	if advice, aerr := svc.GetComparativeGrindAdvice(shot, "en"); aerr == nil && advice != nil {
 		out.ComparativeAdvice = &comparativeAdvice{
 			Type:             advice.Type,
 			Text:             advice.Text,
@@ -681,23 +687,38 @@ func annotationString(shot shots.Shot, key string) string {
 	return v
 }
 
-func ratingOf(shot shots.Shot) (int, bool) {
-	switch v := annotationMap(shot)["rating"].(type) {
+// ratingValue parses a stored annotation rating as an integer in 1..5. Stored
+// ratings are validated as integers (internal/shots rejects fractional ones),
+// so a float64 like 3.5 is rejected rather than rounded to 3; NaN fails every
+// comparison and is rejected too. Both the read tools (ratingOf) and the write
+// tools (annotationRating) go through this one parser (#1622 slice 12), which
+// is what keeps their answers consistent. Bounding the value before the int
+// conversion keeps it safe (and CodeQL happy).
+func ratingValue(v any) (int, bool) {
+	switch n := v.(type) {
 	case float64:
-		// NaN fails both comparisons, so it is rejected as well; bounding the
-		// value first keeps the int conversion safe (and CodeQL happy).
-		if !(v >= 1 && v <= 5) {
+		if !(n >= 1 && n <= 5) || n != math.Trunc(n) {
 			return 0, false
 		}
-		return int(v), true
+		return int(n), true
+	case int:
+		if n < 1 || n > 5 {
+			return 0, false
+		}
+		return n, true
 	case int64:
-		if v < 1 || v > 5 {
+		if n < 1 || n > 5 {
 			return 0, false
 		}
-		return int(v), true
+		return int(n), true
 	default:
 		return 0, false
 	}
+}
+
+// ratingOf reads shot's annotation rating through ratingValue.
+func ratingOf(shot shots.Shot) (int, bool) {
+	return ratingValue(annotationMap(shot)["rating"])
 }
 
 func optionalFloat(ok bool, v float64) *float64 {

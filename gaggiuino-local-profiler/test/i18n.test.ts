@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { describe, it, expect, vi } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -10,6 +10,21 @@ import fr from '../public-src/i18n/fr.js';
 import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
 import { LOCALE_MAP, localeFor } from '../public-src/constants.js';
+
+// setLang() runs applyTranslations() (which touches document) and then re-renders
+// the active view through window.* hooks. Stub those browser globals so the
+// behaviour test can drive the real setLang() the same way index.ts does.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+g.navigator ??= { language: 'en-US' };
+g.window ??= g;
+g.document = {
+  documentElement: { lang: 'de' },
+  getElementById: (): null => null,
+  querySelectorAll: (): unknown[] => [],
+};
+const { S } = await import('../public-src/state/index.js');
+const { setLang } = await import('../public-src/i18n.js');
 
 // localeFor()'s declared parameter is `string`, but the app feeds it a
 // possibly-unset S.currentLang; this test pins the runtime tolerance for
@@ -33,13 +48,6 @@ const NEW_KEYS = [
 ];
 
 describe('i18n language files', () => {
-    it('all 6 languages export the same key set', () => {
-        const base = Object.keys(de).sort();
-        for (const [name, obj] of Object.entries(LANGS)) {
-            expect(Object.keys(obj).sort(), `key mismatch in ${name}.js`).toEqual(base);
-        }
-    });
-
     // Regression (#391): LOCALE_MAP only had 5 entries for 6 supported
     // languages (nl was missing), silently falling back to 'de-DE' for
     // Dutch-locale date formatting.
@@ -98,6 +106,86 @@ describe('i18n language files', () => {
     });
 });
 
+// #1620: one consistency guard for the six dictionaries. It fails when a key
+// is missing from a language, when code references a key no dictionary
+// defines, when a key nothing references is left behind, or when the
+// languages disagree on a key's placeholders (a formatter's parameter count).
+describe('i18n dictionaries stay consistent with the code (#1620)', () => {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const SRC_ROOT = join(__dirname, '../public-src');
+
+    function sourceFiles(dir: string, out: string[] = []): string[] {
+        for (const name of readdirSync(dir)) {
+            const path = join(dir, name);
+            if (statSync(path).isDirectory()) {
+                if (name !== 'i18n' && name !== 'public') sourceFiles(path, out);
+            } else if (/\.(ts|html)$/.test(name)) {
+                out.push(path);
+            }
+        }
+        return out;
+    }
+    const sources = sourceFiles(SRC_ROOT).map(path => readFileSync(path, 'utf8')).join('\n');
+
+    // Keys the code builds at runtime, e.g. t(`ach_${id}_n`). Every key with
+    // one of these prefixes counts as used; each prefix must still occur in
+    // the code, so the list cannot outlive the construction it stands for.
+    const DYNAMIC_PREFIXES = [
+        'ach_', 'analytics_fact_wd_', 'analytics_summary_delta_', 'backup_section_',
+        'curve_', 'exit_reason_', 'machine_warn_', 'phase_type_',
+        'profile_dialin_symptom_', 'theme_preset_',
+    ];
+
+    it('every language defines exactly the English key set', () => {
+        const base = new Set(Object.keys(en));
+        for (const [name, dict] of Object.entries(LANGS)) {
+            const keys = new Set(Object.keys(dict));
+            const missing = [...base].filter(k => !keys.has(k));
+            const extra = [...keys].filter(k => !base.has(k));
+            expect(missing, `${name} is missing keys`).toEqual([]);
+            expect(extra, `${name} has keys English lacks`).toEqual([]);
+        }
+    });
+
+    it('every statically referenced key exists', () => {
+        const referenced = new Set<string>();
+        for (const m of sources.matchAll(/\bt(?:Html)?\(\s*['"]([A-Za-z0-9_-]+)['"]\s*[,)]/g)) referenced.add(m[1] ?? '');
+        for (const m of sources.matchAll(/\sdata-i18n(?:-[a-z-]+)?="([A-Za-z0-9_-]+)"/g)) referenced.add(m[1] ?? '');
+        const missing = [...referenced].filter(k => !(k in en)).sort();
+        expect(missing, 'keys referenced in public-src but defined in no dictionary').toEqual([]);
+    });
+
+    it('every key is referenced somewhere', () => {
+        const unused = Object.keys(en).filter(key => {
+            if (DYNAMIC_PREFIXES.some(prefix => key.startsWith(prefix))) return false;
+            return !new RegExp(`['"\`]${key}['"\`]`).test(sources);
+        });
+        expect(unused, 'keys no code or markup references').toEqual([]);
+    });
+
+    it('every dynamic key prefix is still built in the code', () => {
+        for (const prefix of DYNAMIC_PREFIXES) {
+            expect(sources.includes(`${prefix}\${`) || sources.includes(`'${prefix}' +`), `prefix ${prefix} is no longer built at runtime`).toBe(true);
+        }
+    });
+
+    it('placeholders match across languages', () => {
+        const mismatches: string[] = [];
+        for (const [key, ref] of Object.entries(en)) {
+            for (const [name, dict] of Object.entries(LANGS)) {
+                const val = dict[key];
+                if (val === undefined) continue; // reported by the key-set test
+                if (typeof val !== typeof ref) {
+                    mismatches.push(`${name}:${key} is a ${typeof val}, English a ${typeof ref}`);
+                } else if (typeof val === 'function' && typeof ref === 'function' && val.length !== ref.length) {
+                    mismatches.push(`${name}:${key} takes ${val.length} placeholders, English ${ref.length}`);
+                }
+            }
+        }
+        expect(mismatches).toEqual([]);
+    });
+});
+
 describe('index.html i18n wiring', () => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const html = readFileSync(join(__dirname, '../public-src/index.html'), 'utf8');
@@ -151,6 +239,12 @@ describe('index.html i18n wiring', () => {
     });
 });
 
+// The shot detail view wires its phase tags, compare title and profile fallback
+// through t(); rendering updateView() needs a full Chart.js + curve-fetch + ~40
+// element harness (see test/shots-load-data-race.test.ts, which deliberately
+// avoids it), so this stays a source guard — the escape hatch the issue allows
+// for a disproportionate harness. The language-switch re-render below is its
+// behavioural half.
 describe('shot detail view i18n wiring', () => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(__dirname, '../public-src/views/shots/index.ts'), 'utf8');
@@ -171,21 +265,32 @@ describe('shot detail view i18n wiring', () => {
 });
 
 describe('setLang() re-renders the open shot view', () => {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const src = readFileSync(join(__dirname, '../public-src/i18n.ts'), 'utf8');
-
+    // Regression guard: the Chart.js legend, grind advice and phase tags are only
+    // rebuilt when the shot detail re-renders — applyTranslations()'s DOM scan can't
+    // reach canvas-drawn text, so a language switch used to leave them stuck in
+    // whatever language was active when the shot was first opened.
     it('calls window.updateView() when switching language while on the shots view', () => {
-        // Regression guard: the Chart.js legend, grind advice and phase tags are only
-        // rebuilt when the shot detail re-renders — applyTranslations()'s DOM scan can't
-        // reach canvas-drawn text, so a language switch used to leave them stuck in
-        // whatever language was active when the shot was first opened.
-        expect(src).toMatch(/currentMode === 'shots'.*window\.updateView/);
+        const updateView = vi.fn();
+        g.updateView = updateView;
+        S.currentMode = 'shots';
+        setLang('en');
+        expect(S.currentLang).toBe('en');
+        expect(updateView).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call window.updateView() when another view is active', () => {
+        const updateView = vi.fn();
+        g.updateView = updateView;
+        g.initAnalytics = vi.fn();
+        S.currentMode = 'analytics';
+        setLang('de');
+        expect(updateView).not.toHaveBeenCalled();
     });
 });
 
 // #811 Phase 5 removed the app's second visual language: text glyphs baked
 // into translated status strings (e.g. "✓ Gespeichert") instead of the
-// app's own drawn icon set (public-src/icons.js). One sibling key
+// app's own drawn icon set (public-src/icons.ts). One sibling key
 // (orders_types_saved) was missed by the original sweep and only found by a
 // manual recount -- no test caught it, because the existing key-set-
 // equality test above only checks keys exist, not what their values

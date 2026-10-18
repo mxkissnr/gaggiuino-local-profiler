@@ -8,7 +8,8 @@ import {
   importDevDb as importDevDbRequest,
 } from '../api/system.js';
 import { shareOrDownloadBlob, syncInstallId } from '../utils.js';
-import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge, updateLegacyMachineOptionsBanner } from './onboarding.js';
+import { markDirty, noteServerRevs } from '../live-sync.js';
+import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './onboarding.js';
 import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
 import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
@@ -45,30 +46,49 @@ interface StatusPayload {
   devBuild?: string | null;
   ordersFeature?: boolean;
   isDemo?: boolean;
-  legacyMachineOptionsPending?: boolean;
+  // #1539 slice 2/3: the SSE data-change tracker's epoch and per-kind
+  // revisions, so a reconnecting client can tell which kinds it missed.
+  dataEpoch?: string;
+  dataRevs?: Record<string, number>;
 }
 
 // Tracks the server-side shot count as of the last status poll, so the periodic
 // poll below can detect a newly-finished shot even when the user isn't on the
-// shots view (and thus never got the live.js post-brew loadData() trigger) —
-// see #296.
+// shots view (and thus never got the live.ts post-brew loadData() trigger) —
+// see #296. A rise marks the `shots` kind dirty through live-sync instead of
+// calling window.loadData() directly, so the refresh goes through the
+// annotation/focus guards and never clobbers in-progress text.
 let knownShotCount: number | null = null;
 
-// #734 review: updateStatus() can be triggered from three independent places
-// (the 30s setInterval, applyActiveMachineChange() on a machine switch, and
-// #733's visibilitychange refocus handler) with no ordering guarantee between
-// them, so a plain in-flight guard keeps overlapping calls from each running
-// a redundant fetch+render in the same tick.
+// #734 review / #1605: updateStatus() can be triggered from three independent
+// places (the 30s setInterval, applyActiveMachineChange() on a machine switch,
+// and #733's visibilitychange refocus handler) with no ordering guarantee
+// between them. Overlapping calls must not each run a redundant fetch+render
+// in the same tick, but they must also not be silently dropped: a scoped call
+// that arrives while the unscoped poll is in flight used to vanish, leaving
+// the switched-to machine showing the previous machine's status until the next
+// tick. So while a call is in flight, the latest requested machine id is
+// remembered and exactly one rerun is started when the in-flight call finishes
+// (several calls during one flight collapse into that single rerun).
 let _statusUpdateInFlight = false;
+let _pendingMachineId: string | number | null | undefined;
+let _rerunPending = false;
 
 // #464: an explicit machineId scopes the status-dot/hostname fields below to
-// that machine (see go/internal/system's /api/status). 'all'/null/undefined
-// fall back to the unscoped call (default machine), mirroring the same
-// convention views/live.js and views/maintenance.js already use for the
-// 'all' switcher value — so single-machine installs and the unparameterized
-// 30s poll are unaffected.
+// that machine (see go/internal/system's /api/status). #1605: an argument-less
+// call now means "the machine the app is showing" — it resolves to
+// S.activeMachineId instead of the default machine, so the start-up call and
+// the 30s poll can no longer overwrite a selected non-default machine's status
+// with the default machine's (#464 regression). 'all'/null keep the unscoped
+// call, mirroring the same convention views/live.ts and views/maintenance.ts
+// already use for the 'all' switcher value.
 export async function updateStatus(machineId?: string | number | null): Promise<void> {
-  if (_statusUpdateInFlight) return;
+  if (machineId === undefined) machineId = S.activeMachineId;
+  if (_statusUpdateInFlight) {
+    _pendingMachineId = machineId;
+    _rerunPending = true;
+    return;
+  }
   _statusUpdateInFlight = true;
   try {
     const [statusRes, switchRes] = await Promise.all([
@@ -82,21 +102,24 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // DOM lookups or JSON parsing further below) can never leave them stuck in a stale
     // state — see #288.
     updateMachineBanner(s);
-    updateLegacyMachineOptionsBanner(s);
     updateOnboardingPanel();
-    // #750: must run before main.js's shouldOpenSetupWizard() check on the
+    // #1539 slice 3: feed the server's data-change epoch/revisions to the
+    // live-sync tracker, so a reconnect (or a missed SSE event) shows up as a
+    // refetch on the next poll.
+    if (s.dataEpoch != null && s.dataRevs != null) noteServerRevs(s.dataEpoch, s.dataRevs);
+    // #750: must run before boot/data.ts's shouldOpenSetupWizard() check on the
     // very first status poll after boot -- see syncInstallId()'s own comment.
     syncInstallId(s.installId);
     if (typeof s.shotCount === 'number') {
-      if (knownShotCount !== null && s.shotCount > knownShotCount && window.loadData) {
-        void window.loadData();
+      if (knownShotCount !== null && s.shotCount > knownShotCount) {
+        markDirty('shots', null);
       }
       knownShotCount = s.shotCount;
     }
     // Token is no longer returned by /api/status — it comes from /api/token (initToken)
     // #803: exposeApiPort mirrors the add-on option of the same name (default
     // true if the field is somehow missing, e.g. an older server -- matches
-    // the option's own default). main.js's renderApiTokenCard() reads this to
+    // the option's own default). boot/settings.ts's renderApiTokenCard() reads this to
     // tell "no token because expose_api_port is off" apart from "no token yet".
     S.apiPortExposed = s.exposeApiPort !== false;
     // #807: the app-wide banner for that state -- re-evaluated on every poll
@@ -147,7 +170,7 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // driving it with richer detail (see syncTopbarMachineIconFallback()).
     syncTopbarMachineIconFallback(s.machineReachable);
     // Skip machineSubtitle while a shot is being viewed (#344): updateView()
-    // (views/shots/index.js) owns it in that case, showing the machine that
+    // (views/shots/index.ts) owns it in that case, showing the machine that
     // actually owns the viewed shot — this global/default-machine value
     // would otherwise clobber it on the next 30s poll tick regardless of
     // which machine's shot is on screen.
@@ -208,8 +231,18 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     if (switchRes?.ok) updatePowerButton(await switchRes.json() as SwitchPayload);
     else updatePowerButton({ configured: false });
   } catch { /* ignore */ }
-  // Single-flight guard (#734): the reset below runs on every path, and last-writer-wins is fine -- the guard only needs to be false again once no call is in flight.
-  finally { _statusUpdateInFlight = false; }
+  // Single-flight guard (#734/#1605): the reset below runs on every path. If a
+  // call arrived while this one was in flight, rerun exactly once with the last
+  // machine id it asked for.
+  finally {
+    _statusUpdateInFlight = false;
+    if (_rerunPending) {
+      _rerunPending = false;
+      const rerunMachineId = _pendingMachineId;
+      _pendingMachineId = undefined;
+      void updateStatus(rerunMachineId);
+    }
+  }
 }
 
 // #722: the devToolsCard button's click handler -- deliberately goes through
@@ -312,9 +345,9 @@ export function updatePowerButton(sw: SwitchPayload): void {
   S.machinePowerState = sw.state ?? null;
   btn.className = sw.state === true  ? 'machine-on'
                 : sw.state === false ? 'machine-off' : '';
-  btn.title = sw.state === true  ? 'Maschine AN – zum Ausschalten klicken'
-            : sw.state === false ? 'Maschine AUS – zum Einschalten klicken'
-            : 'Schalter-Status unbekannt';
+  btn.title = sw.state === true  ? t('power_btn_on_title')
+            : sw.state === false ? t('power_btn_off_title')
+            : t('power_btn_unknown_title');
   if (railBtn) { railBtn.className = btn.className; railBtn.title = btn.title; }
 
   const machineOff = sw.state === false;
@@ -356,9 +389,14 @@ export async function triggerSync(): Promise<void> {
   const btn = document.getElementById('syncBtn') as HTMLButtonElement;
   btn.disabled = true;
   btn.textContent = '↻ …';
+  // On a 429 the button keeps the server's "please wait" message and stays
+  // disabled until the existing 3s timeout resets it; without this flag the
+  // finally block below would wipe that message in the same tick.
+  let rateLimited = false;
   try {
     const r = await triggerSyncRequest();
     if (r.status === 429) {
+      rateLimited = true;
       const d = await r.json() as { error?: string };
       btn.textContent = d.error || t('please_wait');
       setTimeout(() => { btn.textContent = t('btn_sync'); btn.disabled = false; }, 3000);
@@ -368,7 +406,9 @@ export async function triggerSync(): Promise<void> {
     if (window.loadData) await window.loadData();
     await updateStatus();
   } finally {
-    btn.disabled = false;
-    btn.textContent = t('btn_sync');
+    if (!rateLimited) {
+      btn.disabled = false;
+      btn.textContent = t('btn_sync');
+    }
   }
 }

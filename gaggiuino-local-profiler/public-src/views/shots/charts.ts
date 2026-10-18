@@ -17,7 +17,7 @@ interface ChartShot extends ShotMeta {
 
 interface PQPoint { x: number; y: number }
 
-// #957: curves are lazy. updateView() (index.js) ensureCurves() for the
+// #957: curves are lazy. updateView() (index.ts) ensureCurves() for the
 // selected + comparand shots before switching to the P·Q / fullscreen chart,
 // so these synchronous cache reads hit; a synthetic/demo shot still carries
 // its own datapoints, used as the fallback.
@@ -91,9 +91,9 @@ export function updatePQChart(): void {
     type: 'scatter',
     data: { datasets },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
+      ...chartRegistry.chartBaseOptions(),
       plugins: {
-        legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
+        legend: { labels: chartRegistry.chartLegendLabels(C.text) },
         tooltip: { callbacks: { label: c => `${(c.parsed.y as number).toFixed(1)} bar @ ${(c.parsed.x as number).toFixed(1)} ml/s` } }
       },
       scales: {
@@ -157,9 +157,9 @@ function renderFsChart(): void {
           borderColor: '#3498db', backgroundColor: '#3498db',
           borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }] },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: false,
+        ...chartRegistry.chartBaseOptions(),
         plugins: {
-          legend: { labels: { color: C.text, font: { family: 'Figtree' } } },
+          legend: { labels: chartRegistry.chartLegendLabels(C.text) },
           tooltip: { callbacks: { label: c => `${(c.parsed.y as number).toFixed(1)} bar @ ${(c.parsed.x as number).toFixed(1)} ml/s` } }
         },
         scales: {
@@ -190,7 +190,7 @@ function renderFsChart(): void {
     plugins: [corsairPlugin],
     data: { datasets },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
+      ...chartRegistry.chartBaseOptions(),
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: true, position: 'bottom',

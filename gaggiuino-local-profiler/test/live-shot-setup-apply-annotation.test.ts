@@ -29,6 +29,15 @@ vi.mock('../public-src/api/shots.js', () => ({
   annotateShot: (...args: unknown[]) => annotateShotMock(...args) as unknown,
 }));
 
+// #1613: autoApplyRefShot() -> _applyRefShotById() -> getShotCurve(); mocked so
+// the SSE brew-start assertion can count how many times the auto-apply ran
+// without a real curve fetch (the live chart is never initialised here, so
+// _applyRefDatasets no-ops).
+const getShotCurveMock = vi.fn((..._args: unknown[]) => Promise.resolve({}));
+vi.mock('../public-src/shot-curves.js', () => ({
+  getShotCurve: (...args: unknown[]) => getShotCurveMock(...args) as unknown,
+}));
+
 vi.mock('../public-src/views/shots/annotation.js', () => ({
   renderGrinderField: () => {},
   getGrinderFieldValue: () => '',
@@ -40,7 +49,7 @@ vi.mock('../public-src/views/shots/annotation.js', () => ({
 }));
 
 const { S } = await import('../public-src/state/index.js');
-const { fetchLiveData } = await import('../public-src/views/live.js');
+const { fetchLiveData, handleLiveSnapshotEvent } = await import('../public-src/views/live.js');
 
 // The DOM stand-in these tests touch: only the members the live view reads
 // off each element.
@@ -232,5 +241,68 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     await vi.advanceTimersByTimeAsync(4000);
 
     expect(annotateShotMock).not.toHaveBeenCalled();
+  });
+});
+
+// #1613: the same brew-start/brew-end transitions must also run when the
+// payload arrives over SSE (handleLiveSnapshotEvent) -- the path that calls
+// handleLiveData directly, skipping fetchLiveData. SSE is the default
+// transport, so before the fix the reference shot was never auto-picked and
+// the pre-shot draft never written for most users.
+describe('live transitions run on the SSE path too (#1613)', () => {
+  let draftStore: Record<string, string>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    annotateShotMock.mockClear();
+    getShotCurveMock.mockClear();
+    g.document = makeFakeDocument();
+
+    draftStore = {};
+    g.localStorage = {
+      getItem: (key: string) => (key in draftStore ? draftStore[key] : null),
+      setItem: (key: string, value: string) => { draftStore[key] = value; },
+      removeItem: (key: string) => { delete draftStore[key]; },
+    };
+
+    S.activeMachineId = 1;
+    S.currentLang = 'en';
+    S.liveWasLive = false;
+    S.liveLastSeq = 0;
+    S.refShotId = null;
+    S.shots = [
+      { id: 10, machineId: 1, timestamp: 1, annotation: {}, profileName: 'X', hasChartData: true },
+    ];
+  });
+
+  it('auto-applies the reference shot at brew start and applies the draft at brew end, once each', async () => {
+    draftStore[draftKey(1)] = JSON.stringify({ grinder: 'Niche Zero' });
+
+    // Idle first, so the brew start below is a real idle -> live transition.
+    handleLiveSnapshotEvent({ isLive: false, seq: 0 });
+    expect(getShotCurveMock).not.toHaveBeenCalled();
+
+    // Brew starts: the reference shot for the profile is picked, exactly once.
+    handleLiveSnapshotEvent({ isLive: true, profileName: 'X', seq: 1 });
+    expect(getShotCurveMock).toHaveBeenCalledTimes(1);
+    expect(S.refShotId).toBe(10);
+
+    // A second live message must not re-run the start transition.
+    handleLiveSnapshotEvent({ isLive: true, profileName: 'X', seq: 2 });
+    expect(getShotCurveMock).toHaveBeenCalledTimes(1);
+
+    // Brew ends: the draft is applied to the freshly-synced shot after 4s.
+    window.loadData = () => {
+      S.shots = [
+        { id: 10, machineId: 1, timestamp: 1, annotation: {}, profileName: 'X', hasChartData: true },
+        { id: 12, machineId: 1, timestamp: 2, annotation: {}, profileName: 'X', hasChartData: true },
+      ];
+      return Promise.resolve();
+    };
+    handleLiveSnapshotEvent({ isLive: false, seq: 3 });
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(annotateShotMock).toHaveBeenCalledTimes(1);
+    expect(annotateShotMock.mock.calls[0]?.[0]).toBe(12);
   });
 });

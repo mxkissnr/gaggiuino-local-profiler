@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ShotMeta } from '../public-src/state/index.js';
 
-// shots/index.js's import chain touches state.js/i18n.js, which read
+// shots/index.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
 // globals so the module graph can be imported under vitest's node
-// environment (same pattern as test/library-profile-editor.test.js and
-// test/library-load-render-race.test.js). vitest's node environment has no
+// environment (same pattern as test/library-profile-editor.test.ts and
+// test/library-load-render-race.test.ts). vitest's node environment has no
 // browser globals, so the fakes go through a loose view of globalThis rather
 // than satisfying the full Storage/Navigator/Document shapes (the same bridge
 // test/shots-load-all-meta-throttle.test.ts uses).

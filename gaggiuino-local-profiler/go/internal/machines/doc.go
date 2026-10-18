@@ -20,8 +20,9 @@
 //   - adapter.go — the Adapter interface (the documented per-machine-type
 //     contract, extended with the #597 settings-proxy methods) and
 //     per-machine-type dispatch.
-//   - validation.go — profile-input types (phaseSchema et al.) and
-//     ToWireProfile(), which converts a profile to its wire representation.
+//   - validation.go — profile-input types (ProfileInput/PhaseInput et al.)
+//     and ToWireProfile(), which converts a profile to its wire
+//     representation.
 //   - proto/ — the reconstructed Gaggiuino binary protobuf schema (see its
 //     own doc.go for the full story: no `.proto` sources exist anywhere,
 //     hand-written Go structs + wire codec, cross-validated against real
@@ -33,11 +34,11 @@
 //   - gaggiuino_adapter.go / http.go — the Gaggiuino Adapter implementation:
 //     REST calls (net/http) plus ws.go/live.go for what has no REST
 //     equivalent.
-//   - gaggimate_ws.go / gaggimate_profiles.go / gaggimate_adapter.go — the
-//     GaggiMate Adapter implementation: a short-lived JSON WebSocket
-//     client (request()/waitForStatus() only — see gaggimate_ws.go's
-//     header comment for what's deliberately not implemented) plus profile
-//     pass-throughs.
+//   - gaggimate_ws.go / gaggimate_live.go / gaggimate_profiles.go /
+//     gaggimate_history.go / gaggimate_adapter.go — the GaggiMate Adapter
+//     implementation: a short-lived JSON WebSocket helper, a persistent
+//     live-status session, profile pass-throughs and the index.bin/.slog
+//     shot-history parser.
 //   - firmware_check.go — the #620 GitHub-releases update-availability
 //     check.
 //   - handlers.go / handlers_registry.go / handlers_control.go /
@@ -58,17 +59,15 @@
 // passthroughs, forwarding whatever JSON shape the machine itself
 // returns/expects.
 //
-// This package replicates that passthrough exactly by treating a settings
-// payload as opaque bytes end-to-end, never as a typed Go struct with real
-// bool fields: GetSettings/UpdateSettings both move json.RawMessage/raw
-// []byte only (see http.go's httpGetBytes/httpPostBytes and
-// gaggiuino_adapter.go's doc comments), and handlers_control.go's
-// updateSettings handler forwards the exact client request bytes it read
-// off the wire, not a JSON-decoded-then-re-encoded value. See
+// This package keeps a settings payload as opaque JSON end-to-end, never a
+// typed Go struct with real bool fields: GetSettings/UpdateSettings move
+// json.RawMessage/raw []byte only (see http.go's httpGetBytes/httpPostBytes),
+// and handlers_control.go's updateSettings forwards the client's request
+// bytes unchanged — except for the "system" category, which is decoded into
+// a map so the redacted mqttPassword can be restored (#1431) and then
+// re-encoded. String-encoded bools survive that round trip as strings. See
 // gaggiuino_adapter_test.go's TestGaggiuinoAdapter_SettingsQuirkPassthrough
-// and handlers_test.go's TestHandlers_SettingsQuirkPassthrough_EndToEnd
-// for the tests that verify this field-by-field, at both the adapter and
-// full-HTTP-handler layers.
+// and handlers_test.go's TestHandlers_SettingsQuirkPassthrough_EndToEnd.
 //
 // # 501 = adapter unsupported
 //
@@ -103,65 +102,27 @@
 // enough Adapter implementations or call sites that review alone stops
 // being reliable.
 //
-// # What this package deliberately does NOT implement (and why)
+// # What lives elsewhere, or is not done
 //
-//   - GET /api/machine/status, GET /api/preheat, POST /api/preheat/ready-by,
-//     GET /api/live/data — all four depend on the single-machine 1s
-//     background polling loop (machine status, preheat scheduling), which
-//     is the `system` package's job, not this one's. GET /api/machine/live
-//     (which IS implemented here, backed by live.go's own WS session cache
-//     rather than the poller's) is genuinely machine-adapter-scoped;
-//     internal/system's poll.go reads that same cache through this
-//     package's Adapter interface rather than duplicating it.
-//   - GET /api/machine/profiles' default-machine special case, which would
-//     read the system poller's cached machine status instead of calling
-//     adapter.GetStatus() directly for the default machine only.
-//     handlers_profiles.go's listMachineProfiles calls adapter.GetStatus()
-//     unconditionally for every machine, default or not — functionally
-//     equivalent (same response shape) but one extra round trip to the
-//     machine for the default machine's profile list specifically, until
-//     this can wire into internal/system's cache instead.
-//   - The default machine's on-disk profiles-cache persistence. handlers.go's
-//     profilesCache is in-memory only for every machine including the
-//     default one — acceptable since this binary isn't wired into a
-//     running add-on process yet (go/README.md).
-//   - The MQTT live-data transport (an alternative to the WebSocket path
-//     live.go implements, toggled by a Settings-page option,
-//     default-machine-only). Not in scope and not reachable from any
-//     endpoint this package exposes.
-//   - GaggiMate's index.bin/.slog binary shot-history parsing
-//     (GaggiMateAdapter's GetLatestShotId/GetShot). These back the
-//     background shot-history sync, not any REST endpoint this package
-//     exposes — the shots-sync domain itself (#729/#731 catch-up sync
-//     included, see handlers_registry.go's header comment) doesn't run as
-//     a background process in this binary yet either.
-//   - The GaggiMate live client (a third, persistent-connection pattern,
-//     used only by the system poller's multi-machine live-poll loop) — see
-//     live.go's header comment: every REST endpoint that would read its
-//     cached data is gated by requireSettingsProxySupport, and GaggiMate
-//     reports capabilities().settingsProxy == false, so it's unreachable
-//     from this package's REST surface regardless.
-//   - Machine restore (Registry.RestoreMachines, #901) — the backup domain
-//     (go/internal/backup) calls it. Deliberately NOT included: evicting
-//     the live session for every host that existed before the restore (a
-//     stale WS session simply reconnects/fails naturally against a host
-//     nothing identifies anymore, rather than being torn down immediately —
-//     a cosmetic timing difference, not a data-correctness one) and
-//     reconciling a restored machine's stale host/switchEntity back to the
-//     current legacy add-on options.json (no options.json facade exists
-//     yet; see go/internal/orders/options.go's isOrdersEnabled() for the
-//     same gap noted from the orders domain's side). See RestoreMachines'
-//     own doc comment for the full detail.
+//   - GET /api/machine/status, GET /api/preheat, POST /api/preheat/ready-by
+//     and GET /api/live/data belong to internal/system's poller. GET
+//     /api/machine/live is served here from live.go's WS session cache,
+//     which internal/system's poller reads through the Adapter interface.
+//   - The MQTT live-data transport is internal/mqtt; the background
+//     shot-history sync (which calls GetLatestShotId/GetShot) is
+//     internal/system.
+//   - listMachineProfiles asks the machine live for every machine; only a
+//     machine the poller already knows is unreachable is served straight
+//     from the local ProfilesRepository cache (#1572).
+//   - Registry.RestoreMachines (#901, called by internal/backup) does not
+//     tear down live sessions for hosts that existed before the restore;
+//     they idle out or reconnect on their own.
 //
 // # Protobuf verification status
 //
 // proto/messages.go's hand-written wire codec is cross-validated against
-// real captured runtime output (proto/node_vectors_test.go) — genuine
-// ground truth, since it comes from the code talking to real machines in
-// production today. It has NOT been verified against a live machine
-// directly: no network access to real hardware was available while this
-// package was built.
-// cmd/gaggiuino-ws-probe is the tool this package ships specifically so
-// that step is a `go run` away once real hardware is reachable — see its
-// own doc comment.
+// wire vectors captured from the former Node implementation
+// (proto/node_vectors_test.go). The tests do not talk to a live machine;
+// cmd/gaggiuino-ws-probe dumps decoded frames from a real one for manual
+// checks.
 package machines

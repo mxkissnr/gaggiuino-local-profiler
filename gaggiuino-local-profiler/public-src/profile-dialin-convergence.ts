@@ -1,15 +1,13 @@
 // Profile Dial-In convergence logic (#313) — pure, no DOM/state/i18n. Sibling
-// to dialin-convergence.js (the grind wizard's engine), adapted for tuning
+// to dialin-convergence.ts (the grind wizard's engine), adapted for tuning
 // machine-profile phases instead of a single grind number.
 //
-// v1 SCOPE DECISION (see ~/.claude/plans/glp-profile-dialin-phase2.md): the
-// primary tuning signal is a manual taste-symptom pick per round (sour/
-// balanced/bitter/watery/channeling), mapped to a concrete phase/field
-// adjustment via the coffee-expert skill's symptom→cause table — NOT
-// shot.profile.phases parsing, whose field shape is unverified against real
-// hardware. calcShotScore(shot) is the objective secondary
-// signal, used only for convergence detection, not for picking *which*
-// field to adjust.
+// v1 SCOPE DECISION: the primary tuning signal is a manual taste-symptom pick
+// per round (sour/balanced/bitter/watery/channeling), mapped to a concrete
+// phase/field adjustment via a symptom→cause table — NOT shot.profile.phases
+// parsing, whose field shape is unverified against real hardware.
+// calcShotScore(shot) is the objective secondary signal, used only for
+// convergence detection, not for picking *which* field to adjust.
 //
 // A "round" is one dialed-in shot in a profile dial-in session:
 //   { symptom: 'sour'|'balanced'|'bitter'|'watery'|'channeling', score: number|null,
@@ -21,7 +19,7 @@
 // step size for the same field, for the halve-on-reversal logic below).
 // isProfileDialinConverged(roundHistory) is evaluated separately by the
 // wizard, over rounds *including* the one just accepted (mirrors
-// dialin-convergence.js's isConverged(s.rounds) called right after push).
+// dialin-convergence.ts's isConverged(s.rounds) called right after push).
 
 // One round of the profile dial-in session, as stored in
 // S.profileDialinSession.rounds.
@@ -107,7 +105,7 @@ function _resolvePrimarySymptom(symptom: unknown): string {
 }
 
 // ── Phase lookup (name-based, with structural fallback) ────────────────────
-// Real Gaggiuino profiles (see public-src/profile-suggestion.js, the
+// Real Gaggiuino profiles (see public-src/profile-suggestion.ts, the
 // community-derived skeleton) name phases 'Preinfusion' / 'Bloom' / 'Ramp' /
 // 'Decline Flow' — match on that first; fall back to phase shape/position
 // for hand-edited profiles that used different names.
@@ -156,10 +154,10 @@ function _setPath(obj: Record<string, unknown>, path: string, value: unknown): v
 
 // ── Field candidates per symptom ────────────────────────────────────────
 // min/max are sane per-session limits (not machine hard limits) grounded in
-// public-src/profile-suggestion.js's community-derived skeleton and the
-// coffee-expert skill's symptom table. Step sizes: "±0.5-1 bar for pressure,
-// ±1-2s for time" per plan (time fields are milliseconds on the wire — see
-// project_gaggiuino_protocol memory — so 1-2s = 1000-2000).
+// public-src/profile-suggestion.ts's community-derived skeleton and a
+// symptom table. Step sizes: "±0.5-1 bar for pressure,
+// ±1-2s for time" per plan (time fields are milliseconds on the wire, so
+// 1-2s = 1000-2000).
 function _candidateDefs(primary: string): CandidateDef[] {
   switch (primary) {
     case 'sour':
@@ -220,7 +218,7 @@ function _resolveCandidate(def: CandidateDef, profile: unknown): ResolvedCandida
 }
 
 // Previous step size for this exact field (halve on direction reversal,
-// otherwise keep it — same binary-search philosophy as dialin-convergence.js,
+// otherwise keep it — same binary-search philosophy as dialin-convergence.ts,
 // just tracked per-field instead of for a single global grind number.
 function _stepFor(candidate: ResolvedCandidate, roundHistory: unknown): number {
   const history = roundHistory as ProfileDialinRoundRow[] | null | undefined;
@@ -235,8 +233,12 @@ function _stepFor(candidate: ResolvedCandidate, roundHistory: unknown): number {
 }
 
 function _round(value: number, unit: string): number {
-  const precision = unit === 'ms' ? 100 : unit === 'ratio' ? 0.1 : 0.1;
-  return Math.round(value / precision) * precision;
+  const isMs = unit === 'ms';
+  const precision = isMs ? 100 : 0.1;
+  // toFixed() trims the binary-float noise that Math.round(v / p) * p leaves
+  // behind (e.g. 9.200000000000001) before the value is stored/shown.
+  const decimals = isMs ? 0 : 1;
+  return Number((Math.round(value / precision) * precision).toFixed(decimals));
 }
 
 function _computeAdjustment(candidate: ResolvedCandidate, roundHistory: unknown): ComputedAdjustment {

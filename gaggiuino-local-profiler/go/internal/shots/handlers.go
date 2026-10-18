@@ -8,10 +8,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync/atomic"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/jsnum"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 )
 
@@ -112,39 +115,8 @@ func withScore(shot Shot, detail ScoreDetail) Shot {
 
 // ── id parsing ──────────────────────────────────────────────────────────
 
-// jsParseInt parses like parseInt(s, 10): skip leading whitespace, an optional
-// sign, then consume as many leading decimal digits as present ("123abc" ->
-// 123, ok); no digits at all (after whitespace/sign) is not ok ("abc").
-// strconv.ParseInt/Atoi are both stricter — they reject any trailing garbage
-// outright — which would diverge from what a shot-id param like "123abc" is
-// expected to yield.
-func jsParseInt(s string) (int64, bool) {
-	i, n := 0, len(s)
-	for i < n {
-		switch s[i] {
-		case ' ', '\t', '\n', '\r', '\v', '\f':
-			i++
-			continue
-		}
-		break
-	}
-	start := i
-	if i < n && (s[i] == '+' || s[i] == '-') {
-		i++
-	}
-	digitsStart := i
-	for i < n && s[i] >= '0' && s[i] <= '9' {
-		i++
-	}
-	if i == digitsStart {
-		return 0, false
-	}
-	v, err := strconv.ParseInt(s[start:i], 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return v, true
-}
+// jsParseInt mirrors JS's parseInt(s, 10); see jsnum.ParseInt.
+var jsParseInt = jsnum.ParseInt
 
 // parseID accepts a real shot id (1..MaxShotID) or a demo-seed shot id (the
 // tight demoIDBase..demoIDMax band, which sits far above MaxShotID — see
@@ -180,27 +152,62 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 
 // ── handlers ────────────────────────────────────────────────────────────
 
-// listShots serves the shot list; ?trash=1 selects the trash list.
+// shotsTodayHeader carries GET /shots.json's shotsToday count (#1616): the
+// number of non-trashed shots stamped today (server-local calendar day,
+// every machine). The body is a bare JSON array that existing clients
+// parse as-is, so the count travels as a header rather than a field.
+const shotsTodayHeader = "X-Shots-Today"
+
+// listShots serves the shot list; ?trash=1 selects the trash list. An
+// optional ?limit=N (a positive integer) returns only the newest N active
+// shots, still oldest first — the tail of the full list (#1616); an absent
+// or invalid limit, or one with ?trash=1, returns the full list as before.
 func (h *Handlers) listShots(w http.ResponseWriter, r *http.Request) {
-	var (
-		list []Shot
-		err  error
-	)
-	if r.URL.Query().Get("trash") == "1" {
-		list, err = h.service.GetTrash()
+	q := r.URL.Query()
+	var out []Shot
+	if q.Get("trash") == "1" {
+		list, err := h.service.GetTrash()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		detail := h.service.DetailScorer()
+		out = make([]Shot, len(list))
+		for i, shot := range list {
+			out[i] = withScore(shot, detail(shot))
+		}
 	} else {
-		list, err = h.service.GetAll()
+		// The active list's scores come from the score cache (#1616) — the
+		// values the per-shot DetailScorer computes, without rescoring the
+		// whole history on every integration poll.
+		rows, err := h.service.GetAllScored(listLimit(q.Get("limit")))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		out = make([]Shot, len(rows))
+		for i, row := range rows {
+			out[i] = withScore(row.Shot, ScoreDetail{Score: row.Score, UsedBeanTarget: row.UsedBeanTarget})
+		}
 	}
+	today, err := h.service.CountToday(time.Now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	detail := h.service.DetailScorer()
-	out := make([]Shot, len(list))
-	for i, shot := range list {
-		out[i] = withScore(shot, detail(shot))
-	}
+	w.Header().Set(shotsTodayHeader, strconv.Itoa(today))
 	writeJSON(w, http.StatusOK, out)
+}
+
+// listLimit parses /shots.json's ?limit=: a positive base-10 integer, or 0
+// for anything else (absent, malformed, zero, negative), which means "no
+// limit".
+func listLimit(v string) int {
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0
+	}
+	return n
 }
 
 // listShotsPage serves GET /api/shots (#957): a keyset-paginated,
@@ -414,8 +421,9 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	}
 	accent := r.URL.Query().Get("accent")
 	theme := r.URL.Query().Get("theme")
+	lang := r.URL.Query().Get("lang")
 
-	png, err := renderShareCard(shot, h.service.ComputeScore(shot), format, accent, theme, h.card)
+	png, err := renderShareCard(shot, h.service.ComputeScore(shot), format, accent, theme, lang, h.card)
 	if err != nil {
 		log.Printf("shots: share-card render for shot %d failed: %v", id, err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
@@ -425,6 +433,24 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="glp-shot-%d-%s.png"`, id, format))
 	w.WriteHeader(http.StatusOK)
 	w.Write(png)
+}
+
+// annotationSavedHook is the process-wide "a shot's annotation was just
+// saved" callback. cmd/server installs it through SetAnnotationSavedHook to
+// run the fire-and-forget low-stock notification, which needs
+// internal/library and cannot live in this package.
+var annotationSavedHook atomic.Pointer[func(shotID int64)]
+
+// SetAnnotationSavedHook installs the process-wide post-annotate hook,
+// given the saved shot's id. Passing nil removes it. annotate runs it in its
+// own goroutine (via httputil.SafeGo) so it never blocks or fails the
+// response; see annotate's doc comment.
+func SetAnnotationSavedHook(fn func(shotID int64)) {
+	if fn == nil {
+		annotationSavedHook.Store(nil)
+		return
+	}
+	annotationSavedHook.Store(&fn)
 }
 
 // annotate serves POST /api/shots/{id}/annotate. Body validation runs before
@@ -451,10 +477,12 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 // by the error handling, not a 4xx — see handlers_test.go's
 // TestAnnotate_NonexistentShotFailsOnForeignKey.
 //
-// The fire-and-forget low-stock notification is NOT sent here: it needs
-// internal/library (bean resolution, bag stock, HA-notify settings), which is
-// still a placeholder. Wire it in once that lands — until then, annotating a
-// shot in the Go server never sends a low-stock notification.
+// The fire-and-forget low-stock notification runs through the installed
+// annotation-saved hook (SetAnnotationSavedHook, #1671): once the save above
+// succeeds, the hook is handed the shot id on its own goroutine and there
+// checks the shot's bean against the library, sending the "bean running low"
+// push via HA when it crosses the threshold. It never blocks this response,
+// and a failure is logged there — never surfaced here.
 func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSONBody(w, r)
 	if !ok {
@@ -484,6 +512,9 @@ func (h *Handlers) annotate(w http.ResponseWriter, r *http.Request) {
 		score = h.service.ComputeScore(shot)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "annotation": ann, "score": score})
+	if hook := annotationSavedHook.Load(); hook != nil {
+		httputil.SafeGo("shots: low-stock notification", func() { (*hook)(id) })
+	}
 }
 
 // trash serves POST /api/shots/{id}/trash.
@@ -518,12 +549,12 @@ func (h *Handlers) restore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// delete serves POST /api/shots/{id}/delete: permanently deletes and adds the
-// id to the blocklist so a later re-import/re-sync never resurrects it. The
-// blocklist add goes through AppendToBlocklist's atomic INSERT OR IGNORE
-// rather than a GetBlocklist+SaveBlocklist read-modify-write — see
-// Repository.AppendToBlocklist's doc comment for why the latter loses updates
-// under concurrent deletes (#901).
+// delete serves POST /api/shots/{id}/delete: permanently deletes the shot and
+// adds its id to the blocklist so a later re-import/re-sync never resurrects
+// it. The delete and the blocklist insert run in one transaction
+// (Service.PermanentDelete → Repository.DeleteAndBlocklist, #1609), so a sync
+// running in between can neither see the shot gone-but-not-blocklisted and
+// re-import it nor observe a blocklist entry for a shot that is still there.
 func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -544,13 +575,10 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #1525: the shot row is gone, so its stored photo and thumbnail are now
-	// orphaned — remove them here rather than waiting for the startup sweep.
+	// orphaned — remove them here, only after the delete+blocklist transaction
+	// committed, rather than waiting for the startup sweep.
 	if ext := shot.imageExt(); ext != "" {
 		img.Delete(h.imageDir, id, ext, "shot-")
-	}
-	if err := h.service.AppendToBlocklist(strconv.FormatInt(id, 10)); err != nil {
-		writeError(w, http.StatusInternalServerError, "Internal server error")
-		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

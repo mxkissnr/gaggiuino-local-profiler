@@ -6,26 +6,30 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
 )
 
 // DefaultImageDir is the one directory every entity photo
 // (bean/grinder/basket/puckScreen/shot) lives in, distinguished by filename
 // prefix (see Filename). Handlers take this as
 // an injectable field so tests can point uploads at a t.TempDir() instead
-// of the real /data mount. Resolved from GLP_IMAGE_DIR at startup (falling
-// back to /data/bean-images) so the throwaway E2E/screenshot harness keeps
-// the server's image reads and writes inside its tmp data dir — the same
-// way GLP_DB_PATH and GLP_TOKEN_FILE already work.
+// of the real data mount. Resolved from GLP_IMAGE_DIR at startup (falling
+// back to datadir.Root's bean-images directory) so the throwaway
+// E2E/screenshot harness keeps the server's image reads and writes inside its
+// tmp data dir — the same way GLP_DB_PATH and GLP_TOKEN_FILE already work.
 var DefaultImageDir = resolveImageDir()
 
 // resolveImageDir returns the GLP_IMAGE_DIR override when set, otherwise the
-// production /data mount. A function rather than an inline expression so a
-// test can exercise the override with t.Setenv after package init has run.
+// bean-images directory under datadir.Root (the production data mount, or a
+// per-test directory in a `go test` binary). A function rather than an inline
+// expression so a test can exercise the override with t.Setenv after package
+// init has run.
 func resolveImageDir() string {
 	if dir := os.Getenv("GLP_IMAGE_DIR"); dir != "" {
 		return dir
 	}
-	return "/data/bean-images"
+	return datadir.Path("bean-images")
 }
 
 // MaxBytes is the cap on a raw uploaded / fetched / restored image body.
@@ -76,9 +80,10 @@ var ExtContentType = map[string]string{
 	"gif":  "image/gif",
 }
 
-// knownExt reports whether ext is one of the four whitelisted on-disk
-// extensions.
-func knownExt(ext string) bool {
+// KnownExt reports whether ext is one of the four whitelisted on-disk
+// extensions. Any extension read back from stored data must pass this before
+// it is used to build a filesystem path.
+func KnownExt(ext string) bool {
 	_, ok := ExtContentType[ext]
 	return ok
 }
@@ -121,13 +126,25 @@ func thumbPathFor(path, ext string) string {
 }
 
 // Delete is the best-effort removal of a stored image AND its thumbnail,
-// silently ignoring an already-missing file.
+// silently ignoring an already-missing file. A stored extension is
+// caller-supplied data (sync, restore, import), so an extension outside the
+// whitelist is ignored rather than turned into a path.
 func Delete(dir string, id int64, ext, prefix string) {
-	if ext == "" {
+	if !KnownExt(ext) {
 		return
 	}
-	_ = os.Remove(Path(dir, id, ext, prefix))
-	_ = os.Remove(ThumbPath(dir, id, ext, prefix))
+	cleanDir := filepath.Clean(dir)
+	for _, path := range []string{
+		Path(dir, id, ext, prefix),
+		ThumbPath(dir, id, ext, prefix),
+	} {
+		// Second floor: KnownExt already rules out separators and "..", but
+		// never remove a path that resolves outside dir.
+		if !strings.HasPrefix(filepath.Clean(path), cleanDir+string(os.PathSeparator)) {
+			continue
+		}
+		_ = os.Remove(path)
+	}
 }
 
 // ServePath returns the filesystem path a `GET .../image` handler should

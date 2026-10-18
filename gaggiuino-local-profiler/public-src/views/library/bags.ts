@@ -1,20 +1,20 @@
 // Bag lifecycle, stock quick-adjust, full bag edit and drag-reorder sections of
-// the Library view, split out of views/library.js. Pure move + type port
+// the Library view, split out of views/library.ts. Pure move + type port
 // (Part of #1115); no behavior change.
 import { S } from '../../state/index.js';
-import { tHtml } from '../../i18n.js';
+import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, todayIsoDate, html, joinHtml } from '../../utils.js';
+import { ICON_TRASH } from '../../icons.js';
 import type { Html } from '../../utils.js';
 import type { Bean } from '../../api/types.js';
 import * as libraryView from '../library.js';
 
-// Circular with library.js (it re-exports this module): only ever touched at
+// Circular with library.ts (it re-exports this module): only ever touched at
 // call time, never read at module load.
 const library = libraryView;
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
-const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>` as Html;
 
 // The generated Bean.bags item lags the backend: every bean-returning
 // response also carries price_eur/sortOrder (stored) and the server-computed
@@ -104,7 +104,7 @@ export function classifyBeanBags(b: BeanRow): ClassifiedBags {
 
 // Bag cards are collapsed by default (space-saving on mobile) — this Set
 // tracks which bag ids are expanded, mirroring the _pendingBeanActiveToggles
-// module-state pattern already used in views/library.js.
+// module-state pattern already used in views/library.ts.
 const _expandedBagCards = new Set<number | undefined>();
 // Same pattern for the "Vergangene" (past bags) section per bean id — see
 // renderBeanList's pastSection comment for why this can't live as
@@ -119,8 +119,8 @@ export const _expandedPastSections = new Set<number>();
 // still unconsumed (consumed === 0) — upcoming bags always qualify by
 // construction (SimulateBagQueue never touches a bag before its turn),
 // current loses it as soon as any dose lands on it, past bags never had it.
-// Only 'upcoming' bags are drag-reorderable (see main.js's pointer-events
-// drag handler) — current is queue-position-fixed, past is inert.
+// Only 'upcoming' bags are drag-reorderable (see bagDragPointerDown
+// below) — current is queue-position-fixed, past is inert.
 export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, beans: BeanRow[], canDelete: boolean): Html {
   const { bg, consumed, stockG, remaining } = entry;
   const pct = remaining != null && stockG != null && stockG > 0 ? Math.round((remaining / stockG) * 100) : null;
@@ -152,7 +152,7 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
   // own always-visible button — both are "change this bag's stock" actions.
   const stockRow: Html = editingStock
     ? html`<div class="lib-stock-edit-row">
-         <input type="number" class="lib-new-bag-input" id="bagStockEditInput${esc(bg.id)}" value="${esc(remaining ?? 0)}" min="0" step="1" placeholder="${tHtml('lib_stock_adjust_ph')}">
+         <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_stock_adjust_ph')}" id="bagStockEditInput${esc(bg.id)}" value="${esc(remaining ?? 0)}" min="0" step="1" placeholder="${tHtml('lib_stock_adjust_ph')}">
          <button class="lib-save-btn" data-action="save-bag-stock-edit" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_save')}</button>
          <button class="lib-btn-sm" data-action="mark-bag-empty" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_mark_empty')}</button>
          <button class="lib-btn-sm" data-action="close-bag-stock-edit" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
@@ -166,10 +166,10 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
   const editRow: Html = editingFull
     ? html`<div class="lib-new-bag-form" style="display:flex">
          <div class="lib-new-bag-fields">
-           <input type="date" class="lib-new-bag-input" id="editBagRoastDate${esc(bg.id)}" title="${tHtml('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${esc(todayIsoDate())}">
-           <input type="number" class="lib-new-bag-input" id="editBagStock${esc(bg.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1" value="${esc(stockG ?? '')}">
-           <input type="number" class="lib-new-bag-input" id="editBagPrice${esc(bg.id)}" placeholder="${tHtml('lib_bag_price')}" min="0" step="0.01" value="${esc(bg.price_eur ?? '')}">
-           <input type="text" class="lib-new-bag-input" id="editBagBatchNumber${esc(bg.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
+           <input type="date" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_roast_date')}" id="editBagRoastDate${esc(bg.id)}" title="${tHtml('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${esc(todayIsoDate())}">
+           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="editBagStock${esc(bg.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1" value="${esc(stockG ?? '')}">
+           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_price')}" id="editBagPrice${esc(bg.id)}" placeholder="${tHtml('lib_bag_price')}" min="0" step="0.01" value="${esc(bg.price_eur ?? '')}">
+           <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="editBagBatchNumber${esc(bg.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
          </div>
          <div class="lib-form-actions">
            <button class="lib-btn-sm" data-action="close-edit-bag" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
@@ -181,7 +181,7 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
     ? html`<span class="lib-bag-drag-handle" data-bag-drag-handle data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_reorder_handle')}">⠿</span>`
     : esc('');
   return html`<div class="lib-bag-card${esc(state === 'current' ? ' active' : '')}${esc(expanded ? ' expanded' : '')}" data-bag-card data-bag-id="${esc(bg.id)}">
-    <div class="lib-bag-card-header" data-action="toggle-bag-card" data-bag-id="${esc(bg.id)}">
+    <div class="lib-bag-card-header" role="button" tabindex="0" aria-expanded="${esc(expanded ? 'true' : 'false')}" data-action="toggle-bag-card" data-bag-id="${esc(bg.id)}">
       ${dragHandle}
       <span class="lib-bag-date">${bg.roastDate ? esc(bg.roastDate) : tHtml('lib_bag_no_roast_date')}</span>
       ${stateBadge}
@@ -341,6 +341,27 @@ function bagDragPointerDown(e: PointerEvent): void {
   card.classList.add('dragging');
   document.addEventListener('pointermove', bagDragPointerMove);
   document.addEventListener('pointerup', bagDragPointerUp);
+  document.addEventListener('pointercancel', bagDragPointerCancel);
+}
+
+// Drops every drag listener and clears the dragging state, shared by the
+// pointerup and pointercancel end paths.
+function endBagDrag(): void {
+  document.removeEventListener('pointermove', bagDragPointerMove);
+  document.removeEventListener('pointerup', bagDragPointerUp);
+  document.removeEventListener('pointercancel', bagDragPointerCancel);
+  _dragState?.card.classList.remove('dragging');
+  _dragState = null;
+}
+
+// pointercancel fires when the browser takes the pointer back mid-drag (a
+// cancelled touch, a gesture the UA claims). Ending here abandons the drag
+// without saving and re-renders the list so the DOM returns to the saved
+// order.
+function bagDragPointerCancel(e: PointerEvent): void {
+  if (!_dragState || e.pointerId !== _dragState.pointerId) return;
+  endBagDrag();
+  library.renderBeanList();
 }
 
 function bagDragPointerMove(e: PointerEvent): void {
@@ -362,11 +383,8 @@ function bagDragPointerUp(e: PointerEvent): void {
 
 async function finishBagDrag(e: PointerEvent): Promise<void> {
   if (!_dragState || e.pointerId !== _dragState.pointerId) return;
-  const { card, list, beanId } = _dragState;
-  card.classList.remove('dragging');
-  document.removeEventListener('pointermove', bagDragPointerMove);
-  document.removeEventListener('pointerup', bagDragPointerUp);
-  _dragState = null;
+  const { list, beanId } = _dragState;
+  endBagDrag();
   // data-bag-drag-list holds exactly this bean's upcoming (non-current) bags
   // (renderBeanList only puts those in it), so this is the complete ordered
   // list reorderBags/the server require: every upcoming bag, once, in DOM
@@ -384,7 +402,14 @@ if (typeof document !== 'undefined') {
 
 export async function reorderBags(beanId: number, bagIds: number[]): Promise<void> {
   const saved = await libraryApi.reorderBeanBags(beanId, bagIds);
-  if (!saved) return;
+  if (!saved) {
+    // The reorder didn't stick: tell the user and re-render so the DOM
+    // returns to the server's (unchanged) order instead of keeping the
+    // unsaved arrangement the drag left behind.
+    window.showToast?.(t('error_generic', ''));
+    library.renderBeanList();
+    return;
+  }
   const idx = _beans().findIndex(b => b.id === beanId);
   if (idx !== -1) _beans()[idx] = saved;
   library.renderBeanList();

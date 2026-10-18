@@ -9,6 +9,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -31,7 +32,7 @@ type Handlers struct {
 	repo            *Repository
 	shotsRepo       *shots.Repository
 	imageDir        string
-	limiter         *rateLimiter
+	limiter         *ratelimit.KeyedLimiter
 	onGrinderDelete func(grinderID int64) error
 
 	// onBeanRestocked runs after a new bag has been added to a bean
@@ -85,7 +86,7 @@ func (h *Handlers) notifyBeanRestocked(wasEmpty bool) {
 // written under DefaultImageDir; tests override the unexported imageDir
 // field to point at a throwaway directory instead (see helpers_test.go).
 func NewHandlers(repo *Repository, shotsRepo *shots.Repository) *Handlers {
-	return &Handlers{repo: repo, shotsRepo: shotsRepo, imageDir: DefaultImageDir, limiter: newRateLimiter()}
+	return &Handlers{repo: repo, shotsRepo: shotsRepo, imageDir: DefaultImageDir, limiter: ratelimit.NewKeyed()}
 }
 
 // RegisterRoutes registers every /api/library/* route onto mux.
@@ -197,9 +198,9 @@ func writeUpdateError(w http.ResponseWriter, err error) {
 // writing the uploaded file, so an unknown id still 404s — and no file is
 // written — before any image validation, matching dev's original ordering.
 // GetLibrary is always called first (even for an unparseable id), so a
-// broken DB outranks the not-found response exactly as before; find is the
-// kind's findXIndex.
-func (h *Handlers) entityExists(id int64, noMatch bool, find func(Library, int64) int) (bool, error) {
+// broken DB outranks the not-found response exactly as before; k selects the
+// collection to search.
+func (h *Handlers) entityExists(id int64, noMatch bool, k entityKind) (bool, error) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
 		return false, err
@@ -207,7 +208,7 @@ func (h *Handlers) entityExists(id int64, noMatch bool, find func(Library, int64
 	if noMatch {
 		return false, nil
 	}
-	return find(lib, id) != -1, nil
+	return findEntityIndex(*k.list(&lib), id) != -1, nil
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
@@ -224,7 +225,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
 // rateLimitCreate applies the `lib:<ip>`-keyed guard every library
 // create-endpoint (bean/grinder/basket/milk/puckscreen/recipe) opens with.
 func (h *Handlers) rateLimitCreate(w http.ResponseWriter, r *http.Request) bool {
-	if h.limiter.allow("lib:"+auth.RemoteIP(r), 30) {
+	if h.limiter.Allow("lib:"+auth.RemoteIP(r), 30) {
 		return true
 	}
 	writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
@@ -247,7 +248,7 @@ const imageRateLimitPerMin = 30
 // scoped to its own `image:<ip>` key so image uploads don't share a budget
 // with entity creates.
 func (h *Handlers) rateLimitImage(w http.ResponseWriter, r *http.Request) bool {
-	if h.limiter.allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
+	if h.limiter.Allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
 		return true
 	}
 	writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
@@ -265,9 +266,9 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	var allShots []shots.Shot
+	var uses []shots.GrinderUse
 	if len(lib.Grinders) > 0 {
-		allShots, err = h.shotsRepo.FindAllExcludingTrash()
+		uses, err = h.shotsRepo.GrinderUses()
 		if err != nil {
 			internalError(w, err)
 			return
@@ -275,7 +276,7 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	grinders := make([]Entity, len(lib.Grinders))
 	for i, g := range lib.Grinders {
-		shotsSince, gramsSince := ComputeGrinderWearFrom(allShots, g)
+		shotsSince, gramsSince := ComputeGrinderWearFromUses(uses, g)
 		grinders[i] = withWearEntity(g, shotsSince, gramsSince)
 	}
 	lib.Grinders = grinders
@@ -299,11 +300,8 @@ func (h *Handlers) getLibrary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, lib)
 }
 
-// withWear attaches wear: computeGrinderWearStats(g). Field names are
-// shotsSinceBurrs/gramsSinceBurrs, the actual return shape — NOT
-// openapi.yaml's Grinder.wear schema (documented there as `{shots, grams}`),
-// which drifted from the implementation; the running behavior wins, same
-// "doc vs. code disagree, code wins" rule shots/doc.go states.
+// withWear attaches wear: {shotsSinceBurrs, gramsSinceBurrs} from
+// ComputeGrinderWearStats.
 func (h *Handlers) withWear(grinder Entity) Entity {
 	shotsSince, gramsSince, err := ComputeGrinderWearStats(h.shotsRepo, grinder)
 	if err != nil {
@@ -331,7 +329,12 @@ func (h *Handlers) getBeansInfo(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, GetBeansInfo(lib))
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, GetBeansInfo(lib, doseRows))
 }
 
 // ── image handling shared by bean/grinder/basket/puckscreen ───────────────

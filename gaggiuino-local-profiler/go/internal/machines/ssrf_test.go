@@ -78,3 +78,43 @@ func TestAssertMachineHost_UnresolvableIsPlainError(t *testing.T) {
 		t.Fatal("an unresolvable host must be a plain error, not ErrSSRFBlocked")
 	}
 }
+
+// Embedded loopback/metadata forms must be unwrapped and rejected (#1747),
+// not mistaken for an ordinary public IPv6 host.
+func TestAssertMachineHost_BlocksEmbeddedLoopbackAndMetadata(t *testing.T) {
+	cases := []string{
+		"::127.0.0.1",
+		"::ffff:127.0.0.1",
+		"64:ff9b::7f00:1",
+		"64:ff9b::a9fe:a9fe",
+		"2002:7f00:1::1",
+		"2002:a9fe:a9fe::1",
+	}
+	for _, ip := range cases {
+		t.Run(ip, func(t *testing.T) {
+			withFakeMachineLookup(t, map[string][]net.IP{"evil.example": {net.ParseIP(ip)}})
+			err := assertMachineHost(context.Background(), "evil.example")
+			if err == nil || !isSSRFBlocked(err) {
+				t.Fatalf("expected ErrSSRFBlocked for %s, got %v", ip, err)
+			}
+		})
+	}
+}
+
+// Unwrapping an embedded IPv4 address must not block a legitimate LAN
+// machine: machines live in RFC1918 space (#336).
+func TestAssertMachineHost_AllowsEmbeddedLANAddress(t *testing.T) {
+	cases := []string{
+		"::192.168.1.20",
+		"64:ff9b::c0a8:114",
+		"2002:c0a8:114::1",
+	}
+	for _, ip := range cases {
+		t.Run(ip, func(t *testing.T) {
+			withFakeMachineLookup(t, map[string][]net.IP{"gaggiuino.local": {net.ParseIP(ip)}})
+			if err := assertMachineHost(context.Background(), "gaggiuino.local"); err != nil {
+				t.Fatalf("expected an embedded LAN address to pass assertMachineHost, got: %v", err)
+			}
+		})
+	}
+}

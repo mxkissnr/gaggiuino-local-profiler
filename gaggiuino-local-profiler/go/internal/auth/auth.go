@@ -5,14 +5,20 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/datadir"
 )
 
-// DefaultTokenFile is the on-disk location of the generated X-GLP-Token.
-const DefaultTokenFile = "/data/api_token.txt"
+// DefaultTokenFile is the on-disk location of the generated X-GLP-Token, under
+// datadir.Root (the real data directory in production, a per-test directory
+// under `go test`). A var, not a const, so it is resolved through the data-dir
+// seam.
+var DefaultTokenFile = datadir.Path("api_token.txt")
 
 // HAIngressPrefix is the fixed prefix of the X-Ingress-Path header HA Core
 // sets when proxying a request through Ingress. It is a PREFIX, not the add-on's own path: HA Core
@@ -25,25 +31,24 @@ const DefaultTokenFile = "/data/api_token.txt"
 // arbitrary X-Ingress-Path.
 const HAIngressPrefix = "/api/hassio_ingress/"
 
-// IsSupervisorIP has exact (non-obvious) string semantics: only literal
-// "127.0.0.1" or "::1" — not the whole 127.0.0.0/8 loopback block — count as
-// loopback, and "172.30." is a plain string prefix check on the (optionally
-// IPv4-mapped) address, not a CIDR-aware containment check. This is
-// deliberately a string comparison, not net.IP-based (no ParseIP,
-// IsLoopback, or IPNet.Contains): it strips a leading "::ffff:" and compares
-// the resulting string, so anything that isn't exactly one of those three
-// forms (e.g. "127.0.0.5", an octal/non-canonical form, garbage) is
-// untrusted.
+// SupervisorIngressIP is the HA Supervisor's fixed ingress proxy address.
+// It is a package variable only so tests can point it at loopback; it is
+// never set from configuration or the environment.
+var SupervisorIngressIP = "172.30.32.2"
+
+// IsSupervisorIP has exact (non-obvious) string semantics: it trusts only
+// the literal Supervisor ingress proxy address, compared as a string after
+// trimming whitespace and stripping a leading "::ffff:" (IPv4-mapped IPv6).
+// It is deliberately not net.IP-based (no ParseIP or IPNet.Contains), so
+// non-canonical forms (e.g. an octal address, garbage) are untrusted.
 //
-// #801: this deliberately trusts the *whole* 172.30.0.0/16 network, not only
-// the Ingress proxy specifically — any other add-on running on that network
-// could in principle send a crafted X-Ingress-Path and be treated as Ingress
-// by IsIngressRequest. Not exploitable beyond what the already-public GET
-// /api/token grants, but load-bearing for anything later built on the
-// assumption that Ingress implies trusted.
+// #801/#1747: Home Assistant's developer docs require that only connections
+// from 172.30.32.2 be allowed. That is the sole address Ingress requests
+// arrive from, so the rest of the 172.30.0.0/16 add-on network — other
+// containers, or a local process — is not trusted.
 func IsSupervisorIP(ip string) bool {
 	plain := strings.TrimPrefix(strings.TrimSpace(ip), "::ffff:")
-	return plain == "127.0.0.1" || plain == "::1" || strings.HasPrefix(plain, "172.30.")
+	return plain == SupervisorIngressIP
 }
 
 // RemoteIP extracts the connecting IP from an *http.Request's RemoteAddr
@@ -58,18 +63,18 @@ func RemoteIP(r *http.Request) string {
 }
 
 // IsFromSupervisor is true only for requests whose connection originates
-// from the HA Supervisor's internal network. External LAN clients arrive
-// with their own IP and must not receive the same trust level.
+// from the HA Supervisor's ingress proxy address. External LAN clients
+// arrive with their own IP and must not receive the same trust level.
 func IsFromSupervisor(r *http.Request) bool {
 	return IsSupervisorIP(RemoteIP(r))
 }
 
 // IsIngressRequest is true only for requests that genuinely arrive through
-// HA Ingress — an X-Ingress-Path
-// header with the expected prefix AND a Supervisor-network source IP (the
-// same trust check IsFromSupervisor uses). The Supervisor-IP check is what
-// stops a LAN client on the app's exposed port from simply sending its own
-// X-Ingress-Path header to pass this.
+// HA Ingress — an X-Ingress-Path header with the expected prefix AND the
+// Supervisor ingress-proxy source IP (the same trust check IsFromSupervisor
+// uses). The Supervisor-IP check is what stops a LAN client on the app's
+// exposed port from simply sending its own X-Ingress-Path header to pass
+// this.
 func IsIngressRequest(r *http.Request) bool {
 	ingressPath := r.Header.Get("X-Ingress-Path")
 	return strings.HasPrefix(ingressPath, HAIngressPrefix) && IsFromSupervisor(r)
@@ -93,18 +98,41 @@ func IsTokenValid(stored, candidate string) bool {
 	return subtle.ConstantTimeCompare(a, b) == 1
 }
 
+// tokenMinLen is the length below which a hand-set token is logged as a
+// warning. A generated token is 64 hex chars; a shorter one is likely a value
+// the user set themselves, which is kept rather than replaced — replacing it
+// would lock out the HA integration and the cards that already hold it.
+const tokenMinLen = 32
+
 // LoadOrCreateToken reads the token at path if present (trimmed), or
 // generates a new 32-byte random token (hex-encoded) and persists it via an
-// atomic write (writeTokenFile below) if none exists yet.
+// atomic write (writeTokenFile below) if none exists yet. A file that exists
+// but is empty or whitespace-only is treated exactly like a missing one — a
+// blank token would otherwise leave RequireToken failing closed and answering
+// 503 to every request. A non-empty token shorter than tokenMinLen is kept
+// as-is, only logged as a warning.
 func LoadOrCreateToken(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err == nil {
-		return strings.TrimSpace(string(data)), nil
+		token := strings.TrimSpace(string(data))
+		if token == "" {
+			log.Printf("auth: token file was empty — generated a new token")
+			return writeNewToken(path)
+		}
+		if len(token) < tokenMinLen {
+			log.Printf("auth: token in %s is only %d characters; keeping it", path, len(token))
+		}
+		return token, nil
 	}
 	if !os.IsNotExist(err) {
 		return "", err
 	}
+	return writeNewToken(path)
+}
 
+// writeNewToken generates a fresh 32-byte random token (hex-encoded) and
+// persists it through writeTokenFile's atomic rename.
+func writeNewToken(path string) (string, error) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", err
@@ -187,8 +215,9 @@ func SecurityHeaders(next http.Handler) http.Handler {
 // pages), without having to special-case each route individually.
 // It must run behind SecurityHeaders and ahead of any route — see
 // cmd/server's middleware chain, whose ordering is security headers, then
-// the rate limiter, then this.
-func RequireToken(token string) func(http.Handler) http.Handler {
+// the rate limiter, then this. tickets backs GET /api/events' ?ticket=
+// (#1626); nil accepts no ticket.
+func RequireToken(token string, tickets *TicketStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Fail closed, not open: if no token is available, deny
@@ -204,11 +233,20 @@ func RequireToken(token string) func(http.Handler) http.Handler {
 
 			authenticated := IsTokenValid(token, r.Header.Get("X-GLP-Token"))
 			// #735: EventSource can't send custom headers, so /api/events —
-			// and only that route — also accepts the token as a query
-			// param. See internal/sse/doc.go for why this lives here and
-			// not in that package.
+			// and only that route — also accepts a credential in the query.
+			// #1626: that is a short-lived, single-use ?ticket= from
+			// POST /api/events/ticket (ticket.go). The long-lived token as
+			// ?token= is still accepted for now, deprecated, so a web app
+			// loaded before the update keeps its live stream until reload.
+			// See internal/sse/doc.go for why this lives here and not in
+			// that package.
 			if !authenticated && r.URL.Path == "/api/events" {
-				authenticated = IsTokenValid(token, r.URL.Query().Get("token"))
+				q := r.URL.Query()
+				if ticket := q.Get("ticket"); ticket != "" {
+					authenticated = tickets.Consume(ticket)
+				} else {
+					authenticated = IsTokenValid(token, q.Get("token"))
+				}
 			}
 
 			// Ingress bypass: only trust X-Ingress-Path when the request

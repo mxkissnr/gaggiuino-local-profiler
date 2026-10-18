@@ -76,3 +76,8 @@ export const CHECK_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 
 export const CLOSE_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>`;
 
 export const EDIT_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 4.5 19.5 8.5 8 20H4v-4z"/><path d="M13.5 6.5l4 4"/></svg>`;
+
+// #1622: the one delete glyph. Every library view had copy-pasted this
+// byte-for-byte; the differently sized near-copies (14px/16px in orders,
+// the sidebar and the shots trash) stay local on purpose.
+export const ICON_TRASH: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;

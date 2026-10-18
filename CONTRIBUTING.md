@@ -2,13 +2,40 @@
 
 Bug reports, feature ideas and pull requests are welcome!
 
+The [roadmap board](https://github.com/users/mxkissnr/projects/2/views/2) shows what is planned for the next release, what comes later and
+where help is wanted.
+
 ## Workflow
 
-1. **Open an issue first** — describe the bug or feature before writing any code  
-   (no PRs without a linked issue — see [CLAUDE.md](CLAUDE.md) for context)
-2. **Fork & branch** — `feature/short-description` or `fix/short-description`
-3. **Implement** — commit with `Closes #N` in the message
-4. **Pull request** — see [Pull requests](#pull-requests) below
+1. **Open an issue first** — describe the bug or feature before writing any code
+   (no PRs without a linked issue)
+2. **Fork & branch** — `fix/…` or `feat/…`
+3. **Target the right branch** — open the PR against `dev`, or against the feature branch named
+   in the issue when the issue belongs to a feature, such as the score epic. See
+   [Which branch?](#which-branch) below
+4. **Implement with tests**
+5. **Open the pull request** — see [Pull requests](#pull-requests) below
+
+See [docs/MAINTAINING.md](docs/MAINTAINING.md) for release and branch maintenance.
+
+### Which branch?
+
+`main` stays the default branch because Home Assistant's app store reads the default branch, so
+contributors pick `dev` as the PR base by hand.
+
+| Branch | Holds | Open PRs against it? |
+|---|---|---|
+| `main` | released versions only | No — only the release PR from `release/vX.Y.0` |
+| `dev` | exactly what the next release ships | Yes — fixes and small features go here |
+| `feature/*` | a large change that may ship in a later release | Yes — when the issue belongs to that feature |
+| `release/*` | a release in acceptance, or a patch line | No — maintainers cut and merge these |
+
+Branch protection enforces these bases. `dev` and `feature/**` require the CI checks
+**Test and build**, **Go backend test/vet/build/vuln gate** and **E2E smoke test**; `dev`
+additionally requires **Analyze (go)**, **Analyze (javascript-typescript)** and **AI
+assistance disclosure present**. `main` and `release/**` additionally require the three
+Docker image smoke tests (`Docker image build+smoke test` per architecture). Force-pushes
+and branch deletion are blocked on protected branches.
 
 ## Pull requests
 
@@ -19,7 +46,7 @@ Every PR must:
 - **Use a Conventional Commits title in English** — `feat:` `fix:` `docs:` `chore:` `refactor:` `test:` `build:`
 - **Explain what and why** in the description, not just what
 - **Pass CI** — lint, tests and build green before requesting review
-- **Update `CHANGELOG.md`** for any user-facing change
+- **Add a changelog fragment** in `gaggiuino-local-profiler/changelog.d/<issue>.<added|changed|fixed|removed|security>.md` for user-visible changes. One bold sentence ending with `Closes #N`. Never edit `CHANGELOG.md` directly.
 - **Include before/after screenshots** for UI changes
 - **Disclose AI assistance** — see below
 - **No real names** in commit messages, PR text, code comments or docs
@@ -30,9 +57,8 @@ Be transparent about AI tool use so reviewers know what they are reviewing.
 
 - **Per commit (machine-readable, required):** every commit an AI tool helped write carries a
   trailer, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>` or
-  `Co-Authored-By: Copilot <198982749+Copilot@users.noreply.github.com>`. Claude Code also
-  adds a `Claude-Session:` trailer. For this repo the Claude trailer names the specific model,
-  e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` (see [CLAUDE.md](CLAUDE.md)).
+  `Co-Authored-By: Copilot <198982749+Copilot@users.noreply.github.com>`. For this repo the
+  Claude trailer names the specific model, e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 - **Per PR (summary, required):** the "AI assistance disclosure" section of the PR template —
   one of `none` / `assisted` / `substantial` / `generated`, plus the tool and model names.
 
@@ -56,6 +82,14 @@ Include:
 | Storage | SQLite (`go/internal/db`, `modernc.org/sqlite` — pure Go, no CGo) at `/data/glp.db` for shot data **and** machine config (the `machines` table is the source of truth — see [CLAUDE.md](CLAUDE.md#key-conventions)); `/data/*.json` for token, preheat state, profile cache, and `options.json` (a tracked *input* to the machine registry, adopted on start — not live config, see `go/internal/machines`) |
 | Translations | UI strings via `t()` + `TRANSLATIONS` object (DE/EN/IT/FR/ES/NL) — add all 6 languages for new keys |
 | URLs | Always relative (no leading `/`) for HA ingress compatibility |
+
+## Large files
+
+`gaggiuino-local-profiler/public-src/views/analytics.ts`,
+`gaggiuino-local-profiler/public-src/main.ts` and
+`gaggiuino-local-profiler/go/internal/system/poll.go` are oversized. When a PR changes one of
+them substantially, move the part it touches into its own module in the same PR. Do not open PRs
+that only reorganize these files.
 
 ## Frontend build
 
@@ -148,6 +182,61 @@ artifact, not source. Before writing anything the script scans every text respon
 personal data (IP literals, e-mail addresses, long hex blobs) and aborts on a hit, so a run that
 passes is safe to serve but never committed. Like `screenshots.mts` it needs
 `npx playwright install chromium` once.
+
+## Performance comparison
+
+The manually triggered `perf-compare` GitHub Actions workflow measures the same
+workload against two images — a base ref (for example the previous release tag)
+and a head ref (the release candidate) — runs them one after the other on the
+same runner, and writes a Markdown table. It only runs in GitHub Actions, never
+on a local machine, and it is not a pull-request gate; it feeds the release
+acceptance pass (#1558). Start it from the Actions tab or with
+`gh workflow run perf-compare.yml -f base=v3.4.0 -f head=dev`; the table lands in
+the run's job summary and both JSON files in its `perf-compare` artifact.
+
+The three Node scripts it runs can also be called by hand from
+`gaggiuino-local-profiler/`:
+
+```sh
+npm run perf:dataset -- --shots 5000 --out /tmp/dataset.zip
+npm run perf:measure -- --base-url http://127.0.0.1:8099 --ref v3.5.0 --out /tmp/head.json
+npm run perf:compare -- /tmp/base.json /tmp/head.json
+```
+
+`perf:dataset` grows the committed demo backup
+(`gaggiuino-local-profiler/demo/glp-demo-backup.zip`, overridable with
+`--input`) to the requested shot count with a seeded generator (default 5000
+shots, seed 1558), so the same input and seed give a byte-identical ZIP. That
+demo ZIP is only read — the scaled result is written to the `--out` path, never
+back into the fixture. `perf:measure` optionally restores that ZIP
+(`--restore <zip>`) and times the shot list, a shot detail with its curve, the
+full `/shots.json` history the statistics page loads, and the library,
+maintenance, achievements and status endpoints, each as median and p95 over
+`--runs` runs (default 30, after `--warmup`, default 3). It also measures the
+built frontend bundle size: every same-origin script, stylesheet and
+modulepreload the index page references, plus the total.
+
+`perf:measure` takes the API token from `--token <value>`, else the environment
+variable `GLP_PERF_TOKEN`, and otherwise fetches `GET /api/token`. When GLP runs
+as a plain Docker container outside Home Assistant that endpoint is refused
+(`expose_api_port`), so pass `--token` or `GLP_PERF_TOKEN`; the token is sent as
+`x-glp-token` on every request, including `POST /api/restore`.
+
+The workflow merges its own container metrics (startup time until `/api/status`
+answers, image size, and idle CPU, idle memory and peak memory from the
+container's cgroup), measured outside Node, into the same JSON with `jq`. Every
+metric has one shape:
+`{ "value": number, "unit": "ms" | "bytes" | "%", "better": "lower" | "higher" }`.
+
+`perf:compare` prints `Metric | Base | Head | Change (%)`. A row whose change is
+worse than `--threshold` percent (default 15) in the metric's `better` direction
+is marked `review`; a metric present in only one file is listed with `n/a`. The
+command always exits 0 — a regression is a review item, not a failure.
+
+Lighthouse is deliberately not measured: its run-to-run noise on CI runners is
+well above the 10 % the issue asks for, so a 15 % threshold could not tell a
+real regression from noise. Bundle size and the API timings above cover the
+frontend instead.
 
 ## Versioning
 

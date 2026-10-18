@@ -21,10 +21,10 @@ import (
 // /api/library/beans-info, a contract glp-integration's proxy and
 // glp-lovelace-card both consume directly, so field names/nullability here
 // must match byte-for-byte.
-func GetBeansInfo(lib Library) []Entity {
+func GetBeansInfo(lib Library, doseRows []shots.AnnotatedDose) []Entity {
 	out := make([]Entity, 0, len(lib.Beans))
 	for _, bean := range lib.Beans {
-		bag := resolveCurrentBagSimple(bean)
+		bag := currentBag(bean, doseRows, lib.Beans)
 		var roastDate any
 		if bag != nil {
 			if v, _ := bag["roastDate"].(string); v != "" {
@@ -77,27 +77,34 @@ func parseJSDate(s string) (ms int64, ok bool) {
 	return 0, false
 }
 
+// ParseJSDate is parseJSDate's exported entry point for internal/mcp's library
+// tools, so the assistant shares the library's date parsing instead of keeping
+// its own copy.
+func ParseJSDate(s string) (ms int64, ok bool) {
+	return parseJSDate(s)
+}
+
 // ComputeGrinderWearStats returns shots/grams ground on this grinder since
 // its last burr swap (or purchase), matched by annotated grinder name,
 // case-insensitive. shotsRepo is internal/shots' Repository — the shots
 // domain doesn't expose a Service for this cross-domain read, so this package
 // talks to its Repository directly rather than through a Service.
 func ComputeGrinderWearStats(shotsRepo *shots.Repository, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64, err error) {
-	allShots, err := shotsRepo.FindAllExcludingTrash()
+	uses, err := shotsRepo.GrinderUses()
 	if err != nil {
 		return 0, 0, err
 	}
-	s, g := ComputeGrinderWearFrom(allShots, grinder)
+	s, g := ComputeGrinderWearFromUses(uses, grinder)
 	return s, g, nil
 }
 
-// ComputeGrinderWearFrom is ComputeGrinderWearStats' pure core: one
-// grinder's burr wear against an already-loaded shot list. Enriching every
-// grinder for GET /api/library (and the /grinders web page) used to call
-// ComputeGrinderWearStats per grinder, so a 3-grinder library scanned the
-// whole shot history 3× (#951); those call sites now load the shots once
-// and fold every grinder through this in a single pass.
-func ComputeGrinderWearFrom(allShots []shots.Shot, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64) {
+// ComputeGrinderWearFromUses folds one grinder's burr wear over the
+// history's GrinderUse rows (internal/shots.Repository.GrinderUses).
+// Enriching every grinder for GET /api/library used to call
+// ComputeGrinderWearStats per grinder, scanning the whole shot history per
+// grinder (#951); the call sites load the rows once and fold every grinder
+// through this. The rows replace a full hydrate of every shot (#1616).
+func ComputeGrinderWearFromUses(uses []shots.GrinderUse, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64) {
 	name, _ := grinder["name"].(string)
 	name = lowerOrEmpty(name)
 
@@ -116,24 +123,16 @@ func ComputeGrinderWearFrom(allShots []shots.Shot, grinder Entity) (shotsSinceBu
 	}
 
 	var grams float64
-	for _, shot := range allShots {
-		ann, _ := shot["annotation"].(map[string]any)
-		grinderName := ""
-		if ann != nil {
-			grinderName, _ = ann["grinder"].(string)
-		}
-		if lowerOrEmpty(grinderName) != name {
+	for _, u := range uses {
+		if lowerOrEmpty(u.Grinder) != name {
 			continue
 		}
-		ts, _ := shot["timestamp"].(int64)
-		if ts*1000 <= resetTs {
+		if u.Timestamp*1000 <= resetTs {
 			continue
 		}
 		shotsSinceBurrs++
-		if ann != nil {
-			if dose, ok := jsParseFloat(ann["dose"]); ok {
-				grams += dose
-			}
+		if dose, ok := jsParseFloat(u.Dose); ok {
+			grams += dose
 		}
 	}
 	return shotsSinceBurrs, roundTo1(grams)
@@ -199,7 +198,7 @@ func UpsertKnownGrindSetting(lib *Library, beanID int64, grinder, grindSetting s
 // issuing their own extra GetLibrary call.
 func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, found bool, err error) {
 	err = repo.Update(func(l *Library) error {
-		idx := findBeanIndex(*l, id)
+		idx := findEntityIndex(l.Beans, id)
 		if idx == -1 {
 			return ErrSkipSave
 		}
@@ -224,37 +223,58 @@ func ToggleBeanActive(repo *Repository, id int64) (bean Entity, lib Library, fou
 	return bean, lib, true, nil
 }
 
+// BeanImageHook, when set by cmd/server at startup, is invoked once after a
+// bean's downloaded photo has been stored on a fresh library read (see
+// SetBeanImage). It lets the server announce the image write that happened
+// after the create/update HTTP response already published its own
+// data-changed event. nil (the default, and in every test that doesn't set
+// it) makes the call a no-op.
+var BeanImageHook func(beanID int64)
+
 // SetBeanImage runs fire-and-forget after a bean create with an `imageUrl`
-// field — it downloads the image once and records its extension on a FRESH
-// read of the library (not the `lib` object the create handler already
-// saved), because the bean may have been edited/deleted by the time this
-// finishes. Called from a goroutine on the bean create path.
+// field — it downloads the image into memory first, then records its extension
+// on a FRESH read of the library (not the `lib` object the create handler
+// already saved), because the bean may have been edited/deleted by the time
+// this finishes. Called from a goroutine on the bean create path.
+//
+// The image is only written, and BeanImageHook only fired, when the bean still
+// exists and has no image of its own: a photo the user uploaded while this
+// download was in flight must never be overwritten.
 func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL string) {
-	ext := fetchBeanImage(imageDir, beanID, imageURL)
-	if ext == "" {
+	data, contentType := downloadBeanImage(imageURL)
+	if data == nil {
 		return
 	}
+	storedExt := ""
 	err := repo.Update(func(lib *Library) error {
-		for i, bean := range lib.Beans {
-			id, ok := idOf(bean, "id")
-			if !ok || id != beanID {
-				continue
-			}
-			if oldExt, _ := bean["image"].(string); oldExt != "" && oldExt != ext {
-				img.Delete(imageDir, beanID, oldExt, "")
-			}
-			bean["image"] = ext
-			lib.Beans[i] = bean
-			return nil
+		idx := findEntityIndex(lib.Beans, beanID)
+		if idx == -1 {
+			return ErrSkipSave // bean deleted before the download finished
 		}
-		return ErrSkipSave
+		bean := lib.Beans[idx]
+		if existing, _ := bean["image"].(string); existing != "" {
+			return ErrSkipSave // the user's own photo wins
+		}
+		ext, ok := img.Save(imageDir, "", beanID, data, contentType, img.ModeUpload)
+		if !ok {
+			return ErrSkipSave
+		}
+		bean["image"] = ext
+		lib.Beans[idx] = bean
+		storedExt = ext
+		return nil
 	})
-	if errors.Is(err, ErrSkipSave) {
-		// Bean was deleted before the download finished — clean up the orphaned file.
-		img.Delete(imageDir, beanID, ext, "")
+	if err != nil && !errors.Is(err, ErrSkipSave) {
+		if storedExt != "" {
+			img.Delete(imageDir, beanID, storedExt, "")
+		}
+		log.Printf("library: setBeanImage: updating library for bean %d: %v", beanID, err)
 		return
 	}
-	if err != nil {
-		log.Printf("library: setBeanImage: updating library for bean %d: %v", beanID, err)
+	if storedExt == "" {
+		return
+	}
+	if BeanImageHook != nil {
+		BeanImageHook(beanID)
 	}
 }

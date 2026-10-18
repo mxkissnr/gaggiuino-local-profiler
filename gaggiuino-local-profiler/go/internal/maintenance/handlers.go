@@ -7,8 +7,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/jsnum"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -76,6 +78,22 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 	return body, true
 }
 
+// hostnameFromHost turns a machine's stored host (with or without a scheme)
+// into a bare hostname, reporting whether that succeeded.
+func hostnameFromHost(raw string) (string, bool) {
+	if raw == "" {
+		return "", false
+	}
+	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return "", false
+	}
+	return u.Hostname(), true
+}
+
 // machineHostname returns the default machine's host, as a bare hostname,
 // falling back to "gaggiuino" on any error — cosmetic display/log text
 // stored on newly-written maintenance_log rows; no behavior depends on it.
@@ -83,18 +101,26 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, boo
 // MarkTaskDone can call it without needing a *Handlers instance.
 func machineHostname(registry *machines.Registry) string {
 	m, err := registry.GetDefaultMachine()
-	if err != nil || m == nil || m.Host == "" {
+	if err != nil || m == nil {
 		return "gaggiuino"
 	}
-	raw := m.Host
-	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
-		raw = "http://" + raw
+	if host, ok := hostnameFromHost(m.Host); ok {
+		return host
 	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Hostname() == "" {
-		return "gaggiuino"
+	return "gaggiuino"
+}
+
+// machineHostnameFor returns the bare hostname of the machine a maintenance
+// log entry is for, falling back to the default machine's host only when the
+// machine cannot be looked up or has no usable host.
+func machineHostnameFor(registry *machines.Registry, machineID int64) string {
+	m, err := registry.GetMachine(machineID)
+	if err == nil && m != nil {
+		if host, ok := hostnameFromHost(m.Host); ok {
+			return host
+		}
 	}
-	return u.Hostname()
+	return machineHostname(registry)
 }
 
 // parseMachineIDParam ports parseMachineIdParam(req): 'all' passes
@@ -111,14 +137,45 @@ func parseMachineIDParam(r *http.Request) (id int64, isAll bool) {
 	return v, false
 }
 
-// activeMachineID ports activeMachineId(req): 'all' resolves to 1 for
-// write routes, which always need one concrete target machine.
-func activeMachineID(r *http.Request) int64 {
-	id, isAll := parseMachineIDParam(r)
-	if isAll {
-		return 1
+// writeMachineID resolves the concrete target machine for a mutating
+// maintenance route. An absent machineId means the registry's default
+// machine; "all" or an unparseable value is a 400, and an id that names no
+// machine is a 404 -- a write must never silently land on a different
+// machine than the one asked for. It writes the error response itself and
+// returns ok == false when it did.
+func (h *Handlers) writeMachineID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := r.URL.Query().Get("machineId")
+	if raw == "" {
+		m, err := h.registry.GetDefaultMachine()
+		if err != nil {
+			internalError(w, err)
+			return 0, false
+		}
+		if m == nil {
+			internalError(w, errors.New("maintenance: no default machine"))
+			return 0, false
+		}
+		return m.ID, true
 	}
-	return id
+	if raw == "all" {
+		writeError(w, http.StatusBadRequest, "Invalid machineId")
+		return 0, false
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid machineId")
+		return 0, false
+	}
+	m, err := h.registry.GetMachine(id)
+	if err != nil {
+		internalError(w, err)
+		return 0, false
+	}
+	if m == nil {
+		writeError(w, http.StatusNotFound, "Unknown machine")
+		return 0, false
+	}
+	return id, true
 }
 
 func (h *Handlers) getMaintenance(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +212,10 @@ func (h *Handlers) taskDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	notes, _ := body["notes"].(string)
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	stats, err := MarkTaskDone(h.repo, h.shotsRepo, h.libRepo, h.registry, r.PathValue("task"), notes, machineID)
 	if err != nil {
 		if errors.Is(err, ErrUnknownTask) {
@@ -176,17 +236,19 @@ func (h *Handlers) taskDone(w http.ResponseWriter, r *http.Request) {
 // and cmd/server's firmware-update hook (a task outside this package) reuses
 // the exact same scoping rather than duplicating it.
 func ShotCountFor(shotsRepo *shots.Repository, task string, machineID int64) int64 {
-	var list []shots.Shot
+	// COUNT(*) instead of loading every shot just for len() (#1616). Every
+	// synced shot counts, trashed or not; an error still records 0.
+	var n int
 	var err error
 	if isGlobalMaintenanceTask(task) {
-		list, err = shotsRepo.FindAll()
+		n, err = shotsRepo.Count()
 	} else {
-		list, err = findAllByMachine(shotsRepo, machineID)
+		n, err = shotsRepo.CountByMachine(machineID)
 	}
 	if err != nil {
 		return 0
 	}
-	return int64(len(list))
+	return int64(n)
 }
 
 // FirmwareUpdateNote formats the maintenance-log note for a `firmware_update`
@@ -207,33 +269,15 @@ func FirmwareUpdateNote(from, to string) string {
 	}
 }
 
-// findAllByMachine returns the machineId-scoped shots for a maintenance
-// log's shot_count — internal/shots.Repository.FindAll() has no
-// machineId-scoped variant (only FindAllExcludingTrashByMachine, which
-// this call needs to NOT apply, since shot_count counts every synced shot,
-// trashed or not). Filters client-side rather than adding a fifth query
-// variant to internal/shots.Repository for this one cosmetic counter.
-func findAllByMachine(shotsRepo *shots.Repository, machineID int64) ([]shots.Shot, error) {
-	all, err := shotsRepo.FindAll()
-	if err != nil {
-		return nil, err
-	}
-	out := make([]shots.Shot, 0, len(all))
-	for _, s := range all {
-		mid, _ := s["machineId"].(int64)
-		if mid == machineID {
-			out = append(out, s)
-		}
-	}
-	return out, nil
-}
-
 func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeJSONBody(w, r)
 	if !ok {
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	maint, err := h.repo.GetMaintenance(machineID)
 	if err != nil {
 		internalError(w, err)
@@ -248,8 +292,15 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 	if t == nil {
 		t = Task{}
 	}
+	// delta collects only the keys this request actually changes. SaveTask
+	// merges it onto the stored row, so writing one task can neither clobber a
+	// concurrent edit to another nor freeze GetMaintenance's defaults into the
+	// DB. The in-memory t/maint copy below still drives the returned stats.
+	delta := Task{}
 	if v, present := body["threshold_shots"]; present {
-		t["threshold_shots"] = clampThreshold(v, 1, 10000)
+		c := clampThreshold(v, 1, 10000)
+		t["threshold_shots"] = c
+		delta["threshold_shots"] = c
 	}
 	if v, present := body["threshold_days"]; present {
 		// Custom tasks are user-defined and may legitimately track something
@@ -262,7 +313,9 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 		if isCustomTask(task) {
 			max = 3650
 		}
-		t["threshold_days"] = clampThreshold(v, 1, max)
+		c := clampThreshold(v, 1, max)
+		t["threshold_days"] = c
+		delta["threshold_days"] = c
 	}
 	if v, present := body["disabled"]; present {
 		if b, ok := v.(bool); ok {
@@ -271,6 +324,7 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 			} else {
 				delete(t, "disabled")
 			}
+			delta["disabled"] = b
 		}
 	}
 	if isCustomTask(task) {
@@ -279,17 +333,20 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 				s = strings.TrimSpace(s)
 				if s != "" && len(s) <= 100 {
 					t["label"] = s
+					delta["label"] = s
 				}
 			}
 		}
 	}
 	if strings.HasPrefix(task, "grinder_") {
 		if v, present := body["threshold_g"]; present {
-			t["threshold_g"] = clampThreshold(v, 1, 100000)
+			c := clampThreshold(v, 1, 100000)
+			t["threshold_g"] = c
+			delta["threshold_g"] = c
 		}
 	}
 	maint[task] = t
-	if err := h.repo.SaveMaintenance(maint, machineID); err != nil {
+	if err := h.repo.SaveTask(machineID, task, delta); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -311,22 +368,8 @@ func clampThreshold(v any, lo, hi int64) any {
 	return n
 }
 
-func jsParseIntAny(v any) (int64, bool) {
-	switch t := v.(type) {
-	case float64:
-		return int64(t), true
-	case int64:
-		return t, true
-	case string:
-		n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
-		if err != nil {
-			return 0, false
-		}
-		return n, true
-	default:
-		return 0, false
-	}
-}
+// jsParseIntAny mirrors JS's parseInt over a body/query value; see jsnum.ParseIntAny.
+var jsParseIntAny = jsnum.ParseIntAny
 
 func (h *Handlers) getLog(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("machineId")
@@ -349,7 +392,10 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	maint, err := h.repo.GetMaintenance(machineID)
 	if err != nil {
 		internalError(w, err)
@@ -361,16 +407,28 @@ func (h *Handlers) postLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid task")
 		return
 	}
+	// An explicit date back-dates the entry: it means that day at 12:00 UTC.
+	// A malformed or future date (later than today UTC) is rejected. No date
+	// means "now".
+	at := time.Now()
 	date, _ := body["date"].(string)
-	if date != "" && !dateRe.MatchString(date) {
-		writeError(w, http.StatusBadRequest, "Invalid date")
-		return
+	if date != "" {
+		if !dateRe.MatchString(date) || date > time.Now().UTC().Format("2006-01-02") {
+			writeError(w, http.StatusBadRequest, "Invalid date")
+			return
+		}
+		parsed, err := time.Parse("2006-01-02", date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid date")
+			return
+		}
+		at = parsed.Add(12 * time.Hour)
 	}
 	notes, _ := body["notes"].(string)
 	if runes := []rune(notes); len(runes) > 500 {
 		notes = string(runes[:500])
 	}
-	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostname(h.registry), ShotCountFor(h.shotsRepo, task, machineID), machineID)
+	entry, err := h.repo.AddMaintenanceLogEntry(task, notes, machineHostnameFor(h.registry, machineID), ShotCountFor(h.shotsRepo, task, machineID), machineID, at)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -385,24 +443,13 @@ func (h *Handlers) deleteLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid id")
 		return
 	}
-	log, err := h.repo.GetMaintenanceLog(0)
+	deleted, err := h.repo.DeleteMaintenanceLog(id)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	found := false
-	for _, e := range log {
-		if e.ID == id {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if deleted == 0 {
 		writeError(w, http.StatusNotFound, "Not found")
-		return
-	}
-	if err := h.repo.DeleteMaintenanceLog(id); err != nil {
-		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -429,7 +476,10 @@ func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "label produced empty key")
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	maint, err := h.repo.GetMaintenance(machineID)
 	if err != nil {
 		internalError(w, err)
@@ -445,7 +495,7 @@ func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
 		"threshold_shots": clampThreshold(body["threshold_shots"], 1, 10000),
 		"threshold_days":  clampThreshold(body["threshold_days"], 1, 3650),
 	}
-	if err := h.repo.SaveCustomTask(machineID, key, task); err != nil {
+	if err := h.repo.SaveTask(machineID, key, task); err != nil {
 		internalError(w, err)
 		return
 	}
@@ -465,7 +515,10 @@ func (h *Handlers) customDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid custom task key")
 		return
 	}
-	machineID := activeMachineID(r)
+	machineID, ok := h.writeMachineID(w, r)
+	if !ok {
+		return
+	}
 	if err := h.repo.DeleteCustomTask(machineID, key); err != nil {
 		internalError(w, err)
 		return

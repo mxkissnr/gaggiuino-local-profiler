@@ -1,7 +1,8 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints, isoToGerman } from '../../utils.js';
+import { mapShotDatapoints, parseRoastDate, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
+import type { PressureNote } from '../../shared/score.js';
 
 // state/index.ts types shot rows as metadata-only `ShotMeta` with an index
 // signature; these local aliases name the fields these helpers actually read
@@ -21,6 +22,7 @@ export interface ShotLike {
   score?: number | null;
   usedBeanTarget?: boolean;
   datapoints?: ShotDatapoints;
+  profile?: { name?: string | null; phases?: unknown[] } | null;
   annotation?: ShotAnnotationLike | null;
 }
 
@@ -38,38 +40,16 @@ type BeanRecord = {
 
 // ── Bean age ───────────────────────────────────────────────────────────────
 
-// Roast dates reach us as the server's ISO storage format (`YYYY-MM-DD`,
-// see validateBagRoastDate in go/internal/library/handlers_beans.go) or as
-// the German `DD.MM.YYYY` typed by hand. isoToGerman turns the former into
-// the latter and passes the latter through untouched, so one split covers
-// both; anything else falls through to NaN.
-function _parseDMY(str: string | null | undefined): number {
-  if (!str) return NaN;
-  const p = isoToGerman(str).split('.');
-  if (p.length !== 3) return NaN;
-  const [day = '', month = '', year = ''] = p;
-  return new Date(+year, +month - 1, +day).getTime();
-}
-
 // #456: resolves a shot/annotation to its library bean, preferring the
 // stable beanId link over the free-text coffee name — mirrors
 // LibraryService.resolveBeanForAnnotation on the backend, and the same
-// underlying rule as library.js's renderBeanList consumption totals: when
-// beanId resolves to a bean, it's trusted exclusively; only when it's
-// absent, or points at nothing currently in the library, does this fall
-// back to a name match (recovering a delete+reimport under the same name,
-// and covering annotations that predate beanId).
+// underlying rule as library.ts's renderBeanList consumption totals. The
+// matching itself lives in utils.ts (the pure helper module, so a caller that
+// passes the bean list explicitly need not pull this state-backed module in);
+// this wrapper only supplies the current library as the default list.
 export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): BeanRecord | null {
-  const ann = annotation as ShotAnnotationLike | null | undefined;
   const list = (Array.isArray(beans) ? beans : S.coffeeLibrary?.beans || []) as BeanRecord[];
-  if (ann?.beanId != null) {
-    const byId = list.find(b => b.id === ann.beanId);
-    if (byId) return byId;
-  }
-  const name = ann?.coffee;
-  if (!name) return null;
-  const key = String(name).toLowerCase();
-  return list.find(b => String(b.name || '').toLowerCase() === key) || null;
+  return _resolveBeanForAnnotation(annotation, list) as BeanRecord | null;
 }
 
 export function _roastDateFromLibrary(
@@ -109,9 +89,9 @@ export function calcBeanAgeAtShot(
       .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
     if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
   }
-  const roastMs = _parseDMY(roastDateStr);
-  if (isNaN(roastMs)) return null;
-  const days = Math.round((shotMs - roastMs) / 86400000);
+  const roastDate = parseRoastDate(roastDateStr);
+  if (!roastDate) return null;
+  const days = Math.round((shotMs - roastDate.getTime()) / 86400000);
   return days >= 0 && days <= 730 ? days : null;
 }
 
@@ -121,7 +101,7 @@ export function calcBeanAgeAtShot(
 // object that actually carries its curve blob (synthetic/demo data, a shot
 // just fetched from GET /api/shots/{id}, or a live-brew payload). List rows
 // from GET /api/shots no longer carry datapoints: go through the curve cache
-// (shot-curves.js getShotCurve / getCachedShotData) for those.
+// (shot-curves.ts getShotCurve / getCachedShotData) for those.
 export function getShotData(shot: { datapoints?: ShotDatapoints } | null | undefined): ShotSeries | null {
   if (!shot) return null;
   return mapShotDatapoints(shot.datapoints);
@@ -144,6 +124,22 @@ export function shotUsedBeanTarget(shot: ShotLike | null | undefined): boolean {
   if (shot && shot.usedBeanTarget !== undefined) return !!shot.usedBeanTarget;
   const bean = resolveBeanForAnnotation(shot?.annotation);
   return _calcShotScoreDetail(shot, bean).usedBeanTarget;
+}
+
+// #1538: why the pressure part was scored the way it was for a sub-5-bar shot
+// ('profile' when scored against the profile's own target, 'omitted' when left
+// out), or null for a normal >=5-bar shot. `data` is the raw datapoints object
+// (a metadata-only list row doesn't carry it; the detail view passes the curve
+// it fetched), falling back to the shot's own datapoints for synthetic/live
+// rows. Powers the verdict header's pressure hint, mirroring shotUsedBeanTarget.
+export function shotPressureNote(
+  shot: ShotLike | null | undefined,
+  data?: ShotDatapoints | null,
+): PressureNote | null {
+  if (!shot) return null;
+  const datapoints = data && Object.keys(data).length ? data : shot.datapoints;
+  if (!datapoints) return null;
+  return _calcShotScoreDetail({ ...shot, datapoints }).pressureNote;
 }
 
 // ── Same-profile auto-compare (#402) ────────────────────────────────────────

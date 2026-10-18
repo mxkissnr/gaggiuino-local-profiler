@@ -230,7 +230,7 @@ async function main(): Promise<void> {
     // it overlays the top of the page and intercepts clicks on the nav bar.
     await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
     // #btnLive is only shown once a switch_entity is configured for machine
-    // power control (components/status.js's updatePowerButton()) — this
+    // power control (components/status.ts's updatePowerButton()) — this
     // throwaway instance has no HA connection to report one, so force it
     // visible for the screenshot rather than leaving the Live tab undocumented.
     await page.addStyleTag({ content: '#btnLive{display:flex!important}' });

@@ -3,7 +3,7 @@ import * as libraryApi from '../../api/library.js';
 import { S } from '../../state/index.js';
 import type { ShotMeta } from '../../state/index.js';
 import { localeFor, countryName } from '../../constants.js';
-import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, toIsoDateInput, todayIsoDate, html, joinHtml } from '../../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
 import { miniWheelSvg, flavorChipsHtml } from '../../components/flavor-mini-wheel.js';
@@ -66,7 +66,7 @@ export function originDisplay(bean: OriginBean): string {
 // Most recently used grind setting for a bean (#829). Deliberately reads
 // S.shots' own annotations rather than bean.knownGrindSettings: that array
 // is only written by the Guided Dial-In wizard's explicit "Save known grind"
-// button (dialin-wizard.js's dialinSaveKnownGrind, POST .../known-grind) —
+// button (dialin-wizard.ts's dialinSaveKnownGrind, POST .../known-grind) —
 // it stays empty for the common case of a bean that's only ever been
 // annotated on normal shots, which would make "last used" silently blank
 // for most beans. Same beanId-first, name-fallback matching convention as
@@ -101,17 +101,9 @@ export function beanFreshBadge(b: BeanListRow): Html {
     : esc('');
 }
 
-// #1408: safeHttpUrl returns u only when it parses as an absolute http(s)
-// URL, so a stored javascript:/data: value renders as plain text, never as a
-// clickable link.
-export function safeHttpUrl(u: string | null | undefined): string | null {
-  if (!u) return null;
-  try {
-    const parsed = new URL(u);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return u;
-  } catch { /* not a URL */ }
-  return null;
-}
+// safeHttpUrl moved to utils.ts (#1626) so every link sink can share it; it
+// stays re-exported here for library.ts's existing export list.
+export { safeHttpUrl };
 
 export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   const bags = Array.isArray(b.bags) ? b.bags : [];
@@ -158,7 +150,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   const bagHistoryHtml: Html = bags.length >= 1 ? (() => {
     const parts: Html[] = [];
     if (current) parts.push(renderBagCard(b, current, 'current', beans, false));
-    // data-bag-drag-list marks the container main.js's drag-reorder
+    // data-bag-drag-list marks the container bags.ts's drag-reorder
     // handler watches for drop targets — only "upcoming" bags participate.
     const upcomingHtml = joinHtml(upcoming.map(entry => renderBagCard(b, entry, 'upcoming', beans, true)));
     if (upcomingHtml) parts.push(html`<div class="lib-bag-drag-list" data-bag-drag-list data-bean-id="${esc(b.id)}">${upcomingHtml}</div>`);
@@ -178,11 +170,11 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     const pastExpanded = _expandedPastSections.has(b.id);
     const pastBagsHtml = pastExpanded ? joinHtml(past.map(entry => renderBagCard(b, entry, 'past', beans, true))) : esc('');
     const pastSection: Html = past.length
-      ? html`<div class="lib-bag-history-toggle${esc(pastExpanded ? ' expanded' : '')}" data-action="toggle-past-bags" data-id="${esc(b.id)}">
+      ? html`<button type="button" class="lib-bag-history-toggle${esc(pastExpanded ? ' expanded' : '')}" aria-expanded="${esc(pastExpanded ? 'true' : 'false')}" data-action="toggle-past-bags" data-id="${esc(b.id)}">
            <span class="lib-bag-chevron">▸</span>
            <span>${tHtml('lib_bag_state_past')}</span>
            <span class="lib-bag-past-count">${esc(past.length)}</span>
-         </div>
+         </button>
          <div class="lib-bag-history-past-wrap${esc(pastExpanded ? ' expanded' : '')}">
            <div class="lib-bag-history-past">${pastBagsHtml}</div>
          </div>`
@@ -202,9 +194,9 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     const editForm: Html = html`
       <div id="editFrozenForm${esc(fp.id)}" class="lib-new-bag-form" style="display:none">
         <div class="lib-new-bag-fields">
-          <input type="number" class="lib-new-bag-input" id="editFrozenRemaining${esc(fp.id)}" placeholder="${tHtml('bag_freeze_count')}" min="0" max="${esc(fp.portionCount)}" step="1" value="${esc(remaining)}">
-          <input type="number" class="lib-new-bag-input" id="editFrozenWeight${esc(fp.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1" value="${esc(fp.portionWeight_g)}">
-          <input type="date" class="lib-new-bag-input" id="editFrozenDate${esc(fp.id)}" value="${esc(toIsoDateInput(new Date(fp.frozenAt).toISOString()))}" max="${esc(todayIsoDate())}">
+          <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="editFrozenRemaining${esc(fp.id)}" placeholder="${tHtml('bag_freeze_count')}" min="0" max="${esc(fp.portionCount)}" step="1" value="${esc(remaining)}">
+          <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="editFrozenWeight${esc(fp.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1" value="${esc(fp.portionWeight_g)}">
+          <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="editFrozenDate${esc(fp.id)}" value="${esc(localIsoDate(fp.frozenAt))}" max="${esc(todayIsoDate())}">
         </div>
         <div class="lib-form-actions">
           <button class="lib-btn-sm" data-action="close-edit-frozen-form" data-portion-id="${esc(fp.id)}">${tHtml('lib_cancel')}</button>
@@ -226,15 +218,15 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       : esc('');
     if (fp.thawedAt) {
       const thawedStr = new Date(fp.thawedAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
-      return html`<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${tHtml('bag_frozen_thawed_badge', thawedStr)}${fpAgeBadge}
+      return html`<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${tHtml('bag_frozen_thawed_badge', esc(thawedStr))}${fpAgeBadge}
         <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
     }
-    return html`<span class="lib-frozen-badge" title="${esc(fpTitle)}">${SNOWFLAKE_ICON_SVG} ${esc(remaining)}/${esc(fp.portionCount)} ${tHtml('bag_frozen_badge', frozenStr)}${fpAgeBadge}
+    return html`<span class="lib-frozen-badge" title="${esc(fpTitle)}">${SNOWFLAKE_ICON_SVG} ${esc(remaining)}/${esc(fp.portionCount)} ${tHtml('bag_frozen_badge', esc(frozenStr))}${fpAgeBadge}
       <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_thaw_btn')}">${tHtml('bag_thaw_btn')}</button>
       <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
   }))}</div>` : esc('');
 
-  const rating = calcBeanRating(b.name, _shots());
+  const rating = calcBeanRating(b, _shots(), S.coffeeLibrary?.beans);
   const ratingHtml: Html = rating ? html`<div class="lib-rating-row" title="${esc(t('bean_rating_tooltip', rating.count))}">
     ${joinHtml(Array.from({ length: 5 }, (_, i) => html`<span class="lib-star${esc(i < Math.round(rating.avg) ? ' on' : '')}">${STAR_ICON_SVG}</span>`))}
     <span class="lib-rating-num">${esc(rating.avg.toFixed(1))}</span>
@@ -322,9 +314,9 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     </div>
     <div id="newBagForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
       <div class="lib-new-bag-fields">
-        <input type="date" class="lib-new-bag-input" id="newBagRoastDate${esc(b.id)}" title="${tHtml('lib_bag_roast_date')}" max="${esc(todayIsoDate())}">
-        <input type="number" class="lib-new-bag-input" id="newBagStock${esc(b.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1">
-        <input type="text" class="lib-new-bag-input" id="newBagBatchNumber${esc(b.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50">
+        <input type="date" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_roast_date')}" id="newBagRoastDate${esc(b.id)}" title="${tHtml('lib_bag_roast_date')}" max="${esc(todayIsoDate())}">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="newBagStock${esc(b.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1">
+        <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="newBagBatchNumber${esc(b.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50">
       </div>
       <div class="lib-form-actions">
         <button class="lib-btn-sm" data-action="close-new-bag" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
@@ -333,9 +325,9 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     </div>
     <div id="freezeForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
       <div class="lib-new-bag-fields">
-        <input type="number" class="lib-new-bag-input" id="freezePortionCount${esc(b.id)}" placeholder="${tHtml('bag_freeze_count')}" min="1" step="1">
-        <input type="number" class="lib-new-bag-input" id="freezePortionWeight${esc(b.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1">
-        <input type="date" class="lib-new-bag-input" id="freezeDate${esc(b.id)}" title="${tHtml('bag_freeze_date')}" value="${esc(todayIsoDate())}" max="${esc(todayIsoDate())}">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="freezePortionCount${esc(b.id)}" placeholder="${tHtml('bag_freeze_count')}" min="1" step="1">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="freezePortionWeight${esc(b.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1">
+        <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="freezeDate${esc(b.id)}" title="${tHtml('bag_freeze_date')}" value="${esc(todayIsoDate())}" max="${esc(todayIsoDate())}">
       </div>
       <div class="lib-form-actions">
         <button class="lib-btn-sm" data-action="close-freeze-form" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
@@ -397,7 +389,7 @@ export function closeFreezeForm(id: number): void {
 // Freezes a portion of the active bag: grams move into a dated frozen pool
 // (see bag.frozenPortions in the schema) but stay counted in stock_g — the
 // freeze doesn't consume anything, it just pauses that portion's own
-// freshness clock (frozenPortionAgeDays(), utils.js, #477 — the bag's own
+// freshness clock (frozenPortionAgeDays(), utils.ts, #477 — the bag's own
 // badge is never affected by this) until it's thawed.
 // frozenAt (#472) comes from the form's date picker (defaults to today, but
 // editable for logging a portion frozen in the past) rather than always

@@ -6,8 +6,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 )
 
 // newTestApp builds the full handler chain (buildApp) against a fresh throwaway
@@ -63,5 +66,16 @@ func removeAllRetry(t *testing.T, dir string) {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestTestAppImageDirOutsideRealData guards the #1598 invariant where the full
+// app is built: the image directory newTestApp's background orphan cleanup runs
+// against must never be the real data mount, or on any host that has a /data
+// directory (a HA host, a developer box) changing a real install's photos would
+// look orphaned and be deleted with an empty test database.
+func TestTestAppImageDirOutsideRealData(t *testing.T) {
+	if strings.HasPrefix(library.DefaultImageDir, "/data/") {
+		t.Fatalf("library.DefaultImageDir = %q; a test binary must not use the real /data directory", library.DefaultImageDir)
 	}
 }

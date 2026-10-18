@@ -1,5 +1,23 @@
 import type { Chart } from 'chart.js';
 import type { RecordedPhaseTransition } from './constants.js';
+import { safeLocalStorage } from './storage.js';
+
+// #1547: this module holds pure helpers and renders no <input>/<select>/<textarea>,
+// so there is no form field here to give an accessible name.
+
+// ── Link targets ──────────────────────────────────────────────────────────
+// #1408: safeHttpUrl returns u only when it parses as an absolute http(s)
+// URL, so a stored javascript:/data: value renders as plain text, never as a
+// clickable link. #1626: every href built from stored or fetched data goes
+// through it.
+export function safeHttpUrl(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return u;
+  } catch { /* not a URL */ }
+  return null;
+}
 
 // ── HTML escaping (XSS prevention) ───────────────────────────────────────
 // Branded marker for a string known to be safe to interpolate into markup
@@ -36,21 +54,8 @@ export function joinHtml(parts: readonly Html[]): Html {
 // TT.MM.JJJJ placeholder) and YYYY-MM-DD (ISO, bags & imports). Returns whole
 // days since roast, or null when unparseable / implausible (>2 years).
 export function roastAgeDays(str: string | null | undefined, nowMs: number = Date.now()): number | null {
-  if (!str || typeof str !== 'string') return null;
-  let d: Date | null = null;
-  let m = str.trim().match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
-  if (m) {
-    const [, dd = '', dm = '', dy = ''] = m;
-    const y = dy.length === 2 ? 2000 + parseInt(dy) : parseInt(dy);
-    d = new Date(y, parseInt(dm) - 1, parseInt(dd));
-  } else {
-    m = str.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const [, yy = '', mm = '', dd = ''] = m;
-      d = new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd));
-    }
-  }
-  if (!d || isNaN(d.getTime())) return null;
+  const d = parseRoastDate(str);
+  if (!d) return null;
   const days = Math.floor((nowMs - d.getTime()) / 86400000);
   return days >= 0 && days <= 730 ? days : null;
 }
@@ -79,16 +84,43 @@ export function toIsoDateInput(str: string | null | undefined): string {
   return '';
 }
 
-// Today's date as YYYY-MM-DD in local time (not UTC — Date#toISOString()
-// would roll over a day early/late depending on the user's timezone) — used
-// as both the default value and the `max` of freeze-date-style pickers that
-// shouldn't accept a future date.
+// A Date's calendar day as YYYY-MM-DD in local time (not UTC —
+// Date#toISOString() would roll over a day early/late depending on the
+// user's timezone).
+export function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// The same key in UTC. Kept separate on purpose: analytics steps over serial
+// UTC day numbers, so its synthetic dates must not shift with the local zone.
+export function utcDateKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+// A Date's local calendar month as YYYY-MM (the sidebar's month-group keys).
+export function localMonthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// A timestamp's date as YYYY-MM-DD in local time.
+export function localIsoDate(ms: number): string {
+  return localDateKey(new Date(ms));
+}
+
+// Today's local date — used as both the default value and the `max` of
+// freeze-date-style pickers that shouldn't accept a future date.
 export function todayIsoDate(nowMs: number = Date.now()): string {
-  const d = new Date(nowMs);
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  return `${y}-${mo}-${da}`;
+  return localIsoDate(nowMs);
+}
+
+// A YYYY-MM-DD date-input value as the epoch ms of local midnight (not UTC —
+// `new Date('2026-10-12')` parses as UTC midnight and lands on the previous
+// day for users east of UTC). Returns NaN for an empty/invalid value.
+export function localMidnightMs(isoDate: string): number {
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return NaN;
+  const [, yy = '', mm = '', dd = ''] = m;
+  return new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd)).getTime();
 }
 
 // Parses a date-input's YYYY-MM-DD value into a local-noon epoch ms
@@ -161,18 +193,55 @@ export function calcBrewRatio(
   return ratio > 0.5 && ratio < 6 ? ratio : null;
 }
 
+// ── Bean identity (#456) ───────────────────────────────────────────────────
+// Resolve an annotation to its library bean, preferring the stable beanId
+// link over the free-text coffee name — the rule the backend's
+// LibraryService.resolveBeanForAnnotation mirrors. This is the single
+// implementation; views/shots/utils.ts's exported resolveBeanForAnnotation
+// wraps it to default the bean list to the current library. Kept here, in the
+// pure helper module (beans are passed in), so calcBeanRating below does not
+// pull the state-backed shots utils into the import graph of modules that
+// only need utils. When beanId resolves to a bean it is trusted exclusively;
+// only an absent, or dangling, beanId falls back to a case-insensitive name
+// match (recovering a delete+reimport under the same name, and covering
+// annotations that predate beanId).
+export function resolveBeanForAnnotation(
+  annotation: unknown,
+  beans?: unknown,
+): { id?: number | null; name?: string | null } | null {
+  const ann = annotation as { beanId?: number | null; coffee?: string | null } | null | undefined;
+  const list = (Array.isArray(beans) ? beans : []) as { id?: number | null; name?: string | null }[];
+  if (ann?.beanId != null) {
+    const byId = list.find(b => b.id === ann.beanId);
+    if (byId) return byId;
+  }
+  const name = ann?.coffee;
+  if (!name) return null;
+  const key = String(name).toLowerCase();
+  return list.find(b => String(b.name || '').toLowerCase() === key) || null;
+}
+
 // ── Bean rating ───────────────────────────────────────────────────────────
-// Average star rating (1-5) across all shots annotated with this bean name
-// (case-insensitive, same join precedent as computeBeanRemaining). Returns
-// { avg, count } or null when no rated shot matches.
+// Average star rating (1-5) across all shots that belong to this bean, joined
+// through resolveBeanForAnnotation so a renamed bean (or a reimport under a
+// new name) keeps its history: a shot counts when it links to bean.id, and
+// only shots that resolve to no bean at all fall back to the name comparison.
+// Takes the library bean ({ id, name }); a bare name string is still accepted
+// for the name-only path. Returns { avg, count } or null when nothing matches.
 export function calcBeanRating(
-  beanName: string | null | undefined,
-  shots: { annotation?: { coffee?: string | null; rating?: string | null } | null }[] | null | undefined,
+  bean: { id?: number | null; name?: string | null } | string | null | undefined,
+  shots: { annotation?: { coffee?: string | null; beanId?: number | null; rating?: string | null } | null }[] | null | undefined,
+  beans?: unknown,
 ): { avg: number; count: number } | null {
-  if (!beanName || !Array.isArray(shots)) return null;
-  const name = beanName.toLowerCase();
+  const beanId = bean && typeof bean === 'object' ? bean.id ?? null : null;
+  const name = ((typeof bean === 'string' ? bean : bean?.name) || '').toLowerCase();
+  if ((!name && beanId == null) || !Array.isArray(shots)) return null;
   const ratings = shots
-    .filter(s => (s.annotation?.coffee || '').toLowerCase() === name)
+    .filter(s => {
+      const resolved = resolveBeanForAnnotation(s.annotation, beans);
+      if (resolved) return beanId != null && resolved.id === beanId;
+      return (s.annotation?.coffee || '').toLowerCase() === name;
+    })
     .map(s => parseFloat(s.annotation?.rating ?? ''))
     .filter(r => r >= 1 && r <= 5);
   if (!ratings.length) return null;
@@ -238,21 +307,19 @@ export async function shareOrDownloadBlob(
 // shouldOpenSetupWizard()'s own host check keeps the wizard closed
 // regardless of the completed flag once a real host exists.
 //
-// Lives here rather than in views/setup-wizard.js so components/status.js can
+// Lives here rather than in views/setup-wizard.ts so components/status.ts can
 // call it from updateStatus() without importing the wizard back: the wizard
-// already imports components/machines-settings.js, which imports
-// components/status.js, so that edge closed an import cycle (#1102).
-// views/setup-wizard.js re-exports it for its existing importers.
+// already imports components/machines-settings.ts, which imports
+// components/status.ts, so that edge closed an import cycle (#1102).
+// views/setup-wizard.ts re-exports it for its existing importers.
 export const COMPLETED_KEY = 'glp_setup_wizard_completed';
 export const INSTALL_ID_KEY = 'glp_install_id';
 
 export function syncInstallId(installId?: string | null): void {
   if (!installId) return;
-  const stored = localStorage.getItem(INSTALL_ID_KEY);
-  if (stored !== installId) {
-    try { localStorage.removeItem(COMPLETED_KEY); } catch { /* ignore */ }
-  }
-  try { localStorage.setItem(INSTALL_ID_KEY, installId); } catch { /* ignore */ }
+  const stored = safeLocalStorage.getItem(INSTALL_ID_KEY);
+  if (stored !== installId) safeLocalStorage.removeItem(COMPLETED_KEY);
+  safeLocalStorage.setItem(INSTALL_ID_KEY, installId);
 }
 
 // ── Math helpers ──────────────────────────────────────────────────────────
@@ -312,15 +379,16 @@ export function mapToXY(
 }
 
 // mapShotDatapoints(datapoints) -> the XY-series bundle the shot charts and
-// metrics read. Split out of views/shots/utils.js's getShotData (#957) so the
-// per-shot curve cache (shot-curves.js) maps a lazily-fetched datapoints
+// metrics read. Split out of views/shots/utils.ts's getShotData (#957) so the
+// per-shot curve cache (shot-curves.ts) maps a lazily-fetched datapoints
 // object through the exact same shape. Pure; a missing/empty datapoints
 // yields all-empty series, never null. Kept in this leaf module (no imports)
-// so shot-curves.js can depend on it without an import cycle.
+// so shot-curves.ts can depend on it without an import cycle.
 export interface ShotDatapoints {
   timeInShot?: number[];
   pressure?: number[];
   targetPressure?: number[];
+  phaseIndex?: number[];
   pumpFlow?: number[];
   targetPumpFlow?: number[];
   shotWeight?: number[];
@@ -421,14 +489,27 @@ export function germanToIso(s: string | null | undefined): string | null {
   return `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
 }
 
-export function parseDMY(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
-  if (!m) return null;
-  const [, dd = '', mm = '', yy = ''] = m;
-  const y = yy.length === 2 ? 2000 + parseInt(yy) : parseInt(yy);
-  const d = new Date(y, parseInt(mm) - 1, parseInt(dd));
-  return isNaN(d.getTime()) ? null : d;
+// One parser for both roast-date formats the app stores and accepts: ISO
+// `YYYY-MM-DD...` (bags, imports) or typed DMY `D.M.YY` / `DD.MM.YYYY` with
+// `.`, `-` or `/` separators (a two-digit year means 20YY). Returns local
+// midnight, or null when the input is empty/unparseable/invalid.
+export function parseRoastDate(s: string | null | undefined): Date | null {
+  if (!s || typeof s !== 'string') return null;
+  const str = s.trim();
+  let m = str.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
+  if (m) {
+    const [, dd = '', mm = '', yy = ''] = m;
+    const y = yy.length === 2 ? 2000 + parseInt(yy) : parseInt(yy);
+    const d = new Date(y, parseInt(mm) - 1, parseInt(dd));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const [, yy = '', mm = '', dd = ''] = m;
+    const d = new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
 
 // ── Day-separator grouping (#412, hybrid grouping #426) ─────────────────
@@ -464,24 +545,22 @@ export function groupShotsByDay<T extends { timestamp: number }>(
   formatRecent: (date: Date) => string,
   formatOlder: (date: Date) => string,
 ): ShotGroup<T>[] {
-  const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-  const today = dayKey(now);
+  const today = localDateKey(now);
   const yesterdayDate = new Date(now);
   yesterdayDate.setDate(now.getDate() - 1);
-  const yesterday = dayKey(yesterdayDate);
+  const yesterday = localDateKey(yesterdayDate);
   const todayStart = startOfDay(now);
 
   const groups: ShotGroup<T>[] = [];
   let current: ShotGroup<T> | null = null;
   (shots || []).forEach(shot => {
     const d = new Date(shot.timestamp * 1000);
-    const dKey = dayKey(d);
+    const dKey = localDateKey(d);
     const daysAgo = Math.round((todayStart.getTime() - startOfDay(d).getTime()) / 86400000);
     const isRecent = daysAgo < RECENT_WINDOW_DAYS;
-    const key = isRecent ? dKey : monthKey(d);
+    const key = isRecent ? dKey : localMonthKey(d);
     if (!current || current.key !== key) {
       const label = dKey === today ? todayLabel
         : dKey === yesterday ? yesterdayLabel
@@ -496,18 +575,31 @@ export function groupShotsByDay<T extends { timestamp: number }>(
 }
 
 // ── Score helpers ─────────────────────────────────────────────────────────
-// Unified 3-tier scale (#397): green >= 90, yellow >= 70, red below — the
-// single source of truth for shot-score coloring across sidebar, shot
-// detail, analytics, and the dial-in wizards. No per-view thresholds.
+// #1622: the one five-step score scale, shared by every view and the Go share
+// card (card_palette.go). The thresholds live here so nothing else hard-codes
+// them: >=88 great, >=75 good, >=60 ok, >=45 low, below bad.
+export const SCORE_STEPS = { great: 88, good: 75, ok: 60, low: 45 } as const;
+
+// The same five steps as CSS classes (#1622), so a score is coloured by the
+// .score-* rules in style.css instead of a per-view threshold. Kept in
+// lockstep with scoreColor() below by reading SCORE_STEPS.
 export function scoreClass(n: number): string {
-  return n >= 90 ? 'score-great' : n >= 70 ? 'score-ok' : 'score-bad';
+  return n >= SCORE_STEPS.great ? 'score-great'
+       : n >= SCORE_STEPS.good  ? 'score-good'
+       : n >= SCORE_STEPS.ok    ? 'score-ok'
+       : n >= SCORE_STEPS.low   ? 'score-low'
+       : 'score-bad';
 }
 
 // Returns a CSS custom-property reference so callers stay theme-aware
 // (accent/light-dark) instead of a hardcoded hex.
 export function scoreColor(sc: number | null | undefined): string {
   if (sc == null) return 'var(--gray-600)';
-  return sc >= 90 ? 'var(--ok)' : sc >= 70 ? 'var(--warn)' : 'var(--err)';
+  return sc >= SCORE_STEPS.great ? 'var(--ok)'
+       : sc >= SCORE_STEPS.good  ? 'var(--score-good)'
+       : sc >= SCORE_STEPS.ok    ? 'var(--warn)'
+       : sc >= SCORE_STEPS.low   ? 'var(--score-low)'
+       : 'var(--err)';
 }
 
 // Signed delta formatting for the same-profile auto-compare chips (#402):
@@ -547,7 +639,8 @@ export function chartColors(): { text: string; tick: string; grid: string } {
   };
 }
 
-// #814: fired by _applyTheme() in main.js after the theme attribute changes.
+// #814: fired by theme.ts's applyTheme() (and main.ts's setAccentTheme) after
+// the theme changes.
 // A chart already on screen keeps the colours it was built with, so views
 // holding a live Chart instance listen for this and rebuild — without it,
 // switching theme in Settings leaves every open chart on the old palette

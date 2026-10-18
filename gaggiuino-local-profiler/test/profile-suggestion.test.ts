@@ -81,7 +81,7 @@ describe('suggestProfileFromBean', () => {
   });
 
   // #328: #323's "fix" (target.start = Ramp restriction, declining numerically)
-  // turned out to be a regression — Max's real "Sertão Decaf" and "Adaptive"
+  // turned out to be a regression — the maintainer's real "Sertão Decaf" and "Adaptive"
   // profiles both have target.start: 0 on this phase. Reverted; target.end
   // now branches 1.6 (gentle, matches Sertão Decaf) / 2.5 (else, matches
   // Adaptive), and restriction (a pressure ceiling on this FLOW phase) still

@@ -14,6 +14,7 @@ import {
   _overlayShieldsSheets, _trapTab, _dropNewShelfTile,
 } from './bean-sheet.js';
 import * as libraryApi from '../../api/library.js';
+import type { Bean } from '../../api/types.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { renderRecipeList } from './recipes.js';
 import { openNewBagForm } from './bean-card.js';
@@ -39,6 +40,17 @@ let _formHomeNext: Node | null = null;
 let _formReturnBeanId: number | null = null;
 let _beanFormDirty = false;
 let _beanFormDirtyBound = false;
+// The roast date the form was prefilled with (the current bag's, see
+// openBeanForm). saveBeanInternal compares against it so an edit that leaves
+// the field untouched sends no roastDate at all (#1606).
+let _beanFormPrefilledRoastDate = '';
+// The sheet header's Save button (built once with the persistent host); one of
+// the buttons disabled while a save is in flight.
+let _formSheetSaveBtn: HTMLButtonElement | null = null;
+// True from just before the save POST until it settles. A second Save tap
+// while the first is pending is ignored instead of creating the bean twice
+// (#1614 slice 4).
+let _beanSaveInFlight = false;
 
 function _rememberFormHome(): void {
   const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
@@ -99,6 +111,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   close.className = 'lib-sheet-close';
   close.setAttribute('data-action', 'close-bean-form-sheet');
   close.setAttribute('aria-label', t('lib_sheet_close'));
+  close.setAttribute('data-i18n-aria-label', 'lib_sheet_close');
   close.innerHTML = CLOSE_ICON_SVG;
   head.appendChild(close);
   const title = document.createElement('h2');
@@ -115,8 +128,11 @@ function _beanFormSheetHost(): HTMLElement | null {
   save.className = 'lib-sheet-save';
   save.setAttribute('aria-label', t('lib_save'));
   save.textContent = t('lib_save');
+  save.setAttribute('data-i18n-aria-label', 'lib_save');
+  save.setAttribute('data-i18n', 'lib_save');
   save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanNoBag()); });
   headActions.appendChild(save);
+  _formSheetSaveBtn = save;
   head.appendChild(headActions);
   section.appendChild(head);
 
@@ -126,6 +142,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   const question = document.createElement('span');
   question.className = 'lib-form-confirm-q';
   question.textContent = t('lib_form_discard_q');
+  question.setAttribute('data-i18n', 'lib_form_discard_q');
   confirm.appendChild(question);
   const confirmActions = document.createElement('div');
   confirmActions.className = 'lib-form-confirm-actions';
@@ -133,12 +150,14 @@ function _beanFormSheetHost(): HTMLElement | null {
   discard.type = 'button';
   discard.className = 'lib-btn-sm';
   discard.textContent = t('lib_form_discard');
+  discard.setAttribute('data-i18n', 'lib_form_discard');
   discard.addEventListener('click', () => discardBeanForm());
   confirmActions.appendChild(discard);
   const keep = document.createElement('button');
   keep.type = 'button';
   keep.className = 'lib-save-btn';
   keep.textContent = t('lib_form_keep_editing');
+  keep.setAttribute('data-i18n', 'lib_form_keep_editing');
   keep.addEventListener('click', () => _hideFormConfirm());
   confirmActions.appendChild(keep);
   confirm.appendChild(confirmActions);
@@ -222,7 +241,12 @@ function _showBeanFormSheet(): void {
   if (!host) return;
   _rememberFormHome();
   const isEdit = S.beanEditId != null;
-  if (_formSheetTitle) _formSheetTitle.textContent = t(isEdit ? 'lib_form_sheet_edit' : 'lib_form_sheet_new');
+  // #1620: data-i18n lets applyTranslations() retitle an open sheet on a language change.
+  const titleKey = isEdit ? 'lib_form_sheet_edit' : 'lib_form_sheet_new';
+  if (_formSheetTitle) {
+    _formSheetTitle.setAttribute('data-i18n', titleKey);
+    _formSheetTitle.textContent = t(titleKey);
+  }
   // #1489: hide the form's own action row only when editing; creating keeps it
   // so both "save without / with a bag" choices stay reachable.
   _formSheetSection?.classList?.toggle('is-editing', isEdit);
@@ -260,14 +284,20 @@ export function openBeanForm(bean?: BeanRow | null): void {
   const extraRecipes = document.getElementById('beanFormExtraRecipes');
   if (extraRecipes) { extraRecipes.style.display = 'none'; extraRecipes.innerHTML = html``; }
   _state()._urlImportExtraRecipes = null;
+  // #1606: the form's roast date is the current bag's, not the bean-level
+  // field — once the queue has advanced through doses the bean-level date is
+  // the old bag's, and saving a pure name edit would write it back over the
+  // new current bag's. Fall back to the bean-level date when the current bag
+  // has none.
+  const activeEditBag = bean ? classifyBeanBags(bean).current?.bg : null;
+  _beanFormPrefilledRoastDate = toIsoDateInput(activeEditBag?.roastDate || bean?.roastDate);
   _field('beanFormName').value      = bean?.name      || '';
   _field('beanFormRoaster').value   = bean?.roaster   || '';
-  _field('beanFormRoastDate').value = toIsoDateInput(bean?.roastDate);
+  _field('beanFormRoastDate').value = _beanFormPrefilledRoastDate;
   _field('beanFormNotes').value     = bean?.notes     || '';
   // Stock and batch number are bag-only now (see classifyBeanBags/
   // renderBagCard's own "Bestand anpassen"/bag-dialog fields) — neither
   // field exists on the bean form at all.
-  const activeEditBag = bean ? classifyBeanBags(bean).current?.bg : null;
   _field('beanFormDecaf').checked   = !!bean?.decaf;
   populateOriginSelect();
   bindOriginInput();
@@ -381,7 +411,21 @@ export async function saveBean(): Promise<void> { return saveBeanInternal(false)
 export async function saveBeanNoBag(): Promise<void> { return saveBeanInternal(false); }
 export async function saveBeanAddBag(): Promise<void> { return saveBeanInternal(true); }
 
+// Enables/disables every Save control the bean form can be submitted with (the
+// sheet header's Save plus the create/edit action-row buttons) so a double tap
+// during an in-flight save is visibly a no-op (#1614 slice 4).
+function _setBeanSaveButtonsDisabled(disabled: boolean): void {
+  if (_formSheetSaveBtn) _formSheetSaveBtn.disabled = disabled;
+  for (const id of ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn']) {
+    const btn = document.getElementById(id) as HTMLButtonElement | null;
+    if (btn) btn.disabled = disabled;
+  }
+}
+
 async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
+  // A Save tap while the previous request is still pending is dropped: without
+  // this the second POST creates the bean a second time (#1614 slice 4).
+  if (_beanSaveInFlight) return;
   const name      = _field('beanFormName').value.trim();
   const roaster   = _field('beanFormRoaster').value.trim();
   const roastDate = _field('beanFormRoastDate').value.trim();
@@ -410,6 +454,14 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes,
   };
+  // #1606: on an edit, send roastDate only when the user actually changed it.
+  // The prefill is the current bag's date, so re-sending the unchanged field
+  // would overwrite the current bag's roast date with the (possibly stale)
+  // bean-level one once the queue has advanced past it. Creating a bean still
+  // sends it.
+  if (S.beanEditId != null && roastDate === _beanFormPrefilledRoastDate) {
+    delete payload.roastDate;
+  }
   if (!S.beanEditId && S._urlImportSource) {
     payload.source     = S._urlImportSource;
     payload.importedAt = S._urlImportedAt;
@@ -421,64 +473,76 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   // checked before closeBeanForm() clears both the DOM and this state.
   const extraRecipesToImport = (_state()._urlImportExtraRecipes || []).filter((_, i) =>
     document.querySelector<HTMLInputElement>(`[data-extra-recipe-idx="${i}"]`)?.checked);
-  const saved = await libraryApi.saveBean(S.beanEditId, payload);
-  if (!saved) return;
-  if (S.beanEditId) {
-    const idx = _beanList().findIndex(b => b.id === S.beanEditId);
-    if (idx !== -1) _beanList()[idx] = saved;
-  } else {
-    _beanList().push(saved);
-  }
-  const wasCreate = !S.beanEditId;
-  // #1329 part 2: upload a photo staged while creating, now that the bean has
-  // an id. A failed upload must not lose the bean — it stays in the list and
-  // the user gets the same generic error an edit-mode upload shows.
-  const staged = stagedBeanImage();
-  if (wasCreate && staged) {
-    clearStagedBeanImage();
-    const uploaded = await libraryApi.uploadBeanImage(saved.id, staged);
-    if (uploaded.ok) {
-      const withImage = (await uploaded.json()) as BeanListRow;
-      const imgIdx = _beanList().findIndex(b => b.id === saved.id);
-      if (imgIdx !== -1) _beanList()[imgIdx] = withImage;
-      invalidateBeanImage(saved.id);
+  _beanSaveInFlight = true;
+  _setBeanSaveButtonsDisabled(true);
+  try {
+    let saved: Bean;
+    try {
+      saved = await libraryApi.saveBean(S.beanEditId, payload);
+    } catch (e) {
+      window.showToast?.(t('error_generic', (e as Error).message));
+      return;
+    }
+    if (S.beanEditId) {
+      const idx = _beanList().findIndex(b => b.id === S.beanEditId);
+      if (idx !== -1) _beanList()[idx] = saved;
     } else {
-      const err = (await uploaded.json().catch(() => ({}))) as { error?: string };
-      alert(t('error_generic', err.error || uploaded.statusText));
+      _beanList().push(saved);
     }
-  }
-  for (const recipe of extraRecipesToImport) {
-    const importedRecipe = await libraryApi.saveRecipe(null, { ...recipe, brewMethod: 'espresso', beanName: saved.name });
-    if (importedRecipe) {
-      const lib = _state().coffeeLibrary;
-      if (!lib.recipes) lib.recipes = [];
-      lib.recipes.push(importedRecipe);
-    }
-  }
-  // Also persist price_eur to the current bag so per-bag price stays in sync
-  if (S.beanEditId && price_eur) {
-    const activeBagForSave = classifyBeanBags(saved).current?.bg || null;
-    if (activeBagForSave) {
-      const savedWithBag = await libraryApi.updateBeanBag(S.beanEditId, activeBagForSave.id as number, {
-        roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
-        batchNumber: activeBagForSave.batchNumber || '', price_eur: parseFloat(price_eur) || null,
-      });
-      if (savedWithBag) {
-        const idx2 = _beanList().findIndex(b => b.id === S.beanEditId);
-        if (idx2 !== -1) _beanList()[idx2] = savedWithBag;
+    const wasCreate = !S.beanEditId;
+    // #1329 part 2: upload a photo staged while creating, now that the bean has
+    // an id. A failed upload must not lose the bean — it stays in the list and
+    // the user gets the same generic error an edit-mode upload shows.
+    const staged = stagedBeanImage();
+    if (wasCreate && staged) {
+      clearStagedBeanImage();
+      const uploaded = await libraryApi.uploadBeanImage(saved.id, staged);
+      if (uploaded.ok) {
+        const withImage = (await uploaded.json()) as BeanListRow;
+        const imgIdx = _beanList().findIndex(b => b.id === saved.id);
+        if (imgIdx !== -1) _beanList()[imgIdx] = withImage;
+        invalidateBeanImage(saved.id);
+      } else {
+        const err = (await uploaded.json().catch(() => ({}))) as { error?: string };
+        alert(t('error_generic', err.error || uploaded.statusText));
       }
     }
+    for (const recipe of extraRecipesToImport) {
+      const importedRecipe = await libraryApi.saveRecipe(null, { ...recipe, brewMethod: 'espresso', beanName: saved.name });
+      if (importedRecipe) {
+        const lib = _state().coffeeLibrary;
+        if (!lib.recipes) lib.recipes = [];
+        lib.recipes.push(importedRecipe);
+      }
+    }
+    // Also persist price_eur to the current bag so per-bag price stays in sync
+    if (S.beanEditId && price_eur) {
+      const activeBagForSave = classifyBeanBags(saved).current?.bg || null;
+      if (activeBagForSave) {
+        const savedWithBag = await libraryApi.updateBeanBag(S.beanEditId, activeBagForSave.id as number, {
+          roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
+          batchNumber: activeBagForSave.batchNumber || '', price_eur: parseFloat(price_eur) || null,
+        });
+        if (savedWithBag) {
+          const idx2 = _beanList().findIndex(b => b.id === S.beanEditId);
+          if (idx2 !== -1) _beanList()[idx2] = savedWithBag;
+        }
+      }
+    }
+    library.updateLibraryDatalist();
+    closeBeanForm();
+    library.renderBeanList();
+    if (wasCreate) _dropNewShelfTile(saved.id);
+    if (extraRecipesToImport.length) renderRecipeList();
+    // #1398: the new bean's inline #newBagForm<id> only exists inside its
+    // detail sheet (renderBeanCard), so with a plain
+    // openNewBagForm the element was missing and the call threw. Open the
+    // fresh sheet first and reveal the form once its content has painted.
+    if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id));
+  } finally {
+    _beanSaveInFlight = false;
+    _setBeanSaveButtonsDisabled(false);
   }
-  library.updateLibraryDatalist();
-  closeBeanForm();
-  library.renderBeanList();
-  if (wasCreate) _dropNewShelfTile(saved.id);
-  if (extraRecipesToImport.length) renderRecipeList();
-  // #1398: the new bean's inline #newBagForm<id> only exists inside its
-  // detail sheet (renderBeanCard), so with a plain
-  // openNewBagForm the element was missing and the call threw. Open the
-  // fresh sheet first and reveal the form once its content has painted.
-  if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id));
 }
 
 export async function deleteBean(id: number): Promise<void> {

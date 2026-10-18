@@ -56,6 +56,50 @@ ok()  { PASS=$((PASS + 1)); printf '  OK   %s\n' "$1"; }
 bad() { FAIL=$((FAIL + 1)); printf '  FAIL %s\n' "$1"; }
 step() { printf '\n== %s ==\n' "$1"; }
 
+# json_array_len <json> [<jq path>] -- print the array length when the value
+# at that path (the whole document by default) is a JSON array, and fail
+# with no output otherwise. A bare `jq length` reports a *key count* for a
+# JSON error object like {"error":"..."}, which made a failed request look
+# like a real, non-empty array and count.
+json_array_len() {
+	jq -e --arg p "${2:-.}" \
+		'getpath($p | split(".") | map(select(length > 0))) | if type == "array" then length else error("not a JSON array") end' <<<"$1"
+}
+
+# require_count <label> <value> <min> -- ok when <value> is an integer >=
+# <min>, bad otherwise; returns non-zero only when it is not, so the caller
+# can flag the run. Guards server A's counts in cross-domain 3 so an invalid
+# (empty / failed) count can never be used as the expected side of a
+# comparison.
+require_count() {
+	local label="$1" value="$2" min="$3"
+	if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= min )); then
+		ok "$label on server A: $value"
+		return 0
+	fi
+	bad "$label on server A is not a valid count (>= $min): '$value'"
+	return 1
+}
+
+# compare_restored_count <label> <a> <b> <a_valid> [<note>] -- ok when
+# server B's count matches server A's validated count; otherwise bad. A bare
+# `[[ "$b" == "$a" ]]` also passed when both sides were empty (both requests
+# failed), or when both were key counts of a JSON error object, so the
+# A-side must have been validated first (<a_valid>).
+compare_restored_count() {
+	local label="$1" a="$2" b="$3" a_valid="$4" note="${5:-}"
+	if [[ "$a_valid" -eq 1 && -n "$a" && "$b" == "$a" ]]; then
+		if [[ -n "$note" ]]; then
+			ok "$label restored ($b == $a, $note)"
+		else
+			ok "$label restored ($b == $a)"
+		fi
+		return 0
+	fi
+	bad "$label count mismatch after restore: A=$a B=$b"
+	return 1
+}
+
 cleanup() {
 	if [[ -n "$DOCKER_IMAGE" ]]; then
 		[[ -n "$PID_A" ]] && docker stop "$PID_A" >/dev/null 2>&1
@@ -120,6 +164,11 @@ start_server() {
 	(
 		export GLP_DB_PATH="$dbdir/glp.db"
 		export GLP_TOKEN_FILE="$dbdir/api_token.txt"
+		# Keep every other data path (preheat state/history, options.json, the
+		# bean-images dir) inside the throwaway dir too, so a smoke run never
+		# reads or writes the host's real /data directory (#1598).
+		export GLP_DATA_DIR="$dbdir"
+		export GLP_IMAGE_DIR="$dbdir/bean-images"
 		export GLP_PORT="$port"
 		export GLP_ENABLE_ORDERS=true
 		exec "$BIN"
@@ -256,8 +305,8 @@ else
 fi
 
 shots_json=$(curl_a "$BASE_A/shots.json")
-shots_count=$(echo "$shots_json" | jq 'length' 2>/dev/null || echo 0)
-[[ "$shots_count" -gt 0 ]] && ok "GET /shots.json ($shots_count demo shots)" || bad "GET /shots.json: expected demo shots, got: $shots_json"
+shots_count=$(json_array_len "$shots_json" 2>/dev/null)
+[[ -n "$shots_count" && "$shots_count" -gt 0 ]] && ok "GET /shots.json ($shots_count demo shots)" || bad "GET /shots.json: expected demo shots, got: $shots_json"
 
 step "domain: library"
 lib_json=$(curl_a "$BASE_A/api/library")
@@ -319,7 +368,10 @@ preheat_json=$(curl_a "$BASE_A/api/preheat")
 
 step "sse: GET /api/events"
 sse_file="$SMOKE_DIR/sse_a.txt"
-curl -s --max-time 3 -N "$BASE_A/api/events?token=$TOKEN_A" >"$sse_file" 2>/dev/null
+# #1626: the stream URL carries a short-lived ticket, not the token.
+sse_ticket=$(curl_a -X POST "$BASE_A/api/events/ticket" | jq -r '.ticket // empty')
+[[ -n "$sse_ticket" ]] && ok "POST /api/events/ticket" || bad "POST /api/events/ticket returned no ticket"
+curl -s --max-time 3 -N "$BASE_A/api/events?ticket=$sse_ticket" >"$sse_file" 2>/dev/null
 line1=$(sed -n '1p' "$sse_file")
 line1_len=${#line1}
 # ":" + 2048 spaces (see internal/sse/sse.go's paddingBytes const).
@@ -383,11 +435,26 @@ row_after=$(sqlite3 "$(db_snapshot_path "$SMOKE_DIR/a" "$PID_A")" \
 	|| bad "grinder_$grinder_id maintenance row NOT cleaned up after delete (count=$row_after) -- #901 regression"
 
 step "cross-domain 3: backup (server A) -> restore into a fresh DB (server B)"
-shots_count=$(curl_a "$BASE_A/shots.json" | jq 'length')
-beans_count=$(curl_a "$BASE_A/api/library" | jq '.beans | length')
-grinders_count=$(curl_a "$BASE_A/api/library" | jq '.grinders | length')
-machines_count=$(curl_a "$BASE_A/api/machines" | jq 'length')
-orders_count=$(curl_a "$BASE_A/api/orders" | jq 'length')
+# Server A's counts go through json_array_len and are validated before being
+# used as the expected side of the restore comparisons: the old bare
+# `jq length` returned a key count for a JSON error object, so a request
+# that failed on *both* servers -- or two such key counts -- compared equal
+# and the check passed without a single row actually restored.
+lib_a=$(curl_a "$BASE_A/api/library")
+shots_count=$(json_array_len "$(curl_a "$BASE_A/shots.json")" 2>/dev/null)
+beans_count=$(json_array_len "$lib_a" '.beans' 2>/dev/null)
+grinders_count=$(json_array_len "$lib_a" '.grinders' 2>/dev/null)
+machines_count=$(json_array_len "$(curl_a "$BASE_A/api/machines")" 2>/dev/null)
+orders_count=$(json_array_len "$(curl_a "$BASE_A/api/orders")" 2>/dev/null)
+# The demo seed guarantees shots/beans/machines, so those must be > 0;
+# grinders/orders are legitimately allowed to be 0, so only a real,
+# non-negative integer is required there.
+counts_valid=1
+require_count "shots" "$shots_count" 1 || counts_valid=0
+require_count "beans" "$beans_count" 1 || counts_valid=0
+require_count "machines" "$machines_count" 1 || counts_valid=0
+require_count "grinders" "$grinders_count" 0 || counts_valid=0
+require_count "orders" "$orders_count" 0 || counts_valid=0
 curl_a "$BASE_A/api/backup" >"$SMOKE_DIR/backup.json"
 
 PID_B=$(start_server "$SMOKE_DIR/b" "$PORT_B")
@@ -406,30 +473,20 @@ else
 		bad "POST /api/restore failed: $restore_resp"
 	fi
 
-	shots_count_b=$(curl_b "$BASE_B/shots.json" | jq 'length')
-	[[ "$shots_count_b" == "$shots_count" ]] \
-		&& ok "shots restored ($shots_count_b == $shots_count)" \
-		|| bad "shots count mismatch after restore: A=$shots_count B=$shots_count_b"
+	shots_count_b=$(json_array_len "$(curl_b "$BASE_B/shots.json")" 2>/dev/null)
+	compare_restored_count "shots" "$shots_count" "$shots_count_b" "$counts_valid"
 
 	lib_b=$(curl_b "$BASE_B/api/library")
-	beans_count_b=$(echo "$lib_b" | jq '.beans | length')
-	grinders_count_b=$(echo "$lib_b" | jq '.grinders | length')
-	[[ "$beans_count_b" == "$beans_count" ]] \
-		&& ok "library beans restored ($beans_count_b == $beans_count)" \
-		|| bad "library beans count mismatch after restore: A=$beans_count B=$beans_count_b"
-	[[ "$grinders_count_b" == "$grinders_count" ]] \
-		&& ok "library grinders restored ($grinders_count_b == $grinders_count, deleted grinder stayed deleted)" \
-		|| bad "library grinders count mismatch after restore: A=$grinders_count B=$grinders_count_b"
+	beans_count_b=$(json_array_len "$lib_b" '.beans' 2>/dev/null)
+	grinders_count_b=$(json_array_len "$lib_b" '.grinders' 2>/dev/null)
+	compare_restored_count "library beans" "$beans_count" "$beans_count_b" "$counts_valid"
+	compare_restored_count "library grinders" "$grinders_count" "$grinders_count_b" "$counts_valid" "deleted grinder stayed deleted"
 
-	machines_count_b=$(curl_b "$BASE_B/api/machines" | jq 'length')
-	[[ "$machines_count_b" == "$machines_count" ]] \
-		&& ok "machines restored ($machines_count_b == $machines_count)" \
-		|| bad "machines count mismatch after restore: A=$machines_count B=$machines_count_b"
+	machines_count_b=$(json_array_len "$(curl_b "$BASE_B/api/machines")" 2>/dev/null)
+	compare_restored_count "machines" "$machines_count" "$machines_count_b" "$counts_valid"
 
-	orders_count_b=$(curl_b "$BASE_B/api/orders" | jq 'length')
-	[[ "$orders_count_b" == "$orders_count" ]] \
-		&& ok "orders restored ($orders_count_b == $orders_count)" \
-		|| bad "orders count mismatch after restore: A=$orders_count B=$orders_count_b"
+	orders_count_b=$(json_array_len "$(curl_b "$BASE_B/api/orders")" 2>/dev/null)
+	compare_restored_count "orders" "$orders_count" "$orders_count_b" "$counts_valid"
 fi
 
 step "summary"

@@ -64,11 +64,27 @@ function parseFragmentName(fileName: string): ParsedFragment {
     return { section, issue: Number(match[1]), suffix: match[2] ?? '' };
 }
 
+// A bullet is a `- ` line plus the non-empty, whitespace-indented lines that
+// directly follow it (a wrapped sentence, a nested list item). The old
+// startsWith('- ') filter dropped those continuations on the floor when a
+// fragment was folded into CHANGELOG.md (#1597). Lines before the first
+// bullet and blank lines are still dropped, so the "no bullet" error below
+// still fires for a fragment with no `- ` line.
 function bulletsOf(content: string): string[] {
-    return content
-        .split('\n')
-        .map((line) => line.replace(/\r$/, ''))
-        .filter((line) => line.startsWith('- '));
+    const bullets: string[] = [];
+    let continuing = false;
+    for (const raw of content.split('\n')) {
+        const line = raw.replace(/\r$/, '');
+        if (line.startsWith('- ')) {
+            bullets.push(line);
+            continuing = true;
+        } else if (continuing && line.trim() !== '' && /^\s/.test(line)) {
+            bullets.push(line);
+        } else {
+            continuing = false;
+        }
+    }
+    return bullets;
 }
 
 // Returns a Map of existing `### Title` heading to the lines that follow it,
@@ -157,7 +173,7 @@ export function collectChangelog(
 }
 
 // CLI: node changelog-collect.mts [--dry-run]
-if (import.meta.url === `file://${process.argv[1] ?? ''}`) {
+if (import.meta.main) {
     const scriptDir = dirname(fileURLToPath(import.meta.url));
     const projectDir = join(scriptDir, '..');
     const fragmentsDir = join(projectDir, 'changelog.d');

@@ -353,3 +353,79 @@ func TestSimulateBagQueue_FrozenPortionsDoNotConsumeStock(t *testing.T) {
 		t.Fatalf("status = %+v, want current=true", statuses[0])
 	}
 }
+
+// TestSimulateBagQueue_RemainingMatchesBeanRounding regresses #1553: a bag's
+// remainingG must be its stock minus its already-rounded consumedG (floored at
+// 0) — the same "round consumption first, then subtract" rule
+// ComputeBeanRemaining uses. Rounding the remainder on its own made a 250 g bag
+// with 203.5 g consumed report 204 g used but round(250-203.5)=47 g left, while
+// the bean-level value the stock line reads said 250-204=46.
+func TestSimulateBagQueue_RemainingMatchesBeanRounding(t *testing.T) {
+	cases := []struct {
+		name           string
+		stockG         float64
+		doses          []float64
+		wantConsumedG  int64
+		wantRemainingG int64
+		checkBean      bool
+		wantBeanG      int64
+	}{
+		{
+			// Eleven 18.5 g doses (the demo data's "El Indio" shots) sum to
+			// 203.5 g: consumption rounds to 204, so the bag has 250-204=46 g
+			// left — not round(250-203.5)=47.
+			name:           "half gram rounds consumption first (250 g bag, 203.5 g used)",
+			stockG:         250,
+			doses:          []float64{18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5},
+			wantConsumedG:  204,
+			wantRemainingG: 46,
+			checkBean:      true,
+			wantBeanG:      46,
+		},
+		{
+			// A dose bigger than the bag's stock cannot drive remainingG below
+			// 0.
+			name:           "consumption over stock floors remaining at 0",
+			stockG:         100,
+			doses:          []float64{130},
+			wantConsumedG:  100,
+			wantRemainingG: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			beanID := int64(1)
+			bean := Entity{
+				"id": beanID, "name": "El Indio",
+				"bags": []any{
+					Entity{"id": int64(1), "stock_g": tc.stockG, "openedAt": int64(1000), "sortOrder": int64(0)},
+				},
+			}
+			rows := make([]shots.AnnotatedDose, len(tc.doses))
+			for i, d := range tc.doses {
+				dose := d
+				rows[i] = shots.AnnotatedDose{BeanID: &beanID, Dose: &dose, Timestamp: int64(1500 + i)}
+			}
+			statuses := SimulateBagQueue(bean, rows, []Entity{bean})
+			if len(statuses) != 1 {
+				t.Fatalf("len(statuses) = %d, want 1", len(statuses))
+			}
+			if statuses[0].ConsumedG != tc.wantConsumedG || statuses[0].RemainingG != tc.wantRemainingG {
+				t.Fatalf("bag = %+v, want consumed=%d remaining=%d", statuses[0], tc.wantConsumedG, tc.wantRemainingG)
+			}
+			if !tc.checkBean {
+				return
+			}
+			remaining, ok := ComputeBeanRemaining(bean, rows, []Entity{bean})
+			if !ok {
+				t.Fatalf("ComputeBeanRemaining ok = false, want true")
+			}
+			if remaining != tc.wantBeanG {
+				t.Fatalf("bean remainingG = %d, want %d", remaining, tc.wantBeanG)
+			}
+			if remaining != statuses[0].RemainingG {
+				t.Fatalf("bean remainingG = %d, bag remainingG = %d; the two must agree", remaining, statuses[0].RemainingG)
+			}
+		})
+	}
+}

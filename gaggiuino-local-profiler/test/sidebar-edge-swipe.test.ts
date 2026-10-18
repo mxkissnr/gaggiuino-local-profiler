@@ -2,7 +2,7 @@
 // gesture to the existing swipe-left-to-close pair (handleDrawerTouchStart/
 // End). Bound to `document` rather than #sidebar, since the sidebar is
 // transformed off-screen (untouchable) while closed. Fake DOM mirrors
-// test/machine-accent-theme.test.js's FakeClassList pattern.
+// test/machine-accent-theme.test.ts's FakeClassList pattern.
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // vitest's node environment has no browser globals; stub them through a loose
@@ -13,7 +13,7 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 g.window ??= globalThis;
-// sidebar.js only schedules a frame to add the drawer-mode class; run it
+// sidebar.ts only schedules a frame to add the drawer-mode class; run it
 // straight away so the class lands synchronously (the return value is unused).
 g.requestAnimationFrame ??= (cb: FrameRequestCallback) => { cb(0); };
 
@@ -75,10 +75,12 @@ describe('edge-swipe-to-open the mobile drawer (#682)', () => {
   it('does not re-trigger while the drawer is already open', () => {
     sidebarEl.classList.add('sidebar-drawer-open');
     handleEdgeSwipeStart(touch(10));
-    // _edgeSwipeStartX should never have been armed -- confirmed by the
-    // drawer-mode class staying exactly as it already was (already open,
-    // nothing new added by this gesture).
     handleEdgeSwipeEnd(touchEnd(90));
+    // The gesture must be ignored entirely: the drawer stays open and no fresh
+    // drawer-mode/display state is applied on top of it. Asserting only the
+    // already-set open class would be true no matter what this gesture did.
     expect(sidebarEl.classList.contains('sidebar-drawer-open')).toBe(true);
+    expect(sidebarEl.classList.contains('sidebar-drawer-mode')).toBe(false);
+    expect(sidebarEl.style.display).toBeUndefined();
   });
 });

@@ -2,6 +2,7 @@ package backup
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -10,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -30,32 +33,56 @@ func fakePNG() []byte {
 // for the duration of a test.
 func useImageDir(t *testing.T) string {
 	t.Helper()
-	prev := imageDir
 	dir := t.TempDir()
+	useImageDirAt(t, dir)
+	return dir
+}
+
+// useImageDirAt points imageDir at dir for the duration of the test,
+// restoring the previous value on cleanup. Unlike useImageDir it creates no
+// directory, so a test can install a second, distinct image directory — the
+// restore target — after exporting from the first.
+func useImageDirAt(t *testing.T, dir string) {
+	t.Helper()
+	prev := imageDir
 	imageDir = dir
 	t.Cleanup(func() { imageDir = prev })
-	return dir
+}
+
+// imagesIdentical reports whether name exists under both dirA and dirB with
+// byte-identical contents. A file missing on either side is not a match, so a
+// restore that dropped an image is detected instead of being masked by the
+// source copy still sitting in the export directory.
+func imagesIdentical(t *testing.T, dirA, dirB, name string) bool {
+	t.Helper()
+	a, err := os.ReadFile(filepath.Join(dirA, name))
+	if err != nil {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(dirB, name))
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(a, b)
 }
 
 // TestStreamRoundTrip_FullFidelity seeds a populated install, streams a
 // backup zip out, streams it back into a fresh install, and deep-compares
 // every restored section.
 func TestStreamRoundTrip_FullFidelity(t *testing.T) {
-	imgDir := useImageDir(t)
-	if err := os.WriteFile(filepath.Join(imgDir, "1.png"), fakePNG(), 0o644); err != nil {
+	srcDir := useImageDir(t)
+	if err := os.WriteFile(filepath.Join(srcDir, "1.png"), fakePNG(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	h1, deps1, _ := newTestHandlers(t)
+	h1, deps1, sqlDB := newTestHandlers(t)
 	mux1 := newMux(h1)
 
 	seedShot(t, deps1, 42)
 	seedShot(t, deps1, 43)
-	if err := deps1.ShotsRepo.SetTrashEntry(43, 1234567); err != nil {
-		t.Fatal(err)
-	}
+	insertTrashEntry(t, sqlDB, 43, 1234567)
 	seedOrder(t, deps1)
-	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "rt note", "gaggiuino.local", 5, 1); err != nil {
+	if _, err := deps1.MaintenanceRepo.AddMaintenanceLogEntry("descaling", "rt note", "gaggiuino.local", 5, 1, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := deps1.LibRepo.SaveLibrary(library.Library{
@@ -63,7 +90,7 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := deps1.ShotsRepo.SaveBlocklist([]string{"77"}); err != nil {
+	if err := deps1.ShotsRepo.AppendToBlocklist("77"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +100,10 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	}
 	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
 
-	// Fresh install.
+	// Fresh install with a SEPARATE image directory: a restore that silently
+	// drops the image can no longer be masked by the source copy in srcDir.
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
 	h2, deps2, _ := newTestHandlersInDir(t)
 	mux2 := newMux(h2)
 
@@ -104,8 +134,13 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	if len(lib.Beans) != 1 || lib.Beans[0]["name"] != "RT Bean" || lib.Beans[0]["image"] != "png" {
 		t.Errorf("library beans = %+v", lib.Beans)
 	}
-	if _, err := os.Stat(filepath.Join(imgDir, "1.png")); err != nil {
-		t.Errorf("bean image not written on restore: %v", err)
+	if !imagesIdentical(t, srcDir, dstDir, "1.png") {
+		t.Errorf("restored bean image 1.png is missing from the target dir or differs from the source")
+	}
+	// The comparison must be able to fail: a directory without the image is not
+	// a match, so a restore that wrote nothing could never pass the check above.
+	if imagesIdentical(t, srcDir, t.TempDir(), "1.png") {
+		t.Error("image comparison matched a target directory that has no restored image")
 	}
 	// Orders.
 	if o, _ := deps2.OrdersRepo.FindAll(); len(o) != 1 {
@@ -146,9 +181,9 @@ func oversizedJPEGWithEXIF(t *testing.T, w, h int) []byte {
 // thumbnailed by writePendingImages, while the stored extension (and the
 // bean row referencing it) stays put.
 func TestRestore_OptimizesImagesThroughPipeline(t *testing.T) {
-	imgDir := useImageDir(t)
+	srcDir := useImageDir(t)
 	big := oversizedJPEGWithEXIF(t, 1700, 1700)
-	if err := os.WriteFile(filepath.Join(imgDir, "1.jpg"), big, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "1.jpg"), big, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -164,15 +199,19 @@ func TestRestore_OptimizesImagesThroughPipeline(t *testing.T) {
 	}
 	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
 
+	// Restore into a separate, empty image directory so every file the pipeline
+	// writes is one the restore actually produced.
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
 	h2, deps2, _ := newTestHandlersInDir(t)
 	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
 	}
 
-	restored, err := os.ReadFile(filepath.Join(imgDir, "1.jpg"))
+	restored, err := os.ReadFile(filepath.Join(dstDir, "1.jpg"))
 	if err != nil {
-		t.Fatalf("restored image missing: %v", err)
+		t.Fatalf("restored image missing from the target dir: %v", err)
 	}
 	if len(restored) >= len(big) {
 		t.Errorf("restored image not shrunk: %d >= %d", len(restored), len(big))
@@ -187,7 +226,7 @@ func TestRestore_OptimizesImagesThroughPipeline(t *testing.T) {
 	if cfg.Width > 1600 || cfg.Height > 1600 {
 		t.Errorf("restored image not downscaled: %dx%d", cfg.Width, cfg.Height)
 	}
-	if _, err := os.Stat(filepath.Join(imgDir, "1.thumb.jpg")); err != nil {
+	if _, err := os.Stat(filepath.Join(dstDir, "1.thumb.jpg")); err != nil {
 		t.Errorf("thumbnail not generated on restore: %v", err)
 	}
 	lib, _ := deps2.LibRepo.GetLibrary()
@@ -205,7 +244,7 @@ func TestStreamedBackupJSON_StructuralShape(t *testing.T) {
 	mux := newMux(h)
 	seedShot(t, deps, 1)
 	seedOrder(t, deps)
-	if err := deps.ShotsRepo.SaveBlocklist([]string{"5"}); err != nil {
+	if err := deps.ShotsRepo.AppendToBlocklist("5"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -306,14 +345,7 @@ func tinyJPEG(t *testing.T, w, h int) []byte {
 // landed on disk; it never exercised the serving route, never mixed library
 // images with a shot image, and never used a CreateBean-shaped id.
 func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
-	imgDir := useImageDir(t)
-	// The library package resolves its image dir once from
-	// library.DefaultImageDir; point it at the same throwaway dir so the real
-	// GET .../image handlers serve exactly what the restore wrote.
-	prevLibDir := library.DefaultImageDir
-	library.DefaultImageDir = imgDir
-	t.Cleanup(func() { library.DefaultImageDir = prevLibDir })
-
+	srcDir := useImageDir(t)
 	const (
 		beanID    int64 = 1783373357122
 		grinderID int64 = 1783373357200
@@ -325,7 +357,7 @@ func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
 	png := fakePNG()
 	write := func(name string, b []byte) {
 		t.Helper()
-		if err := os.WriteFile(filepath.Join(imgDir, name), b, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, name), b, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -357,6 +389,15 @@ func TestRestore_ServesLibraryImagesThroughHTTP(t *testing.T) {
 		t.Fatalf("export status = %d; body=%s", recExp.Code, recExp.Body.String())
 	}
 	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	// Restore into a separate image directory, and point the library package's
+	// own dir at it, so the HTTP 200s below prove the restore wrote the files
+	// rather than the handlers merely re-serving the seeded originals.
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
+	prevLibDir := library.DefaultImageDir
+	library.DefaultImageDir = dstDir
+	t.Cleanup(func() { library.DefaultImageDir = prevLibDir })
 
 	h2, deps2, _ := newTestHandlersInDir(t)
 	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
@@ -623,5 +664,144 @@ func TestRestore_LegacyBackup_LeavesUIPrefsUntouched(t *testing.T) {
 	}
 	if prefs["view"] != "local-only" {
 		t.Errorf("legacy restore clobbered ui_prefs: %+v", prefs)
+	}
+}
+
+// latin1HeaderValue renders s the way a browser would place it in a header
+// value: each rune up to U+00FF becomes its single ISO-8859-1 byte, and a
+// rune above that (e.g. €) is replaced — exactly the corruption the legacy
+// X-GLP-Passphrase header suffers, since a header value can only carry
+// ISO-8859-1 bytes.
+func latin1HeaderValue(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r > 0xFF {
+			b.WriteByte('?')
+			continue
+		}
+		b.WriteByte(byte(r))
+	}
+	return b.String()
+}
+
+// TestRestore_ZipPassphraseUTF8Header (#1602): a backup protected by a
+// passphrase with umlauts and € round-trips through a zip restore only when
+// the passphrase arrives base64-encoded as its UTF-8 bytes
+// (X-GLP-Passphrase-B64). The same backup with the legacy ISO-8859-1
+// X-GLP-Passphrase header cannot decrypt the secrets — the old bug the base64
+// header fixes.
+func TestRestore_ZipPassphraseUTF8Header(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 42)
+
+	const passphrase = "Kaffeebohnenäöü€"
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", mustMarshal(t, map[string]any{"passphrase": passphrase}))
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", recExp.Code, recExp.Body.String())
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	// Standard base64 of the passphrase's UTF-8 bytes — what postRestore now
+	// sends in X-GLP-Passphrase-B64.
+	b64 := base64.StdEncoding.EncodeToString([]byte(passphrase))
+
+	h2, _, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, map[string]string{"X-GLP-Passphrase-B64": b64})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	result := decodeBody(t, rr.Body.Bytes())
+	if result["secretsPresent"] != true || result["secretsRestored"] != true {
+		t.Errorf("base64 header: secrets = %+v; want present and restored", result)
+	}
+
+	// The legacy header carries the passphrase's Latin-1 bytes, so the derived
+	// key differs from the export key and decryption fails — the secrets are
+	// present but not restored (the pre-#1602 behaviour).
+	h3, _, _ := newTestHandlersInDir(t)
+	rr = doZip(t, newMux(h3), "/api/restore", zipBytes, map[string]string{"X-GLP-Passphrase": latin1HeaderValue(passphrase)})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("legacy-header restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	result = decodeBody(t, rr.Body.Bytes())
+	if result["secretsPresent"] != true || result["secretsRestored"] != false {
+		t.Errorf("legacy header: secrets = %+v; want present but NOT restored", result)
+	}
+}
+
+// TestRestore_InvalidBase64PassphraseHeader400 (#1602): a malformed
+// X-GLP-Passphrase-B64 value is a client error, not silently ignored (which
+// would look like a wrong passphrase).
+func TestRestore_InvalidBase64PassphraseHeader400(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 1)
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d", recExp.Code)
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	h2, _, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, map[string]string{"X-GLP-Passphrase-B64": "!!!not-base64!!!"})
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d; want 400; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestRestore_ReportsImagesThatCouldNotBeWritten (#1602): when the restore
+// queue holds two images but only one can be written to disk, the response
+// reports images = 1 (written) and imagesFailed = 1 instead of counting both
+// as restored. A directory standing in for one target path makes the write
+// fail the way a full disk or a permission error would.
+func TestRestore_ReportsImagesThatCouldNotBeWritten(t *testing.T) {
+	srcDir := useImageDir(t)
+	jpg := tinyJPEG(t, 48, 36)
+	for _, name := range []string{"1.jpg", "2.jpg"} {
+		if err := os.WriteFile(filepath.Join(srcDir, name), jpg, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h1, deps1, _ := newTestHandlers(t)
+	if err := deps1.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{
+			{"id": int64(1), "name": "Writable Bean", "stock_g": float64(100), "image": "jpg"},
+			{"id": int64(2), "name": "Unwritable Bean", "stock_g": float64(100), "image": "jpg"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	recExp := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if recExp.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", recExp.Code, recExp.Body.String())
+	}
+	zipBytes := append([]byte(nil), recExp.Body.Bytes()...)
+
+	// Restore into a fresh target directory whose second image path is a
+	// directory, so os.WriteFile fails for it (as it would on a full disk or a
+	// permission error) while the first writes fine. The source bytes still live
+	// in the backup zip, so pass-1 validation is unaffected.
+	dstDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dstDir, "2.jpg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	useImageDirAt(t, dstDir)
+
+	h2, _, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	result := decodeBody(t, rr.Body.Bytes())
+	if got, _ := result["images"].(float64); got != 1 {
+		t.Errorf("images = %v; want 1 (only the writable image)", result["images"])
+	}
+	if got, _ := result["imagesFailed"].(float64); got != 1 {
+		t.Errorf("imagesFailed = %v; want 1 (the unwritable image)", result["imagesFailed"])
+	}
+	if _, err := os.Stat(filepath.Join(dstDir, "1.jpg")); err != nil {
+		t.Errorf("image that could be written is missing from the target dir: %v", err)
 	}
 }

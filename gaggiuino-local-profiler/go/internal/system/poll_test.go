@@ -767,3 +767,151 @@ func TestHandleDefaultMachineChange_StartsPollingWithoutLivePolling(t *testing.T
 		t.Fatal("SwitchOnAt = nil, want a fresh session")
 	}
 }
+
+// TestMachineKnownOffline pins #1572's "known offline" predicate that lets the
+// profiles and firmware-version handlers skip their fetch timeouts: an
+// explicitly unreachable poll state, or the default machine with a configured
+// switch that reads off. Everything else stays live, including standby (still
+// reachable and answering) and unknown non-default machines.
+func TestMachineKnownOffline(t *testing.T) {
+	setReachable := func(p *Poller, id int64, v bool) {
+		p.state.mu.Lock()
+		p.state.machine(id).reachable = ptrBool(v)
+		p.state.mu.Unlock()
+	}
+	setSwitch := func(t *testing.T, p *Poller, entity string) {
+		t.Helper()
+		if _, err := p.registry.UpdateMachine(1, machines.MachineInput{SwitchEntity: &entity}, nil); err != nil {
+			t.Fatalf("UpdateMachine: %v", err)
+		}
+	}
+
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, p *Poller) int64
+		want  bool
+	}{
+		{
+			name: "unreachable poll state",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setReachable(p, 1, false)
+				return 1
+			},
+			want: true,
+		},
+		{
+			name: "default machine switch off",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setSwitch(t, p, "switch.gaggia")
+				p.runtime.SetMachineOn(false)
+				return 1
+			},
+			want: true,
+		},
+		{
+			name: "default machine switch off but no switch entity",
+			setup: func(t *testing.T, p *Poller) int64 {
+				p.runtime.SetMachineOn(false)
+				return 1
+			},
+			want: false,
+		},
+		{
+			name: "default machine standby with switch on",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setSwitch(t, p, "switch.gaggia")
+				p.runtime.SetMachineOn(true)
+				p.runtime.SetStandby(true)
+				return 1
+			},
+			want: false,
+		},
+		{
+			name: "non-default machine unknown state",
+			setup: func(t *testing.T, p *Poller) int64 {
+				return addOtherMachine(t, p.registry, "Second", "gaggiuino", "machine2.test", true).ID
+			},
+			want: false,
+		},
+		{
+			name: "reachable wins over switch off",
+			setup: func(t *testing.T, p *Poller) int64 {
+				setSwitch(t, p, "switch.gaggia")
+				p.runtime.SetMachineOn(false)
+				setReachable(p, 1, true)
+				return 1
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, _ := newTestPoller(t, &fakeAdapter{})
+			t.Cleanup(p.stopLivePolling)
+			id := tc.setup(t, p)
+			if got := p.MachineKnownOffline(id); got != tc.want {
+				t.Errorf("MachineKnownOffline(%d) = %v, want %v", id, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBrewAccumulator_CapsAtMaxLiveAccumPoints is the #1601 regression test: a
+// machine stuck reporting "brewing" must not grow the accumulator (and the
+// per-tick deep copy + broadcast of it) without bound. Every series stops at
+// exactly maxLiveAccumPoints.
+func TestBrewAccumulator_CapsAtMaxLiveAccumPoints(t *testing.T) {
+	fake := &fakeAdapter{}
+	fake.setStatus(okStatus(t, `{}`, 93, 94, 9, 5, true, "Test Profile", 1), nil)
+	p, _ := newTestPoller(t, fake)
+
+	for i := 0; i < maxLiveAccumPoints+10; i++ {
+		p.pollViaGaggiuinoStatus(context.Background())
+	}
+
+	dp := p.LiveData().Datapoints
+	if dp == nil {
+		t.Fatal("expected the brew accumulator to still be live")
+	}
+	for name, series := range map[string][]int{
+		"timeInShot":        dp.TimeInShot,
+		"pressure":          dp.Pressure,
+		"temperature":       dp.Temperature,
+		"shotWeight":        dp.ShotWeight,
+		"weightFlow":        dp.WeightFlow,
+		"pumpFlow":          dp.PumpFlow,
+		"targetTemperature": dp.TargetTemperature,
+	} {
+		if len(series) != maxLiveAccumPoints {
+			t.Errorf("%s series length = %d, want exactly %d", name, len(series), maxLiveAccumPoints)
+		}
+	}
+}
+
+// TestSteamAccumulator_CapsAtMaxLiveAccumPoints is the #1601 mode-accumulator
+// counterpart: a forgotten steam session caps its series the same way.
+func TestSteamAccumulator_CapsAtMaxLiveAccumPoints(t *testing.T) {
+	fake := &fakeAdapter{}
+	fake.setStatus(okStatus(t, `{}`, 130, 135, 1.5, 0, false, "Espresso", 1), nil)
+	fake.setLive(&proto.SensorStateSnapshotDto{Temperature: 130, SteamActive: true}, nil)
+	p, _ := newTestPoller(t, fake)
+
+	for i := 0; i < maxLiveAccumPoints+10; i++ {
+		p.pollViaGaggiuinoStatus(context.Background())
+	}
+
+	ld := p.LiveData()
+	if !ld.IsSteaming || ld.SteamDatapoints == nil {
+		t.Fatal("expected the steam accumulator to still be live")
+	}
+	for name, series := range map[string][]int{
+		"timeInMode":  ld.SteamDatapoints.TimeInMode,
+		"pressure":    ld.SteamDatapoints.Pressure,
+		"temperature": ld.SteamDatapoints.Temperature,
+	} {
+		if len(series) != maxLiveAccumPoints {
+			t.Errorf("%s series length = %d, want exactly %d", name, len(series), maxLiveAccumPoints)
+		}
+	}
+}

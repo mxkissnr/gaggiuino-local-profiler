@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 )
 
 func TestLimiter_Allow_BucketExhaustionAndReset(t *testing.T) {
@@ -178,6 +181,167 @@ func TestBucketKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := bucketKey(tc.ip); got != tc.want {
 				t.Errorf("bucketKey(%q) = %q, want %q", tc.ip, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewGuardsInvalidWindowAndMax(t *testing.T) {
+	// A max below 1 used to divide by zero in rate.Every (a startup panic); a
+	// non-positive window used to make rate.Every return rate.Inf, silently
+	// disabling the limit. Both must be clamped and still limit.
+
+	t.Run("max below one is clamped and still limits", func(t *testing.T) {
+		l := New(time.Minute, 0)
+		if !l.Allow("192.0.2.1") {
+			t.Fatal("first request should be allowed")
+		}
+		if l.Allow("192.0.2.1") {
+			t.Fatal("second request should be refused once the clamped burst of 1 is spent")
+		}
+	})
+
+	t.Run("non-positive window falls back to the default and still limits", func(t *testing.T) {
+		l := New(0, 10)
+		for i := 0; i < 10; i++ {
+			if !l.Allow("192.0.2.2") {
+				t.Fatalf("request %d should be allowed within the burst", i+1)
+			}
+		}
+		if l.Allow("192.0.2.2") {
+			t.Fatal("request beyond the burst should be refused")
+		}
+	})
+}
+
+// ingressTestRequest builds a request that auth.IsIngressRequest accepts:
+// Supervisor-network source address plus the Ingress path prefix.
+func ingressTestRequest(userID string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	req.RemoteAddr = "172.30.32.2:1234"
+	req.Header.Set("X-Ingress-Path", auth.HAIngressPrefix+"session-token")
+	if userID != "" {
+		req.Header.Set(ingressUserIDHeader, userID)
+	}
+	return req
+}
+
+func TestLimiter_Middleware_IngressUsersGetSeparateBuckets(t *testing.T) {
+	l := New(time.Minute, 1)
+	handler := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	alice := ingressTestRequest("alice")
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, alice)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("alice first request: expected 200, got %d", rec1.Code)
+	}
+
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, alice)
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("alice second request: expected 429, got %d", rec2.Code)
+	}
+
+	bob := ingressTestRequest("bob")
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, bob)
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("bob: expected his own unexhausted bucket (200), got %d", rec3.Code)
+	}
+}
+
+func TestLimiter_Middleware_IgnoresUserHeaderOnNonIngressRequest(t *testing.T) {
+	l := New(time.Minute, 1)
+	handler := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req1 := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	req1.RemoteAddr = "192.168.1.50:1234"
+	req1.Header.Set(ingressUserIDHeader, "alice")
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", rec1.Code)
+	}
+
+	// A LAN client can set the header itself; it must not buy a fresh bucket.
+	req2 := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	req2.RemoteAddr = "192.168.1.50:5678"
+	req2.Header.Set(ingressUserIDHeader, "bob")
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request with a different spoofed user header: expected 429, got %d", rec2.Code)
+	}
+}
+
+func TestLimiter_Middleware_IngressWithoutUserHeaderUsesSharedSocketKey(t *testing.T) {
+	l := New(time.Minute, 1)
+	handler := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req1 := ingressTestRequest("")
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", rec1.Code)
+	}
+
+	req2 := ingressTestRequest("")
+	req2.RemoteAddr = "172.30.32.2:5678" // same Supervisor address, different port
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second headerless Ingress request: expected the shared bucket (429), got %d", rec2.Code)
+	}
+}
+
+func TestLimiter_Middleware_OverLongIngressUserIDFallsBack(t *testing.T) {
+	l := New(time.Minute, 1)
+	handler := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	overlong := strings.Repeat("a", maxIngressUserIDLen+1)
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, ingressTestRequest(overlong))
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", rec1.Code)
+	}
+
+	// A different over-long id must not create a second bucket; both fall back
+	// to the shared Supervisor address key.
+	otherOverlong := strings.Repeat("b", maxIngressUserIDLen+1)
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, ingressTestRequest(otherOverlong))
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second over-long id: expected the shared bucket (429), got %d", rec2.Code)
+	}
+}
+
+func TestValidIngressUserID(t *testing.T) {
+	cases := []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{"empty", "", false},
+		{"simple", "abc-123", true},
+		{"max length", strings.Repeat("a", maxIngressUserIDLen), true},
+		{"over max length", strings.Repeat("a", maxIngressUserIDLen+1), false},
+		{"space is printable", "user name", true},
+		{"control character", "user\x01", false},
+		{"non-ASCII", "user\u00e9", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validIngressUserID(tc.id); got != tc.want {
+				t.Errorf("validIngressUserID(%q) = %v, want %v", tc.id, got, tc.want)
 			}
 		})
 	}

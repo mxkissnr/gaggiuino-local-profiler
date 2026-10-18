@@ -1,6 +1,7 @@
 package shots
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -69,15 +70,15 @@ func TestFindTrashed_SkipsOrphanTrashEntry(t *testing.T) {
 	}
 }
 
-// ── AppendToBlocklist (#901 finding 1: was a GetBlocklist+SaveBlocklist
-// read-modify-write, racy under concurrent deletes) ────────────────────
+// ── AppendToBlocklist (#901 finding 1: was a GetBlocklist + whole-list
+// rewrite, racy under concurrent deletes) ────────────────────
 
 // TestDelete_ConcurrentDeletesAllLandInBlocklist reproduces the race
 // against the actual HTTP path: N goroutines each permanently delete a
 // distinct shot concurrently. Before the fix, the delete handler's
-// GetBlocklist-then-SaveBlocklist round trip let two overlapping requests
-// each read the same blocklist snapshot and then have the later
-// SaveBlocklist (a blanket DELETE+re-INSERT) clobber the earlier one's
+// GetBlocklist-then-rewrite round trip let two overlapping requests each
+// read the same blocklist snapshot and then have the later whole-list write
+// (a blanket DELETE+re-INSERT) clobber the earlier one's
 // addition, silently dropping an id that had already been permanently
 // deleted. AppendToBlocklist's single INSERT OR IGNORE has no read step, so
 // every concurrent delete's id must end up present exactly once.
@@ -123,5 +124,46 @@ func TestDelete_ConcurrentDeletesAllLandInBlocklist(t *testing.T) {
 	}
 	if len(seen) != n {
 		t.Fatalf("expected all %d deleted ids in the blocklist, got %d: %+v", n, len(seen), blocklist)
+	}
+}
+
+// TestUpsert_DropsUnknownImageExtension pins that an `image` value read back
+// from sync/restore/import is only stored when it is a whitelisted
+// extension. Delete and move build paths from it, so anything else is
+// dropped at the single write point.
+func TestUpsert_DropsUnknownImageExtension(t *testing.T) {
+	_, repo, sqlDB := newTestHandlers(t)
+
+	cases := []struct {
+		name  string
+		image any
+		want  bool
+	}{
+		{"parent traversal", "../x", false},
+		{"separator", "x/jpg", false},
+		{"unknown extension", "jpeg", false},
+		{"non-string", float64(1), false},
+		{"known extension", "png", true},
+	}
+	for i, tc := range cases {
+		id := int64(i + 1)
+		if err := repo.Upsert(Shot{"id": id, "timestamp": id * 1000, "image": tc.image}); err != nil {
+			t.Fatalf("Upsert(%q): %v", tc.name, err)
+		}
+		var data string
+		if err := sqlDB.QueryRow(`SELECT data FROM shots WHERE id = ?`, id).Scan(&data); err != nil {
+			t.Fatalf("reading shot %d data: %v", id, err)
+		}
+		var stored map[string]any
+		if err := json.Unmarshal([]byte(data), &stored); err != nil {
+			t.Fatalf("decoding shot %d data: %v", id, err)
+		}
+		got, ok := stored["image"]
+		if ok != tc.want {
+			t.Fatalf("%s: image key present = %v, want %v (data=%s)", tc.name, ok, tc.want, data)
+		}
+		if tc.want && got != tc.image {
+			t.Fatalf("%s: image = %v, want %v", tc.name, got, tc.image)
+		}
 	}
 }

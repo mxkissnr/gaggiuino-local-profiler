@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// analytics.js's import chain reads localStorage/navigator at module load and
+// analytics.ts's import chain reads localStorage/navigator at module load and
 // zrender's env detection wants a Node.js UA (same stubs as
-// analytics-calendar-stats.test.js). computeRecipeSummary() and _trendAxisMin()
+// analytics-calendar-stats.test.ts). computeRecipeSummary() and _trendAxisMin()
 // themselves are pure.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let computeRecipeSummary: Analytics['computeRecipeSummary'];

@@ -1,0 +1,377 @@
+{
+  "/api/maintenance": {
+    "backflush": {
+      "daysSince": 6,
+      "machineSyncedAt": null,
+      "pct": 0.6,
+      "shotsSince": 18,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_shots": 30
+    },
+    "descaling": {
+      "daysSince": 20,
+      "machineSyncedAt": null,
+      "pct": 0.3333333333333333,
+      "shotsSince": 55,
+      "status": "ok",
+      "threshold_days": 60,
+      "threshold_shots": 200
+    },
+    "gaskets": {
+      "daysSince": null,
+      "pct": 0,
+      "shotsSince": 176,
+      "status": "never",
+      "threshold_days": 365,
+      "threshold_shots": null
+    },
+    "grinder_101": {
+      "daysSince": 39,
+      "gramsSince": 1433,
+      "grinderName": "Niche Zero",
+      "pct": 0.59,
+      "shotsSince": 118,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": 5000,
+      "threshold_shots": 200
+    },
+    "grinder_102": {
+      "daysSince": 35,
+      "gramsSince": 1302,
+      "grinderName": "Mühle Pro",
+      "pct": 0.106,
+      "shotsSince": 106,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 1000
+    },
+    "grinder_103": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "DF64",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grinder_104": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "Retired Grinder",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grouphead": {
+      "daysSince": 38,
+      "pct": 0.31666666666666665,
+      "shotsSince": 103,
+      "status": "ok",
+      "threshold_days": 120,
+      "threshold_shots": 500
+    },
+    "waterfilter": {
+      "daysSince": 30,
+      "pct": 0.455,
+      "shotsSince": 91,
+      "status": "ok",
+      "threshold_days": 90,
+      "threshold_shots": 200
+    }
+  },
+  "/api/maintenance?machine=1": {
+    "backflush": {
+      "daysSince": 6,
+      "machineSyncedAt": null,
+      "pct": 0.6,
+      "shotsSince": 18,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_shots": 30
+    },
+    "descaling": {
+      "daysSince": 20,
+      "machineSyncedAt": null,
+      "pct": 0.3333333333333333,
+      "shotsSince": 55,
+      "status": "ok",
+      "threshold_days": 60,
+      "threshold_shots": 200
+    },
+    "gaskets": {
+      "daysSince": null,
+      "pct": 0,
+      "shotsSince": 176,
+      "status": "never",
+      "threshold_days": 365,
+      "threshold_shots": null
+    },
+    "grinder_101": {
+      "daysSince": 39,
+      "gramsSince": 1433,
+      "grinderName": "Niche Zero",
+      "pct": 0.59,
+      "shotsSince": 118,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": 5000,
+      "threshold_shots": 200
+    },
+    "grinder_102": {
+      "daysSince": 35,
+      "gramsSince": 1302,
+      "grinderName": "Mühle Pro",
+      "pct": 0.106,
+      "shotsSince": 106,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 1000
+    },
+    "grinder_103": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "DF64",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grinder_104": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "Retired Grinder",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grouphead": {
+      "daysSince": 38,
+      "pct": 0.31666666666666665,
+      "shotsSince": 103,
+      "status": "ok",
+      "threshold_days": 120,
+      "threshold_shots": 500
+    },
+    "waterfilter": {
+      "daysSince": 30,
+      "pct": 0.455,
+      "shotsSince": 91,
+      "status": "ok",
+      "threshold_days": 90,
+      "threshold_shots": 200
+    }
+  },
+  "/api/maintenance?machine=2": {
+    "backflush": {
+      "daysSince": 6,
+      "machineSyncedAt": null,
+      "pct": 0.6,
+      "shotsSince": 18,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_shots": 30
+    },
+    "descaling": {
+      "daysSince": 20,
+      "machineSyncedAt": null,
+      "pct": 0.3333333333333333,
+      "shotsSince": 55,
+      "status": "ok",
+      "threshold_days": 60,
+      "threshold_shots": 200
+    },
+    "gaskets": {
+      "daysSince": null,
+      "pct": 0,
+      "shotsSince": 176,
+      "status": "never",
+      "threshold_days": 365,
+      "threshold_shots": null
+    },
+    "grinder_101": {
+      "daysSince": 39,
+      "gramsSince": 1433,
+      "grinderName": "Niche Zero",
+      "pct": 0.59,
+      "shotsSince": 118,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": 5000,
+      "threshold_shots": 200
+    },
+    "grinder_102": {
+      "daysSince": 35,
+      "gramsSince": 1302,
+      "grinderName": "Mühle Pro",
+      "pct": 0.106,
+      "shotsSince": 106,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 1000
+    },
+    "grinder_103": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "DF64",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grinder_104": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "Retired Grinder",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grouphead": {
+      "daysSince": 38,
+      "pct": 0.31666666666666665,
+      "shotsSince": 103,
+      "status": "ok",
+      "threshold_days": 120,
+      "threshold_shots": 500
+    },
+    "waterfilter": {
+      "daysSince": 30,
+      "pct": 0.455,
+      "shotsSince": 91,
+      "status": "ok",
+      "threshold_days": 90,
+      "threshold_shots": 200
+    }
+  },
+  "/api/maintenance?machine=all": {
+    "backflush": {
+      "daysSince": 6,
+      "machineSyncedAt": null,
+      "pct": 0.6,
+      "shotsSince": 18,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_shots": 30
+    },
+    "descaling": {
+      "daysSince": 20,
+      "machineSyncedAt": null,
+      "pct": 0.3333333333333333,
+      "shotsSince": 55,
+      "status": "ok",
+      "threshold_days": 60,
+      "threshold_shots": 200
+    },
+    "gaskets": {
+      "daysSince": null,
+      "pct": 0,
+      "shotsSince": 176,
+      "status": "never",
+      "threshold_days": 365,
+      "threshold_shots": null
+    },
+    "grinder_101": {
+      "daysSince": 39,
+      "gramsSince": 1433,
+      "grinderName": "Niche Zero",
+      "pct": 0.59,
+      "shotsSince": 118,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": 5000,
+      "threshold_shots": 200
+    },
+    "grinder_102": {
+      "daysSince": 35,
+      "gramsSince": 1302,
+      "grinderName": "Mühle Pro",
+      "pct": 0.106,
+      "shotsSince": 106,
+      "status": "ok",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 1000
+    },
+    "grinder_103": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "DF64",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grinder_104": {
+      "daysSince": null,
+      "gramsSince": 2353,
+      "grinderName": "Retired Grinder",
+      "pct": 0.98,
+      "shotsSince": 196,
+      "status": "never",
+      "threshold_days": null,
+      "threshold_g": null,
+      "threshold_shots": 200
+    },
+    "grouphead": {
+      "daysSince": 38,
+      "pct": 0.31666666666666665,
+      "shotsSince": 103,
+      "status": "ok",
+      "threshold_days": 120,
+      "threshold_shots": 500
+    },
+    "waterfilter": {
+      "daysSince": 30,
+      "pct": 0.455,
+      "shotsSince": 91,
+      "status": "ok",
+      "threshold_days": 90,
+      "threshold_shots": 200
+    }
+  },
+  "shotCountFor": {
+    "backflush@1": 180,
+    "backflush@2": 20,
+    "backflush@3": 0,
+    "custom_x@1": 180,
+    "custom_x@2": 20,
+    "custom_x@3": 0,
+    "descaling@1": 180,
+    "descaling@2": 20,
+    "descaling@3": 0,
+    "gaskets@1": 180,
+    "gaskets@2": 20,
+    "gaskets@3": 0,
+    "grinder_101@1": 200,
+    "grinder_101@2": 200,
+    "grinder_101@3": 200,
+    "grouphead@1": 180,
+    "grouphead@2": 20,
+    "grouphead@3": 0,
+    "waterfilter@1": 200,
+    "waterfilter@2": 200,
+    "waterfilter@3": 200
+  }
+}

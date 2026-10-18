@@ -137,8 +137,7 @@ func badges() []badge {
 		}},
 		{ID: "temp_stable", Card: "craft", Stamp: "shield", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
-				t := datapointsScaled(s, "temperature", 10)
-				if len(t) > 5 && stddev(t) <= tempStableToleranceC {
+				if isTempStable(s) {
 					return true
 				}
 			}
@@ -146,9 +145,7 @@ func badges() []badge {
 		}},
 		{ID: "pressure_flat", Card: "craft", Stamp: "bolt", Check: func(c *Context) bool {
 			for _, s := range c.Shots {
-				times := datapointsScaled(s, "timeInShot", 10)
-				pressures := datapointsScaled(s, "pressure", 10)
-				if hasPressurePlateau(times, pressures, pressurePlateauWindowS, pressurePlateauToleranceBar) {
+				if hasShotPressurePlateau(s) {
 					return true
 				}
 			}
@@ -160,9 +157,7 @@ func badges() []badge {
 				if sc == nil || *sc < 88 {
 					continue
 				}
-				times := datapointsScaled(s, "timeInShot", 10)
-				pressures := datapointsScaled(s, "pressure", 10)
-				if pre := detectPreinfusionSeconds(times, pressures); pre != nil && *pre > 10 {
+				if pre := shotPreinfusionSeconds(s); pre != nil && *pre > 10 {
 					return true
 				}
 			}
@@ -559,11 +554,13 @@ func countMaintLogs(c *Context, task string) int {
 	return n
 }
 
+// shotDaySet returns the local calendar days ("2006-01-02", time.Local —
+// see currentDayStreak) that have a shot.
 func shotDaySet(shotList []shots.Shot) map[string]bool {
 	set := map[string]bool{}
 	for _, s := range shotList {
 		if ts, ok := asInt64(s["timestamp"]); ok {
-			set[time.UnixMilli(ts*1000).UTC().Format("2006-01-02")] = true
+			set[time.Unix(ts, 0).In(time.Local).Format("2006-01-02")] = true
 		}
 	}
 	return set

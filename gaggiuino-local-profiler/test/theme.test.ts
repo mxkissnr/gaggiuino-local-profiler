@@ -1,7 +1,7 @@
-// #1018: applyTheme()/resolveTheme()/watchSystemTheme() (public-src/theme.js).
-// Split out of main.js specifically so this could be unit tested without
-// pulling in main.js's whole side-effecting import chain -- see the fake
-// minimal document/window approach test/library-load-render-race.test.js
+// #1018: applyTheme()/resolveTheme()/watchSystemTheme() (public-src/theme.ts).
+// Split out of main.ts specifically so this could be unit tested without
+// pulling in main.ts's whole side-effecting import chain -- see the fake
+// minimal document/window approach test/library-load-render-race.test.ts
 // already uses for the same reason, rather than pulling in jsdom.
 import { describe, it, expect, vi } from 'vitest';
 import { resolveTheme, applyTheme, watchSystemTheme, THEME_STORAGE_KEY } from '../public-src/theme.js';
@@ -61,11 +61,16 @@ function fakeButton(themeVal: string | undefined): FakeButton {
   };
 }
 
-function fakeDoc(buttons: FakeButton[]): FakeDoc {
+function fakeDoc(buttons: FakeButton[], allButtons: FakeButton[] = buttons): FakeDoc {
   return {
     documentElement: { dataset: {} },
-    querySelectorAll: sel =>
-      sel === '#themeToggleGroup .theme-btn' ? buttons : [],
+    querySelectorAll: sel => {
+      if (sel === '#themeToggleGroup .theme-btn') return buttons;
+      // A bare `.theme-btn` query (the pre-#1018 bug) also matches the buttons
+      // passed as allButtons, e.g. the MQTT transport toggle.
+      if (sel === '.theme-btn') return allButtons;
+      return [];
+    },
   };
 }
 
@@ -158,7 +163,7 @@ describe('applyTheme active-state class (#1018)', () => {
     expect(doc.documentElement.dataset.theme).toBe('dark');
   });
 
-  // #1018's actual bug: main.js used to query the bare `.theme-btn` class,
+  // #1018's actual bug: main.ts used to query the bare `.theme-btn` class,
   // which #mqttTransportToggle's WebSocket/MQTT buttons also carry (with no
   // data-theme-val) -- an unscoped query wired/matched those too, and
   // clicking one called setTheme(undefined), which matched neither 'dark'
@@ -168,10 +173,14 @@ describe('applyTheme active-state class (#1018)', () => {
     const dark = fakeButton('dark'), light = fakeButton('light');
     const mqttBtn = fakeButton(undefined);
     mqttBtn.classList.toggle('active', true); // pre-existing, unrelated .active
-    const doc = fakeDoc([dark, light]); // querySelectorAll is scoped -- mqttBtn never returned
+    // A bare `.theme-btn` query would return mqttBtn too; only the scoped query
+    // hides it. If applyTheme regressed to the unscoped selector, mqttBtn (no
+    // data-theme-val) would be toggled off and the last assertion would fail.
+    const doc = fakeDoc([dark, light], [dark, light, mqttBtn]);
     const win = linkWin(fakeWin(false));
     applyTheme('dark', { doc: asDoc(doc), win: asWin(win) });
     expect(dark.classList.contains('active')).toBe(true);
+    expect(light.classList.contains('active')).toBe(false);
     expect(mqttBtn.classList.contains('active')).toBe(true); // untouched
   });
 
@@ -217,12 +226,21 @@ describe('watchSystemTheme (#1018 live auto re-resolution)', () => {
     const win = linkWin(fakeWin(false));
     const storage = { getItem: () => 'dark', setItem: () => {} };
 
-    watchSystemTheme({ win: asWin(win), storage: asStorage(storage) });
-    win.prefersDark = true;
-    win.fireChange();
+    const realDocument = g.document;
+    // applyTheme() falls back to the global document; stub it to `doc` so a
+    // stray re-apply would leave an observable trace here.
+    g.document = doc;
+    try {
+      watchSystemTheme({ win: asWin(win), storage: asStorage(storage) });
+      win.prefersDark = true;
+      win.fireChange();
 
-    // untouched -- no applyTheme() call should have fired
-    expect(doc.documentElement.dataset.theme).toBe('dark');
-    expect(dark.classList.contains('active')).toBe(false);
+      // untouched -- no applyTheme() call should have fired, so no
+      // theme-change event and no button re-highlighting.
+      expect(win.events).toEqual([]);
+      expect(dark.classList.contains('active')).toBe(false);
+    } finally {
+      g.document = realDocument;
+    }
   });
 });

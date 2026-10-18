@@ -46,7 +46,6 @@ func newTestHandlers(t testing.TB) (*Handlers, *Repository, *sql.DB) {
 	t.Cleanup(func() { sqlDB.Close() })
 	repo := NewRepository(sqlDB)
 	h := NewHandlers(repo, shots.NewRepository(sqlDB))
-	t.Cleanup(h.limiter.Stop)
 	// DefaultImageDir ("/data/bean-images") isn't writable by a test
 	// process — point image uploads at a throwaway dir instead.
 	h.imageDir = t.TempDir()

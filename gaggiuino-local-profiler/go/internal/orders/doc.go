@@ -16,33 +16,24 @@
 // _broadcastShopState/_getPreheatInfo (the shop-open/shop-closed HA push
 // notification POST /api/orders/settings fires when `enabled` flips) need
 // the default machine's live runtime state (machineOn/switchOnAt) and live
-// in handlers.go's broadcastShopState — wired to internal/system's Poller
-// via the PreheatInfoFunc callback SetPreheatInfoProvider takes, not a
-// direct import (see handlers.go's header comment and
-// go/internal/system/doc.go for why a callback, not an import).
+// in handlers_shop.go's broadcastShopState — wired to internal/system's
+// Poller via the PreheatInfoFunc callback SetPreheatInfoProvider takes, not a
+// direct import (see go/internal/system/doc.go for why a callback).
 //
 // File layout:
 //
-//	options.go     isOrdersEnabled() — a narrow, single-field read of
-//	                /data/options.json (see its own doc comment for why
-//	                this reads that one field itself rather than going
-//	                through the system domain's options.json facade)
+//	options.go     isOrdersEnabled() — options.json's enable_orders via
+//	                internal/config's shared Options() reader
 //	repository.go   the `orders` table plus the menu/orders_settings/
 //	                notify_mapping kv keys
 //	service.go      resolveMachineId/resolveBeanId/computeQueueEta/
 //	                place|accept|complete|declineOrder
-//	handlers.go     the REST handlers
+//	handlers.go     route registration and shared handler plumbing
+//	handlers_orders.go / handlers_shop.go  the REST handlers
+//	normalize.go    menu-item normalisation (NormalizeMenuItem)
 //
-// # Deliberately not implemented
-//
-//   - _checkPreheatNotify's barista "preheat ready" HA push (the OTHER
-//     preheat-related notification, distinct from the shop-broadcast
-//     above) belongs to internal/system, not this package — see that
-//     package's doc.go.
-//   - internal/ha implements sendHaNotify/
-//     getNotifyServices/getHaPersons only — getSwitchState/getHaLanguage/
-//     callHaService/getHaState aren't needed by any route this domain
-//     registers; see internal/ha's own doc comment.
+// The barista "preheat ready" HA push is internal/system's (see that
+// package's preheat.go); this package only provides the settings it reads.
 //
 // Machine/live-status fields like machineReachable, isLive, apiToken and
 // targetAt belong to the system package's contract, not this one — see

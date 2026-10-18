@@ -1,6 +1,10 @@
 package shots
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // ── MoveMisfiledShot (#1162) ────────────────────────────────────────────
 
@@ -53,14 +57,10 @@ func TestMoveMisfiledShot_MovesRowAndChildren(t *testing.T) {
 	if ann["dose"] == nil {
 		t.Fatalf("annotation lost in move: %+v", ann)
 	}
-	if _, ok, err := repo.GetTrashEntry(20_000_005); err != nil {
-		t.Fatalf("GetTrashEntry(20000005): %v", err)
-	} else if !ok {
+	if _, ok := trashEntry(t, sqlDB, 20_000_005); !ok {
 		t.Fatalf("trash entry not re-keyed to 20000005")
 	}
-	if _, ok, err := repo.GetTrashEntry(5); err != nil {
-		t.Fatalf("GetTrashEntry(5): %v", err)
-	} else if ok {
+	if _, ok := trashEntry(t, sqlDB, 5); ok {
 		t.Fatalf("old trash entry for 5 still present")
 	}
 
@@ -166,5 +166,25 @@ func TestMoveMisfiledShot_TargetTakenLeavesBoth(t *testing.T) {
 	}
 	if ts, _ := tgt["timestamp"].(int64); ts != 7000 {
 		t.Fatalf("target shot 20000005 timestamp = %#v, want 7000 (untouched)", tgt["timestamp"])
+	}
+}
+
+// TestMoveShotImageFiles_IgnoresUnknownExtension pins that an unknown
+// extension is not renamed: the old `ext == ""` guard would have moved
+// shot-1.jpeg to shot-2.jpeg.
+func TestMoveShotImageFiles_IgnoresUnknownExtension(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "shot-1.jpeg")
+	if err := os.WriteFile(src, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	MoveShotImageFiles(dir, 1, 2, "jpeg")
+
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("shot-1.jpeg was renamed or removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "shot-2.jpeg")); !os.IsNotExist(err) {
+		t.Fatalf("shot-2.jpeg should not exist (err=%v)", err)
 	}
 }

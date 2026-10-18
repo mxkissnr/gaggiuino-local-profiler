@@ -7,22 +7,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
 // This file implements the bean endpoints.
-
-func findBeanIndex(lib Library, id int64) int {
-	for i, b := range lib.Beans {
-		if bid, ok := idOf(b, "id"); ok && bid == id {
-			return i
-		}
-	}
-	return -1
-}
 
 // createBean handles POST /api/library/bean — a thin wrapper around
 // CreateBean (create.go).
@@ -34,7 +23,7 @@ func (h *Handlers) createBean(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	bean, _, err := CreateBean(h.repo, h.imageDir, body)
+	bean, err := CreateBean(h.repo, h.imageDir, body)
 	if err != nil {
 		var verr *ValidationError
 		if errors.As(err, &verr) {
@@ -56,7 +45,15 @@ func (h *Handlers) updateBean(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	bean, _, found, err := UpdateBean(h.repo, id, body)
+	// UpdateBean writes the body's roastDate/stock_g/batchNumber into the bag
+	// actually being drawn from, so it needs the dose rows to find that bag;
+	// without them it could only guess, and guessing would edit the wrong bag.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	bean, found, err := UpdateBean(h.repo, id, body, doseRows)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -114,7 +111,7 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -177,7 +174,7 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 		// was already exhausted, so this one is drawn from immediately) — not
 		// unconditionally, which would overwrite the bean's displayed roast
 		// date/stock with a bag still queued behind the real current one.
-		if cur := resolveCurrentBagSimple(bean); cur != nil {
+		if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
 			if cid, ok := idOf(cur, "id"); ok && cid == bagID {
 				bean["roastDate"] = bag["roastDate"]
 				bean["stock_g"] = bag["stock_g"]
@@ -210,11 +207,21 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bagIds required")
 		return
 	}
+	// The upcoming set is exactly the bags the client may reorder, so this
+	// needs the same dose replay SimulateBagQueue does — without it an
+	// already-emptied past bag looks "upcoming" and a still-full bag looks
+	// current. A read failure here would misclassify them and wrongly accept
+	// or reject the request, so fail rather than guess.
+	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
+	err = h.repo.Update(func(lib *Library) error {
 		idx := -1
 		if !noMatch {
-			idx = findBeanIndex(*lib, id)
+			idx = findEntityIndex(lib.Beans, id)
 		}
 		if idx == -1 {
 			return errNotFound
@@ -236,16 +243,20 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 		// "upcoming"). Past/exhausted bags are unaffected either way since a
 		// bag with 0 capacity left never advances the queue regardless of its
 		// position.
+		statuses := SimulateBagQueue(bean, doseRows, lib.Beans)
 		baseline := int64(0)
 		currentBagID := int64(-1)
-		if cur := resolveCurrentBagSimple(bean); cur != nil {
+		if cur := currentBag(bean, doseRows, lib.Beans); cur != nil {
 			baseline = effectiveSortOrder(cur)
 			if cid, ok := idOf(cur, "id"); ok {
 				currentBagID = cid
 			}
 		}
-		// bagIds must be exactly the set of "upcoming" (non-current) bags —
-		// no duplicates, none missing. Assigning sortOrder to only a subset
+		// bagIds must be exactly the set of "upcoming" bags the client can
+		// reorder — tracked (SimulateBagQueue resolved it), not current, and
+		// still with stock left (classifyBeanBags' `upcoming`) — no
+		// duplicates, none missing. Past/emptied and untracked bags are
+		// neither required nor allowed. Assigning sortOrder to only a subset
 		// would leave the omitted bags' old values unchanged, which can now
 		// collide with or fall between the freshly-assigned ones (the new
 		// values are baseline+1, baseline+2, ... contiguous integers, so any
@@ -253,10 +264,11 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 		// duplicate id in the request would just assign it a sortOrder twice,
 		// silently discarding whichever assignment came first.
 		upcoming := make(map[int64]bool, len(bags))
-		for bid := range byID {
-			if bid != currentBagID {
-				upcoming[bid] = true
+		for _, s := range statuses {
+			if s.Current || s.RemainingG <= 0 {
+				continue
 			}
+			upcoming[s.BagID] = true
 		}
 		seen := make(map[int64]bool, len(rawIDs))
 		for _, rawID := range rawIDs {
@@ -292,407 +304,9 @@ func (h *Handlers) reorderBags(w http.ResponseWriter, r *http.Request) {
 	h.writeEnrichedBean(w, bean)
 }
 
-// freezePortions handles POST /api/library/bean/:id/freeze-portions (#472).
-func (h *Handlers) freezePortions(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	body, ok := decodeJSONBody(w, r)
-	if !ok {
-		return
-	}
-	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !noMatch {
-			idx = findBeanIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		bean = lib.Beans[idx]
-		bags := bagsOf(bean)
-		if len(bags) == 0 {
-			return errNoActiveBag
-		}
-		// frozenAt must be strictly a JSON number, not a numeric string (unlike
-		// jsParseFloat elsewhere).
-		frozenAt, isNum := body["frozenAt"].(float64)
-		if !isNum || math.IsInf(frozenAt, 0) {
-			frozenAt = float64(newID())
-		}
-		candidate := Entity{"frozenAt": frozenAt, "portionCount": body["portionCount"], "portionWeight_g": body["portionWeight_g"]}
-		portions := sanitizeFrozenPortions([]any{candidate})
-		if len(portions) == 0 {
-			return errPortionFieldsRequired
-		}
-		newPortion := portions[0]
-
-		// Attach to the queue's current bag — the one actually being drawn
-		// from — not the array-last bag (see #sortOrder rework; those can now
-		// differ once bags are manually reordered).
-		target := resolveCurrentBagSimple(bean)
-		if target == nil {
-			target, _ = bags[len(bags)-1].(Entity)
-		}
-		fp, _ := target["frozenPortions"].([]any)
-		target["frozenPortions"] = append(fp, newPortion)
-		lib.Beans[idx] = bean
-		return nil
-	})
-	if err != nil {
-		writeUpdateError(w, err)
-		return
-	}
-	h.writeEnrichedBean(w, bean)
-}
-
-// findFrozenPortion locates a frozen portion by id across every bag. The
-// same search backs both thaw-portion and adjust-frozen-portion.
-func findFrozenPortion(bean Entity, portionID int64, requireNotThawed bool) Entity {
-	for _, b := range bagsOf(bean) {
-		bag, _ := b.(Entity)
-		if bag == nil {
-			continue
-		}
-		fps, _ := bag["frozenPortions"].([]any)
-		for _, p := range fps {
-			portion, _ := p.(Entity)
-			if portion == nil {
-				continue
-			}
-			pid, ok := idOf(portion, "id")
-			if !ok || pid != portionID {
-				continue
-			}
-			if requireNotThawed {
-				if _, thawed := portion["thawedAt"]; thawed {
-					continue
-				}
-			}
-			return portion
-		}
-	}
-	return nil
-}
-
-// thawPortion handles POST /api/library/bean/:id/thaw-portion (#472).
-func (h *Handlers) thawPortion(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	body, ok := decodeJSONBody(w, r)
-	if !ok {
-		return
-	}
-	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !noMatch {
-			idx = findBeanIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		bean = lib.Beans[idx]
-		portionID, _ := jsParseIntLoose(body["portionId"])
-		count := int64(1)
-		if c, ok := jsParseIntLoose(body["count"]); ok && c > 0 {
-			count = c
-		}
-		portion := findFrozenPortion(bean, portionID, true)
-		if portion == nil {
-			return errFrozenPortionNotFound
-		}
-		currentRemaining, ok := jsParseIntLoose(portion["remainingCount"])
-		if !ok {
-			currentRemaining, _ = jsParseIntLoose(portion["portionCount"])
-		}
-		remaining := currentRemaining - count
-		if remaining < 0 {
-			remaining = 0
-		}
-		portion["remainingCount"] = remaining
-		if remaining == 0 {
-			portion["thawedAt"] = newID()
-		}
-		lib.Beans[idx] = bean
-		return nil
-	})
-	if err != nil {
-		writeUpdateError(w, err)
-		return
-	}
-	h.writeEnrichedBean(w, bean)
-}
-
-// adjustFrozenPortion handles POST /api/library/bean/:id/adjust-frozen-portion (#472).
-func (h *Handlers) adjustFrozenPortion(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	body, ok := decodeJSONBody(w, r)
-	if !ok {
-		return
-	}
-	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !noMatch {
-			idx = findBeanIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		bean = lib.Beans[idx]
-		portionID, _ := jsParseIntLoose(body["portionId"])
-		portion := findFrozenPortion(bean, portionID, false)
-		if portion == nil {
-			return errFrozenPortionNotFound
-		}
-
-		if v, present := body["portionWeight_g"]; present && v != nil {
-			wgt, ok := jsParseFloat(v)
-			if !ok || !(wgt > 0 && wgt <= 2000) {
-				return errInvalidPortionWeight
-			}
-			portion["portionWeight_g"] = roundTo1(wgt)
-		}
-		if v, present := body["frozenAt"]; present && v != nil {
-			fa, ok := v.(float64)
-			if !ok || math.IsInf(fa, 0) {
-				return errInvalidFrozenAt
-			}
-			portion["frozenAt"] = fa
-		}
-		if v, present := body["remainingCount"]; present && v != nil {
-			rc, ok := jsParseIntLoose(v)
-			if !ok || rc < 0 {
-				return errInvalidRemainingCount
-			}
-			portionCount, _ := jsParseIntLoose(portion["portionCount"])
-			if rc > portionCount {
-				rc = portionCount
-			}
-			portion["remainingCount"] = rc
-			if rc == 0 {
-				if _, already := portion["thawedAt"]; !already {
-					portion["thawedAt"] = newID()
-				}
-			} else {
-				delete(portion, "thawedAt")
-			}
-		}
-
-		lib.Beans[idx] = bean
-		return nil
-	})
-	if err != nil {
-		writeUpdateError(w, err)
-		return
-	}
-	h.writeEnrichedBean(w, bean)
-}
-
-// deleteBag handles DELETE /api/library/bean/:id/bag/:bagId.
-func (h *Handlers) deleteBag(w http.ResponseWriter, r *http.Request) {
-	id, idNoMatch := parseIDParam(r.PathValue("id"))
-	bagID, bagNoMatch := parseIDParam(r.PathValue("bagId"))
-	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !idNoMatch {
-			idx = findBeanIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		bean = lib.Beans[idx]
-		bags := bagsOf(bean)
-		if len(bags) <= 1 {
-			return errCannotDeleteLastBag
-		}
-		filtered := make([]any, 0, len(bags))
-		for _, b := range bags {
-			bag, _ := b.(Entity)
-			bgID, ok := idOf(bag, "id")
-			if !bagNoMatch && ok && bgID == bagID {
-				continue
-			}
-			filtered = append(filtered, b)
-		}
-		bean["bags"] = filtered
-		last, _ := filtered[len(filtered)-1].(Entity)
-		bean["roastDate"] = last["roastDate"]
-		bean["stock_g"] = last["stock_g"]
-		lib.Beans[idx] = bean
-		return nil
-	})
-	if err != nil {
-		writeUpdateError(w, err)
-		return
-	}
-	h.writeEnrichedBean(w, bean)
-}
-
-// validateBagFloatField parses body[key] with the same parseFloat-or-null
-// idiom as floatOrNilFalsy, but — unlike bean-level price_eur's
-// sanitizePrice, which silently clamps an out-of-range/unparseable value to
-// nil — treats a present-but-non-numeric or negative value as a hard 400.
-// Bag stock_g/price_eur are only ever set by the app's own numeric inputs,
-// so a value that fails to parse here means a client bug, not a legitimate
-// free-text omission the way a roaster-entered bean price can be.
-func validateBagFloatField(body Entity, key string) (any, bool) {
-	v, present := body[key]
-	if !present || v == nil {
-		return nil, true
-	}
-	f, ok := jsParseFloat(v)
-	if !ok || f < 0 {
-		return nil, false
-	}
-	return f, true
-}
-
-// validateBagRoastDate implements the updateBag roastDate gate: a date
-// parseable as YYYY-MM-DD that's more than a day in the future almost
-// certainly means a client clock/timezone bug rather than an intentional
-// future roast date, so it's rejected outright — unlike bean-level roastDate
-// (trimMax), which never validates the string's content, just its length.
-func validateBagRoastDate(body Entity) (string, bool) {
-	roastDate := trimMax(body["roastDate"], 10)
-	if roastDate == "" {
-		return roastDate, true
-	}
-	parsed, err := time.Parse("2006-01-02", roastDate)
-	if err != nil {
-		return roastDate, true
-	}
-	if parsed.After(time.Now().AddDate(0, 0, 1)) {
-		return roastDate, false
-	}
-	return roastDate, true
-}
-
-// updateBag handles PUT /api/library/bean/{id}/bag/{bagId}: edit any bag's
-// mutable fields (roastDate, stock_g, batchNumber, price_eur). If the updated
-// bag is the active (last) bag, bean-level roastDate and stock_g are synced.
-func (h *Handlers) updateBag(w http.ResponseWriter, r *http.Request) {
-	id, idNoMatch := parseIDParam(r.PathValue("id"))
-	bagID, bagNoMatch := parseIDParam(r.PathValue("bagId"))
-	body, ok := decodeJSONBody(w, r)
-	if !ok {
-		return
-	}
-	var bean Entity
-	err := h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !idNoMatch {
-			idx = findBeanIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		bean = lib.Beans[idx]
-		bags := bagsOf(bean)
-		bagIdx := -1
-		if !bagNoMatch {
-			for i, raw := range bags {
-				bag, ok := raw.(Entity)
-				if !ok {
-					continue
-				}
-				if bid, ok := idOf(bag, "id"); ok && bid == bagID {
-					bagIdx = i
-					break
-				}
-			}
-		}
-		if bagIdx == -1 {
-			return &apiError{http.StatusNotFound, "bag not found"}
-		}
-		roastDate, ok := validateBagRoastDate(body)
-		if !ok {
-			return &apiError{http.StatusBadRequest, "roastDate cannot be in the future"}
-		}
-		stockG, ok := validateBagFloatField(body, "stock_g")
-		if !ok {
-			return &apiError{http.StatusBadRequest, "invalid stock_g"}
-		}
-		priceEur, ok := validateBagFloatField(body, "price_eur")
-		if !ok {
-			return &apiError{http.StatusBadRequest, "invalid price_eur"}
-		}
-		bag := bags[bagIdx].(Entity)
-		// sortOrder, unlike every other field here, is genuinely optional per
-		// request (the reorder-bags endpoint is the normal way to change it in
-		// bulk; most PUTs here — stock-adjust, mark-empty, the edit dialog —
-		// never touch it) — falling back to the bag's current value instead of
-		// full-replacing it like roastDate/stock_g/price_eur do keeps a plain
-		// "resend everything but sortOrder" caller from silently resetting the
-		// bag's queue position.
-		sortOrder, sortOK := jsParseIntLoose(body["sortOrder"])
-		if !sortOK {
-			sortOrder = effectiveSortOrder(bag)
-		}
-		bag["roastDate"] = roastDate
-		bag["stock_g"] = stockG
-		bag["batchNumber"] = trimMax(body["batchNumber"], 50)
-		bag["price_eur"] = priceEur
-		bag["sortOrder"] = sortOrder
-		bags[bagIdx] = bag
-		bean["bags"] = bags
-		// Sync bean-level fields only when the edited bag is the one SimulateBagQueue
-		// considers current — not the array-last bag, which differs after reorderBags.
-		if cur := resolveCurrentBagSimple(bean); cur != nil {
-			if cid, ok := idOf(cur, "id"); ok && cid == bagID {
-				bean["roastDate"] = bag["roastDate"]
-				bean["stock_g"] = bag["stock_g"]
-			}
-		}
-		lib.Beans[idx] = bean
-		return nil
-	})
-	if err != nil {
-		writeUpdateError(w, err)
-		return
-	}
-	h.writeEnrichedBean(w, bean)
-}
-
 // deleteBean handles POST /api/library/bean/:id/delete.
 func (h *Handlers) deleteBean(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	var imgExt string
-	// The image file removal below is filesystem I/O: it must not run while
-	// Update holds the library write lock, so the closure only records the
-	// extension and the handler deletes the file once Update returns.
-	err := h.repo.Update(func(lib *Library) error {
-		if !noMatch {
-			if idx := findBeanIndex(*lib, id); idx != -1 {
-				if ext, _ := lib.Beans[idx]["image"].(string); ext != "" {
-					imgExt = ext
-				}
-			}
-		}
-		filtered := make([]Entity, 0, len(lib.Beans))
-		removed := false
-		for _, b := range lib.Beans {
-			bid, ok := idOf(b, "id")
-			if !noMatch && ok && bid == id {
-				removed = true
-				continue
-			}
-			filtered = append(filtered, b)
-		}
-		if !removed {
-			return ErrSkipSave
-		}
-		lib.Beans = filtered
-		return nil
-	})
-	if err != nil && !errors.Is(err, ErrSkipSave) {
-		internalError(w, err)
-		return
-	}
-	if imgExt != "" {
-		img.Delete(h.imageDir, id, imgExt, "")
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	h.deleteEntity(w, r, beanKind, nil)
 }
 
 // toggleBeanActive handles POST /api/library/bean/:id/toggle-active (#578).
@@ -782,77 +396,15 @@ func formatJSNumber(f float64) string {
 
 // getBeanImage handles GET /api/library/bean/:id/image.
 func (h *Handlers) getBeanImage(w http.ResponseWriter, r *http.Request) {
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	lib, err := h.repo.GetLibrary()
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	ext := ""
-	if !noMatch {
-		if idx := findBeanIndex(lib, id); idx != -1 {
-			ext, _ = lib.Beans[idx]["image"].(string)
-		}
-	}
-	h.serveImage(w, r, ext, "", id)
+	h.getEntityImage(w, r, beanKind)
 }
 
 // postBeanImage handles POST /api/library/bean/:id/image (manual upload
 // fallback — no URL fetch, no SSRF surface, unlike bean creation's imageUrl
-// field).
+// field). Beans answer with the enriched bean, so they pass writeEnrichedBean
+// as the success responder.
 func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
-	if !h.rateLimitImage(w, r) {
-		return
-	}
-	id, noMatch := parseIDParam(r.PathValue("id"))
-	// Existence is decided before the upload is read/validated or any file is
-	// written: an unknown id 404s even when the image is also invalid, and no
-	// orphan file is ever written (matching dev's ordering).
-	exists, err := h.entityExists(id, noMatch, findBeanIndex)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	if !exists {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	data, contentType, ok := readUploadedImage(w, r)
-	if !ok {
-		return
-	}
-	ext, ok := img.Save(h.imageDir, "", id, data, contentType, img.ModeUpload)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "unsupported image")
-		return
-	}
-	var bean Entity
-	var oldExt string
-	err = h.repo.Update(func(lib *Library) error {
-		idx := -1
-		if !noMatch {
-			idx = findBeanIndex(*lib, id)
-		}
-		if idx == -1 {
-			return errNotFound
-		}
-		bean = lib.Beans[idx]
-		oldExt, _ = bean["image"].(string)
-		bean["image"] = ext
-		lib.Beans[idx] = bean
-		return nil
-	})
-	if err != nil {
-		// The entity was deleted between the existence check and the write;
-		// the just-saved file has no owner, so drop it.
-		img.Delete(h.imageDir, id, ext, "")
-		writeUpdateError(w, err)
-		return
-	}
-	if oldExt != "" && oldExt != ext {
-		img.Delete(h.imageDir, id, oldExt, "")
-	}
-	h.writeEnrichedBean(w, bean)
+	h.postEntityImage(w, r, beanKind, h.writeEnrichedBean)
 }
 
 // writeEnrichedBean attaches computed bag-queue status (consumedG/
@@ -861,17 +413,21 @@ func (h *Handlers) postBeanImage(w http.ResponseWriter, r *http.Request) {
 // endpoint gives the frontend a self-consistent view without it having to
 // replay doseRows client-side. allBeans is needed for the same
 // beanId-first/name-fallback dose matching ComputeBeanRemaining already
-// uses. Falls back to the undecorated bean on a shots-lookup error rather
-// than failing the whole request — the mutation itself already succeeded.
+// uses. On a library- or shots-lookup error it logs and answers 200 with the
+// undecorated bean rather than failing the whole request — the mutation
+// itself already succeeded, so a 500 here would only make the client retry a
+// change it already made.
 func (h *Handlers) writeEnrichedBean(w http.ResponseWriter, bean Entity) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
-		internalError(w, err)
+		log.Printf("library: reading library to decorate bean response: %v", err)
+		writeJSON(w, http.StatusOK, bean)
 		return
 	}
 	doseRows, err := h.shotsRepo.GetAnnotatedDoses()
 	if err != nil {
-		internalError(w, err)
+		log.Printf("library: reading doses to decorate bean response: %v", err)
+		writeJSON(w, http.StatusOK, bean)
 		return
 	}
 	writeJSON(w, http.StatusOK, decorateBeanStatus(bean, doseRows, lib.Beans))

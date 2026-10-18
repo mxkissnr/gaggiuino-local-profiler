@@ -1,10 +1,21 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 
-// Same harness as analytics-new-charts.test.js: analytics.js pulls in
-// state.js/i18n.js (localStorage/navigator at module load) and calls
+// The shelf loads its photos itself, straight from bean-image.ts — never through
+// views/library.ts (whose namespace isn't initialised yet when analytics
+// renders). Mock the loader so the behavioural test below can assert it is what
+// fills the shelf tiles.
+const imageMocks = vi.hoisted(() => ({ loadBeanImageBlobUrl: vi.fn(() => Promise.resolve('blob:fake')) }));
+vi.mock('../public-src/bean-image.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../public-src/bean-image.js')>()),
+  loadBeanImageBlobUrl: imageMocks.loadBeanImageBlobUrl,
+}));
+
+async function flushPromises(times = 10): Promise<void> {
+  for (let i = 0; i < times; i += 1) await Promise.resolve();
+}
+
+// Same harness as analytics-new-charts.test.ts: analytics.ts pulls in
+// state/index.ts/i18n.ts (localStorage/navigator at module load) and calls
 // window.calcShotScore at runtime, so stub a minimal scoring window.
 type Analytics = typeof import('../public-src/views/analytics.js');
 let _computeBeanRanking: Analytics['_computeBeanRanking'];
@@ -148,30 +159,63 @@ describe('_sortBeanShelfRows (#1467)', () => {
   });
 });
 
-describe('bean shelf import boundary (#1467)', () => {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const src = readFileSync(join(here, '../public-src/views/analytics.ts'), 'utf8');
-  // Only the import list matters — a prose mention of the old symbol in a
-  // comment must not read as an import.
-  const imports = src.split('\n').filter(line => /^import\b/.test(line)).join('\n');
-
-  it('fills the shelf photos without importing views/library', () => {
+describe('bean shelf renders its own thumbnails (#1467)', () => {
+  it('loads each shelf photo through bean-image without importing views/library', async () => {
     // Regression: analytics.ts imported the loader from ./library.js, which is
     // not initialised yet when statistics render, so the console threw "Cannot
-    // read properties of undefined (reading 'loadBeanThumbnails')". The shelf
-    // loads its own blob URLs straight from bean-image instead.
-    expect(imports).not.toMatch(/from '\.\/library\.js'/);
-    expect(imports).not.toContain('loadBeanThumbnails');
-    expect(imports).toContain("from '../bean-image.js'");
-    expect(src).toContain("'#beanShelf .lib-shelf-img[data-bean-id]'");
-  });
+    // read properties of undefined (reading 'loadBeanThumbnails')". A fresh
+    // module graph with no library import must still render the shelf and fill
+    // its tiles from bean-image.
+    vi.resetModules();
+    imageMocks.loadBeanImageBlobUrl.mockClear();
+    imageMocks.loadBeanImageBlobUrl.mockResolvedValue('blob:fake');
 
-  it('reuses the existing bean-image loader instead of editing that module', () => {
-    // The plan names public-src/bean-image.ts because the shared blob-URL loader
-    // lives there. It already exports loadBeanImageBlobUrl, so this slice imports
-    // it and leaves the module itself untouched.
-    expect(imports).toMatch(/import \{ loadBeanImageBlobUrl \} from '\.\.\/bean-image\.js'/);
-    const beanImage = readFileSync(join(here, '../public-src/bean-image.ts'), 'utf8');
-    expect(beanImage).toContain('export function loadBeanImageBlobUrl');
+    const img = { dataset: { beanId: '7' }, src: '' };
+    const beanShelf = { innerHTML: '' };
+    const count = { textContent: '' };
+    Object.defineProperty(globalThis, 'window', {
+      value: { calcShotScore: (s: { score?: number }) => s.score ?? null, getShotData: () => ({}) },
+      configurable: true, writable: true,
+    });
+
+    const { S } = await import('../public-src/state/index.js');
+    S.shots = [{
+      id: 1,
+      // Within the default 30-day analytics window, so no filter change needed.
+      timestamp: Math.floor(Date.now() / 1000) - 60,
+      duration: 280,
+      score: 88,
+      annotation: { coffee: 'Bean A', beanId: 7 },
+    }];
+    S.coffeeLibrary = {
+      beans: [{ id: 7, name: 'Bean A', image: 'photo.jpg' }],
+      grinders: [],
+      recipes: [], milks: [], baskets: [], puckScreens: [],
+    };
+
+    const { buildBeanShelf } = await import('../public-src/views/analytics.js');
+
+    // Installed only after the import chain has run: views/library/bags.ts wires a
+    // document-level pointerdown handler behind a `typeof document !== 'undefined'`
+    // guard at import time, so leave document undefined during import (as the
+    // sibling harness does) and provide it for the render itself.
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        getElementById: (id: string) => (id === 'beanShelf' ? beanShelf : id === 'beanShelfCount' ? count : null),
+        querySelectorAll: (selector: string) => (selector.includes('.lib-shelf-img') ? [img] : []),
+        querySelector: (): null => null,
+        addEventListener: (): void => {},
+        removeEventListener: (): void => {},
+        documentElement: { lang: 'en' },
+      },
+      configurable: true, writable: true,
+    });
+
+    expect(() => buildBeanShelf()).not.toThrow();
+    await flushPromises();
+
+    expect(imageMocks.loadBeanImageBlobUrl).toHaveBeenCalledWith(7);
+    expect(img.src).toBe('blob:fake');
+    expect(beanShelf.innerHTML).toContain('analytics-shelf-tile');
   });
 });

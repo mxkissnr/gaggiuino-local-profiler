@@ -78,7 +78,7 @@ func gaggiuinoWSURL(baseURL string) (string, error) {
 
 // wsConnect centralizes the connect-with-timeout preamble every short-lived
 // WS call in this package (wsSendAndWait/wsSendCommand here, plus
-// gaggimateRequest/gaggimateWaitForStatus in gaggimate_ws.go) would otherwise
+// gaggimateWaitForStatus in gaggimate_ws.go) would otherwise
 // repeat verbatim: derive a timeout-bounded ctx, build the WS URL via urlFor,
 // and dial it (#901 code review). Returns the derived ctx — callers must use
 // it for Write/Read, not the ctx they passed in — and a cancel func the
@@ -117,6 +117,8 @@ func wsSendAndWait(ctx context.Context, baseURL, action string, requestData []by
 	defer cancel()
 	defer conn.CloseNow()
 
+	host := hostFromBaseURL(baseURL)
+
 	req := &proto.WebSocketMessageDto{Action: action, Data: requestData}
 	if err := conn.Write(ctx, websocket.MessageBinary, req.Marshal()); err != nil {
 		return fmt.Errorf("sending request: %w", err)
@@ -130,6 +132,7 @@ func wsSendAndWait(ctx context.Context, baseURL, action string, requestData []by
 			}
 			return fmt.Errorf("waiting for %q from the machine: %w", expected, err)
 		}
+		countMachineWSMessage(host)
 		var envelope proto.WebSocketMessageDto
 		if err := envelope.Unmarshal(data); err != nil {
 			continue // not a valid envelope frame, ignore
@@ -166,6 +169,8 @@ func wsSendCommand(ctx context.Context, baseURL, action string, requestData []by
 	defer cancel()
 	defer conn.CloseNow()
 
+	host := hostFromBaseURL(baseURL)
+
 	req := &proto.WebSocketMessageDto{Action: action, Data: requestData}
 	if err := conn.Write(ctx, websocket.MessageBinary, req.Marshal()); err != nil {
 		return "", fmt.Errorf("sending command: %w", err)
@@ -179,6 +184,7 @@ func wsSendCommand(ctx context.Context, baseURL, action string, requestData []by
 			}
 			return "", fmt.Errorf("waiting for a %q acknowledgement from the machine: %w", action, err)
 		}
+		countMachineWSMessage(host)
 		var envelope proto.WebSocketMessageDto
 		if err := envelope.Unmarshal(data); err != nil {
 			continue

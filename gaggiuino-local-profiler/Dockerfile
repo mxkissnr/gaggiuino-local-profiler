@@ -34,7 +34,7 @@
 # output is architecture-independent, so that has no bearing here.
 # Digest-pinned (multi-arch manifest) like the alpine runtime stage below;
 # Renovate's dockerfile manager keeps it current.
-FROM --platform=$BUILDPLATFORM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS frontend-deps
+FROM --platform=$BUILDPLATFORM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS frontend-deps
 
 WORKDIR /app
 
@@ -58,7 +58,7 @@ RUN npm ci --ignore-scripts
 # downloading the newer toolchain itself — ubuntu-latest GitHub-hosted
 # runners have network access, so that degrades to a slower build rather
 # than failing.
-FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -106,7 +106,7 @@ FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cab
 # Empty by default -- only .github/workflows/build-dev.yaml passes this
 # build-arg (as dev-<run_number>); the release build (build.yaml) never sets
 # it, so GLP_DEV_BUILD stays unset in every image users install and the UI's
-# dev-build badge (public-src/components/status.js) never appears for them.
+# dev-build badge (public-src/components/status.ts) never appears for them.
 ARG GLP_DEV_BUILD=""
 ENV GLP_DEV_BUILD=${GLP_DEV_BUILD}
 
@@ -129,8 +129,10 @@ ENV GLP_MODELS_DIR=/data/cutout-models
 # also runs standalone without an explicit `-v` — matching the HA add-on's
 # real usage, where Supervisor always provides the mount, but keeping local
 # `docker run` (and go/scripts/smoke-test.sh in docker mode) simple.
-# docker-entrypoint.sh still re-fixes ownership every start for the real
-# bind-mount case, whose host-side UID isn't known at build time.
+# docker-entrypoint.sh still fixes /data ownership at start for the real
+# bind-mount case, whose host-side UID isn't known at build time -- but only
+# when something under it isn't already owned by glp, so an already-correct
+# mount costs no inode writes.
 RUN apk add --no-cache wget ca-certificates su-exec \
     && adduser -D -H -u 1000 glp \
     && mkdir -p /data \

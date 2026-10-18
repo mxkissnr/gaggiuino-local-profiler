@@ -5,13 +5,9 @@ import (
 	"net/http"
 )
 
-// This file is the machine-registry CRUD + probe endpoints (#317). NOT
-// implemented: the #729/#731 catch-up shot-history sync every save/update
-// would trigger — that's the shots-sync domain, which doesn't run as a
-// background process in this binary yet (see go/README.md's "not wired
-// into a running add-on" status). The `?sync=0` query param (#731) is still
-// parsed and accepted for request-shape compatibility, but is currently a
-// no-op either way since there's no sync to suppress.
+// This file is the machine-registry CRUD + probe endpoints (#317). A save
+// does not start a catch-up shot-history sync (#729/#731); the poller's
+// regular sync picks up a new or changed machine.
 
 func (h *Handlers) registerRegistryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/machines", h.listMachines)

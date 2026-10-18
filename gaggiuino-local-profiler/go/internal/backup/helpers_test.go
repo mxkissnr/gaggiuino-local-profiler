@@ -43,11 +43,20 @@ func newTestHandlers(t *testing.T) (*Handlers, Dependencies, *sql.DB) {
 		MaintenanceRepo:  maintenance.NewRepository(sqlDB, libRepo),
 		Registry:         machines.NewRegistry(sqlDB),
 		AchievementsRepo: achievements.NewRepository(sqlDB),
-		Token:            "test-token-value",
+		Token:            "test-token-value-0123456789abcdef",
 		TokenFile:        filepath.Join(t.TempDir(), "api_token.txt"),
 	}
 	h := NewHandlers(deps)
 	return h, deps, sqlDB
+}
+
+// insertTrashEntry writes a trash row directly, bypassing MoveToTrash so a
+// test can pin an explicit deleted_at instead of time.Now().
+func insertTrashEntry(t *testing.T, sqlDB *sql.DB, shotID, deletedAt int64) {
+	t.Helper()
+	if _, err := sqlDB.Exec(`INSERT OR REPLACE INTO trash (shot_id, deleted_at) VALUES (?, ?)`, shotID, deletedAt); err != nil {
+		t.Fatalf("inserting trash entry for shot %d: %v", shotID, err)
+	}
 }
 
 func newMux(h *Handlers) *http.ServeMux {

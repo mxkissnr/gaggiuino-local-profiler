@@ -67,6 +67,16 @@ type Handlers struct {
 	// countdown stuck at the full window. A callback for the same
 	// import-cycle reason as onProfileSaved. A nil hook is a no-op.
 	onDefaultChanged func()
+
+	// knownUnreachable reports whether the poller's most recent poll of a
+	// machine found it unreachable (#1572). Set via SetKnownUnreachable by
+	// cmd/server; the profiles and firmware-version handlers use it to answer
+	// from local state immediately when the machine is known to be off,
+	// instead of paying the live fetch timeouts. A callback rather than a
+	// direct import for the same import-cycle reason as onFirmwareUpdate:
+	// internal/system already imports internal/machines. A nil hook is a
+	// no-op (and machineKnownOffline then always reports false).
+	knownUnreachable func(machineID int64) bool
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB
@@ -125,6 +135,30 @@ func (h *Handlers) SetOnProfileSaved(fn func(action string)) {
 // reassignment itself already succeeded.
 func (h *Handlers) SetOnDefaultChanged(fn func()) {
 	h.onDefaultChanged = fn
+}
+
+// SetKnownUnreachable wires the offline fast-path check (#1572): it reports
+// whether the poller's most recent poll of a machine found it unreachable.
+// cmd/server passes a closure over poller.MachineStatus, so the profiles and
+// firmware-version handlers can answer immediately from local state when the
+// machine is switched off rather than waiting on live fetch timeouts.
+// internal/system imports internal/machines, so this is a callback for the same
+// import-cycle reason as SetOnDefaultChanged. A nil hook (never wired, e.g. in
+// this package's own unit tests) is a no-op: machineKnownOffline then reports
+// false and every handler keeps its existing live behavior.
+func (h *Handlers) SetKnownUnreachable(fn func(machineID int64) bool) {
+	h.knownUnreachable = fn
+}
+
+// machineKnownOffline reports whether the poller's last poll for the machine
+// said it was unreachable (#1572). Unknown poller state (hook nil, or the hook
+// itself reporting "no state yet") counts as not offline, so behavior is
+// unchanged until the poller has actually observed a failed poll.
+func (h *Handlers) machineKnownOffline(id int64) bool {
+	if h.knownUnreachable == nil {
+		return false
+	}
+	return h.knownUnreachable(id)
 }
 
 // SetOnShotSaved wires the side effect to run when the GaggiMate controller
@@ -200,19 +234,21 @@ func readRawJSONBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 }
 
 // queryMachineID reads the machineId query parameter, the repeated read
-// every route in this package does before calling registry.ResolveMachine —
-// nil means "not given at all", matching ResolveMachine's own
-// nil-vs-absent distinction.
-func queryMachineID(r *http.Request) *int64 {
+// every route in this package does before calling registry.ResolveMachine.
+// The id is nil when no machineId was given at all, matching
+// ResolveMachine's own nil-vs-absent distinction. valid is false when a value
+// was given but could not be parsed, so a mutating route can reject it
+// instead of silently falling back to the default machine.
+func queryMachineID(r *http.Request) (id *int64, valid bool) {
 	raw := r.URL.Query().Get("machineId")
 	if raw == "" {
-		return nil
+		return nil, true
 	}
 	n, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		return nil
+		return nil, false
 	}
-	return &n
+	return &n, true
 }
 
 // pathID64 parses the {id} path wildcard as an int64.

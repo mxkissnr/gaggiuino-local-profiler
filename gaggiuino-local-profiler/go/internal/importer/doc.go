@@ -4,7 +4,7 @@
 // stored under kv.key = 'import_settings').
 //
 // The bean value every parser produces is a map[string]any, deliberately —
-// the embedded Vite frontend's import dialog consumes exactly that loose
+// the embedded frontend's import dialog consumes exactly that loose
 // shape (a subset of the Bean schema plus importMethod/sourceUrl/variants/
 // duplicateWarning/extraBrewRecipes/_debug). Fields set to `null` are kept as
 // JSON null; omitted fields are simply absent from the map.

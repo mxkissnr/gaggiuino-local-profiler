@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
-// analytics.js pulls in state.js/i18n.js (localStorage/navigator at module
-// load, same as best-grind-combo.test.js) and calls window.calcShotScore /
-// window.getShotData at runtime (mirroring main.js's real window-exposure
+// analytics.ts pulls in state/index.ts/i18n.ts (localStorage/navigator at module
+// load, same as best-grind-combo.test.ts) and calls window.calcShotScore /
+// window.getShotData at runtime (mirroring main.ts's real window-exposure
 // pattern) — stub a minimal scoring window here so shots carrying a plain
 // .score field resolve without needing real datapoints.
 //
 // navigator.userAgent must contain 'Node.js': since this file (unlike
-// world-map-antimeridian.test.js) also stubs a `window` global, zrender's
-// env detection (pulled in transitively by analytics.js's now-bundled
+// world-map-antimeridian.test.ts) also stubs a `window` global, zrender's
+// env detection (pulled in transitively by analytics.ts's now-bundled
 // `echarts` import, see #509) takes the browser-UA-sniffing branch
 // instead of its own headless-node short-circuit, and throws matching
 // against an undefined UA otherwise.
@@ -16,7 +16,7 @@ type Analytics = typeof import('../public-src/views/analytics.js');
 let _computeBeanRanking: Analytics['_computeBeanRanking'];
 let _computeMachineComparison: Analytics['_computeMachineComparison'];
 
-// views/analytics.js's ShotRow interface isn't exported; derive it from a
+// views/analytics.ts's ShotRow interface isn't exported; derive it from a
 // helper under test so the fixtures stay shape-checked against it.
 type ShotRow = Parameters<Analytics['_computeBeanRanking']>[0][number];
 
@@ -149,6 +149,21 @@ describe('_computeMachineComparison (#394)', () => {
     ];
     const rows = _computeMachineComparison(shots, machines);
     // deviations: 0, 0.5, 1.0 -> mean 0.5
+    expect(rows.find(r => r.name === 'Gaggiuino')?.avgStability).toBe(0.5);
+  });
+
+  it('ignores 0.0 °C dropout samples in the stability fallback (#1688)', () => {
+    const shots = [
+      shot({
+        machineId: 1,
+        datapoints: {
+          temperature:       [930, 0, 935, 0, 940], // isolated dropouts to 0.0 °C
+          targetTemperature: [930, 930, 930, 930, 930],
+        },
+      }),
+    ];
+    const rows = _computeMachineComparison(shots, machines);
+    // deviations 0, 0.5, 1.0 -> mean 0.5, the two 0.0 samples are dropped.
     expect(rows.find(r => r.name === 'Gaggiuino')?.avgStability).toBe(0.5);
   });
 

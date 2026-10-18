@@ -3,17 +3,24 @@ info:
   title: GLP REST API
   version: 2.0.0
   description: >
-    REST API for the **Gaggiuino Local Profiler** Home Assistant add-on.
+    REST API for the **Gaggiuino Local Profiler** Home Assistant app.
     Provides shot storage, coffee library, maintenance tracking, a barista
-    orders system, and live machine data.
+    orders system, and live machine data. Every request also counts against
+    an app-wide per-IP limit (600 requests/minute by default,
+    `GLP_RATE_LIMIT_MAX`/`GLP_RATE_LIMIT_WINDOW_MS`); some routes have a
+    lower limit of their own, noted on their 429 response.
   contact:
     url: https://github.com/mxkissnr/gaggiuino-local-profiler
 
 servers:
   - url: http://localhost:8099
     description: Direct port (integration, cards)
-  - url: /api/hassio_ingress/gaggiuino_local_profiler
+  - url: /api/hassio_ingress/{ingressToken}
     description: HA Ingress (browser — auth via HA session, no token needed)
+    variables:
+      ingressToken:
+        default: ingress-token
+        description: Per-session token Home Assistant puts in the Ingress path
 
 security:
   - tokenAuth: []
@@ -26,18 +33,28 @@ components:
       name: X-GLP-Token
       description: >
         64-char hex token, auto-generated on first start, stored in
-        `/data/api_token.txt`. Retrieve from `GET /api/status`.
+        `/data/api_token.txt`. Retrieve from `GET /api/token`.
         Requests via HA Ingress bypass this check (HA session is sufficient).
-        `GET /api/status` is always public.
+        `GET /api/status` and `GET /api/token` need no token.
+    ticketQueryAuth:
+      type: apiKey
+      in: query
+      name: ticket
+      description: >
+        A short-lived, single-use ticket from `POST /api/events/ticket`
+        (#1626). Only honored on `GET /api/events`, since a browser-native
+        EventSource connection can't set custom headers — every other route
+        requires the header. Valid for 30 seconds and for one connection.
     tokenQueryAuth:
       type: apiKey
       in: query
       name: token
       description: >
-        Same token as `tokenAuth`, accepted as a `?token=` query parameter
-        instead of the `X-GLP-Token` header. Only honored on `GET
-        /api/events`, since a browser-native EventSource connection can't
-        set custom headers — every other route requires the header.
+        Deprecated (#1626): use `ticketQueryAuth`. Same token as `tokenAuth`,
+        accepted as a `?token=` query parameter on `GET /api/events` only,
+        so a web app loaded before the ticket was introduced keeps its live
+        stream until it reloads. A long-lived token in a URL can end up in
+        logs, so this is going away.
 
   schemas:
 
@@ -149,7 +166,7 @@ components:
       type: object
       description: >
         Raw shot record from the Gaggiuino machine, enriched with annotation
-        and trash metadata by the add-on.
+        and trash metadata by the app.
       required: [id, timestamp, duration, profile_name, profileName, machineId, nativeId, annotation]
       properties:
         id:          { type: integer, description: Unique shot ID }
@@ -171,7 +188,7 @@ components:
             Machine-reported curve series: an open-ended map of series name
             to samples. Deliberately an open object (additionalProperties:
             true) because the machine payload is a cross-repo contract the
-            add-on passes through without knowing every field. Present on
+            app passes through without knowing every field. Present on
             GET /api/shots/{id} and /shots.json; stripped from the
             GET /api/shots metadata list.
         image:       { type: string, nullable: true, description: "Stored photo extension (see GET /api/shots/{id}/image), if any" }
@@ -308,8 +325,8 @@ components:
           type: object
           description: Computed burr-wear stats (shots/grams since burrsResetAt), added on read.
           properties:
-            shots: { type: integer }
-            grams: { type: number, nullable: true }
+            shotsSinceBurrs: { type: integer }
+            gramsSinceBurrs: { type: number }
 
     Basket:
       type: object
@@ -533,24 +550,28 @@ components:
       description: >
         Public fields are always present; the block below marked
         "authenticated only" is omitted entirely (H1) unless the request
-        carries a valid X-GLP-Token or arrives via HA Ingress.
+        carries a valid X-GLP-Token header. Arriving via HA Ingress is not
+        enough.
       properties:
         shotCount:          { type: integer }
         lastSync:            { type: string, format: date-time, nullable: true }
-        syncRetryCount:      { type: integer, description: "Current retry attempt (0 = normal schedule, 1–3 = backing off)" }
         machineVersion:      { type: string, nullable: true }
         syncInterval:        { type: integer, description: Minutes }
         haConnected:         { type: boolean }
         glpVersion:          { type: string }
         devBuild:            { type: string, description: "Only present on the dev-channel image build (GLP_DEV_BUILD build-arg)" }
         ordersFeature:       { type: boolean }
-        exposeApiPort:       { type: boolean, description: "add-on's expose_api_port option (#803) — whether GET /api/token answers direct-port callers" }
+        exposeApiPort:       { type: boolean, description: "the app's expose_api_port option (#803) — whether GET /api/token answers direct-port callers" }
         machineReachable:    { type: boolean, nullable: true }
         lastMachineSuccess:  { type: integer, nullable: true, description: Unix ms of the last successful poll of the default machine }
         machineOn:           { type: boolean, nullable: true, description: Default machine's tracked power-switch state }
         machineOnSince:      { type: integer, nullable: true, description: Unix ms the default machine last switched on }
-        legacyMachineOptionsPending: { type: boolean, description: "True while the default machine still has an unconfirmed legacy machine_host/switch_entity add-on option (#662)" }
         installId:           { type: string, description: "Stable per-database identity (#751) — changes only when glp.db is freshly (re)created" }
+        dataEpoch:           { type: string, description: "Server data-revision epoch (#1539); changes when the process restarts and resets dataRevs, telling a client to drop the revisions it has seen" }
+        dataRevs:
+          type: object
+          description: "Per-kind write revisions (#1539); a client refetches a kind whose revision advanced since it last polled"
+          additionalProperties: { type: integer }
         machines:
           type: array
           description: All configured machines (#317). The fields above always describe the default machine, unchanged, for backward compatibility.
@@ -567,7 +588,14 @@ components:
               firmwareVersion: { type: string, nullable: true, description: "Cached firmware version for this machine (#1201)" }
               firmwareName: { type: string, nullable: true, description: "Machine name set in the machine's firmware, when it reports one (#1454)" }
               on:        { type: boolean, nullable: true }
-              theme:     { type: string, nullable: true, description: "#701 accent color, synced from Settings → Machines" }
+              theme:
+                type: object
+                nullable: true
+                description: "#701 accent color, synced from Settings → Machines — either {preset} or {a,b} hex colors"
+                properties:
+                  preset: { type: string }
+                  a:      { type: string }
+                  b:      { type: string }
         # ── authenticated only (H1) ──────────────────────────────────────
         machineUrl:       { type: string }
         machineHostname:  { type: string }
@@ -617,6 +645,7 @@ components:
         remaining:   { type: integer, description: Remaining seconds }
         pct:         { type: number, minimum: 0, maximum: 1 }
         preheatTime: { type: integer, description: Configured preheat time in minutes }
+        stabilityReady: { type: boolean, description: "True when preheat finished early because the boiler temperature had stabilised at the target. Omitted when the machine is off or was never switched on." }
         temp:        { type: number, description: Current boiler temperature °C, nullable: true }
         targetTemp:  { type: number, description: Target boiler temperature °C, nullable: true }
         readyByTargetAt:   { type: integer, nullable: true, description: "Epoch-ms wall-clock target set via POST /api/preheat/ready-by, or null if none is pending" }
@@ -1147,9 +1176,23 @@ paths:
           in: query
           description: Set to "1" to return trashed shots instead of active shots
           schema: { type: string, enum: ["0", "1"] }
+        - name: limit
+          in: query
+          description: >
+            Return only the newest N active shots, still oldest first (the
+            last N entries of the full list). Absent, zero, negative or
+            non-numeric means no limit; ignored with trash=1. (#1616)
+          schema: { type: integer, minimum: 1 }
       responses:
         "200":
           description: Array of shots
+          headers:
+            X-Shots-Today:
+              description: >
+                Number of active shots (every machine) stamped on the
+                server's local calendar day. A header because the body is a
+                bare array. (#1616)
+              schema: { type: integer, minimum: 0 }
           content:
             application/json:
               schema:
@@ -1275,6 +1318,7 @@ paths:
         - { name: format, in: query, schema: { type: string, enum: [square, story], default: square } }
         - { name: accent, in: query, schema: { type: string }, description: "Hex accent color override" }
         - { name: theme, in: query, schema: { type: string }, description: "UI theme name override" }
+        - { name: lang, in: query, schema: { type: string }, description: "UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en)" }
       responses:
         "200": { description: PNG image, content: { image/png: { schema: { type: string, format: binary } } } }
         "400": { description: Invalid shot ID }
@@ -1306,6 +1350,7 @@ paths:
         "200": { description: "Updated shot (with score recomputed)", content: { application/json: { schema: { $ref: '#/components/schemas/Shot' } } } }
         "400": { description: Invalid shot ID, no image data, or unsupported image type }
         "404": { description: Shot not found }
+        "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
     delete:
       tags: [Shots]
       summary: Remove a shot's uploaded photo
@@ -1353,6 +1398,7 @@ paths:
       responses:
         "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
         "400": { description: Invalid shot ID, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Shot not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/shots/{id}/restore:
     post:
@@ -1439,7 +1485,7 @@ paths:
       responses:
         "200": { description: Created bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "400": { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP library create limit, 30/min" }
 
   /api/library/bean/{id}:
     put:
@@ -1639,6 +1685,7 @@ paths:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
         "400": { description: No image data, or unsupported image type }
         "404": { description: Not found }
+        "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/grinder:
     post:
@@ -1660,7 +1707,7 @@ paths:
       responses:
         "200": { description: Created grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
         "400": { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP library create limit, 30/min" }
 
   /api/library/grinder/{id}:
     put:
@@ -1765,6 +1812,7 @@ paths:
         "200": { description: Updated grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
         "400": { description: No image data, or unsupported image type }
         "404": { description: Not found }
+        "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/baskets:
     get:
@@ -1794,7 +1842,7 @@ paths:
       responses:
         "200": { description: Created basket, content: { application/json: { schema: { $ref: '#/components/schemas/Basket' } } } }
         "400": { description: "name required, or invalid wallType/shape" }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP library create limit, 30/min" }
 
   /api/library/basket/{id}:
     put:
@@ -1851,6 +1899,7 @@ paths:
         "200": { description: Updated basket, content: { application/json: { schema: { $ref: '#/components/schemas/Basket' } } } }
         "400": { description: No image data, or unsupported image type }
         "404": { description: Not found }
+        "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/puckscreens:
     get:
@@ -1878,7 +1927,7 @@ paths:
       responses:
         "200": { description: Created puck screen, content: { application/json: { schema: { $ref: '#/components/schemas/PuckScreen' } } } }
         "400": { description: "name required, or invalid thickness" }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP library create limit, 30/min" }
 
   /api/library/puckscreen/{id}:
     put:
@@ -1933,6 +1982,7 @@ paths:
         "200": { description: Updated puck screen, content: { application/json: { schema: { $ref: '#/components/schemas/PuckScreen' } } } }
         "400": { description: No image data, or unsupported image type }
         "404": { description: Not found }
+        "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/milks:
     get:
@@ -1971,7 +2021,7 @@ paths:
       responses:
         "200": { description: Created milk, content: { application/json: { schema: { $ref: '#/components/schemas/Milk' } } } }
         "400": { description: name required }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP library create limit, 30/min" }
 
   /api/library/milk/{id}:
     put:
@@ -2045,7 +2095,7 @@ paths:
       responses:
         "200": { description: Created recipe, content: { application/json: { schema: { $ref: '#/components/schemas/Recipe' } } } }
         "400": { description: name required }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP library create limit, 30/min" }
 
   /api/library/recipe/{id}:
     put:
@@ -2090,7 +2140,7 @@ paths:
                   notes:   { type: string }
         "400": { description: Invalid barcode format }
         "404": { description: Product not found }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP barcode lookup limit, 20/min" }
         "502": { description: Lookup failed (blocked address or upstream error) }
 
   # ── Maintenance ──────────────────────────────────────────────────────────
@@ -2240,7 +2290,7 @@ paths:
       tags: [Orders]
       summary: List orders (most recent first, max 100)
       description: >
-        Requires `enable_orders: true` in add-on config, otherwise returns 404.
+        Requires `enable_orders: true` in the app configuration, otherwise returns 404.
       parameters:
         - name: status
           in: query
@@ -2282,7 +2332,7 @@ paths:
       responses:
         "200": { description: Created order, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
         "400": { description: Validation error }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded — per-IP order limit, 10/min" }
         "503": { description: Orders disabled }
 
   /api/orders/mine:
@@ -2550,9 +2600,11 @@ paths:
       tags: [Orders]
       summary: Enable or disable the orders feature, and configure notification toggles/recipients
       description: >
-        Toggling `enabled` broadcasts a shop-open/shop-closed notification to
-        `broadcastRecipients` (filtered to devices currently home, when HA
-        person data is available), unless `notify_shop_state` is false.
+        `enabled` is optional; omitting it keeps the stored value and skips the
+        shop-open/shop-closed broadcast. When present, a change in `enabled`
+        broadcasts a shop-open/shop-closed notification to `broadcastRecipients`
+        (filtered to devices currently home, when HA person data is available),
+        unless `notify_shop_state` is false.
       requestBody:
         required: true
         content:
@@ -2560,7 +2612,7 @@ paths:
             schema: { $ref: '#/components/schemas/OrdersSettings' }
       responses:
         "200": { description: Updated settings, content: { application/json: { schema: { $ref: '#/components/schemas/OrdersSettings' } } } }
-        "400": { description: enabled (boolean) required }
+        "400": { description: enabled must be a boolean }
 
   /api/orders/notify-services:
     get:
@@ -2605,9 +2657,10 @@ paths:
       summary: Retrieve the API token
       security: []
       description: >
-        Rate-limited (10/min per IP). Reverses the older HA-internal-only
+        Rate-limited per IP: 10/min for direct-port callers, 120/min via HA
+        Ingress. Reverses the older HA-internal-only
         restriction (#533): a direct-port caller (not via HA Ingress) is
-        rejected with 403 only when the add-on option `expose_api_port` has
+        rejected with 403 only when the app option `expose_api_port` has
         been explicitly set to `false` (default `true`, matching the
         historical always-open behavior — see #803 and the config.yaml
         option comment).
@@ -2619,15 +2672,17 @@ paths:
   /api/status:
     get:
       tags: [System]
-      summary: Add-on status (public — no auth required)
+      summary: App status (public — no auth required)
       security: []
       description: >
         `?machineId=<id>` for a non-default machine scopes
-        machineHostname/lastSync/lastSyncError/machineReachable to that
-        machine via a live reachability probe, instead of describing the
-        default machine (#464). Omitted, or a machineId that resolves back
-        to the default machine, keeps the default-machine behavior
-        byte-for-byte.
+        machineHostname/machineReachable/lastMachineError to that machine
+        via a live reachability probe, instead of describing the default
+        machine (#464). Omitted, or a machineId that resolves back to the
+        default machine, keeps the default-machine behavior. The live probe
+        only runs for a caller with a valid `X-GLP-Token` or one arriving
+        through HA Ingress (#1626); any other caller gets that machine's last
+        polled reachability instead.
       parameters:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
@@ -2744,7 +2799,7 @@ paths:
               type: object
               properties:
                 option:    { type: string, description: Profile name — required unless `id` is given }
-                id:        { type: integer, description: Profile id — takes precedence over `option` if both given }
+                id:        { oneOf: [{ type: string }, { type: integer }], description: Profile id — takes precedence over `option` if both given }
                 machineId: { type: integer }
       responses:
         "200": { description: "{ ok: true, profileId }" }
@@ -2757,7 +2812,7 @@ paths:
       tags: [System]
       summary: Full detail of one machine profile (all phases), read directly over the machine's WebSocket/protobuf channel — no REST equivalent exists on the machine itself
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string }, description: "Machine-assigned id, or a \"local:<n>\" placeholder until first synced" }
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
         "200":
@@ -2770,7 +2825,7 @@ paths:
       tags: [System]
       summary: Update an existing machine profile (name/phases/stop conditions), written over the machine's WebSocket/protobuf channel — the machine has no REST write endpoint
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string } }
       requestBody:
         required: true
         content:
@@ -2782,14 +2837,14 @@ paths:
                   properties: { machineId: { type: integer } }
       responses:
         "200": { description: "{ id, name } as confirmed by the machine", content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
-        "400": { description: "invalid profile (Zod validation failure — details include the issue list)" }
+        "400": { description: "Invalid profile — the error message names the failing field" }
         "501": { description: "Machine type does not support remote profile editing (e.g. GaggiMate)" }
         "502": { description: Machine unreachable, returned an error, or did not confirm the update }
     delete:
       tags: [System]
       summary: Delete a machine profile, over the WebSocket/protobuf channel
       parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: string } }
         - { name: machineId, in: query, schema: { type: integer }, description: "Also accepted in the request body" }
       responses:
         "200": { description: "{ ok: true, remaining: [...] }" }
@@ -2811,7 +2866,7 @@ paths:
                   properties: { machineId: { type: integer } }
       responses:
         "200": { description: "{ id, name } — id is assigned by the machine" }
-        "400": { description: "invalid profile (Zod validation failure — details include the issue list)" }
+        "400": { description: "Invalid profile — the error message names the failing field" }
         "501": { description: "Machine type does not support remote profile editing (e.g. GaggiMate)" }
         "502": { description: Machine unreachable, returned an error, or did not confirm the create }
 
@@ -3145,7 +3200,7 @@ paths:
       tags: [Machines]
       summary: Add a machine
       parameters:
-        - { name: sync, in: query, schema: { type: string, enum: ["0", "false"] }, description: "Pass sync=0 to suppress the catch-up shot-history sync this save would otherwise trigger (#731 — used by the 'Verbindung testen' implicit save)" }
+        - { name: sync, in: query, schema: { type: string, enum: ["0", "false"] }, description: "Accepted for compatibility and ignored: a save does not start a shot-history sync" }
       requestBody:
         required: true
         content:
@@ -3161,7 +3216,7 @@ paths:
       summary: Update a machine (partial update — omitted fields keep their current value)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
-        - { name: sync, in: query, schema: { type: string, enum: ["0", "false"] }, description: "Pass sync=0 to suppress the catch-up shot-history sync this save would otherwise trigger (#731)" }
+        - { name: sync, in: query, schema: { type: string, enum: ["0", "false"] }, description: "Accepted for compatibility and ignored: a save does not start a shot-history sync" }
       requestBody:
         required: true
         content:
@@ -3261,7 +3316,9 @@ paths:
       summary: Server-Sent Events stream multiplexing every push event type over one connection (#735/#736)
       description: >
         text/event-stream. Event types: `sync-progress`, `sync-complete`,
-        `live-snapshot` (LiveData), `preheat-update` (PreheatStatus). A newly
+        `live-snapshot` (LiveData), `preheat-update` (PreheatStatus),
+        `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write
+        bumped a data kind's revision). A newly
         connected client is primed with the current in-flight sync-progress
         (if any), plus one live-snapshot and one preheat-update, so it isn't
         waiting for the next natural trigger. A `:ping` comment line is sent
@@ -3272,10 +3329,13 @@ paths:
         stream doesn't work. Not exposed in the OpenAPI response schemas
         below since this is a raw multiplexed text stream, not JSON.
         Auth: accepts either the usual `X-GLP-Token` header or, only on this
-        route, the token as a `?token=` query parameter — EventSource can't
-        set custom headers, so this is the one exception to header-only auth.
+        route, a short-lived single-use `?ticket=` from
+        `POST /api/events/ticket` (#1626) — EventSource can't set custom
+        headers, so this is the one exception to header-only auth. The
+        long-lived token as `?token=` is still accepted but deprecated.
       security:
         - tokenAuth: []
+        - ticketQueryAuth: []
         - tokenQueryAuth: []
       responses:
         "200":
@@ -3283,6 +3343,30 @@ paths:
           content:
             text/event-stream:
               schema: { type: string }
+
+  /api/events/ticket:
+    post:
+      tags: [System]
+      summary: Issue a short-lived ticket for the /api/events stream (#1626)
+      description: >
+        Trades the API token (sent as the usual `X-GLP-Token` header) for a
+        random ticket the client puts in the `GET /api/events?ticket=` URL
+        instead of the token. A ticket is valid for 30 seconds and
+        authenticates one connection; ask for a new one before every
+        (re)connect.
+      responses:
+        "200":
+          description: The ticket
+          headers:
+            Cache-Control:
+              schema: { type: string, example: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket]
+                properties:
+                  ticket: { type: string }
 
   /api/menu:
     get:
@@ -3299,8 +3383,11 @@ paths:
   /api/version:
     get:
       tags: [System]
-      summary: Add-on version and whether an update is available
-      description: Cached/rate-limited — see also the `up_to_date` achievement badge.
+      summary: App version and whether an update is available
+      description: >
+        The GitHub release lookup is cached for an hour; after a failed
+        lookup GitHub is not asked again for a minute. See also the
+        `up_to_date` achievement badge.
       responses:
         "200":
           description: Version info
@@ -3448,7 +3535,6 @@ paths:
     get:
       tags: [System]
       summary: This OpenAPI specification as JSON
-      security: []
       responses:
         "200":
           description: OpenAPI 3.0.3 spec
@@ -3461,7 +3547,7 @@ paths:
   /api/backup:
     get:
       tags: [Backup]
-      summary: Download a full backup of all add-on data
+      summary: Download a full backup of all app data
       description: >
         Always the unscoped, all-sections, secrets-free export — for the
         selective/encrypted export, use the POST variant below. Kept as GET
@@ -3472,6 +3558,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BackupBundle' }
+        "429": { description: "Rate limit exceeded — per-IP backup download limit, 5/min" }
     post:
       tags: [Backup]
       summary: Download a backup as a zip, optionally scoped to specific sections and/or including encrypted secrets
@@ -3516,25 +3603,32 @@ paths:
           content:
             application/zip:
               schema: { type: string, format: binary }
+        "429": { description: "Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626)" }
 
   /api/restore:
     post:
       tags: [Backup]
-      summary: Restore add-on data from a backup bundle, or preview what a restore would do
+      summary: Restore app data from a backup bundle, or preview what a restore would do
       description: >
-        Body limit is 50 MB. Rate-limited to 3 requests per minute per IP (a
-        dry run is bucketed separately at 30/min, since the modal fires one
-        per section-checkbox toggle). **Overwrites the sections selected by
-        `sections` (or every section present in the file, if `sections` is
-        omitted).** A section not selected is left completely untouched, not
-        wiped. Accepts either the legacy self-contained `application/json`
-        body (BackupBundle, images embedded as base64 — every backup before
-        #658 used this shape, and it must keep working), or an
-        `application/zip` body (the shape POST /api/backup produces) — for
-        the zip form, `sections`/`dryRun`/`passphrase` travel as the
-        `X-GLP-Sections` (JSON-encoded array), `X-GLP-Dry-Run` (`"true"`) and
-        `X-GLP-Passphrase` headers respectively, never in the (binary) body
-        or as query parameters.
+        Body limit: 2 GiB for the zip form (the request body is spooled to
+        disk, not held in memory), 50 MB for the legacy JSON form.
+        Rate-limited per IP: 30 uploads per minute overall, of which at most
+        3 per minute may be real restores (a dry run is bucketed separately
+        at 30/min, since the modal fires one per section-checkbox toggle). **Overwrites the sections selected by `sections` (or every
+        section present in the file, if `sections` is omitted).** A section
+        not selected is left completely untouched, not wiped. Accepts either
+        the legacy self-contained `application/json` body (BackupBundle,
+        images embedded as base64 — every backup before #658 used this shape,
+        and it must keep working), or an `application/zip` body (the shape
+        POST /api/backup produces) — for the zip form,
+        `sections`/`dryRun`/`passphrase` travel as the `X-GLP-Sections`
+        (JSON-encoded array), `X-GLP-Dry-Run` (`"true"`) and
+        `X-GLP-Passphrase-B64` (standard base64 of the passphrase's UTF-8
+        bytes — a header value can only carry ISO-8859-1 bytes, so a
+        passphrase with umlauts or other non-ASCII characters must be
+        base64-encoded) headers respectively, never in the (binary) body or
+        as query parameters. `X-GLP-Passphrase` is still accepted for ASCII
+        passphrases (older clients and scripts).
       requestBody:
         required: true
         content:
@@ -3576,6 +3670,8 @@ paths:
                 properties:
                   ok:     { type: boolean }
                   shots:  { type: integer, description: Number of shots restored (real restore only) }
+                  images:       { type: integer, description: Number of backup images actually written to disk }
+                  imagesFailed: { type: integer, description: Number of backup images that could not be written (see the app log) }
                   secretsPresent:  { type: boolean, description: Whether the file had a `secrets` block and it was in the requested sections }
                   secretsRestored: { type: boolean, description: Whether the given passphrase actually decrypted it }
                   dryRun: { type: boolean }
@@ -3601,7 +3697,7 @@ paths:
                         items: { type: string, enum: [shots, maintenance, orders, machines, settings, secrets] }
                         description: Which of the six domains actually have their defining key(s) present in the file, independent of `sections` filtering.
         "400": { description: "Invalid backup file (missing glp_backup/shots, too many shots, invalid zip, or invalid X-GLP-Sections header)" }
-        "429": { description: Rate limit exceeded }
+        "429": { description: "Rate limit exceeded (see the limits above)" }
 
   # ── Import ───────────────────────────────────────────────────────────────
 
@@ -3711,9 +3807,9 @@ tags:
   - name: Maintenance
     description: Maintenance task tracker with configurable thresholds
   - name: Orders
-    description: Barista order system (requires enable_orders in add-on config)
+    description: Barista order system (requires enable_orders in the app configuration)
   - name: System
-    description: Add-on status, manual sync, machine switch, live data, preheat
+    description: App status, manual sync, machine switch, live data, preheat
   - name: Machines
     description: "Multi-machine registry (#317) — add/remove/test additional Gaggiuino or GaggiMate machines"
   - name: Backup

@@ -1,9 +1,9 @@
 // Package auth implements the app's ingress-trust and token-auth model:
 //
-//   - IsFromSupervisor/IsIngressRequest trust the HA Supervisor's
-//     172.30.0.0/16 add-on network (plus loopback), and require both a
-//     Supervisor-network source IP and an X-Ingress-Path header with the
-//     HAIngressPrefix prefix before a request counts as genuine Ingress.
+//   - IsFromSupervisor/IsIngressRequest trust only the HA Supervisor's
+//     ingress proxy address (172.30.32.2), and require both that source IP
+//     and an X-Ingress-Path header with the HAIngressPrefix prefix before a
+//     request counts as genuine Ingress.
 //   - IsTokenValid is a constant-time X-GLP-Token comparison
 //     (crypto/subtle.ConstantTimeCompare), including the same-length-
 //     required early exit.
