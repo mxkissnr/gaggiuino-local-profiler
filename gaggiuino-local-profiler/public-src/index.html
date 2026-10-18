@@ -96,7 +96,7 @@
          was removed (#432) — redundant next to the nav tabs since the app is
          already framed by the HA ingress panel. -->
     <div id="content-topbar">
-        <button id="mobileDrawerBtn" class="mobile-drawer-btn" data-i18n-title="sidebar_drawer_open" title="Shot-Liste öffnen" aria-label="Shot-Liste öffnen" aria-expanded="false" aria-controls="sidebar">
+        <button id="mobileDrawerBtn" class="mobile-drawer-btn" data-i18n-title="sidebar_drawer_open" title="Shot-Liste öffnen" aria-label="Shot-Liste öffnen" data-i18n-aria-label="sidebar_drawer_open" aria-expanded="false" aria-controls="sidebar">
             <svg class="rail-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <button id="expandSidebarBtn" data-i18n-title="sidebar_expand" title="Sidebar aufklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg></button>
@@ -146,7 +146,7 @@
         </button>
 
         <div class="topbar-machine">
-            <button type="button" id="topbarMachineIcon" class="topbar-machine-icon" data-i18n-title="topbar_machine_icon_title" title="Maschinen-Status" aria-label="Maschinen-Status"></button>
+            <button type="button" id="topbarMachineIcon" class="topbar-machine-icon" data-i18n-title="topbar_machine_icon_title" title="Maschinen-Status" aria-label="Maschinen-Status" data-i18n-aria-label="topbar_machine_icon_title"></button>
             <span class="status-dot unknown" id="railStatusDot"></span>
             <span id="railMachineName" class="topbar-machine-name">–</span>
             <!-- #914: mobile-only duplicate of #powerBtn -- #sidebar (which
