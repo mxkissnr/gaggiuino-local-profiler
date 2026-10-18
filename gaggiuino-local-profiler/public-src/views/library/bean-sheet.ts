@@ -83,7 +83,7 @@ function _sheetBadges(b: BeanListRow): Html {
   const disabled = b.enabled === false;
   return html`${beanFreshBadge(b)}
     ${b.roastType ? html`<span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}
-    ${b.decaf ? html`<span class="lib-decaf-badge">DECAF</span>` : esc('')}
+    ${b.decaf ? html`<span class="lib-decaf-badge">${tHtml('lib_bean_decaf_short')}</span>` : esc('')}
     ${disabled ? html`<span class="lib-disabled-badge">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}`;
 }
 

@@ -212,7 +212,7 @@ function _render(): void {
     _initChart();
   } catch (e) {
     console.error('[GLP] GaggiMate editor render error:', e);
-    body.innerHTML = html`<div style="padding:1rem;color:var(--red-400)">Render-Fehler: ${esc(e instanceof Error ? e.message : String(e))}</div>`;
+    body.innerHTML = html`<div style="padding:1rem;color:var(--red-400)">${tHtml('gm_render_error', esc(e instanceof Error ? e.message : String(e)))}</div>`;
   }
   _bindInputs();
 }
@@ -223,7 +223,7 @@ function _renderBody(isPro: boolean): Html {
     ${_renderInfo()}
     ${_renderChart()}
     ${isPro ? _renderProPhases(phases) : _renderStandardPhases(phases)}
-    ${_saving ? html`<div style="text-align:center;padding:.5rem;opacity:.6">Wird gespeichert…</div>` : html``}
+    ${_saving ? html`<div style="text-align:center;padding:.5rem;opacity:.6">${tHtml('autosave_pending')}</div>` : html``}
   `;
 }
 

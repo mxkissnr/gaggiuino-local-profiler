@@ -668,7 +668,7 @@ export function buildTrendChart() {
     data: {
       labels,
       datasets: [
-        { label: 'Score', data: scoreData, borderColor: themeColor('--gray-600', '#52525b'),
+        { label: t('sort_score'), data: scoreData, borderColor: themeColor('--gray-600', '#52525b'),
           pointBackgroundColor: pointColors,
           pointBorderColor: scoreData.map(sc => sc >= 100 ? '#f3e1c0' : _scoreChartColor(sc)),
           pointBorderWidth: scoreData.map(sc => sc >= 100 ? 2 : 1),
@@ -806,7 +806,7 @@ export function buildProfileChart() {
     type: 'bar',
     data: {
       labels:   entries.map(e => e.name.length > 20 ? e.name.slice(0, 19) + '…' : e.name),
-      datasets: [{ label: 'Ø Score', data: entries.map(e => e.avgScore),
+      datasets: [{ label: t('analytics_verdict_avg'), data: entries.map(e => e.avgScore),
                    backgroundColor: entries.map(e => _withAlpha(_scoreChartColor(e.avgScore), 0.7)), borderRadius: 4 }]
     },
     options: {
