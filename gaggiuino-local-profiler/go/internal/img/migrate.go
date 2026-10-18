@@ -22,7 +22,7 @@ func parseImageName(name string) (id int64, ext, prefix string, ok bool) {
 		return 0, "", "", false
 	}
 	ext = strings.TrimPrefix(filepath.Ext(name), ".")
-	if !knownExt(ext) {
+	if !KnownExt(ext) {
 		return 0, "", "", false
 	}
 	base := strings.TrimSuffix(name, filepath.Ext(name))

@@ -80,9 +80,10 @@ var ExtContentType = map[string]string{
 	"gif":  "image/gif",
 }
 
-// knownExt reports whether ext is one of the four whitelisted on-disk
-// extensions.
-func knownExt(ext string) bool {
+// KnownExt reports whether ext is one of the four whitelisted on-disk
+// extensions. Any extension read back from stored data must pass this before
+// it is used to build a filesystem path.
+func KnownExt(ext string) bool {
 	_, ok := ExtContentType[ext]
 	return ok
 }
@@ -125,13 +126,25 @@ func thumbPathFor(path, ext string) string {
 }
 
 // Delete is the best-effort removal of a stored image AND its thumbnail,
-// silently ignoring an already-missing file.
+// silently ignoring an already-missing file. A stored extension is
+// caller-supplied data (sync, restore, import), so an extension outside the
+// whitelist is ignored rather than turned into a path.
 func Delete(dir string, id int64, ext, prefix string) {
-	if ext == "" {
+	if !KnownExt(ext) {
 		return
 	}
-	_ = os.Remove(Path(dir, id, ext, prefix))
-	_ = os.Remove(ThumbPath(dir, id, ext, prefix))
+	cleanDir := filepath.Clean(dir)
+	for _, path := range []string{
+		Path(dir, id, ext, prefix),
+		ThumbPath(dir, id, ext, prefix),
+	} {
+		// Second floor: KnownExt already rules out separators and "..", but
+		// never remove a path that resolves outside dir.
+		if !strings.HasPrefix(filepath.Clean(path), cleanDir+string(os.PathSeparator)) {
+			continue
+		}
+		_ = os.Remove(path)
+	}
 }
 
 // ServePath returns the filesystem path a `GET .../image` handler should

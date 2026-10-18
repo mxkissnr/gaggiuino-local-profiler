@@ -7,6 +7,8 @@ import (
 	"maps"
 	"strings"
 	"sync"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 // Repository is the SQL DB access for shots, annotations and the related
@@ -498,6 +500,12 @@ func shotInsertArgs(shot Shot) (shotInsertRow, error) {
 		switch k {
 		case "id", "timestamp", "duration", "profile_name", "profileName", "annotation", "machineId":
 			continue
+		case "image":
+			// The photo extension is used to build file names later (delete,
+			// move), so only a whitelisted value is kept.
+			if ext, ok := v.(string); ok && img.KnownExt(ext) {
+				rest[k] = v
+			}
 		default:
 			rest[k] = v
 		}
