@@ -113,7 +113,7 @@ func MergeCredentials(current, next Settings) Settings {
 	if next.Password != "" {
 		return next
 	}
-	if sameBroker(current, next) {
+	if SameBroker(current, next) {
 		next.Password = current.Password
 		return next
 	}
@@ -121,9 +121,9 @@ func MergeCredentials(current, next Settings) Settings {
 	return next
 }
 
-// sameBroker compares the parts of Settings that identify a broker. DNS names
-// are case-insensitive and a user may pad a typed host, so both sides are
-// trimmed and folded.
-func sameBroker(a, b Settings) bool {
+// SameBroker reports whether a and b name the same broker. DNS names are
+// case-insensitive and a user may pad a typed host, so both sides are trimmed
+// and folded.
+func SameBroker(a, b Settings) bool {
 	return a.Port == b.Port && strings.EqualFold(strings.TrimSpace(a.Host), strings.TrimSpace(b.Host))
 }

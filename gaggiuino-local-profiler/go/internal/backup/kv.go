@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mqtt"
 )
@@ -89,17 +88,21 @@ func saveMqttSettings(db *sql.DB, patch map[string]any) error {
 	next := mqttSettingsFromMap(mergedMap)
 	_, sentPassword := patch["password"]
 	_, sentUsername := patch["username"]
-	if !sentPassword {
-		next.Password = ""
-	}
 	if !sentUsername {
 		next.Username = ""
 	}
-	merged := mqtt.MergeCredentials(current, next)
-	// A kv restore strips credentials, so when its patch carries no username
-	// keep the stored one for the same broker.
-	if !sentUsername && sameMqttBroker(current, merged) {
-		merged.Username = current.Username
+	merged := next
+	if !sentPassword {
+		// An omitted password is not sent: let the broker-binding merge decide
+		// whether the stored one may stay. When a password is sent, even an
+		// empty one, it is exactly what the caller wants stored.
+		next.Password = ""
+		merged = mqtt.MergeCredentials(current, next)
+		// A kv restore strips credentials, so when its patch carries no
+		// username keep the stored one for the same broker.
+		if !sentUsername && mqtt.SameBroker(current, merged) {
+			merged.Username = current.Username
+		}
 	}
 
 	return saveKV(db, "mqtt_settings", map[string]any{
@@ -140,10 +143,6 @@ func mqttSettingsFromMap(m map[string]any) mqtt.Settings {
 		s.Prefix = v
 	}
 	return s
-}
-
-func sameMqttBroker(a, b mqtt.Settings) bool {
-	return a.Port == b.Port && strings.EqualFold(strings.TrimSpace(a.Host), strings.TrimSpace(b.Host))
 }
 
 // importSettingsDefaults is the default import-provider settings blob.

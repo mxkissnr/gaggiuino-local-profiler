@@ -1145,3 +1145,40 @@ func TestRestore_APITokenIgnoredWhenSecretsNotSelected(t *testing.T) {
 		t.Fatalf("token file = %q, want the current token unchanged", got)
 	}
 }
+
+// A secrets block that carries a username with an empty password must clear
+// the stored password on the same broker: the empty value is sent on purpose,
+// not omitted, so keeping p2 would pair it with a different account name.
+func TestRestore_SecretsEmptyPasswordClearsStoredPassword(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	if err := saveMqttSettings(deps.DB, map[string]any{
+		"transport": "mqtt", "host": "192.168.1.50", "port": float64(1883),
+		"username": "u2", "password": "p2", "prefix": "gaggiuino",
+	}); err != nil {
+		t.Fatalf("saveMqttSettings: %v", err)
+	}
+	enc, err := EncryptSecrets(map[string]any{
+		"mqtt": map[string]any{"username": "u", "password": ""},
+	}, "hunter2")
+	if err != nil {
+		t.Fatalf("EncryptSecrets: %v", err)
+	}
+	bundle := map[string]any{
+		"glp_backup": true, "shots": []any{},
+		"sections": []any{"secrets"}, "passphrase": "hunter2", "secrets": enc,
+	}
+	rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	stored, err := getMqttSettings(deps.DB)
+	if err != nil {
+		t.Fatalf("getMqttSettings: %v", err)
+	}
+	if user, _ := stored["username"].(string); user != "u" {
+		t.Fatalf("username = %q, want u", user)
+	}
+	if pw, _ := stored["password"].(string); pw != "" {
+		t.Fatalf("password = %q, want it cleared", pw)
+	}
+}
