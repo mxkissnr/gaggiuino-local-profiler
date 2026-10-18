@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchJson } from './fetch.js';
+import { apiFetch, apiFetchJson, pathSeg } from './fetch.js';
 import type {
   MenuItem, MilkStock, NotifyMapping, NotifyMappingView, NotifyService, Order, OrderStats,
   OrdersSettings, OrdersSettingsUpdate, QueueEta,
@@ -74,7 +74,7 @@ export function getOrdersStats(): Promise<OrderStats> {
 
 /** POST /api/orders/{id}/accept. */
 export function postOrderAccept(id: string, eta: number): Promise<Response> {
-  return apiFetch(`api/orders/${id}/accept`, {
+  return apiFetch(`api/orders/${pathSeg(id)}/accept`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ eta }),
@@ -83,7 +83,7 @@ export function postOrderAccept(id: string, eta: number): Promise<Response> {
 
 /** POST /api/orders/{id}/decline. */
 export function postOrderDecline(id: string, reason: string): Promise<Response> {
-  return apiFetch(`api/orders/${id}/decline`, {
+  return apiFetch(`api/orders/${pathSeg(id)}/decline`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
@@ -92,12 +92,12 @@ export function postOrderDecline(id: string, reason: string): Promise<Response> 
 
 /** POST /api/orders/{id}/complete. */
 export function postOrderComplete(id: string): Promise<Response> {
-  return apiFetch(`api/orders/${id}/complete`, { method: 'POST' });
+  return apiFetch(`api/orders/${pathSeg(id)}/complete`, { method: 'POST' });
 }
 
 /** DELETE /api/orders/{id}. */
 export function deleteOrderById(id: string): Promise<Response> {
-  return apiFetch(`api/orders/${id}`, { method: 'DELETE' });
+  return apiFetch(`api/orders/${pathSeg(id)}`, { method: 'DELETE' });
 }
 
 /** DELETE /api/orders/history — clears every done/declined order. */
@@ -132,7 +132,7 @@ export function postOrdersMenu({ name, emoji }: { name: string; emoji: string })
 
 /** PUT /api/orders/menu/{id} — patch one menu item (trending/milkMl/variants/useBeans/useMilks). */
 export function putMenuItem(id: string, patch: Partial<MenuItem>): Promise<Response> {
-  return apiFetch(`api/orders/menu/${id}`, {
+  return apiFetch(`api/orders/menu/${pathSeg(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
@@ -141,7 +141,7 @@ export function putMenuItem(id: string, patch: Partial<MenuItem>): Promise<Respo
 
 /** DELETE /api/orders/menu/{id}. */
 export function deleteMenuItem(id: string): Promise<Response> {
-  return apiFetch(`api/orders/menu/${id}`, { method: 'DELETE' });
+  return apiFetch(`api/orders/menu/${pathSeg(id)}`, { method: 'DELETE' });
 }
 
 // ── Notifications ────────────────────────────────────────────────────────

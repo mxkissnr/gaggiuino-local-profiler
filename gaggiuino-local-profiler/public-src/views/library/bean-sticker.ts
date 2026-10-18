@@ -3,6 +3,7 @@ import { t } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { apiFetch } from '../../api/transport.js';
+import { pathSeg } from '../../api/fetch.js';
 import { openImageCropEditor } from '../../components/image-crop.js';
 import { _beanList } from './bean-shared.js';
 import type { BeanListRow } from './bean-shared.js';
@@ -116,7 +117,7 @@ export async function cutOutBeanSticker(): Promise<void> {
     const id = S.beanEditId;
     let photo: Blob | null;
     if (id != null) {
-      const r = await apiFetch(`api/library/bean/${id}/image`);
+      const r = await apiFetch(`api/library/bean/${pathSeg(id)}/image`);
       if (!r.ok) {
         const err = (await r.json().catch(() => ({}))) as { error?: string };
         alert(t('error_generic', err.error || r.statusText));
