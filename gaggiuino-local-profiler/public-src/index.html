@@ -30,7 +30,7 @@
 <div id="sidebar">
     <h2><span class="shot-count-num" id="flapDigits"></span><span class="shot-count-label">Shots</span><button id="collapseBtn" data-i18n-title="sidebar_collapse" title="Sidebar einklappen"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg></button></h2>
     <div id="search-container">
-        <input type="search" id="shotSearch" placeholder="Suche nach Profil, Kaffee, Mühle …">
+        <input type="search" id="shotSearch" aria-label="Search" data-i18n-aria-label="search_placeholder" placeholder="Suche nach Profil, Kaffee, Mühle …">
         <div id="beanFilterIndicator" style="display:none"></div>
     </div>
     <div id="sort-bar">
@@ -155,7 +155,7 @@
                  topbar needs its own power toggle there. Desktop-hidden via
                  the max-width:768px block in style.css. -->
             <button id="railPowerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
-            <select id="machineSwitcher" class="machine-switcher" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
+            <select id="machineSwitcher" class="machine-switcher" aria-label="Machine" data-i18n-aria-label="machine_switcher_title" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
         </div>
     </div>
 
@@ -353,53 +353,53 @@
                 </div>
                 <div class="annotation-photo-row" id="annotationPhotoRow">
                     <img class="shot-photo-thumb" id="annPhotoThumb" alt="" style="display:none">
-                    <input type="file" id="annPhotoInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+                    <input type="file" id="annPhotoInput" aria-label="Add a photo to this shot" data-i18n-aria-label="ann_photo_upload" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                     <button type="button" class="lib-open-btn" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
                     <button type="button" class="lib-btn-sm del" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
                 </div>
                 <div class="annotation-fields">
                     <div class="annotation-field full-width">
-                        <label data-i18n="ann_drink_type">Getränk</label>
-                        <div class="drink-pills" id="drinkPillsContainer"></div>
+                        <label id="annDrinkTypeLabel" data-i18n="ann_drink_type">Getränk</label>
+                        <div class="drink-pills" id="drinkPillsContainer" role="group" aria-labelledby="annDrinkTypeLabel"></div>
                         <input type="hidden" id="annDrinkType">
                     </div>
                     <div class="annotation-field full-width" id="milkTypeField" style="display:none">
-                        <label data-i18n="ann_milk_type">Milch</label>
-                        <div class="drink-pills" id="milkPillsContainer"></div>
+                        <label id="annMilkTypeLabel" data-i18n="ann_milk_type">Milch</label>
+                        <div class="drink-pills" id="milkPillsContainer" role="group" aria-labelledby="annMilkTypeLabel"></div>
                         <input type="hidden" id="annMilkType">
                     </div>
                     <div class="annotation-field full-width" id="recipeField" style="display:none">
-                        <label data-i18n="ann_recipe">Rezept</label>
+                        <label for="annRecipe" data-i18n="ann_recipe">Rezept</label>
                         <select id="annRecipe" class="ann-recipe-select"></select>
                     </div>
                     <div class="annotation-field">
-                        <label data-i18n="ann_coffee">Kaffee / Bohne</label>
+                        <label for="annCoffee" data-i18n="ann_coffee">Kaffee / Bohne</label>
                         <select id="annCoffee"></select>
                         <div id="beanAgeHint" class="bean-age-hint" style="display:none"></div>
                     </div>
                     <div class="annotation-field">
-                        <label data-i18n="ann_basket">Sieb</label>
+                        <label for="annBasket" data-i18n="ann_basket">Sieb</label>
                         <select id="annBasket"></select>
                     </div>
                     <div class="annotation-field">
-                        <label data-i18n="ann_puckscreen">Puck Screen</label>
+                        <label for="annPuckScreen" data-i18n="ann_puckscreen">Puck Screen</label>
                         <select id="annPuckScreen"></select>
                     </div>
                     <div class="annotation-field full-width" id="frozenPortionField" style="display:none">
-                        <label data-i18n="ann_frozen_portion">Portion</label>
-                        <div class="drink-pills" id="frozenPortionPillsContainer"></div>
+                        <label id="annFrozenPortionLabel" data-i18n="ann_frozen_portion">Portion</label>
+                        <div class="drink-pills" id="frozenPortionPillsContainer" role="group" aria-labelledby="annFrozenPortionLabel"></div>
                         <input type="hidden" id="annFrozenPortionId">
                     </div>
                     <div class="annotation-field">
-                        <label data-i18n="ann_grinder">Mühle</label>
+                        <label for="annGrinder" data-i18n="ann_grinder">Mühle</label>
                         <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off">
                     </div>
                     <div class="annotation-field">
-                        <label data-i18n="ann_grind_setting">Mahlgrad</label>
+                        <label for="annGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
                         <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks">
                     </div>
                     <div class="annotation-field">
-                        <label data-i18n="ann_dose">Dosis (g)</label>
+                        <label for="annDose" data-i18n="ann_dose">Dosis (g)</label>
                         <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
                     </div>
                     <div class="annotation-field">
@@ -409,11 +409,11 @@
                         </div>
                     </div>
                     <div class="annotation-field">
-                        <label>TDS % <span id="annTdsOptional" style="color:var(--gray-600);font-weight:normal" data-i18n="ann_tds_optional">(optional)</span></label>
+                        <label for="annTds">TDS % <span id="annTdsOptional" style="color:var(--gray-600);font-weight:normal" data-i18n="ann_tds_optional">(optional)</span></label>
                         <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
                     </div>
                     <div class="annotation-field full-width">
-                        <label data-i18n="ann_notes">Notizen</label>
+                        <label for="annNotes" data-i18n="ann_notes">Notizen</label>
                         <textarea id="annNotes" data-i18n-placeholder="ann_notes_ph" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
                     </div>
                 </div>
@@ -438,9 +438,9 @@
             </div>
             <div id="maintLogForm" class="maint-log-form" style="display:none">
                 <div class="maint-log-form-row">
-                    <select id="maintLogTask" class="maint-log-select"></select>
-                    <input type="date" id="maintLogDate" class="maint-log-date">
-                    <input type="text" id="maintLogNotes" class="maint-log-notes-input" data-i18n-placeholder="maint_log_notes_ph" placeholder="z.B. Cafiza 1h">
+                    <select id="maintLogTask" class="maint-log-select" aria-label="Maintenance" data-i18n-aria-label="maint_log_col_task"></select>
+                    <input type="date" id="maintLogDate" class="maint-log-date" aria-label="Date" data-i18n-aria-label="maint_log_col_date">
+                    <input type="text" id="maintLogNotes" class="maint-log-notes-input" aria-label="Notes" data-i18n-aria-label="maint_log_col_notes" data-i18n-placeholder="maint_log_notes_ph" placeholder="z.B. Cafiza 1h">
                 </div>
                 <div class="maint-log-form-actions">
                     <button class="maint-done-btn" id="submitMaintLogBtn" data-i18n="maint_log_save">Speichern</button>
@@ -503,8 +503,8 @@
             <div id="ordersMenuBody">
                 <div class="orders-menu-list" id="ordersMenuList"></div>
                 <div class="orders-menu-add-row">
-                    <input class="orders-menu-input emoji" id="ordersMenuEmoji" placeholder="☕" maxlength="2">
-                    <input class="orders-menu-input" id="ordersMenuName" style="flex:1" placeholder="Name …" data-i18n-ph="orders_menu_name_ph">
+                    <input class="orders-menu-input emoji" id="ordersMenuEmoji" aria-label="Emoji" data-i18n-aria-label="lib_milk_emoji" placeholder="☕" maxlength="2">
+                    <input class="orders-menu-input" id="ordersMenuName" aria-label="Name" data-i18n-aria-label="orders_menu_name_ph" style="flex:1" placeholder="Name …" data-i18n-ph="orders_menu_name_ph">
                     <button class="orders-menu-save-btn" id="addOrderMenuItemBtn" data-i18n="orders_menu_save">Hinzufügen</button>
                 </div>
             </div>
@@ -549,29 +549,29 @@
                         <div class="lib-import-extra-recipes" id="beanFormExtraRecipes" style="display:none"></div>
                         <div class="lib-form-grid">
                             <div class="lib-form-field">
-                                <label data-i18n="lib_bean_name">Name *</label>
+                                <label for="beanFormName" data-i18n="lib_bean_name">Name *</label>
                                 <input type="text" id="beanFormName" data-i18n-placeholder="lib_bean_name_ph" placeholder="Ethiopia Yirgacheffe">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_bean_roaster">Rösterei</label>
+                                <label for="beanFormRoaster" data-i18n="lib_bean_roaster">Rösterei</label>
                                 <input type="text" id="beanFormRoaster" data-i18n-placeholder="lib_bean_roaster_ph" placeholder="Quijote Kaffee">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_bean_roast_date">Röstdatum</label>
+                                <label for="beanFormRoastDate" data-i18n="lib_bean_roast_date">Röstdatum</label>
                                 <input type="date" id="beanFormRoastDate">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_bean_notes">Notizen</label>
+                                <label for="beanFormNotes" data-i18n="lib_bean_notes">Notizen</label>
                                 <input type="text" id="beanFormNotes" placeholder="Blaubeere, Jasmin …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_bean_origin">Herkunft</label>
+                                <label for="beanFormOrigin" data-i18n="lib_bean_origin">Herkunft</label>
                                 <div class="flavor-chips-wrap" id="beanFormOriginChips"></div>
                                 <select id="beanFormOrigin"></select>
                                 <span class="lib-form-hint" data-i18n="bean_origin_hint">Mehrere Länder = Blend; optionaler %-Anteil pro Land</span>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_species_label">Spezies</label>
+                                <label for="beanFormSpecies" data-i18n="bean_species_label">Spezies</label>
                                 <select id="beanFormSpecies">
                                     <option value="" data-i18n="species_none">– keine Angabe –</option>
                                     <option value="Arabica" data-i18n="species_arabica">Arabica</option>
@@ -581,26 +581,26 @@
                                 </select>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_category_label">Kategorie</label>
+                                <label for="beanFormCategory" data-i18n="bean_category_label">Kategorie</label>
                                 <select id="beanFormCategory">
                                     <option value="normal" data-i18n="category_normal">Normal</option>
                                     <option value="speciality" data-i18n="category_speciality">Speciality</option>
                                 </select>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_bean_variety">Varietät</label>
+                                <label for="beanFormVariety" data-i18n="lib_bean_variety">Varietät</label>
                                 <input type="text" id="beanFormVariety" placeholder="Geisha, Bourbon …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_bean_process">Aufbereitung</label>
+                                <label for="beanFormProcess" data-i18n="lib_bean_process">Aufbereitung</label>
                                 <input type="text" id="beanFormProcess" placeholder="Washed, Natural …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_region_label">Region</label>
+                                <label for="beanFormRegion" data-i18n="bean_region_label">Region</label>
                                 <input type="text" id="beanFormRegion" data-i18n-placeholder="bean_region_ph" placeholder="Sidama, Bensa …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_roast_type">Röstung</label>
+                                <label for="beanFormRoastType" data-i18n="bean_roast_type">Röstung</label>
                                 <select id="beanFormRoastType">
                                     <option value="" data-i18n="roast_type_none">– keine Angabe –</option>
                                     <option value="espresso" data-i18n="roast_type_espresso">Espresso-Röstung</option>
@@ -609,54 +609,54 @@
                                 </select>
                             </div>
                             <div class="lib-form-field lib-form-field-wide">
-                                <label data-i18n="bean_flavors_label">Geschmacksnoten</label>
+                                <label for="beanFormFlavorInput" data-i18n="bean_flavors_label">Geschmacksnoten</label>
                                 <div class="flavor-chips-wrap" id="beanFormFlavorChips">
                                     <input type="text" id="beanFormFlavorInput" data-i18n-placeholder="bean_flavors_ph" placeholder="Aprikose, Karamell …">
                                 </div>
                                 <span class="lib-form-hint" data-i18n="bean_flavors_hint">Enter oder Komma fügt hinzu</span>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_altitude_label">Höhenlage (m)</label>
+                                <label for="beanFormAltitude" data-i18n="bean_altitude_label">Höhenlage (m)</label>
                                 <input type="number" id="beanFormAltitude" data-i18n-placeholder="bean_altitude_ph" placeholder="z.B. 1900" step="1" min="0" max="3000">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_importer_label">Importeur</label>
+                                <label for="beanFormImporter" data-i18n="bean_importer_label">Importeur</label>
                                 <input type="text" id="beanFormImporter" data-i18n-placeholder="bean_importer_ph" placeholder="Rehm Coffee">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_harvest_label">Ernte</label>
+                                <label for="beanFormHarvest" data-i18n="bean_harvest_label">Ernte</label>
                                 <input type="text" id="beanFormHarvest" data-i18n-placeholder="bean_harvest_ph" placeholder="04-06.25">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_price_label">Preis (€)</label>
+                                <label for="beanFormPrice" data-i18n="bean_price_label">Preis (€)</label>
                                 <input type="number" id="beanFormPrice" data-i18n-placeholder="bean_price_ph" placeholder="z.B. 14.90" step="0.01" min="0" max="500">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_producer_label">Produzent</label>
+                                <label for="beanFormProducer" data-i18n="bean_producer_label">Produzent</label>
                                 <input type="text" id="beanFormProducer" data-i18n-placeholder="bean_producer_ph" placeholder="Finca La Maravilla">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_certification_label">Zertifizierung</label>
+                                <label for="beanFormCertification" data-i18n="bean_certification_label">Zertifizierung</label>
                                 <input type="text" id="beanFormCertification" data-i18n-placeholder="bean_certification_ph" placeholder="Bio, Fairtrade …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_brew_temp_label">Brühtemperatur (°C)</label>
+                                <label for="beanFormBrewTemp" data-i18n="bean_brew_temp_label">Brühtemperatur (°C)</label>
                                 <input type="number" id="beanFormBrewTemp" data-i18n-placeholder="bean_brew_temp_ph" placeholder="z.B. 94" step="0.5" min="80" max="100">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_brew_ratio_label">Brühverhältnis</label>
+                                <label for="beanFormBrewRatio" data-i18n="bean_brew_ratio_label">Brühverhältnis</label>
                                 <input type="text" id="beanFormBrewRatio" data-i18n-placeholder="bean_brew_ratio_ph" placeholder="1:2.2" maxlength="20">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_brew_time_label">Brühzeit (s)</label>
+                                <label for="beanFormBrewTime" data-i18n="bean_brew_time_label">Brühzeit (s)</label>
                                 <input type="number" id="beanFormBrewTime" data-i18n-placeholder="bean_brew_time_ph" placeholder="z.B. 28" step="1" min="5" max="300">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="bean_brew_notes_label">Zubereitungshinweis</label>
+                                <label for="beanFormBrewNotes" data-i18n="bean_brew_notes_label">Zubereitungshinweis</label>
                                 <input type="text" id="beanFormBrewNotes" data-i18n-placeholder="bean_brew_notes_ph" placeholder="etwas heißer als üblich" maxlength="300">
                             </div>
                             <div class="lib-form-field" id="beanFormImageField" style="display:none">
-                                <label data-i18n="bean_image_label">Bild</label>
+                                <label for="beanFormImage" data-i18n="bean_image_label">Bild</label>
                                 <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
@@ -690,7 +690,7 @@
                         <button class="lib-scan-trigger" id="toggleImportSettingsBtn" data-i18n-html="lib_import_settings_btn"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M11.05 5.27L10.54 1.6A10.5 10.5 0 0 1 13.46 1.6L12.95 5.27A6.8 6.8 0 0 1 16.09 6.57L18.32 3.61A10.5 10.5 0 0 1 20.39 5.68L17.43 7.91A6.8 6.8 0 0 1 18.73 11.05L22.4 10.54A10.5 10.5 0 0 1 22.4 13.46L18.73 12.95A6.8 6.8 0 0 1 17.43 16.09L20.39 18.32A10.5 10.5 0 0 1 18.32 20.39L16.09 17.43A6.8 6.8 0 0 1 12.95 18.73L13.46 22.4A10.5 10.5 0 0 1 10.54 22.4L11.05 18.73A6.8 6.8 0 0 1 7.91 17.43L5.68 20.39A10.5 10.5 0 0 1 3.61 18.32L6.57 16.09A6.8 6.8 0 0 1 5.27 12.95L1.6 13.46A10.5 10.5 0 0 1 1.6 10.54L5.27 11.05A6.8 6.8 0 0 1 6.57 7.91L3.61 5.68A10.5 10.5 0 0 1 5.68 3.61L7.91 6.57A6.8 6.8 0 0 1 11.05 5.27Z"/></svg> Quellen</button>
                     </div>
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
-                        <input class="lib-url-input" id="urlImportInput" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
+                        <input class="lib-url-input" id="urlImportInput" aria-label="Import from URL" data-i18n-aria-label="lib_url_placeholder" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
                         <button class="lib-url-btn" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
                     </div>
                     <div class="lib-import-settings" id="importSettingsRow" style="display:none">
@@ -700,7 +700,7 @@
                             <div class="lib-import-settings-subtitle" data-i18n="lib_import_settings_custom_label">Eigene Shopify-Shops</div>
                             <div id="importSettingsCustomList"></div>
                             <div class="lib-import-settings-add">
-                                <input type="text" id="importSettingsDomainInput" data-i18n-placeholder="lib_import_settings_add_domain_ph" placeholder="shop.example.com">
+                                <input type="text" id="importSettingsDomainInput" aria-label="Shop domain" data-i18n-aria-label="lib_import_settings_add_domain_ph" data-i18n-placeholder="lib_import_settings_add_domain_ph" placeholder="shop.example.com">
                                 <button class="lib-btn-sm" id="importSettingsAddDomainBtn" data-i18n="lib_import_settings_add_domain_btn">Hinzufügen</button>
                             </div>
                         </div>
@@ -717,33 +717,33 @@
                     <div class="lib-add-form" id="grinderAddForm">
                         <div class="lib-form-grid single">
                             <div class="lib-form-field">
-                                <label data-i18n="lib_grinder_name">Name *</label>
+                                <label for="grinderFormName" data-i18n="lib_grinder_name">Name *</label>
                                 <input type="text" id="grinderFormName" data-i18n-placeholder="lib_grinder_name_ph" placeholder="Niche Zero">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_grinder_notes">Notizen</label>
+                                <label for="grinderFormNotes" data-i18n="lib_grinder_notes">Notizen</label>
                                 <input type="text" id="grinderFormNotes" data-i18n-placeholder="lib_grinder_notes_ph" placeholder="Espresso: 23 Clicks">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_grinder_burr_type">Mahlwerk</label>
+                                <label for="grinderFormBurrType" data-i18n="lib_grinder_burr_type">Mahlwerk</label>
                                 <input type="text" id="grinderFormBurrType" data-i18n-placeholder="lib_grinder_burr_type_ph" placeholder="Konisch Stahl">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_grinder_purchase_date">Kaufdatum</label>
+                                <label for="grinderFormPurchaseDate" data-i18n="lib_grinder_purchase_date">Kaufdatum</label>
                                 <input type="date" id="grinderFormPurchaseDate">
                             </div>
                             <div class="lib-form-field" id="grinderFormImageField" style="display:none">
-                                <label data-i18n="lib_grinder_image">Bild</label>
+                                <label for="grinderFormImage" data-i18n="lib_grinder_image">Bild</label>
                                 <input type="file" id="grinderFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
                                 </div>
                             </div>
                             <div class="lib-form-field" id="grinderFormZeroPointField" style="display:none">
-                                <label data-i18n="lib_grinder_zero_point">Nullpunkt</label>
+                                <label for="grinderFormZeroPoint" data-i18n="lib_grinder_zero_point">Nullpunkt</label>
                                 <input type="number" step="0.1" id="grinderFormZeroPoint">
                                 <div class="lib-form-hint" data-i18n="lib_grinder_zero_point_hint">Nach dem Reinigen: Nullpunkt hier aktualisieren, statt jedes Rezept anzupassen. Vorschläge/Vergleiche rechnen automatisch um.</div>
-                                <label data-i18n="lib_grinder_zero_point_since" style="margin-top:0.5rem">Aktiv seit (leer = jetzt)</label>
+                                <label for="grinderFormZeroPointSince" data-i18n="lib_grinder_zero_point_since" style="margin-top:0.5rem">Aktiv seit (leer = jetzt)</label>
                                 <input type="date" id="grinderFormZeroPointSince">
                                 <div id="grinderFormZeroPointHistory"></div>
                             </div>
@@ -761,11 +761,11 @@
                     <div class="lib-add-form" id="recipeAddForm">
                         <div class="lib-form-grid">
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_name">Name *</label>
+                                <label for="recipeFormName" data-i18n="lib_recipe_name">Name *</label>
                                 <input type="text" id="recipeFormName" placeholder="Aerocano">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_brew_method">Brühmethode</label>
+                                <label for="recipeFormBrewMethod" data-i18n="lib_recipe_brew_method">Brühmethode</label>
                                 <select id="recipeFormBrewMethod">
                                     <option value="espresso"    data-i18n="lib_brew_espresso">Espresso</option>
                                     <option value="aeropress"   data-i18n="lib_brew_aeropress">AeroPress</option>
@@ -777,51 +777,51 @@
                                 </select>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_drink_type">Getränketyp</label>
+                                <label for="recipeFormDrinkType" data-i18n="lib_recipe_drink_type">Getränketyp</label>
                                 <input type="text" id="recipeFormDrinkType" placeholder="Flat White, Lungo …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_dose">Dosis (g)</label>
+                                <label for="recipeFormDose" data-i18n="lib_recipe_dose">Dosis (g)</label>
                                 <input type="number" id="recipeFormDose" step="0.1" min="0" placeholder="11">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_yield">Ausbeute (g)</label>
+                                <label for="recipeFormYield" data-i18n="lib_recipe_yield">Ausbeute (g)</label>
                                 <input type="number" id="recipeFormYield" step="0.1" min="0" placeholder="200">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_time">Zeit (s)</label>
+                                <label for="recipeFormTime" data-i18n="lib_recipe_time">Zeit (s)</label>
                                 <input type="number" id="recipeFormTime" step="1" min="0" placeholder="150">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_water_temp">Wassertemperatur (°C)</label>
+                                <label for="recipeFormWaterTemp" data-i18n="lib_recipe_water_temp">Wassertemperatur (°C)</label>
                                 <input type="number" id="recipeFormWaterTemp" step="1" min="0" max="100" placeholder="100">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_water_g">Wassermenge (g)</label>
+                                <label for="recipeFormWaterG" data-i18n="lib_recipe_water_g">Wassermenge (g)</label>
                                 <input type="number" id="recipeFormWaterG" step="1" min="0" placeholder="65">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_ice_g">Eismenge (g)</label>
+                                <label for="recipeFormIceG" data-i18n="lib_recipe_ice_g">Eismenge (g)</label>
                                 <input type="number" id="recipeFormIceG" step="1" min="0" placeholder="85">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_grind">Mahlgrad</label>
+                                <label for="recipeFormGrind" data-i18n="lib_recipe_grind">Mahlgrad</label>
                                 <input type="text" id="recipeFormGrind" placeholder="mittelfein, Niche 18 …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_source">Quelle (URL)</label>
+                                <label for="recipeFormSourceUrl" data-i18n="lib_recipe_source">Quelle (URL)</label>
                                 <input type="url" id="recipeFormSourceUrl" placeholder="https://…">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_profile">Profil</label>
+                                <label for="recipeFormProfile" data-i18n="lib_recipe_profile">Profil</label>
                                 <input type="text" id="recipeFormProfile" placeholder="Standard …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_bean">Bohne</label>
+                                <label for="recipeFormBean" data-i18n="lib_recipe_bean">Bohne</label>
                                 <input type="text" id="recipeFormBean" placeholder="Ethiopia …">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_recipe_notes">Notizen</label>
+                                <label for="recipeFormNotes" data-i18n="lib_recipe_notes">Notizen</label>
                                 <input type="text" id="recipeFormNotes" placeholder="Notizen …">
                             </div>
                         </div>
@@ -845,15 +845,15 @@
                     <div class="lib-add-form" id="milkAddForm">
                         <div class="lib-form-grid single">
                             <div class="lib-form-field">
-                                <label data-i18n="lib_milk_name">Name *</label>
+                                <label for="milkFormName" data-i18n="lib_milk_name">Name *</label>
                                 <input type="text" id="milkFormName" data-i18n-placeholder="lib_milk_name_ph" placeholder="z.B. Vollmilch">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_milk_emoji">Emoji</label>
+                                <label for="milkFormEmoji" data-i18n="lib_milk_emoji">Emoji</label>
                                 <input type="text" id="milkFormEmoji" placeholder="🥛" maxlength="4" style="width:60px">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_milk_stock">Vorrat (ml)</label>
+                                <label for="milkFormStock" data-i18n="lib_milk_stock">Vorrat (ml)</label>
                                 <input type="number" id="milkFormStock" placeholder="1000" min="0" step="50">
                             </div>
                         </div>
@@ -870,15 +870,15 @@
                     <div class="lib-add-form" id="basketAddForm">
                         <div class="lib-form-grid single">
                             <div class="lib-form-field">
-                                <label data-i18n="lib_basket_name">Name *</label>
+                                <label for="basketFormName" data-i18n="lib_basket_name">Name *</label>
                                 <input type="text" id="basketFormName" data-i18n-placeholder="lib_basket_name_ph" placeholder="IMS Precision">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_basket_dose_capacity">Dosis-Kapazität</label>
+                                <label for="basketFormDoseCapacity" data-i18n="lib_basket_dose_capacity">Dosis-Kapazität</label>
                                 <input type="text" id="basketFormDoseCapacity" data-i18n-placeholder="lib_basket_dose_capacity_ph" placeholder="18-20g">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_basket_wall_type">Wandtyp</label>
+                                <label for="basketFormWallType" data-i18n="lib_basket_wall_type">Wandtyp</label>
                                 <select id="basketFormWallType">
                                     <option value="" data-i18n="basket_wall_type_none">– keine Angabe –</option>
                                     <option value="pressurized" data-i18n="basket_wall_type_pressurized">Pressurized</option>
@@ -888,7 +888,7 @@
                                 </select>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_basket_shape">Form</label>
+                                <label for="basketFormShape" data-i18n="lib_basket_shape">Form</label>
                                 <select id="basketFormShape">
                                     <option value="" data-i18n="basket_shape_none">– keine Angabe –</option>
                                     <option value="straight" data-i18n="basket_shape_straight">Gerade</option>
@@ -896,15 +896,15 @@
                                 </select>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_basket_hole_count">Lochanzahl</label>
+                                <label for="basketFormHoleCount" data-i18n="lib_basket_hole_count">Lochanzahl</label>
                                 <input type="text" id="basketFormHoleCount" data-i18n-placeholder="lib_basket_hole_count_ph" placeholder="~600 Löcher">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_basket_notes">Notizen</label>
+                                <label for="basketFormNotes" data-i18n="lib_basket_notes">Notizen</label>
                                 <input type="text" id="basketFormNotes" data-i18n-placeholder="lib_basket_notes_ph" placeholder="Notizen …">
                             </div>
                             <div class="lib-form-field" id="basketFormImageField" style="display:none">
-                                <label data-i18n="lib_basket_image">Bild</label>
+                                <label for="basketFormImage" data-i18n="lib_basket_image">Bild</label>
                                 <input type="file" id="basketFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="basketFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
@@ -924,11 +924,11 @@
                     <div class="lib-add-form" id="puckScreenAddForm">
                         <div class="lib-form-grid single">
                             <div class="lib-form-field">
-                                <label data-i18n="lib_puckscreen_name">Name *</label>
+                                <label for="puckScreenFormName" data-i18n="lib_puckscreen_name">Name *</label>
                                 <input type="text" id="puckScreenFormName" data-i18n-placeholder="lib_puckscreen_name_ph" placeholder="Slayer mesh">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_puckscreen_thickness">Dicke</label>
+                                <label for="puckScreenFormThickness" data-i18n="lib_puckscreen_thickness">Dicke</label>
                                 <select id="puckScreenFormThickness">
                                     <option value="" data-i18n="puckscreen_thickness_none">– keine Angabe –</option>
                                     <option value="very-thin" data-i18n="puckscreen_thickness_very_thin">Sehr dünn</option>
@@ -938,15 +938,15 @@
                                 </select>
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_puckscreen_material">Material</label>
+                                <label for="puckScreenFormMaterial" data-i18n="lib_puckscreen_material">Material</label>
                                 <input type="text" id="puckScreenFormMaterial" data-i18n-placeholder="lib_puckscreen_material_ph" placeholder="Porous Sintered Mesh">
                             </div>
                             <div class="lib-form-field">
-                                <label data-i18n="lib_puckscreen_notes">Notizen</label>
+                                <label for="puckScreenFormNotes" data-i18n="lib_puckscreen_notes">Notizen</label>
                                 <input type="text" id="puckScreenFormNotes" data-i18n-placeholder="lib_puckscreen_notes_ph" placeholder="Notizen …">
                             </div>
                             <div class="lib-form-field" id="puckScreenFormImageField" style="display:none">
-                                <label data-i18n="lib_puckscreen_image">Bild</label>
+                                <label for="puckScreenFormImage" data-i18n="lib_puckscreen_image">Bild</label>
                                 <input type="file" id="puckScreenFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="puckScreenFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
@@ -979,27 +979,27 @@
             <div class="pe-scroll">
                 <div class="lib-form-grid">
                     <div class="lib-form-field">
-                        <label data-i18n="profile_form_name">Name *</label>
+                        <label for="profileFormName" data-i18n="profile_form_name">Name *</label>
                         <input type="text" id="profileFormName" placeholder="Sertao Decaf">
                     </div>
                     <div class="lib-form-field">
-                        <label data-i18n="profile_form_water_temp">Wassertemperatur (°C)</label>
+                        <label for="profileFormWaterTemp" data-i18n="profile_form_water_temp">Wassertemperatur (°C)</label>
                         <input type="number" id="profileFormWaterTemp" step="0.5" min="80" max="100" placeholder="93">
                     </div>
                     <div class="lib-form-field">
-                        <label data-i18n="profile_form_coffee_in">Dosis (g)</label>
+                        <label for="profileFormCoffeeIn" data-i18n="profile_form_coffee_in">Dosis (g)</label>
                         <input type="number" id="profileFormCoffeeIn" step="0.1" min="0" placeholder="18">
                     </div>
                     <div class="lib-form-field">
-                        <label data-i18n="profile_form_coffee_out">Ausbeute (g)</label>
+                        <label for="profileFormCoffeeOut" data-i18n="profile_form_coffee_out">Ausbeute (g)</label>
                         <input type="number" id="profileFormCoffeeOut" step="0.1" min="0" placeholder="36">
                     </div>
                     <div class="lib-form-field">
-                        <label data-i18n="profile_form_ratio">Ratio</label>
+                        <label for="profileFormRatio" data-i18n="profile_form_ratio">Ratio</label>
                         <input type="number" id="profileFormRatio" step="0.1" min="0" placeholder="2">
                     </div>
                     <div class="lib-form-field">
-                        <label data-i18n="profile_form_weight">Stopp-Gewicht (g)</label>
+                        <label for="profileFormWeight" data-i18n="profile_form_weight">Stopp-Gewicht (g)</label>
                         <input type="number" id="profileFormWeight" step="0.1" min="0" placeholder="39.6">
                     </div>
                 </div>
@@ -1099,7 +1099,7 @@
 
         <div id="live-ref-bar">
             <span class="live-ref-label" data-i18n="ref_label">Referenz:</span>
-            <select id="refShotSelect">
+            <select id="refShotSelect" aria-label="Reference" data-i18n-aria-label="ref_label">
                 <option value="" data-i18n="ref_none">— kein Referenz-Shot —</option>
             </select>
             <button id="refClearBtn" style="display:none" data-i18n-html="ref_clear"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Löschen</button>
@@ -1172,7 +1172,7 @@
                         <div class="annotation-field">
                             <label for="lsGrinder" data-i18n="ann_grinder">Mühle</label>
                             <select id="lsGrinder"></select>
-                            <input type="text" id="lsGrinderOther" style="display:none">
+                            <input type="text" id="lsGrinderOther" aria-label="Grinder" data-i18n-aria-label="ann_grinder" style="display:none">
                         </div>
                         <div class="annotation-field">
                             <label for="lsGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
@@ -1373,7 +1373,7 @@
                     <section class="analytics-sec" data-analytics-period>
                         <div class="analytics-card-head">
                             <h3 class="analytics-section-title" data-i18n="analytics_dialin_progression">Dial-In-Verlauf</h3>
-                            <select id="dialinProgressionBeanSelect" class="analytics-bean-select" data-action="dialin-progression-bean-change"></select>
+                            <select id="dialinProgressionBeanSelect" class="analytics-bean-select" aria-label="Dial-In Progression" data-i18n-aria-label="analytics_dialin_progression" data-action="dialin-progression-bean-change"></select>
                         </div>
                         <div style="height:220px;position:relative"><canvas id="dialinProgressionChart"></canvas></div>
                     </section>
@@ -1390,7 +1390,7 @@
             <h3 style="margin:0;font-size:.95rem;color:var(--gray-200)" data-i18n="dialin_title">Einwählen</h3>
             <div class="dialin-header-actions">
                 <button class="lib-btn-sm" id="startDialinWizardBtn" data-action="start-dialin" data-i18n="dialin_wizard_start_btn">Geführtes Einwählen starten</button>
-                <select id="dialinCount" class="dialin-count-select">
+                <select id="dialinCount" class="dialin-count-select" aria-label="Shots" data-i18n-aria-label="nav_shots">
                     <option value="3">3 Shots</option>
                     <option value="5" selected>5 Shots</option>
                     <option value="10">10 Shots</option>
@@ -1552,17 +1552,17 @@
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_shot_defaults_title">Standardwerte für Shot-Notizen</h3>
             <p class="settings-card-desc" data-i18n="settings_shot_defaults_desc">Werden beim Öffnen eines neuen, noch nicht bewerteten Shots automatisch vorausgefüllt — bleiben dabei jederzeit änderbar.</p>
-            <label class="machine-form-label" data-i18n="ann_drink_type">Getränk</label>
+            <label for="sdDrinkType" class="machine-form-label" data-i18n="ann_drink_type">Getränk</label>
             <select id="sdDrinkType" class="machine-form-input"></select>
-            <label class="machine-form-label" data-i18n="ann_coffee">Kaffee / Bohne</label>
+            <label for="sdCoffee" class="machine-form-label" data-i18n="ann_coffee">Kaffee / Bohne</label>
             <select id="sdCoffee" class="machine-form-input"></select>
-            <label class="machine-form-label" data-i18n="ann_basket">Sieb</label>
+            <label for="sdBasket" class="machine-form-label" data-i18n="ann_basket">Sieb</label>
             <select id="sdBasket" class="machine-form-input"></select>
-            <label class="machine-form-label" data-i18n="ann_puckscreen">Puck Screen</label>
+            <label for="sdPuckScreen" class="machine-form-label" data-i18n="ann_puckscreen">Puck Screen</label>
             <select id="sdPuckScreen" class="machine-form-input"></select>
-            <label class="machine-form-label" data-i18n="ann_grinder">Mühle</label>
+            <label for="sdGrinder" class="machine-form-label" data-i18n="ann_grinder">Mühle</label>
             <input type="text" id="sdGrinder" class="machine-form-input" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off">
-            <label class="machine-form-label" data-i18n="ann_dose">Dosis (g)</label>
+            <label for="sdDose" class="machine-form-label" data-i18n="ann_dose">Dosis (g)</label>
             <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
             <div class="machine-form-actions">
                 <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
@@ -1582,13 +1582,13 @@
             </div>
             <div id="mqttConnFields" style="display:none">
                 <p class="settings-card-desc" id="mqttDiscoveryHint"></p>
-                <label class="machine-form-label" data-i18n="settings_mqtt_host">Broker-Host</label>
+                <label for="mqttHost" class="machine-form-label" data-i18n="settings_mqtt_host">Broker-Host</label>
                 <input type="text" id="mqttHost" class="machine-form-input" placeholder="core-mosquitto">
-                <label class="machine-form-label" data-i18n="settings_mqtt_port">Port</label>
+                <label for="mqttPort" class="machine-form-label" data-i18n="settings_mqtt_port">Port</label>
                 <input type="number" id="mqttPort" class="machine-form-input" placeholder="1883">
-                <label class="machine-form-label" data-i18n="settings_mqtt_username">Benutzername (optional)</label>
+                <label for="mqttUsername" class="machine-form-label" data-i18n="settings_mqtt_username">Benutzername (optional)</label>
                 <input type="text" id="mqttUsername" class="machine-form-input">
-                <label class="machine-form-label" data-i18n="settings_mqtt_password">Passwort (optional)</label>
+                <label for="mqttPassword" class="machine-form-label" data-i18n="settings_mqtt_password">Passwort (optional)</label>
                 <input type="password" id="mqttPassword" class="machine-form-input">
                 <div id="mqttPasswordRemoveRow" style="display:none">
                     <label class="machine-theme-gradient-toggle">
@@ -1596,7 +1596,7 @@
                         <span data-i18n="settings_mqtt_password_remove">Passwort entfernen</span>
                     </label>
                 </div>
-                <label class="machine-form-label" data-i18n="settings_mqtt_prefix">Topic-Präfix</label>
+                <label for="mqttPrefix" class="machine-form-label" data-i18n="settings_mqtt_prefix">Topic-Präfix</label>
                 <input type="text" id="mqttPrefix" class="machine-form-input" placeholder="gaggiuino">
                 <div class="machine-form-actions">
                     <button id="mqttSaveBtn" type="button" class="backup-btn" data-i18n="settings_mqtt_save">Speichern</button>
@@ -1616,16 +1616,16 @@
         <div class="settings-card" id="machineFormCard" style="display:none">
             <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">+ Maschine hinzufügen</h3>
             <input type="hidden" id="machineFormId">
-            <label class="machine-form-label" data-i18n="settings_machine_name">Name</label>
+            <label for="machineFormName" class="machine-form-label" data-i18n="settings_machine_name">Name</label>
             <input type="text" id="machineFormName" class="machine-form-input">
-            <label class="machine-form-label" data-i18n="settings_machine_type">Typ</label>
+            <label for="machineFormType" class="machine-form-label" data-i18n="settings_machine_type">Typ</label>
             <select id="machineFormType" class="machine-form-input">
                 <option value="gaggiuino">Gaggiuino</option>
                 <option value="gaggimate" data-i18n="settings_machine_type_gaggimate">GaggiMate</option>
             </select>
-            <label class="machine-form-label" data-i18n="settings_machine_host">Host</label>
+            <label for="machineFormHost" class="machine-form-label" data-i18n="settings_machine_host">Host</label>
             <input type="text" id="machineFormHost" class="machine-form-input" placeholder="gaggiuino.local">
-            <label class="machine-form-label" data-i18n="settings_machine_switch">HA Switch-Entität (optional)</label>
+            <label for="machineFormSwitch" class="machine-form-label" data-i18n="settings_machine_switch">HA Switch-Entität (optional)</label>
             <input type="text" id="machineFormSwitch" class="machine-form-input" placeholder="switch.espresso">
             <div id="machineWaterSensorRow" style="display:none">
                 <label class="machine-theme-gradient-toggle">
@@ -1634,25 +1634,25 @@
                 </label>
             </div>
             <div id="machineReleaseChannelRow" style="display:none">
-                <label class="machine-form-label" data-i18n="settings_machine_release_channel">Release-Kanal</label>
+                <label for="machineFormReleaseChannel" class="machine-form-label" data-i18n="settings_machine_release_channel">Release-Kanal</label>
                 <select id="machineFormReleaseChannel" class="machine-form-input">
                     <option value="0" data-i18n="settings_machine_release_channel_stable">Stable</option>
                     <option value="1" data-i18n="settings_machine_release_channel_test">Test</option>
                     <option value="2" data-i18n="settings_machine_release_channel_debug">Debug</option>
                 </select>
             </div>
-            <label class="machine-form-label" data-i18n="settings_machine_theme">Farbe</label>
-            <div class="machine-theme-picker-row">
+            <label id="machineThemeLabel" class="machine-form-label" data-i18n="settings_machine_theme">Farbe</label>
+            <div class="machine-theme-picker-row" role="group" aria-labelledby="machineThemeLabel">
                 <div class="machine-theme-swatches" id="machineThemeSwatches"></div>
                 <div class="machine-theme-preview" id="machineThemePreview"></div>
             </div>
             <div class="machine-theme-custom-inputs" id="machineThemeCustomInputs" style="display:none">
-                <input type="color" id="machineThemeCustomA" class="machine-theme-color-input" value="#f59e0b">
+                <input type="color" id="machineThemeCustomA" class="machine-theme-color-input" aria-label="Custom colour" data-i18n-aria-label="settings_machine_theme_custom" value="#f59e0b">
                 <label class="machine-theme-gradient-toggle">
                     <input type="checkbox" id="machineThemeGradientToggle">
                     <span data-i18n="settings_machine_theme_gradient">Verlauf</span>
                 </label>
-                <input type="color" id="machineThemeCustomB" class="machine-theme-color-input" value="#f59e0b" style="display:none">
+                <input type="color" id="machineThemeCustomB" class="machine-theme-color-input" aria-label="Custom colour" data-i18n-aria-label="settings_machine_theme_custom" value="#f59e0b" style="display:none">
             </div>
             <div class="machine-form-actions">
                 <button id="machineFormTestBtn" type="button" class="backup-btn" data-i18n="settings_machine_test">Verbindung testen</button>
@@ -1761,7 +1761,7 @@
         </div>
     </form>
     <button type="button" class="lib-btn-sm scan-photo-btn" data-action="scan-take-photo" data-i18n="scan_take_photo">Foto aufnehmen</button>
-    <input id="scanPhotoInput" type="file" accept="image/*" capture="environment" hidden>
+    <input id="scanPhotoInput" type="file" accept="image/*" capture="environment" aria-label="Take photo" data-i18n-aria-label="scan_take_photo" hidden>
     <p style="color:var(--gray-600);font-size:.7rem;text-align:center;margin:0">
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
@@ -1783,12 +1783,12 @@
         </label>
 
         <div id="backupPassphraseRow" class="backup-passphrase-row" style="display:none">
-            <label class="machine-form-label" data-i18n="backup_passphrase_label">Passwort für Token &amp; MQTT-Login</label>
+            <label for="backupPassphraseInput" class="machine-form-label" data-i18n="backup_passphrase_label">Passwort für Token &amp; MQTT-Login</label>
             <input type="password" id="backupPassphraseInput" class="machine-form-input" autocomplete="new-password" data-i18n-placeholder="backup_passphrase_placeholder">
             <p class="backup-modal-hint" data-i18n="backup_passphrase_hint">Nur du kennst dieses Passwort — GLP speichert es nirgends. Vergisst du es, bleibt der Rest des Backups nutzbar, nur Token und MQTT-Login können dann nicht wiederhergestellt werden.</p>
         </div>
         <div id="backupPassphraseConfirmRow" class="backup-passphrase-row" style="display:none">
-            <label class="machine-form-label" data-i18n="backup_passphrase_confirm_label">Passwort bestätigen</label>
+            <label for="backupPassphraseConfirm" class="machine-form-label" data-i18n="backup_passphrase_confirm_label">Passwort bestätigen</label>
             <input type="password" id="backupPassphraseConfirm" class="machine-form-input" autocomplete="new-password">
         </div>
 

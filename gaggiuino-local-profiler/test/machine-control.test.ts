@@ -35,6 +35,7 @@ const {
 interface FakeElement {
   className: string;
   textContent: string;
+  innerHTML: string;
   style: Record<string, string>;
   disabled: boolean;
   checked: boolean;
@@ -43,7 +44,7 @@ interface FakeElement {
 function makeFakeDocument() {
   const registry = new Map<string, FakeElement>();
   function makeElement(): FakeElement {
-    return { className: '', textContent: '', style: {}, disabled: false, checked: false };
+    return { className: '', textContent: '', innerHTML: '', style: {}, disabled: false, checked: false };
   }
   return {
     getElementById: (id: string): FakeElement => {
@@ -97,7 +98,7 @@ describe('machine-control flush button (#1324)', () => {
     renderMachineControl({ machineId: 7, canFlush: false, flushing: false, brewConfirm: ['water', 'futureKey'] });
 
     expect(doc.getElementById('brewConfirmModal').style.display).toBe('flex');
-    expect(doc.getElementById('brewConfirmWarnings').textContent).toBe('Water tank low · futureKey');
+    expect(doc.getElementById('brewConfirmWarnings').innerHTML).toBe('<li>Water tank low</li><li>futureKey</li>');
   });
 
   it('confirms the brew and hides the dialog immediately (optimistic)', async () => {
