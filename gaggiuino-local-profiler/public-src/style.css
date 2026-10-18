@@ -73,7 +73,7 @@
                same "brightest text" token the rest of the app uses (e.g.
                .analytics-section-title), themed correctly in both modes. */
             color: var(--gray-200);
-            background: color-mix(in srgb, var(--gray-200) 2%, transparent);
+            background: color-mix(in srgb, var(--paper) 2%, transparent);
         }
 
         #shot-count { color: var(--gray-600); font-size: var(--fs-2); font-weight: normal; margin-left: var(--sp-2); }
@@ -96,7 +96,7 @@
             padding-right: var(--sp-1);
             transition: background .15s;
         }
-        .shot-wrapper:hover           { background: color-mix(in srgb, var(--gray-200) 4.5%, transparent); }
+        .shot-wrapper:hover           { background: color-mix(in srgb, var(--paper) 4.5%, transparent); }
         .shot-wrapper.active          { background: var(--gray-800); }
         .shot-wrapper.compare-active  { background: color-mix(in srgb, var(--compare) 12%, transparent); }
 
@@ -215,7 +215,7 @@
 
         #sidebar-footer {
             padding: var(--sp-3) var(--sp-5);
-            background: color-mix(in srgb, var(--gray-200) 2%, transparent);
+            background: color-mix(in srgb, var(--paper) 2%, transparent);
             font-size: var(--fs-1);
             color: var(--gray-500);
         }
@@ -334,7 +334,7 @@
             white-space: nowrap; position: relative;
             transition: background .15s, color .15s, border-color .15s;
         }
-        .topbar-nav:hover  { color: var(--gray-200); background: color-mix(in srgb, var(--gray-200) 4%, transparent); }
+        .topbar-nav:hover  { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 4%, transparent); }
         /* #816: pill -> underline (Border-Diät). --accent-ink rather than the
            raw --accent-from/-to gradient used for underlines elsewhere
            (.lib-tab.active) — that gradient's weaker stop measures as low as
@@ -1131,7 +1131,7 @@
             cursor: pointer; text-align: left;
             transition: background .15s, color .15s;
         }
-        #lsToggle:hover { background: color-mix(in srgb, var(--gray-200) 4%, transparent); color: var(--gray-100); }
+        #lsToggle:hover { background: color-mix(in srgb, var(--paper) 4%, transparent); color: var(--gray-100); }
         .ls-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--gray-500); }
         .ls-chevron { width: 16px; height: 16px; flex-shrink: 0; margin-left: auto; color: var(--gray-600); transition: transform .2s; }
         #live-shot-setup.open #lsToggle {
@@ -1168,19 +1168,19 @@
             transition: border-color .15s, color .15s;
         }
         #lsReset:hover { border-color: var(--gray-500); color: var(--gray-300); }
-        .ordered-by-badge { font-size: var(--fs-1); color: var(--warn); background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; gap: var(--sp-1); }
+        .ordered-by-badge { font-size: var(--fs-1); color: var(--warn); background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; gap: var(--sp-1); }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
 
         /* ── Drink type pills ── */
         .drink-pills { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 2px; }
-        .drink-pill { background: color-mix(in srgb, var(--gray-200) 4%, transparent); border: 1px solid var(--gray-700); border-radius: 20px; color: var(--gray-400); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-3); cursor: pointer; transition: border-color .15s, color .15s, background .15s; white-space: nowrap; }
-        .drink-pill:hover { border-color: var(--gray-500); color: var(--gray-200); background: color-mix(in srgb, var(--gray-200) 7%, transparent); }
+        .drink-pill { background: color-mix(in srgb, var(--paper) 4%, transparent); border: 1px solid var(--gray-700); border-radius: 20px; color: var(--gray-400); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-3); cursor: pointer; transition: border-color .15s, color .15s, background .15s; white-space: nowrap; }
+        .drink-pill:hover { border-color: var(--gray-500); color: var(--gray-200); background: color-mix(in srgb, var(--paper) 7%, transparent); }
         .drink-pill.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
 
         /* ── Theme toggle (settings) ── */
         .theme-toggle-group { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
-        .theme-btn { background: color-mix(in srgb, var(--gray-200) 4%, transparent); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-400); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-4); cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: var(--sp-2); }
+        .theme-btn { background: color-mix(in srgb, var(--paper) 4%, transparent); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-400); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-4); cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: var(--sp-2); }
         .theme-btn:hover { border-color: var(--gray-500); color: var(--gray-200); }
         .theme-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
 
@@ -1324,7 +1324,7 @@
            remove button, so this never touches the editor. */
         .flavor-chip-static { padding: 1px var(--sp-2); font-size: var(--fs-1); background: transparent; border-color: var(--gray-700); color: var(--gray-500); }
         .origin-chip { background: color-mix(in srgb, var(--ice) 12%, transparent); border-color: color-mix(in srgb, var(--ice) 30%, transparent); color: var(--ice); }
-        .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: color-mix(in srgb, var(--gray-200) 8%, transparent); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
+        .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         /* #1350: "Aromas" block in the bean detail sheet — the inline mini
            wheel next to highlight chips coloured from each flavour's segment. */
@@ -1337,7 +1337,7 @@
         /* #1372: lit segments carry the same white outline as the large wheel. */
         .lib-aroma-seg.is-lit { stroke: var(--paper); stroke-width: 1.6; }
         .lib-aroma-svg.has-hl .lib-aroma-seg { opacity: .35; }
-        .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--gray-200) 65%, transparent)); }
+        .lib-aroma-svg.has-hl .lib-aroma-seg.is-hl { opacity: 1; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--paper) 65%, transparent)); }
         .lib-aroma-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); flex: 1 1 120px; }
         /* #1543: the note's own colour as text was unreadable for dark notes
            (e.g. Molasses) on the dark theme -- keep it as the border/background
@@ -1368,7 +1368,7 @@
         .lib-form-field-check { display: flex; align-items: center; padding-top: var(--sp-5); }
         .lib-check-label { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; font-size: var(--fs-2); color: var(--gray-300); }
         .lib-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; }
-        .lib-new-bag-form { margin-top: var(--sp-2); padding: var(--sp-3) var(--sp-3); background: color-mix(in srgb, var(--gray-200) 3%, transparent); border: 1px solid var(--gray-800); border-radius:var(--radius); }
+        .lib-new-bag-form { margin-top: var(--sp-2); padding: var(--sp-3) var(--sp-3); background: color-mix(in srgb, var(--paper) 3%, transparent); border: 1px solid var(--gray-800); border-radius:var(--radius); }
         .lib-new-bag-fields { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: wrap; }
         /* Material 3 "filled text field": tinted fill + flat top corners +
            an underline that thickens/accents on focus, instead of a plain
@@ -1408,7 +1408,7 @@
            state layer gives it the same "this is a control" affordance as
            the icon buttons below, not just a static glyph. */
         .lib-bag-drag-handle { cursor: grab; color: var(--gray-600); font-size: 16px; line-height: 1; touch-action: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; transition: background .15s, color .15s; }
-        .lib-bag-drag-handle:hover { background: color-mix(in srgb, var(--gray-200) 6%, transparent); color: var(--gray-400); }
+        .lib-bag-drag-handle:hover { background: color-mix(in srgb, var(--paper) 6%, transparent); color: var(--gray-400); }
         .lib-bag-drag-handle:active { cursor: grabbing; }
         .lib-bag-drag-list { display: flex; flex-direction: column; gap: var(--sp-2); }
         /* State badges as Material 3 assist chips: tonal fill, no border,
@@ -1426,8 +1426,12 @@
            "standard icon button") instead of just a color change on the
            glyph itself. */
         .lib-bag-edit-btn, .lib-bag-del { background: none; border: none; color: var(--gray-600); cursor: pointer; width: 32px; height: 32px; border-radius: 999px; transition: background .15s, color .15s; display: flex; align-items: center; justify-content: center; }
-        .lib-bag-edit-btn:hover { background: color-mix(in srgb, var(--gray-200) 8%, transparent); color: var(--gray-200); }
-        .lib-bag-del { font-size: var(--fs-1); }
+        .lib-bag-edit-btn:hover { background: color-mix(in srgb, var(--paper) 8%, transparent); color: var(--gray-200); }
+        /* #1618: this used to sit in the legacy block after the shared
+           Material icon-button rule and won on source order. The button is
+           still rendered (views/library/bags.ts), so its effective values
+           live here instead of being deleted with the dead siblings. */
+        .lib-bag-del { color: var(--gray-700); font-size: var(--fs-1); padding: 0 2px; line-height: 1; transition: color .15s; margin-left: auto; }
         .lib-bag-del:hover { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
         .lib-bag-card-details { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-1); }
         .lib-bag-detail { display: flex; flex-direction: column; gap: 1px; }
@@ -1439,7 +1443,7 @@
            a tonal badge) instead of the old plain text-link button with a
            hand-swapped ▸/▾ character. */
         .lib-bag-history-toggle { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; padding: var(--sp-2) var(--sp-3); border-radius: 999px; margin-top: var(--sp-2); color: var(--gray-400); font-size: var(--fs-1); font-weight: 600; transition: background .15s, color .15s; }
-        .lib-bag-history-toggle:hover { background: color-mix(in srgb, var(--gray-200) 5%, transparent); color: var(--gray-200); }
+        .lib-bag-history-toggle:hover { background: color-mix(in srgb, var(--paper) 5%, transparent); color: var(--gray-200); }
         .lib-bag-history-toggle .lib-bag-chevron { transition: transform .2s ease; }
         .lib-bag-history-toggle.expanded .lib-bag-chevron { transform: rotate(90deg); }
         .lib-bag-past-count { margin-left: auto; background: var(--gray-700); color: var(--gray-400); border-radius: 999px; padding: 1px var(--sp-2); font-size: 10px; font-weight: 700; }
@@ -1470,7 +1474,7 @@
         .lib-recipe-step-n { color: var(--gray-600); font-size: var(--fs-1); min-width: 16px; flex-shrink: 0; }
         .lib-recipe-step-dur { color: var(--gray-600); font-size: var(--fs-1); flex-shrink: 0; white-space: nowrap; }
         .lib-btn-sm { background: none; border: none; border-radius:var(--radius); color: var(--gray-600); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor: pointer; transition: background .15s, color .15s; display: inline-flex; align-items: center; justify-content: center; }
-        .lib-btn-sm:hover { background: color-mix(in srgb, var(--gray-200) 6%, transparent); color: var(--gray-400); }
+        .lib-btn-sm:hover { background: color-mix(in srgb, var(--paper) 6%, transparent); color: var(--gray-400); }
         .lib-btn-sm.del:hover { background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err); }
         .lib-btn-icon { padding: var(--sp-1); min-width: 28px; min-height: 28px; }
         .lib-add-form { background: var(--gray-800); border-radius:var(--radius); padding: var(--sp-3); display: none; margin-bottom: var(--sp-2); }
@@ -1543,7 +1547,7 @@
         .lib-variant-picker-option input { accent-color: var(--accent); }
         .lib-import-notice { margin-bottom: var(--sp-3); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-1); color:var(--gray-300); }
         .lib-import-notice-hint { color:var(--gray-500); margin-top: var(--sp-1); }
-        .lib-import-notice-warning { background:color-mix(in srgb, var(--accent) 10%, transparent); border-color:color-mix(in srgb, var(--accent) 35%, transparent); color:var(--warn); }
+        .lib-import-notice-warning { background:color-mix(in srgb, var(--amber) 10%, transparent); border-color:color-mix(in srgb, var(--amber) 35%, transparent); color:var(--warn); }
         /* Opt-in Brew Guide recipe candidates (#451) — e.g. "Milky Espresso"
            blocks discarded from the bean's own brewTempC/brewRatio fields. */
         .lib-import-extra-recipes { margin-bottom: var(--sp-3); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); }
@@ -2040,7 +2044,7 @@
         #preheat-status-text { font-size: var(--fs-2); color: var(--gray-400); font-weight: 600; }
         #preheat-bar-bg {
             width: 100%; height: 6px;
-            background: color-mix(in srgb, var(--gray-200) 8%, transparent); border-radius: 3px; overflow: hidden;
+            background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: 3px; overflow: hidden;
             margin: var(--sp-3) 0 var(--sp-2);
         }
         #preheat-bar-fill {
@@ -2069,7 +2073,7 @@
         #beanFilterIndicator {
             display: flex; align-items: center; gap: var(--sp-2);
             margin-top: var(--sp-2); padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
-            background: color-mix(in srgb, var(--accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+            background: color-mix(in srgb, var(--amber) 10%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
             border-radius: var(--radius); font-size: var(--fs-1); color: var(--accent-ink);
         }
         .bean-filter-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2077,7 +2081,7 @@
             background: none; border: none; color: var(--accent-ink); cursor: pointer;
             font-size: var(--fs-1); line-height: 1; padding: 2px var(--sp-1); border-radius: var(--radius);
         }
-        .bean-filter-clear:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+        .bean-filter-clear:hover { background: color-mix(in srgb, var(--amber) 15%, transparent); }
 
         /* ── Sidebar score pill ── */
         .sidebar-score {
@@ -2113,7 +2117,7 @@
         /* #397: buttons live on fill + hover instead of a persistent 1px
            border. */
         .sort-btn {
-            background: color-mix(in srgb, var(--gray-200) 4%, transparent);
+            background: color-mix(in srgb, var(--paper) 4%, transparent);
             color: var(--gray-500);
             border: 1px solid transparent;
             border-radius:var(--radius);
@@ -2126,7 +2130,7 @@
             align-items: center;
             gap: var(--sp-1);
         }
-        .sort-btn:hover     { color: var(--gray-200); background: color-mix(in srgb, var(--gray-200) 8%, transparent); }
+        .sort-btn:hover     { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 8%, transparent); }
         .sort-btn.active    { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
 
         /* ── Freshness badge ── */
@@ -2137,7 +2141,7 @@
             margin-left: var(--sp-2); vertical-align: middle;
         }
         .freshness-fresh  { background: color-mix(in srgb, var(--ok) 15%, transparent);  color: var(--ok); }
-        .freshness-ok     { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent-ink); }
+        .freshness-ok     { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--accent-ink); }
         .freshness-old    { background: color-mix(in srgb, var(--err) 12%, transparent);  color: var(--err); }
 
         /* Shot-detail header photo thumbnail (#448) — originally the mobile
@@ -2194,10 +2198,10 @@
         .comp-toggle { background: none; border: none; color: inherit; font-size: var(--fs-1); cursor: pointer; padding: 0 var(--sp-2) 0 0; opacity: .7; flex-shrink: 0; display: inline-block; transition: transform .15s, opacity .15s; }
         .comp-toggle:hover { opacity: 1; }
         .grind-comparative.expanded .comp-toggle { transform: rotate(90deg); }
-        .comp-shots-panel { display: none; width: 100%; margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid color-mix(in srgb, var(--gray-200) 10%, transparent); }
+        .comp-shots-panel { display: none; width: 100%; margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid color-mix(in srgb, var(--paper) 10%, transparent); }
         .grind-comparative.expanded .comp-shots-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--sp-2); }
-        .comp-thumb { background: color-mix(in srgb, var(--gray-200) 5%, transparent); border: 1px solid color-mix(in srgb, var(--gray-200) 8%, transparent); border-radius:var(--radius); overflow: hidden; cursor: pointer; transition: border-color .15s, background .15s; }
-        .comp-thumb:hover { background: color-mix(in srgb, var(--gray-200) 9%, transparent); border-color: color-mix(in srgb, var(--gray-200) 20%, transparent); }
+        .comp-thumb { background: color-mix(in srgb, var(--paper) 5%, transparent); border: 1px solid color-mix(in srgb, var(--paper) 8%, transparent); border-radius:var(--radius); overflow: hidden; cursor: pointer; transition: border-color .15s, background .15s; }
+        .comp-thumb:hover { background: color-mix(in srgb, var(--paper) 9%, transparent); border-color: color-mix(in srgb, var(--paper) 20%, transparent); }
         .comp-thumb-chart { background: color-mix(in srgb, var(--scrim) 20%, transparent); }
         .comp-thumb-no-data { height: 65px; display: flex; align-items: center; justify-content: center; color: var(--gray-600); font-size: var(--fs-1); }
         /* #811 follow-up: repeated raw font-size:.85rem literals (analytics empty
@@ -2407,7 +2411,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: color-mix(in srgb, var(--gray-200) 4%, transparent);
+            background: color-mix(in srgb, var(--paper) 4%, transparent);
             border: 1px solid var(--gray-700);
             border-radius:var(--radius);
             color: var(--gray-500);
@@ -2419,7 +2423,7 @@
             transition: background .2s, color .2s, border-color .2s;
             flex-shrink: 0;
         }
-        #collapseBtn:hover { background: color-mix(in srgb, var(--gray-200) 8%, transparent); border-color: var(--gray-600); color: var(--gray-200); }
+        #collapseBtn:hover { background: color-mix(in srgb, var(--paper) 8%, transparent); border-color: var(--gray-600); color: var(--gray-200); }
         #expandSidebarBtn {
             display: none;
             align-items: center;
@@ -2737,7 +2741,7 @@
         .maint-card-title { flex:1; font-size:var(--fs-2); font-weight:600; color:var(--gray-100); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .maint-card-chip { padding:2px 8px; border-radius:var(--radius-sm); font-size:var(--fs-1); font-weight:600; flex-shrink:0; }
         .maint-card-chip.due    { background:color-mix(in srgb, var(--err) 18%, transparent);  color:var(--err); }
-        .maint-card-chip.soon   { background:color-mix(in srgb, var(--accent) 18%, transparent);  color:var(--accent-ink); }
+        .maint-card-chip.soon   { background:color-mix(in srgb, var(--amber-deep) 18%, transparent);  color:var(--accent-ink); }
         .maint-card-chip.ok     { background:color-mix(in srgb, var(--ok) 18%, transparent);  color:var(--ok); }
         .maint-card-chip.never  { background:var(--gray-800); color:var(--gray-500); }
         /* Progress bar */
@@ -3123,7 +3127,7 @@
         .order-eta-custom { width:52px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); text-align:center; outline:none; }
         .order-eta-suggest { font-size: var(--fs-1); color:var(--gray-600); align-self:center; }
         .order-queue-hint { font-size: var(--fs-1); color:var(--gray-600); margin-left: var(--sp-2); }
-        .orders-queue-banner { background:color-mix(in srgb, var(--accent) 7%, transparent); border:1px solid color-mix(in srgb, var(--accent) 20%, transparent); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-1); color:var(--warn); margin-bottom: var(--sp-2); display:flex; align-items:center; gap: var(--sp-1); }
+        .orders-queue-banner { background:color-mix(in srgb, var(--amber) 7%, transparent); border:1px solid color-mix(in srgb, var(--amber) 20%, transparent); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-1); color:var(--warn); margin-bottom: var(--sp-2); display:flex; align-items:center; gap: var(--sp-1); }
         .order-btn { border:none; border-radius:var(--radius); font-size: var(--fs-1); font-weight:600; padding: var(--sp-2) var(--sp-3); cursor:pointer; transition:all .15s; }
         .order-btn.accept  { background:color-mix(in srgb, var(--ok) 15%, transparent); color:var(--ok); border:1px solid color-mix(in srgb, var(--ok) 30%, transparent); }
         .order-btn.accept:hover { background:color-mix(in srgb, var(--ok) 25%, transparent); }
@@ -3190,7 +3194,7 @@
         .orders-menu-use-milks { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); padding: 2px var(--sp-2); cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; }
         .orders-menu-use-milks:hover { border-color:var(--gray-500); color:var(--gray-300); }
         .orders-menu-use-milks.active { border-color:var(--milk-ink); color:var(--milk-ink); background:color-mix(in srgb, var(--milk-ink) 8%, transparent); }
-        .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--gray-200) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
+        .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
         .ann-ordered-by-label { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .ann-ordered-by-val { font-size: var(--fs-1); color:var(--gray-200); }
         .orders-menu-add-row { display:flex; gap: var(--sp-2); align-items:center; flex-wrap:wrap; }
@@ -3539,7 +3543,7 @@
             position:relative; width:100%; max-width:660px;
             background:var(--ach-paper); color:var(--ach-ink);
             border-radius:7px; padding:26px 26px 20px;
-            box-shadow:0 1px 0 color-mix(in srgb, var(--gray-200) 50%, transparent) inset, 0 2px 0 color-mix(in srgb, var(--scrim) 22%, transparent), 0 16px 34px color-mix(in srgb, var(--scrim) 34%, transparent);
+            box-shadow:0 1px 0 color-mix(in srgb, var(--paper) 50%, transparent) inset, 0 2px 0 color-mix(in srgb, var(--scrim) 22%, transparent), 0 16px 34px color-mix(in srgb, var(--scrim) 34%, transparent);
         }
         .ach-frame { position:absolute; inset:9px; border:1px solid color-mix(in srgb, var(--ach-ink) 26%, transparent); border-radius:4px; pointer-events:none; }
         .ach-head { display:flex; flex-direction:column; align-items:center; gap:2px; padding-bottom:16px; }
