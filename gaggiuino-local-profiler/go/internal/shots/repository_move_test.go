@@ -1,6 +1,10 @@
 package shots
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // ── MoveMisfiledShot (#1162) ────────────────────────────────────────────
 
@@ -162,5 +166,30 @@ func TestMoveMisfiledShot_TargetTakenLeavesBoth(t *testing.T) {
 	}
 	if ts, _ := tgt["timestamp"].(int64); ts != 7000 {
 		t.Fatalf("target shot 20000005 timestamp = %#v, want 7000 (untouched)", tgt["timestamp"])
+	}
+}
+
+// TestMoveShotImageFiles_IgnoresUnknownExtension pins that an extension
+// outside the whitelist never turns into a rename, even when the traversed
+// path resolves to a real file next to the photo directory.
+func TestMoveShotImageFiles_IgnoresUnknownExtension(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "images")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"shot-1...", "shot-2..."} {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	MoveShotImageFiles(dir, 1, 2, "../victim")
+
+	if data, err := os.ReadFile(victim); err != nil || string(data) != "keep" {
+		t.Fatalf("victim at traversed path was renamed or removed: data=%q err=%v", data, err)
 	}
 }
