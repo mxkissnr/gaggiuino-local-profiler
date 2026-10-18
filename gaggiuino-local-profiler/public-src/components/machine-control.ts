@@ -10,6 +10,7 @@ import {
 } from '../api/machines.js';
 import type { MachineControlState } from '../api/types.js';
 import { t } from '../i18n.js';
+import { esc, html, joinHtml } from '../utils.js';
 
 // #1409/#1324: a warning key from the machine maps to a machine_warn_<key>
 // label; a key we don't know yet (a newer firmware) falls back to the raw key
@@ -63,7 +64,7 @@ export function renderMachineControl(mc: MachineControlState | null | undefined)
   modal.style.display = visible ? 'flex' : 'none';
   if (!warnings) return;
   const list = document.getElementById('brewConfirmWarnings');
-  if (list) list.textContent = warnings.map(machineWarningLabel).join(' · ');
+  if (list) list.innerHTML = joinHtml(warnings.map(w => html`<li>${esc(machineWarningLabel(w))}</li>`));
 }
 
 export async function toggleFlush(): Promise<void> {
