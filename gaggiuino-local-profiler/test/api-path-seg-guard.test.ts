@@ -32,10 +32,10 @@ function violations(): Violation[] {
   for (const file of sourceFiles(SRC_DIR)) {
     const source = readFileSync(file, 'utf8');
     for (const literalMatch of source.matchAll(/`([^`]*)`/g)) {
-      const literal = literalMatch[1];
+      const literal = literalMatch[1] ?? '';
       if (!literal.trimStart().startsWith('api/')) continue;
       for (const exprMatch of literal.matchAll(/\$\{([^}]*)\}/g)) {
-        const expression = exprMatch[1].trim();
+        const expression = (exprMatch[1] ?? '').trim();
         if (ALLOWED_IDENTS.has(expression)) continue;
         if (/^(pathSeg|encodeURIComponent)\(.*\)$/s.test(expression)) continue;
         const index = (literalMatch.index ?? 0) + 1 + (exprMatch.index ?? 0);

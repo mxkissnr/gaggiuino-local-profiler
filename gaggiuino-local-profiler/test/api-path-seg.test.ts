@@ -75,7 +75,7 @@ describe('API clients encode ids (#1747)', () => {
     await deleteMaintenanceLogEntry(3);
     expect(sentUrl()).toBe('api/maintenance/log/3');
     fetchMock.mockClear();
-    await postOrderAccept(3, 5);
+    await postOrderAccept('3', 5);
     expect(sentUrl()).toBe('api/orders/3/accept');
     fetchMock.mockClear();
     await sendShotToTrash(3);
