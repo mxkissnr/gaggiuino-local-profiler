@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -298,5 +299,52 @@ func TestGaggiuinoAdapter_ListProfiles_MalformedResponseErrors(t *testing.T) {
 	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
 	if _, err := a.ListProfiles(context.Background(), testMachine(srv.URL)); err == nil {
 		t.Fatal("ListProfiles with a non-JSON body returned nil error; want an error so the handler keeps the local cache")
+	}
+}
+
+// TestGaggiuinoAdapter_ProfileActionsRejectNonNumericIDs pins #1747: profile
+// ids are unsigned integers on the wire, so a non-numeric id must be rejected
+// before any request reaches the machine.
+func TestGaggiuinoAdapter_ProfileActionsRejectNonNumericIDs(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":5,"name":"REST Profile"}`)
+	}))
+	defer srv.Close()
+
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+	m := testMachine(srv.URL)
+	ctx := context.Background()
+
+	for _, id := range []string{"abc", "1/../x", "-1", "4294967296"} {
+		if _, err := a.GetProfile(ctx, m, id); err == nil {
+			t.Errorf("GetProfile(%q) returned nil error", id)
+		}
+		if _, err := a.DeleteProfile(ctx, m, id); err == nil {
+			t.Errorf("DeleteProfile(%q) returned nil error", id)
+		}
+		if err := a.SelectProfile(ctx, m, id); err == nil {
+			t.Errorf("SelectProfile(%q) returned nil error", id)
+		}
+	}
+	if got := atomic.LoadInt32(&requests); got != 0 {
+		t.Fatalf("machine received %d request(s) for invalid ids; want 0", got)
+	}
+
+	// A numeric id still reaches the machine as before.
+	if _, err := a.GetProfile(ctx, m, "5"); err != nil {
+		t.Fatalf("GetProfile(\"5\"): %v", err)
+	}
+	if err := a.SelectProfile(ctx, m, "5"); err != nil {
+		t.Fatalf("SelectProfile(\"5\"): %v", err)
+	}
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	if _, err := a.DeleteProfile(ctx, testMachine(fake.URL), "5"); err != nil {
+		t.Fatalf("DeleteProfile(\"5\"): %v", err)
 	}
 }
