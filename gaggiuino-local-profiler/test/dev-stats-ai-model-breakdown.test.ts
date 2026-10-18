@@ -1,27 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import { isAiCoAuthor, billingTypeFor, aiModelInChunk } from '../scripts/dev-stats.mts';
 
-// #1100: the model breakdown used to only recognize `Claude ...` co-author
-// strings, so every DeepSeek/openhands/future-model commit silently fell out
-// of both the model table and the AI-commit/line counts. isAiCoAuthor()
-// replaces that hardcoded regex with an exclude-list of known non-AI
-// trailers (humans, dependabot/renovate) — everything else counts as AI.
-describe('dev-stats isAiCoAuthor (#1100)', () => {
-    it('accepts Claude co-authors, any era/model string', () => {
+// #1769: isAiCoAuthor() now uses an allowlist of known AI model name prefixes.
+// The previous exclude-list treated every unrecognized trailer as AI, so human
+// co-authors missing from it (e.g. m471j4) were counted as AI models.
+describe('dev-stats isAiCoAuthor (#1769)', () => {
+    it('accepts known AI model co-authors', () => {
+        expect(isAiCoAuthor('Claude Opus 5.5')).toBe(true);
         expect(isAiCoAuthor('Claude Sonnet 5')).toBe(true);
-        expect(isAiCoAuthor('Claude Opus 4.8')).toBe(true);
         expect(isAiCoAuthor('Claude')).toBe(true);
-    });
-
-    it('accepts non-Claude AI co-authors', () => {
+        expect(isAiCoAuthor('Claude Haiku 4.5')).toBe(true);
+        expect(isAiCoAuthor('Claude Fable 5')).toBe(true);
+        expect(isAiCoAuthor('DeepSeek V4.1 Flash')).toBe(true);
         expect(isAiCoAuthor('DeepSeek V4 Flash')).toBe(true);
         expect(isAiCoAuthor('GLP-Firma Coder (DeepSeek V4 Flash)')).toBe(true);
-        expect(isAiCoAuthor('openhands')).toBe(true);
+        expect(isAiCoAuthor('GLP-Firma Planner (Claude Sonnet 5)')).toBe(true);
+        expect(isAiCoAuthor('Big Pickle')).toBe(true);
     });
 
-    it('rejects known human co-authors', () => {
+    it('rejects human co-authors', () => {
+        expect(isAiCoAuthor('m471j4')).toBe(false);
         expect(isAiCoAuthor('mxkissnr')).toBe(false);
+        expect(isAiCoAuthor('ppops-oh')).toBe(false);
+        expect(isAiCoAuthor('openhands')).toBe(false);
         expect(isAiCoAuthor('Paul-Lukas Schäfer')).toBe(false);
+        expect(isAiCoAuthor('Paul Lukas Schäfer')).toBe(false);
+        expect(isAiCoAuthor('Jane Doe')).toBe(false);
     });
 
     it('rejects known bots', () => {
@@ -47,6 +51,20 @@ describe('dev-stats aiModelInChunk (#1597)', () => {
 
     it('returns undefined for a human-only co-author', () => {
         const chunk = 'Fix the thing\n\nCo-authored-by: mxkissnr <mx@example.com>';
+        expect(aiModelInChunk(chunk)).toBeUndefined();
+    });
+
+    // #1769: an unknown human trailer must not hide the AI trailer that follows it.
+    it('skips a human trailer and finds the AI model after it', () => {
+        const chunk =
+            'Fix the thing\n\n' +
+            'Co-authored-by: m471j4 <m471j4@users.noreply.github.com>\n' +
+            'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>';
+        expect(aiModelInChunk(chunk)).toBe('Claude Opus 5.5');
+    });
+
+    it('returns undefined when only an unknown human trailer is present', () => {
+        const chunk = 'Fix the thing\n\nCo-authored-by: m471j4 <m471j4@users.noreply.github.com>';
         expect(aiModelInChunk(chunk)).toBeUndefined();
     });
 });
