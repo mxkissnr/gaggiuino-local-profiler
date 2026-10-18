@@ -118,6 +118,33 @@ func TestGaggiMateParseSlog_AllowsLargerDevicePadding(t *testing.T) {
 	}
 }
 
+// TestGaggiMateParseSlog_RejectsEmptyFieldsMask covers #1747: with no fields
+// active the computed sample size stays 0, which defeated the #992 floor and
+// let the device-reported stride drive the sample count.
+func TestGaggiMateParseSlog_RejectsEmptyFieldsMask(t *testing.T) {
+	data := buildGaggiMateSlog(t, 7, 0, 250, nil)
+	if _, err := gaggiMateParseSlog(data); err == nil {
+		t.Fatal("gaggiMateParseSlog accepted a header with fieldsMask 0")
+	}
+}
+
+// TestGaggiMateParseSlog_RejectsExcessiveSampleCount covers #1747: a header
+// announcing more samples than gaggiMateSlogMaxSamples is rejected before the
+// sample slice is preallocated, while the same fixture still parses when the
+// count is plausible.
+func TestGaggiMateParseSlog_RejectsExcessiveSampleCount(t *testing.T) {
+	const mask = 0x3FFF
+	data := buildGaggiMateSlog(t, 7, mask, 250, []gaggiMateTestSample{gaggiMateV7Sample(0)})
+	if _, err := gaggiMateParseSlog(data); err != nil {
+		t.Fatalf("valid fixture: gaggiMateParseSlog: %v", err)
+	}
+
+	binary.LittleEndian.PutUint32(data[16:20], uint32(gaggiMateSlogMaxSamples+1))
+	if _, err := gaggiMateParseSlog(data); err == nil {
+		t.Fatalf("gaggiMateParseSlog accepted a sample count of %d", gaggiMateSlogMaxSamples+1)
+	}
+}
+
 // gaggiMateTestSample carries the raw on-wire value of every .slog sample
 // field. Fields that are not present in fieldsMask are ignored.
 type gaggiMateTestSample struct {

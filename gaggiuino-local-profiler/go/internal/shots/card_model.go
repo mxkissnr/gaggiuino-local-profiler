@@ -13,6 +13,11 @@ import (
 
 const cardPX = 52.0 // card design's base px unit
 
+// cardAxisMaxTicks bounds the axis tick loops independently of the values
+// driving them, so a shot with an implausible duration or temperature cannot
+// emit unbounded SVG elements.
+const cardAxisMaxTicks = 200
+
 type cardModel struct {
 	shot   Shot
 	score  *int
@@ -235,6 +240,7 @@ func (c *cardModel) svg() string {
 	if d := cardNum(c.shot["duration"]); d != 0 {
 		totalSec = d / 10
 	}
+	totalSec = clampCardRange(totalSec, 1, 3600)
 
 	profileName := firstNonEmpty(
 		mapString(c.shot["profile"], "name"),
@@ -413,10 +419,7 @@ func (c *cardModel) svg() string {
 	plotH := outerH - chartT - chartB - legendH
 
 	leftMax := 12.0
-	tempMax := math.Ceil(cardMaxOr0(temp) + 5)
-	if tempMax == 0 {
-		tempMax = 100
-	}
+	tempMax := clampCardRange(math.Ceil(cardMaxOr0(temp)+5), 1, 300)
 	yLeft := func(v float64) float64 { return plotY + plotH - clamp01(v/leftMax)*plotH }
 	yRight := func(v float64) float64 { return plotY + plotH - clamp01(v/tempMax)*plotH }
 	xTime := func(i int) float64 { return plotX + (float64(i)/math.Max(float64(nPts-1), 1))*plotW }
@@ -441,7 +444,7 @@ func (c *cardModel) svg() string {
 	case tempMax <= 80:
 		rightStep = 20
 	}
-	for v := rightStep; v < tempMax; v += rightStep {
+	for v, i := rightStep, 0; v < tempMax && i < cardAxisMaxTicks; v, i = v+rightStep, i+1 {
 		gy := yRight(v)
 		s.text(outerX+outerW-chartR+5, gy+5, 15, false, p.textMute, "", num1(v))
 	}
@@ -453,7 +456,7 @@ func (c *cardModel) svg() string {
 	case totalSec > 40:
 		xTickStep = 10
 	}
-	for t := 0.0; t <= totalSec; t += xTickStep {
+	for t, i := 0.0, 0; t <= totalSec && i < cardAxisMaxTicks; t, i = t+xTickStep, i+1 {
 		gx := plotX + (t/totalSec)*plotW
 		s.line(gx, plotY, gx, plotY+plotH, p.border, 1, "2,4")
 		m := int(t) / 60
@@ -707,6 +710,18 @@ func clamp01(v float64) float64 {
 	}
 	if v > 1 {
 		return 1
+	}
+	return v
+}
+
+// clampCardRange bounds v to [lo, hi]; NaN and infinities count as out of
+// range, so a malformed shot value falls back to the nearest bound.
+func clampCardRange(v, lo, hi float64) float64 {
+	if math.IsNaN(v) || v < lo {
+		return lo
+	}
+	if math.IsInf(v, 1) || v > hi {
+		return hi
 	}
 	return v
 }
