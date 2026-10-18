@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -983,5 +984,164 @@ func TestRestore_RejectsUnsafeOrderAndNotifyServiceValues(t *testing.T) {
 	}
 	if got := mapping["ha-user-2"]; got != "notify.mobile_app_x" {
 		t.Errorf("ha-user-2 mapping = %q, want notify.mobile_app_x", got)
+	}
+}
+
+func TestRestore_MqttSettingsBrokerChangeDropsStoredCredentials(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	mux := newMux(h)
+	seed := func() {
+		t.Helper()
+		if err := saveMqttSettings(deps.DB, map[string]any{
+			"transport": "mqtt", "host": "192.168.1.50", "port": float64(1883),
+			"username": "old-user", "password": "old-pass", "prefix": "gaggiuino",
+		}); err != nil {
+			t.Fatalf("saveMqttSettings: %v", err)
+		}
+	}
+	restoreMqtt := func(host string) map[string]any {
+		t.Helper()
+		bundle := map[string]any{
+			"glp_backup": true, "shots": []any{},
+			"sections": []any{"settings"},
+			"kv": map[string]any{"mqtt_settings": map[string]any{
+				"transport": "mqtt", "host": host, "port": float64(1883),
+				"username": "", "password": "", "prefix": "gaggiuino",
+			}},
+		}
+		rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+		}
+		stored, err := getMqttSettings(deps.DB)
+		if err != nil {
+			t.Fatalf("getMqttSettings: %v", err)
+		}
+		return stored
+	}
+
+	seed()
+	stored := restoreMqtt("192.168.1.51")
+	if pw, _ := stored["password"].(string); pw != "" {
+		t.Fatalf("broker change kept the stored password: %v", stored)
+	}
+	if user, _ := stored["username"].(string); user != "" {
+		t.Fatalf("broker change kept the stored username: %v", stored)
+	}
+	if host, _ := stored["host"].(string); host != "192.168.1.51" {
+		t.Fatalf("host = %v, want 192.168.1.51", stored["host"])
+	}
+
+	seed()
+	stored = restoreMqtt("192.168.1.50")
+	if pw, _ := stored["password"].(string); pw != "old-pass" {
+		t.Fatalf("same broker lost the stored password: %v", stored)
+	}
+	if user, _ := stored["username"].(string); user != "old-user" {
+		t.Fatalf("same broker lost the stored username: %v", stored)
+	}
+}
+
+func TestRestore_RejectsMalformedAPIToken(t *testing.T) {
+	cases := []struct {
+		name  string
+		token string
+	}{
+		{"too short", "short"},
+		{"below minimum", strings.Repeat("a", restoredTokenMinLen-1)},
+		{"invalid character", strings.Repeat("a", restoredTokenMinLen-1) + "!"},
+		{"base64 padding", strings.Repeat("a", restoredTokenMinLen) + "="},
+	}
+	const current = "current-api-token-value"
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, deps, _ := newTestHandlers(t)
+			if err := os.WriteFile(deps.TokenFile, []byte(current), 0o600); err != nil {
+				t.Fatalf("seeding token file: %v", err)
+			}
+			enc, err := EncryptSecrets(map[string]any{"apiToken": tc.token}, "hunter2")
+			if err != nil {
+				t.Fatalf("EncryptSecrets: %v", err)
+			}
+			bundle := map[string]any{
+				"glp_backup": true, "shots": []any{},
+				"sections": []any{"secrets"}, "passphrase": "hunter2", "secrets": enc,
+			}
+			rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+			}
+			if result := decodeBody(t, rec.Body.Bytes()); result["secretsRestored"] != false {
+				t.Fatalf("secretsRestored = %v, want false", result["secretsRestored"])
+			}
+			got, err := os.ReadFile(deps.TokenFile)
+			if err != nil {
+				t.Fatalf("reading token file: %v", err)
+			}
+			if string(got) != current {
+				t.Fatalf("token file = %q, want the current token unchanged", got)
+			}
+		})
+	}
+}
+
+func TestRestore_ValidAPITokenRestoredWhenSecretsSelected(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	if err := os.WriteFile(deps.TokenFile, []byte("current-api-token-value"), 0o600); err != nil {
+		t.Fatalf("seeding token file: %v", err)
+	}
+	token := strings.Repeat("0123456789abcdef", 4)
+	enc, err := EncryptSecrets(map[string]any{"apiToken": token}, "hunter2")
+	if err != nil {
+		t.Fatalf("EncryptSecrets: %v", err)
+	}
+	bundle := map[string]any{
+		"glp_backup": true, "shots": []any{},
+		"sections": []any{"secrets"}, "passphrase": "hunter2", "secrets": enc,
+	}
+	rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if result := decodeBody(t, rec.Body.Bytes()); result["secretsRestored"] != true {
+		t.Fatalf("secretsRestored = %v, want true", result["secretsRestored"])
+	}
+	got, err := os.ReadFile(deps.TokenFile)
+	if err != nil {
+		t.Fatalf("reading token file: %v", err)
+	}
+	if string(got) != token {
+		t.Fatalf("token file = %q, want %q", got, token)
+	}
+}
+
+func TestRestore_APITokenIgnoredWhenSecretsNotSelected(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	const current = "current-api-token-value"
+	if err := os.WriteFile(deps.TokenFile, []byte(current), 0o600); err != nil {
+		t.Fatalf("seeding token file: %v", err)
+	}
+	token := strings.Repeat("0123456789abcdef", 4)
+	enc, err := EncryptSecrets(map[string]any{"apiToken": token}, "hunter2")
+	if err != nil {
+		t.Fatalf("EncryptSecrets: %v", err)
+	}
+	bundle := map[string]any{
+		"glp_backup": true, "shots": []any{},
+		"sections": []any{"settings"}, "passphrase": "hunter2", "secrets": enc,
+	}
+	rec := doJSON(t, newMux(h), http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if result := decodeBody(t, rec.Body.Bytes()); result["secretsRestored"] != false {
+		t.Fatalf("secretsRestored = %v, want false", result["secretsRestored"])
+	}
+	got, err := os.ReadFile(deps.TokenFile)
+	if err != nil {
+		t.Fatalf("reading token file: %v", err)
+	}
+	if string(got) != current {
+		t.Fatalf("token file = %q, want the current token unchanged", got)
 	}
 }

@@ -669,3 +669,42 @@ func TestOnMessage_DropsOversizedPayload(t *testing.T) {
 		t.Fatalf("oversized payload replaced the snapshot: %+v", s.sensorSnap)
 	}
 }
+
+// TestRoute_SettingsPost_BrokerChangeDropsStoredPassword binds a stored
+// password to its broker: a POST naming a different host without a password
+// must not forward the old one, while a new host that also supplies a new
+// password stores the new value.
+func TestRoute_SettingsPost_BrokerChangeDropsStoredPassword(t *testing.T) {
+	_, repo, m := newRoutes(t, &fakeAdapter{}, fakeSupervisor{err: errors.New("x")})
+	if _, err := repo.SaveSettings(Settings{
+		Transport: TransportMQTT, Host: "192.168.1.50", Port: 1883,
+		Username: "u", Password: "super-secret", Prefix: "gaggiuino",
+	}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	rec := do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.51","port":1883,"username":"u","prefix":"gaggiuino"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if body := decode(t, rec); body["hasPassword"] != false {
+		t.Fatalf("response hasPassword = %v, want false", body["hasPassword"])
+	}
+	stored := repo.GetSettings()
+	if stored.Password != "" {
+		t.Fatalf("broker change kept the stored password: %+v", stored)
+	}
+	if stored.Host != "192.168.1.51" {
+		t.Fatalf("host = %q, want 192.168.1.51", stored.Host)
+	}
+
+	rec = do(t, m, http.MethodPost, "/api/mqtt/settings",
+		`{"transport":"mqtt","host":"192.168.1.51","port":1883,"username":"u","password":"new-secret","prefix":"gaggiuino"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := repo.GetSettings().Password; got != "new-secret" {
+		t.Fatalf("new password = %q, want new-secret", got)
+	}
+}
