@@ -11,26 +11,28 @@ describe('checkVersionMatch', () => {
         return values.map((source, i) => ({ label: `spot${i}`, source, re: packageJsonRe }));
     }
 
+    const configSource = 'version: "3.4.0"\n';
+
     it('passes when every source matches config.yaml', () => {
-        const result = checkVersionMatch('3.4.0', sources('{"version":"3.4.0"}', '{"version":"3.4.0"}'));
+        const result = checkVersionMatch(configSource, sources('{"version":"3.4.0"}', '{"version":"3.4.0"}'));
         expect(result).toEqual({ configVersion: '3.4.0', failures: [] });
     });
 
     it('fails when a source does not match config.yaml', () => {
-        const result = checkVersionMatch('3.4.0', sources('{"version":"3.3.0"}'));
+        const result = checkVersionMatch(configSource, sources('{"version":"3.3.0"}'));
         expect(result.configVersion).toBe('3.4.0');
         expect(result.failures).toHaveLength(1);
         expect(result.failures[0]).toContain('spot0="3.3.0"');
     });
 
     it('fails closed when a source could not be read', () => {
-        const result = checkVersionMatch('3.4.0', sources(null));
+        const result = checkVersionMatch(configSource, sources(null));
         expect(result.failures).toHaveLength(1);
         expect(result.failures[0]).toContain('could not read a version from spot0');
     });
 
     it('fails closed when a source has no version field', () => {
-        const result = checkVersionMatch('3.4.0', sources('{"name":"app"}'));
+        const result = checkVersionMatch(configSource, sources('{"name":"app"}'));
         expect(result.failures).toHaveLength(1);
         expect(result.failures[0]).toContain('could not read a version from spot0');
     });
