@@ -75,7 +75,7 @@ function _renderDialinProgressionChart(beanKey: string | null): void {
       datasets: [
         { label: t('ann_grind_setting'), data: grindData, borderColor: '#38bdf8', backgroundColor: 'transparent',
           yAxisID: 'y', spanGaps: true, tension: .2, pointRadius: 3 },
-        { label: 'Score', data: scoreData, borderColor: '#ef4444', backgroundColor: 'transparent',
+        { label: t('sort_score'), data: scoreData, borderColor: '#ef4444', backgroundColor: 'transparent',
           yAxisID: 'y1', spanGaps: true, tension: .2, pointRadius: 3 },
       ],
     },

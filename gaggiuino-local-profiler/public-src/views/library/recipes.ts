@@ -83,7 +83,7 @@ export function renderRecipeList(): void {
       ? (scoredShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / scoredShots.length).toFixed(1)
       : null;
     const shotsBadge  = shotCount > 0
-      ? html`<span class="lib-recipe-shots-badge">${esc(shotCount)} Shot${shotCount !== 1 ? html`s` : html``}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
+      ? html`<span class="lib-recipe-shots-badge">${tHtml('lib_recipe_shots', shotCount)}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
       : html``;
     const sourceHref = safeHttpUrl(r.sourceUrl);
     return html`<div class="lib-item">
@@ -93,7 +93,7 @@ export function renderRecipeList(): void {
         ${params.length ? html`<div class="lib-recipe-params">${joinHtml(params.map(p => html`<span>${p}</span>`))}</div>` : html``}
         ${stepsHtml}
         ${r.notes ? html`<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : html``}
-        ${sourceHref ? html`<div class="lib-item-source"><a href="${esc(sourceHref)}" target="_blank" rel="noopener">${LINK_ICON_SVG} Quelle</a></div>` : html``}
+        ${sourceHref ? html`<div class="lib-item-source"><a href="${esc(sourceHref)}" target="_blank" rel="noopener">${LINK_ICON_SVG} ${tHtml('lib_recipe_source_link')}</a></div>` : html``}
       </div>
       <div class="lib-item-actions">
         <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
