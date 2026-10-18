@@ -105,6 +105,8 @@ All components authenticate automatically via a shared token:
 
 No manual configuration is required for the HA Ingress path. To rotate the token, delete `/data/api_token.txt` and restart the app.
 
+The app-wide request limit (600 requests per minute by default, separate from the `/api/token` limit) is counted per Home Assistant user for requests through HA Ingress when the Supervisor forwards the user header; without that header those requests fall back to one shared Supervisor bucket.
+
 #### Trust model
 
 The API token grants full API access — including `/api/restore`, which wipes and replaces the entire database.

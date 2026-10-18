@@ -105,6 +105,8 @@ Alle Komponenten authentifizieren sich automatisch über einen gemeinsamen Token
 
 Keine manuelle Konfiguration für den HA-Ingress-Pfad erforderlich. Um den Token zu erneuern, `/data/api_token.txt` löschen und die App neu starten.
 
+Das app-weite Anfrage-Limit (standardmäßig 600 Anfragen pro Minute, getrennt vom `/api/token`-Limit) wird bei Anfragen über HA Ingress pro Home-Assistant-Benutzer gezählt, wenn der Supervisor den Benutzer-Header weiterreicht; ohne diesen Header fallen diese Anfragen auf einen gemeinsamen Supervisor-Bucket zurück.
+
 #### Vertrauensmodell
 
 Der API-Token gewährt vollen API-Zugriff — inklusive `/api/restore`, das die gesamte Datenbank löscht und ersetzt.
