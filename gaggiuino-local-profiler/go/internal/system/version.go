@@ -29,7 +29,7 @@ const versionFailureBackoff = time.Minute
 // config.yaml's `version:` is canonical; this const must match it and is
 // bumped alongside it at release time (CLAUDE.md's Versioning section).
 // Enforced by test/version-sync.test.ts and scripts/release-check.mts.
-const glpVersion = "3.4.0"
+const glpVersion = "3.5.0"
 
 // Version returns the GLP version this binary reports from GET /api/version,
 // for callers that need the same value (the MCP server identity, #1196).

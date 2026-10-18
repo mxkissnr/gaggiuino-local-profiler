@@ -1,3 +1,99 @@
+## [3.5.0] - 2026-10-18
+
+### Added
+- **Open pages pick up changes made on another device within seconds, without a reload.** Closes #1539
+- **New developer MCP tool reports response times, memory and machine traffic of the running app.** Closes #1568
+- **The shot list API accepts an optional limit and reports how many shots were pulled today.** Refs #1616
+- **A backflush or descale recorded by your Gaggiuino now ticks off the matching maintenance task automatically.** Closes #1639
+
+### Changed
+- **The profile list's sync status and the app settings now update on other open pages too.** Closes #1539
+- **Pages and the Home Assistant integration load much faster on small devices with a long shot history.** Refs #1616
+- **Theme colours and overlay stacking now come from shared tokens, keeping the light theme consistent.** Refs #1618
+- **The app starts faster on SD cards because it only fixes data folder ownership when it is actually wrong.** Refs #1621
+- **Shot scores now use the same five-step colour scale everywhere, including the sidebar and the analytics tables.** Refs #1622
+- **A machine with an invalid address no longer falls back to a built-in placeholder address.**
+- **Achievements load faster on devices with a long shot history.** Refs #1721
+
+### Fixed
+- **Shots that never reach 5 bar now get a score instead of none.** Closes #1538
+- **Screen readers now announce every form field by its caption, and clicking a caption focuses its field.** Closes #1547
+- **The bean sheet and shelf now show the same remaining amount as the stock line.** Closes #1553
+- **Profile and firmware views open instantly when the machine is switched off, also at its smart plug, instead of waiting several seconds.** Closes #1572
+- **An imported bean's photo and map position now appear right away instead of after a later reload.** Closes #1580
+- **A machine stuck in a brew or steam mode, or reporting a garbage shot number, can no longer slow the app down or flood the sync.** Refs #1601
+- **Odd data from a machine or the MQTT broker can no longer break the live view or grow the app's memory.** Closes #1601
+- **Large backups with many photos and backups protected by a passphrase with umlauts can be restored again.** Refs #1602
+- **A restore now tells you when photos from the backup could not be written** instead of reporting them as restored. Refs #1602
+- **The JSON backup export no longer includes photos that nothing refers to any more.** Closes #1602
+- **Restoring a backup no longer brings back invalid shot notes or fails on duplicate entries.** Refs #1603
+- **Restoring a backup with a damaged order menu no longer breaks the Orders view and the order cards.** Refs #1603
+- **Restoring a backup now checks coffee bags and milk icons like the editor does.** Refs #1603
+- **Shot notes survive a machine sync, and the restore preview only counts machines it will really restore.** Closes #1603
+- **MQTT now connects once the broker comes online, even if it was down when the app started.** Closes #1604
+- **With several machines, a change sent for a machine that does not exist is now rejected instead of being applied to the default machine.** Refs #1605
+- **With several machines, the status display stays on the selected machine, and maintenance log entries made in the all-machines view go to the default machine.**
+- **With several machines, profile edits and profile dial-in always go to the machine they were started on, even if you switch machines in between.** Closes #1605
+- **Editing, freezing and reordering bean bags now always act on the bag you are actually using, also after a bag has been emptied.** Refs #1606
+- **Saving a bean no longer overwrites the current bag's roast date, and bag deletes, frozen portions and bag dragging behave reliably.** Closes #1606
+- **Placing an order while another one is being completed no longer brings the completed order back or deducts its milk twice.** Closes #1607
+- **Back-dated maintenance entries keep their date, and changing two maintenance tasks at once no longer loses one change.** Closes #1608
+- **A deleted shot can no longer come back with the next sync, and a shot restored from the trash is never purged by mistake.** Refs #1609
+- **An offline profile edit is no longer overwritten by the machine's copy during sync.** Closes #1609
+- **A garbled profile list from the machine no longer wipes the locally synced profiles.** Refs #1610
+- **A ready-by time that passed while the app was offline no longer switches the machine on later.** Closes #1611
+- **Restarting the app no longer cuts off running requests, open tabs no longer miss a refresh, and an empty token file no longer locks the app.** Refs #1612
+- **Live updates come back on their own after a dropped network connection.** Closes #1612
+- **The reference shot is picked at brew start and your pre-shot setup is saved onto the new shot again, also with live push updates.** Closes #1613
+- **Saving a notification setting can no longer reopen the coffee shop when the settings fail to load, and failed saves now show an error.** Refs #1614
+- **A save or order action that the server rejects now shows an error instead of looking successful.** Refs #1614
+- **Background refreshes no longer erase what you are typing in the dial-in wizards, the orders view or the shot notes.**
+- **Background refreshes no longer cut the shot list short, late answers no longer overwrite newer ones in the machine and backup dialogs, and a double tap on Save no longer creates a bean twice.** Closes #1614
+- **The app now starts even when the browser blocks local storage.** Refs #1615
+- **Photos are handled more safely: a damaged image can no longer crash the app on 32-bit devices, location data is removed even when a photo cannot be resized, thumbnails always match the latest photo, and an imported bean picture never replaces your own photo.** Closes #1617
+- **Text and controls that were hard to read in the light theme are readable again.** Refs #1618
+- **Form fields are now announced correctly by screen readers, and the order kiosk can be zoomed.** Refs #1619
+- **Ratings, cards, dialogs and sheets can now be used with the keyboard alone.** Refs #1619
+- **Text fields with umlauts or other non-ASCII characters now get their full length limit, and the backup description no longer contradicts itself.** Refs #1620
+- **Input placeholders and the onboarding hint now follow the selected language.** Refs #1620
+- **The connection status texts now follow the selected language.** Refs #1620
+- **The share card now uses your language, your local date and the machine's own shot number.** Refs #1620
+- **More screens now follow the selected language instead of showing German or English text.** Refs #1620
+- **The degassing tracker and bean age now also work for roast dates stored as YYYY-MM-DD or typed with a two-digit year.** Refs #1622
+- **The assistant tools now report the same current bag, roast date and frozen portions as the app.** Refs #1622
+- **The shot share card and the shot details now show the same yield, ratio and preinfusion time.** Refs #1622
+- **Imported flavour notes that start with an umlaut are capitalised correctly.** Refs #1622
+- **The API description and setup docs now match how the app actually behaves.** Refs #1623
+- **Shot notes can be edited again even when an older entry contains a value that is no longer accepted, and comparisons with the previous shot also work for shots taken at the same second.**
+- **Bean origins that could not be located during a temporary map-service outage are looked up again later instead of staying missing.**
+- **Badges now unlock right after the change that earns them, including rating edits and photo uploads.**
+- **Dates entered or shown shortly after midnight no longer jump to the previous day, and a grind setting of 0 is kept.**
+- **Moving the open shot to the trash now opens a neighbouring shot instead of the oldest one, recipe averages ignore unrated shots, and exporting a shot with a numeric grind setting works again.**
+- **Bean ratings, frozen-portion choices and the bean rankings in Analytics stay with the right bean after it is renamed.**
+- **The offline copy of the app no longer keeps error pages, German flavor names like "geröstete Mandel" are recognised, dial-in suggestions show clean values, and a failed tap in the sticker editor keeps your earlier edits.** Closes #1625
+- **The "bean running low" and "machine ready" push notifications work again.** Closes #1671
+- **Shots are no longer marked down for brief temperature-sensor dropouts that read 0 °C.** Closes #1688
+- **Moving a shot to the trash from the sidebar can now be undone right away.** Refs #1716
+- **Achievement day streaks now follow your local day instead of UTC.** Refs #1727
+- **The container image now declares the correct license.** Refs #1727
+- **Several people using the app through Home Assistant no longer share one request limit.** Refs #1732
+- **The streak figures next to the coffee-year calendar are no longer cut off when the window is medium-wide.** Refs #1741
+- **Screen readers announce the shot list button and the machine status icon in the selected language.**
+- **Saving a bean that the server rejects now shows an error instead of doing nothing.**
+
+### Security
+- **The app now closes stalled connections and can no longer crash or lose its rate limit through a bad rate-limit setting.** Refs #1601
+- **Restoring a crafted backup file can no longer exhaust the app's memory.** Refs #1601
+- **Several low-severity hardening fixes: safer exports, links, logs and live-update connections.** Refs #1626
+- **Stored photo file types are now checked before photo files are moved or deleted.** Refs #1747
+- **Order notifications only ever call Home Assistant notify services, and restored order and menu ids are checked.** Refs #1747
+- **Profile actions on a Gaggiuino machine reject profile ids that are not numbers.** Refs #1747
+- **Saved MQTT credentials are only reused for the same broker, and a restored API token must have the expected format.** Refs #1747
+- **Shot images and machine histories with implausible values no longer slow the app down or exhaust its memory.** Refs #1747
+- **The network guard for imports and shop images now also blocks reserved, multicast and IPv4-embedding IPv6 addresses.** Refs #1747
+- **Ids are URL-encoded wherever the app builds an API request path.** Refs #1747
+- **Requests are only treated as Home Assistant Ingress requests when they really are.** Refs #1747
+
 ## [3.4.0] - 2026-10-09
 
 > **Before you update:** the app now refuses requests for unknown host names. Through the Home Assistant sidebar, by IP address or under a local name such as `.local` or `.fritz.box` nothing changes. If you open GLP under your own domain, for example through a reverse proxy, add that domain to the new `allowed_hosts` option right after updating, otherwise that address stops working.
