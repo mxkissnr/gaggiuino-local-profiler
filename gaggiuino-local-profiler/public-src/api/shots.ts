@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch.js';
+import { apiFetch, pathSeg } from './fetch.js';
 import type { HydratedShot, ShotAnnotationInput, ShotDefaults } from './types.js';
 
 // Typed client for the `shots` domain (go/internal/shots — every route that
@@ -42,7 +42,7 @@ export function listShots({ limit, cursor, trash = false }: ListShotsParams): Pr
  * treat it as transient and retry later.
  */
 export async function getShot(id: number): Promise<HydratedShot | null> {
-  const r = await apiFetch(`api/shots/${id}`);
+  const r = await apiFetch(`api/shots/${pathSeg(id)}`);
   return r.ok ? ((await r.json()) as HydratedShot) : null;
 }
 
@@ -52,12 +52,12 @@ export async function getShot(id: number): Promise<HydratedShot | null> {
  * `<img src>`.
  */
 export function shotImageUrl(id: number): string {
-  return `api/shots/${id}/image`;
+  return `api/shots/${pathSeg(id)}/image`;
 }
 
 /** POST /api/shots/{id}/annotate — upsert the shot's annotation. */
 export function annotateShot(id: number, annotation: ShotAnnotationInput): Promise<Response> {
-  return apiFetch(`api/shots/${id}/annotate`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/annotate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(annotation),
@@ -89,7 +89,7 @@ export async function saveShotDefaults(defaults: ShotDefaults): Promise<ShotDefa
 
 /** POST /api/shots/{id}/trash — soft-delete. */
 export function sendShotToTrash(id: number): Promise<Response> {
-  return apiFetch(`api/shots/${id}/trash`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/trash`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -97,7 +97,7 @@ export function sendShotToTrash(id: number): Promise<Response> {
 
 /** POST /api/shots/{id}/restore — undo {@link sendShotToTrash}. */
 export function restoreShotFromTrash(id: number): Promise<Response> {
-  return apiFetch(`api/shots/${id}/restore`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -105,7 +105,7 @@ export function restoreShotFromTrash(id: number): Promise<Response> {
 
 /** POST /api/shots/{id}/delete — permanently delete an already-trashed shot. */
 export function deleteShotPermanently(id: number): Promise<Response> {
-  return apiFetch(`api/shots/${id}/delete`, {
+  return apiFetch(`api/shots/${pathSeg(id)}/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -129,7 +129,7 @@ export interface ShotCardOptions {
  */
 export function getShotCard(id: number, { format, accent, theme, lang }: ShotCardOptions): Promise<Response> {
   const params = new URLSearchParams({ format, accent, theme, lang });
-  return apiFetch(`api/shots/${id}/card?${params}`);
+  return apiFetch(`api/shots/${pathSeg(id)}/card?${params}`);
 }
 
 /** POST /api/shots/{id}/image — upload a (cropped) shot photo. */

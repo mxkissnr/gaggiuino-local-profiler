@@ -1,4 +1,5 @@
 import { apiFetch } from './api/transport.js';
+import { pathSeg } from './api/fetch.js';
 import { shotImageUrl } from './api/shots.js';
 
 // Bean/grinder/shot images require the auth token, so <img src="api/...">
@@ -27,11 +28,11 @@ function _load(key: string, url: string): Promise<string | null> {
 }
 
 export function loadBeanImageBlobUrl(beanId: unknown): Promise<string | null> {
-  return _load(`bean:${beanId as string}`, `api/library/bean/${beanId as string}/image`);
+  return _load(`bean:${beanId as string}`, `api/library/bean/${pathSeg(beanId as string)}/image`);
 }
 
 export function loadGrinderImageBlobUrl(grinderId: unknown): Promise<string | null> {
-  return _load(`grinder:${grinderId as string}`, `api/library/grinder/${grinderId as string}/image`);
+  return _load(`grinder:${grinderId as string}`, `api/library/grinder/${pathSeg(grinderId as string)}/image`);
 }
 
 export function invalidateGrinderImage(grinderId: unknown): void {
@@ -44,7 +45,7 @@ export function invalidateBeanImage(beanId: unknown): void {
 
 // #635: basket/puck screen photos — same pattern as bean/grinder images.
 export function loadBasketImageBlobUrl(basketId: unknown): Promise<string | null> {
-  return _load(`basket:${basketId as string}`, `api/library/basket/${basketId as string}/image`);
+  return _load(`basket:${basketId as string}`, `api/library/basket/${pathSeg(basketId as string)}/image`);
 }
 
 export function invalidateBasketImage(basketId: unknown): void {
@@ -52,7 +53,7 @@ export function invalidateBasketImage(basketId: unknown): void {
 }
 
 export function loadPuckScreenImageBlobUrl(puckScreenId: unknown): Promise<string | null> {
-  return _load(`puckscreen:${puckScreenId as string}`, `api/library/puckscreen/${puckScreenId as string}/image`);
+  return _load(`puckscreen:${puckScreenId as string}`, `api/library/puckscreen/${pathSeg(puckScreenId as string)}/image`);
 }
 
 export function invalidatePuckScreenImage(puckScreenId: unknown): void {
