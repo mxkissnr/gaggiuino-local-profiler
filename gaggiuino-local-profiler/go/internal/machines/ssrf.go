@@ -60,7 +60,7 @@ func isLoopbackOrMetadataAddress(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
-	if v4 := ip.To4(); v4 != nil {
+	if v4 := netguard.EmbeddedIPv4(ip); v4 != nil {
 		return isLoopbackOrMetadataIPv4(v4)
 	}
 	return isLoopbackOrMetadataIPv6(ip)
