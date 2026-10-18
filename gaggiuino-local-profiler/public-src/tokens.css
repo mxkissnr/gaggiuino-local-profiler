@@ -9,6 +9,36 @@
             --radius-sm: 4px;
             --radius-lg: 16px;
 
+
+            /* ── z-index scale ── #1618: named layers instead of magic
+               numbers scattered through style.css. The numbers keep the
+               order the app shipped with; changing one reorders whatever
+               sits on that layer, so add a step rather than retuning an
+               existing one. 1-4 are only for stacking inside a component
+               (shelf tiles, the sheet's own bar/grab/menu). */
+            --z-base: 0;
+            --z-local-1: 1;
+            --z-local-2: 2;
+            --z-local-3: 3;
+            --z-local-4: 4;
+            --z-sticky: 5;
+            --z-topbar: 10;
+            --z-dropdown: 30;
+            --z-main: 40;
+            --z-drawer-backdrop: 45;
+            --z-drawer: 50;
+            --z-bottom-nav: 150;
+            --z-menu: 200;
+            --z-popover-backdrop: 205;
+            --z-popover: 220;
+            --z-sheet-backdrop: 900;
+            --z-sheet: 901;
+            --z-modal: 1000;
+            --z-crop: 1100;
+            --z-lightbox: 1200;
+            --z-fullscreen: 9000;
+            --z-toast: 9500;
+
             /* ── Type scale ── #811: six steps, replacing 53 distinct
                font-size literals that stepped in 0.02rem increments. A size
                not on this ladder is a regression, not a nuance — the tail of
@@ -124,6 +154,36 @@
                because #397/#404 only ever checked these tokens as TEXT ON a
                surface, never as a surface UNDER text. */
             --on-fill: #000;
+
+            /* ── Fixed colours ── #1618: values that deliberately do not
+               follow the theme. Scrims always darken, the compare-mode
+               accent stays recognisable, and the small fixed palettes
+               (swatch wheel, flavour/milk chips, live-stat highlights)
+               are data, not UI chrome. They live here so style.css
+               contains no literal colour at all; declared after the
+               themed tokens because nothing below overrides them. */
+            --scrim: #000;
+            --paper: #fff;
+            --compare: #3498db;
+            --compare-fill: #217cb9;
+            --crema: #f3e1c0;
+            --night-from: #10182b;
+            --night-star: #cdd7ef;
+            --swatch-amber: #f59e0b;
+            --swatch-pink: #ec4899;
+            --swatch-cyan: #0891b2;
+            --swatch-green: #22c55e;
+            --flavor-tint: #a855f7;
+            --flavor-ink: #c084fc;
+            --beans-ink: #a78bfa;
+            --brew-tint: #6366f1;
+            --brew-ink: #818cf8;
+            --milk-ink: #7dd3fc;
+            --stat-pressure: #3498db;
+            --stat-flow: #f39c12;
+            --stat-weight: #2ecc71;
+            --stat-temp: #e74c3c;
+            --stat-time: #9c59b6;
             /* --accent-ink: the accent used as TEXT or an icon, as opposed to
                a fill. On dark surfaces the accent itself is readable, so this
                is simply the accent. In the light theme it is not — #1021's
@@ -168,6 +228,7 @@
             --score-low: #92451b;
             --err:    #a83526;
             --ice:    #1f6d95;
+            --night-from: #dfe6f5;
             --on-fill: #fff;
         }
         /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
