@@ -892,7 +892,7 @@ func TestRestore_DropsUnknownShotImageExtension(t *testing.T) {
 	if shotEntry == nil {
 		t.Fatalf("exported shot is not an object: %#v", shotEntries[0])
 	}
-	shotEntry["image"] = "../../victim"
+	shotEntry["image"] = "x/../../victim"
 
 	rec = doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
 	if rec.Code != http.StatusOK {
@@ -912,7 +912,7 @@ func TestRestore_DropsUnknownShotImageExtension(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	img.Delete(dir, 1, "../../victim", "shot-")
+	img.Delete(dir, 1, "x/../../victim", "shot-")
 
 	if _, err := os.Stat(victim); err != nil {
 		t.Fatalf("victim outside image dir was removed: %v", err)
