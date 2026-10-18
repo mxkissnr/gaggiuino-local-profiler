@@ -45,6 +45,9 @@ export function jsonBody(body: unknown, method = 'POST'): RequestInit {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
+// Every id that goes into an API path or query goes through this.
+export const pathSeg = (v: string | number): string => encodeURIComponent(String(v));
+
 // The parsed body of an ok response as T, or null for a non-ok one: the
 // "null on a non-ok response" convention the domain clients share.
 export async function jsonOrNull<T>(r: Response): Promise<T | null> {

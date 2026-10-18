@@ -117,8 +117,9 @@ func (h *Handlers) postSettings(w http.ResponseWriter, r *http.Request) {
 		// #1050: getSettings never echoes the real password back (see above),
 		// so the Settings UI's re-submitted form has no way to send it back
 		// unchanged — an absent password field means "keep the stored one",
-		// not "clear it".
-		parsed.Password = h.repo.GetSettings().Password
+		// not "clear it". The password is only reused while the host and port
+		// still name the same broker; a different broker gets no credentials.
+		parsed = MergeCredentials(h.repo.GetSettings(), parsed)
 	}
 	// #988: reject a broker host the SSRF guard would refuse to dial, same
 	// threat model as a machine's own host (client.go's connect() re-checks

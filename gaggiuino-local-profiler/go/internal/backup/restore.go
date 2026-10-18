@@ -241,7 +241,9 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.applyRestoredToken(plan.restoredToken)
+	if !h.applyRestoredToken(plan.restoredToken) {
+		plan.secretsRestored = false
+	}
 	written, failed := h.writePendingImages(plan.images, plan.pending)
 
 	writeJSON(w, http.StatusOK, map[string]any{

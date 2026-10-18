@@ -43,7 +43,7 @@ func newTestHandlers(t *testing.T) (*Handlers, Dependencies, *sql.DB) {
 		MaintenanceRepo:  maintenance.NewRepository(sqlDB, libRepo),
 		Registry:         machines.NewRegistry(sqlDB),
 		AchievementsRepo: achievements.NewRepository(sqlDB),
-		Token:            "test-token-value",
+		Token:            "test-token-value-0123456789abcdef",
 		TokenFile:        filepath.Join(t.TempDir(), "api_token.txt"),
 	}
 	h := NewHandlers(deps)

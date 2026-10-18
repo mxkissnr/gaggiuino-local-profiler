@@ -210,16 +210,23 @@ func entityList(v any) []library.Entity {
 // Dependencies.Token's doc comment: this does NOT take effect in the
 // already-running process (internal/auth.RequireToken closes over a fixed
 // token string at startup) until the process restarts — a documented,
-// deliberate gap.
-func (h *Handlers) applyRestoredToken(token string) {
+// deliberate gap. It reports false when the token could not be written so the
+// caller can report the secrets as not restored.
+func (h *Handlers) applyRestoredToken(token string) bool {
 	if token == "" {
-		return
+		return true
 	}
 	tmp := h.deps.TokenFile + ".tmp"
 	if err := os.WriteFile(tmp, []byte(token), 0o600); err != nil {
-		return
+		log.Printf("backup: restore failed to write API token: %v", err)
+		return false
 	}
-	_ = os.Rename(tmp, h.deps.TokenFile)
+	if err := os.Rename(tmp, h.deps.TokenFile); err != nil {
+		log.Printf("backup: restore failed to replace API token: %v", err)
+		_ = os.Remove(tmp)
+		return false
+	}
+	return true
 }
 
 // writePendingImages streams each validated image from the restore image
