@@ -5,7 +5,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // card_model.go holds the share card's data extraction (from the shot's
@@ -18,6 +17,7 @@ type cardModel struct {
 	shot   Shot
 	score  *int
 	format string
+	lang   string
 	pal    palette
 	deps   cardDeps
 
@@ -25,11 +25,12 @@ type cardModel struct {
 	scale float64
 }
 
-func newCardModel(shot Shot, score *int, format, accent, theme string, deps cardDeps) *cardModel {
+func newCardModel(shot Shot, score *int, format, accent, theme, lang string, deps cardDeps) *cardModel {
 	c := &cardModel{
 		shot:   shot,
 		score:  score,
 		format: format,
+		lang:   normalizeCardLang(lang),
 		pal:    buildPalette(accent, theme),
 		deps:   deps,
 		w:      1080,
@@ -241,7 +242,7 @@ func (c *cardModel) svg() string {
 		strField(c.shot, "profileName"),
 	)
 	if profileName == "" {
-		profileName = "Unknown"
+		profileName = cardText(c.lang, "unknown")
 	}
 	bean := strField(ann, "coffee")
 	machine := firstNonEmpty(strField(ann, "machine"), strField(c.shot, "machine"))
@@ -298,12 +299,12 @@ func (c *cardModel) svg() string {
 	headerRight := ""
 	if c.format != "story" {
 		shotID := ""
-		if id := c.shot.id(); id != 0 {
-			shotID = fmt.Sprintf("Shot #%d", id)
+		if id := nativeShotID(c.shot); id != 0 {
+			shotID = cardTextf(c.lang, "shot_id", id)
 		}
 		dateStr := ""
 		if ts := cardNum(c.shot["timestamp"]); ts != 0 {
-			dateStr = germanDate(int64(ts))
+			dateStr = cardDate(c.lang, int64(ts))
 		}
 		headerRight = strings.TrimSpace(strings.Join(nonEmpty(shotID, dateStr), "  ·  "))
 	}
@@ -329,7 +330,7 @@ func (c *cardModel) svg() string {
 	s.text(cardPX+leadW, headlineBaseline, 52, true, p.text, "", headline)
 
 	cursorY := headlineBaseline + 32
-	phrase := scoreTierPhrase(c.score)
+	phrase := scoreTierPhrase(c.score, c.lang)
 	if c.score != nil && phrase != "" {
 		cursorY = headlineBaseline + 78
 		vx := cardPX
@@ -384,7 +385,7 @@ func (c *cardModel) svg() string {
 	}
 	if len(doseParts) > 0 {
 		doseY := subY + 14
-		s.text(cardPX, doseY, 22, false, p.textMute, "", "Dosis")
+			s.text(cardPX, doseY, 22, false, p.textMute, "", cardText(c.lang, "dose"))
 		s.text(cardPX+78, doseY, 22, true, p.text, "", strings.Join(doseParts, "  "))
 		subY = doseY
 	}
@@ -496,10 +497,10 @@ func (c *cardModel) svg() string {
 		preWidth := pxEnd - plotX
 		extWidth := plotX + plotW - pxEnd
 		if preWidth > 90 {
-			s.text(plotX+6, plotY+19, 13, true, p.cPressure, "", "Preinfusion")
+			s.text(plotX+6, plotY+19, 13, true, p.cPressure, "", cardText(c.lang, "preinfusion"))
 		}
 		if extWidth > 90 {
-			s.text(pxEnd+6, plotY+19, 13, true, p.cFlow, "", "Extraktion")
+			s.text(pxEnd+6, plotY+19, 13, true, p.cFlow, "", cardText(c.lang, "extraction"))
 		}
 	}
 
@@ -510,28 +511,28 @@ func (c *cardModel) svg() string {
 	}
 	var legend []legendItem
 	if len(pressure) > 2 {
-		legend = append(legend, legendItem{p.cPressure, "Druck", false})
+		legend = append(legend, legendItem{p.cPressure, cardText(c.lang, "pressure"), false})
 	}
 	if len(flow) > 2 {
-		legend = append(legend, legendItem{p.cFlow, "Pumpenfluss", false})
+		legend = append(legend, legendItem{p.cFlow, cardText(c.lang, "pump_flow"), false})
 	}
 	if len(weightFlow) > 2 {
-		legend = append(legend, legendItem{p.cWeightFlow, "Gewichtsfluss", false})
+		legend = append(legend, legendItem{p.cWeightFlow, cardText(c.lang, "weight_flow"), false})
 	}
 	if len(weight) > 2 {
-		legend = append(legend, legendItem{p.cWeight, "Gewicht", false})
+		legend = append(legend, legendItem{p.cWeight, cardText(c.lang, "weight"), false})
 	}
 	if len(temp) > 2 {
-		legend = append(legend, legendItem{p.cTemp, "Temperatur", false})
+		legend = append(legend, legendItem{p.cTemp, cardText(c.lang, "temperature"), false})
 	}
 	if len(tgtPress) > 2 {
-		legend = append(legend, legendItem{p.cPressure, "Ziel Druck", true})
+		legend = append(legend, legendItem{p.cPressure, cardText(c.lang, "target_pressure"), true})
 	}
 	if len(tgtFlow) > 2 {
-		legend = append(legend, legendItem{p.cFlow, "Ziel Fluss", true})
+		legend = append(legend, legendItem{p.cFlow, cardText(c.lang, "target_flow"), true})
 	}
 	if len(tgtTemp) > 2 {
-		legend = append(legend, legendItem{p.cTemp, "Ziel Temperatur", true})
+		legend = append(legend, legendItem{p.cTemp, cardText(c.lang, "target_temperature"), true})
 	}
 	if len(legend) > 0 {
 		legY := outerY + outerH - legendH/2
@@ -564,9 +565,9 @@ func (c *cardModel) svg() string {
 
 	pressQual := ""
 	if hasTgtPress && tgtPressVal > 0 {
-		pressQual = "Ziel " + num1(tgtPressVal)
+		pressQual = cardTextf(c.lang, "press_target", num1(tgtPressVal))
 	} else if hasMaxPres {
-		pressQual = "max " + num1(math.Round(maxPres*10)/10)
+		pressQual = cardTextf(c.lang, "press_max", num1(math.Round(maxPres*10)/10))
 	}
 
 	type bandCell struct{ label, value string }
@@ -581,33 +582,33 @@ func (c *cardModel) svg() string {
 		} else {
 			v = num1(*yieldG) + "g"
 		}
-		row1 = append(row1, &bandCell{"Dosis → Ausbeute", v})
+		row1 = append(row1, &bandCell{cardText(c.lang, "dose_yield"), v})
 	} else {
 		row1 = append(row1, nil)
 	}
 	if ratio != "" {
-		row1 = append(row1, &bandCell{"Ratio", ratio})
+		row1 = append(row1, &bandCell{cardText(c.lang, "ratio"), ratio})
 	} else {
 		row1 = append(row1, nil)
 	}
-	row1 = append(row1, &bandCell{"Dauer", fmtDurSec(totalSec)})
+	row1 = append(row1, &bandCell{cardText(c.lang, "duration"), fmtDurSec(totalSec)})
 
 	if hasAvgPres {
-		lbl := "Druck Ø"
+		lbl := cardText(c.lang, "pressure_avg")
 		if pressQual != "" {
-			lbl = "Druck Ø · " + pressQual
+			lbl = cardText(c.lang, "pressure_avg") + " · " + pressQual
 		}
 		row2 = append(row2, &bandCell{lbl, num1(math.Round(avgPres*10)/10) + " bar"})
 	} else {
 		row2 = append(row2, nil)
 	}
 	if hasAvgFlow {
-		row2 = append(row2, &bandCell{"Pumpenfluss Ø", num1(math.Round(avgFlow*10)/10) + " ml/s"})
+		row2 = append(row2, &bandCell{cardText(c.lang, "pump_flow_avg"), num1(math.Round(avgFlow*10)/10) + " ml/s"})
 	} else {
 		row2 = append(row2, nil)
 	}
 	if hasAvgTemp {
-		lbl := "Temperatur Ø"
+		lbl := cardText(c.lang, "temperature_avg")
 		if hasTempSD {
 			lbl += " ±" + num1(tempSD)
 		}
@@ -758,9 +759,18 @@ func mapString(v any, key string) string {
 	return ""
 }
 
-// germanDate formats a Unix timestamp as a German date, e.g. "16. Aug. 2026".
-func germanDate(unixSec int64) string {
-	t := time.Unix(unixSec, 0).UTC()
-	months := []string{"Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."}
-	return fmt.Sprintf("%02d. %s %d", t.Day(), months[int(t.Month())-1], t.Year())
+// nativeShotID returns the machine's own shot number when the shot carries
+// one, else the globally unique id.
+func nativeShotID(shot Shot) int64 {
+	switch v := shot["nativeId"].(type) {
+	case int64:
+		if v > 0 {
+			return v
+		}
+	case int:
+		if v > 0 {
+			return int64(v)
+		}
+	}
+	return shot.id()
 }

@@ -405,7 +405,7 @@ func getShot(svc *shots.Service, in getShotInput) (getShotOutput, error) {
 	if ann := annotationMap(shot); len(ann) > 0 {
 		out.Annotation = ann
 	}
-	if advice, aerr := svc.GetComparativeGrindAdvice(shot); aerr == nil && advice != nil {
+	if advice, aerr := svc.GetComparativeGrindAdvice(shot, "en"); aerr == nil && advice != nil {
 		out.ComparativeAdvice = &comparativeAdvice{
 			Type:             advice.Type,
 			Text:             advice.Text,

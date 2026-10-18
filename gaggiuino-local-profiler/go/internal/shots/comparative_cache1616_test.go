@@ -28,7 +28,7 @@ func TestComparativeAdvice_MatchesFullHistoryComputation(t *testing.T) {
 			if shot == nil {
 				continue
 			}
-			got, err := env.svc.GetComparativeGrindAdvice(shot)
+			got, err := env.svc.GetComparativeGrindAdvice(shot, "en")
 			if err != nil {
 				t.Fatal(err)
 			}
