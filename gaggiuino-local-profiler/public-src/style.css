@@ -1938,7 +1938,7 @@
         .live-stat .stat-unit { font-size: var(--fs-1); color: var(--gray-500); }
         .live-stat .stat-label { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-2); }
 
-        .live-stat.highlight-pressure { border-color: color-mix(in srgb, var(--compare) 40%, transparent); }
+        .live-stat.highlight-pressure { border-color: color-mix(in srgb, var(--stat-pressure) 40%, transparent); }
         .live-stat.highlight-flow     { border-color: color-mix(in srgb, var(--stat-flow) 40%, transparent); }
         .live-stat.highlight-weight   { border-color: color-mix(in srgb, var(--stat-weight) 40%, transparent); }
         .live-stat.highlight-temp     { border-color: color-mix(in srgb, var(--stat-temp) 40%, transparent); }
