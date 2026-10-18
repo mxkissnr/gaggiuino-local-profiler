@@ -76,7 +76,7 @@ func saveMqttSettings(db *sql.DB, patch map[string]any) error {
 	if err != nil {
 		return err
 	}
-	mergedMap := make(map[string]any, len(currentMap)+len(patch))
+	mergedMap := make(map[string]any)
 	for k, v := range currentMap {
 		mergedMap[k] = v
 	}
