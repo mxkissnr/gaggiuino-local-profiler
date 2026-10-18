@@ -9,7 +9,6 @@
             --radius-sm: 4px;
             --radius-lg: 16px;
 
-
             /* ── z-index scale ── #1618: named layers instead of magic
                numbers scattered through style.css. The numbers keep the
                order the app shipped with; changing one reorders whatever
@@ -160,8 +159,7 @@
                accent stays recognisable, and the small fixed palettes
                (swatch wheel, flavour/milk chips, live-stat highlights)
                are data, not UI chrome. They live here so style.css
-               contains no literal colour at all; declared after the
-               themed tokens because nothing below overrides them. */
+               contains no literal colour at all. */
             --scrim: #000;
             --paper: #fff;
             --compare: #3498db;
