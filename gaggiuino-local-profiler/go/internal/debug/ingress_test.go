@@ -24,10 +24,10 @@ func ingressMux(t *testing.T) *http.ServeMux {
 }
 
 // ingressRequest fabricates a request that auth.IsIngressRequest accepts:
-// a Supervisor-network source IP plus the X-Ingress-Path header.
+// the Supervisor ingress-proxy source IP plus the X-Ingress-Path header.
 func ingressRequest(target string) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, target, nil)
-	r.RemoteAddr = "172.30.32.1:41000"
+	r.RemoteAddr = "172.30.32.2:41000"
 	r.Header.Set("X-Ingress-Path", testIngressPath)
 	return r
 }

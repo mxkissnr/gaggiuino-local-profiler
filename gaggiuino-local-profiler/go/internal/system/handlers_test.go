@@ -239,7 +239,7 @@ func TestGetToken_RateLimited(t *testing.T) {
 }
 
 // TestGetToken_IngressGetsHigherRateLimit guards the #901 live-navigation
-// fix: a genuine Ingress caller (Supervisor-network RemoteAddr +
+// fix: a genuine Ingress caller (Supervisor ingress-proxy RemoteAddr +
 // X-Ingress-Path, exactly like auth_test.go's ingress fixtures) shares one
 // token:<ip> bucket across every browser tab/user behind that Ingress
 // session, and this app re-fetches the token on every single page's full
@@ -250,7 +250,7 @@ func TestGetToken_IngressGetsHigherRateLimit(t *testing.T) {
 	ingressGet := func() *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/token", nil)
-		req.RemoteAddr = "172.30.32.1:12345"
+		req.RemoteAddr = "172.30.32.2:12345"
 		req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/faketoken")
 		mux.ServeHTTP(rec, req)
 		return rec
@@ -275,7 +275,7 @@ func TestGetToken_IngressGetsHigherRateLimit(t *testing.T) {
 
 // TestGetToken_DirectPortDeniedWhenExposeApiPortFalse guards #803: a
 // non-Ingress caller (every httptest.NewRequest's default RemoteAddr is
-// outside the Supervisor's 172.30.0.0/16 network, so auth.IsIngressRequest
+// outside the Supervisor's ingress proxy address, so auth.IsIngressRequest
 // is always false here) is rejected with 403 once expose_api_port is
 // explicitly false.
 func TestGetToken_DirectPortDeniedWhenExposeApiPortFalse(t *testing.T) {

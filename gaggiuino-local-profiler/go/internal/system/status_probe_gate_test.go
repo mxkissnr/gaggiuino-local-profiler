@@ -46,7 +46,7 @@ func TestGetStatus_MachineIdProbeNeedsTokenOrIngress(t *testing.T) {
 		t.Fatalf("token machineReachable = %v, want false (live probe ran)", got)
 	}
 	ingress := func(r *http.Request) {
-		r.RemoteAddr = "172.30.32.1:12345"
+		r.RemoteAddr = "172.30.32.2:12345"
 		r.Header.Set("X-Ingress-Path", "/api/hassio_ingress/faketoken")
 	}
 	if got := get(ingress)["machineReachable"]; got != false {
