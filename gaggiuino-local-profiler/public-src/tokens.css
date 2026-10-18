@@ -155,11 +155,13 @@
             --on-fill: #000;
 
             /* ── Fixed colours ── #1618: values that deliberately do not
-               follow the theme. Scrims always darken, the compare-mode
-               accent stays recognisable, and the small fixed palettes
-               (swatch wheel, flavour/milk chips, live-stat highlights)
-               are data, not UI chrome. They live here so style.css
-               contains no literal colour at all. */
+               follow the theme. --scrim and --paper are absolute black and
+               white for scrims, knobs and white state layers, NOT theme
+               surfaces: never use them as a card or page background. The
+               compare-mode accent stays recognisable, and the small fixed
+               palettes (swatch wheel, flavour/milk chips, live-stat
+               highlights) are data, not UI chrome. They live here so
+               style.css contains no literal colour at all. */
             --scrim: #000;
             --paper: #fff;
             --compare: #3498db;

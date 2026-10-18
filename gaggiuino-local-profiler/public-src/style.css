@@ -1276,7 +1276,9 @@
         .lib-inv-remaining.low { color: var(--err); }
         .lib-inv-consumed { color: var(--gray-500); }
         .lib-inv-sep { color: var(--gray-700); }
-        .lib-inv-total { color: var(--gray-600); }
+        /* #1618: the removed legacy rule came later and won here, so keep
+           its colour rather than the earlier --gray-600. */
+        .lib-inv-total { color: var(--gray-700); }
         .lib-inv-reorder { background: color-mix(in srgb, var(--err) 12%, transparent); border: 1px solid color-mix(in srgb, var(--err) 30%, transparent); color: var(--err); border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; text-decoration: none; }
         .lib-decaf-badge { display: inline-block; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
         .lib-fresh-badge { display: inline-block; border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
