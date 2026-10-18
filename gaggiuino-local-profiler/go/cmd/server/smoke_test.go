@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 )
 
 // This file is the HA-ingress smoke test (#901). It boots the
@@ -26,17 +28,27 @@ import (
 //	    X-Accel-Buffering: no + Cache-Control: no-cache, no-transform and
 //	    flushes the padding comment before the first event.
 //	(c) token/auth behind the ingress header — a genuine ingress request
-//	    (Supervisor-network source IP + X-Ingress-Path) bypasses the token,
+//	    (Supervisor ingress-proxy source IP + X-Ingress-Path) bypasses the token,
 //	    the same request without the header does not.
 //
-// httptest.NewServer listens on loopback, and auth.IsSupervisorIP trusts
-// 127.0.0.1/::1 — so adding the X-Ingress-Path header to a request here is
-// a genuine ingress request as far as auth.IsIngressRequest (reused, not
-// reinvented) is concerned. The spoofed-header-from-a-LAN-IP
+// httptest.NewServer listens on loopback, but auth.IsSupervisorIP trusts only
+// the Supervisor's ingress proxy address. Ingress cases point that address at
+// loopback (setLoopbackIngress) so adding the X-Ingress-Path header to a
+// request here is a genuine ingress request as far as auth.IsIngressRequest
+// (reused, not reinvented) is concerned. The spoofed-header-from-a-LAN-IP
 // rejection can't be reached over loopback and is covered by
 // internal/auth/auth_test.go's TestRequireToken_SpoofedIngressHeaderFromLANRejected.
 
 const ingressHeader = "/api/hassio_ingress/0123456789abcdef0123456789abcdef"
+
+// setLoopbackIngress points auth at the loopback address httptest servers
+// listen on for the duration of the test.
+func setLoopbackIngress(t *testing.T) {
+	t.Helper()
+	prev := auth.SupervisorIngressIP
+	auth.SupervisorIngressIP = "127.0.0.1"
+	t.Cleanup(func() { auth.SupervisorIngressIP = prev })
+}
 
 func newSmokeServer(t *testing.T) (base string, token string) {
 	t.Helper()
@@ -148,6 +160,7 @@ func TestIngressSmoke_NoOriginAbsoluteReferences(t *testing.T) {
 // link is omitted (the add-on is framed in the HA panel); on a bare port
 // it is injected.
 func TestIngressSmoke_PWAGatingFollowsIngressDetection(t *testing.T) {
+	setLoopbackIngress(t)
 	base, _ := newSmokeServer(t)
 
 	viaIngress := smokeGet(t, base+"/", map[string]string{"X-Ingress-Path": ingressHeader})
@@ -232,6 +245,7 @@ func TestIngressSmoke_SSEEndpointNotBuffered(t *testing.T) {
 // ── trap (c): token/auth flow behind the ingress header ───────────────
 
 func TestIngressSmoke_AuthBehindIngressHeader(t *testing.T) {
+	setLoopbackIngress(t)
 	base, token := newSmokeServer(t)
 	const apiPath = "/api/shots/last"
 

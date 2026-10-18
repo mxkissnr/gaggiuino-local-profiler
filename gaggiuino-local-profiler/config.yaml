@@ -57,9 +57,9 @@ options:
   # go/internal/system/handlers.go's GET /api/token. Turning this off
   # returns 403 from that one endpoint for any request that didn't arrive
   # via HA Ingress; it does not unmap port 8099 itself, and it does not
-  # narrow the trust boundary below the whole Supervisor add-on network
-  # (go/internal/auth trusts all of 172.30.0.0/16, not just the Ingress
-  # proxy). Breaks direct-port browser
+  # narrow the trust boundary below the Supervisor ingress proxy: only its
+  # fixed address (172.30.32.2) is treated as Ingress (go/internal/auth).
+  # Breaks direct-port browser
   # access to the app entirely (this includes the installable PWA -- it's
   # just the installed form of the same UI), plus first-time setup of the
   # GLP Order Card's direct-URL mode, since none of those have any other way
