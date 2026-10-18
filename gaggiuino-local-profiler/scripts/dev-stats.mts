@@ -294,6 +294,7 @@ const CLAUDE_PRO_MONTHLY_USD = 20;
 const NON_AI_COAUTHOR_PATTERNS: RegExp[] = [
     /^mxkissnr$/i,                  // any email
     /^Paul-Lukas Schäfer$/i,
+    /^Max\s+K\S+$/,                 // the maintainer, from a squash-merged PR body
     /^dependabot\[bot\]$/i,
     /^renovate\[bot\]$/i,
 ];
