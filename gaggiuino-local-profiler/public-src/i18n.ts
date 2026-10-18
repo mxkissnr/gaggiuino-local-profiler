@@ -156,6 +156,12 @@ export function applyTranslations(): void {
     const key = el.dataset.i18nHtml;
     if (key) el.innerHTML = tHtml(key);
   });
+  // #1619: the rating buttons need a parameterised "n of 5" label, which
+  // data-i18n-aria-label cannot build (it calls t() without arguments).
+  document.querySelectorAll<HTMLElement>('#starRating .star').forEach(el => {
+    const n = Number(el.dataset.val);
+    if (Number.isFinite(n)) el.setAttribute('aria-label', t('ann_rating_star', n));
+  });
   // The easter-egg close button's aria-label is set by id (#1499); it
   // predates data-i18n-aria-label and its text node is the × glyph.
   const easterEggCloseBtn = document.getElementById('easterEggPanelCloseBtn');

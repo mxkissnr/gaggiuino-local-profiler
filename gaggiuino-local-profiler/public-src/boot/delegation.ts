@@ -34,8 +34,21 @@ import { closeEasterEggPanel } from '../components/topbar-machine-icon.js';
 import { toggleFlush, confirmBrewFromDialog, cancelBrewFromDialog } from '../components/machine-control.js';
 import { isActiveMachineGaggiMate } from './library.js';
 
+// #1619: keep role="button" cards operable without turning their block
+// children into invalid <button> content. Native buttons are excluded so
+// Enter/Space cannot fire a second synthetic click on top of the browser's.
+export function activateActionFromKeyboard(e: KeyboardEvent): void {
+  if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+  const target = e.target as HTMLElement | null;
+  const el = target?.closest?.('[data-action][role="button"]') as HTMLElement | null;
+  if (!el || el !== target) return;
+  e.preventDefault();
+  el.click();
+}
+
 export function wireDelegation(): void {
   // ── Global click delegation for dynamic content ────────────────────────
+  document.body.addEventListener('keydown', activateActionFromKeyboard);
   document.body.addEventListener('click', e => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!el) return;

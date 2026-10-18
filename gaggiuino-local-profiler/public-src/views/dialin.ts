@@ -81,7 +81,7 @@ export async function renderDialin(): Promise<void> {
       yield_ ? [tHtml('dialin_yield'), yield_] : null,
     ].filter((m): m is [Html, Html] => m !== null).slice(0, 5);
 
-    return html`<div class="dialin-card" data-action="goto-shot" data-id="${esc(s.id)}">
+    return html`<div class="dialin-card" role="button" tabindex="0" data-action="goto-shot" data-id="${esc(s.id)}">
       <div class="dialin-card-head">
         <div>
           <div class="dialin-profile">${esc(profile)}</div>

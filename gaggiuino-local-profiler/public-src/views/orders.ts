@@ -391,7 +391,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
         <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${tHtml('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
       </span>
     </div>
-    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <span class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</span>` : html``}</div>
+    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <button type="button" class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}</div>
   </div>`;
 }
 

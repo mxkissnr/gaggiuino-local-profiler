@@ -170,11 +170,11 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     const pastExpanded = _expandedPastSections.has(b.id);
     const pastBagsHtml = pastExpanded ? joinHtml(past.map(entry => renderBagCard(b, entry, 'past', beans, true))) : esc('');
     const pastSection: Html = past.length
-      ? html`<div class="lib-bag-history-toggle${esc(pastExpanded ? ' expanded' : '')}" data-action="toggle-past-bags" data-id="${esc(b.id)}">
+      ? html`<button type="button" class="lib-bag-history-toggle${esc(pastExpanded ? ' expanded' : '')}" aria-expanded="${pastExpanded ? 'true' : 'false'}" data-action="toggle-past-bags" data-id="${esc(b.id)}">
            <span class="lib-bag-chevron">▸</span>
            <span>${tHtml('lib_bag_state_past')}</span>
            <span class="lib-bag-past-count">${esc(past.length)}</span>
-         </div>
+         </button>
          <div class="lib-bag-history-past-wrap${esc(pastExpanded ? ' expanded' : '')}">
            <div class="lib-bag-history-past">${pastBagsHtml}</div>
          </div>`

@@ -343,12 +343,12 @@
                         <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
                         <button class="lib-open-btn" id="quickCloneBtn" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
                     </div>
-                    <div class="star-rating" id="starRating">
-                        <span class="star" data-val="1"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></span>
-                        <span class="star" data-val="2"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></span>
-                        <span class="star" data-val="3"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></span>
-                        <span class="star" data-val="4"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></span>
-                        <span class="star" data-val="5"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></span>
+                    <div class="star-rating" id="starRating" role="group" aria-label="Rating" data-i18n-aria-label="sort_rating">
+                        <button type="button" class="star" data-val="1" aria-label="1 of 5 stars" aria-pressed="false"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></button>
+                        <button type="button" class="star" data-val="2" aria-label="2 of 5 stars" aria-pressed="false"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></button>
+                        <button type="button" class="star" data-val="3" aria-label="3 of 5 stars" aria-pressed="false"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></button>
+                        <button type="button" class="star" data-val="4" aria-label="4 of 5 stars" aria-pressed="false"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></button>
+                        <button type="button" class="star" data-val="5" aria-label="5 of 5 stars" aria-pressed="false"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></button>
                     </div>
                 </div>
                 <div class="annotation-photo-row" id="annotationPhotoRow">
@@ -1770,7 +1770,7 @@
 
 <!-- ── Backup export/restore modal ── shared by both flows, see
      public-src/components/backup-modal.js for why. -->
-<div id="backupModal">
+<div id="backupModal" role="dialog" aria-modal="true" aria-labelledby="backupModalTitle" aria-describedby="backupModalDesc">
     <div class="backup-modal-card">
         <h3 id="backupModalTitle"></h3>
         <p id="backupModalDesc" class="settings-card-desc"></p>

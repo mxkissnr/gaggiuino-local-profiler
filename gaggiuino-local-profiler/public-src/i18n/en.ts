@@ -95,6 +95,7 @@ const en: Translations = {
     btn_fullscreen_close:`${CLOSE_ICON_SVG} Close`, btn_fullscreen_tooltip:'Fullscreen',
     btn_compare_tooltip:'Set as compare shot (B). Tip: click the name to select Shot A.', btn_delete_tooltip:'Delete shot',
     ann_title:'Notes & Rating',    ann_coffee:'Coffee / Bean',
+    ann_rating_star:(n)=>`${n} of 5 stars`,
     ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
     ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
     ann_dose:'Dose (g)', ann_dose_ph:'e.g. 18',

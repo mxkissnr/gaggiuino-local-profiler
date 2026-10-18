@@ -95,6 +95,7 @@ const fr: Partial<Translations> = {
     btn_fullscreen_close:`${CLOSE_ICON_SVG} Fermer`, btn_fullscreen_tooltip:'Plein écran',
     btn_compare_tooltip:'Sélectionner comme shot de comparaison (B). Astuce : cliquez sur le nom pour Shot A.', btn_delete_tooltip:'Supprimer le shot',
     ann_title:'Notes & Évaluation',    ann_coffee:'Café / Grain',
+    ann_rating_star:(n)=>`${n} sur 5 étoiles`,
     ann_grinder:'Moulin', ann_grinder_ph:'ex. Niche Zero',
     ann_grind_setting:'Mouture', ann_grind_ph:'ex. 23 Clics',
     ann_dose:'Dose (g)', ann_dose_ph:'ex. 18',
