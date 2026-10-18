@@ -924,8 +924,10 @@ func TestRestore_RejectsUnsafeOrderAndNotifyServiceValues(t *testing.T) {
 	mux := newMux(h)
 
 	bundle := map[string]any{
-		"sections": []any{"orders", "settings"},
-		"orders": []any{
+		"glp_backup": true,
+		"shots":      []any{},
+		"sections":   []any{"orders", "settings"},
+		"orders":     []any{
 			map[string]any{"id": "ord_1_a", "status": "pending", "item": "Espresso", "customer": "Max", "notifyService": "script.x"},
 			map[string]any{"id": "../x", "status": "pending", "item": "Espresso", "customer": "Max"},
 			map[string]any{"id": "ord_2_b", "status": "pending", "item": "Latte", "customer": "Eva", "notifyService": "notify.mobile_app_x"},
