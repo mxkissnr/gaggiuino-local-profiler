@@ -1,4 +1,4 @@
-import { apiFetch, jsonBody, jsonOrNull } from './fetch.js';
+import { apiFetch, jsonBody, jsonOrNull, pathSeg } from './fetch.js';
 import type {
   FirmwareProgress, FirmwareVersion, Machine, MachineControlSettings, MachineProfile, MachineProfileList,
   MachineSaveInput, MachineSystemSettings,
@@ -33,22 +33,22 @@ export async function listMachines(): Promise<Machine[] | null> {
  * id and the server's error body off it.
  */
 export function saveMachine(id: string | number | null, payload: MachineSaveInput): Promise<Response> {
-  return apiFetch(id ? `api/machines/${id}` : 'api/machines', jsonBody(payload, id ? 'PUT' : 'POST'));
+  return apiFetch(id ? `api/machines/${pathSeg(id)}` : 'api/machines', jsonBody(payload, id ? 'PUT' : 'POST'));
 }
 
 /** POST /api/machines/{id}/test — connection test; the caller reads `{ reachable }` off the raw Response. */
 export function testMachine(id: string | number): Promise<Response> {
-  return apiFetch(`api/machines/${id}/test`, { method: 'POST' });
+  return apiFetch(`api/machines/${pathSeg(id)}/test`, { method: 'POST' });
 }
 
 /** POST /api/machines/{id}/default — reassign the default machine (#753). */
 export function setDefaultMachine(id: string | number): Promise<Response> {
-  return apiFetch(`api/machines/${id}/default`, { method: 'POST' });
+  return apiFetch(`api/machines/${pathSeg(id)}/default`, { method: 'POST' });
 }
 
 /** DELETE /api/machines/{id} — remove a machine; the caller reads the error body on a non-ok. */
 export function deleteMachine(id: string | number): Promise<Response> {
-  return apiFetch(`api/machines/${id}`, { method: 'DELETE' });
+  return apiFetch(`api/machines/${pathSeg(id)}`, { method: 'DELETE' });
 }
 
 // ── Settings control proxy ───────────────────────────────────────────────
@@ -62,7 +62,7 @@ export async function getMachineSettings(
   category: string,
 ): Promise<MachineSystemSettings | null> {
   return jsonOrNull<MachineSystemSettings>(
-    await apiFetch(`api/machine/settings?machineId=${machineId}&category=${category}`),
+    await apiFetch(`api/machine/settings?machineId=${pathSeg(machineId)}&category=${pathSeg(category)}`),
   );
 }
 
@@ -72,14 +72,14 @@ export async function getMachineSettings(
  * awaits the result, so the raw Response is enough.
  */
 export function saveMachineSettings(category: string, payload: unknown): Promise<Response> {
-  return apiFetch(`api/machine/settings/${category}`, jsonBody(payload));
+  return apiFetch(`api/machine/settings/${pathSeg(category)}`, jsonBody(payload));
 }
 
 // ── Firmware OTA (#1044) ─────────────────────────────────────────────────
 
 /** GET /api/machine/firmware/version?machineId=... — installed/latest version info. Null on a non-ok. */
 export async function getFirmwareVersion(machineId: string | number): Promise<FirmwareVersion | null> {
-  return jsonOrNull<FirmwareVersion>(await apiFetch(`api/machine/firmware/version?machineId=${machineId}`));
+  return jsonOrNull<FirmwareVersion>(await apiFetch(`api/machine/firmware/version?machineId=${pathSeg(machineId)}`));
 }
 
 /** POST /api/machine/firmware/update — trigger the machine's OTA update. Raw Response (the caller reads the error body on a non-ok). */
@@ -89,7 +89,7 @@ export function triggerFirmwareUpdate(machineId: string | number): Promise<Respo
 
 /** GET /api/machine/firmware/progress?machineId=... — poll update progress. Null on a non-ok or an unparseable body (treated as a transient failure by the poller). */
 export async function getFirmwareProgress(machineId: string | number): Promise<FirmwareProgress | null> {
-  const r = await apiFetch(`api/machine/firmware/progress?machineId=${machineId}`);
+  const r = await apiFetch(`api/machine/firmware/progress?machineId=${pathSeg(machineId)}`);
   if (!r.ok) return null;
   return (await r.json().catch(() => null)) as FirmwareProgress | null;
 }
@@ -101,7 +101,7 @@ export async function getFirmwareProgress(machineId: string | number): Promise<F
  * the raw machine options array and `stale` marks a cached/offline answer.
  */
 export async function listMachineProfiles(machineId: string | number): Promise<MachineProfileList | null> {
-  return jsonOrNull<MachineProfileList>(await apiFetch(`api/machine/profiles?machineId=${machineId}`));
+  return jsonOrNull<MachineProfileList>(await apiFetch(`api/machine/profiles?machineId=${pathSeg(machineId)}`));
 }
 
 /**
@@ -114,8 +114,8 @@ export async function getMachineProfile(
   machineId?: string | number,
 ): Promise<MachineProfile | null> {
   const url = machineId === undefined
-    ? `api/machine/profile/${id}`
-    : `api/machine/profile/${id}?machineId=${machineId}`;
+    ? `api/machine/profile/${pathSeg(id)}`
+    : `api/machine/profile/${pathSeg(id)}?machineId=${pathSeg(machineId)}`;
   return jsonOrNull<MachineProfile>(await apiFetch(url));
 }
 
@@ -131,7 +131,7 @@ export function fetchMachineProfilesResponse(
   machineId: string | number,
   signal?: AbortSignal,
 ): Promise<Response> {
-  return apiFetch(`api/machine/profiles?machineId=${machineId}`, signal ? { signal } : undefined);
+  return apiFetch(`api/machine/profiles?machineId=${pathSeg(machineId)}`, signal ? { signal } : undefined);
 }
 
 /** Low-level GET /api/machine/profile/{id} counterpart to {@link fetchMachineProfilesResponse}. */
@@ -140,7 +140,7 @@ export function fetchMachineProfileResponse(
   machineId: string | number,
   signal?: AbortSignal,
 ): Promise<Response> {
-  return apiFetch(`api/machine/profile/${id}?machineId=${machineId}`, signal ? { signal } : undefined);
+  return apiFetch(`api/machine/profile/${pathSeg(id)}?machineId=${pathSeg(machineId)}`, signal ? { signal } : undefined);
 }
 
 /**
@@ -149,13 +149,13 @@ export function fetchMachineProfileResponse(
  * on a non-ok, so this returns the raw Response.
  */
 export function saveMachineProfile(id: string | number | null, body: unknown): Promise<Response> {
-  const url = id != null ? `api/machine/profile/${id}` : 'api/machine/profile';
+  const url = id != null ? `api/machine/profile/${pathSeg(id)}` : 'api/machine/profile';
   return apiFetch(url, jsonBody(body, id != null ? 'PUT' : 'POST'));
 }
 
 /** DELETE /api/machine/profile/{id}?machineId=... — delete a profile; raw Response so the caller distinguishes the failure. */
 export function deleteMachineProfile(id: string | number, machineId: string | number): Promise<Response> {
-  return apiFetch(`api/machine/profile/${id}?machineId=${machineId}`, { method: 'DELETE' });
+  return apiFetch(`api/machine/profile/${pathSeg(id)}?machineId=${pathSeg(machineId)}`, { method: 'DELETE' });
 }
 
 // ── Machine control (#1324) ──────────────────────────────────────────────
