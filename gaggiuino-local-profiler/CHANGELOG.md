@@ -1,25 +1,25 @@
 ## [3.5.0] - 2026-10-18
+
 ### Added
 - **Open pages pick up changes made on another device within seconds, without a reload.** Closes #1539
 - **New developer MCP tool reports response times, memory and machine traffic of the running app.** Closes #1568
 - **The shot list API accepts an optional limit and reports how many shots were pulled today.** Refs #1616
 - **A backflush or descale recorded by your Gaggiuino now ticks off the matching maintenance task automatically.** Closes #1639
+
 ### Changed
 - **The profile list's sync status and the app settings now update on other open pages too.** Closes #1539
 - **Pages and the Home Assistant integration load much faster on small devices with a long shot history.** Refs #1616
 - **Theme colours and overlay stacking now come from shared tokens, keeping the light theme consistent.** Refs #1618
 - **The app starts faster on SD cards because it only fixes data folder ownership when it is actually wrong.** Refs #1621
-- **Shot scores are now coloured in five steps everywhere, matching the analytics charts.** Refs #1622
-- **Scores in the sidebar and the analytics tables now use the same five-step colour scale as the charts.** Refs #1622
+- **Shot scores now use the same five-step colour scale everywhere, including the sidebar and the analytics tables.** Refs #1622
 - **A machine with an invalid address no longer falls back to a built-in placeholder address.**
-- **The release check now also scans the source code for private file references and internal hostnames.** Closes #1624
 - **Achievements load faster on devices with a long shot history.** Refs #1721
+
 ### Fixed
 - **Shots that never reach 5 bar now get a score instead of none.** Closes #1538
 - **Screen readers now announce every form field by its caption, and clicking a caption focuses its field.** Closes #1547
 - **The bean sheet and shelf now show the same remaining amount as the stock line.** Closes #1553
-- **Profile and firmware views open instantly when the machine is switched off instead of waiting several seconds.** Closes #1572
-- **Profile and firmware views also skip the timeout wait when the machine is switched off at its smart plug.** Closes #1572
+- **Profile and firmware views open instantly when the machine is switched off, also at its smart plug, instead of waiting several seconds.** Closes #1572
 - **An imported bean's photo and map position now appear right away instead of after a later reload.** Closes #1580
 - **A machine stuck in a brew or steam mode, or reporting a garbage shot number, can no longer slow the app down or flood the sync.** Refs #1601
 - **Odd data from a machine or the MQTT broker can no longer break the live view or grow the app's memory.** Closes #1601
@@ -80,6 +80,7 @@
 - **The streak figures next to the coffee-year calendar are no longer cut off when the window is medium-wide.** Refs #1741
 - **Screen readers announce the shot list button and the machine status icon in the selected language.**
 - **Saving a bean that the server rejects now shows an error instead of doing nothing.**
+
 ### Security
 - **The app now closes stalled connections and can no longer crash or lose its rate limit through a bad rate-limit setting.** Refs #1601
 - **Restoring a crafted backup file can no longer exhaust the app's memory.** Refs #1601
@@ -91,7 +92,7 @@
 - **Shot images and machine histories with implausible values no longer slow the app down or exhaust its memory.** Refs #1747
 - **The network guard for imports and shop images now also blocks reserved, multicast and IPv4-embedding IPv6 addresses.** Refs #1747
 - **Ids are URL-encoded wherever the app builds an API request path.** Refs #1747
-- **Home Assistant Ingress requests are only recognised when they come from the Supervisor's ingress proxy.** Refs #1747
+- **Requests are only treated as Home Assistant Ingress requests when they really are.** Refs #1747
 
 ## [3.4.0] - 2026-10-09
 
