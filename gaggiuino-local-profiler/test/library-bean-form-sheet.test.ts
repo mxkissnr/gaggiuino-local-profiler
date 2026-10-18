@@ -511,9 +511,9 @@ describe('rejected save shows an error (#1761)', () => {
   const saveButtonIds = ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn'];
 
   function expectSaveButtonsEnabled(): void {
-    expect((find('lib-sheet-save') as unknown as { disabled: boolean }).disabled).toBe(false);
+    expect(find('lib-sheet-save')?.disabled).toBe(false);
     for (const id of saveButtonIds) {
-      expect((doc.getElementById(id) as unknown as { disabled: boolean }).disabled).toBe(false);
+      expect(doc.getElementById(id)?.disabled).toBe(false);
     }
   }
 
