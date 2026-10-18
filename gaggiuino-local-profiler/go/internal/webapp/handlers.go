@@ -77,6 +77,8 @@ func (h *Handlers) kioskRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 // index serves the templated index.html — see doc.go's "Handler behavior".
+// The manifest link is omitted only when auth.IsIngressRequest trusts the
+// request, i.e. when it came from the Supervisor's ingress proxy.
 func (h *Handlers) index(w http.ResponseWriter, r *http.Request) {
 	html := h.indexHTML
 	if !auth.IsIngressRequest(r) {

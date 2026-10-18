@@ -204,7 +204,7 @@ func (h *Handlers) postDemoEnd(w http.ResponseWriter, r *http.Request) {
 // non-Ingress (direct-port/LAN) callers — see getToken's doc comment.
 //
 // tokenRateLimitIngress applies to HA Ingress callers (#901). Every Ingress
-// request arrives from the one shared Supervisor address (see
+// request arrives from the one shared Supervisor ingress proxy address (see
 // auth.IsSupervisorIP), so the token:<ip> bucket is shared by every browser
 // tab and user of the same HA instance, and each SPA load fetches the token
 // once. 10/min was too tight for that; 120/min still bounds a runaway client

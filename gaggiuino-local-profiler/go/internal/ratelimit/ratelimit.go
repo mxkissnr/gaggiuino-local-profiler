@@ -99,7 +99,7 @@ func bucketKey(ip string) string {
 // socket address only, IPv6-/64-normalized via bucketKey, see doc.go), same
 // /assets/* exemption, same 429 JSON error shape. Ingress requests with a
 // forwarded per-user header are keyed per Home Assistant user instead, so they
-// do not all share the Supervisor's single address bucket.
+// do not all share the Supervisor ingress proxy's single address bucket.
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/assets/") {
@@ -119,9 +119,10 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 // requestKey returns the rate-limit bucket key for r. Non-Ingress requests
 // keep the raw socket-address key exactly as before: a LAN client on the
 // exposed port could set X-Remote-User-Id itself, so the header is only read
-// when auth.IsIngressRequest proves the request came from the Supervisor. An
-// Ingress request without a usable header falls back to the same shared
-// Supervisor key, preserving the previous behavior if the header is absent.
+// when auth.IsIngressRequest proves the request came from the Supervisor's
+// ingress proxy address. An Ingress request without a usable header falls
+// back to the same shared ingress-proxy key, preserving the previous
+// behavior if the header is absent.
 func requestKey(r *http.Request) string {
 	fallback := bucketKey(auth.RemoteIP(r))
 	if !auth.IsIngressRequest(r) {
