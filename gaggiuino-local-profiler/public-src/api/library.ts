@@ -1,4 +1,4 @@
-import { apiFetch, jsonBody, jsonOrNull } from './fetch.js';
+import { apiFetch, jsonBody, jsonOrNull, pathSeg } from './fetch.js';
 import type {
   AdjustFrozenPortionInput, BagUpdateInput, Basket, Bean, CoffeeLibrary, FreezePortionsInput,
   Grinder, Milk, NewBagInput, PuckScreen, Recipe, ReorderBagsInput, ThawPortionInput,
@@ -34,43 +34,43 @@ export async function getLibrary(): Promise<CoffeeLibrary | null> {
  * bean, or null on a non-ok response.
  */
 export async function saveBean(id: number | null, payload: unknown): Promise<Bean | null> {
-  const url = id != null ? `api/library/bean/${id}` : 'api/library/bean';
+  const url = id != null ? `api/library/bean/${pathSeg(id)}` : 'api/library/bean';
   return jsonOrNull<Bean>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/bean/{id}/new-bag — append a bag to the bean. */
 export async function addBeanBag(id: number, payload: NewBagInput): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/new-bag`, jsonBody(payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(id)}/new-bag`, jsonBody(payload)));
 }
 
 /** DELETE /api/library/bean/{beanId}/bag/{bagId} — drop one bag; returns the updated bean. */
 export async function deleteBeanBag(beanId: number, bagId: number): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, { method: 'DELETE' }));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(beanId)}/bag/${pathSeg(bagId)}`, { method: 'DELETE' }));
 }
 
 /** PUT /api/library/bean/{beanId}/bag/{bagId} — edit a bag's mutable fields (full-replace; sortOrder optional/partial). */
 export async function updateBeanBag(beanId: number, bagId: number, payload: BagUpdateInput): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/bag/${bagId}`, jsonBody(payload, 'PUT')));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(beanId)}/bag/${pathSeg(bagId)}`, jsonBody(payload, 'PUT')));
 }
 
 /** POST /api/library/bean/{id}/reorder-bags — bulk-reassign queue order for upcoming bags. */
 export async function reorderBeanBags(id: number, bagIds: ReorderBagsInput['bagIds']): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/reorder-bags`, jsonBody({ bagIds })));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(id)}/reorder-bags`, jsonBody({ bagIds })));
 }
 
 /** POST /api/library/bean/{id}/freeze-portions — split part of the active bag into dated frozen portions. */
 export async function freezeBeanPortions(id: number, payload: FreezePortionsInput): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/freeze-portions`, jsonBody(payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(id)}/freeze-portions`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{beanId}/thaw-portion — thaw one portion of a frozen batch. */
 export async function thawBeanPortion(beanId: number, payload: ThawPortionInput): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/thaw-portion`, jsonBody(payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(beanId)}/thaw-portion`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{beanId}/adjust-frozen-portion — correct a frozen-portion entry after the fact. */
 export async function adjustFrozenPortion(beanId: number, payload: AdjustFrozenPortionInput): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${beanId}/adjust-frozen-portion`, jsonBody(payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(beanId)}/adjust-frozen-portion`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{id}/known-grind — remember a (grinder, grindSetting) pair. */
@@ -78,35 +78,35 @@ export async function saveBeanKnownGrind(
   id: number,
   payload: { grinder?: string; grindSetting?: string | number },
 ): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/known-grind`, jsonBody(payload)));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(id)}/known-grind`, jsonBody(payload)));
 }
 
 /** POST /api/library/bean/{id}/toggle-active — manual override for the order card's bean picker (#578). */
 export async function toggleBeanActive(id: number): Promise<Bean | null> {
-  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${id}/toggle-active`, { method: 'POST' }));
+  return jsonOrNull<Bean>(await apiFetch(`api/library/bean/${pathSeg(id)}/toggle-active`, { method: 'POST' }));
 }
 
 /** POST /api/library/bean/{id}/delete — permanently delete a bean. */
 export function deleteBeanPermanently(id: number): Promise<Response> {
-  return apiFetch(`api/library/bean/${id}/delete`, { method: 'POST' });
+  return apiFetch(`api/library/bean/${pathSeg(id)}/delete`, { method: 'POST' });
 }
 
 /** POST /api/library/bean/{id}/image — upload a (cropped) bean photo; raw Response so the caller can read the JSON error/statusText. */
 export function uploadBeanImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/bean/${id}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+  return apiFetch(`api/library/bean/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
 }
 
 // ── Grinders ─────────────────────────────────────────────────────────────
 
 /** POST/PUT /api/library/grinder[/{id}] — create (`id` null) or update a grinder. */
 export async function saveGrinder(id: number | null, payload: unknown): Promise<Grinder | null> {
-  const url = id != null ? `api/library/grinder/${id}` : 'api/library/grinder';
+  const url = id != null ? `api/library/grinder/${pathSeg(id)}` : 'api/library/grinder';
   return jsonOrNull<Grinder>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/grinder/{id}/reset-burrs — start a fresh burr-wear counting window. */
 export async function resetGrinderBurrs(id: number): Promise<Grinder | null> {
-  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/reset-burrs`, { method: 'POST' }));
+  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${pathSeg(id)}/reset-burrs`, { method: 'POST' }));
 }
 
 /**
@@ -116,35 +116,35 @@ export async function resetGrinderBurrs(id: number): Promise<Grinder | null> {
 export async function setGrinderZeroPoint(id: number, zeroPoint: number, since?: number): Promise<Grinder | null> {
   const body: { zeroPoint: number; since?: number } = { zeroPoint };
   if (since) body.since = since;
-  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point`, jsonBody(body, 'PUT')));
+  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${pathSeg(id)}/zero-point`, jsonBody(body, 'PUT')));
 }
 
 /** DELETE /api/library/grinder/{id}/zero-point/{since} — remove one history entry. */
 export async function deleteGrinderZeroPoint(id: number, since: number): Promise<Grinder | null> {
-  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${id}/zero-point/${since}`, { method: 'DELETE' }));
+  return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${pathSeg(id)}/zero-point/${pathSeg(since)}`, { method: 'DELETE' }));
 }
 
 /** POST /api/library/grinder/{id}/image — upload a (cropped) grinder photo; raw Response. */
 export function uploadGrinderImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/grinder/${id}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+  return apiFetch(`api/library/grinder/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
 }
 
 /** POST /api/library/grinder/{id}/delete — permanently delete a grinder. */
 export function deleteGrinderPermanently(id: number): Promise<Response> {
-  return apiFetch(`api/library/grinder/${id}/delete`, { method: 'POST' });
+  return apiFetch(`api/library/grinder/${pathSeg(id)}/delete`, { method: 'POST' });
 }
 
 // ── Recipes ──────────────────────────────────────────────────────────────
 
 /** POST/PUT /api/library/recipe[/{id}] — create (`id` null) or update a recipe. */
 export async function saveRecipe(id: number | null, payload: unknown): Promise<Recipe | null> {
-  const url = id != null ? `api/library/recipe/${id}` : 'api/library/recipe';
+  const url = id != null ? `api/library/recipe/${pathSeg(id)}` : 'api/library/recipe';
   return jsonOrNull<Recipe>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/recipe/{id}/delete — permanently delete a recipe. */
 export function deleteRecipePermanently(id: number): Promise<Response> {
-  return apiFetch(`api/library/recipe/${id}/delete`, { method: 'POST' });
+  return apiFetch(`api/library/recipe/${pathSeg(id)}/delete`, { method: 'POST' });
 }
 
 // ── Milk ─────────────────────────────────────────────────────────────────
@@ -161,48 +161,48 @@ export async function createMilk(payload: unknown): Promise<Milk | null> {
 
 /** POST /api/library/milk/{id}/restock — add `ml` to the milk's stock. */
 export async function restockMilk(id: number, ml: number): Promise<Milk | null> {
-  return jsonOrNull<Milk>(await apiFetch(`api/library/milk/${id}/restock`, jsonBody({ ml })));
+  return jsonOrNull<Milk>(await apiFetch(`api/library/milk/${pathSeg(id)}/restock`, jsonBody({ ml })));
 }
 
 /** DELETE /api/library/milk/{id} — permanently delete a milk. */
 export function deleteMilkById(id: number): Promise<Response> {
-  return apiFetch(`api/library/milk/${id}`, { method: 'DELETE' });
+  return apiFetch(`api/library/milk/${pathSeg(id)}`, { method: 'DELETE' });
 }
 
 // ── Baskets (#635) ───────────────────────────────────────────────────────
 
 /** POST/PUT /api/library/basket[/{id}] — create (`id` null) or update a basket. */
 export async function saveBasket(id: number | null, payload: unknown): Promise<Basket | null> {
-  const url = id != null ? `api/library/basket/${id}` : 'api/library/basket';
+  const url = id != null ? `api/library/basket/${pathSeg(id)}` : 'api/library/basket';
   return jsonOrNull<Basket>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/basket/{id}/image — upload a (cropped) basket photo; raw Response. */
 export function uploadBasketImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/basket/${id}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+  return apiFetch(`api/library/basket/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
 }
 
 /** DELETE /api/library/basket/{id} — permanently delete a basket. */
 export function deleteBasketById(id: number): Promise<Response> {
-  return apiFetch(`api/library/basket/${id}`, { method: 'DELETE' });
+  return apiFetch(`api/library/basket/${pathSeg(id)}`, { method: 'DELETE' });
 }
 
 // ── Puck screens (#635) ──────────────────────────────────────────────────
 
 /** POST/PUT /api/library/puckscreen[/{id}] — create (`id` null) or update a puck screen. */
 export async function savePuckScreen(id: number | null, payload: unknown): Promise<PuckScreen | null> {
-  const url = id != null ? `api/library/puckscreen/${id}` : 'api/library/puckscreen';
+  const url = id != null ? `api/library/puckscreen/${pathSeg(id)}` : 'api/library/puckscreen';
   return jsonOrNull<PuckScreen>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
 /** POST /api/library/puckscreen/{id}/image — upload a (cropped) puck-screen photo; raw Response. */
 export function uploadPuckScreenImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/puckscreen/${id}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+  return apiFetch(`api/library/puckscreen/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
 }
 
 /** DELETE /api/library/puckscreen/{id} — permanently delete a puck screen. */
 export function deletePuckScreenById(id: number): Promise<Response> {
-  return apiFetch(`api/library/puckscreen/${id}`, { method: 'DELETE' });
+  return apiFetch(`api/library/puckscreen/${pathSeg(id)}`, { method: 'DELETE' });
 }
 
 // ── Barcode scan ─────────────────────────────────────────────────────────
@@ -213,5 +213,5 @@ export function deletePuckScreenById(id: number): Promise<Response> {
  * failure and reads the `{ name, roaster, notes }` body itself.
  */
 export function scanBarcode(barcode: string): Promise<Response> {
-  return apiFetch(`api/library/scan/${encodeURIComponent(barcode)}`);
+  return apiFetch(`api/library/scan/${pathSeg(barcode)}`);
 }
