@@ -64,6 +64,7 @@ class FakeElement {
   hidden = false;
   value = '';
   checked = false;
+  disabled = false;
   type = '';
   parentNode: FakeElement | null = null;
   readonly children: FakeElement[] = [];
@@ -275,11 +276,13 @@ interface StateLike {
 let doc: FakeDocument;
 let library: LibraryModule;
 let S: StateLike;
+let showToast: ReturnType<typeof vi.fn>;
 
 beforeEach(async () => {
   doc = new FakeDocument();
+  showToast = vi.fn();
   g.document = doc;
-  g.window = { matchMedia: () => ({ matches: false }) };
+  g.window = { matchMedia: () => ({ matches: false }), showToast };
   mocks.saveBean.mockReset();
   vi.resetModules();
   ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
@@ -501,5 +504,53 @@ describe('double save guard (#1614 slice 4)', () => {
     await second;
 
     expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('rejected save shows an error (#1761)', () => {
+  const saveButtonIds = ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn'];
+
+  function expectSaveButtonsEnabled(): void {
+    expect((find('lib-sheet-save') as unknown as { disabled: boolean }).disabled).toBe(false);
+    for (const id of saveButtonIds) {
+      expect((doc.getElementById(id) as unknown as { disabled: boolean }).disabled).toBe(false);
+    }
+  }
+
+  it('create: shows the server message and keeps the form and its values', async () => {
+    const { home, form } = setupHome();
+    mocks.saveBean.mockRejectedValue(new Error('name required'));
+
+    library.openBeanForm();
+    doc.getElementById('beanFormName')!.value = 'Rejected Bean';
+    find('lib-sheet-save')!.dispatch('click');
+
+    await vi.waitFor(() => expect(showToast).toHaveBeenCalledTimes(1));
+
+    expect(showToast.mock.calls[0]?.[0]).toContain('name required');
+    expect(form.parentNode).not.toBe(home);
+    expect(doc.body.querySelector('#beanFormSheet')?.classList.contains('open')).toBe(true);
+    expect(doc.getElementById('beanFormName')!.value).toBe('Rejected Bean');
+    expect(S.coffeeLibrary.beans).toHaveLength(0);
+    expectSaveButtonsEnabled();
+  });
+
+  it('edit: falls back to the HTTP status and leaves the bean unchanged', async () => {
+    setupHome();
+    const bean = addBean();
+    mocks.saveBean.mockRejectedValue(new Error('HTTP 500'));
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    find('lib-sheet-save')!.dispatch('click');
+
+    await vi.waitFor(() => expect(showToast).toHaveBeenCalledTimes(1));
+
+    expect(showToast.mock.calls[0]?.[0]).toContain('HTTP 500');
+    expect(doc.body.querySelector('#beanFormSheet')?.classList.contains('open')).toBe(true);
+    expect(doc.getElementById('beanFormName')!.value).toBe('Renamed');
+    expect(S.coffeeLibrary.beans).toHaveLength(1);
+    expect(S.coffeeLibrary.beans[0]?.name).toBe('Yirgacheffe Chelelektu');
+    expectSaveButtonsEnabled();
   });
 });

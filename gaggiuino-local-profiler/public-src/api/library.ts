@@ -1,4 +1,4 @@
-import { apiFetch, jsonBody, jsonOrNull, pathSeg } from './fetch.js';
+import { apiFetch, apiFetchJson, jsonBody, jsonOrNull, pathSeg } from './fetch.js';
 import type {
   AdjustFrozenPortionInput, BagUpdateInput, Basket, Bean, CoffeeLibrary, FreezePortionsInput,
   Grinder, Milk, NewBagInput, PuckScreen, Recipe, ReorderBagsInput, ThawPortionInput,
@@ -31,11 +31,12 @@ export async function getLibrary(): Promise<CoffeeLibrary | null> {
 /**
  * POST/PUT /api/library/bean[/{id}] — create (`id` null) or update a bean.
  * `payload` is the form's field set (see the Bean schema); returns the saved
- * bean, or null on a non-ok response.
+ * bean, or throws an Error carrying the server's `error` string (or
+ * `HTTP <status>`) on a non-ok response.
  */
-export async function saveBean(id: number | null, payload: unknown): Promise<Bean | null> {
+export async function saveBean(id: number | null, payload: unknown): Promise<Bean> {
   const url = id != null ? `api/library/bean/${pathSeg(id)}` : 'api/library/bean';
-  return jsonOrNull<Bean>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
+  return apiFetchJson<Bean>(url, jsonBody(payload, id != null ? 'PUT' : 'POST'));
 }
 
 /** POST /api/library/bean/{id}/new-bag — append a bag to the bean. */

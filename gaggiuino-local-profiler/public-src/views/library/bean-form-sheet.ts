@@ -14,6 +14,7 @@ import {
   _overlayShieldsSheets, _trapTab, _dropNewShelfTile,
 } from './bean-sheet.js';
 import * as libraryApi from '../../api/library.js';
+import type { Bean } from '../../api/types.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { renderRecipeList } from './recipes.js';
 import { openNewBagForm } from './bean-card.js';
@@ -475,8 +476,13 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   _beanSaveInFlight = true;
   _setBeanSaveButtonsDisabled(true);
   try {
-    const saved = await libraryApi.saveBean(S.beanEditId, payload);
-    if (!saved) return;
+    let saved: Bean;
+    try {
+      saved = await libraryApi.saveBean(S.beanEditId, payload);
+    } catch (e) {
+      window.showToast?.(t('error_generic', (e as Error).message));
+      return;
+    }
     if (S.beanEditId) {
       const idx = _beanList().findIndex(b => b.id === S.beanEditId);
       if (idx !== -1) _beanList()[idx] = saved;
