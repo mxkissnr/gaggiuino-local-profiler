@@ -5,6 +5,7 @@ import it from './i18n/it.js';
 import fr from './i18n/fr.js';
 import es from './i18n/es.js';
 import nl from './i18n/nl.js';
+import { themeColor } from './utils.js';
 
 // The corsair crosshair plugin stashes its transient {x,y,draw} state directly
 // on the chart instance, which Chart.js's own type has no member for.
@@ -371,11 +372,21 @@ interface CorsairOptions {
   dash: number[];
 }
 
+// #1618: the crosshair used to be a fixed white, which disappears on the
+// light theme's near-white chart surface. themeColor() (utils.ts) resolves it
+// from the live theme at draw time, so a theme switch is picked up by the next
+// render.
 export const corsairPlugin: Plugin<ChartType, CorsairOptions> = {
   id: 'corsair',
-  defaults: { width: 1, color: 'rgba(255,255,255,0.35)', dash: [4,4] },
+  defaults: { width: 1, color: '', dash: [4,4] },
   afterInit:  c => { c.corsair = { x: 0, y: 0 }; },
-  afterEvent: (c, args) => { c.corsair = { x: args.event.x ?? 0, y: args.event.y ?? 0, draw: args.inChartArea }; c.draw(); },
+  // #1618: Chart.js renders after afterEvent itself. Asking for that render
+  // (args.changed) replaces the extra draw() that painted the chart a second
+  // time on every pointer move.
+  afterEvent: (c, args) => {
+    c.corsair = { x: args.event.x ?? 0, y: args.event.y ?? 0, draw: args.inChartArea };
+    args.changed = true;
+  },
   beforeDatasetsDraw: (c, _a, opts) => {
     if (!c.corsair) return;
     const { ctx } = c;
@@ -384,7 +395,9 @@ export const corsairPlugin: Plugin<ChartType, CorsairOptions> = {
     if (!draw) return;
     ctx.save();
     ctx.beginPath();
-    ctx.lineWidth = opts.width; ctx.strokeStyle = opts.color; ctx.setLineDash(opts.dash);
+    ctx.lineWidth = opts.width;
+    ctx.strokeStyle = opts.color || themeColor('--gray-500', 'rgba(255,255,255,0.35)');
+    ctx.setLineDash(opts.dash);
     ctx.moveTo(x, bottom); ctx.lineTo(x, top); ctx.stroke();
     ctx.restore();
   }
