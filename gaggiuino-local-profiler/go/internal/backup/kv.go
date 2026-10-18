@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mqtt"
 )
 
 // This file holds a narrow get/save round trip for the two settings blobs
@@ -62,19 +65,84 @@ func getMqttSettings(db *sql.DB) (map[string]any, error) {
 	return out, nil
 }
 
-// saveMqttSettings merges into the currently stored settings, never
-// overwrites wholesale — load-bearing for restore's decrypted-secrets
-// path, which must not erase a locally configured password when the backup
-// carried no secrets block at all.
+// saveMqttSettings merges patch into the currently stored settings and then
+// binds any reused credentials to the broker they belong to. A patch that
+// omits username/password does not send them: the stored ones survive only
+// while host and port still name the same broker. This is load-bearing for
+// restore, where a kv blob has its credentials stripped and a decrypted
+// secrets block may add host/port and credentials in separate steps.
 func saveMqttSettings(db *sql.DB, patch map[string]any) error {
-	current, err := getMqttSettings(db)
+	currentMap, err := getMqttSettings(db)
 	if err != nil {
 		return err
 	}
-	for k, v := range patch {
-		current[k] = v
+	mergedMap := make(map[string]any)
+	for k, v := range currentMap {
+		mergedMap[k] = v
 	}
-	return saveKV(db, "mqtt_settings", current)
+	for k, v := range patch {
+		mergedMap[k] = v
+	}
+
+	current := mqttSettingsFromMap(currentMap)
+	next := mqttSettingsFromMap(mergedMap)
+	_, sentPassword := patch["password"]
+	_, sentUsername := patch["username"]
+	if !sentUsername {
+		next.Username = ""
+	}
+	merged := next
+	if !sentPassword {
+		// An omitted password is not sent: let the broker-binding merge decide
+		// whether the stored one may stay. When a password is sent, even an
+		// empty one, it is exactly what the caller wants stored.
+		next.Password = ""
+		merged = mqtt.MergeCredentials(current, next)
+		// A kv restore strips credentials, so when its patch carries no
+		// username keep the stored one for the same broker.
+		if !sentUsername && mqtt.SameBroker(current, merged) {
+			merged.Username = current.Username
+		}
+	}
+
+	return saveKV(db, "mqtt_settings", map[string]any{
+		"transport": string(merged.Transport),
+		"host":      merged.Host,
+		"port":      float64(merged.Port),
+		"username":  merged.Username,
+		"password":  merged.Password,
+		"prefix":    merged.Prefix,
+	})
+}
+
+func mqttSettingsFromMap(m map[string]any) mqtt.Settings {
+	s := mqtt.Settings{Transport: mqtt.TransportWebSocket, Port: 1883, Prefix: "gaggiuino"}
+	if v, ok := m["transport"].(string); ok {
+		s.Transport = mqtt.TransportKind(v)
+	}
+	if v, ok := m["host"].(string); ok {
+		s.Host = v
+	}
+	switch v := m["port"].(type) {
+	case float64:
+		if v >= 1 && v <= 65535 && v == math.Trunc(v) {
+			s.Port = int(v)
+		}
+	case int:
+		if v >= 1 && v <= 65535 {
+			s.Port = v
+		}
+	}
+	if v, ok := m["username"].(string); ok {
+		s.Username = v
+	}
+	if v, ok := m["password"].(string); ok {
+		s.Password = v
+	}
+	if v, ok := m["prefix"].(string); ok {
+		s.Prefix = v
+	}
+	return s
 }
 
 // importSettingsDefaults is the default import-provider settings blob.

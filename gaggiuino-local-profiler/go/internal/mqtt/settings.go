@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // This file implements the #608 Settings-page WebSocket/MQTT live-transport
@@ -99,4 +100,30 @@ func (r *Repository) SaveSettings(s Settings) (Settings, error) {
 		return Settings{}, fmt.Errorf("mqtt: saving settings: %w", err)
 	}
 	return s, nil
+}
+
+// MergeCredentials applies next's connection details and decides whether the
+// stored password may be reused. A password only belongs to the broker it was
+// configured for: when next names a different host or port and carries no
+// password of its own, the stored password is dropped (and the stored username
+// is kept only when next sends one). Re-submitting the same broker without a
+// password keeps the stored one, matching the Settings UI, which never gets the
+// real password back from GET.
+func MergeCredentials(current, next Settings) Settings {
+	if next.Password != "" {
+		return next
+	}
+	if SameBroker(current, next) {
+		next.Password = current.Password
+		return next
+	}
+	next.Password = ""
+	return next
+}
+
+// SameBroker reports whether a and b name the same broker. DNS names are
+// case-insensitive and a user may pad a typed host, so both sides are trimmed
+// and folded.
+func SameBroker(a, b Settings) bool {
+	return a.Port == b.Port && strings.EqualFold(strings.TrimSpace(a.Host), strings.TrimSpace(b.Host))
 }

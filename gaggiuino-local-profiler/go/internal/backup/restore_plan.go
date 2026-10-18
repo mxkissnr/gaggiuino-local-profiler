@@ -196,8 +196,18 @@ func buildRestorePlan(b map[string]any, images restoreImages, shotCount int) res
 
 	plan.wantsSettings = sec.has("settings")
 
-	if s, ok := plan.decryptedSecrets["apiToken"].(string); ok {
-		plan.restoredToken = sanitizeToken(s)
+	if sec.has("secrets") {
+		if s, ok := plan.decryptedSecrets["apiToken"].(string); ok {
+			token := sanitizeToken(s)
+			if validRestoredToken(token) {
+				plan.restoredToken = token
+			} else {
+				// A rejected token leaves the current one in place — generating
+				// a replacement would lock out the integration and cards already
+				// holding it.
+				plan.secretsRestored = false
+			}
+		}
 	}
 
 	return plan
@@ -211,8 +221,30 @@ func decodeEncryptedSecrets(m map[string]any) *EncryptedSecrets {
 	return &enc
 }
 
+// restoredTokenMinLen matches auth.tokenMinLen. The app generates its own
+// token as 32 random bytes hex-encoded (64 lowercase hex characters); the
+// accepted alphabet is widened to the URL-safe base64 set so a hand-set token
+// still restores, while punctuation such as "/", "+" and "=" and control
+// characters are rejected.
+const restoredTokenMinLen = 32
+
+// validRestoredToken reports whether token is a plausible API token after
+// sanitizeToken has run.
+func validRestoredToken(token string) bool {
+	if len(token) < restoredTokenMinLen {
+		return false
+	}
+	for i := 0; i < len(token); i++ {
+		c := token[i]
+		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // sanitizeToken strips CR/LF/NUL from the token, trims it, and caps it at
-// 200 chars.
+// 200 chars. The result is format-checked by validRestoredToken.
 func sanitizeToken(s string) string {
 	out := make([]rune, 0, len(s))
 	for _, r := range s {
