@@ -585,6 +585,16 @@ function _setDeltaChip(id: string, delta: number | null, decimals = 0, unit = ''
 
 let _updateViewToken = 0;
 
+// Language the shot detail was last fully rendered in (#1760). updateView()
+// builds the detail imperatively (Chart.js legend, phase tags, stop-reason
+// line), so nothing else re-translates it; mode.ts compares this against
+// S.currentLang when the Shots tab is entered.
+let _renderedLang: string | null = null;
+
+export function shotsRenderedLang(): string | null {
+  return _renderedLang;
+}
+
 // Set per updateView() call — lets the async GaggiMate-phases callback
 // rebuild the chart once gmPhases lands (see below for why rebuild, not mutate).
 let _buildShotChart: ((phasesOpt: GmPhasesOption) => void) | null = null;
@@ -1053,4 +1063,6 @@ export async function updateView(): Promise<void> {
       _buildShotChart!({ gaggimatePhases: ranges });
     });
   }
+
+  _renderedLang = S.currentLang;
 }
