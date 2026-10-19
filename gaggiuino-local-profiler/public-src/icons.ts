@@ -61,7 +61,7 @@ export const STAR_ICON_SVG: Html = html`<svg class="rail-icon sm star-glyph" vie
 
 export const LIGHTNING_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
 
-export const SCALE_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M4 7h16"/><path d="M2 7l3 6a3 3 0 0 0 6 0L8 7"/><path d="M16 7l3 6a3 3 0 0 0 6 0l-3-6"/></svg>`;
+export const SCALE_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M7 21h10M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/></svg>`;
 
 export const BAR_CHART_ICON_SVG: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>`;
 
