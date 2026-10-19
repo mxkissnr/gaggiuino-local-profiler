@@ -565,3 +565,7 @@ Ab glp-integration v1.9.0 ist [ALERTua/hass-gaggiuino](https://github.com/ALERTu
 Die Profil-Endpunkte in GLP wurden vom Konzept der ALERTua/hass-gaggiuino-Integration inspiriert. Danke an [@ALERTua](https://github.com/ALERTua) für die ursprüngliche Integration.
 
 Vollständige Dokumentation — Features, Live-Modus, Analytics, Shot-Score, Exporte, Kompatibilität — im [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
+
+## Community und Support
+
+Fragen, Hilfe, das Teilen von Shots, Bohnen und Profilen sowie Release-Ankündigungen: [GLP Discord](https://discord.gg/CbPtWXKRev). Bestätigte Fehler und verfolgte Feature-Wünsche: [GitHub Issues](https://github.com/mxkissnr/gaggiuino-local-profiler/issues). Sicherheitsprobleme nur über eine [private Security Advisory](https://github.com/mxkissnr/gaggiuino-local-profiler/security/advisories/new).
