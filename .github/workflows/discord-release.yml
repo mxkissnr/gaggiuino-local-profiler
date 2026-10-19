@@ -74,6 +74,7 @@ jobs:
                 description: (
                   if ($body | length) > 3900
                   then $body[0:3900] + "\n\n[Full notes on GitHub](" + $url + ")"
+                  elif $body == "" then null
                   else $body
                   end
                 )
