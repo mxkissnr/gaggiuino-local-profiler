@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20armv7%20%7C%20aarch64-6b7280?style=flat-square" alt="Architectures"/>
   <img src="https://img.shields.io/badge/Backend-Go-00ADD8?logo=go&style=flat-square" alt="Go backend"/>
   <img src="https://img.shields.io/badge/Built%20with%20AI-Claude%20%2B%20DeepSeek-D97706?style=flat-square" alt="Built with AI: Claude + DeepSeek"/>
+  <a href="https://discord.gg/CbPtWXKRev"><img src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white&style=flat-square" alt="Discord"/></a>
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="License GPL-3.0"/>
 </p>
 
@@ -225,12 +226,14 @@ Full numbers (timeline, per-model breakdown, cost estimate) generated live from 
 
 ---
 
-## Community
+## Community & support
 
+- **Discord:** join the [GLP Discord](https://discord.gg/CbPtWXKRev) for questions, help, sharing shots, beans and profiles, and release announcements.
 - **Questions:** ask in [Q&A](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/q-a).
 - **Ideas:** one idea per discussion in [Feature Requests](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/feature-requests); upvote the ones you want most.
 - **Releases:** every release gets a discussion in [Announcements](https://github.com/mxkissnr/gaggiuino-local-profiler/discussions/categories/announcements).
-- **Bugs:** open an [issue](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/new/choose).
+- **Bugs:** open an [issue](https://github.com/mxkissnr/gaggiuino-local-profiler/issues/new/choose) for confirmed bugs and tracked feature requests.
+- **Security:** report problems only through a [private security advisory](https://github.com/mxkissnr/gaggiuino-local-profiler/security/advisories/new).
 - **Roadmap:** what comes next, and where help is welcome, is on the [roadmap board](https://github.com/users/mxkissnr/projects/2/views/2).
 
 Thanks to everyone who reports bugs, shares ideas and sends pull requests:

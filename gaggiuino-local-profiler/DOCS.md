@@ -562,3 +562,7 @@ As of glp-integration v1.9.0, you no longer need to install [ALERTua/hass-gaggiu
 The profile endpoint design in GLP was inspired by the pioneering work in ALERTua/hass-gaggiuino. Thank you to [@ALERTua](https://github.com/ALERTua) for the original integration.
 
 For full documentation — features, live mode, analytics, shot score, exports, compatibility — see the [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
+
+## Community and support
+
+Questions, help, sharing shots, beans and profiles, and release announcements: [GLP Discord](https://discord.gg/CbPtWXKRev). Confirmed bugs and tracked feature requests: [GitHub issues](https://github.com/mxkissnr/gaggiuino-local-profiler/issues). Security problems only through a [private security advisory](https://github.com/mxkissnr/gaggiuino-local-profiler/security/advisories/new).
