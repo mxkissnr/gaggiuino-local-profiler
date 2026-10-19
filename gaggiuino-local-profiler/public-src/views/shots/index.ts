@@ -619,6 +619,9 @@ export async function updateView(): Promise<void> {
   const token = ++_updateViewToken;
   await ensureCurves([shotA.id, shotB && shotB.id, previousShot && previousShot.id].filter(Boolean));
   if (token !== _updateViewToken) return;
+  // Captured after the await: the language this synchronous render body will
+  // actually use, even if setLang() runs before it finishes.
+  const renderedLang = S.currentLang;
 
   const dA    = getCachedShotData(shotA.id) || mapShotDatapoints({});
   const dB    = shotB ? (getCachedShotData(shotB.id) || mapShotDatapoints({})) : null;
@@ -1064,5 +1067,5 @@ export async function updateView(): Promise<void> {
     });
   }
 
-  _renderedLang = S.currentLang;
+  _renderedLang = renderedLang;
 }
