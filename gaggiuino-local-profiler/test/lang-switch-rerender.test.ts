@@ -45,7 +45,7 @@ const DIRECT_IDS = [
     'maintenance-view', 'achievements-view', 'orders-view', 'settings-view',
 ];
 
-function setup(): { updateView: ReturnType<typeof vi.fn> } {
+function setup() {
     const nodes: Record<string, FakeEl> = {};
     for (const id of DIRECT_IDS) nodes[id] = new FakeEl();
     g.document = {
