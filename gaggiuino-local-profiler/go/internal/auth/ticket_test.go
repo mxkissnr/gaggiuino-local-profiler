@@ -71,8 +71,8 @@ func TestTicket_OnlyValidOnTheStream(t *testing.T) {
 	}
 }
 
-// A ticket in the URL takes precedence: a bad ticket is not rescued by a
-// token= next to it.
+// A bad ticket is not rescued by a token= next to it: the long-lived token is
+// never accepted in the query.
 func TestTicket_BadTicketWithTokenIsRefused(t *testing.T) {
 	h := newTicketHandler(NewTicketStore())
 	if code := lanGet(h, "/api/events?ticket=bad&token="+testToken); code != http.StatusUnauthorized {

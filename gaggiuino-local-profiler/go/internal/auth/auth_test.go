@@ -51,9 +51,20 @@ func TestRequireToken_MissingTokenRejected(t *testing.T) {
 	}
 }
 
-func TestRequireToken_SSEQueryParamFallback(t *testing.T) {
+func TestRequireToken_SSEQueryTokenRejected(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/events?token="+testToken, nil)
+	req.RemoteAddr = "192.168.1.50:1234" // LAN, no header, no Ingress
+	rec := httptest.NewRecorder()
+	newAuthedHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 (the long-lived token is never accepted in the query), got %d", rec.Code)
+	}
+}
+
+func TestRequireToken_SSEHeaderPasses(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
 	req.RemoteAddr = "192.168.1.50:1234"
+	req.Header.Set("X-GLP-Token", testToken)
 	rec := httptest.NewRecorder()
 	newAuthedHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -61,13 +72,24 @@ func TestRequireToken_SSEQueryParamFallback(t *testing.T) {
 	}
 }
 
-func TestRequireToken_QueryParamFallbackOnlyAppliesToEvents(t *testing.T) {
+func TestRequireToken_SSEIngressBypass(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	req.RemoteAddr = "172.30.32.2:1234"
+	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/abc123")
+	rec := httptest.NewRecorder()
+	newAuthedHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected genuine Ingress request to bypass auth, got %d", rec.Code)
+	}
+}
+
+func TestRequireToken_QueryTokenRejectedOutsideEvents(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/shots?token="+testToken, nil)
 	req.RemoteAddr = "192.168.1.50:1234"
 	rec := httptest.NewRecorder()
 	newAuthedHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 (query-param fallback must not apply outside /api/events), got %d", rec.Code)
+		t.Fatalf("expected 401 (the query token is never accepted), got %d", rec.Code)
 	}
 }
 

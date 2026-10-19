@@ -12,9 +12,9 @@
 //     atomic write.
 //   - SecurityHeaders is the security-header net/http middleware.
 //   - RequireToken is the API-token-auth middleware: the X-GLP-Token header
-//     / ?token= query-param (for /api/events only) checks, the Ingress/
+//     and ?ticket= query-param (for /api/events only) checks, the Ingress/
 //     status/token/non-API bypasses, and the JSON 401/503 error shapes, in
-//     that order.
+//     that order. The long-lived token is never accepted in the query.
 //
 // See go/README.md for the security guarantees this model must preserve.
 //
