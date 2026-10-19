@@ -71,6 +71,10 @@ interface MaintLogEntry {
 
 type MaintScope = string | number;
 
+// Marker the backend writes into a log entry's notes for entries taken over
+// from the machine's service log; the log renders it as a translated badge.
+export const AUTO_SYNCED_NOTE = 'Auto-synced from machine';
+
 // ── Task icons (#393) — plain inline SVG line icons, no emoji, matching the
 // Dashboard mockup the maintainer picked. Purely decorative; task identity always comes
 // from MAINT_META's translation key (or the grinder's own name), never the
@@ -636,7 +640,9 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
       <td>${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</td>
       <td>${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}</td>
       <td class="num">${esc(e.shotCountAtTime ?? '–')}</td>
-      <td>${e.notes ? esc(e.notes) : html``}
+      <td>${e.notes === AUTO_SYNCED_NOTE
+        ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
+        : e.notes ? esc(e.notes) : html``}
         <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" title="${tHtml('maint_log_confirm_delete')}">${tHtml('maint_log_delete')}</button>
       </td>
     </tr>`;

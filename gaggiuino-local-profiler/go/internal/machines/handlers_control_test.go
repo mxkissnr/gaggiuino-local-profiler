@@ -536,3 +536,75 @@ func TestFirmwareVersion_ReachableOrUnknownStillFetchesSettings(t *testing.T) {
 		})
 	}
 }
+
+// errorSettingsAdapter returns a preset GetSettings error, standing in for a
+// real transport failure whose text embeds the machine's host (#1762).
+type errorSettingsAdapter struct {
+	fakePanicAdapter
+	err error
+}
+
+func (a errorSettingsAdapter) GetSettings(context.Context, *Machine, string) (json.RawMessage, error) {
+	return nil, a.err
+}
+
+// TestGetSettings_KnownOfflineAnswersAtOnce is the #1762 regression test for
+// GET /api/machine/settings: once the poller reports the machine unreachable,
+// the handler must answer 502 immediately with a generic message instead of
+// paying the adapter timeout. failOnCallAdapter fails the test if the live
+// GetSettings path is ever entered.
+func TestGetSettings_KnownOfflineAnswersAtOnce(t *testing.T) {
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+	h.gaggiuino = failOnCallAdapter{t: t}
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	h.SetKnownUnreachable(func(id int64) bool { return id == machine.ID })
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/settings?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, body = %s, want 502", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "machine offline") {
+		t.Errorf("body = %s, want the generic offline message", body)
+	}
+	if strings.Contains(body, "192.0.2.1") || strings.Contains(body, "http") {
+		t.Errorf("body = %s, must not contain the machine host/URL", body)
+	}
+}
+
+// TestGetSettings_AdapterErrorHidesMachineHost is the #1762 counterpart for the
+// live path: a GetSettings failure whose text embeds the host must still map to
+// a generic 502 body, with the real error only logged server-side.
+func TestGetSettings_AdapterErrorHidesMachineHost(t *testing.T) {
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+	h.gaggiuino = errorSettingsAdapter{
+		err: errors.New(`Get "http://192.0.2.1/api/settings": dial tcp 192.0.2.1:80: connect: connection refused`),
+	}
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/settings?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, body = %s, want 502", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "machine unreachable") {
+		t.Errorf("body = %s, want the generic unreachable message", body)
+	}
+	if strings.Contains(body, "192.0.2.1") || strings.Contains(body, "http") {
+		t.Errorf("body = %s, must not contain the machine host/URL", body)
+	}
+}

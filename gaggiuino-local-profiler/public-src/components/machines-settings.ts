@@ -554,13 +554,24 @@ async function loadReleaseChannel(machineId: number): Promise<void> {
     // The form may have been switched to another machine (or closed) while
     // this was in flight; a later call bumped the counter, so drop the answer.
     if (seq !== _releaseChannelReqSeq) return;
-    if (!settings) return;
+    if (!settings) {
+      // Offline/unreachable (the API answers 502): no channel can be saved,
+      // so don't let the user pick one (#1762).
+      select.disabled = true;
+      return;
+    }
+    // A previous failed load may have disabled the select (#1762).
+    select.disabled = false;
     const sys = settings as Record<string, unknown>;
     _machineSystemSettings = sys;
     _machineSystemSettingsMachineId = machineId;
     const ch = Number(sys.releaseChannel);
     select.value = [0, 1, 2].includes(ch) ? String(ch) : '0';
-  } catch { /* offline/unreachable -- leave the select at its default */ }
+  } catch {
+    // Network/offline failure -- no channel can be saved (#1762).
+    if (seq !== _releaseChannelReqSeq) return;
+    select.disabled = true;
+  }
 }
 
 // #1044: called from saveMachineForm() after the main machine record has
