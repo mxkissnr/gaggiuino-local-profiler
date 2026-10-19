@@ -24,12 +24,13 @@
 // that is defense-in-depth, not something this package needs, so it
 // correctly has no code for it.
 //
-// The query-param auth for EventSource (a short-lived ?ticket= from
-// POST /api/events/ticket, #1626, plus the deprecated ?token=) does NOT live
-// in this package — it's a special case in internal/auth.RequireToken
-// (checked only when the request path is /api/events; the ticket store is
-// internal/auth's ticket.go), which cmd/server wires this package's handler
-// behind unchanged rather than this package reimplementing it.
+// The query-param auth for EventSource (a short-lived, single-use ?ticket=
+// from POST /api/events/ticket, #1626; the long-lived token is never accepted
+// in the query) does NOT live in this package — it's a special case in
+// internal/auth.RequireToken (checked only when the request path is
+// /api/events; the ticket store is internal/auth's ticket.go), which
+// cmd/server wires this package's handler behind unchanged rather than this
+// package reimplementing it.
 //
 // Hub is a minimal in-process pub/sub. Producers publish through
 // Hub.Publish/Handler.Prime; cmd/server wires DataChanges (datachanged.go) as

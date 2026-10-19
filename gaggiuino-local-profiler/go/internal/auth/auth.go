@@ -234,19 +234,15 @@ func RequireToken(token string, tickets *TicketStore) func(http.Handler) http.Ha
 			authenticated := IsTokenValid(token, r.Header.Get("X-GLP-Token"))
 			// #735: EventSource can't send custom headers, so /api/events —
 			// and only that route — also accepts a credential in the query.
-			// #1626: that is a short-lived, single-use ?ticket= from
-			// POST /api/events/ticket (ticket.go). The long-lived token as
-			// ?token= is still accepted for now, deprecated, so a web app
-			// loaded before the update keeps its live stream until reload.
+			// #1626: the header, a ?ticket=, or HA Ingress authenticates the
+			// stream; the ticket is short-lived and single-use, issued by
+			// POST /api/events/ticket (ticket.go). The long-lived token is
+			// never accepted in the query, where it would end up in proxy
+			// logs and browser tooling.
 			// See internal/sse/doc.go for why this lives here and not in
 			// that package.
 			if !authenticated && r.URL.Path == "/api/events" {
-				q := r.URL.Query()
-				if ticket := q.Get("ticket"); ticket != "" {
-					authenticated = tickets.Consume(ticket)
-				} else {
-					authenticated = IsTokenValid(token, q.Get("token"))
-				}
+				authenticated = tickets.Consume(r.URL.Query().Get("ticket"))
 			}
 
 			// Ingress bypass: only trust X-Ingress-Path when the request

@@ -45,17 +45,6 @@ components:
         (#1626). Only honored on `GET /api/events`, since a browser-native
         EventSource connection can't set custom headers — every other route
         requires the header. Valid for 30 seconds and for one connection.
-    tokenQueryAuth:
-      type: apiKey
-      in: query
-      name: token
-      description: >
-        Deprecated (#1626): use `ticketQueryAuth`. Same token as `tokenAuth`,
-        accepted as a `?token=` query parameter on `GET /api/events` only,
-        so a web app loaded before the ticket was introduced keeps its live
-        stream until it reloads. A long-lived token in a URL can end up in
-        logs, so this is going away.
-
   schemas:
 
     Ok:
@@ -3332,11 +3321,10 @@ paths:
         route, a short-lived single-use `?ticket=` from
         `POST /api/events/ticket` (#1626) — EventSource can't set custom
         headers, so this is the one exception to header-only auth. The
-        long-lived token as `?token=` is still accepted but deprecated.
+        long-lived token is never accepted in the query.
       security:
         - tokenAuth: []
         - ticketQueryAuth: []
-        - tokenQueryAuth: []
       responses:
         "200":
           description: "text/event-stream — see event types above"
