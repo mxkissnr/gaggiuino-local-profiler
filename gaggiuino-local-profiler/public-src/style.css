@@ -975,7 +975,6 @@
             color: var(--ring-color, var(--gray-600));
             flex-shrink: 0;
         }
-        .verdict-sep       { font-size: var(--fs-5); font-weight: 700; line-height: 1; color: var(--gray-600); flex-shrink: 0; }
         .verdict-headline  { font-size: var(--fs-3); font-weight: 700; color: var(--gray-200); display: flex; align-items: center; gap: var(--sp-2); }
         .verdict-subline   { font-size: var(--fs-1); color: var(--gray-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* #457: bean-target score hint — muted, same tone as the subline, so
