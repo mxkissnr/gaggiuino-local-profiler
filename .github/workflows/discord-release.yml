@@ -1,0 +1,83 @@
+# Posts each published GitHub release to the Discord #announcements channel (#1784).
+#
+# Trigger: `release: published` (drafts and prereleases are skipped), or a manual
+# `workflow_dispatch` with an existing release tag to re-post or test.
+# Secret: DISCORD_RELEASE_WEBHOOK (channel webhook URL). If it is not set, the job
+# succeeds with a notice. The URL is never echoed.
+# Note: release and workflow_dispatch events only use the workflow file from the
+# default branch, so this becomes active once a release merges dev into main.
+name: Discord release announcement
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re-)post
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  announce:
+    name: Post release to Discord
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REL_TAG: ${{ github.event.release.tag_name }}
+          REL_NAME: ${{ github.event.release.name }}
+          REL_BODY: ${{ github.event.release.body }}
+          REL_URL: ${{ github.event.release.html_url }}
+          REL_DRAFT: ${{ github.event.release.draft }}
+          REL_PRE: ${{ github.event.release.prerelease }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::notice::DISCORD_RELEASE_WEBHOOK is not set; skipping Discord announcement."
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            release=$(gh api "repos/$REPO/releases/tags/$INPUT_TAG")
+            REL_TAG=$(jq -r '.tag_name' <<<"$release")
+            REL_NAME=$(jq -r '.name // ""' <<<"$release")
+            REL_BODY=$(jq -r '.body // ""' <<<"$release")
+            REL_URL=$(jq -r '.html_url' <<<"$release")
+            REL_DRAFT=$(jq -r '.draft' <<<"$release")
+            REL_PRE=$(jq -r '.prerelease' <<<"$release")
+          fi
+
+          if [ "$REL_DRAFT" = "true" ] || [ "$REL_PRE" = "true" ]; then
+            echo "::notice::Release $REL_TAG is a draft or prerelease; skipping."
+            exit 0
+          fi
+
+          payload=$(jq -n \
+            --arg title "${REL_NAME:-GLP $REL_TAG released}" \
+            --arg url "$REL_URL" \
+            --arg body "$REL_BODY" \
+            '{
+              username: "GLP Releases",
+              embeds: [{
+                title: $title,
+                url: $url,
+                color: 14251782,
+                description: (
+                  if ($body | length) > 3900
+                  then $body[0:3900] + "\n\n[Full notes on GitHub](" + $url + ")"
+                  else $body
+                  end
+                )
+              }]
+            }')
+
+          curl --fail-with-body -sS -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK"
