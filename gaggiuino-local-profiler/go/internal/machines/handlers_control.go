@@ -96,9 +96,19 @@ func (h *Handlers) getSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unknown settings category: "+category)
 		return
 	}
+	if h.machineKnownOffline(machine.ID) {
+		// #1762: the poller already knows the machine is unreachable, so skip the
+		// ~5s adapter timeout and answer at once. The generic message keeps the
+		// machine's host out of the response body.
+		writeError(w, http.StatusBadGateway, "machine offline")
+		return
+	}
 	settings, err := adapter.GetSettings(r.Context(), machine, category)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		// The adapter error embeds the machine's host (and possibly the full URL),
+		// so log it server-side and answer with a generic message (#1762).
+		slog.Warn("reading machine settings failed", "machineId", machine.ID, "category", category, "err", err)
+		writeError(w, http.StatusBadGateway, "machine unreachable")
 		return
 	}
 	// #1431: the system category carries the machine's own MQTT broker
