@@ -348,7 +348,13 @@ export function applyActiveMachineChange(): void {
   }
   if (window.updateView) window.updateView();
   if (S.currentMode === 'analytics' && window.initAnalytics) window.initAnalytics();
-  if (S.currentMode === 'live' && window.connectLiveStream) window.connectLiveStream();
+  // #1759: the Live reference-shot dropdown is built from S.shots, so a
+  // machine switch must rebuild it -- reconnecting the stream alone left
+  // the previous machine's shots listed.
+  if (S.currentMode === 'live') {
+    if (window.populateRefSelector) window.populateRefSelector();
+    if (window.connectLiveStream) window.connectLiveStream();
+  }
   // #334: library bean/grinder lists are filtered by active machine too —
   // re-render so switching machine while already on that tab updates live.
   if (S.currentMode === 'library') {
