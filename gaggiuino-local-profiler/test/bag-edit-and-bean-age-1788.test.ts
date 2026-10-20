@@ -56,7 +56,7 @@ function bagCard(consumed: number): string {
     bags: [{ id: 7, roastDate: '2024-05-01', stock_g: 250, consumedG: consumed, remainingG: 250 - consumed, current: true }],
   } as unknown as BeanRow;
   const entry = { bg: bean.bags![0], consumed, stockG: 250, remaining: 250 - consumed } as unknown as BagEntry;
-  return renderBagCard(bean, entry, 'current', [bean], false) as unknown as string;
+  return renderBagCard(bean, entry, 'current', [bean], false);
 }
 
 function inputTag(htmlText: string, id: string): string {
