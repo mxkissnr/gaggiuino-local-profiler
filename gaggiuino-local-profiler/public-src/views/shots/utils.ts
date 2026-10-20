@@ -95,6 +95,38 @@ export function calcBeanAgeAtShot(
   return days >= 0 && days <= 730 ? days : null;
 }
 
+export interface ShotBeanAge {
+  days: number;
+  atShot: boolean;
+}
+
+export interface ShotBeanAgeOptions {
+  nowMs?: number;
+  /** Allow the "days since roast until now" read (single-shot view only). */
+  relativeToNow?: boolean;
+}
+
+// #1788: the freshness badge follows the library rather than the value frozen
+// into the annotation at save time, so correcting a bag's roast date also
+// fixes shots already saved with the old beanAgeDays. The stored value is only
+// the fallback for a bean that has left the library; relative-to-now is the
+// last resort when neither is available.
+export function shotBeanAge(
+  annotation: { beanId?: number | null; coffee?: string | null; beanAgeDays?: number | null; roastDate?: string | null } | null | undefined,
+  shotTimestampSec: number | null | undefined,
+  opts: ShotBeanAgeOptions = {},
+): ShotBeanAge | null {
+  const ann = annotation || {};
+  const live = calcBeanAgeAtShot(ann.coffee, shotTimestampSec, ann.beanId);
+  if (live != null) return { days: live, atShot: true };
+  if (ann.beanAgeDays != null) return { days: ann.beanAgeDays, atShot: true };
+  if (!(opts.relativeToNow ?? true) || !ann.roastDate) return null;
+  const roastDate = parseRoastDate(ann.roastDate);
+  if (!roastDate) return null;
+  const days = Math.round(((opts.nowMs ?? Date.now()) - roastDate.getTime()) / 86400000);
+  return days >= 0 ? { days, atShot: false } : null;
+}
+
 // ── Shot data ─────────────────────────────────────────────────────────────
 
 // getShotData(shot) reads shot.datapoints directly — only valid for a shot

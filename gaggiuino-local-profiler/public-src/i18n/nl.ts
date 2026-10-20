@@ -325,6 +325,7 @@ const nl: Partial<Translations> = {
     freshness_title:(d)=>`${d} dagen geleden geroosterd (optimum: 7–21 dagen)`,
     bean_age_at_shot:(d)=>`${d} dagen oud bij shot`,
     bean_age_badge:(d)=>`${d}d bij shot`,
+    freshness_badge:(d)=>`${d}d`,
     phase_preinfusion:'Preinfusie', phase_extraction:'Extractie',
     shot_end_reason:(r)=>`Shot beëindigd: ${r}`,
     exit_reason_1:'doelgewicht bereikt', exit_reason_2:'doeldruk bereikt',

@@ -2157,6 +2157,7 @@
             font-size: var(--fs-1); font-weight: 600;
             border-radius:var(--radius); padding: 2px var(--sp-2);
             margin-left: var(--sp-2); vertical-align: middle;
+            white-space: nowrap;
         }
         .freshness-fresh  { background: color-mix(in srgb, var(--ok) 15%, transparent);  color: var(--ok); }
         .freshness-ok     { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--accent-ink); }
