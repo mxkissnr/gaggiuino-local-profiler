@@ -325,6 +325,7 @@ const es: Partial<Translations> = {
     freshness_title:(d)=>`Tostado hace ${d} días (óptimo: 7–21 días)`,
     bean_age_at_shot:(d)=>`${d} días al momento del shot`,
     bean_age_badge:(d)=>`${d}d al shot`,
+    freshness_badge:(d)=>`${d}d`,
     phase_preinfusion:'Preinfusión', phase_extraction:'Extracción',
     shot_end_reason:(r)=>`Extracción finalizada: ${r}`,
     exit_reason_1:'peso objetivo alcanzado', exit_reason_2:'presión objetivo alcanzada',

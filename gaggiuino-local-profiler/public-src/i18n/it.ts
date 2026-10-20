@@ -325,6 +325,7 @@ const it: Partial<Translations> = {
     freshness_title:(d)=>`Torrefatto ${d} giorni fa (ottimale: 7–21 giorni)`,
     bean_age_at_shot:(d)=>`${d} giorni al momento del shot`,
     bean_age_badge:(d)=>`${d}g al shot`,
+    freshness_badge:(d)=>`${d}g`,
     phase_preinfusion:'Preinfusione', phase_extraction:'Estrazione',
     shot_end_reason:(r)=>`Estrazione terminata: ${r}`,
     exit_reason_1:'peso target raggiunto', exit_reason_2:'pressione target raggiunta',

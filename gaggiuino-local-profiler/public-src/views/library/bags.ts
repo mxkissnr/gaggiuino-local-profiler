@@ -115,12 +115,15 @@ export const _expandedPastSections = new Set<number>();
 // current/upcoming get the stock-adjust controls (past is already empty by
 // definition); delete is only offered on upcoming/past (never current —
 // see classifyBeanBags, and never the last remaining bag, enforced
-// server-side too). The full edit dialog is only offered while the bag is
-// still unconsumed (consumed === 0) — upcoming bags always qualify by
-// construction (SimulateBagQueue never touches a bag before its turn),
-// current loses it as soon as any dose lands on it, past bags never had it.
-// Only 'upcoming' bags are drag-reorderable (see bagDragPointerDown
-// below) — current is queue-position-fixed, past is inert.
+// server-side too). Current and upcoming bags stay fully editable even after
+// doses have been drawn: a wrong roast date or batch number must remain
+// correctable for the whole life of the bag. Only the original-weight input is
+// locked once consumed > 0 (stock changes go through the stock-adjust flow
+// above); roast date, price and batch number stay editable, and saveEditBag
+// resends the unchanged stock value. Past bags are locked except the single
+// most recently emptied one (isLastEmpty). Only 'upcoming' bags are
+// drag-reorderable (see bagDragPointerDown below) — current is
+// queue-position-fixed, past is inert.
 export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, beans: BeanRow[], canDelete: boolean): Html {
   const { bg, consumed, stockG, remaining } = entry;
   const pct = remaining != null && stockG != null && stockG > 0 ? Math.round((remaining / stockG) * 100) : null;
@@ -130,8 +133,9 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
   // Past bags are locked out of editing except the single most recently
   // emptied one (classifyBeanBags' isLastEmpty) — lets a "verklickt"
   // (fat-fingered) mark-empty/stock-adjust get corrected without reopening
-  // arbitrary older history.
-  const canEdit = state === 'past' ? !!entry.isLastEmpty : consumed === 0;
+  // arbitrary older history. Current/upcoming bags never lose the pencil:
+  // consumed doses only lock the original-weight field below.
+  const canEdit = state === 'past' ? !!entry.isLastEmpty : true;
   const details: Html[] = [
     stockG != null && stockG > 0 ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_weight')}</span><span class="lib-bag-detail-val">${esc(stockG)} g</span></span>` : esc(''),
     consumed > 0 ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_consumed')}</span><span class="lib-bag-detail-val">${esc(consumed)} g</span></span>` : esc(''),
@@ -167,7 +171,7 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
     ? html`<div class="lib-new-bag-form" style="display:flex">
          <div class="lib-new-bag-fields">
            <input type="date" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_roast_date')}" id="editBagRoastDate${esc(bg.id)}" title="${tHtml('lib_bag_roast_date')}" value="${esc(bg.roastDate || '')}" max="${esc(todayIsoDate())}">
-           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="editBagStock${esc(bg.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1" value="${esc(stockG ?? '')}">
+           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="editBagStock${esc(bg.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1" value="${esc(stockG ?? '')}"${esc(consumed > 0 ? ' disabled' : '')}>
            <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_price')}" id="editBagPrice${esc(bg.id)}" placeholder="${tHtml('lib_bag_price')}" min="0" step="0.01" value="${esc(bg.price_eur ?? '')}">
            <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="editBagBatchNumber${esc(bg.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
          </div>

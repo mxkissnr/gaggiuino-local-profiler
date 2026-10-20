@@ -325,6 +325,7 @@ const en: Translations = {
     freshness_title:(d)=>`Roasted ${d} days ago (optimal: 7–21 days)`,
     bean_age_at_shot:(d)=>`${d} days old at shot`,
     bean_age_badge:(d)=>`${d}d at shot`,
+    freshness_badge:(d)=>`${d}d`,
     phase_preinfusion:'Preinfusion', phase_extraction:'Extraction',
     shot_end_reason:(r)=>`Shot ended: ${r}`,
     exit_reason_1:'target weight reached', exit_reason_2:'target pressure reached',
