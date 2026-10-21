@@ -431,6 +431,15 @@ async function recordPhaseA(baseUrl: string, demoNow: Date): Promise<void> {
             // backup was taken (demoNow), keeping the recorded shots view
             // identical however long the backup has been sitting in the repo.
             // setFixedTime keeps real timers running, only Date is frozen.
+            //
+            // Pinning lives here, not in public-src/components/sidebar.ts or
+            // public-src/utils.ts: the 14-day window is correct app behaviour
+            // for real users, so widening or freezing it in the SPA would hide
+            // a genuine regression to fix a fixture. The demo/glp-demo-backup.zip
+            // timestamps are likewise left alone — re-dating a binary backup
+            // would churn it on every run, and demo/sw/demo-sw.ts already
+            // shifts every fixture by Date.now() - manifest.generated, which is
+            // what makes one recorded clock age gracefully for visitors.
             await context.clock.setFixedTime(demoNow);
             await context.addInitScript(() => {
                 try { localStorage.setItem('glp_lang', 'en'); } catch { /* ignore */ }
