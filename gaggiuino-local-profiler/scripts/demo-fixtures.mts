@@ -413,7 +413,7 @@ function attachRecorder(page: Page): Promise<void>[] {
     return pending;
 }
 
-async function recordPhaseA(baseUrl: string): Promise<void> {
+async function recordPhaseA(baseUrl: string, demoNow: Date): Promise<void> {
     const browser = await chromium.launch();
     try {
         for (const profile of PAGE_PROFILES) {
@@ -424,6 +424,14 @@ async function recordPhaseA(baseUrl: string): Promise<void> {
                 locale: 'en-US',
                 timezoneId: 'Europe/Berlin',
             });
+            // #1794: the sidebar groups shots younger than RECENT_WINDOW_DAYS
+            // (14) by day and folds older ones into collapsed month groups that
+            // render no shot rows at all. The backup's shots age every day, so
+            // the clock is pinned to the age the newest shot had when the
+            // backup was taken (demoNow), keeping the recorded shots view
+            // identical however long the backup has been sitting in the repo.
+            // setFixedTime keeps real timers running, only Date is frozen.
+            await context.clock.setFixedTime(demoNow);
             await context.addInitScript(() => {
                 try { localStorage.setItem('glp_lang', 'en'); } catch { /* ignore */ }
             });
@@ -719,7 +727,7 @@ function collectLeaks(apiToken: string): string[] {
     return hits;
 }
 
-function writeFixtures(outDir: string): { count: number; totalBytes: number } {
+function writeFixtures(outDir: string, generated: Date): { count: number; totalBytes: number } {
     rmSync(outDir, { recursive: true, force: true });
     mkdirSync(outDir, { recursive: true });
     const entries: Record<string, { status: number; contentType: string; file: string }> = {};
@@ -742,7 +750,11 @@ function writeFixtures(outDir: string): { count: number; totalBytes: number } {
         totalBytes += body.length;
         entries[key] = { status: entry.status, contentType: entry.contentType, file };
     }
-    writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({ generated: new Date().toISOString(), entries }, null, 2)}\n`);
+    // The demo service worker shifts every fixture timestamp by
+    // Date.now() - manifest.generated (demo/sw/demo-sw.ts), so the recorded
+    // clock — not the wall clock — is what keeps the newest shot at
+    // "yesterday" for every visitor (#1794).
+    writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({ generated: generated.toISOString(), entries }, null, 2)}\n`);
     return { count: Object.keys(entries).length, totalBytes };
 }
 
@@ -801,6 +813,27 @@ async function createPendingOrders(baseUrl: string): Promise<string> {
     return apiToken;
 }
 
+// The demo clock origin: one day after the newest shot in the restored backup,
+// so the newest shot lands in the sidebar's "yesterday" bucket. Derived from
+// the backup rather than hard-coded, because the demo shots age every day.
+const DAY_MS = 86400000;
+
+async function demoNowFromNewestShot(baseUrl: string, apiToken: string): Promise<Date> {
+    // GET /api/shots is newest-first, so limit=1 is the newest shot; a page
+    // size the server clamps is still handled by taking the max below.
+    const page = await apiJson<{ shots?: Array<{ timestamp?: unknown }> }>(
+        baseUrl, apiToken, `${ID_SOURCES.shots.listPath}?limit=1`,
+    );
+    const timestamps = (page.shots ?? [])
+        .map(shot => shot.timestamp)
+        .filter((timestamp): timestamp is number => typeof timestamp === 'number' && Number.isFinite(timestamp));
+    if (timestamps.length === 0) {
+        throw new Error('demo-fixtures: the restored backup has no shot timestamp to pin the demo clock to');
+    }
+    // Shot timestamps are Unix seconds (public-src renders them as timestamp * 1000).
+    return new Date(Math.max(...timestamps) * 1000 + DAY_MS);
+}
+
 async function main(): Promise<void> {
     const outDir = path.join(appRoot, 'demo', 'fixtures');
     const backupPath = process.env.GLP_DEMO_BACKUP || path.join(appRoot, 'demo', 'glp-demo-backup.zip');
@@ -812,7 +845,9 @@ async function main(): Promise<void> {
         console.log(`demo-fixtures: restored ${path.relative(appRoot, backupPath)} (${restored.shots ?? 0} shots)`);
 
         const apiToken = await createPendingOrders(baseUrl);
-        await recordPhaseA(baseUrl);
+        const demoNow = await demoNowFromNewestShot(baseUrl, apiToken);
+        console.log(`demo-fixtures: pinning the demo clock to ${demoNow.toISOString()}`);
+        await recordPhaseA(baseUrl, demoNow);
         console.log(`demo-fixtures: ${recorded.size} responses recorded from the desktop/phone passes`);
 
         const getPaths = parseOpenApiGetPaths(readFileSync(openapiPath, 'utf8'));
@@ -828,7 +863,7 @@ async function main(): Promise<void> {
             throw new Error(`refusing to write fixtures — required responses were not recorded:\n${missingKeys.join('\n')}`);
         }
 
-        const { count, totalBytes } = writeFixtures(outDir);
+        const { count, totalBytes } = writeFixtures(outDir, demoNow);
         const missing = missingGetPaths(getPaths);
         console.log(`demo-fixtures: wrote ${count} fixtures (${(totalBytes / 1024).toFixed(1)} KiB) to ${path.relative(process.cwd(), outDir)}`);
         for (const template of missing) {
