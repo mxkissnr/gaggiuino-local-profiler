@@ -56,8 +56,8 @@ beta, then the #977 cutover that made this the shipping image — see
 compatibility bars anchored it and still hold:
 
 - The API contract: every endpoint keeps the paths, methods, status codes
-  and response shapes `glp-integration`, `glp-lovelace-card` and
-  `glp-order-card` depend on. `internal/system/openapi.yaml` (served at
+  and response shapes `glp-integration` and its bundled Shot Card and
+  Order Card (`cards/`) depend on. `internal/system/openapi.yaml` (served at
   `/api/openapi.json`) is the current spec.
 - The existing `/data/glp.db` SQLite file keeps opening unchanged — no
   data migration, only schema compatibility (see `internal/db/doc.go`).
@@ -136,8 +136,8 @@ Docker image and `make frontend` supply the real bundle.
 ## Contract
 
 `internal/system/openapi.yaml`, served at `/api/openapi.json`, is the API
-spec. External consumers (`glp-integration`, `glp-lovelace-card`,
-`glp-order-card`) depend on the paths, methods, status codes and response
+spec. External consumers (`glp-integration` and its bundled Shot Card and
+Order Card in `cards/`) depend on the paths, methods, status codes and response
 shapes it documents.
 
 ## Building
