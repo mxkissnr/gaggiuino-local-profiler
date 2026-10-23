@@ -117,19 +117,6 @@ function xmlEsc(value: string): string {
     return value.replace(/[&<>"]/g, c => XML_ESCAPES[c] ?? c);
 }
 
-function legendParts(legend: BarChartLegendEntry[], palette: ChartPalette, x: number, baselineY: number): string[] {
-    const parts: string[] = [];
-    let lx = x;
-    for (const entry of legend) {
-        parts.push(
-            `<rect x="${lx}" y="${baselineY - LEGEND_SWATCH}" width="${LEGEND_SWATCH}" height="${LEGEND_SWATCH}" rx="2" fill="${entry.color}"/>`,
-            `<text x="${lx + LEGEND_SWATCH + LEGEND_LABEL_GAP}" y="${baselineY}" fill="${palette.inkSecondary}" font-size="13">${xmlEsc(entry.label)}</text>`,
-        );
-        lx += LEGEND_SWATCH + LEGEND_LABEL_GAP + entry.label.length * 7 + LEGEND_ENTRY_GAP;
-    }
-    return parts;
-}
-
 const BAR_CHART_BAR_H = 22;
 const BAR_CHART_GAP = 14;
 const BAR_CHART_TOP_PAD = 46;
@@ -180,7 +167,16 @@ export function barChartSVG(
         `<line x1="${leftPad}" y1="${topPad - 8}" x2="${leftPad}" y2="${topPad + items.length * (barH + gap) - gap}" stroke="${palette.baseline}" stroke-width="1"/>`,
     ];
 
-    if (legend && legend.length) parts.push(...legendParts(legend, palette, LEGEND_X, LEGEND_BASELINE_Y));
+    if (legend && legend.length) {
+        let lx = LEGEND_X;
+        for (const entry of legend) {
+            parts.push(
+                `<rect x="${lx}" y="${LEGEND_BASELINE_Y - LEGEND_SWATCH}" width="${LEGEND_SWATCH}" height="${LEGEND_SWATCH}" rx="2" fill="${entry.color}"/>`,
+                `<text x="${lx + LEGEND_SWATCH + LEGEND_LABEL_GAP}" y="${LEGEND_BASELINE_Y}" fill="${palette.inkSecondary}" font-size="13">${xmlEsc(entry.label)}</text>`,
+            );
+            lx += LEGEND_SWATCH + LEGEND_LABEL_GAP + entry.label.length * 7 + LEGEND_ENTRY_GAP;
+        }
+    }
 
     items.forEach((item, i) => {
         const y = topPad + i * (barH + gap);
@@ -224,105 +220,136 @@ export interface AiCommit {
     model: string;
 }
 
-export interface WeeklySeries {
+export interface MonthlySeries {
     model: string;
     counts: number[];
 }
 
-const DAY_MS = 86_400_000;
-
-// Monday (UTC) of the calendar week containing an ISO date, as YYYY-MM-DD.
-export function weekStart(date: string): string {
-    const t = Date.parse(`${date}T00:00:00Z`);
-    return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY_MS).toISOString().slice(0, 10);
+// Calendar month (YYYY-MM) of an ISO date.
+export function monthKey(date: string): string {
+    return date.slice(0, 7);
 }
 
-// Weekly AI commit counts per model (#1800): one bucket per calendar week from
-// the first AI commit to the week of `today`; the `topN` models by total
+// Monthly AI commit counts per model (#1800): one bucket per calendar month
+// from the first AI commit to the month of `today`; the `topN` models by total
 // commits keep their own series, the rest fold into a trailing "Other".
-export function weeklyModelSeries(
+export function monthlyModelSeries(
     commits: AiCommit[],
     today: string,
     topN = 5,
-): { weeks: string[]; series: WeeklySeries[] } | null {
+): { months: string[]; series: MonthlySeries[] } | null {
     if (!commits.length) return null;
-    const first = Date.parse(`${weekStart(commits.map(c => c.date).sort()[0]!)}T00:00:00Z`);
-    const last = Date.parse(`${weekStart(today)}T00:00:00Z`);
-    const weeks: string[] = [];
-    for (let t = first; t <= last; t += 7 * DAY_MS) weeks.push(new Date(t).toISOString().slice(0, 10));
+    const months: string[] = [];
+    const end = monthKey(today);
+    for (let m = commits.map(c => monthKey(c.date)).sort()[0]!; m <= end;) {
+        months.push(m);
+        const [y, mo] = m.split('-').map(Number) as [number, number];
+        m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`;
+    }
     const totals: Record<string, number> = {};
     for (const c of commits) totals[c.model] = (totals[c.model] || 0) + 1;
     const ranked = Object.keys(totals).sort((a, b) => totals[b]! - totals[a]! || a.localeCompare(b));
     const top = ranked.slice(0, topN);
-    const rows = [...top, ...(ranked.length > topN ? ['Other'] : [])];
-    const series = rows.map(model => ({ model, counts: weeks.map(() => 0) }));
+    const series = [...top, ...(ranked.length > topN ? ['Other'] : [])]
+        .map(model => ({ model, counts: months.map(() => 0) }));
     for (const c of commits) {
-        const row = series[Math.min(top.indexOf(c.model) < 0 ? top.length : top.indexOf(c.model), series.length - 1)]!;
-        const i = weeks.indexOf(weekStart(c.date));
+        const row = series[top.includes(c.model) ? top.indexOf(c.model) : top.length]!;
+        const i = months.indexOf(monthKey(c.date));
         if (i >= 0) row.counts[i]!++;
     }
-    return { weeks, series };
+    return { months, series };
 }
 
-// Per-vendor line shades (light, dark) so models of one vendor stay apart;
-// the first shade of each vendor is the bar-chart series colour.
-const LINE_SHADES: Record<Theme, Record<Vendor, string[]>> = {
-    light: { claude: ['#2a78d6', '#8dbcf0', '#0f3f7d', '#2f9bb3', '#6a63c9'], deepseek: ['#eb6834', '#f4a583'], other: ['#8a8983', '#b9b8b2'] },
-    dark: { claude: ['#3987e5', '#9cc5f2', '#24579f', '#45b0c8', '#8a84e0'], deepseek: ['#d95926', '#eb9774'], other: ['#8a8983', '#b9b8b2'] },
+// Neobrutalist look for the timeline chart only (#1800): the chart is a card
+// with a thick border and a hard, unblurred offset shadow; flat saturated line
+// colours per vendor (shade per model), heavy square markers, bold labels.
+interface TimelineTheme {
+    card: string;
+    ink: string;
+    shadow: string;
+    grid: string;
+    shades: Record<Vendor, string[]>;
+}
+const TIMELINE_THEMES: Record<Theme, TimelineTheme> = {
+    light: {
+        card: '#fffaf0', ink: '#0b0b0b', shadow: '#0b0b0b', grid: '#d9d2bf',
+        shades: { claude: ['#1f5fff', '#6aa8ff', '#0a2a8a', '#00a6c0', '#7a3cff'], deepseek: ['#ff5a1f', '#ffa23a'], other: ['#6b6b6b', '#9a9a9a'] },
+    },
+    dark: {
+        card: '#16181d', ink: '#f5f1e6', shadow: '#ff7a3d', grid: '#34363d',
+        shades: { claude: ['#4d8dff', '#a3c8ff', '#2a55c8', '#2ed3ec', '#a07bff'], deepseek: ['#ff7a3d', '#ffb347'], other: ['#a8a8a8', '#d0d0d0'] },
+    },
 };
 
-// Multi-line chart of weekly commits: x = week starts with month ticks, y =
-// commits per week. Same title/legend/ink conventions as barChartSVG; the
-// folded "Other" series is a dashed grey line.
+// Multi-line chart of monthly commits: x = months, y = commits per month.
+// Same title/legend/<title>+<desc> conventions as barChartSVG; the folded
+// "Other" series is a dashed grey line.
 export function lineChartSVG(
     title: string,
-    data: { weeks: string[]; series: WeeklySeries[] } | null,
+    data: { months: string[]; series: MonthlySeries[] } | null,
     theme: Theme = 'light',
 ): string | null {
     if (!data || !data.series.length) return null;
-    const palette = CHART_THEMES[theme] || CHART_THEMES.light;
-    const { weeks, series } = data;
-    const width = 880, height = 340, left = 50, right = 24, top = 76, bottom = 36;
-    const plotW = width - left - right, plotH = height - top - bottom;
+    const t = TIMELINE_THEMES[theme] || TIMELINE_THEMES.light;
+    const { months, series } = data;
+    const width = 880, height = 360, shadow = 8, cardW = width - shadow - 4, cardH = height - shadow - 4;
+    const left = 64, right = 36, top = 92, bottom = 52;
+    const plotW = cardW - left - right, plotH = cardH - top - bottom;
     const peak = Math.max(...series.flatMap(s => s.counts), 1);
-    const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500].find(n => n * 4 >= peak) ?? Math.ceil(peak / 4);
+    const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(n => n * 4 >= peak) ?? Math.ceil(peak / 4);
     const yMax = step * 4;
-    const x = (i: number) => left + (weeks.length > 1 ? (i / (weeks.length - 1)) * plotW : plotW / 2);
+    const x = (i: number) => left + (months.length > 1 ? (i / (months.length - 1)) * plotW : plotW / 2);
     const y = (v: number) => top + plotH - (v / yMax) * plotH;
+    const text = (extra: string) => `fill="${t.ink}" font-weight="800" ${extra}`;
 
     const used: Record<Vendor, number> = { claude: 0, deepseek: 0, other: 0 };
     const styled = series.map(s => {
         const folded = s.model === 'Other';
         const vendor = folded ? 'other' : modelVendor(s.model);
-        const shades = LINE_SHADES[theme][vendor];
+        const shades = t.shades[vendor];
         return { ...s, folded, color: shades[used[vendor]++ % shades.length]! };
     });
+    const total = (s: MonthlySeries) => s.counts.reduce((a, b) => a + b, 0);
 
     const parts = [
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" font-family="${CHART_FONT_STACK}" role="img" aria-labelledby="t d">`,
         `<title id="t">${xmlEsc(title)}</title>`,
-        `<desc id="d">${xmlEsc(`Line chart of AI commits per week from ${weeks[0]} to ${weeks[weeks.length - 1]}, one line per model: ${series.map(s => `${modelDisplayLabel(s.model)} (${s.counts.reduce((a, b) => a + b, 0)} commits)`).join(', ')}.`)}</desc>`,
-        `<text x="20" y="28" fill="${palette.ink}" font-size="15" font-weight="600">${xmlEsc(title)}</text>`,
-        ...legendParts(styled.map(s => ({ label: modelDisplayLabel(s.model), color: s.color })), palette, 20, 52),
+        `<desc id="d">${xmlEsc(`Line chart of AI commits per month from ${months[0]} to ${months[months.length - 1]} (current month still in progress), one line per model: ${series.map(s => `${modelDisplayLabel(s.model)} (${total(s)} commits)`).join(', ')}.`)}</desc>`,
+        `<rect x="${4 + shadow}" y="${4 + shadow}" width="${cardW}" height="${cardH}" fill="${t.shadow}"/>`,
+        `<rect x="5.5" y="5.5" width="${cardW}" height="${cardH}" fill="${t.card}" stroke="${t.ink}" stroke-width="3"/>`,
+        `<text x="26" y="40" ${text('font-size="19" letter-spacing="0.5"')}>${xmlEsc(title.toUpperCase())}</text>`,
     ];
+    let lx = 26;
+    for (const s of styled) {
+        const label = modelDisplayLabel(s.model);
+        parts.push(
+            `<rect x="${lx}" y="58" width="12" height="12" fill="${s.color}" stroke="${t.ink}" stroke-width="2"/>`,
+            `<text x="${lx + 19}" y="69" ${text('font-size="12"')}>${xmlEsc(label)}</text>`,
+        );
+        lx += 19 + label.length * 7 + 16;
+    }
     for (let v = 0; v <= yMax; v += step) {
         parts.push(
-            `<line x1="${left}" y1="${y(v)}" x2="${width - right}" y2="${y(v)}" stroke="${palette.baseline}" stroke-width="1"/>`,
-            `<text x="${left - 8}" y="${y(v) + 4}" fill="${palette.inkSecondary}" font-size="12" text-anchor="end">${v}</text>`,
+            `<line x1="${left}" y1="${y(v)}" x2="${left + plotW}" y2="${y(v)}" stroke="${v ? t.grid : t.ink}" stroke-width="${v ? 2 : 3}"/>`,
+            `<text x="${left - 10}" y="${y(v) + 4}" ${text('font-size="13" text-anchor="end"')}>${v}</text>`,
         );
     }
+    parts.push(`<line x1="${left}" y1="${top}" x2="${left}" y2="${top + plotH}" stroke="${t.ink}" stroke-width="3"/>`);
     let lastLabelX = -Infinity;
-    weeks.forEach((w, i) => {
-        if (i > 0 && w.slice(0, 7) === weeks[i - 1]!.slice(0, 7)) return;
-        if (x(i) - lastLabelX < 45) return;
+    months.forEach((m, i) => {
+        parts.push(`<line x1="${x(i)}" y1="${top + plotH}" x2="${x(i)}" y2="${top + plotH + 6}" stroke="${t.ink}" stroke-width="3"/>`);
+        if (x(i) - lastLabelX < 48) return;
         lastLabelX = x(i);
-        const label = new Date(`${w}T00:00:00Z`).toLocaleString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
-        parts.push(`<text x="${x(i)}" y="${height - bottom + 18}" fill="${palette.inkSecondary}" font-size="12" text-anchor="middle">${xmlEsc(label)}</text>`);
+        const label = new Date(`${m}-01T00:00:00Z`).toLocaleString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+        parts.push(`<text x="${x(i)}" y="${top + plotH + 24}" ${text('font-size="13" text-anchor="middle"')}>${xmlEsc(label)}</text>`);
     });
-    parts.push(`<text x="14" y="${top + plotH / 2}" fill="${palette.inkSecondary}" font-size="12" text-anchor="middle" transform="rotate(-90 14 ${top + plotH / 2})">Commits per week</text>`);
+    parts.push(`<text x="20" y="${top + plotH / 2}" ${text('font-size="12" text-anchor="middle" letter-spacing="0.5"')} transform="rotate(-90 20 ${top + plotH / 2})">COMMITS / MONTH</text>`);
     for (const s of styled) {
         const pts = s.counts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-        parts.push(`<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${s.folded ? ' stroke-dasharray="5 4"' : ''}/>`);
+        parts.push(`<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="4" stroke-linejoin="miter"${s.folded ? ' stroke-dasharray="8 5"' : ''}/>`);
+        for (const [i, v] of s.counts.entries()) {
+            parts.push(`<rect x="${(x(i) - 5).toFixed(1)}" y="${(y(v) - 5).toFixed(1)}" width="10" height="10" fill="${s.color}" stroke="${t.ink}" stroke-width="2"/>`);
+        }
     }
     parts.push('</svg>');
     return parts.join('\n') + '\n';
@@ -363,7 +390,7 @@ function renderCharts(results: RepoStats[], combinedModelCounts: Record<string, 
             writeFileSync(path.join(outDir, `model-breakdown-${theme}.svg`), modelSvg);
             rendered = true;
         }
-        const timelineSvg = lineChartSVG('AI commits per week by model', weeklyModelSeries(aiLog, new Date().toISOString().slice(0, 10)), theme);
+        const timelineSvg = lineChartSVG('AI commits per month by model', monthlyModelSeries(aiLog, new Date().toISOString().slice(0, 10)), theme);
         if (timelineSvg) {
             writeFileSync(path.join(outDir, `model-timeline-${theme}.svg`), timelineSvg);
             rendered = true;
@@ -683,7 +710,7 @@ function main(): void {
     }
     lines.push('');
     if (chartsRendered) { lines.push(chartPictureHTML('model-breakdown', 'AI model breakdown by commits')); lines.push(''); }
-    if (chartsRendered && combined.aiCommits) { lines.push(chartPictureHTML('model-timeline', 'AI commits per week by model')); lines.push(''); }
+    if (chartsRendered && combined.aiCommits) { lines.push(chartPictureHTML('model-timeline', 'AI commits per month by model')); lines.push(''); }
     lines.push('The exact co-author string varies by era as model names changed over the project\'s lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.');
     lines.push('');
     lines.push('## Cost');

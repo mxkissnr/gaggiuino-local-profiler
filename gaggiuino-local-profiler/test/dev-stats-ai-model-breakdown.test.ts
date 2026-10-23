@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isAiCoAuthor, billingTypeFor, aiModelInChunk, weekStart, weeklyModelSeries, lineChartSVG } from '../scripts/dev-stats.mts';
+import { isAiCoAuthor, billingTypeFor, aiModelInChunk, monthlyModelSeries, lineChartSVG } from '../scripts/dev-stats.mts';
 
 // #1769: isAiCoAuthor() now uses an allowlist of known AI model name prefixes.
 // The previous exclude-list treated every unrecognized trailer as AI, so human
@@ -89,40 +89,38 @@ describe('dev-stats billingTypeFor (#1100)', () => {
     });
 });
 
-// #1800: weekly AI-commits-per-model timeline.
-describe('dev-stats weekly model timeline (#1800)', () => {
+// #1800: monthly AI-commits-per-model timeline.
+describe('dev-stats monthly model timeline (#1800)', () => {
     const c = (date: string, model: string) => ({ date, model });
 
-    it('maps dates to their Monday', () => {
-        expect(weekStart('2026-10-19')).toBe('2026-10-19');
-        expect(weekStart('2026-10-25')).toBe('2026-10-19');
-        expect(weekStart('2026-10-26')).toBe('2026-10-26');
-    });
-
-    it('buckets per week, including empty weeks up to today', () => {
-        const r = weeklyModelSeries([c('2026-10-06', 'A'), c('2026-10-08', 'A'), c('2026-10-20', 'A')], '2026-10-23')!;
-        expect(r.weeks).toEqual(['2026-10-05', '2026-10-12', '2026-10-19']);
+    it('buckets per calendar month, including empty months up to today', () => {
+        const r = monthlyModelSeries([c('2026-08-06', 'A'), c('2026-08-31', 'A'), c('2026-10-20', 'A')], '2026-10-23')!;
+        expect(r.months).toEqual(['2026-08', '2026-09', '2026-10']);
         expect(r.series).toEqual([{ model: 'A', counts: [2, 0, 1] }]);
     });
 
+    it('crosses year boundaries', () => {
+        expect(monthlyModelSeries([c('2026-12-31', 'A')], '2027-02-01')!.months).toEqual(['2026-12', '2027-01', '2027-02']);
+    });
+
     it('keeps the top N models and folds the rest into Other', () => {
-        const commits = [c('2026-10-05', 'A'), c('2026-10-05', 'A'), c('2026-10-05', 'B'), c('2026-10-12', 'C'), c('2026-10-12', 'D')];
-        const r = weeklyModelSeries(commits, '2026-10-13', 2)!;
+        const commits = [c('2026-10-05', 'A'), c('2026-10-05', 'A'), c('2026-10-05', 'B'), c('2026-11-12', 'C'), c('2026-11-12', 'D')];
+        const r = monthlyModelSeries(commits, '2026-11-13', 2)!;
         expect(r.series.map(s => s.model)).toEqual(['A', 'B', 'Other']);
         expect(r.series[2]!.counts).toEqual([0, 2]);
     });
 
     it('returns null / no SVG for an empty history', () => {
-        expect(weeklyModelSeries([], '2026-10-23')).toBeNull();
+        expect(monthlyModelSeries([], '2026-10-23')).toBeNull();
         expect(lineChartSVG('t', null)).toBeNull();
     });
 
-    it('renders one polyline per series with vendor colours and a legend', () => {
-        const data = weeklyModelSeries([c('2026-10-05', 'Claude Sonnet 5'), c('2026-10-12', 'DeepSeek V4 Flash'), c('2026-10-12', 'GPT-5')], '2026-10-13', 2)!;
+    it('renders one polyline per series with vendor colours, markers and a legend', () => {
+        const data = monthlyModelSeries([c('2026-09-05', 'Claude Sonnet 5'), c('2026-10-12', 'DeepSeek V4 Flash'), c('2026-10-12', 'GPT-5')], '2026-10-13', 2)!;
         const svg = lineChartSVG('Timeline', data, 'dark')!;
         expect(svg.match(/<polyline/g)).toHaveLength(3);
-        expect(svg).toContain('stroke="#3987e5"');
-        expect(svg).toContain('stroke="#d95926"');
+        expect(svg).toContain('stroke="#4d8dff"');
+        expect(svg).toContain('stroke="#ff7a3d"');
         expect(svg).toContain('stroke-dasharray');
         expect(svg).toContain('<title id="t">Timeline</title>');
         expect(svg).toContain('Other');
