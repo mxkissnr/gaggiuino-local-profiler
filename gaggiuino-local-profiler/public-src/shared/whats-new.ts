@@ -21,6 +21,10 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.5.1', date: '2026-10-23', highlights: [
+        'Fixed: a bag\'s roast date can be corrected after the first shot, machine settings answer at once when the machine is off, and the Live page, language switch and maintenance labels follow your changes without a reload.',
+        'Security: the live-update stream no longer accepts the API token in the address, and the app is built with a patched Go release.',
+    ] },
     { version: '3.5.0', date: '2026-10-18', highlights: [
         'Open pages pick up changes made on another device within seconds, without a reload.',
         'A backflush or descale recorded by your Gaggiuino now ticks off the matching maintenance task automatically.',
@@ -65,11 +69,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
     ] },
     { version: '3.0.1', date: '2026-09-10', highlights: [
         'Fixed: demo mode\'s shot detail (curve chart, P·Q view and average pressure/temperature) is no longer blank.',
-    ] },
-    { version: '3.0.0', date: '2026-09-09', highlights: [
-        'The add-on now runs on a Go backend instead of Node.js, with no visible change in behaviour. Back up Home Assistant before updating.',
-        'armv7 (32-bit ARM) is no longer deprecated — the Go backend builds a static armv7 image again.',
-        'First-class GaggiMate support: foundational integration across the stack plus a full Standard/Pro profile editor, saved straight to the machine. Thanks to @Paul-Lukas.',
     ] },
 ];
 
