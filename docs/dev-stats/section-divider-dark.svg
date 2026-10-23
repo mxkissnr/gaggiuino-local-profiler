@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 26" role="img" aria-label="Section divider">
+<title>Section divider</title>
+<rect x="12" y="12" width="868" height="14" fill="#ff7a3d"/>
+<rect x="5.5" y="5.5" width="868" height="14" fill="#16181d" stroke="#f5f1e6" stroke-width="3"/>
+<rect x="7" y="7" width="44" height="11" fill="#4d8dff"/>
+<rect x="51" y="7" width="44" height="11" fill="#ff7a3d"/>
+<rect x="95" y="7" width="44" height="11" fill="#a8a8a8"/>
+</svg>
