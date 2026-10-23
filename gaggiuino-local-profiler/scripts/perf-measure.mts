@@ -192,6 +192,10 @@ async function main(): Promise<void> {
     const token = await resolveToken(root, argValue(argv, '--token'));
 
     if (restore !== undefined) {
+        // Here the target is the workflow's Docker container (or any remote
+        // instance), so restoreBackup can only confirm the restore succeeded:
+        // the image files land inside that server's GLP_IMAGE_DIR, not on this
+        // host, and the host-side image count is skipped.
         const result = await restoreBackup(root, restore, token);
         console.log(`restored ${basename(restore)}: ${JSON.stringify(result)}`);
     }

@@ -1,3 +1,17 @@
+## [3.5.1] - 2026-10-23
+
+### Fixed
+- **The reference shot list on the Live page now follows a machine switch right away.** Closes #1759
+- **Switching the language now also updates the open shot details and the statistics filter without a reload.** Closes #1760
+- **Machine settings answer at once when the machine is switched off instead of waiting for a timeout.** Closes #1762
+- **Maintenance entries taken over from the machine now show a translated label instead of English text.** Closes #1763
+- **The ratio warning in the shot header now shows a clean scale icon, and the stray dot next to the score is gone.** Closes #1775
+- **A bag's roast date can now be corrected after the first shot, and the bean age on a shot follows the corrected date.** Closes #1788
+
+### Security
+- **The live-update stream no longer accepts the API token in the address; it uses short-lived tickets only.** Closes #1730
+- **The app is built with Go 1.27.3, closing a published certificate-validation vulnerability in the standard library.** Closes #1792
+
 ## [3.5.0] - 2026-10-18
 
 ### Added

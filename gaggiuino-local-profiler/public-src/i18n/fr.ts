@@ -325,6 +325,7 @@ const fr: Partial<Translations> = {
     freshness_title:(d)=>`Torréfié il y a ${d} jours (optimal: 7–21 jours)`,
     bean_age_at_shot:(d)=>`${d} jours au moment du shot`,
     bean_age_badge:(d)=>`${d}j au shot`,
+    freshness_badge:(d)=>`${d}j`,
     phase_preinfusion:'Pré-infusion', phase_extraction:'Extraction',
     shot_end_reason:(r)=>`Extraction terminée : ${r}`,
     exit_reason_1:'poids cible atteint', exit_reason_2:'pression cible atteinte',

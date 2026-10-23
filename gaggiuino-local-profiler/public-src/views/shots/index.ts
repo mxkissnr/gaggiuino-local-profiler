@@ -13,7 +13,7 @@ import {
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel, shotBeanAge } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
@@ -585,6 +585,16 @@ function _setDeltaChip(id: string, delta: number | null, decimals = 0, unit = ''
 
 let _updateViewToken = 0;
 
+// Language the shot detail was last fully rendered in (#1760). updateView()
+// builds the detail imperatively (Chart.js legend, phase tags, stop-reason
+// line), so nothing else re-translates it; mode.ts compares this against
+// S.currentLang when the Shots tab is entered.
+let _renderedLang: string | null = null;
+
+export function shotsRenderedLang(): string | null {
+  return _renderedLang;
+}
+
 // Set per updateView() call — lets the async GaggiMate-phases callback
 // rebuild the chart once gmPhases lands (see below for why rebuild, not mutate).
 let _buildShotChart: ((phasesOpt: GmPhasesOption) => void) | null = null;
@@ -609,6 +619,9 @@ export async function updateView(): Promise<void> {
   const token = ++_updateViewToken;
   await ensureCurves([shotA.id, shotB && shotB.id, previousShot && previousShot.id].filter(Boolean));
   if (token !== _updateViewToken) return;
+  // Captured after the await: the language this synchronous render body will
+  // actually use, even if setLang() runs before it finishes.
+  const renderedLang = S.currentLang;
 
   const dA    = getCachedShotData(shotA.id) || mapShotDatapoints({});
   const dB    = shotB ? (getCachedShotData(shotB.id) || mapShotDatapoints({})) : null;
@@ -721,17 +734,19 @@ export async function updateView(): Promise<void> {
   _el('beanVal').textContent    = ann.coffee || '–';
   _el('grinderVal').textContent = grinderLabel || '–';
 
-  // Freshness badge
-  const freshEl   = _el('freshnessBadge');
-  const ageAtShot = ann.beanAgeDays != null ? ann.beanAgeDays
-    : (!shotB && ann.roastDate && ann.coffee)
-      ? Math.round((Date.now() - new Date(ann.roastDate).getTime()) / 86400000)
-      : null;
-  if (ageAtShot != null && ageAtShot >= 0 && ageAtShot <= 365) {
+  // Freshness badge — #1788: follows the library's current roast date instead
+  // of the beanAgeDays frozen into the annotation at save time, so correcting a
+  // bag's roast date also fixes shots saved before the correction. The stored
+  // value is only the fallback for a bean that has left the library; the last
+  // resort stays "days since roast until now" (single-shot view only).
+  const freshEl  = _el('freshnessBadge');
+  const beanAge  = shotBeanAge(ann, shotA.timestamp, { relativeToNow: !shotB });
+  if (beanAge != null && beanAge.days >= 0 && beanAge.days <= 365) {
+    const ageAtShot = beanAge.days;
     const cls = ageAtShot <= 21 ? 'freshness-fresh' : ageAtShot <= 35 ? 'freshness-ok' : 'freshness-old';
     freshEl.className   = `freshness-badge ${cls}`;
-    freshEl.textContent = ann.beanAgeDays != null ? t('bean_age_badge', ageAtShot) : `${ageAtShot}d`;
-    freshEl.title       = ann.beanAgeDays != null ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot);
+    freshEl.textContent = beanAge.atShot ? t('bean_age_badge', ageAtShot) : t('freshness_badge', ageAtShot);
+    freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot);
     freshEl.style.display = '';
   } else { freshEl.style.display = 'none'; }
 
@@ -1053,4 +1068,6 @@ export async function updateView(): Promise<void> {
       _buildShotChart!({ gaggimatePhases: ranges });
     });
   }
+
+  _renderedLang = renderedLang;
 }

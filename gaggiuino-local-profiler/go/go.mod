@@ -7,7 +7,7 @@ go 1.26.0
 // library security fixes govulncheck flags against a bare 1.26.0 — the
 // digest-pinned golang:1.27-alpine Docker builder (Dockerfile) already
 // resolves to a toolchain at or ahead of this directive.
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	github.com/PuerkitoBio/goquery v1.13.0

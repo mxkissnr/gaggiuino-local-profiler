@@ -2,6 +2,7 @@ import { S } from '../state/index.js';
 import { updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
 import { updateTopbarNavFade, isFullyVisibleIn } from './topbar-nav-fade.js';
+import { shotsRenderedLang } from '../views/shots/index.js';
 
 export function goToShot(id: number): void {
   switchMode('shots');
@@ -58,6 +59,13 @@ export function switchMode(mode: string): void {
     if (window.connectLiveStream) window.connectLiveStream();
   } else {
     if (window.disconnectLiveStream) window.disconnectLiveStream();
+  }
+  if (mode === 'shots') {
+    // #1760: setLang() only re-renders while Shots is already active, and this
+    // switch had no shots branch — entering the tab after a language change
+    // left the imperatively-rendered detail in the old language. Re-render
+    // once, only when the detail's recorded render language is stale.
+    if (S.primaryShotId != null && shotsRenderedLang() !== S.currentLang && window.updateView) window.updateView();
   }
   if (mode === 'analytics')   { if (window.initAnalytics) window.initAnalytics(); }
   if (mode === 'dialin')      { if (window.renderDialin) window.renderDialin(); }

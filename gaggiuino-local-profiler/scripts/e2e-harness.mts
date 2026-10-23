@@ -17,7 +17,7 @@
 
 import { spawn, execFileSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { mkdtempSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -211,7 +211,10 @@ export async function restoreBackup(baseUrl: string, zipPath: string, token?: st
     // used to hit) would otherwise leave the DB rows pointing at files that
     // 404, producing blank-photo screenshots with no error at all. Fail
     // loudly instead.
-    if (parsed.images > 0) {
+    // GLP_IMAGE_DIR is only knowable on the host when bootServer() set it. A
+    // remote server (perf-measure.mts against a Docker container) writes the
+    // images inside its own filesystem, so there is nothing to count here.
+    if (parsed.images > 0 && existsSync(tmpImageDir)) {
         const files = readdirSync(tmpImageDir);
         const written = files.filter(f => !f.includes('.thumb.')).length;
         if (written < parsed.images) {

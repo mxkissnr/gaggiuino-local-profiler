@@ -34,7 +34,7 @@
 # output is architecture-independent, so that has no bearing here.
 # Digest-pinned (multi-arch manifest) like the alpine runtime stage below;
 # Renovate's dockerfile manager keeps it current.
-FROM --platform=$BUILDPLATFORM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS frontend-deps
+FROM --platform=$BUILDPLATFORM node:24-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS frontend-deps
 
 WORKDIR /app
 
@@ -58,7 +58,7 @@ RUN npm ci --ignore-scripts
 # downloading the newer toolchain itself — ubuntu-latest GitHub-hosted
 # runners have network access, so that degrades to a slower build rather
 # than failing.
-FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT

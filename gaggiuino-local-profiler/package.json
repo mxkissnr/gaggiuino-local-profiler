@@ -1,6 +1,6 @@
 {
   "name": "gaggiuino-local-profiler-frontend",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "scripts": {
     "build": "vite build",
     "build:demo": "vite build --mode demo",
@@ -36,9 +36,9 @@
     "openapi-typescript": "7.13.0",
     "playwright": "^1.62.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.71.1",
+    "typescript-eslint": "8.71.2",
     "vite": "8.3.4",
-    "vitest": "5.0.3"
+    "vitest": "5.0.5"
   },
   "overrides": {
     "openapi-typescript": {

@@ -284,22 +284,26 @@ const REPOS: RepoSpec[] = [
 // or its price changes — every cost figure in DEVELOPMENT.md derives from it.
 const CLAUDE_PRO_MONTHLY_USD = 20;
 
-// #1100: co-author trailers that name a human or a non-coding-assistant bot,
-// not an AI model — excluded from the AI model breakdown and from
-// aiCommits/aiLines. Everything else found in a Co-Authored-By trailer is
-// treated as an AI model and grouped by its literal string, same as the
-// Claude-only version of this script already did — this naturally covers
-// Claude *, DeepSeek *, bare `openhands`, and any future model string
-// without per-model hardcoding.
-const NON_AI_COAUTHOR_PATTERNS: RegExp[] = [
-    /^mxkissnr$/i,                  // any email
-    /^Paul-Lukas Schäfer$/i,
-    /^Max\s+K\S+$/,                 // the maintainer, from a squash-merged PR body
-    /^dependabot\[bot\]$/i,
-    /^renovate\[bot\]$/i,
+// #1769: only co-author names that look like a known AI model count toward the
+// AI model breakdown and aiCommits/aiLines. The old exclude-list treated every
+// unrecognized name as AI, so human co-authors missing from it (e.g. m471j4)
+// showed up in the model table. Patterns are case-insensitive and anchored at
+// the start of the name (aiModelInChunk() trims the trailer value first).
+const AI_MODEL_PATTERNS: RegExp[] = [
+    /^Claude/i,
+    /^DeepSeek/i,
+    /^GPT/i,
+    /^Gemini/i,
+    /^Copilot/i,
+    /^Codex/i,
+    /^Qwen/i,
+    /^Kimi/i,
+    /^GLM/i,
+    /^Big Pickle/i,
+    /^GLP-Firma /i,
 ];
 export function isAiCoAuthor(name: string): boolean {
-    return !NON_AI_COAUTHOR_PATTERNS.some(re => re.test(name));
+    return AI_MODEL_PATTERNS.some(re => re.test(name));
 }
 
 // A commit body can carry more than one Co-Authored-By trailer (e.g. a squash
