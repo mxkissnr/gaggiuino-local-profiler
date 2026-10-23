@@ -30,8 +30,8 @@
 <path d="M220,262 H246 Q250,262 250,266 V280 Q250,284 246,284 H220 Z" fill="#3987e5"/>
 <text x="260" y="277" fill="#ffffff" font-size="13" font-weight="600">41</text>
 <text x="208" y="313" fill="#c3c2b7" font-size="13" text-anchor="end">Claude Sonnet 5.5</text>
-<path d="M220,298 H229 Q233,298 233,302 V316 Q233,320 229,320 H220 Z" fill="#3987e5"/>
-<text x="243" y="313" fill="#ffffff" font-size="13" font-weight="600">18</text>
+<path d="M220,298 H230 Q234,298 234,302 V316 Q234,320 230,320 H220 Z" fill="#3987e5"/>
+<text x="244" y="313" fill="#ffffff" font-size="13" font-weight="600">20</text>
 <text x="208" y="349" fill="#c3c2b7" font-size="13" text-anchor="end">Claude (version not recorded)</text>
 <path d="M220,334 H225 Q229,334 229,338 V352 Q229,356 225,356 H220 Z" fill="#3987e5"/>
 <text x="239" y="349" fill="#ffffff" font-size="13" font-weight="600">12</text>

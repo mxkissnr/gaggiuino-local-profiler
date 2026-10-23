@@ -4,36 +4,36 @@ Generated 2026-10-23 by `scripts/dev-stats.mts`. Re-run it any time to refresh t
 
 ## Timeline
 
-The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **155 days** as of the last commit (2026-10-21).
+The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **157 days** as of the last commit (2026-10-23).
 
 | Repo | First commit | Last commit | Commits | AI co-authored |
 |---|---|---|---|---|
-| gaggiuino-local-profiler | 2026-05-20 | 2026-10-21 | 2061 | 1639 (80%) |
+| gaggiuino-local-profiler | 2026-05-20 | 2026-10-23 | 2065 | 1641 (79%) |
 | glp-integration | 2026-05-22 | 2026-10-20 | 239 | 171 (72%) |
 | glp-lovelace-card | 2026-05-24 | 2026-10-20 | 183 | 131 (72%) |
 | glp-order-card | 2026-05-25 | 2026-10-20 | 169 | 119 (70%) |
-| **Combined** | **2026-05-20** | **2026-10-21** | **2652** | **2060 (78%)** |
+| **Combined** | **2026-05-20** | **2026-10-23** | **2656** | **2062 (78%)** |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/commits-per-repo-dark.svg">
   <img src="docs/dev-stats/commits-per-repo-light.svg" alt="Commits per repo" width="100%">
 </picture>
 
-Combined line changes (insertions + deletions across all commits): **780.305**, of which **708.760** landed in AI-co-authored commits.
+Combined line changes (insertions + deletions across all commits): **780.491**, of which **708.946** landed in AI-co-authored commits.
 
 Commits without an AI co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.
 
 ## Hours of development (lower-bound estimate)
 
-Clustering each repo's commit timestamps into working sessions — commits within 2h of each other join the same session, and each session gets a 30-minute lead-in credited ahead of its first commit — gives a combined **711.7 hours** across all four repos.
+Clustering each repo's commit timestamps into working sessions — commits within 2h of each other join the same session, and each session gets a 30-minute lead-in credited ahead of its first commit — gives a combined **712.7 hours** across all four repos.
 
 | Repo | Hours (session-clustered) |
 |---|---|
-| gaggiuino-local-profiler | 487.3 |
+| gaggiuino-local-profiler | 488.2 |
 | glp-integration | 86.0 |
 | glp-lovelace-card | 71.9 |
 | glp-order-card | 66.6 |
-| **Combined** | **711.7** |
+| **Combined** | **712.7** |
 
 This is a **lower-bound estimate derived from git commit timestamps only**, not measured time — it undercounts real work because a long AI-agentic session (orchestration, agent dispatch, review between infrequent commits) can run for hours between commits.
 
@@ -48,7 +48,7 @@ This is a **lower-bound estimate derived from git commit timestamps only**, not 
 | Claude Opus 5 | 55 |
 | Claude Opus 4.8 | 47 |
 | Claude Fable 5 | 41 |
-| Claude Sonnet 5.5 | 18 |
+| Claude Sonnet 5.5 | 20 |
 | Claude (version not recorded) | 12 |
 | DeepSeek V4 Flash | 9 |
 | Claude Haiku 4.5 | 4 |
@@ -58,6 +58,11 @@ This is a **lower-bound estimate derived from git commit timestamps only**, not 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/model-breakdown-dark.svg">
   <img src="docs/dev-stats/model-breakdown-light.svg" alt="AI model breakdown by commits" width="100%">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/model-timeline-dark.svg">
+  <img src="docs/dev-stats/model-timeline-light.svg" alt="AI commits per week by model" width="100%">
 </picture>
 
 The exact co-author string varies by era as model names changed over the project's lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.

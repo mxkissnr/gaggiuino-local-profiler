@@ -117,6 +117,19 @@ function xmlEsc(value: string): string {
     return value.replace(/[&<>"]/g, c => XML_ESCAPES[c] ?? c);
 }
 
+function legendParts(legend: BarChartLegendEntry[], palette: ChartPalette, x: number, baselineY: number): string[] {
+    const parts: string[] = [];
+    let lx = x;
+    for (const entry of legend) {
+        parts.push(
+            `<rect x="${lx}" y="${baselineY - LEGEND_SWATCH}" width="${LEGEND_SWATCH}" height="${LEGEND_SWATCH}" rx="2" fill="${entry.color}"/>`,
+            `<text x="${lx + LEGEND_SWATCH + LEGEND_LABEL_GAP}" y="${baselineY}" fill="${palette.inkSecondary}" font-size="13">${xmlEsc(entry.label)}</text>`,
+        );
+        lx += LEGEND_SWATCH + LEGEND_LABEL_GAP + entry.label.length * 7 + LEGEND_ENTRY_GAP;
+    }
+    return parts;
+}
+
 const BAR_CHART_BAR_H = 22;
 const BAR_CHART_GAP = 14;
 const BAR_CHART_TOP_PAD = 46;
@@ -167,16 +180,7 @@ export function barChartSVG(
         `<line x1="${leftPad}" y1="${topPad - 8}" x2="${leftPad}" y2="${topPad + items.length * (barH + gap) - gap}" stroke="${palette.baseline}" stroke-width="1"/>`,
     ];
 
-    if (legend && legend.length) {
-        let lx = LEGEND_X;
-        for (const entry of legend) {
-            parts.push(
-                `<rect x="${lx}" y="${LEGEND_BASELINE_Y - LEGEND_SWATCH}" width="${LEGEND_SWATCH}" height="${LEGEND_SWATCH}" rx="2" fill="${entry.color}"/>`,
-                `<text x="${lx + LEGEND_SWATCH + LEGEND_LABEL_GAP}" y="${LEGEND_BASELINE_Y}" fill="${palette.inkSecondary}" font-size="13">${xmlEsc(entry.label)}</text>`,
-            );
-            lx += LEGEND_SWATCH + LEGEND_LABEL_GAP + entry.label.length * 7 + LEGEND_ENTRY_GAP;
-        }
-    }
+    if (legend && legend.length) parts.push(...legendParts(legend, palette, LEGEND_X, LEGEND_BASELINE_Y));
 
     items.forEach((item, i) => {
         const y = topPad + i * (barH + gap);
@@ -215,6 +219,115 @@ export function modelBreakdownData(
     return { items, legend };
 }
 
+export interface AiCommit {
+    date: string;
+    model: string;
+}
+
+export interface WeeklySeries {
+    model: string;
+    counts: number[];
+}
+
+const DAY_MS = 86_400_000;
+
+// Monday (UTC) of the calendar week containing an ISO date, as YYYY-MM-DD.
+export function weekStart(date: string): string {
+    const t = Date.parse(`${date}T00:00:00Z`);
+    return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY_MS).toISOString().slice(0, 10);
+}
+
+// Weekly AI commit counts per model (#1800): one bucket per calendar week from
+// the first AI commit to the week of `today`; the `topN` models by total
+// commits keep their own series, the rest fold into a trailing "Other".
+export function weeklyModelSeries(
+    commits: AiCommit[],
+    today: string,
+    topN = 5,
+): { weeks: string[]; series: WeeklySeries[] } | null {
+    if (!commits.length) return null;
+    const first = Date.parse(`${weekStart(commits.map(c => c.date).sort()[0]!)}T00:00:00Z`);
+    const last = Date.parse(`${weekStart(today)}T00:00:00Z`);
+    const weeks: string[] = [];
+    for (let t = first; t <= last; t += 7 * DAY_MS) weeks.push(new Date(t).toISOString().slice(0, 10));
+    const totals: Record<string, number> = {};
+    for (const c of commits) totals[c.model] = (totals[c.model] || 0) + 1;
+    const ranked = Object.keys(totals).sort((a, b) => totals[b]! - totals[a]! || a.localeCompare(b));
+    const top = ranked.slice(0, topN);
+    const rows = [...top, ...(ranked.length > topN ? ['Other'] : [])];
+    const series = rows.map(model => ({ model, counts: weeks.map(() => 0) }));
+    for (const c of commits) {
+        const row = series[Math.min(top.indexOf(c.model) < 0 ? top.length : top.indexOf(c.model), series.length - 1)]!;
+        const i = weeks.indexOf(weekStart(c.date));
+        if (i >= 0) row.counts[i]!++;
+    }
+    return { weeks, series };
+}
+
+// Per-vendor line shades (light, dark) so models of one vendor stay apart;
+// the first shade of each vendor is the bar-chart series colour.
+const LINE_SHADES: Record<Theme, Record<Vendor, string[]>> = {
+    light: { claude: ['#2a78d6', '#8dbcf0', '#0f3f7d', '#2f9bb3', '#6a63c9'], deepseek: ['#eb6834', '#f4a583'], other: ['#8a8983', '#b9b8b2'] },
+    dark: { claude: ['#3987e5', '#9cc5f2', '#24579f', '#45b0c8', '#8a84e0'], deepseek: ['#d95926', '#eb9774'], other: ['#8a8983', '#b9b8b2'] },
+};
+
+// Multi-line chart of weekly commits: x = week starts with month ticks, y =
+// commits per week. Same title/legend/ink conventions as barChartSVG; the
+// folded "Other" series is a dashed grey line.
+export function lineChartSVG(
+    title: string,
+    data: { weeks: string[]; series: WeeklySeries[] } | null,
+    theme: Theme = 'light',
+): string | null {
+    if (!data || !data.series.length) return null;
+    const palette = CHART_THEMES[theme] || CHART_THEMES.light;
+    const { weeks, series } = data;
+    const width = 880, height = 340, left = 50, right = 24, top = 76, bottom = 36;
+    const plotW = width - left - right, plotH = height - top - bottom;
+    const peak = Math.max(...series.flatMap(s => s.counts), 1);
+    const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500].find(n => n * 4 >= peak) ?? Math.ceil(peak / 4);
+    const yMax = step * 4;
+    const x = (i: number) => left + (weeks.length > 1 ? (i / (weeks.length - 1)) * plotW : plotW / 2);
+    const y = (v: number) => top + plotH - (v / yMax) * plotH;
+
+    const used: Record<Vendor, number> = { claude: 0, deepseek: 0, other: 0 };
+    const styled = series.map(s => {
+        const folded = s.model === 'Other';
+        const vendor = folded ? 'other' : modelVendor(s.model);
+        const shades = LINE_SHADES[theme][vendor];
+        return { ...s, folded, color: shades[used[vendor]++ % shades.length]! };
+    });
+
+    const parts = [
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" font-family="${CHART_FONT_STACK}" role="img" aria-labelledby="t d">`,
+        `<title id="t">${xmlEsc(title)}</title>`,
+        `<desc id="d">${xmlEsc(`Line chart of AI commits per week from ${weeks[0]} to ${weeks[weeks.length - 1]}, one line per model: ${series.map(s => `${modelDisplayLabel(s.model)} (${s.counts.reduce((a, b) => a + b, 0)} commits)`).join(', ')}.`)}</desc>`,
+        `<text x="20" y="28" fill="${palette.ink}" font-size="15" font-weight="600">${xmlEsc(title)}</text>`,
+        ...legendParts(styled.map(s => ({ label: modelDisplayLabel(s.model), color: s.color })), palette, 20, 52),
+    ];
+    for (let v = 0; v <= yMax; v += step) {
+        parts.push(
+            `<line x1="${left}" y1="${y(v)}" x2="${width - right}" y2="${y(v)}" stroke="${palette.baseline}" stroke-width="1"/>`,
+            `<text x="${left - 8}" y="${y(v) + 4}" fill="${palette.inkSecondary}" font-size="12" text-anchor="end">${v}</text>`,
+        );
+    }
+    let lastLabelX = -Infinity;
+    weeks.forEach((w, i) => {
+        if (i > 0 && w.slice(0, 7) === weeks[i - 1]!.slice(0, 7)) return;
+        if (x(i) - lastLabelX < 45) return;
+        lastLabelX = x(i);
+        const label = new Date(`${w}T00:00:00Z`).toLocaleString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+        parts.push(`<text x="${x(i)}" y="${height - bottom + 18}" fill="${palette.inkSecondary}" font-size="12" text-anchor="middle">${xmlEsc(label)}</text>`);
+    });
+    parts.push(`<text x="14" y="${top + plotH / 2}" fill="${palette.inkSecondary}" font-size="12" text-anchor="middle" transform="rotate(-90 14 ${top + plotH / 2})">Commits per week</text>`);
+    for (const s of styled) {
+        const pts = s.counts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+        parts.push(`<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${s.folded ? ' stroke-dasharray="5 4"' : ''}/>`);
+    }
+    parts.push('</svg>');
+    return parts.join('\n') + '\n';
+}
+
 // <picture> markup that swaps the light chart for the dark one under GitHub's
 // dark theme (#1210). Paths are relative to the repo root, where both the
 // generated DEVELOPMENT.md and the README sit.
@@ -227,7 +340,7 @@ export function chartPictureHTML(base: string, alt: string): string {
     ].join('\n');
 }
 
-function renderCharts(results: RepoStats[], combinedModelCounts: Record<string, number>): boolean {
+function renderCharts(results: RepoStats[], combinedModelCounts: Record<string, number>, aiLog: AiCommit[]): boolean {
     const outDir = path.join(appRepoRoot, 'docs', 'dev-stats');
     mkdirSync(outDir, { recursive: true });
 
@@ -250,6 +363,11 @@ function renderCharts(results: RepoStats[], combinedModelCounts: Record<string, 
             writeFileSync(path.join(outDir, `model-breakdown-${theme}.svg`), modelSvg);
             rendered = true;
         }
+        const timelineSvg = lineChartSVG('AI commits per week by model', weeklyModelSeries(aiLog, new Date().toISOString().slice(0, 10)), theme);
+        if (timelineSvg) {
+            writeFileSync(path.join(outDir, `model-timeline-${theme}.svg`), timelineSvg);
+            rendered = true;
+        }
     }
     return rendered;
 }
@@ -268,6 +386,7 @@ interface RepoStats {
     aiCommits: number;
     modelCounts: Record<string, number>;
     modelCostUsd: Record<string, number>;
+    aiLog: AiCommit[];
     totalLines: number;
     aiLines: number;
     devHours: number;
@@ -445,11 +564,12 @@ function statsForRepo(repo: RepoSpec): RepoStats | null {
     // commit body, then (thanks to --shortstat) that same commit's diffstat
     // line — so a single split gives us, per commit, both the co-author line
     // and its changed-line count without any per-commit subprocess call.
-    const raw    = git(repo.dir, `log ${scope} --format=%x02%B --shortstat`);
+    const raw    = git(repo.dir, `log ${scope} --format=%x02%ad%x01%B --date=short --shortstat`);
     const chunks = raw.split('\x02').filter(Boolean);
 
     const modelCounts: Record<string, number> = {};
     const modelCostUsd: Record<string, number> = {};
+    const aiLog: AiCommit[] = [];
     let aiCommits = 0, totalLines = 0, aiLines = 0;
     for (const chunk of chunks) {
         const ins = parseInt((chunk.match(/(\d+) insertion/) || [])[1] || '0', 10);
@@ -459,6 +579,7 @@ function statsForRepo(repo: RepoSpec): RepoStats | null {
         if (!model) continue;
         aiCommits++;
         aiLines += ins + del;
+        aiLog.push({ date: chunk.slice(0, 10), model });
         modelCounts[model] = (modelCounts[model] || 0) + 1;
 
         // TODO(#1100 follow-up, out of scope here): no commit sets this trailer
@@ -474,7 +595,7 @@ function statsForRepo(repo: RepoSpec): RepoStats | null {
         }
     }
 
-    return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, modelCostUsd, totalLines, aiLines, devHours };
+    return { ...repo, firstDate, lastDate, totalCommits, aiCommits, modelCounts, modelCostUsd, aiLog, totalLines, aiLines, devHours };
 }
 
 function fmtDate(d: string | null | undefined): string { return d || '?'; }
@@ -512,7 +633,7 @@ function main(): void {
         ? Math.round((new Date(combined.lastDate).getTime() - new Date(combined.firstDate).getTime()) / 86400000) + 1
         : null;
 
-    const chartsRendered = renderCharts(results, combinedModelCounts);
+    const chartsRendered = renderCharts(results, combinedModelCounts, results.flatMap(r => r.aiLog));
 
     const monthsSinceStartCount = monthsSinceStart(combined.firstDate);
     const subscriptionCostUsd = monthsSinceStartCount * CLAUDE_PRO_MONTHLY_USD;
@@ -562,6 +683,7 @@ function main(): void {
     }
     lines.push('');
     if (chartsRendered) { lines.push(chartPictureHTML('model-breakdown', 'AI model breakdown by commits')); lines.push(''); }
+    if (chartsRendered && combined.aiCommits) { lines.push(chartPictureHTML('model-timeline', 'AI commits per week by model')); lines.push(''); }
     lines.push('The exact co-author string varies by era as model names changed over the project\'s lifetime — this table groups by the literal string used in each commit, so the same underlying model released under a new name shows up as a separate row.');
     lines.push('');
     lines.push('## Cost');
