@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     barChartSVG,
     chartPictureHTML,
+    dividerSVG,
     modelBreakdownData,
     modelDisplayLabel,
     modelVendor,
@@ -17,7 +18,7 @@ const ITEMS = [
 
 function barFills(svg: string): string[] {
     const fills: string[] = [];
-    for (const m of svg.matchAll(/<path d="[^"]*" fill="([^"]+)"/g)) {
+    for (const m of svg.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="24" fill="([^"]+)"/g)) {
         const fill = m[1];
         if (fill !== undefined) fills.push(fill);
     }
@@ -25,18 +26,19 @@ function barFills(svg: string): string[] {
 }
 
 describe('dev-stats barChartSVG (#1210)', () => {
-    it('uses a viewBox with no fixed width/height and no background rect', () => {
+    it('uses a viewBox with no fixed width/height and draws a bordered card with a hard shadow', () => {
         const svg = barChartSVG('Commits per repo', ITEMS)!;
         const rootTag = svg.slice(0, svg.indexOf('>') + 1);
         expect(rootTag).toContain('viewBox="0 0 880 ');
         expect(rootTag).not.toContain('width=');
         expect(rootTag).not.toContain('height=');
         expect(svg).toContain('role="img"');
-        expect(svg).toContain('<title>Commits per repo</title>');
-        // The old full-bleed #1a1a19 surface is gone; the only <rect>s left are
-        // the 10px legend swatches.
-        expect(svg).not.toContain('#1a1a19');
+        expect(svg).toContain('<title id="t">Commits per repo</title>');
+        expect(svg).toContain('<desc id="d">');
+        expect(svg).toContain('COMMITS PER REPO');
         expect(svg).not.toMatch(/<rect width="/);
+        // Offset shadow first, then the card with its 3px ink border.
+        expect(svg).toMatch(/<rect x="12" y="12"[^>]*fill="#0b0b0b"\/>\n<rect x="5.5" y="5.5"[^>]*fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"\/>/);
     });
 
     it('returns null for an empty series', () => {
@@ -46,14 +48,14 @@ describe('dev-stats barChartSVG (#1210)', () => {
     it('renders different ink for the light and dark themes', () => {
         const light = barChartSVG('T', ITEMS, { theme: 'light' })!;
         const dark = barChartSVG('T', ITEMS, { theme: 'dark' })!;
-        expect(light).toContain('fill="#0b0b0b"');
-        expect(dark).toContain('fill="#ffffff"');
+        expect(light).toContain('fill="#0b0b0b" font-weight="800"');
+        expect(dark).toContain('fill="#f5f1e6" font-weight="800"');
         expect(light).not.toBe(dark);
 
-        const valueFills = [...dark.matchAll(/fill="([^"]+)" font-size="13" font-weight="600"/g)].map(m => m[1]);
+        const valueFills = [...dark.matchAll(/fill="([^"]+)" font-weight="800" font-size="14"/g)].map(m => m[1]);
         expect(valueFills.length).toBe(ITEMS.length);
-        expect(valueFills.every(f => f === '#ffffff')).toBe(true);
-        expect(light).not.toContain('fill="#ffffff"');
+        expect(valueFills.every(f => f === '#f5f1e6')).toBe(true);
+        expect(light).not.toContain('#f5f1e6');
     });
 
     it('uses one colour for a single-series chart', () => {
@@ -61,7 +63,7 @@ describe('dev-stats barChartSVG (#1210)', () => {
         const fills = barFills(svg);
         expect(fills.length).toBe(ITEMS.length);
         expect(new Set(fills).size).toBe(1);
-        expect(fills[0]).toBe('#2a78d6');
+        expect(fills[0]).toBe('#1f5fff');
     });
 
     it('XML-escapes the title and labels', () => {
@@ -94,15 +96,15 @@ describe('dev-stats model breakdown (#1210)', () => {
         expect(new Set(deepseekFills).size).toBe(1);
         expect(claudeFills[0]).not.toBe(deepseekFills[0]);
 
-        expect(claudeFills[0]).toBe('#2a78d6');
-        expect(deepseekFills[0]).toBe('#eb6834');
+        expect(claudeFills[0]).toBe('#1f5fff');
+        expect(deepseekFills[0]).toBe('#ff5a1f');
         expect(legend.map(l => l.label)).toEqual(['Claude', 'DeepSeek']);
     });
 
     it('omits vendors that are not present from the legend', () => {
         const { legend } = modelBreakdownData({ 'Claude Opus 4': 4 }, 'dark');
         expect(legend.map(l => l.label)).toEqual(['Claude']);
-        expect(legend[0]?.color).toBe('#3987e5');
+        expect(legend[0]?.color).toBe('#4d8dff');
     });
 
     it('shows the unversioned Claude row as "Claude (version not recorded)"', () => {
@@ -123,5 +125,18 @@ describe('dev-stats chartPictureHTML (#1210)', () => {
             + '  <img src="docs/dev-stats/commits-per-repo-light.svg" alt="Commits per repo" width="100%">\n'
             + '</picture>',
         );
+    });
+});
+
+describe('dev-stats dividerSVG (#1802)', () => {
+    it('draws the card-style bar with an accessible name in both themes', () => {
+        for (const theme of ['light', 'dark'] as const) {
+            const svg = dividerSVG(theme);
+            expect(svg).toContain('role="img"');
+            expect(svg).toContain('<title>Section divider</title>');
+            expect(svg).toContain('stroke-width="3"');
+        }
+        expect(dividerSVG('dark')).toContain('#ff7a3d');
+        expect(dividerSVG('light')).not.toBe(dividerSVG('dark'));
     });
 });
