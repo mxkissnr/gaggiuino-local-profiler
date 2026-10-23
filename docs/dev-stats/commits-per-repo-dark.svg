@@ -4,7 +4,7 @@
 <line x1="220" y1="38" x2="220" y2="176" stroke="#383835" stroke-width="1"/>
 <text x="208" y="61" fill="#c3c2b7" font-size="13" text-anchor="end">gaggiuino-local-profiler</text>
 <path d="M220,46 H816 Q820,46 820,50 V64 Q820,68 816,68 H220 Z" fill="#3987e5"/>
-<text x="830" y="61" fill="#ffffff" font-size="13" font-weight="600">2066</text>
+<text x="830" y="61" fill="#ffffff" font-size="13" font-weight="600">2067</text>
 <text x="208" y="97" fill="#c3c2b7" font-size="13" text-anchor="end">glp-integration</text>
 <path d="M220,82 H285 Q289,82 289,86 V100 Q289,104 285,104 H220 Z" fill="#3987e5"/>
 <text x="299" y="97" fill="#ffffff" font-size="13" font-weight="600">239</text>

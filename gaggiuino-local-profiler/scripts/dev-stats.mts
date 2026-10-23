@@ -231,12 +231,11 @@ export function monthKey(date: string): string {
 }
 
 // Monthly AI commit counts per model (#1800): one bucket per calendar month
-// from the first AI commit to the month of `today`; the `topN` models by total
-// commits keep their own series, the rest fold into a trailing "Other".
+// from the first AI commit to the month of `today`; one series per model,
+// ordered by total commits (largest first).
 export function monthlyModelSeries(
     commits: AiCommit[],
     today: string,
-    topN = 5,
 ): { months: string[]; series: MonthlySeries[] } | null {
     if (!commits.length) return null;
     const months: string[] = [];
@@ -249,11 +248,9 @@ export function monthlyModelSeries(
     const totals: Record<string, number> = {};
     for (const c of commits) totals[c.model] = (totals[c.model] || 0) + 1;
     const ranked = Object.keys(totals).sort((a, b) => totals[b]! - totals[a]! || a.localeCompare(b));
-    const top = ranked.slice(0, topN);
-    const series = [...top, ...(ranked.length > topN ? ['Other'] : [])]
-        .map(model => ({ model, counts: months.map(() => 0) }));
+    const series = ranked.map(model => ({ model, counts: months.map(() => 0) }));
     for (const c of commits) {
-        const row = series[top.includes(c.model) ? top.indexOf(c.model) : top.length]!;
+        const row = series[ranked.indexOf(c.model)]!;
         const i = months.indexOf(monthKey(c.date));
         if (i >= 0) row.counts[i]!++;
     }
@@ -273,17 +270,29 @@ interface TimelineTheme {
 const TIMELINE_THEMES: Record<Theme, TimelineTheme> = {
     light: {
         card: '#fffaf0', ink: '#0b0b0b', shadow: '#0b0b0b', grid: '#d9d2bf',
-        shades: { claude: ['#1f5fff', '#6aa8ff', '#0a2a8a', '#00a6c0', '#7a3cff'], deepseek: ['#ff5a1f', '#ffa23a'], other: ['#6b6b6b', '#9a9a9a'] },
+        shades: { claude: ['#1f5fff', '#6aa8ff', '#0a2a8a', '#00a6c0', '#7a3cff', '#0b7a8c', '#b8a1ff', '#3a3aa8'], deepseek: ['#ff5a1f', '#ffa23a', '#b53a00'], other: ['#6b6b6b', '#9a9a9a', '#3f3f3f'] },
     },
     dark: {
         card: '#16181d', ink: '#f5f1e6', shadow: '#ff7a3d', grid: '#34363d',
-        shades: { claude: ['#4d8dff', '#a3c8ff', '#2a55c8', '#2ed3ec', '#a07bff'], deepseek: ['#ff7a3d', '#ffb347'], other: ['#a8a8a8', '#d0d0d0'] },
+        shades: { claude: ['#4d8dff', '#a3c8ff', '#2a55c8', '#2ed3ec', '#a07bff', '#1fa0b8', '#d3c4ff', '#6a6ae0'], deepseek: ['#ff7a3d', '#ffb347', '#d9500f'], other: ['#a8a8a8', '#d0d0d0', '#7d7d7d'] },
     },
 };
 
-// Multi-line chart of monthly commits: x = months, y = commits per month.
-// Same title/legend/<title>+<desc> conventions as barChartSVG; the folded
-// "Other" series is a dashed grey line.
+// Multi-line chart of monthly commits: x = months, y = commits per month, one
+// line per model. Colour = vendor shade; dash pattern and marker shape cycle
+// per model so lines that overlap near zero can still be told apart. Series
+// arrive largest first and are drawn in that order, so small ones end up on
+// top. The legend wraps into rows and the card grows to fit.
+const DASHES = ['', '10 5', '3 5', '10 4 3 4'];
+const MARKERS = ['square', 'circle', 'diamond'] as const;
+
+function markerSVG(shape: (typeof MARKERS)[number], cx: number, cy: number, fill: string, ink: string): string {
+    const at = `fill="${fill}" stroke="${ink}" stroke-width="2"`;
+    if (shape === 'circle') return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" ${at}/>`;
+    if (shape === 'diamond') return `<polygon points="${cx.toFixed(1)},${(cy - 8).toFixed(1)} ${(cx + 8).toFixed(1)},${cy.toFixed(1)} ${cx.toFixed(1)},${(cy + 8).toFixed(1)} ${(cx - 8).toFixed(1)},${cy.toFixed(1)}" ${at}/>`;
+    return `<rect x="${(cx - 5).toFixed(1)}" y="${(cy - 5).toFixed(1)}" width="10" height="10" ${at}/>`;
+}
+
 export function lineChartSVG(
     title: string,
     data: { months: string[]; series: MonthlySeries[] } | null,
@@ -292,23 +301,39 @@ export function lineChartSVG(
     if (!data || !data.series.length) return null;
     const t = TIMELINE_THEMES[theme] || TIMELINE_THEMES.light;
     const { months, series } = data;
-    const width = 880, height = 360, shadow = 8, cardW = width - shadow - 4, cardH = height - shadow - 4;
-    const left = 64, right = 36, top = 92, bottom = 52;
-    const plotW = cardW - left - right, plotH = cardH - top - bottom;
+
+    const used: Record<Vendor, number> = { claude: 0, deepseek: 0, other: 0 };
+    const styled = series.map((s, i) => {
+        const vendor = modelVendor(s.model);
+        const shades = t.shades[vendor];
+        return {
+            ...s,
+            label: modelDisplayLabel(s.model),
+            color: shades[used[vendor]++ % shades.length]!,
+            dash: DASHES[i % DASHES.length]!,
+            marker: MARKERS[i % MARKERS.length]!,
+        };
+    });
+
+    // Legend rows first: they decide how tall the card is.
+    const shadow = 8, width = 880, cardW = width - shadow - 4, legendMaxX = cardW - 20;
+    const entryW = (label: string) => 34 + label.length * 7 + 16;
+    const legend: { x: number; row: number }[] = [];
+    let lx = 26, row = 0;
+    for (const s of styled) {
+        if (lx + entryW(s.label) > legendMaxX && lx > 26) { lx = 26; row++; }
+        legend.push({ x: lx, row });
+        lx += entryW(s.label);
+    }
+    const left = 64, right = 36, top = 66 + (row + 1) * 22 + 14, bottom = 52, plotH = 230;
+    const height = top + plotH + bottom + shadow + 4, cardH = height - shadow - 4;
+    const plotW = cardW - left - right;
     const peak = Math.max(...series.flatMap(s => s.counts), 1);
     const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(n => n * 4 >= peak) ?? Math.ceil(peak / 4);
     const yMax = step * 4;
     const x = (i: number) => left + (months.length > 1 ? (i / (months.length - 1)) * plotW : plotW / 2);
     const y = (v: number) => top + plotH - (v / yMax) * plotH;
     const text = (extra: string) => `fill="${t.ink}" font-weight="800" ${extra}`;
-
-    const used: Record<Vendor, number> = { claude: 0, deepseek: 0, other: 0 };
-    const styled = series.map(s => {
-        const folded = s.model === 'Other';
-        const vendor = folded ? 'other' : modelVendor(s.model);
-        const shades = t.shades[vendor];
-        return { ...s, folded, color: shades[used[vendor]++ % shades.length]! };
-    });
     const total = (s: MonthlySeries) => s.counts.reduce((a, b) => a + b, 0);
 
     const parts = [
@@ -319,15 +344,15 @@ export function lineChartSVG(
         `<rect x="5.5" y="5.5" width="${cardW}" height="${cardH}" fill="${t.card}" stroke="${t.ink}" stroke-width="3"/>`,
         `<text x="26" y="40" ${text('font-size="19" letter-spacing="0.5"')}>${xmlEsc(title.toUpperCase())}</text>`,
     ];
-    let lx = 26;
-    for (const s of styled) {
-        const label = modelDisplayLabel(s.model);
+    styled.forEach((s, i) => {
+        const { x: ex, row: er } = legend[i]!;
+        const ly = 66 + er * 22;
         parts.push(
-            `<rect x="${lx}" y="58" width="12" height="12" fill="${s.color}" stroke="${t.ink}" stroke-width="2"/>`,
-            `<text x="${lx + 19}" y="69" ${text('font-size="12"')}>${xmlEsc(label)}</text>`,
+            `<line x1="${ex}" y1="${ly + 6}" x2="${ex + 24}" y2="${ly + 6}" stroke="${s.color}" stroke-width="4"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/>`,
+            markerSVG(s.marker, ex + 12, ly + 6, s.color, t.ink),
+            `<text x="${ex + 32}" y="${ly + 11}" ${text('font-size="12"')}>${xmlEsc(s.label)}</text>`,
         );
-        lx += 19 + label.length * 7 + 16;
-    }
+    });
     for (let v = 0; v <= yMax; v += step) {
         parts.push(
             `<line x1="${left}" y1="${y(v)}" x2="${left + plotW}" y2="${y(v)}" stroke="${v ? t.grid : t.ink}" stroke-width="${v ? 2 : 3}"/>`,
@@ -346,10 +371,8 @@ export function lineChartSVG(
     parts.push(`<text x="20" y="${top + plotH / 2}" ${text('font-size="12" text-anchor="middle" letter-spacing="0.5"')} transform="rotate(-90 20 ${top + plotH / 2})">COMMITS / MONTH</text>`);
     for (const s of styled) {
         const pts = s.counts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-        parts.push(`<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="4" stroke-linejoin="miter"${s.folded ? ' stroke-dasharray="8 5"' : ''}/>`);
-        for (const [i, v] of s.counts.entries()) {
-            parts.push(`<rect x="${(x(i) - 5).toFixed(1)}" y="${(y(v) - 5).toFixed(1)}" width="10" height="10" fill="${s.color}" stroke="${t.ink}" stroke-width="2"/>`);
-        }
+        parts.push(`<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="4" stroke-linejoin="miter"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/>`);
+        s.counts.forEach((v, i) => { if (v) parts.push(markerSVG(s.marker, x(i), y(v), s.color, t.ink)); });
     }
     parts.push('</svg>');
     return parts.join('\n') + '\n';

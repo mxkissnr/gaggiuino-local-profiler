@@ -1,85 +1,107 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
 <title id="t">AI commits per month by model</title>
-<desc id="d">Line chart of AI commits per month from 2026-05 to 2026-10 (current month still in progress), one line per model: Claude Sonnet 5 (829 commits), DeepSeek V4.1 Flash (612 commits), Claude Sonnet 4.6 (355 commits), Claude Opus 5.5 (76 commits), Claude Opus 5 (55 commits), Other (136 commits).</desc>
-<rect x="12" y="12" width="868" height="348" fill="#0b0b0b"/>
-<rect x="5.5" y="5.5" width="868" height="348" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"/>
+<desc id="d">Line chart of AI commits per month from 2026-05 to 2026-10 (current month still in progress), one line per model: Claude Sonnet 5 (829 commits), DeepSeek V4.1 Flash (612 commits), Claude Sonnet 4.6 (355 commits), Claude Opus 5.5 (76 commits), Claude Opus 5 (55 commits), Claude Opus 4.8 (47 commits), Claude Fable 5 (41 commits), Claude Sonnet 5.5 (22 commits), Claude (version not recorded) (12 commits), DeepSeek V4 Flash (9 commits), Claude Haiku 4.5 (4 commits), Big Pickle (1 commits), Claude Haiku 5.5 (1 commits).</desc>
+<rect x="12" y="12" width="868" height="428" fill="#0b0b0b"/>
+<rect x="5.5" y="5.5" width="868" height="428" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"/>
 <text x="26" y="40" fill="#0b0b0b" font-weight="800" font-size="19" letter-spacing="0.5">AI COMMITS PER MONTH BY MODEL</text>
-<rect x="26" y="58" width="12" height="12" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
-<text x="45" y="69" fill="#0b0b0b" font-weight="800" font-size="12">Claude Sonnet 5</text>
-<rect x="166" y="58" width="12" height="12" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
-<text x="185" y="69" fill="#0b0b0b" font-weight="800" font-size="12">DeepSeek V4.1 Flash</text>
-<rect x="334" y="58" width="12" height="12" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<text x="353" y="69" fill="#0b0b0b" font-weight="800" font-size="12">Claude Sonnet 4.6</text>
-<rect x="488" y="58" width="12" height="12" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<text x="507" y="69" fill="#0b0b0b" font-weight="800" font-size="12">Claude Opus 5.5</text>
-<rect x="628" y="58" width="12" height="12" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
-<text x="647" y="69" fill="#0b0b0b" font-weight="800" font-size="12">Claude Opus 5</text>
-<rect x="754" y="58" width="12" height="12" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
-<text x="773" y="69" fill="#0b0b0b" font-weight="800" font-size="12">Other</text>
-<line x1="64" y1="296" x2="832" y2="296" stroke="#0b0b0b" stroke-width="3"/>
-<text x="54" y="300" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">0</text>
-<line x1="64" y1="245" x2="832" y2="245" stroke="#d9d2bf" stroke-width="2"/>
-<text x="54" y="249" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">200</text>
-<line x1="64" y1="194" x2="832" y2="194" stroke="#d9d2bf" stroke-width="2"/>
-<text x="54" y="198" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">400</text>
-<line x1="64" y1="143" x2="832" y2="143" stroke="#d9d2bf" stroke-width="2"/>
-<text x="54" y="147" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">600</text>
-<line x1="64" y1="92" x2="832" y2="92" stroke="#d9d2bf" stroke-width="2"/>
-<text x="54" y="96" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">800</text>
-<line x1="64" y1="92" x2="64" y2="296" stroke="#0b0b0b" stroke-width="3"/>
-<line x1="64" y1="296" x2="64" y2="302" stroke="#0b0b0b" stroke-width="3"/>
-<text x="64" y="320" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">May 26</text>
-<line x1="217.60000000000002" y1="296" x2="217.60000000000002" y2="302" stroke="#0b0b0b" stroke-width="3"/>
-<text x="217.60000000000002" y="320" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Jun 26</text>
-<line x1="371.20000000000005" y1="296" x2="371.20000000000005" y2="302" stroke="#0b0b0b" stroke-width="3"/>
-<text x="371.20000000000005" y="320" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Jul 26</text>
-<line x1="524.8" y1="296" x2="524.8" y2="302" stroke="#0b0b0b" stroke-width="3"/>
-<text x="524.8" y="320" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Aug 26</text>
-<line x1="678.4000000000001" y1="296" x2="678.4000000000001" y2="302" stroke="#0b0b0b" stroke-width="3"/>
-<text x="678.4000000000001" y="320" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Sep 26</text>
-<line x1="832" y1="296" x2="832" y2="302" stroke="#0b0b0b" stroke-width="3"/>
-<text x="832" y="320" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Oct 26</text>
-<text x="20" y="194" fill="#0b0b0b" font-weight="800" font-size="12" text-anchor="middle" letter-spacing="0.5" transform="rotate(-90 20 194)">COMMITS / MONTH</text>
-<polyline points="64.0,296.0 217.6,296.0 371.2,212.6 524.8,201.9 678.4,262.1 832.0,296.0" fill="none" stroke="#1f5fff" stroke-width="4" stroke-linejoin="miter"/>
-<rect x="59.0" y="291.0" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="212.6" y="291.0" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="366.2" y="207.6" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="519.8" y="196.9" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="673.4" y="257.1" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="827.0" y="291.0" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
-<polyline points="64.0,296.0 217.6,296.0 371.2,296.0 524.8,296.0 678.4,248.6 832.0,187.4" fill="none" stroke="#ff5a1f" stroke-width="4" stroke-linejoin="miter"/>
-<rect x="59.0" y="291.0" width="10" height="10" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="212.6" y="291.0" width="10" height="10" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="366.2" y="291.0" width="10" height="10" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="519.8" y="291.0" width="10" height="10" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="673.4" y="243.6" width="10" height="10" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="827.0" y="182.4" width="10" height="10" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
-<polyline points="64.0,225.6 217.6,275.9 371.2,296.0 524.8,296.0 678.4,296.0 832.0,296.0" fill="none" stroke="#6aa8ff" stroke-width="4" stroke-linejoin="miter"/>
-<rect x="59.0" y="220.6" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="212.6" y="270.9" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="366.2" y="291.0" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="519.8" y="291.0" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="673.4" y="291.0" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="827.0" y="291.0" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<polyline points="64.0,296.0 217.6,296.0 371.2,296.0 524.8,296.0 678.4,294.0 832.0,278.7" fill="none" stroke="#0a2a8a" stroke-width="4" stroke-linejoin="miter"/>
-<rect x="59.0" y="291.0" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="212.6" y="291.0" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="366.2" y="291.0" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="519.8" y="291.0" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="673.4" y="289.0" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="827.0" y="273.7" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<polyline points="64.0,296.0 217.6,296.0 371.2,294.2 524.8,284.3 678.4,295.5 832.0,296.0" fill="none" stroke="#00a6c0" stroke-width="4" stroke-linejoin="miter"/>
-<rect x="59.0" y="291.0" width="10" height="10" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="212.6" y="291.0" width="10" height="10" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="366.2" y="289.2" width="10" height="10" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="519.8" y="279.3" width="10" height="10" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="673.4" y="290.5" width="10" height="10" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="827.0" y="291.0" width="10" height="10" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
-<polyline points="64.0,296.0 217.6,281.0 371.2,285.5 524.8,295.2 678.4,292.2 832.0,291.4" fill="none" stroke="#6b6b6b" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="8 5"/>
-<rect x="59.0" y="291.0" width="10" height="10" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="212.6" y="276.0" width="10" height="10" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="366.2" y="280.5" width="10" height="10" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="519.8" y="290.2" width="10" height="10" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="673.4" y="287.2" width="10" height="10" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="827.0" y="286.4" width="10" height="10" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
+<line x1="26" y1="72" x2="50" y2="72" stroke="#1f5fff" stroke-width="4"/>
+<rect x="33.0" y="67.0" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
+<text x="58" y="77" fill="#0b0b0b" font-weight="800" font-size="12">Claude Sonnet 5</text>
+<line x1="181" y1="72" x2="205" y2="72" stroke="#ff5a1f" stroke-width="4" stroke-dasharray="10 5"/>
+<circle cx="193.0" cy="72.0" r="6" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
+<text x="213" y="77" fill="#0b0b0b" font-weight="800" font-size="12">DeepSeek V4.1 Flash</text>
+<line x1="364" y1="72" x2="388" y2="72" stroke="#6aa8ff" stroke-width="4" stroke-dasharray="3 5"/>
+<polygon points="376.0,64.0 384.0,72.0 376.0,80.0 368.0,72.0" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
+<text x="396" y="77" fill="#0b0b0b" font-weight="800" font-size="12">Claude Sonnet 4.6</text>
+<line x1="533" y1="72" x2="557" y2="72" stroke="#0a2a8a" stroke-width="4" stroke-dasharray="10 4 3 4"/>
+<rect x="540.0" y="67.0" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
+<text x="565" y="77" fill="#0b0b0b" font-weight="800" font-size="12">Claude Opus 5.5</text>
+<line x1="688" y1="72" x2="712" y2="72" stroke="#00a6c0" stroke-width="4"/>
+<circle cx="700.0" cy="72.0" r="6" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
+<text x="720" y="77" fill="#0b0b0b" font-weight="800" font-size="12">Claude Opus 5</text>
+<line x1="26" y1="94" x2="50" y2="94" stroke="#7a3cff" stroke-width="4" stroke-dasharray="10 5"/>
+<polygon points="38.0,86.0 46.0,94.0 38.0,102.0 30.0,94.0" fill="#7a3cff" stroke="#0b0b0b" stroke-width="2"/>
+<text x="58" y="99" fill="#0b0b0b" font-weight="800" font-size="12">Claude Opus 4.8</text>
+<line x1="181" y1="94" x2="205" y2="94" stroke="#0b7a8c" stroke-width="4" stroke-dasharray="3 5"/>
+<rect x="188.0" y="89.0" width="10" height="10" fill="#0b7a8c" stroke="#0b0b0b" stroke-width="2"/>
+<text x="213" y="99" fill="#0b0b0b" font-weight="800" font-size="12">Claude Fable 5</text>
+<line x1="329" y1="94" x2="353" y2="94" stroke="#b8a1ff" stroke-width="4" stroke-dasharray="10 4 3 4"/>
+<circle cx="341.0" cy="94.0" r="6" fill="#b8a1ff" stroke="#0b0b0b" stroke-width="2"/>
+<text x="361" y="99" fill="#0b0b0b" font-weight="800" font-size="12">Claude Sonnet 5.5</text>
+<line x1="498" y1="94" x2="522" y2="94" stroke="#3a3aa8" stroke-width="4"/>
+<polygon points="510.0,86.0 518.0,94.0 510.0,102.0 502.0,94.0" fill="#3a3aa8" stroke="#0b0b0b" stroke-width="2"/>
+<text x="530" y="99" fill="#0b0b0b" font-weight="800" font-size="12">Claude (version not recorded)</text>
+<line x1="26" y1="116" x2="50" y2="116" stroke="#ffa23a" stroke-width="4" stroke-dasharray="10 5"/>
+<rect x="33.0" y="111.0" width="10" height="10" fill="#ffa23a" stroke="#0b0b0b" stroke-width="2"/>
+<text x="58" y="121" fill="#0b0b0b" font-weight="800" font-size="12">DeepSeek V4 Flash</text>
+<line x1="195" y1="116" x2="219" y2="116" stroke="#1f5fff" stroke-width="4" stroke-dasharray="3 5"/>
+<circle cx="207.0" cy="116.0" r="6" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
+<text x="227" y="121" fill="#0b0b0b" font-weight="800" font-size="12">Claude Haiku 4.5</text>
+<line x1="357" y1="116" x2="381" y2="116" stroke="#6b6b6b" stroke-width="4" stroke-dasharray="10 4 3 4"/>
+<polygon points="369.0,108.0 377.0,116.0 369.0,124.0 361.0,116.0" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
+<text x="389" y="121" fill="#0b0b0b" font-weight="800" font-size="12">Big Pickle</text>
+<line x1="477" y1="116" x2="501" y2="116" stroke="#6aa8ff" stroke-width="4"/>
+<rect x="484.0" y="111.0" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
+<text x="509" y="121" fill="#0b0b0b" font-weight="800" font-size="12">Claude Haiku 5.5</text>
+<line x1="64" y1="376" x2="832" y2="376" stroke="#0b0b0b" stroke-width="3"/>
+<text x="54" y="380" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">0</text>
+<line x1="64" y1="318.5" x2="832" y2="318.5" stroke="#d9d2bf" stroke-width="2"/>
+<text x="54" y="322.5" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">200</text>
+<line x1="64" y1="261" x2="832" y2="261" stroke="#d9d2bf" stroke-width="2"/>
+<text x="54" y="265" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">400</text>
+<line x1="64" y1="203.5" x2="832" y2="203.5" stroke="#d9d2bf" stroke-width="2"/>
+<text x="54" y="207.5" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">600</text>
+<line x1="64" y1="146" x2="832" y2="146" stroke="#d9d2bf" stroke-width="2"/>
+<text x="54" y="150" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">800</text>
+<line x1="64" y1="146" x2="64" y2="376" stroke="#0b0b0b" stroke-width="3"/>
+<line x1="64" y1="376" x2="64" y2="382" stroke="#0b0b0b" stroke-width="3"/>
+<text x="64" y="400" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">May 26</text>
+<line x1="217.60000000000002" y1="376" x2="217.60000000000002" y2="382" stroke="#0b0b0b" stroke-width="3"/>
+<text x="217.60000000000002" y="400" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Jun 26</text>
+<line x1="371.20000000000005" y1="376" x2="371.20000000000005" y2="382" stroke="#0b0b0b" stroke-width="3"/>
+<text x="371.20000000000005" y="400" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Jul 26</text>
+<line x1="524.8" y1="376" x2="524.8" y2="382" stroke="#0b0b0b" stroke-width="3"/>
+<text x="524.8" y="400" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Aug 26</text>
+<line x1="678.4000000000001" y1="376" x2="678.4000000000001" y2="382" stroke="#0b0b0b" stroke-width="3"/>
+<text x="678.4000000000001" y="400" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Sep 26</text>
+<line x1="832" y1="376" x2="832" y2="382" stroke="#0b0b0b" stroke-width="3"/>
+<text x="832" y="400" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="middle">Oct 26</text>
+<text x="20" y="261" fill="#0b0b0b" font-weight="800" font-size="12" text-anchor="middle" letter-spacing="0.5" transform="rotate(-90 20 261)">COMMITS / MONTH</text>
+<polyline points="64.0,376.0 217.6,376.0 371.2,282.0 524.8,269.9 678.4,337.8 832.0,376.0" fill="none" stroke="#1f5fff" stroke-width="4" stroke-linejoin="miter"/>
+<rect x="366.2" y="277.0" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
+<rect x="519.8" y="264.9" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
+<rect x="673.4" y="332.8" width="10" height="10" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,376.0 524.8,376.0 678.4,322.5 832.0,253.5" fill="none" stroke="#ff5a1f" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 5"/>
+<circle cx="678.4" cy="322.5" r="6" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
+<circle cx="832.0" cy="253.5" r="6" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,296.6 217.6,353.3 371.2,376.0 524.8,376.0 678.4,376.0 832.0,376.0" fill="none" stroke="#6aa8ff" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="3 5"/>
+<polygon points="64.0,288.6 72.0,296.6 64.0,304.6 56.0,296.6" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
+<polygon points="217.6,345.3 225.6,353.3 217.6,361.3 209.6,353.3" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,376.0 524.8,376.0 678.4,373.7 832.0,356.4" fill="none" stroke="#0a2a8a" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 4 3 4"/>
+<rect x="673.4" y="368.7" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
+<rect x="827.0" y="351.4" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,374.0 524.8,362.8 678.4,375.4 832.0,376.0" fill="none" stroke="#00a6c0" stroke-width="4" stroke-linejoin="miter"/>
+<circle cx="371.2" cy="374.0" r="6" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
+<circle cx="524.8" cy="362.8" r="6" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
+<circle cx="678.4" cy="375.4" r="6" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,362.5 371.2,376.0 524.8,376.0 678.4,376.0 832.0,376.0" fill="none" stroke="#7a3cff" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 5"/>
+<polygon points="217.6,354.5 225.6,362.5 217.6,370.5 209.6,362.5" fill="#7a3cff" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,372.6 371.2,367.7 524.8,376.0 678.4,376.0 832.0,376.0" fill="none" stroke="#0b7a8c" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="3 5"/>
+<rect x="212.6" y="367.6" width="10" height="10" fill="#0b7a8c" stroke="#0b0b0b" stroke-width="2"/>
+<rect x="366.2" y="362.7" width="10" height="10" fill="#0b7a8c" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,376.0 524.8,376.0 678.4,374.3 832.0,371.4" fill="none" stroke="#b8a1ff" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 4 3 4"/>
+<circle cx="678.4" cy="374.3" r="6" fill="#b8a1ff" stroke="#0b0b0b" stroke-width="2"/>
+<circle cx="832.0" cy="371.4" r="6" fill="#b8a1ff" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,372.8 524.8,376.0 678.4,376.0 832.0,375.7" fill="none" stroke="#3a3aa8" stroke-width="4" stroke-linejoin="miter"/>
+<polygon points="371.2,364.8 379.2,372.8 371.2,380.8 363.2,372.8" fill="#3a3aa8" stroke="#0b0b0b" stroke-width="2"/>
+<polygon points="832.0,367.7 840.0,375.7 832.0,383.7 824.0,375.7" fill="#3a3aa8" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,376.0 524.8,376.0 678.4,373.4 832.0,376.0" fill="none" stroke="#ffa23a" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 5"/>
+<rect x="673.4" y="368.4" width="10" height="10" fill="#ffa23a" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,375.7 524.8,375.1 678.4,376.0 832.0,376.0" fill="none" stroke="#1f5fff" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="3 5"/>
+<circle cx="371.2" cy="375.7" r="6" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
+<circle cx="524.8" cy="375.1" r="6" fill="#1f5fff" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,376.0 524.8,376.0 678.4,376.0 832.0,375.7" fill="none" stroke="#6b6b6b" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 4 3 4"/>
+<polygon points="832.0,367.7 840.0,375.7 832.0,383.7 824.0,375.7" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="2"/>
+<polyline points="64.0,376.0 217.6,376.0 371.2,376.0 524.8,376.0 678.4,376.0 832.0,375.7" fill="none" stroke="#6aa8ff" stroke-width="4" stroke-linejoin="miter"/>
+<rect x="827.0" y="370.7" width="10" height="10" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
 </svg>

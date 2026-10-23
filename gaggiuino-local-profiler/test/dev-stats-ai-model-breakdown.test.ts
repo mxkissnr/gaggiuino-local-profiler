@@ -103,11 +103,11 @@ describe('dev-stats monthly model timeline (#1800)', () => {
         expect(monthlyModelSeries([c('2026-12-31', 'A')], '2027-02-01')!.months).toEqual(['2026-12', '2027-01', '2027-02']);
     });
 
-    it('keeps the top N models and folds the rest into Other', () => {
-        const commits = [c('2026-10-05', 'A'), c('2026-10-05', 'A'), c('2026-10-05', 'B'), c('2026-11-12', 'C'), c('2026-11-12', 'D')];
-        const r = monthlyModelSeries(commits, '2026-11-13', 2)!;
-        expect(r.series.map(s => s.model)).toEqual(['A', 'B', 'Other']);
-        expect(r.series[2]!.counts).toEqual([0, 2]);
+    it('keeps every model as its own series, largest first, with no Other', () => {
+        const commits = [c('2026-10-05', 'A'), c('2026-10-05', 'B'), c('2026-10-06', 'B'), c('2026-11-12', 'C'), c('2026-11-12', 'D'), c('2026-11-13', 'E'), c('2026-11-14', 'F'), c('2026-11-14', 'G')];
+        const r = monthlyModelSeries(commits, '2026-11-20')!;
+        expect(r.series.map(s => s.model)).toEqual(['B', 'A', 'C', 'D', 'E', 'F', 'G']);
+        expect(r.series[0]!.counts).toEqual([2, 0]);
     });
 
     it('returns null / no SVG for an empty history', () => {
@@ -115,14 +115,26 @@ describe('dev-stats monthly model timeline (#1800)', () => {
         expect(lineChartSVG('t', null)).toBeNull();
     });
 
-    it('renders one polyline per series with vendor colours, markers and a legend', () => {
-        const data = monthlyModelSeries([c('2026-09-05', 'Claude Sonnet 5'), c('2026-10-12', 'DeepSeek V4 Flash'), c('2026-10-12', 'GPT-5')], '2026-10-13', 2)!;
+    it('renders one polyline per model with vendor colours, distinct dashes and no Other', () => {
+        const data = monthlyModelSeries([c('2026-09-05', 'Claude Sonnet 5'), c('2026-10-12', 'DeepSeek V4 Flash'), c('2026-10-12', 'GPT-5')], '2026-10-13')!;
         const svg = lineChartSVG('Timeline', data, 'dark')!;
         expect(svg.match(/<polyline/g)).toHaveLength(3);
         expect(svg).toContain('stroke="#4d8dff"');
         expect(svg).toContain('stroke="#ff7a3d"');
-        expect(svg).toContain('stroke-dasharray');
+        expect(svg).toContain('stroke-dasharray="10 5"');
+        expect(svg).not.toContain('Other');
         expect(svg).toContain('<title id="t">Timeline</title>');
-        expect(svg).toContain('Other');
+    });
+
+    it('wraps the legend into rows and grows the card height', () => {
+        const model = (n: number) => `Claude Model Number ${n}`;
+        const heightOf = (n: number) => {
+            const commits = Array.from({ length: n }, (_, i) => c('2026-10-05', model(i)));
+            return Number(lineChartSVG('t', monthlyModelSeries(commits, '2026-10-05'))!.match(/viewBox="0 0 880 (\d+)"/)![1]);
+        };
+        expect(heightOf(12)).toBeGreaterThan(heightOf(2));
+        const svg = lineChartSVG('t', monthlyModelSeries(Array.from({ length: 12 }, (_, i) => c('2026-10-05', model(i))), '2026-10-05'))!;
+        for (let i = 0; i < 12; i++) expect(svg).toContain(model(i));
+        expect(Math.max(...[...svg.matchAll(/<line x1="(\d+)" y1="[\d.]+" x2="(\d+)"/g)].map(m => Number(m[2])))).toBeLessThanOrEqual(880);
     });
 });
