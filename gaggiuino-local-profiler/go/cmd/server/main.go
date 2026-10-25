@@ -82,9 +82,9 @@ type appConfig struct {
 	// the always-allowed IP literals, localhost, single-label names and
 	// .local names — from options.json's allowed_hosts plus
 	// GLP_ALLOWED_HOSTS. #1430.
-	allowedHosts    []string
-	dbPath          string
-	tokenPath       string
+	allowedHosts []string
+	dbPath       string
+	tokenPath    string
 	// kioskKeyPath is the guest kiosk's orders-only key (#1731). Empty means
 	// "next to the API token file", which is what production resolves to.
 	kioskKeyPath    string
