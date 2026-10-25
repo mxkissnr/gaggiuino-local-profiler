@@ -6,7 +6,7 @@ import {
   getOrdersSettings, postOrdersSettings, listOrders, getOrdersMenu, getQueueEta, getMilkStock,
   getOrdersStats, postOrderAccept, postOrderDecline, postOrderComplete, deleteOrderById,
   deleteOrderHistory, putMenuItem, deleteMenuItem, postOrdersMenu, getNotifyServices,
-  getNotifyMapping, postNotifyMapping,
+  getNotifyMapping, postNotifyMapping, getKioskKey, rotateKioskKey,
 } from '../api/orders.js';
 import type {
   MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats,
@@ -742,6 +742,78 @@ export function toggleOrdersNotify(): void {
   body.style.display = open ? '' : 'none';
   toggle.textContent = open ? '▾' : '▸';
   if (open) void loadNotifyMappingView();
+}
+
+// ── Kiosk link (#1731) ───────────────────────────────────────────────────
+
+// The direct link a tablet opens once: this app's origin plus kiosk.html, with
+// the orders-only key in the fragment. Under HA Ingress that origin is the
+// per-session Ingress URL, which a tablet cannot reach, hence the hint below.
+export function kioskLinkFor(origin: string, key: string): string {
+  return `${origin}kiosk.html#key=${encodeURIComponent(key)}`;
+}
+
+// The page is being served through HA Ingress, whose URL only works inside the
+// Home Assistant UI.
+function servedThroughIngress(): boolean {
+  return location.pathname.includes('/api/hassio_ingress/');
+}
+
+function renderKioskLink(section: HTMLElement, key: string): void {
+  const link = kioskLinkFor(new URL('./', document.baseURI).href, key);
+  const ingress = servedThroughIngress();
+  section.innerHTML = html`
+    <p class="orders-notify-hint">${tHtml('orders_kiosk_link_desc')}</p>
+    <div class="orders-menu-add-row">
+      <input class="orders-menu-input" id="ordersKioskLink" style="flex:1;min-width:0" readonly
+             aria-label="${esc(t('orders_kiosk_link_title'))}" value="${esc(link)}">
+      <button class="orders-menu-save-btn" id="ordersKioskCopyBtn" type="button">${tHtml('orders_kiosk_link_copy')}</button>
+      <button class="orders-menu-save-btn" id="ordersKioskRotateBtn" type="button">${tHtml('orders_kiosk_link_rotate')}</button>
+    </div>
+    ${ingress ? html`<p class="orders-notify-hint">${tHtml('orders_kiosk_link_ingress_hint')}</p>` : html``}`;
+
+  document.getElementById('ordersKioskCopyBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('ordersKioskLink') as HTMLInputElement | null;
+    const value = input?.value ?? '';
+    if (!value) return;
+    navigator.clipboard?.writeText(value)
+      .then(() => window.showToast?.(t('orders_kiosk_link_copied')))
+      .catch(() => {});
+  });
+  document.getElementById('ordersKioskRotateBtn')?.addEventListener('click', () => {
+    if (!confirm(t('orders_kiosk_link_rotate_confirm'))) return;
+    void rotateKioskLinkAndRender(section);
+  });
+}
+
+async function rotateKioskLinkAndRender(section: HTMLElement): Promise<void> {
+  try {
+    renderKioskLink(section, (await rotateKioskKey()).kioskKey);
+  } catch (err) {
+    window.showToast?.(t('error_generic', err instanceof Error ? err.message : String(err)));
+  }
+}
+
+export async function loadKioskLinkView(): Promise<void> {
+  const section = document.getElementById('ordersKioskBody');
+  if (!section) return;
+  try {
+    // Reading the key mints one on the first visit, so the panel is never empty.
+    renderKioskLink(section, (await getKioskKey()).kioskKey);
+  } catch (err) {
+    section.innerHTML = html`<p class="orders-notify-hint">${
+      esc(t('error_generic', err instanceof Error ? err.message : String(err)))}</p>`;
+  }
+}
+
+export function toggleOrdersKiosk(): void {
+  const body = document.getElementById('ordersKioskBody');
+  const toggle = document.getElementById('ordersKioskToggle');
+  if (!body || !toggle) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  toggle.textContent = open ? '▾' : '▸';
+  if (open) void loadKioskLinkView();
 }
 
 export async function addOrderMenuItem(): Promise<void> {
