@@ -154,6 +154,9 @@ jobs:
     # mirror runner.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
+    env:
+      # Raised at each minor release, never lowered (docs/MAINTAINING.md).
+      GO_COVERAGE_MIN: "75.0"
     defaults:
       run:
         working-directory: gaggiuino-local-profiler/go
@@ -202,8 +205,7 @@ jobs:
       - name: go build
         run: go build ./...
 
-      # Coverage is reported, not gated (#1560); a threshold follows once two
-      # releases show a stable baseline.
+      # Coverage is reported in the summary, then gated against GO_COVERAGE_MIN (#1560).
       - name: go test -race
         # bash = -eo pipefail, so a failing test fails the step despite tee (#1595).
         shell: bash
@@ -219,6 +221,15 @@ jobs:
             awk '/coverage:/ { pkg = ($1 == "ok" || $1 == "?") ? $2 : $1; sub(/.*\/go\//, "", pkg)
               for (i = 1; i <= NF; i++) if ($i == "coverage:") print "| " pkg " | " $(i+1) " |" }' test.out
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage threshold
+        run: |
+          total="$(go tool cover -func=coverage.out | tail -1 | awk '{sub(/%/, "", $NF); print $NF}')"
+          if awk -v t="$total" -v m="$GO_COVERAGE_MIN" 'BEGIN { exit !(t < m) }'; then
+            echo "::error::Go coverage ${total}% is below the threshold ${GO_COVERAGE_MIN}%"
+            exit 1
+          fi
+          echo "Go coverage ${total}% (threshold ${GO_COVERAGE_MIN}%)"
 
       # BLOCKING govulncheck gate (#998, security audit #977 round 3
       # finding 2.3). Fails the build on any *called* vulnerability — one on

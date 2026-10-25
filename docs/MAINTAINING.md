@@ -55,7 +55,8 @@ branch; the next build picks up the merge.
 2. Run the acceptance pass on it and record it under
    [`docs/acceptance/`](../gaggiuino-local-profiler/docs/acceptance/).
 3. Minor releases only: run `npm run coverage:ratchet` on the release branch and commit the raised
-   thresholds in `vitest.config.ts`. Go coverage is shown in the CI job summary.
+   thresholds in `vitest.config.ts`. Raise `GO_COVERAGE_MIN` in `.github/workflows/test.yaml` to the
+   Go total from the CI job summary minus 1 point; never lower it.
 4. Merge the release PR to `main` with `--merge`, not squash.
 5. Merge `main` back into `dev` afterwards.
 
