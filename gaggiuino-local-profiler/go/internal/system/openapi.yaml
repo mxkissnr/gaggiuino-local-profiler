@@ -532,6 +532,12 @@ components:
       description: Map of haUserId → notify service name (e.g. "notify.mobile_app_phone")
       additionalProperties: { type: string }
 
+    KioskKey:
+      type: object
+      required: [kioskKey]
+      properties:
+        kioskKey: { type: string, description: "64-char hex token, accepted only on the kiosk's orders-only routes (#1731)" }
+
     # ── System ────────────────────────────────────────────────────────────
 
     Status:
@@ -2637,6 +2643,40 @@ paths:
             schema: { $ref: '#/components/schemas/NotifyMapping' }
       responses:
         "200": { description: Success, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+
+  # #1731: the guest kiosk's orders-only credential. Both routes require the
+  # full X-GLP-Token — the kiosk key itself is not accepted here, so a kiosk
+  # cannot mint or rotate its own key.
+  /api/orders/kiosk-key:
+    get:
+      tags: [Orders]
+      summary: Get (creating on first call) the guest kiosk's orders-only key
+      description: >
+        Returns the kiosk key: a second credential accepted only on
+        `GET /api/menu`, `GET /api/orders/settings`, `GET /api/orders/queue-eta`,
+        `GET /api/orders` and `POST /api/orders`. Every other route needs the
+        full API token. The key is generated on the first call, so an install
+        that never uses a kiosk never stores one.
+      responses:
+        "200":
+          description: The current kiosk key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KioskKey' }
+
+  /api/orders/kiosk-key/rotate:
+    post:
+      tags: [Orders]
+      summary: Rotate the guest kiosk's orders-only key
+      description: >
+        Generates and stores a new kiosk key and returns it. The previous key
+        stops authenticating immediately.
+      responses:
+        "200":
+          description: The new kiosk key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KioskKey' }
 
   # ── System ───────────────────────────────────────────────────────────────
 

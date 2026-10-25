@@ -19,7 +19,7 @@ import (
 const testToken = "test-fixture-token-not-a-real-secret"
 
 func newAuthedHandler() http.Handler {
-	return RequireToken(testToken, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return RequireToken(testToken, nil, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 }
@@ -221,7 +221,7 @@ func TestRequireToken_ShotsJSONRequiresAuth(t *testing.T) {
 }
 
 func TestRequireToken_EmptyTokenFailsClosed(t *testing.T) {
-	handler := RequireToken("", nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RequireToken("", nil, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("next handler must not run when no token is configured")
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)

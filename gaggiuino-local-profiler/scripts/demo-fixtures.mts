@@ -51,6 +51,7 @@ const UNCAPPED_PARAM_PATHS = new Set(['/api/shots/{id}']);
 // reason it cannot or must not be replayed as a static fixture.
 const OPENAPI_GET_SKIP = new Map([
     ['/api/token',                   'secret — the static demo must never ship a real token'],
+    ['/api/orders/kiosk-key',        'secret — the static demo must never ship a real kiosk key'],
     ['/api/events',                  'SSE stream — the response never completes'],
     ['/api/backup',                  'downloads a full backup zip'],
     ['/api/debug/machine',           'diagnostic — raw machine status, not demo content'],
@@ -396,6 +397,8 @@ function attachRecorder(page: Page): Promise<void>[] {
         }
         if (!pathname.startsWith('/api/')) return;
         if (pathname === '/api/token') return;
+        // #1731: the kiosk key is the same kind of secret as the API token.
+        if (pathname === '/api/orders/kiosk-key' || pathname === '/api/orders/kiosk-key/rotate') return;
         // #1626: a stream ticket is a one-off secret, and the demo service
         // worker answers this route itself, so there is nothing to record.
         if (pathname === '/api/events/ticket') return;

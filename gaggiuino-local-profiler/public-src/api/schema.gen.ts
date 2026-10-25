@@ -4289,6 +4289,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orders/kiosk-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get (creating on first call) the guest kiosk's orders-only key
+         * @description Returns the kiosk key: a second credential accepted only on `GET /api/menu`, `GET /api/orders/settings`, `GET /api/orders/queue-eta`, `GET /api/orders` and `POST /api/orders`. Every other route needs the full API token. The key is generated on the first call, so an install that never uses a kiosk never stores one.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The current kiosk key */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KioskKey"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orders/kiosk-key/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the guest kiosk's orders-only key
+         * @description Generates and stores a new kiosk key and returns it. The previous key stops authenticating immediately.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The new kiosk key */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KioskKey"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/token": {
         parameters: {
             query?: never;
@@ -7837,6 +7915,10 @@ export interface components {
         /** @description Map of haUserId → notify service name (e.g. "notify.mobile_app_phone") */
         NotifyMapping: {
             [key: string]: string;
+        };
+        KioskKey: {
+            /** @description 64-char hex token, accepted only on the kiosk's orders-only routes (#1731) */
+            kioskKey: string;
         };
         /** @description Public fields are always present; the block below marked "authenticated only" is omitted entirely (H1) unless the request carries a valid X-GLP-Token header. Arriving via HA Ingress is not enough. */
         Status: {
