@@ -1,4 +1,5 @@
-# Posts each published GitHub release to the Discord #announcements channel (#1784).
+# Posts each published GitHub release to the Discord #announcements channel (#1784),
+# titled "GLP App <tag>" so it is told apart from integration releases (#1807).
 #
 # Trigger: `release: published` (drafts and prereleases are skipped), or a manual
 # `workflow_dispatch` with an existing release tag to re-post or test.
@@ -62,11 +63,11 @@ jobs:
           fi
 
           payload=$(jq -n \
-            --arg title "${REL_NAME:-GLP $REL_TAG released}" \
+            --arg title "GLP App $REL_TAG" \
             --arg url "$REL_URL" \
             --arg body "$REL_BODY" \
             '{
-              username: "GLP Releases",
+              username: "GLP App Releases",
               embeds: [{
                 title: $title,
                 url: $url,
