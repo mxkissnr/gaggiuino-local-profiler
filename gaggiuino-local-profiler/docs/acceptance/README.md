@@ -83,6 +83,13 @@ changes:
 The simulator is the official desktop simulator from `jniebuhr/gaggimate`
 (`sim/README.md`, PlatformIO env `display-sim`): the real display firmware with
 a simulated controller, serving the same WebUI and WebSocket API as the device.
+It runs from the published image
+[`ghcr.io/mxkissnr/gaggimate-sim`](https://github.com/mxkissnr/gaggimate-sim),
+built by CI for every upstream tag (`:<tag>`, `:latest`):
+
+```shell
+docker run -d -p 8080:8080 -v gaggimate-sim-data:/sim_data ghcr.io/mxkissnr/gaggimate-sim:latest
+```
 It is added to the dev install as a second machine of type `gaggimate`. Its
 address is environment-specific and never written into a protocol.
 
@@ -105,13 +112,14 @@ GaggiMate core cases run against it:
 - The shot is imported after `evt:history-shot-saved` and has a non-empty curve.
 - Profile list, load, save and delete work on an `ACCEPTANCE-` profile.
 
-For a new GaggiMate firmware (an `upstream-firmware` issue): rebuild the
-simulator at the tag (`git checkout vX.Y.Z`, `scripts/build_webui.sh`,
-`pio run -e display-sim`), restart it, run the core cases and post the result
-on that issue. A failing case gets its own fix issue.
+For a new GaggiMate firmware (an `upstream-firmware` issue): wait for the
+gaggimate-sim release of that tag (the image is rebuilt daily, so it appears
+within a day), switch the simulator to `ghcr.io/mxkissnr/gaggimate-sim:vX.Y.Z`,
+run the core cases and post the result on that issue. A failing case gets its
+own fix issue.
 
-The protocol header names the simulator's firmware version, the tag it was
-built from.
+The protocol header names the simulator's firmware version, the image tag it
+ran from.
 
 ## Public content
 
