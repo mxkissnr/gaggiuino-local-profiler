@@ -42,7 +42,7 @@ beforeEach(() => {
 
 describe('kioskLinkFor', () => {
   it('puts the key in the fragment, url-encoded', () => {
-    expect(kioskLinkFor('http://glp.local:8099/', 'a b&c'))
+    expect(kioskLinkFor('http://glp.local:8099/kiosk.html', 'a b&c'))
       .toBe('http://glp.local:8099/kiosk.html#key=a%20b%26c');
   });
 });
@@ -71,8 +71,8 @@ describe('Kiosk link panel', () => {
 
     await loadKioskLinkView();
 
-    expect(section.innerHTML).toMatch(/8099/);
-    expect(section.innerHTML.toLowerCase()).toContain('ingress');
+    expect(section.innerHTML).toContain('use the direct port');
+    expect(section.innerHTML).toContain('http://&lt;host&gt;:8099');
   });
 
   it('shows the error instead of a link when the key cannot be read', async () => {

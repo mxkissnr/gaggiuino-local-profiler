@@ -746,11 +746,11 @@ export function toggleOrdersNotify(): void {
 
 // ── Kiosk link (#1731) ───────────────────────────────────────────────────
 
-// The direct link a tablet opens once: this app's origin plus kiosk.html, with
-// the orders-only key in the fragment. Under HA Ingress that origin is the
+// The direct link a tablet opens once: kiosk.html next to this page, with the
+// orders-only key in the fragment. Under HA Ingress that base is the
 // per-session Ingress URL, which a tablet cannot reach, hence the hint below.
-export function kioskLinkFor(origin: string, key: string): string {
-  return `${origin}kiosk.html#key=${encodeURIComponent(key)}`;
+export function kioskLinkFor(kioskUrl: string, key: string): string {
+  return `${kioskUrl}#key=${encodeURIComponent(key)}`;
 }
 
 // The page is being served through HA Ingress, whose URL only works inside the
@@ -760,7 +760,7 @@ function servedThroughIngress(): boolean {
 }
 
 function renderKioskLink(section: HTMLElement, key: string): void {
-  const link = kioskLinkFor(new URL('./', document.baseURI).href, key);
+  const link = kioskLinkFor(new URL('kiosk.html', document.baseURI).href, key);
   const ingress = servedThroughIngress();
   section.innerHTML = html`
     <p class="orders-notify-hint">${tHtml('orders_kiosk_link_desc')}</p>
