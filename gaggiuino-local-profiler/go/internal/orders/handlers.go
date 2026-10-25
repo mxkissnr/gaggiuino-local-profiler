@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -45,7 +46,8 @@ type Handlers struct {
 	registry    *machines.Registry
 	ha          *ha.Client
 	rl          *ratelimit.KeyedLimiter
-	preheatInfo PreheatInfoFunc // nil until SetPreheatInfoProvider is called
+	preheatInfo PreheatInfoFunc     // nil until SetPreheatInfoProvider is called
+	kioskKey    *auth.KioskKeyStore // nil until SetKioskKeyStore is called
 }
 
 // NewHandlers builds Handlers. shotsRepo/libRepo/registry are the same
@@ -116,6 +118,13 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("DELETE /api/orders/history", gate(h.deleteHistory))
 	mux.HandleFunc("DELETE /api/orders/{id}", gate(h.deleteOrder))
+
+	// #1731: the guest kiosk's orders-only key. Both routes stay behind the
+	// full API token (they are deliberately absent from RequireToken's
+	// kiosk allow-list), so a kiosk key cannot read — let alone rotate — its
+	// own credential.
+	mux.HandleFunc("GET /api/orders/kiosk-key", gate(h.getKioskKey))
+	mux.HandleFunc("POST /api/orders/kiosk-key/rotate", gate(h.rotateKioskKey))
 }
 
 // withOrdersGate applies the isOrdersEnabled 404 guard every /api/orders*

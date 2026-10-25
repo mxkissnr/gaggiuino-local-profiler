@@ -85,6 +85,9 @@ type appConfig struct {
 	allowedHosts    []string
 	dbPath          string
 	tokenPath       string
+	// kioskKeyPath is the guest kiosk's orders-only key (#1731). Empty means
+	// "next to the API token file", which is what production resolves to.
+	kioskKeyPath    string
 	port            string
 	rateLimitWindow time.Duration
 	rateLimitMax    int
@@ -98,6 +101,7 @@ func configFromEnv() appConfig {
 	return appConfig{
 		dbPath:          getEnv("GLP_DB_PATH", db.DefaultPath),
 		tokenPath:       getEnv("GLP_TOKEN_FILE", auth.DefaultTokenFile),
+		kioskKeyPath:    os.Getenv("GLP_KIOSK_KEY_FILE"),
 		port:            getEnv("GLP_PORT", defaultPort),
 		rateLimitWindow: time.Duration(getEnvNumber("GLP_RATE_LIMIT_WINDOW_MS", float64(ratelimit.DefaultWindow/time.Millisecond), 1)) * time.Millisecond,
 		rateLimitMax:    int(getEnvNumber("GLP_RATE_LIMIT_MAX", float64(ratelimit.DefaultMax), 1)),
@@ -217,6 +221,18 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	if err != nil {
 		sqlDB.Close()
 		return nil, nil, fmt.Errorf("loading API token from %s: %w", tokenPath, err)
+	}
+
+	// #1731: the kiosk key is generated lazily, so loading it writes nothing
+	// until a kiosk actually asks for one.
+	kioskKeyPath := cfg.kioskKeyPath
+	if kioskKeyPath == "" {
+		kioskKeyPath = auth.KioskKeyFileFor(tokenPath)
+	}
+	kioskKey, err := auth.LoadKioskKeyStore(kioskKeyPath)
+	if err != nil {
+		sqlDB.Close()
+		return nil, nil, fmt.Errorf("loading kiosk key from %s: %w", kioskKeyPath, err)
 	}
 
 	hub := sse.NewHub()
@@ -424,6 +440,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		}
 	})
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
+	ordersHandlers.SetKioskKeyStore(kioskKey)
 	ordersHandlers.RegisterRoutes(mux)
 
 	// The background polling loop that backs GET /api/machine/status,
@@ -714,7 +731,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	handler := auth.SecurityHeaders(
 		auth.RequireKnownHost(cfg.allowedHosts)(
 			limiter.Middleware(
-				auth.RequireToken(token, sseTickets)(recorder.Middleware(changes.Middleware(dataRoutes)(mux))),
+				auth.RequireToken(token, sseTickets, kioskKey)(recorder.Middleware(changes.Middleware(dataRoutes)(mux))),
 			),
 		),
 	)
