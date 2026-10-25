@@ -32,6 +32,26 @@ export function postOrdersSettings(settings: OrdersSettingsUpdate): Promise<Resp
   });
 }
 
+// ── Kiosk key ────────────────────────────────────────────────────────────
+
+/** GET/POST /api/orders/kiosk-key body: the guest kiosk's orders-only key. */
+export interface KioskKey {
+  kioskKey: string;
+}
+
+/**
+ * GET /api/orders/kiosk-key — the key a kiosk tablet authenticates with. The
+ * backend creates one on the first call, so simply reading it here mints one.
+ */
+export function getKioskKey(): Promise<KioskKey> {
+  return apiFetchJson<KioskKey>('api/orders/kiosk-key');
+}
+
+/** POST /api/orders/kiosk-key/rotate — a fresh key; the previous one stops working at once. */
+export function rotateKioskKey(): Promise<KioskKey> {
+  return apiFetchJson<KioskKey>('api/orders/kiosk-key/rotate', { method: 'POST' });
+}
+
 // ── Orders / queue / stats ───────────────────────────────────────────────
 
 /** GET /api/orders — active (pending + accepted) orders, newest-first. */
