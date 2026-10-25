@@ -26,18 +26,17 @@
 // after the old fixed 400ms, so the pre-#1032 images caught half-rendered
 // views (empty shot chart, mid-render sunburst).
 //
-// Data source of each PNG (#1185). "backup" means the instance restored in
-// backup mode: demo/glp-demo-backup.zip by default, GLP_SCREENSHOT_BACKUP when
-// it is set, or the built-in demo seed when the zip is missing:
+// #1809: every PNG is a full-window page.screenshot() at the same 1400x900
+// viewport — no per-view clipping and no height trimming to the content — so
+// the set looks consistent side by side and the top nav, with the active tab,
+// is visible on every image.
 //
-//   shots.png, library.png, bean-sheet.png, flavor-wheel.png, analytics.png,
-//   analytics-machines.png, maintenance.png, dialin.png, settings.png
-//       -> backup/seed (captured from whichever instance was loaded).
-//   live.png, orders.png
-//       -> ALWAYS the seeded instance. A real backup typically has only
-//          completed orders and an unreachable machine, which renders those
-//          two views empty, so in backup mode they are left unchanged rather
-//          than regenerated from misleading data.
+// Data source of each PNG (#1185). Every capture comes from the one instance
+// loaded for the run: the restored backup (demo/glp-demo-backup.zip by
+// default, GLP_SCREENSHOT_BACKUP when it is set) or the built-in demo seed
+// when no zip is available. live.png and orders.png are captured in both
+// modes too; the Orders view gets three demo orders created by this script
+// through the instance's HTTP API, so the queue is never empty.
 
 import { mkdirSync, cpSync, existsSync } from 'fs';
 import path from 'path';
@@ -159,39 +158,58 @@ async function alignToTop(page: Page, viewSel: string, targetSel: string): Promi
     }, { viewSel, targetSel });
 }
 
-// Clip-shoots `sel`'s on-screen rectangle at the current scroll position —
-// unlike Locator.screenshot(), which re-scrolls the element into view first
-// (discarding a mid-view scroll set beforehand) and always captures the
-// element's full box, leaving a dead band below short content in a tall
-// flex:1/overflow:auto view (its scrollHeight never drops below its
-// clientHeight, so that can't be measured — walk the leaf descendants for
-// the real content extent instead). Height is trimmed to whichever is
-// shorter: the visible frame, or the content that's actually there.
-async function shootView(page: Page, sel: string, filePath: string, { fromTop = true, pad = 24 }: { fromTop?: boolean; pad?: number } = {}): Promise<void> {
-    if (fromTop) {
-        await page.locator(sel).evaluate(el => el.scrollTo(0, 0));
-        await page.waitForTimeout(120);
+// Shoots the whole window (#1809) after resetting `viewSel`'s own
+// overflow:auto box to its top, so a view left mid-scroll by an earlier step
+// is captured from its start. Every PNG uses this same 1400x900 frame, which
+// keeps the top nav (and its active tab) in shot and the set consistent.
+async function shootWindow(page: Page, viewSel: string, filePath: string): Promise<void> {
+    await page.locator(viewSel).evaluate(el => el.scrollTo(0, 0));
+    await page.waitForTimeout(120);
+    await page.screenshot({ path: filePath });
+}
+
+// Places three demo orders in the throwaway instance so the Orders view has
+// a queue to show (#1809): the instance's own queue is empty, and a restored
+// backup usually holds only completed orders. The API calls use the same
+// `x-glp-token` auth as restoreBackup()/seed() in e2e-harness.mts. Orders are
+// only accepted while the shop is open, so enable it first (the restored
+// backup may carry it off). Returns how many orders were placed.
+async function seedDemoOrders(baseUrl: string): Promise<number> {
+    const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken: string };
+    const headers = { 'Content-Type': 'application/json', 'x-glp-token': apiToken };
+    const call = async (p: string, body?: unknown): Promise<unknown> => {
+        const r = await fetch(`${baseUrl}${p}`, {
+            method: 'POST',
+            headers,
+            body: body === undefined ? null : JSON.stringify(body),
+        });
+        const text = await r.text();
+        if (!r.ok) throw new Error(`POST ${p} -> ${r.status}: ${text}`);
+        return text ? (JSON.parse(text) as unknown) : {};
+    };
+
+    await call('/api/orders/settings', { enabled: true });
+
+    // POST /api/orders rejects an item that is not on the menu.
+    const menu = (await fetch(`${baseUrl}/api/orders/menu`, { headers }).then(r => r.json())) as Array<{ name?: string }>;
+    const items = menu.map(m => m.name).filter((n): n is string => !!n).slice(0, 3);
+    if (items.length < 3) {
+        // Best-effort like every other capture: an empty menu still gives a
+        // warnable Orders view rather than aborting the whole regeneration.
+        console.warn(`orders: GET /api/orders/menu returned ${items.length} usable item(s), wanted 3`);
     }
-    const box = await page.locator(sel).evaluate((el, pad) => {
-        const vr = el.getBoundingClientRect();
-        let bottom = vr.top;
-        const paint = /^(CANVAS|IMG|SVG|VIDEO)$/;
-        (function walk(node: Element): void {
-            for (const c of node.children) {
-                const r = c.getBoundingClientRect();
-                // inline <svg> reports tagName 'svg' (lowercase, SVG namespace)
-                const painty = paint.test((c.tagName || '').toUpperCase());
-                const leaf = c.children.length === 0;
-                if (r.height > 0 && (painty || (leaf && (c.textContent ?? '').trim()))) {
-                    bottom = Math.max(bottom, r.bottom);
-                }
-                walk(c);
-            }
-        })(el);
-        const contentH = Math.min(vr.height, Math.ceil(bottom - vr.top) + pad);
-        return { x: vr.x, y: vr.y, width: vr.width, height: Math.max(1, contentH) };
-    }, pad);
-    await page.screenshot({ path: filePath, clip: box });
+
+    const customers = ['Anna', 'Ben', 'Chris'] as const;
+    const placed: Array<{ id?: string }> = [];
+    for (const [i, item] of items.entries()) {
+        const customer = customers[i] ?? 'Guest';
+        placed.push((await call('/api/orders', { item, customer })) as { id?: string });
+    }
+    // Accept the first one so both Queue and In Progress are populated.
+    const firstId = placed[0]?.id;
+    if (firstId) await call(`/api/orders/${encodeURIComponent(firstId)}/accept`, { eta: 5 });
+    console.log(`orders: placed ${placed.length} demo order(s) (${items.join(', ')})`);
+    return placed.length;
 }
 
 async function main(): Promise<void> {
@@ -264,9 +282,8 @@ async function main(): Promise<void> {
     }, undefined, { timeout: 10000 }).catch(() => console.warn('shots: shot photo not decoded within 10000ms — capturing anyway'));
     await page.screenshot({ path: path.join(outDir, 'shots.png') });
 
-    // Each remaining capture is scoped to its view container (#<tab>-view)
-    // via shootView() — cuts the repeated top nav bar out and trims the dead
-    // band a short view leaves below its content in a tall overflow:auto box.
+    // Every remaining capture is the same full 1400x900 window (#1809), after
+    // clicking the view's nav tab so the top nav shows the active tab.
 
     // ── Library ────────────────────────────────────────────────────────
     await page.click('#btnLibrary');
@@ -286,7 +303,7 @@ async function main(): Promise<void> {
     await waitForImages(page, '#library-view .lib-bean-thumb, #library-view .lib-grinder-thumb, #library-view .lib-basket-thumb, #library-view .lib-puckscreen-thumb');
     // A restored backup's photos must all be served; name any that are not.
     if (fromBackup) await reportUnhydratedThumbs(page);
-    await shootView(page, '#library-view', path.join(outDir, 'library.png'));
+    await shootWindow(page, '#library-view', path.join(outDir, 'library.png'));
 
     // ── Flavor wheel ───────────────────────────────────────────────────
     // #1330 moved the wheel button off the shelf into the bean's detail
@@ -315,7 +332,8 @@ async function main(): Promise<void> {
         await wheelBtn.click();
         await page.waitForSelector('#flavorWheelModal', { state: 'visible' });
         await waitForPaint(page, '#flavorWheelCanvas'); // ECharts sunburst (incl. its entry animation)
-        await page.locator('#flavorWheelModal').screenshot({ path: path.join(outDir, 'flavor-wheel.png') });
+        // Full window with the modal open (#1809), not the modal box alone.
+        await page.screenshot({ path: path.join(outDir, 'flavor-wheel.png') });
         const closeBtn = page.locator('#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]').first();
         if (await closeBtn.count()) await closeBtn.click();
         // Close the sheet too, or its backdrop covers the nav bar and the
@@ -342,7 +360,7 @@ async function main(): Promise<void> {
     await page.locator('#worldMapWrap').scrollIntoViewIfNeeded();
     await waitForPaint(page, '#worldMapWrap');      // ECharts origin map (force the dynamic import to resolve)
     // Capture 1: summary KPIs + score trend + calendar.
-    await shootView(page, '#analytics-view', path.join(outDir, 'analytics.png'));
+    await shootWindow(page, '#analytics-view', path.join(outDir, 'analytics.png'));
 
     // Capture 2: the "More insights" fold with its lazily-built charts
     // (#1467). It starts closed, and the fold only builds its charts once
@@ -363,7 +381,8 @@ async function main(): Promise<void> {
         : '#analyticsMore';
     await alignToTop(page, '#analytics-view', moreTarget);
     await page.waitForTimeout(200);
-    await shootView(page, '#analytics-view', path.join(outDir, 'analytics-machines.png'), { fromTop: false });
+    // Keep the mid-view scroll alignToTop() just set: no scrollTo(0, 0) here.
+    await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
 
     // ── Maintenance ────────────────────────────────────────────────────
     await page.click('#btnMaintenance');
@@ -371,7 +390,7 @@ async function main(): Promise<void> {
         () => document.querySelectorAll('#maintSummary .maint-tile').length > 0,
         undefined, { timeout: 15000 },
     );
-    await shootView(page, '#maintenance-view', path.join(outDir, 'maintenance.png'));
+    await shootWindow(page, '#maintenance-view', path.join(outDir, 'maintenance.png'));
 
     // ── Dial-in ────────────────────────────────────────────────────────
     await page.click('#btnDialin');
@@ -388,30 +407,34 @@ async function main(): Promise<void> {
         }
         throw err instanceof Error ? err : new Error(String(err));
     });
-    await shootView(page, '#dialin-view', path.join(outDir, 'dialin.png'));
+    await shootWindow(page, '#dialin-view', path.join(outDir, 'dialin.png'));
 
     // ── Live / Orders / Settings (previously undocumented tabs) ─────────
-    // #1185: Live and Orders are kept from the seeded run in backup mode. A
-    // real backup is all completed orders against a machine the throwaway
-    // instance cannot reach (no HA/machine connection), so those two captures
-    // would show an empty view and overwrite the useful seeded PNGs.
-    if (fromBackup) {
-        console.log('live.png/orders.png left unchanged (seeded data; backup mode skips them)');
-    } else {
-        await page.click('#btnLive');
-        await page.waitForFunction(() => {
-            const badge = document.getElementById('live-status-badge');
-            return !!badge && !badge.classList.contains('connecting');
-        }, undefined, { timeout: 15000 });
-        await shootView(page, '#live-view', path.join(outDir, 'live.png'));
+    // Both are captured in every mode (#1809). Live shows the connecting /
+    // offline state: the throwaway instance has no machine to reach, so the
+    // badge wait is best-effort like dial-in's rather than aborting the run.
+    await page.click('#btnLive');
+    await page.waitForFunction(() => {
+        const badge = document.getElementById('live-status-badge');
+        return !!badge && !badge.classList.contains('connecting');
+    }, undefined, { timeout: 15000 }).catch(() => {
+        console.warn('live: machine never left the connecting state — capturing anyway');
+    });
+    await shootWindow(page, '#live-view', path.join(outDir, 'live.png'));
 
-        await page.click('#btnOrders');
-        await page.waitForFunction(
-            () => !!document.getElementById('ordersEnabledLabel')?.textContent,
-            undefined, { timeout: 15000 },
-        );
-        await shootView(page, '#orders-view', path.join(outDir, 'orders.png'));
-    }
+    // The throwaway instance's queue is empty and a restored backup holds only
+    // completed orders, so the script places demo orders of its own first.
+    const placedOrders = await seedDemoOrders(baseUrl);
+    await page.click('#btnOrders');
+    await page.waitForFunction(
+        () => !!document.getElementById('ordersEnabledLabel')?.textContent,
+        undefined, { timeout: 15000 },
+    );
+    await page.waitForFunction(
+        (min) => document.querySelectorAll('#orders-pending-list .order-card, #orders-accepted-list .order-card').length >= min,
+        placedOrders, { timeout: 15000 },
+    ).catch(() => console.warn('orders: queue did not show all demo orders in 15000ms — capturing anyway'));
+    await shootWindow(page, '#orders-view', path.join(outDir, 'orders.png'));
 
     // #1514: Settings left .topbar-nav-scroll for a fixed slot, but the
     // click target is still its unchanged id.
@@ -421,7 +444,7 @@ async function main(): Promise<void> {
         (min) => document.querySelectorAll('#machinesList .machine-row').length >= min,
         fromBackup ? 1 : 2, { timeout: 15000 },
     );
-    await shootView(page, '#settings-view', path.join(outDir, 'settings.png'));
+    await shootWindow(page, '#settings-view', path.join(outDir, 'settings.png'));
 
     await context.close();
     await browser.close();
