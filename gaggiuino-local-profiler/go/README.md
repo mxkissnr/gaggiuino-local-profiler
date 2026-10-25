@@ -32,7 +32,8 @@ cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
 
 Runtime configuration is env vars (all optional, sensible defaults):
 `GLP_PORT` (8099), `GLP_DB_PATH` (`/data/glp.db`), `GLP_TOKEN_FILE`
-(`/data/api_token.txt`), `GLP_ENABLE_ORDERS`, `GLP_SYNC_INTERVAL`,
+(`/data/api_token.txt`), `GLP_KIOSK_KEY_FILE` (`kiosk_key` next to the token
+file), `GLP_ENABLE_ORDERS`, `GLP_SYNC_INTERVAL`,
 `GLP_PREHEAT_TIME`, `GLP_DEBUG_LOGGING`, `GLP_HA_URL` + `GLP_HA_TOKEN`
 (standalone HA integration), `MACHINE_URL`, `GLP_RATE_LIMIT_*`. Inside the
 HA app the Supervisor writes `/data/options.json` and those take
