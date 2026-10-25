@@ -26,7 +26,6 @@ const { S } = await import('../public-src/state/index.js');
 function memoryStorage() {
   const data = new Map<string, string>();
   return {
-    data,
     getItem: (k: string) => (data.has(k) ? data.get(k) ?? null : null),
     setItem: (k: string, v: string) => { data.set(k, v); },
   };

@@ -23,9 +23,9 @@ vi.mock('../public-src/api/orders.js', async (importOriginal) => {
 
 interface FakeSection { innerHTML: string }
 
-function docWith(section: FakeSection | null, opts: { pathname?: string; baseURI?: string } = {}) {
+function docWith(section: FakeSection | null): Record<string, unknown> {
   return {
-    baseURI: opts.baseURI ?? 'http://glp.local:8099/',
+    baseURI: 'http://glp.local:8099/',
     documentElement: {},
     getElementById: (id: string) => (id === 'ordersKioskBody' ? section : null),
     querySelectorAll: () => [],

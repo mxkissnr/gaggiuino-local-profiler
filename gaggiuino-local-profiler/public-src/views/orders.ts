@@ -763,14 +763,14 @@ function renderKioskLink(section: HTMLElement, key: string): void {
   const link = kioskLinkFor(new URL('kiosk.html', document.baseURI).href, key);
   const ingress = servedThroughIngress();
   section.innerHTML = html`
-    <p class="orders-notify-hint">${tHtml('orders_kiosk_link_desc')}</p>
+    <p class="orders-notify-hint">${esc(t('orders_kiosk_link_desc'))}</p>
     <div class="orders-menu-add-row">
       <input class="orders-menu-input" id="ordersKioskLink" style="flex:1;min-width:0" readonly
              aria-label="${esc(t('orders_kiosk_link_title'))}" value="${esc(link)}">
       <button class="orders-menu-save-btn" id="ordersKioskCopyBtn" type="button">${tHtml('orders_kiosk_link_copy')}</button>
       <button class="orders-menu-save-btn" id="ordersKioskRotateBtn" type="button">${tHtml('orders_kiosk_link_rotate')}</button>
     </div>
-    ${ingress ? html`<p class="orders-notify-hint">${tHtml('orders_kiosk_link_ingress_hint')}</p>` : html``}`;
+    ${ingress ? html`<p class="orders-notify-hint">${esc(t('orders_kiosk_link_ingress_hint'))}</p>` : html``}`;
 
   document.getElementById('ordersKioskCopyBtn')?.addEventListener('click', () => {
     const input = document.getElementById('ordersKioskLink') as HTMLInputElement | null;
