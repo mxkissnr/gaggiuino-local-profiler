@@ -48,49 +48,58 @@ function resolveCompanionDir(relativeDir: string, canonicalDir: string): string 
 // currentColor). #1210 dropped the old opaque dark background rect: the SVG
 // background is now transparent, and each chart ships as a light and a dark
 // variant selected with <picture> + prefers-color-scheme (GitHub's supported
-// way — CSS media queries inside an SVG are unreliable in Safari). See the
-// dataviz skill's color-formula.md for the reference palette this follows.
+// way — CSS media queries inside an SVG are unreliable in Safari).
 
 const CHART_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
-// Two surface themes (#1210). Each carries only the ink used against that
-// surface; the series colours are the light/dark steps of the dataviz
-// reference palette, validated for colour-blind separation and contrast on
-// both surfaces. `single` colours a one-series chart (commits per repo);
-// `claude`/`deepseek`/`other` colour the model breakdown by vendor, so colour
-// encodes the vendor instead of the bar's rank.
+// One neobrutalist look for every dev-stats chart (#1800, #1802): a card with
+// a thick border and a hard, unblurred offset shadow, flat saturated colours,
+// heavy lines and bold labels. `shades` holds per-vendor colours (the first is
+// the vendor's base colour; the timeline cycles through the rest per model).
+// Light and dark variants are selected with <picture> + prefers-color-scheme.
 type Theme = 'light' | 'dark';
 type Vendor = 'claude' | 'deepseek' | 'other';
 
 interface ChartPalette {
+    card: string;
     ink: string;
-    inkSecondary: string;
-    baseline: string;
-    series: Record<'single' | Vendor, string>;
+    shadow: string;
+    grid: string;
+    shades: Record<Vendor, string[]>;
 }
 
 const CHART_THEMES: Record<Theme, ChartPalette> = {
     light: {
-        ink: '#0b0b0b',
-        inkSecondary: '#52514e',
-        baseline: '#d6d5cf',
-        series: { single: '#2a78d6', claude: '#2a78d6', deepseek: '#eb6834', other: '#8a8983' },
+        card: '#fffaf0', ink: '#0b0b0b', shadow: '#0b0b0b', grid: '#d9d2bf',
+        shades: { claude: ['#1f5fff', '#6aa8ff', '#0a2a8a', '#00a6c0', '#7a3cff', '#0b7a8c', '#b8a1ff', '#3a3aa8'], deepseek: ['#ff5a1f', '#ffa23a', '#b53a00'], other: ['#6b6b6b', '#9a9a9a', '#3f3f3f'] },
     },
     dark: {
-        ink: '#ffffff',
-        inkSecondary: '#c3c2b7',
-        baseline: '#383835',
-        series: { single: '#3987e5', claude: '#3987e5', deepseek: '#d95926', other: '#8a8983' },
+        card: '#16181d', ink: '#f5f1e6', shadow: '#ff7a3d', grid: '#34363d',
+        shades: { claude: ['#4d8dff', '#a3c8ff', '#2a55c8', '#2ed3ec', '#a07bff', '#1fa0b8', '#d3c4ff', '#6a6ae0'], deepseek: ['#ff7a3d', '#ffb347', '#d9500f'], other: ['#a8a8a8', '#d0d0d0', '#7d7d7d'] },
     },
 };
 
-// Legend layout: where the swatch row starts (right of the title), its
-// baseline, the 10×10 swatch size, the gap to its label and between entries.
-const LEGEND_X = 300;
-const LEGEND_BASELINE_Y = 28;
-const LEGEND_SWATCH = 10;
-const LEGEND_LABEL_GAP = 6;
-const LEGEND_ENTRY_GAP = 18;
+const CARD_SHADOW = 8;
+const CARD_BORDER = 3;
+
+// Opening of every chart: root <svg>, accessible title/desc, the offset shadow
+// and the bordered card with its uppercase title. `cardH` is the card's own
+// height; the viewBox adds room for the shadow.
+function cardSVG(t: ChartPalette, title: string, desc: string | null, cardH: number): { open: string[]; cardW: number } {
+    const width = 880, cardW = width - CARD_SHADOW - 4;
+    const height = cardH + CARD_SHADOW + 4;
+    return {
+        cardW,
+        open: [
+            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" font-family="${CHART_FONT_STACK}" role="img" aria-labelledby="t d">`,
+            `<title id="t">${xmlEsc(title)}</title>`,
+            `<desc id="d">${xmlEsc(desc ?? title)}</desc>`,
+            `<rect x="${4 + CARD_SHADOW}" y="${4 + CARD_SHADOW}" width="${cardW}" height="${cardH}" fill="${t.shadow}"/>`,
+            `<rect x="5.5" y="5.5" width="${cardW}" height="${cardH}" fill="${t.card}" stroke="${t.ink}" stroke-width="${CARD_BORDER}"/>`,
+            `<text x="26" y="40" fill="${t.ink}" font-weight="800" font-size="19" letter-spacing="0.5">${xmlEsc(title.toUpperCase())}</text>`,
+        ],
+    };
+}
 
 const VENDOR_ORDER: readonly Vendor[] = ['claude', 'deepseek', 'other'];
 const VENDOR_LABELS: Record<Vendor, string> = { claude: 'Claude', deepseek: 'DeepSeek', other: 'Other' };
@@ -117,10 +126,9 @@ function xmlEsc(value: string): string {
     return value.replace(/[&<>"]/g, c => XML_ESCAPES[c] ?? c);
 }
 
-const BAR_CHART_BAR_H = 22;
+const BAR_CHART_BAR_H = 24;
 const BAR_CHART_GAP = 14;
-const BAR_CHART_TOP_PAD = 46;
-const BAR_CHART_BOTTOM_PAD = 16;
+const BAR_CHART_BOTTOM_PAD = 26;
 
 export interface BarChartItem {
     label: string;
@@ -133,64 +141,51 @@ export interface BarChartLegendEntry {
     color: string;
 }
 
-// Horizontal bar chart as an SVG document string: thin marks (22px, under
-// the 24px cap), 4px rounded data-end at the bar's tip, square at the
-// baseline, value label at the tip, category label to the left — see
-// dataviz skill's marks-and-anatomy.md. Same geometry the @napi-rs/canvas
-// version used before #1028, except leftPad, which grew from 190 to 220 so
-// the longest category label this chart now emits — "Claude (version not
-// recorded)", ~189px at 13px — fits in the label gutter instead of clipping.
-//
-// #1210: no fixed pixel width and no background. The root <svg> carries only
-// a viewBox (880 ≈ GitHub's markdown content width, so text renders ~1:1 on
-// desktop and scales down on mobile) plus role="img" and a <title> for
-// assistive tech; the transparent background lets the page theme show
-// through. `theme` picks the light/dark ink, each item may carry its own
-// `color` (defaulting to the theme's single-series blue), and `legend`
-// renders a swatch row right of the title. Returns null for an empty series.
+// Horizontal bar chart as an SVG document string in the shared card style:
+// flat bars with a heavy ink outline growing from a heavy baseline, bold
+// category label to the left and bold value at the tip. The viewBox is a fixed
+// 880 wide (≈ GitHub's markdown content width, so text renders ~1:1 on desktop
+// and scales down on mobile); the root <svg> has role="img" plus <title>/<desc>
+// for assistive tech. `legend` renders a swatch row under the title. Returns
+// null for an empty series.
 export function barChartSVG(
     title: string,
     items: BarChartItem[],
     { theme = 'light', legend = null }: { theme?: Theme; legend?: BarChartLegendEntry[] | null } = {},
 ): string | null {
     if (!items.length) return null;
-    const palette = CHART_THEMES[theme] || CHART_THEMES.light;
-    const width = 880, barH = BAR_CHART_BAR_H, gap = BAR_CHART_GAP, topPad = BAR_CHART_TOP_PAD, bottomPad = BAR_CHART_BOTTOM_PAD, leftPad = 220, rightPad = 60;
-    const height = topPad + items.length * (barH + gap) - gap + bottomPad;
+    const t = CHART_THEMES[theme] || CHART_THEMES.light;
+    const barH = BAR_CHART_BAR_H, gap = BAR_CHART_GAP, leftPad = 236, rightPad = 70;
+    const topPad = legend && legend.length ? 98 : 72;
+    const barsH = items.length * (barH + gap) - gap;
+    const cardH = topPad + barsH + BAR_CHART_BOTTOM_PAD;
+    const { open, cardW } = cardSVG(t, title, `Bar chart: ${items.map(i => `${i.label} ${i.value}`).join(', ')}.`, cardH);
     const maxVal = Math.max(...items.map(i => i.value), 1);
-    const chartW = width - leftPad - rightPad;
-
-    const parts = [
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" font-family="${CHART_FONT_STACK}" role="img">`,
-        `<title>${xmlEsc(title)}</title>`,
-        `<text x="20" y="28" fill="${palette.ink}" font-size="15" font-weight="600">${xmlEsc(title)}</text>`,
-        `<line x1="${leftPad}" y1="${topPad - 8}" x2="${leftPad}" y2="${topPad + items.length * (barH + gap) - gap}" stroke="${palette.baseline}" stroke-width="1"/>`,
-    ];
+    const chartW = cardW - leftPad - rightPad;
+    const text = (extra: string) => `fill="${t.ink}" font-weight="800" ${extra}`;
+    const parts = [...open];
 
     if (legend && legend.length) {
-        let lx = LEGEND_X;
+        let lx = 26;
         for (const entry of legend) {
             parts.push(
-                `<rect x="${lx}" y="${LEGEND_BASELINE_Y - LEGEND_SWATCH}" width="${LEGEND_SWATCH}" height="${LEGEND_SWATCH}" rx="2" fill="${entry.color}"/>`,
-                `<text x="${lx + LEGEND_SWATCH + LEGEND_LABEL_GAP}" y="${LEGEND_BASELINE_Y}" fill="${palette.inkSecondary}" font-size="13">${xmlEsc(entry.label)}</text>`,
+                `<rect x="${lx}" y="58" width="12" height="12" fill="${entry.color}" stroke="${t.ink}" stroke-width="2"/>`,
+                `<text x="${lx + 20}" y="69" ${text('font-size="12"')}>${xmlEsc(entry.label)}</text>`,
             );
-            lx += LEGEND_SWATCH + LEGEND_LABEL_GAP + entry.label.length * 7 + LEGEND_ENTRY_GAP;
+            lx += 20 + entry.label.length * 7 + 22;
         }
     }
 
+    parts.push(`<line x1="${leftPad}" y1="${topPad - 8}" x2="${leftPad}" y2="${topPad + barsH + 8}" stroke="${t.ink}" stroke-width="3"/>`);
     items.forEach((item, i) => {
         const y = topPad + i * (barH + gap);
-        const barW = Math.max(2, Math.round((item.value / maxVal) * chartW));
-        const r = Math.min(4, barW / 2, barH / 2);
-        const color = item.color || palette.series.single;
+        const barW = Math.max(4, Math.round((item.value / maxVal) * chartW));
+        const color = item.color || t.shades.claude[0]!;
         const mid = y + barH / 2 + 4;
-        // Square left edge, 4px-rounded right edge — matches the old canvas path.
-        const bar = `M${leftPad},${y} H${leftPad + barW - r} Q${leftPad + barW},${y} ${leftPad + barW},${y + r}`
-            + ` V${y + barH - r} Q${leftPad + barW},${y + barH} ${leftPad + barW - r},${y + barH} H${leftPad} Z`;
         parts.push(
-            `<text x="${leftPad - 12}" y="${mid}" fill="${palette.inkSecondary}" font-size="13" text-anchor="end">${xmlEsc(item.label)}</text>`,
-            `<path d="${bar}" fill="${color}"/>`,
-            `<text x="${leftPad + barW + 10}" y="${mid}" fill="${palette.ink}" font-size="13" font-weight="600">${item.value}</text>`,
+            `<text x="${leftPad - 14}" y="${mid}" ${text('font-size="13" text-anchor="end"')}>${xmlEsc(item.label)}</text>`,
+            `<rect x="${leftPad + 1.5}" y="${y}" width="${barW}" height="${barH}" fill="${color}" stroke="${t.ink}" stroke-width="3"/>`,
+            `<text x="${leftPad + barW + 12}" y="${mid}" ${text('font-size="14"')}>${item.value}</text>`,
         );
     });
 
@@ -205,13 +200,13 @@ export function modelBreakdownData(
     counts: Record<string, number>,
     theme: Theme = 'light',
 ): { items: Required<BarChartItem>[]; legend: BarChartLegendEntry[] } {
-    const palette = CHART_THEMES[theme] || CHART_THEMES.light;
+    const t = CHART_THEMES[theme] || CHART_THEMES.light;
     const items = Object.entries(counts)
-        .map(([model, value]) => ({ label: modelDisplayLabel(model), value, color: palette.series[modelVendor(model)] }))
+        .map(([model, value]) => ({ label: modelDisplayLabel(model), value, color: t.shades[modelVendor(model)][0]! }))
         .sort((a, b) => b.value - a.value);
     const legend = VENDOR_ORDER
         .filter(vendor => Object.keys(counts).some(model => modelVendor(model) === vendor))
-        .map(vendor => ({ label: VENDOR_LABELS[vendor], color: palette.series[vendor] }));
+        .map(vendor => ({ label: VENDOR_LABELS[vendor], color: t.shades[vendor][0]! }));
     return { items, legend };
 }
 
@@ -257,27 +252,6 @@ export function monthlyModelSeries(
     return { months, series };
 }
 
-// Neobrutalist look for the timeline chart only (#1800): the chart is a card
-// with a thick border and a hard, unblurred offset shadow; flat saturated line
-// colours per vendor (shade per model), heavy square markers, bold labels.
-interface TimelineTheme {
-    card: string;
-    ink: string;
-    shadow: string;
-    grid: string;
-    shades: Record<Vendor, string[]>;
-}
-const TIMELINE_THEMES: Record<Theme, TimelineTheme> = {
-    light: {
-        card: '#fffaf0', ink: '#0b0b0b', shadow: '#0b0b0b', grid: '#d9d2bf',
-        shades: { claude: ['#1f5fff', '#6aa8ff', '#0a2a8a', '#00a6c0', '#7a3cff', '#0b7a8c', '#b8a1ff', '#3a3aa8'], deepseek: ['#ff5a1f', '#ffa23a', '#b53a00'], other: ['#6b6b6b', '#9a9a9a', '#3f3f3f'] },
-    },
-    dark: {
-        card: '#16181d', ink: '#f5f1e6', shadow: '#ff7a3d', grid: '#34363d',
-        shades: { claude: ['#4d8dff', '#a3c8ff', '#2a55c8', '#2ed3ec', '#a07bff', '#1fa0b8', '#d3c4ff', '#6a6ae0'], deepseek: ['#ff7a3d', '#ffb347', '#d9500f'], other: ['#a8a8a8', '#d0d0d0', '#7d7d7d'] },
-    },
-};
-
 // Multi-line chart of monthly commits: x = months, y = commits per month, one
 // line per model. Colour = vendor shade; dash pattern and marker shape cycle
 // per model so lines that overlap near zero can still be told apart. Series
@@ -299,7 +273,7 @@ export function lineChartSVG(
     theme: Theme = 'light',
 ): string | null {
     if (!data || !data.series.length) return null;
-    const t = TIMELINE_THEMES[theme] || TIMELINE_THEMES.light;
+    const t = CHART_THEMES[theme] || CHART_THEMES.light;
     const { months, series } = data;
 
     const used: Record<Vendor, number> = { claude: 0, deepseek: 0, other: 0 };
@@ -316,7 +290,7 @@ export function lineChartSVG(
     });
 
     // Legend rows first: they decide how tall the card is.
-    const shadow = 8, width = 880, cardW = width - shadow - 4, legendMaxX = cardW - 20;
+    const cardW = 880 - CARD_SHADOW - 4, legendMaxX = cardW - 20;
     const entryW = (label: string) => 34 + label.length * 7 + 16;
     const legend: { x: number; row: number }[] = [];
     let lx = 26, row = 0;
@@ -326,7 +300,7 @@ export function lineChartSVG(
         lx += entryW(s.label);
     }
     const left = 64, right = 36, top = 66 + (row + 1) * 22 + 14, bottom = 52, plotH = 230;
-    const height = top + plotH + bottom + shadow + 4, cardH = height - shadow - 4;
+    const cardH = top + plotH + bottom;
     const plotW = cardW - left - right;
     const peak = Math.max(...series.flatMap(s => s.counts), 1);
     const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(n => n * 4 >= peak) ?? Math.ceil(peak / 4);
@@ -336,14 +310,8 @@ export function lineChartSVG(
     const text = (extra: string) => `fill="${t.ink}" font-weight="800" ${extra}`;
     const total = (s: MonthlySeries) => s.counts.reduce((a, b) => a + b, 0);
 
-    const parts = [
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" font-family="${CHART_FONT_STACK}" role="img" aria-labelledby="t d">`,
-        `<title id="t">${xmlEsc(title)}</title>`,
-        `<desc id="d">${xmlEsc(`Line chart of AI commits per month from ${months[0]} to ${months[months.length - 1]} (current month still in progress), one line per model: ${series.map(s => `${modelDisplayLabel(s.model)} (${total(s)} commits)`).join(', ')}.`)}</desc>`,
-        `<rect x="${4 + shadow}" y="${4 + shadow}" width="${cardW}" height="${cardH}" fill="${t.shadow}"/>`,
-        `<rect x="5.5" y="5.5" width="${cardW}" height="${cardH}" fill="${t.card}" stroke="${t.ink}" stroke-width="3"/>`,
-        `<text x="26" y="40" ${text('font-size="19" letter-spacing="0.5"')}>${xmlEsc(title.toUpperCase())}</text>`,
-    ];
+    const desc = `Line chart of AI commits per month from ${months[0]} to ${months[months.length - 1]} (current month still in progress), one line per model: ${series.map(s => `${modelDisplayLabel(s.model)} (${total(s)} commits)`).join(', ')}.`;
+    const parts = [...cardSVG(t, title, desc, cardH).open];
     styled.forEach((s, i) => {
         const { x: ex, row: er } = legend[i]!;
         const ly = 66 + er * 22;
@@ -376,6 +344,25 @@ export function lineChartSVG(
     }
     parts.push('</svg>');
     return parts.join('\n') + '\n';
+}
+
+// Section divider for README.md / DEVELOPMENT.md (#1802): a slim bordered bar
+// with a hard shadow and one block per vendor colour, placed above each `##`
+// heading in the same card style as the charts. Decorative; the real heading
+// below it keeps the anchor and the document outline.
+export function dividerSVG(theme: Theme = 'light'): string {
+    const t = CHART_THEMES[theme] || CHART_THEMES.light;
+    const w = 868, h = 14;
+    const blocks = (['claude', 'deepseek', 'other'] as const).map((v, i) =>
+        `<rect x="${5.5 + CARD_BORDER / 2 + i * 44}" y="${5.5 + CARD_BORDER / 2}" width="44" height="${h - CARD_BORDER}" fill="${t.shades[v][0]}"/>`);
+    return [
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 ${h + CARD_SHADOW + 4}" role="img" aria-label="Section divider">`,
+        '<title>Section divider</title>',
+        `<rect x="${4 + CARD_SHADOW}" y="${4 + CARD_SHADOW}" width="${w}" height="${h}" fill="${t.shadow}"/>`,
+        `<rect x="5.5" y="5.5" width="${w}" height="${h}" fill="${t.card}" stroke="${t.ink}" stroke-width="${CARD_BORDER}"/>`,
+        ...blocks,
+        '</svg>',
+    ].join('\n') + '\n';
 }
 
 // <picture> markup that swaps the light chart for the dark one under GitHub's
@@ -413,6 +400,7 @@ function renderCharts(results: RepoStats[], combinedModelCounts: Record<string, 
             writeFileSync(path.join(outDir, `model-breakdown-${theme}.svg`), modelSvg);
             rendered = true;
         }
+        writeFileSync(path.join(outDir, `section-divider-${theme}.svg`), dividerSVG(theme));
         const timelineSvg = lineChartSVG('AI commits per month by model', monthlyModelSeries(aiLog, new Date().toISOString().slice(0, 10)), theme);
         if (timelineSvg) {
             writeFileSync(path.join(outDir, `model-timeline-${theme}.svg`), timelineSvg);
@@ -760,8 +748,10 @@ function main(): void {
     lines.push('---');
     lines.push('*This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mts` instead.*');
 
+    const divider = chartPictureHTML('section-divider', 'Section divider');
+    const doc = lines.flatMap(l => (chartsRendered && l.startsWith('## ') ? [divider, '', l] : [l]));
     const outPath = path.join(appRepoRoot, 'DEVELOPMENT.md');
-    writeFileSync(outPath, lines.join('\n') + '\n');
+    writeFileSync(outPath, doc.join('\n') + '\n');
     console.log(`Wrote ${outPath}`);
 }
 
