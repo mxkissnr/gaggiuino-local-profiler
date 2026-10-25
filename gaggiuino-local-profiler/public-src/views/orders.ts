@@ -801,8 +801,8 @@ export async function loadKioskLinkView(): Promise<void> {
     // Reading the key mints one on the first visit, so the panel is never empty.
     renderKioskLink(section, (await getKioskKey()).kioskKey);
   } catch (err) {
-    section.innerHTML = html`<p class="orders-notify-hint">${
-      esc(t('error_generic', err instanceof Error ? err.message : String(err)))}</p>`;
+    const message = err instanceof Error ? err.message : String(err);
+    section.innerHTML = html`<p class="orders-notify-hint">${esc(t('error_generic', message))}</p>`;
   }
 }
 

@@ -37,7 +37,7 @@ const { loadKioskLinkView, kioskLinkFor } = await import('../public-src/views/or
 beforeEach(() => {
   api.getKioskKey.mockReset();
   api.rotateKioskKey.mockReset();
-  (g as Record<string, unknown>).location = { pathname: '/', href: 'http://glp.local:8099/' };
+  g.location = { pathname: '/', href: 'http://glp.local:8099/' };
 });
 
 describe('kioskLinkFor', () => {
