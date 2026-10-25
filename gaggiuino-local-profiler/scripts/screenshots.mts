@@ -7,14 +7,17 @@
 // `node scripts/screenshots.mts`. Requires `npx playwright install chromium`
 // once beforehand.
 //
-// #1181: set GLP_SCREENSHOT_BACKUP=/path/to/glp-backup.zip to restore that
-// backup into the throwaway instance through POST /api/restore instead of
-// loading the built-in demo seed — real data makes the README/wiki views look
-// like actual use rather than the synthetic 12-shot seed. A restore that does
-// not succeed aborts the run with a non-zero exit. The backup is read into the
-// instance's tmp DATA_DIR, which is deleted along with the instance, and the
-// file itself must never be committed (`scripts/*.zip` is git-ignored); review
-// any screenshots made from personal data before committing them.
+// #1181: by default the README/wiki views are rendered from the sanitized
+// demo backup committed at demo/glp-demo-backup.zip, restored into the
+// throwaway instance through POST /api/restore. Real data makes the views
+// look like actual use rather than the synthetic 12-shot seed. Set
+// GLP_SCREENSHOT_BACKUP=/path/to/glp-backup.zip to restore a different backup
+// instead; if neither exists the built-in demo seed is used as a fallback. A
+// restore that does not succeed aborts the run with a non-zero exit. The
+// backup is read into the instance's tmp DATA_DIR, which is deleted along with
+// the instance, and the file itself must never be committed
+// (`scripts/*.zip` is git-ignored); review any screenshots made from personal
+// data before committing them.
 //
 // #1032: every capture waits for a real readiness signal (a chart canvas
 // with non-blank pixels, an ECharts instance that has painted, images
@@ -23,9 +26,9 @@
 // after the old fixed 400ms, so the pre-#1032 images caught half-rendered
 // views (empty shot chart, mid-render sunburst).
 //
-// Data source of each PNG (#1185). "backup" means the instance restored from
-// GLP_SCREENSHOT_BACKUP in backup mode, or the built-in demo seed when the
-// env var is unset:
+// Data source of each PNG (#1185). "backup" means the instance restored in
+// backup mode: demo/glp-demo-backup.zip by default, GLP_SCREENSHOT_BACKUP when
+// it is set, or the built-in demo seed when the zip is missing:
 //
 //   shots.png, library.png, bean-sheet.png, flavor-wheel.png, analytics.png,
 //   analytics-machines.png, maintenance.png, dialin.png, settings.png
@@ -44,9 +47,11 @@ import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harn
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
 
-// #1181: opt-in real-backup mode. Set to a GLP backup .zip path to restore it
-// via POST /api/restore instead of seeding the demo dataset.
-const backupPath = process.env.GLP_SCREENSHOT_BACKUP;
+// #1181: real-backup mode. The committed sanitized demo backup is the default;
+// GLP_SCREENSHOT_BACKUP overrides it; the demo seed is the fallback.
+const demoBackupPath = path.join(appRoot, 'demo', 'glp-demo-backup.zip');
+const backupPath = process.env.GLP_SCREENSHOT_BACKUP
+    ?? (existsSync(demoBackupPath) ? demoBackupPath : undefined);
 const fromBackup = !!backupPath;
 
 /* eslint-disable no-undef -- the callbacks below are serialised and run
@@ -192,6 +197,7 @@ async function shootView(page: Page, sel: string, filePath: string, { fromTop = 
 async function main(): Promise<void> {
     mkdirSync(outDir, { recursive: true });
 
+    console.log(`Screenshots data source: ${backupPath ?? 'built-in demo seed'}`);
     const baseUrl = await bootServer();
     if (fromBackup) {
         const result = await restoreBackup(baseUrl, path.resolve(backupPath));
