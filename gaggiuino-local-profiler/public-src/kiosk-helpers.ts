@@ -1,4 +1,6 @@
 import { t } from './i18n.js';
+import { S } from './state/index.js';
+import type { SafeStorage } from './storage.js';
 import type { Order, QueueEta } from './api/types.js';
 
 // Pure helpers for the kiosk page, kept out of kiosk.ts so tests can import
@@ -37,4 +39,48 @@ export function toggleVariantSelection(selected: readonly string[], variant: str
 export function variantOrderField(selected: readonly string[]): { variant?: string } {
   const chosen = selected[0];
   return chosen === undefined ? {} : { variant: chosen };
+}
+
+// ── Orders-only kiosk key (#1731) ────────────────────────────────────────
+
+/** Where the tablet keeps its orders-only key between loads. */
+export const KIOSK_KEY_STORAGE = 'glp_kiosk_key';
+
+// The key carried by a kiosk link's fragment (`kiosk.html#key=<key>`), or null
+// when the hash has none. A blank value counts as none.
+export function kioskKeyFromHash(hash: string): string | null {
+  const key = new URLSearchParams(hash.replace(/^#/, '')).get('key')?.trim() ?? '';
+  return key === '' ? null : key;
+}
+
+// Takes the key out of a kiosk link. A fragment key is stored and then stripped
+// from the address bar (replaceState, so it never enters history) — it must not
+// stay visible on a tablet that sits in the open. Returns the kiosk key now in
+// effect: the fragment's, else the stored one from an earlier visit.
+export function adoptKioskKey({ hash, href, storage, replaceUrl }: {
+  hash: string;
+  href: string;
+  storage: Pick<SafeStorage, 'getItem' | 'setItem'>;
+  replaceUrl: (url: string) => void;
+}): string | null {
+  const fromHash = kioskKeyFromHash(hash);
+  if (fromHash === null) return storage.getItem(KIOSK_KEY_STORAGE) || null;
+  storage.setItem(KIOSK_KEY_STORAGE, fromHash);
+  const url = new URL(href);
+  url.hash = '';
+  replaceUrl(url.toString());
+  return fromHash;
+}
+
+// Authenticates the kiosk: a stored key is the credential, so /api/token is not
+// asked at all (it would hand back the full API token, which the tablet must
+// not hold). Without a key the page keeps its pre-#1731 behaviour. Returns
+// whether a kiosk key is in use, which the 401 hint keys off.
+export async function startKioskAuth(key: string | null, initToken: () => Promise<void>): Promise<boolean> {
+  if (key === null) {
+    await initToken();
+    return false;
+  }
+  S.glpToken = key;
+  return true;
 }
