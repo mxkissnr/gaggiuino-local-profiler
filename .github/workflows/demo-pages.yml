@@ -56,13 +56,20 @@ jobs:
         # apt-get (triggered by --with-deps) can hang indefinitely when the
         # runner's regional Ubuntu mirror is unreachable (#882) -- a short
         # per-attempt timeout + retry lets a single mirror hiccup self-heal
-        # within this run instead of needing a manual rerun.
+        # within this run instead of needing a manual rerun. apt gets its own
+        # retries and a short HTTP timeout, and a failed attempt stops the
+        # apt-get it leaves behind: `timeout` only ends npx, the root apt-get
+        # survives and holds the dpkg lock, so every retry failed (#1821).
         run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
           for attempt in 1 2 3; do
             if timeout 300 npx playwright install --with-deps chromium; then
               exit 0
             fi
             echo "Playwright install attempt $attempt/3 failed or timed out, retrying..."
+            sudo pkill -x apt-get || true
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done
+            sudo dpkg --configure -a || true
             sleep 10
           done
           echo "::error::Playwright Chromium install failed after 3 attempts"
