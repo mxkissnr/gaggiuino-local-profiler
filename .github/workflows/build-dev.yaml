@@ -84,9 +84,13 @@ jobs:
   build-amd64:
     name: Build amd64
     needs: prep
+    # id-token/attestations: the called workflow attests the image (#1829) and
+    # cannot get more permissions than this caller grants.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/build-dev-image.yaml
     with:
       arch: amd64
@@ -99,6 +103,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/build-dev-image.yaml
     with:
       arch: armv7
@@ -111,6 +117,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/build-dev-image.yaml
     with:
       arch: aarch64
