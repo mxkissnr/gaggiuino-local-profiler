@@ -69,6 +69,19 @@ var syncClient = machines.NewGuardedHTTPClient(syncHTTPTimeout)
 // good.
 var errMalformedShot = errors.New("malformed shot body")
 
+// errEmptyShot tags a 200 whose body was completely empty (#1824) — the
+// reporter's machine answered that way for shots 70 and 72 while its SD card
+// was failing. It is wrapped under errMalformedShot, so every existing
+// errors.Is(err, errMalformedShot) skip path applies unchanged; the sync only
+// special-cases it to log "empty response" instead of a JSON decode error.
+var errEmptyShot = errors.New("empty response")
+
+// errAllShotsNotFound is the #1824 all-404 signal: a run that could read no
+// shot at all is a machine/storage failure, not "these shots were deleted", so
+// nothing is blocklisted and the caller stamps a sync error. The next cycle
+// retries from the same cursor.
+var errAllShotsNotFound = errors.New("machine returned 404 for every shot")
+
 // syncBaseURLFor resolves a machine's base URL for the pull loop. A
 // package-level var (rather than machines.BaseURLFor called inline) so a
 // test can point the loop at an httptest fake machine: BaseURLFor's SSRF
@@ -147,11 +160,18 @@ func (p *Poller) RunManualSync(ctx context.Context) {
 // recordMachineReachable/recordMachineError stay in the callers, so the
 // per-machine reachability stamping is unchanged.
 //
+// #1824: a machine whose shot counter was reset (history cleared, SD card
+// formatted) reports a latest id below ids already blocklisted for it. Those
+// entries belong to the previous counter and would wedge the cursor below every
+// new shot, so this machine's whole blocklist is cleared before the cursor is
+// computed. A run that reads no shot at all and gets 404s is a machine/storage
+// failure and blocklists nothing.
+//
 // The first return value reports whether the error is one the caller should
-// stamp as a sync error: true for a fetch transport error or an Upsert
-// failure (the machine/sync failed), false for a local DB error (GetBlocklist,
-// MaxNativeShotID, AppendToBlocklist, prepare), which must not flip a
-// reachable machine offline.
+// stamp as a sync error: true for a fetch transport error, an Upsert failure
+// or an all-404 run (the machine/sync failed), false for a local DB error
+// (GetBlocklist, MaxNativeShotID, RemoveFromBlocklist, AppendToBlocklist,
+// prepare), which must not flip a reachable machine offline.
 func (p *Poller) backfillShots(
 	ctx context.Context,
 	machineID, latestNative int64,
@@ -167,13 +187,31 @@ func (p *Poller) backfillShots(
 	if err != nil {
 		return false, err
 	}
+
+	// #1824: once the machine reports a latest id below the highest id this
+	// machine blocklisted, it re-issued old ids after a counter reset, so every
+	// one of its blocklist entries is stale. Clearing only the entries above
+	// latestNative would leave the cursor wedged below them, so the machine's
+	// whole blocklist goes. Other machines' entries, demo ids and out-of-range
+	// values are untouched (#1147/#1148).
+	if owned, highestOwned := ownedBlocklist(machineID, blocklist); len(owned) > 0 && highestOwned > latestNative {
+		log.Printf("%s: machine shot counter reset (latest %d is below blocklisted shot %d) — clearing this machine's %d blocklist entries", logs.prefix, latestNative, highestOwned, len(owned))
+		if rerr := p.shots.RemoveFromBlocklist(owned); rerr != nil {
+			return false, rerr
+		}
+		blocklist = withoutBlocklistValues(blocklist, owned)
+	}
+
 	effectiveMax := effectiveSyncMax(machineID, maxLocalID, blocklist)
 
 	if effectiveMax >= latestNative {
-		log.Printf("%s: already up to date (shots: %d)", logs.prefix, maxLocalID)
+		owned, _ := ownedBlocklist(machineID, blocklist)
+		log.Printf("%s: already up to date (latest %d, cursor %d, local shots up to %d, %d blocklisted)", logs.prefix, latestNative, effectiveMax, maxLocalID, len(owned))
 		return false, nil
 	}
 
+	var notFound []int64
+	readAny := false
 	for i := effectiveMax + 1; i <= latestNative; i++ {
 		shot, status, err := fetch(ctx, i)
 		if err != nil {
@@ -188,22 +226,33 @@ func (p *Poller) backfillShots(
 					log.Printf("%s: newest shot %d not readable yet (404) — retrying next cycle", logs.prefix, i)
 					continue
 				}
-				// #721: shot permanently gone — blocklist it and skip past.
+				// #721: shot permanently gone — blocklist it and skip past. The
+				// entry is written after the loop (#1824): an all-404 run must
+				// blocklist nothing, which is only known once the run is over.
 				log.Printf("%s: shot %d not found%s (404) — marking permanently missing", logs.prefix, i, logs.notFoundSuffix)
-				if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(shots.ToGlobalShotID(machineID, i), 10)); aerr != nil {
-					return false, aerr
-				}
+				notFound = append(notFound, i)
 				continue
 			}
 			if errors.Is(err, errMalformedShot) {
 				// #1151: one damaged shot must not stop the shots above it
 				// importing. No blocklist entry — that means "permanently
 				// missing on the machine", which we cannot know here.
+				if errors.Is(err, errEmptyShot) {
+					// #1824: a 200 with no body is the machine failing to read
+					// its storage, not a deleted shot.
+					log.Printf("%s: shot %d has an empty response — skipped", logs.prefix, i)
+					continue
+				}
 				log.Printf("%s: shot %d has malformed data (%v) — skipped", logs.prefix, i, err)
 				continue
 			}
+			// A transport error aborts the run, and the 404s collected so far
+			// stay unblocklisted: the run was not healthy, so the next cycle
+			// must re-decide instead of permanently marking shots that may only
+			// be unreadable while the machine is failing (#1824).
 			return true, err
 		}
+		readAny = true
 		if shot["id"] == nil || shot["datapoints"] == nil {
 			log.Printf("%s: shot %d %s — skipped", logs.prefix, i, logs.invalidReason)
 			continue
@@ -219,6 +268,24 @@ func (p *Poller) backfillShots(
 		delete(shot, "annotation")
 		if uerr := p.shots.Upsert(shots.Shot(shot)); uerr != nil {
 			return true, uerr
+		}
+	}
+
+	if len(notFound) > 0 {
+		// #1824: an all-404 run means the machine could not serve a single shot
+		// it claims to have (storage/SD failure), not that those shots were
+		// deleted. Blocklisting them would hide every shot behind a counter
+		// reset for good, so report a retryable sync error instead. An empty or
+		// malformed body does not make the run healthy either — only a readable
+		// shot does.
+		if !readAny {
+			log.Printf("%s: all %d fetched shots returned 404 — not blocklisting, retrying next cycle", logs.prefix, len(notFound))
+			return true, errAllShotsNotFound
+		}
+		for _, i := range notFound {
+			if aerr := p.shots.AppendToBlocklist(strconv.FormatInt(shots.ToGlobalShotID(machineID, i), 10)); aerr != nil {
+				return false, aerr
+			}
 		}
 	}
 
@@ -619,6 +686,12 @@ func (p *Poller) fetchShot(ctx context.Context, machineURL string, id int64) (ma
 	if err != nil {
 		return nil, resp.StatusCode, err
 	}
+	if len(body) == 0 {
+		// #1824: a 200 with a zero-length body is as hopeless as a torn one — a
+		// failing SD card answers this way — so it is skipped, never
+		// blocklisted, and logged as an empty response.
+		return nil, resp.StatusCode, fmt.Errorf("shot %d: %w: %w", id, errMalformedShot, errEmptyShot)
+	}
 	var shot map[string]any
 	if err := json.Unmarshal(body, &shot); err != nil {
 		// #1151: a fully received 200 whose body we still can't decode is
@@ -729,14 +802,49 @@ func (p *Poller) recordSyncError(machineID int64, err error) {
 // machine 1 this is exactly the old 0 < n < 10M check.
 func effectiveSyncMax(machineID, maxLocalNative int64, blocklist []string) int64 {
 	effectiveMax := maxLocalNative
-	for _, b := range blocklist {
-		if n, perr := strconv.ParseInt(b, 10, 64); perr == nil {
-			if native, ok := shots.NativeShotIDIfOwned(machineID, n); ok && native > effectiveMax {
-				effectiveMax = native
-			}
-		}
+	if _, highestOwned := ownedBlocklist(machineID, blocklist); highestOwned > effectiveMax {
+		effectiveMax = highestOwned
 	}
 	return effectiveMax
+}
+
+// ownedBlocklist returns the blocklist values owned by machineID's own native
+// id range plus the highest native id among them. Unparseable values, other
+// machines' ids and demo/out-of-range ids are left out — the same ownership
+// rule effectiveSyncMax applies (#1147/#1148).
+func ownedBlocklist(machineID int64, blocklist []string) ([]string, int64) {
+	var values []string
+	var highest int64
+	for _, b := range blocklist {
+		n, perr := strconv.ParseInt(b, 10, 64)
+		if perr != nil {
+			continue
+		}
+		native, ok := shots.NativeShotIDIfOwned(machineID, n)
+		if !ok {
+			continue
+		}
+		values = append(values, b)
+		if native > highest {
+			highest = native
+		}
+	}
+	return values, highest
+}
+
+// withoutBlocklistValues returns blocklist with every value in values dropped.
+func withoutBlocklistValues(blocklist, values []string) []string {
+	drop := make(map[string]struct{}, len(values))
+	for _, v := range values {
+		drop[v] = struct{}{}
+	}
+	out := make([]string, 0, len(blocklist))
+	for _, v := range blocklist {
+		if _, gone := drop[v]; !gone {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // jsNumberToInt64 accepts the float64 encoding/json produces for a JSON

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -321,6 +322,28 @@ func (r *Repository) GetBlocklist() ([]string, error) {
 func (r *Repository) AppendToBlocklist(value string) error {
 	if _, err := r.db.Exec(`INSERT OR IGNORE INTO blocklist (value) VALUES (?)`, value); err != nil {
 		return fmt.Errorf("shots: appending blocklist entry %q: %w", value, err)
+	}
+	return nil
+}
+
+// RemoveFromBlocklist atomically removes the given values from the blocklist.
+// Its caller is the sync's counter-reset detection (internal/system/sync.go,
+// #1824): when a machine re-issues ids it had already blocklisted, every entry
+// in that machine's native range belongs to the previous shot counter and
+// would otherwise wedge the cursor below every new shot for good. Values not
+// present are ignored, so a concurrent removal is not an error, and an empty
+// input is a no-op with no statement run at all.
+func (r *Repository) RemoveFromBlocklist(values []string) error {
+	if len(values) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+	args := make([]any, len(values))
+	for i, v := range values {
+		args[i] = v
+	}
+	if _, err := r.db.Exec(`DELETE FROM blocklist WHERE value IN (`+placeholders+`)`, args...); err != nil {
+		return fmt.Errorf("shots: removing %d blocklist entries: %w", len(values), err)
 	}
 	return nil
 }
