@@ -167,3 +167,56 @@ func TestUpsert_DropsUnknownImageExtension(t *testing.T) {
 		}
 	}
 }
+
+// TestRemoveFromBlocklist_RemovesOnlyGivenValues is the #1824 repository half:
+// the sync's counter-reset cleanup must drop exactly the ids it names (here one
+// machine's native range) and leave every other entry alone, including a
+// neighbouring machine's global ids and a demo id.
+func TestRemoveFromBlocklist_RemovesOnlyGivenValues(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+
+	for _, v := range []string{"1", "2", "3", "20000001", "900000001"} {
+		if err := repo.AppendToBlocklist(v); err != nil {
+			t.Fatalf("AppendToBlocklist(%q): %v", v, err)
+		}
+	}
+
+	if err := repo.RemoveFromBlocklist([]string{"1", "3", "999"}); err != nil {
+		t.Fatalf("RemoveFromBlocklist: %v", err)
+	}
+
+	got, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatalf("GetBlocklist: %v", err)
+	}
+	want := map[string]bool{"2": true, "20000001": true, "900000001": true}
+	if len(got) != len(want) {
+		t.Fatalf("blocklist = %v, want exactly %v", got, want)
+	}
+	for _, v := range got {
+		if !want[v] {
+			t.Fatalf("blocklist = %v, want exactly %v (unexpected %q)", got, want, v)
+		}
+	}
+}
+
+// TestRemoveFromBlocklist_EmptyInputIsNoop pins that an empty value list never
+// touches the table — the sync calls this for every machine, most of which have
+// no entries to clear.
+func TestRemoveFromBlocklist_EmptyInputIsNoop(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+
+	if err := repo.AppendToBlocklist("7"); err != nil {
+		t.Fatalf("AppendToBlocklist: %v", err)
+	}
+	if err := repo.RemoveFromBlocklist(nil); err != nil {
+		t.Fatalf("RemoveFromBlocklist(nil): %v", err)
+	}
+	got, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatalf("GetBlocklist: %v", err)
+	}
+	if len(got) != 1 || got[0] != "7" {
+		t.Fatalf("blocklist = %v, want [7]", got)
+	}
+}
