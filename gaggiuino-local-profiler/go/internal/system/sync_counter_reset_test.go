@@ -467,4 +467,3 @@ func TestSyncDefaultMachineShots_ZeroLatestKeepsBlocklist(t *testing.T) {
 		}
 	}
 }
-
