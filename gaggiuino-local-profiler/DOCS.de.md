@@ -570,6 +570,16 @@ Die Profil-Endpunkte in GLP wurden vom Konzept der ALERTua/hass-gaggiuino-Integr
 
 Vollständige Dokumentation — Features, Live-Modus, Analytics, Shot-Score, Exporte, Kompatibilität — im [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
 
+## Image verifizieren
+
+Jedes veröffentlichte Image enthält eine signierte Build-Attestierung, die es an den Release-Workflow dieses Repositorys und den exakten Commit bindet, dazu eine SBOM mit den enthaltenen Paketen. Zum Prüfen eines Images vor oder nach der Installation dient die GitHub-CLI:
+
+```bash
+gh attestation verify oci://ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:<version> --owner mxkissnr
+```
+
+Für andere Architekturen `amd64` durch `aarch64` oder `armv7` ersetzen. Schlägt die Prüfung fehl, wurde das Image nicht von diesem Workflow gebaut; nicht ausführen.
+
 ## Community und Support
 
 Fragen, Hilfe, das Teilen von Shots, Bohnen und Profilen sowie Release-Ankündigungen: [GLP Discord](https://discord.gg/CbPtWXKRev). Bestätigte Fehler und verfolgte Feature-Wünsche: [GitHub Issues](https://github.com/mxkissnr/gaggiuino-local-profiler/issues). Sicherheitsprobleme nur über eine [private Security Advisory](https://github.com/mxkissnr/gaggiuino-local-profiler/security/advisories/new).

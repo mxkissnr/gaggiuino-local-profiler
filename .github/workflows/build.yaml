@@ -20,6 +20,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # #1829: keyless signing of the build provenance (OIDC) and storing the
+      # attestation. Nothing broader.
+      id-token: write
+      attestations: write
 
     strategy:
       fail-fast: false
@@ -66,11 +70,16 @@ jobs:
           echo "Building version $VERSION for ${{ matrix.arch }}"
 
       - name: Build and push
+        id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ./gaggiuino-local-profiler
           platforms: ${{ matrix.platform }}
           push: true
+          # #1829: SLSA provenance and an SBOM travel with the image as extra
+          # OCI manifests; the attestation below signs the image digest.
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
           tags: |
@@ -86,3 +95,10 @@ jobs:
             io.hass.type=addon
             io.hass.arch=${{ matrix.arch }}
             io.hass.name=GLP — Gaggiuino Local Profiler
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

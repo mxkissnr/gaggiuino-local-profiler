@@ -567,6 +567,16 @@ The profile endpoint design in GLP was inspired by the pioneering work in ALERTu
 
 For full documentation — features, live mode, analytics, shot score, exports, compatibility — see the [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
 
+## Verify the image
+
+Every released image carries a signed build attestation that ties it to this repository's release workflow and the exact commit it was built from, plus an SBOM listing its packages. To check an image before or after installing it, use the GitHub CLI:
+
+```bash
+gh attestation verify oci://ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:<version> --owner mxkissnr
+```
+
+Replace `amd64` with `aarch64` or `armv7` for other architectures. A failed verification means the image was not built by this repository's workflow; do not run it.
+
 ## Community and support
 
 Questions, help, sharing shots, beans and profiles, and release announcements: [GLP Discord](https://discord.gg/CbPtWXKRev). Confirmed bugs and tracked feature requests: [GitHub issues](https://github.com/mxkissnr/gaggiuino-local-profiler/issues). Security problems only through a [private security advisory](https://github.com/mxkissnr/gaggiuino-local-profiler/security/advisories/new).
