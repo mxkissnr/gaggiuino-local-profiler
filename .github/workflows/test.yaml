@@ -348,6 +348,19 @@ jobs:
             type=gha,mode=max,scope=root-shared
             type=gha,mode=max,scope=root-${{ matrix.arch }}
 
+      # Fixable HIGH/CRITICAL findings in the shipped image (Alpine base +
+      # runtime-stage apk packages) fail the PR gate (#1828). amd64 only: the
+      # other arches share the base image and packages. The daily
+      # security-scan.yml covers newly published CVEs between PRs.
+      - name: Trivy image scan (amd64)
+        if: matrix.arch == 'amd64'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: glp-root:amd64
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
       - name: Smoke test (amd64 image, native container run)
         if: matrix.arch == 'amd64'
         run: GLP_SMOKE_DOCKER_IMAGE=glp-root:amd64 go/scripts/smoke-test.sh

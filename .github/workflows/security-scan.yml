@@ -1,0 +1,172 @@
+name: Security scan
+
+# Vulnerability scanning in test.yaml only runs when a PR touches the repo; new
+# CVEs are published without any commit (#1828). This daily scan covers dev and
+# main: govulncheck (Go modules), osv-scanner (package-lock.json + go.mod,
+# including dependencies that were already present) and Trivy on the amd64
+# image (Alpine base + runtime-stage apk packages). Findings are reported as one
+# `security` issue per branch; reruns comment on the open issue.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-scan
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  scan:
+    name: Scan ${{ matrix.branch }}
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [dev, main]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ matrix.branch }}
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: gaggiuino-local-profiler/go/go.mod
+          cache-dependency-path: gaggiuino-local-profiler/go/go.sum
+
+      # A scanner exits with its "findings" code when it found something (the
+      # text goes to findings/<scanner>.txt for the report job); any other
+      # non-zero exit is a scanner crash and fails the job.
+      - name: govulncheck
+        working-directory: gaggiuino-local-profiler/go
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/findings"
+          rc=0
+          go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./... > "$GITHUB_WORKSPACE/findings/govulncheck.txt" 2>&1 || rc=$?
+          cat "$GITHUB_WORKSPACE/findings/govulncheck.txt"
+          [ "$rc" -eq 0 ] && rm "$GITHUB_WORKSPACE/findings/govulncheck.txt"
+          [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ] || exit "$rc"
+
+      - name: osv-scanner
+        working-directory: gaggiuino-local-profiler
+        run: |
+          rc=0
+          go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0 scan source -L package-lock.json -L go/go.mod > "$GITHUB_WORKSPACE/findings/osv-scanner.txt" 2>&1 || rc=$?
+          cat "$GITHUB_WORKSPACE/findings/osv-scanner.txt"
+          [ "$rc" -eq 0 ] && rm "$GITHUB_WORKSPACE/findings/osv-scanner.txt"
+          [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || exit "$rc"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ./gaggiuino-local-profiler
+          file: ./gaggiuino-local-profiler/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: glp-root:amd64
+          cache-from: |
+            type=gha,scope=root-shared
+            type=gha,scope=root-amd64
+
+      # exit-code 0 + JSON so a finding does not look like a crash; the
+      # findings are counted and rendered below.
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: glp-root:amd64
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: json
+          output: trivy.json
+          exit-code: '0'
+
+      - name: Render Trivy findings
+        run: |
+          jq -r '[.Results[]? | .Target as $t | .Vulnerabilities[]? | "\(.Severity)\t\(.VulnerabilityID)\t\(.PkgName) \(.InstalledVersion) (fixed in \(.FixedVersion))\t\($t)"] | .[]' trivy.json > trivy.tsv
+          if [ -s trivy.tsv ]; then
+            mkdir -p findings
+            cat trivy.tsv > findings/trivy.txt
+            cat trivy.tsv
+          fi
+
+      - name: Upload findings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: findings-${{ matrix.branch }}
+          path: findings/
+          if-no-files-found: ignore
+
+  report:
+    name: Report findings
+    needs: scan
+    if: ${{ !cancelled() && github.server_url == 'https://github.com' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Download findings
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: findings-*
+          path: findings
+
+      - name: Open or update the security issue per branch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const root = 'findings';
+            const dirs = fs.existsSync(root) ? fs.readdirSync(root) : [];
+
+            for (const dir of dirs) {
+              const branch = dir.replace(/^findings-/, '');
+              const sections = [];
+              for (const f of fs.readdirSync(path.join(root, dir)).sort()) {
+                const text = fs.readFileSync(path.join(root, dir, f), 'utf8').trim().slice(0, 20000);
+                sections.push(`### ${path.basename(f, '.txt')}\n\n\`\`\`\n${text}\n\`\`\``);
+              }
+              if (sections.length === 0) continue;
+
+              const title = `Security scan: vulnerabilities found on ${branch}`;
+              const body = [`Branch: \`${branch}\``, `Run: ${runUrl}`, '', ...sections].join('\n');
+
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name: 'security', color: 'b60205' });
+              } catch (e) {
+                if (e.status !== 422) throw e; // 422 = label already exists
+              }
+
+              const open = await github.paginate(github.rest.issues.listForRepo, {
+                owner, repo, labels: 'security', state: 'open', per_page: 100,
+              });
+              const existing = open.find(i => !i.pull_request && i.title === title);
+              if (existing) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body });
+                core.info(`${branch}: commented on #${existing.number}.`);
+              } else {
+                const { data: created } = await github.rest.issues.create({
+                  owner, repo, title, labels: ['security'], body,
+                });
+                core.info(`${branch}: opened #${created.number}.`);
+              }
+            }
