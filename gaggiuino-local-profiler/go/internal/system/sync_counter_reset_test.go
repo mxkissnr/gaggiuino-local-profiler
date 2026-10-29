@@ -375,3 +375,96 @@ func TestBackfillShots_CounterResetRemoveErrorIsLocalDBError(t *testing.T) {
 		t.Fatal("a local DB error must report recordErr=false")
 	}
 }
+
+// TestSyncDefaultMachineShots_NewestShotDeletedIsNotACounterReset is the PR
+// #1826 finding: GaggiMate's latest id is just the highest id in its index, so
+// permanently deleting the newest shot drops it below a blocklisted id that is
+// still a genuine delete. The local state proves this — GLP already holds shots
+// up to 49 and latest is 49 — so no reset is inferred, the user's permanent
+// deletes (20 and 50) stay blocklisted and nothing is re-fetched.
+func TestSyncDefaultMachineShots_NewestShotDeletedIsNotACounterReset(t *testing.T) {
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	p, sqlDB := newTestPoller(t, &fakeAdapter{})
+	repo := shots.NewRepository(sqlDB)
+	p.SetShotsRepo(repo)
+
+	for i := 1; i <= 49; i++ {
+		shot := shots.Shot{"id": int64(i), "timestamp": int64(i * 1000), "datapoints": []any{}, "machineId": int64(1)}
+		if err := repo.Upsert(shot); err != nil {
+			t.Fatalf("Upsert(%d): %v", i, err)
+		}
+	}
+	for _, v := range []string{"20", "50"} {
+		if err := repo.AppendToBlocklist(v); err != nil {
+			t.Fatalf("AppendToBlocklist(%q): %v", v, err)
+		}
+	}
+
+	srv := newSyncFakeMachine(t, `[{"lastShotId":49}]`, map[string]string{})
+	withSyncTestServer(t, srv.URL)
+
+	if err := p.syncDefaultMachineShots(context.Background()); err != nil {
+		t.Fatalf("syncDefaultMachineShots: %v", err)
+	}
+
+	block, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatalf("GetBlocklist: %v", err)
+	}
+	for _, kept := range []string{"20", "50"} {
+		if !blocklistHas(block, kept) {
+			t.Fatalf("blocklist = %v, want the permanent delete %q kept", block, kept)
+		}
+	}
+	if len(block) != 2 {
+		t.Fatalf("blocklist = %v, want exactly the two permanent deletes", block)
+	}
+	if n, err := repo.Count(); err != nil {
+		t.Fatalf("Count: %v", err)
+	} else if n != 49 {
+		t.Fatalf("shot count = %d, want 49 (nothing re-imported)", n)
+	}
+	if out := buf.String(); !strings.Contains(out, "already up to date") {
+		t.Fatalf("log does not report the sync as up to date:\n%s", out)
+	}
+}
+
+// TestSyncDefaultMachineShots_ZeroLatestKeepsBlocklist pins the other half of
+// #1826: a machine reporting latest 0 has nothing to sync, and a transient 0
+// must not be read as a reset that wipes the blocklist.
+func TestSyncDefaultMachineShots_ZeroLatestKeepsBlocklist(t *testing.T) {
+	p, sqlDB := newTestPoller(t, &fakeAdapter{})
+	repo := shots.NewRepository(sqlDB)
+	p.SetShotsRepo(repo)
+
+	for _, v := range []string{"20", "50"} {
+		if err := repo.AppendToBlocklist(v); err != nil {
+			t.Fatalf("AppendToBlocklist(%q): %v", v, err)
+		}
+	}
+
+	srv := newSyncFakeMachine(t, `[{"lastShotId":0}]`, map[string]string{})
+	withSyncTestServer(t, srv.URL)
+
+	if err := p.syncDefaultMachineShots(context.Background()); err != nil {
+		t.Fatalf("syncDefaultMachineShots: %v", err)
+	}
+
+	block, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatalf("GetBlocklist: %v", err)
+	}
+	if len(block) != 2 {
+		t.Fatalf("blocklist = %v, want both entries kept on a latest-0 report", block)
+	}
+	for _, kept := range []string{"20", "50"} {
+		if !blocklistHas(block, kept) {
+			t.Fatalf("blocklist = %v, want %q kept", block, kept)
+		}
+	}
+}
+

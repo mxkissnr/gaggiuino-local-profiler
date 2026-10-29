@@ -194,7 +194,17 @@ func (p *Poller) backfillShots(
 	// latestNative would leave the cursor wedged below them, so the machine's
 	// whole blocklist goes. Other machines' entries, demo ids and out-of-range
 	// values are untouched (#1147/#1148).
-	if owned, highestOwned := ownedBlocklist(machineID, blocklist); len(owned) > 0 && highestOwned > latestNative {
+	//
+	// #1826: the local state has to prove the reset too. GaggiMate's latest is
+	// only the highest id present in its index, so permanently deleting the
+	// newest shot drops it below a blocklisted id that is still a genuine
+	// delete — and a transient 0 has nothing to sync at all. After a real reset
+	// the machine's latest sits below shots GLP already holds
+	// (maxLocalID > latestNative), or GLP never imported anything
+	// (maxLocalID == 0). Deleting the newest shot leaves maxLocalID <=
+	// latestNative, so the user's permanent deletes survive.
+	if owned, highestOwned := ownedBlocklist(machineID, blocklist); len(owned) > 0 && latestNative > 0 &&
+		highestOwned > latestNative && (maxLocalID == 0 || maxLocalID > latestNative) {
 		log.Printf("%s: machine shot counter reset (latest %d is below blocklisted shot %d) — clearing this machine's %d blocklist entries", logs.prefix, latestNative, highestOwned, len(owned))
 		if rerr := p.shots.RemoveFromBlocklist(owned); rerr != nil {
 			return false, rerr
