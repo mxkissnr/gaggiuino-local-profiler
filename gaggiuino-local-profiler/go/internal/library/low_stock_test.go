@@ -71,7 +71,7 @@ func TestCheckLowStock_NotifiesOncePerBag(t *testing.T) {
 		return true
 	}
 
-	if err := CheckLowStock(repo, noDoses, 10, notify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, notify); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if calls != 1 {
@@ -84,7 +84,7 @@ func TestCheckLowStock_NotifiesOncePerBag(t *testing.T) {
 		t.Fatal("lowStockNotifiedAt not stored on the notified bag")
 	}
 
-	if err := CheckLowStock(repo, noDoses, 10, notify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, notify); err != nil {
 		t.Fatalf("second CheckLowStock: %v", err)
 	}
 	if calls != 1 {
@@ -96,7 +96,7 @@ func TestCheckLowStock_NewCurrentBagRearms(t *testing.T) {
 	_, repo, _ := newTestHandlers(t)
 	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 84))
 	alwaysNotify := func(string, int64) bool { return true }
-	if err := CheckLowStock(repo, noDoses, 10, alwaysNotify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, alwaysNotify); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if _, ok := bagStamp(t, repo, 11); !ok {
@@ -106,7 +106,7 @@ func TestCheckLowStock_NewCurrentBagRearms(t *testing.T) {
 	// A new bag becomes current: the first is empty, the second carries stock.
 	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 0), lowStockBag(12, 2_000, 84))
 	var calls int
-	if err := CheckLowStock(repo, noDoses, 10, func(string, int64) bool { calls++; return true }); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, func(string, int64) bool { calls++; return true }); err != nil {
 		t.Fatalf("CheckLowStock (new bag): %v", err)
 	}
 	if calls != 1 {
@@ -123,13 +123,13 @@ func TestCheckLowStock_NotStampedWhenNotifyFails(t *testing.T) {
 
 	var calls int
 	fail := func(string, int64) bool { calls++; return false }
-	if err := CheckLowStock(repo, noDoses, 10, fail); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, fail); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if _, ok := bagStamp(t, repo, 11); ok {
 		t.Fatal("lowStockNotifiedAt stored despite the push failing")
 	}
-	if err := CheckLowStock(repo, noDoses, 10, fail); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, fail); err != nil {
 		t.Fatalf("second CheckLowStock: %v", err)
 	}
 	if calls != 2 {
@@ -139,10 +139,10 @@ func TestCheckLowStock_NotStampedWhenNotifyFails(t *testing.T) {
 
 func TestCheckLowStock_AtThresholdNoNotify(t *testing.T) {
 	_, repo, _ := newTestHandlers(t)
-	saveLowStockBean(t, repo, lowStockBag(11, 1_000, lowStockThresholdG))
+	saveLowStockBean(t, repo, lowStockBag(11, 1_000, float64(DefaultLowStockThresholdG)))
 
 	var calls int
-	if err := CheckLowStock(repo, noDoses, 10, func(string, int64) bool { calls++; return true }); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, func(string, int64) bool { calls++; return true }); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if calls != 0 {
@@ -158,11 +158,41 @@ func TestCheckLowStock_UnknownBeanNoop(t *testing.T) {
 	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 84))
 
 	var calls int
-	if err := CheckLowStock(repo, noDoses, 999, func(string, int64) bool { calls++; return true }); err != nil {
+	if err := CheckLowStock(repo, noDoses, 999, DefaultLowStockThresholdG, func(string, int64) bool { calls++; return true }); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if calls != 0 {
 		t.Fatalf("notify called %d times for an unknown bean, want 0", calls)
+	}
+}
+
+// TestCheckLowStock_CustomThreshold pins #1835: the caller's threshold decides
+// the notification, not the built-in default. 84 g left stays quiet under a
+// 50 g threshold and fires under a 90 g one.
+func TestCheckLowStock_CustomThreshold(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 84))
+
+	var calls int
+	notify := func(string, int64) bool { calls++; return true }
+	if err := CheckLowStock(repo, noDoses, 10, 50, notify); err != nil {
+		t.Fatalf("CheckLowStock below a 50 g threshold: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("notify called %d times with a 50 g threshold and 84 g left, want 0", calls)
+	}
+	if _, ok := bagStamp(t, repo, 11); ok {
+		t.Fatal("bag stamped although the threshold was not crossed")
+	}
+
+	if err := CheckLowStock(repo, noDoses, 10, 90, notify); err != nil {
+		t.Fatalf("CheckLowStock below a 90 g threshold: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("notify called %d times with a 90 g threshold and 84 g left, want 1", calls)
+	}
+	if _, ok := bagStamp(t, repo, 11); !ok {
+		t.Fatal("lowStockNotifiedAt not stored after crossing a custom threshold")
 	}
 }
 
@@ -190,7 +220,7 @@ func TestCheckLowStock_NotifyRunsOutsideTheLibraryLock(t *testing.T) {
 		return true
 	}
 
-	if err := CheckLowStock(repo, noDoses, 10, notify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, notify); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if !notified {
