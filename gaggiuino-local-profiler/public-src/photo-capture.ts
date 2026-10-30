@@ -106,7 +106,7 @@ function hasFocusMode(track: MediaStreamTrack | null, mode: string): boolean {
 // Point-of-interest focus is only reachable through `advanced`, which asks for
 // what the camera can do without ever rejecting the whole constraint set.
 function focusConstraint(spec: Record<string, unknown>): MediaTrackConstraints {
-  return { advanced: [spec] } as unknown as MediaTrackConstraints;
+  return { advanced: [spec] };
 }
 
 function releaseStream(): void {
