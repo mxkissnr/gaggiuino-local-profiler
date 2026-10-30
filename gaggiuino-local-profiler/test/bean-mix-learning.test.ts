@@ -223,10 +223,11 @@ describe('per-bean views skip mixed shots, overall stats keep them (#1837)', () 
   });
 
   it('the bean ranking leaves mixed shots out of the bean shot count', () => {
-    const rows = _computeBeanRanking([
+    const rankingShots: RankShot[] = [
       { id: 1, timestamp: 1001, score: 90, annotation: { beanId: 7, coffee: 'Bean A' } },
       { id: 2, timestamp: 1002, score: 60, annotation: { beanId: 7, coffee: 'Bean A', beanMix: MIX } },
-    ] as unknown as RankShot[]);
+    ];
+    const rows = _computeBeanRanking(rankingShots);
     expect(rows).toHaveLength(1);
     expect(at(rows, 0)).toMatchObject({ name: 'Bean A', shots: 1, avgScore: 90 });
   });
@@ -260,9 +261,9 @@ describe('per-bean views skip mixed shots, overall stats keep them (#1837)', () 
       { id: 1, timestamp: 1001, score: 90, annotation: { beanId: 7, coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '18' } },
       { id: 2, timestamp: 1002, score: 60, annotation: { beanId: 7, coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '14', beanMix: MIX } },
     ];
-    const bean = {
+    const bean: BeanCardRow = {
       id: 7, name: 'Bean A', roastDate: '2024-01-01', bags: [], consumedG: 0, remainingG: null,
-    } as unknown as BeanCardRow;
+    };
 
     const card = renderBeanCard(bean, [bean]);
     expect(card).toContain('Niche Zero @ 18');
