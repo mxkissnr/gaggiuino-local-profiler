@@ -50,6 +50,26 @@ interface CameraModalElements {
   cancel: HTMLButtonElement;
 }
 
+// `focusMode` and `pointsOfInterest` are missing from lib.dom's
+// MediaTrackCapabilities even though Chromium-based WebViews report them.
+interface FocusCapabilities {
+  focusMode?: string[];
+  pointsOfInterest?: unknown;
+}
+
+// ImageCapture is only reached through `window` (absent on WebViews that do
+// not ship it), so it is described by the one method this code calls.
+interface StillCamera {
+  takePhoto: () => Promise<Blob | null>;
+}
+
+type StillCameraCtor = new (track: MediaStreamTrack) => StillCamera;
+
+// Tap-to-focus goes back to continuous autofocus afterwards, so the preview
+// does not stay locked on a point that has since gone out of frame.
+const SINGLE_SHOT_HOLD_MS = 2000;
+const FOCUS_RING_MS = 600;
+
 function cameraModalElements(): CameraModalElements | null {
   if (typeof document === 'undefined') return null;
   const modal = document.getElementById('photoCameraModal');
@@ -67,6 +87,27 @@ let _stream: MediaStream | null = null;
 let _input: HTMLInputElement | null = null;
 let _controls: AbortController | null = null;
 let _keyboard: DialogKeyboardHandle | null = null;
+let _focusTimer: ReturnType<typeof setTimeout> | null = null;
+
+function videoTrack(stream: MediaStream | null): MediaStreamTrack | null {
+  return stream?.getVideoTracks()[0] ?? null;
+}
+
+// getCapabilities() is absent on older WebViews, hence the runtime check.
+function focusCapabilities(track: MediaStreamTrack | null): FocusCapabilities | null {
+  const reader = track as unknown as { getCapabilities?: () => FocusCapabilities } | null;
+  return reader && typeof reader.getCapabilities === 'function' ? reader.getCapabilities() : null;
+}
+
+function hasFocusMode(track: MediaStreamTrack | null, mode: string): boolean {
+  return focusCapabilities(track)?.focusMode?.includes(mode) === true;
+}
+
+// Point-of-interest focus is only reachable through `advanced`, which asks for
+// what the camera can do without ever rejecting the whole constraint set.
+function focusConstraint(spec: Record<string, unknown>): MediaTrackConstraints {
+  return { advanced: [spec] };
+}
 
 function releaseStream(): void {
   if (!_stream) return;
@@ -76,6 +117,10 @@ function releaseStream(): void {
 
 export function closeCameraModal(): void {
   _invocation += 1;
+  if (_focusTimer !== null) {
+    clearTimeout(_focusTimer);
+    _focusTimer = null;
+  }
   releaseStream();
   _controls?.abort();
   _controls = null;
@@ -114,9 +159,18 @@ export async function openCameraModal(input: HTMLInputElement): Promise<void> {
   _controls = controls;
   el.shutter.addEventListener('click', () => { void captureCameraFrame(); }, { signal: controls.signal });
   el.cancel.addEventListener('click', closeCameraModal, { signal: controls.signal });
+  el.video.addEventListener('pointerdown', (event: PointerEvent) => { tapToFocus(el, event); }, { signal: controls.signal });
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    // Without a size request phones hand out a 640x480 stream, which is the
+    // blurry-photo cause here. `ideal` never rejects a smaller camera.
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 3840 },
+        height: { ideal: 2160 },
+      },
+    });
   } catch (error) {
     console.error('Photo camera failed:', error);
     // Cancelled while the permission prompt was up: the user already backed
@@ -142,26 +196,88 @@ function attachPreview(el: CameraModalElements, stream: MediaStream): void {
   _stream = stream;
   el.video.srcObject = stream;
   el.video.classList.remove('photo-video-off');
+  applyContinuousFocus(stream);
+}
+
+// Continuous autofocus keeps the preview sharp without a tap; cameras that
+// only offer single-shot focus simply skip it.
+function applyContinuousFocus(stream: MediaStream): void {
+  const track = videoTrack(stream);
+  if (!track || !hasFocusMode(track, 'continuous')) return;
+  void track.applyConstraints(focusConstraint({ focusMode: 'continuous' }))
+    .catch(() => { /* this camera refused the constraint */ });
+}
+
+function supportsTapFocus(track: MediaStreamTrack | null): boolean {
+  const caps = focusCapabilities(track);
+  return caps?.pointsOfInterest !== undefined || caps?.focusMode?.includes('single-shot') === true;
+}
+
+function tapToFocus(el: CameraModalElements, event: PointerEvent): void {
+  const track = videoTrack(_stream);
+  if (!track || !supportsTapFocus(track)) return;
+  const point = normalisedPoint(el.video, event.clientX, event.clientY);
+  if (!point) return;
+  showFocusRing(el, event.clientX, event.clientY);
+  void track.applyConstraints(focusConstraint({ pointsOfInterest: [point], focusMode: 'single-shot' }))
+    .then(() => {
+      if (!hasFocusMode(track, 'continuous')) return;
+      if (_focusTimer !== null) clearTimeout(_focusTimer);
+      _focusTimer = setTimeout(() => {
+        _focusTimer = null;
+        void track.applyConstraints(focusConstraint({ focusMode: 'continuous' }))
+          .catch(() => { /* the camera went away with the modal */ });
+      }, SINGLE_SHOT_HOLD_MS);
+    })
+    .catch(() => { /* camera refused the point; it keeps whatever focus it had */ });
+}
+
+// Maps a tap on the preview to the 0..1 point the camera wants. The video is
+// painted with object-fit, so the visible box is cropped or letterboxed inside
+// the element and that offset has to be undone first.
+function normalisedPoint(video: HTMLVideoElement, clientX: number, clientY: number): { x: number; y: number } | null {
+  const rect = video.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const frameWidth = video.videoWidth || rect.width;
+  const frameHeight = video.videoHeight || rect.height;
+  const fit = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function'
+    ? window.getComputedStyle(video).objectFit
+    : 'cover';
+  const scale = fit === 'contain'
+    ? Math.min(rect.width / frameWidth, rect.height / frameHeight)
+    : Math.max(rect.width / frameWidth, rect.height / frameHeight);
+  const paintWidth = frameWidth * scale;
+  const paintHeight = frameHeight * scale;
+  const x = clamp01((clientX - rect.left - (rect.width - paintWidth) / 2) / paintWidth);
+  const y = clamp01((clientY - rect.top - (rect.height - paintHeight) / 2) / paintHeight);
+  return { x, y };
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.min(1, Math.max(0, value));
+}
+
+// Decoration only: without somewhere to append it the focus request still goes
+// through, so a missing host never blocks the tap.
+function showFocusRing(el: CameraModalElements, clientX: number, clientY: number): void {
+  const host = el.video.parentElement;
+  if (!host) return;
+  const rect = el.video.getBoundingClientRect();
+  const ring = document.createElement('div');
+  ring.className = 'photo-focus-ring';
+  ring.style.left = `${clientX - rect.left}px`;
+  ring.style.top = `${clientY - rect.top}px`;
+  host.appendChild(ring);
+  setTimeout(() => ring.remove(), FOCUS_RING_MS);
 }
 
 async function captureCameraFrame(): Promise<void> {
   const el = cameraModalElements();
   const input = _input;
   if (!el || !input) return;
-  const { video } = el;
-  const width = video.videoWidth;
-  const height = video.videoHeight;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = width && height ? canvas.getContext('2d') : null;
-  if (!ctx) {
-    closeCameraModal();
-    openCaptureFallback(input);
-    return;
-  }
-  ctx.drawImage(video, 0, 0, width, height);
-  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+  const photo = await takePhoto(_stream);
+  const blob = photo ?? (await grabFrame(el.video));
   closeCameraModal();
   if (!blob) {
     openCaptureFallback(input);
@@ -173,6 +289,34 @@ async function captureCameraFrame(): Promise<void> {
   transfer.items.add(new File([blob], 'camera.jpg', { type: 'image/jpeg' }));
   input.files = transfer.files;
   input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// ImageCapture reads the sensor at its full resolution and lets the camera run
+// its own focus and exposure, which a canvas frame grab cannot do. Not every
+// WebView ships it, and what it fails at falls back to the canvas path.
+async function takePhoto(stream: MediaStream | null): Promise<Blob | null> {
+  const track = videoTrack(stream);
+  const ctor = typeof window === 'undefined'
+    ? undefined
+    : (window as unknown as { ImageCapture?: StillCameraCtor }).ImageCapture;
+  if (!track || typeof ctor !== 'function') return null;
+  try {
+    return await new ctor(track).takePhoto();
+  } catch {
+    return null;
+  }
+}
+
+function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = width && height ? canvas.getContext('2d') : null;
+  if (!ctx) return Promise.resolve(null);
+  ctx.drawImage(video, 0, 0, width, height);
+  return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
 }
 
 // Touch devices get a second "Take photo" button; a desktop webcam capture has
