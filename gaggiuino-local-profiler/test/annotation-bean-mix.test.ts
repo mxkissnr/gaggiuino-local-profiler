@@ -134,8 +134,9 @@ describe('bean mix rows (#1837)', () => {
     expect(el('annDose').value).toBe('18');
     expect(el('annDose').readOnly).toBe(true);
 
+    // 10 g + 10.5 g, rounded to the 0.1 g the field shows.
     mix.setMixRowGrams(1, '10.5');
-    expect(el('annDose').value).toBe('18.5');
+    expect(el('annDose').value).toBe('20.5');
 
     mix.resetBeanMix();
     expect(el('annDose').readOnly).toBe(false);
