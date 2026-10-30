@@ -109,7 +109,7 @@ export async function openCameraModal(input: HTMLInputElement): Promise<void> {
   el.video.srcObject = null;
   el.video.classList.add('photo-video-off');
   el.modal.classList.add('open');
-  _keyboard = attachDialogKeyboard(el.modal, closeCameraModal);
+  _keyboard = attachDialogKeyboard(el.modal, closeCameraModal, { initialFocus: el.shutter });
   const controls = new AbortController();
   _controls = controls;
   el.shutter.addEventListener('click', () => { void captureCameraFrame(); }, { signal: controls.signal });
