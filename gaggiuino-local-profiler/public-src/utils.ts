@@ -1,6 +1,8 @@
 import type { Chart } from 'chart.js';
 import type { RecordedPhaseTransition } from './constants.js';
 import { safeLocalStorage } from './storage.js';
+import { isBeanMix } from './shared/bean-mix.js';
+import type { BeanMixPartInput } from './shared/bean-mix.js';
 
 // #1547: this module holds pure helpers and renders no <input>/<select>/<textarea>,
 // so there is no form field here to give an accessible name.
@@ -308,7 +310,7 @@ export function resolveBeanForAnnotation(
 // for the name-only path. Returns { avg, count } or null when nothing matches.
 export function calcBeanRating(
   bean: { id?: number | null; name?: string | null } | string | null | undefined,
-  shots: { annotation?: { coffee?: string | null; beanId?: number | null; rating?: string | null } | null }[] | null | undefined,
+  shots: { annotation?: { coffee?: string | null; beanId?: number | null; rating?: string | null; beanMix?: readonly BeanMixPartInput[] | null | undefined } | null }[] | null | undefined,
   beans?: unknown,
 ): { avg: number; count: number } | null {
   const beanId = bean && typeof bean === 'object' ? bean.id ?? null : null;
@@ -316,6 +318,9 @@ export function calcBeanRating(
   if ((!name && beanId == null) || !Array.isArray(shots)) return null;
   const ratings = shots
     .filter(s => {
+      // #1837: a mixed shot has no single bean to rate — it names only its
+      // primary part at the top level, which would skew that bean's rating.
+      if (isBeanMix(s.annotation)) return false;
       const resolved = resolveBeanForAnnotation(s.annotation, beans);
       if (resolved) return beanId != null && resolved.id === beanId;
       return (s.annotation?.coffee || '').toLowerCase() === name;

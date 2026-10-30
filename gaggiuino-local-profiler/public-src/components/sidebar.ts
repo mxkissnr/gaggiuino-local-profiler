@@ -5,6 +5,8 @@ import { esc, html, joinHtml, scoreClass, formatTimeLabel, groupShotsByDay } fro
 import type { Html } from '../utils.js';
 import { STAR_ICON_SVG , SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG} from '../icons.js';
 import { resolveBeanForAnnotation } from '../views/shots/utils.js';
+import { beanLabel, beanMix } from '../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../shared/bean-mix.js';
 import type { ShotMeta } from '../state/index.js';
 import { safeLocalStorage } from '../storage.js';
 
@@ -18,6 +20,7 @@ interface ShotAnnotation {
   notes?: string | null;
   grindSetting?: string | null;
   frozenPortionId?: number | null;
+  beanMix?: readonly BeanMixPartInput[] | null;
 }
 
 interface SidebarShot extends ShotMeta {
@@ -130,7 +133,9 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
 
       const dose = parseFloat(String(ann.dose ?? ''));
     const durLabel = shot.duration ? formatTimeLabel(shot.duration / 10) : null;
-    const line2 = [ann.coffee || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
+    // #1837: a mixed shot lists every bean it used ("A + B") instead of only
+    // its primary one; a single-bean shot keeps its plain coffee name.
+    const line2 = [beanLabel(ann) || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
     // #502: which frozen-portion batch (if any) this shot's dose came from —
     // an explicit annotation-panel choice, shown at a glance in the list too.
     const frozenBadge = ann.frozenPortionId ? html`<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : html``;
@@ -281,6 +286,18 @@ function updateBeanFilterIndicator(): void {
 
 function shotMatchesBeanFilter(shot: SidebarShot): boolean {
   if (!S.beanFilter) return true;
+  const filter = S.beanFilter;
+  // #1837: a mixed shot was pulled from every one of its beans, so it matches
+  // the filter through any part — resolved by beanId first, then by the name
+  // recorded on that part.
+  const parts = beanMix(shot.annotation);
+  if (parts) {
+    return parts.some(part => {
+      const partBean = resolveBeanForAnnotation(part, S.coffeeLibrary?.beans);
+      if (partBean) return partBean.id === filter.id;
+      return part.coffee.toLowerCase() === filter.name.toLowerCase();
+    });
+  }
   const resolved = resolveBeanForAnnotation(shot.annotation, S.coffeeLibrary?.beans);
   if (resolved) return resolved.id === S.beanFilter.id;
   // No library bean resolves for this shot (predates beanId, or its bean
@@ -315,9 +332,12 @@ export function filterShots(query: string): void {
     const shot = shotsById.get(id);
     if (!shot) { wrapper.style.display = 'none'; return; }
     const ann = shot.annotation || {};
+    // #1837: a search matches any bean of a mixed shot, not just its primary one.
+    const partNames = (beanMix(ann) || []).map(p => p.coffee);
     const haystack = [
       shot.profile?.name || shot.profileName || '',
       ann.coffee || '',
+      ...partNames,
       ann.grinder || '',
       ann.notes || ''
     ].join(' ').toLowerCase();
