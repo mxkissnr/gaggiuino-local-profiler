@@ -256,6 +256,17 @@ describe('per-bean views skip mixed shots, overall stats keep them (#1837)', () 
     expect(line.context).toEqual({ name: 'Bean A', avgScore: 71 });
   });
 
+  it('the bean rating ignores the rating a mixed shot carries', () => {
+    S.shots = [
+      { id: 1, timestamp: 1001, annotation: { beanId: 7, coffee: 'Bean A', rating: '4' } },
+      { id: 2, timestamp: 1002, annotation: { beanId: 7, coffee: 'Bean A', rating: '1', beanMix: MIX } },
+    ];
+    const bean: BeanCardRow = { id: 7, name: 'Bean A', bags: [] };
+
+    // Only the single-bean 4-star shot counts, so the card shows 4.0, not 2.5.
+    expect(renderBeanCard(bean, [bean])).toContain('4.0');
+  });
+
   it('the bean card shows the last single-bean grind, not a later mixed one', () => {
     S.shots = [
       { id: 1, timestamp: 1001, score: 90, annotation: { beanId: 7, coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '18' } },

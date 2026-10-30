@@ -53,6 +53,11 @@ type BeanShotRow = ShotMeta & {
   };
 };
 function _shots(): BeanShotRow[] { return S.shots as BeanShotRow[]; }
+// #1837: mixed shots never feed per-bean statistics — the rating a mixed shot
+// carries is the mix's, not the primary bean's on its own.
+function _singleBeanShots(shots: BeanShotRow[]): BeanShotRow[] {
+  return shots.filter(s => !isBeanMix(s.annotation));
+}
 
 // Bean origin display — beans predating the blend feature (or ones without an
 // origins[] array yet) fall back to the legacy singular `origin` field.
@@ -232,7 +237,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
   }))}</div>` : esc('');
 
-  const rating = calcBeanRating(b, _shots(), S.coffeeLibrary?.beans);
+  const rating = calcBeanRating(b, _singleBeanShots(_shots()), S.coffeeLibrary?.beans);
   const ratingHtml: Html = rating ? html`<div class="lib-rating-row" title="${esc(t('bean_rating_tooltip', rating.count))}">
     ${joinHtml(Array.from({ length: 5 }, (_, i) => html`<span class="lib-star${esc(i < Math.round(rating.avg) ? ' on' : '')}">${STAR_ICON_SVG}</span>`))}
     <span class="lib-rating-num">${esc(rating.avg.toFixed(1))}</span>
