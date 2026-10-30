@@ -57,11 +57,13 @@ interface FocusCapabilities {
   pointsOfInterest?: unknown;
 }
 
-interface ImageCaptureLike {
-  takePhoto: () => Promise<Blob>;
+// ImageCapture is only reached through `window` (absent on WebViews that do
+// not ship it), so it is described by the one method this code calls.
+interface StillCamera {
+  takePhoto: () => Promise<Blob | null>;
 }
 
-type ImageCaptureCtor = new (track: MediaStreamTrack) => ImageCaptureLike;
+type StillCameraCtor = new (track: MediaStreamTrack) => StillCamera;
 
 // Tap-to-focus goes back to continuous autofocus afterwards, so the preview
 // does not stay locked on a point that has since gone out of frame.
@@ -296,7 +298,7 @@ async function takePhoto(stream: MediaStream | null): Promise<Blob | null> {
   const track = videoTrack(stream);
   const ctor = typeof window === 'undefined'
     ? undefined
-    : (window as unknown as { ImageCapture?: ImageCaptureCtor }).ImageCapture;
+    : (window as unknown as { ImageCapture?: StillCameraCtor }).ImageCapture;
   if (!track || typeof ctor !== 'function') return null;
   try {
     const blob = await new ctor(track).takePhoto();
@@ -306,7 +308,7 @@ async function takePhoto(stream: MediaStream | null): Promise<Blob | null> {
   }
 }
 
-async function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
+function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
   const width = video.videoWidth;
   const height = video.videoHeight;
   if (!width || !height) return null;
