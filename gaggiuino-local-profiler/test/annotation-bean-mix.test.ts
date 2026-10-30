@@ -107,7 +107,7 @@ beforeEach(() => {
   el('annCoffee').value = 'Bean A';
   S.shots = [{ id: 1, timestamp: 1700000000, annotation: {} }];
   S.primaryShotId = 1;
-  S.coffeeLibrary = { beans: [], grinders: [], baskets: [], puckScreens: [], recipes: [] } as unknown as typeof S.coffeeLibrary;
+  S.coffeeLibrary = { beans: [], grinders: [], baskets: [], puckScreens: [], recipes: [] };
   mix.resetBeanMix();
 });
 
