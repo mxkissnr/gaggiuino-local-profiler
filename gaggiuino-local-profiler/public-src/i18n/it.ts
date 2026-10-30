@@ -99,6 +99,7 @@ const it: Partial<Translations> = {
     ann_grinder:'Macinino', ann_grinder_ph:'es. Niche Zero',
     ann_grind_setting:'Macinatura', ann_grind_ph:'es. 23 Click',
     ann_dose:'Dose (g)', ann_dose_ph:'es. 18',
+    ann_add_bean:'Aggiungi un altro caffè', ann_remove_bean:'Rimuovi caffè',
 
     ann_tds_optional:'(opzionale)',
     ann_tds_ph:'es. 9.2', ann_notes:'Note',

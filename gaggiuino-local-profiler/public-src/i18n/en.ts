@@ -99,6 +99,7 @@ const en: Translations = {
     ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
     ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
     ann_dose:'Dose (g)', ann_dose_ph:'e.g. 18',
+    ann_add_bean:'Add another bean', ann_remove_bean:'Remove bean',
 
     ann_tds_optional:'(optional)',
     ann_tds_ph:'e.g. 9.2', ann_notes:'Notes',

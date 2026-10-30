@@ -10,6 +10,7 @@ import { renderStars, scheduleAutoSave, flushAutoSave, updateDegassing, calcBean
          suggestGrindDoseForBean, _renderFrozenPortionPills } from '../views/shots.js';
 import { attachAutocomplete } from '../components/autocomplete.js';
 import { BEAN_ICON_SVG } from '../icons.js';
+import { addMixRow, isMixActive } from '../views/shots/annotation-mix.js';
 
 export function wireAnnotationPanel(): void {
   const starRating = document.getElementById('starRating');
@@ -55,7 +56,9 @@ export function wireAnnotationPanel(): void {
       const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
       if (suggested.grinder      && grinderEl) grinderEl.value = suggested.grinder;
       if (suggested.grindSetting && grindEl)   grindEl.value   = String(suggested.grindSetting);
-      if (suggested.dose         && doseEl)    doseEl.value    = String(suggested.dose);
+      // #1837: in a mix the dose is the rows' sum, so a bean change must not
+      // overwrite it with this bean's own suggestion.
+      if (suggested.dose && doseEl && !isMixActive()) doseEl.value = String(suggested.dose);
 
       // Find roast date from the active bag at shot time
       const shot   = S.primaryShotId ? S.shots?.find(s => s.id === S.primaryShotId) : null;
@@ -95,6 +98,9 @@ export function wireAnnotationPanel(): void {
     el.addEventListener('blur', flushAutoSave);
   });
   attachAutocomplete(document.getElementById('annGrinder') as HTMLInputElement | null, () => S.coffeeLibrary.grinders.map(g => g.name));
+  // #1837: "Add another bean" splits the dose over a second (to fourth) bean,
+  // turning the dose field into the read-only sum of the rows.
+  document.getElementById('annMixAddBtn')?.addEventListener('click', addMixRow);
   document.getElementById('annBasket')!.addEventListener('change', scheduleAutoSave);
   document.getElementById('annPuckScreen')!.addEventListener('change', scheduleAutoSave);
   document.getElementById('annRecipe')?.addEventListener('change', scheduleAutoSave);

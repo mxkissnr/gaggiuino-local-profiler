@@ -14,6 +14,8 @@ import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
+import type { BeanMixPartInput } from '../../shared/bean-mix.js';
+import { initBeanMix, loadBeanMix, mixFields, mixParts, resetBeanMix } from './annotation-mix.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
 // an index signature) and the library rows as Record<string, unknown>; these
@@ -41,6 +43,8 @@ interface AnnotationData {
   milkType?: number | string | null;
   recipeId?: number | null;
   frozenPortionId?: number | null;
+  // #1837: 2-4 per-bean shares of the dose; absent on a single-bean shot.
+  beanMix?: readonly BeanMixPartInput[] | null;
   orderedBy?: OrderedBy | null;
 }
 
@@ -79,6 +83,8 @@ interface AnnotationPayload {
   recipeId: number | null;
   beanAgeDays: number | null;
   frozenPortionId: number | null;
+  // #1837: null clears a previously saved mix (PatchAnnotation drops null keys).
+  beanMix: BeanMixPartInput[] | null;
 }
 
 interface DrinkRow extends LibraryRow { id: string; name?: string; emoji?: string; milkMl?: number }
@@ -147,23 +153,30 @@ function _buildAnnotationPayload(shot: AnnotationShot | undefined): AnnotationPa
   const puckScreenSelect = document.getElementById('annPuckScreen') as HTMLSelectElement | null;
   const puckScreenIdAttr = puckScreenSelect?.selectedOptions[0]?.dataset.puckscreenId;
   const puckScreenId = puckScreenIdAttr ? parseInt(puckScreenIdAttr, 10) : null;
+  // #1837: two or more rows with a bean and grams make a mixed shot. Its dose
+  // is the rows' sum and its top-level bean is the part with the most grams
+  // (ties keep the earlier row), so mix-unaware readers still see one bean.
+  const mix         = mixFields(mixParts());
+  const shotCoffee  = mix ? mix.coffee : coffee;
+  const shotBeanId  = mix ? mix.beanId : beanId;
   return {
     rating:       S.currentRating || null,
-    coffee,
-    beanId,
+    coffee:       shotCoffee,
+    beanId:       shotBeanId,
     basketId,
     puckScreenId,
     grinder:      (document.getElementById('annGrinder') as HTMLInputElement).value.trim(),
     grindSetting: (document.getElementById('annGrindSetting') as HTMLInputElement).value.trim(),
-    dose:         parseFloat((document.getElementById('annDose') as HTMLInputElement).value) || null,
-    roastDate:    germanToIso(_roastDateFromLibrary(coffee, shot?.timestamp, beanId) || '') || null,
+    dose:         mix ? mix.dose : parseFloat((document.getElementById('annDose') as HTMLInputElement).value) || null,
+    roastDate:    germanToIso(_roastDateFromLibrary(shotCoffee, shot?.timestamp, shotBeanId) || '') || null,
     tds:          parseFloat((document.getElementById('annTds') as HTMLInputElement).value) || null,
     notes:        (document.getElementById('annNotes') as HTMLInputElement).value.trim(),
     drinkType:    (document.getElementById('annDrinkType') as HTMLSelectElement | null)?.value || null,
     milkType:     (document.getElementById('annMilkType') as HTMLSelectElement | null)?.value ? parseInt((document.getElementById('annMilkType') as HTMLSelectElement).value) : null,
     recipeId:     parseInt((document.getElementById('annRecipe') as HTMLSelectElement | null)?.value as string) || null,
-    beanAgeDays:  calcBeanAgeAtShot(coffee, shot?.timestamp, beanId) ?? null,
+    beanAgeDays:  calcBeanAgeAtShot(shotCoffee, shot?.timestamp, shotBeanId) ?? null,
     frozenPortionId: parseInt((document.getElementById('annFrozenPortionId') as HTMLSelectElement | null)?.value as string, 10) || null,
+    beanMix:      mix ? mix.beanMix : null,
   };
 }
 
@@ -704,6 +717,9 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   (document.getElementById('annGrinder') as HTMLInputElement).value      = ann.grinder      || '';
   (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting ?? '');
   (document.getElementById('annDose') as HTMLInputElement).value         = String(ann.dose        || '');
+  // #1837: after the bean select and the dose it renders row 1 from — a saved
+  // mix restores its rows and takes the dose over as their sum.
+  loadBeanMix(ann);
   updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '');
   (document.getElementById('annTds') as HTMLInputElement).value          = String(ann.tds         || '');
   (document.getElementById('annNotes') as HTMLInputElement).value        = ann.notes        || '';
@@ -745,6 +761,9 @@ export function quickClone(): void {
   // selection.
   const beanId = useCurrentAnn ? (currentAnn.beanId ?? null) : (ann.beanId ?? null);
   _renderBeanSelect(beanName, beanId);
+  // #1837: a clone is a single-bean shot again — the previous shot's mix rows
+  // never carry over (the bean select above already shows its primary bean).
+  resetBeanMix();
   // Grinder/grind setting/dose come from this bean's own history, not
   // blindly from prev — prev may have used a different bean entirely.
   // "↩ Letzten" means the grind last used for this bean, so prefer the
@@ -773,3 +792,8 @@ export function quickClone(): void {
   // button left to catch this otherwise.
   scheduleAutoSave();
 }
+
+// #1837: the mix editor needs a bean <select> renderer and the panel's save
+// scheduler; annotation-mix.ts cannot import them (that would close an import
+// cycle), so they are handed over here.
+initBeanMix(_renderBeanSelect, scheduleAutoSave);
