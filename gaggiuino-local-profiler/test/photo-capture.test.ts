@@ -3,7 +3,7 @@
 // environment with no browser globals, so the sliver each function touches is
 // faked here (same approach as test/theme.test.ts).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { openPhotoInput, canTakePhoto, showCameraButtons, closeCameraModal } from '../public-src/photo-capture.js';
+import { openPhotoInput, canTakePhoto, showCameraButtons, closeCameraModal, coverRegion } from '../public-src/photo-capture.js';
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -567,6 +567,25 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     openPhotoInput(asInput(input), { camera: false });
     expect(input.attrs.has('capture')).toBe(false);
     expect(input.clicks).toBe(1);
+  });
+});
+
+describe('coverRegion()', () => {
+  it('cuts the sides off a 16:9 frame shown in a 3:4 box', () => {
+    expect(coverRegion(1920, 1080, 360, 480)).toEqual({ x: 555, y: 0, width: 810, height: 1080 });
+  });
+
+  it('cuts the top and bottom off a 4:3 frame shown in a 3:4 box', () => {
+    expect(coverRegion(4032, 3024, 360, 480)).toEqual({ x: 882, y: 0, width: 2268, height: 3024 });
+  });
+
+  it('keeps the whole frame when it already has the box aspect', () => {
+    expect(coverRegion(1920, 1080, 640, 360)).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
+  });
+
+  it('falls back to the whole frame for an unlaid-out box or empty source', () => {
+    expect(coverRegion(1920, 1080, 0, 0)).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
+    expect(coverRegion(0, 0, 360, 480)).toEqual({ x: 0, y: 0, width: 0, height: 0 });
   });
 });
 
