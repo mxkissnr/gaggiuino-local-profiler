@@ -2,7 +2,7 @@
 // setUiPref(), the same store utils.ts's freshnessWindows() and the Go
 // low-stock check read, so the assertions look at the localStorage cache the
 // store writes synchronously — no network involved (the PUT is debounced).
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const g = globalThis as unknown as Record<string, unknown>;
 const store = new Map<string, string>();
@@ -53,7 +53,19 @@ function shownValues(doc: ReturnType<typeof makeFakeDocument>): string[] {
 
 beforeEach(() => {
   store.clear();
+  // state/index.ts resolves S.currentLang from here at module load; pin it so
+  // the error-message assertion below does not depend on the host locale.
+  store.set('glp_lang', 'en');
   g.document = makeFakeDocument();
+  // Saving flips the button to "Saved" and schedules the flip back; keeping
+  // that timer fake stops it firing after the suite has torn its DOM down.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+});
+
+afterEach(() => {
+  // Drops the pending button/queue timers instead of running them: the store's
+  // debounced PUT has nothing to assert here and would only race the teardown.
+  vi.useRealTimers();
 });
 
 describe('bean freshness settings card (#1835)', () => {
