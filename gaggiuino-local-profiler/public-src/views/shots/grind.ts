@@ -7,6 +7,8 @@ import type { ShotLike }                   from './utils.js';
 import { getRawCurve }                     from '../../shot-curves.js';
 import { normalizeGrindToNow }             from '../../grind-zero.js';
 import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../icons.js';
+import { isBeanMix } from '../../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 
 interface GrindAnnotation {
   coffee?: string | null;
@@ -14,6 +16,7 @@ interface GrindAnnotation {
   grinder?: string | null;
   dose?: string | number | null;
   grindSetting?: string | number | null;
+  beanMix?: readonly BeanMixPartInput[] | null;
 }
 
 export interface GrindShot extends ShotLike {
@@ -147,6 +150,10 @@ function _currentGrindNum(grinderName: string | null | undefined, grindSettingSt
 
 export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[]): ComparativeAdvice | null {
   const ann          = shot.annotation || {};
+  // #1837: a mixed shot has no single bean to compare against — its top-level
+  // coffee/beanId only name the primary part, so neither it nor any other mixed
+  // shot may feed this comparison.
+  if (isBeanMix(shot.annotation)) return null;
   const coffee       = ann.coffee?.trim().toLowerCase();
   const beanId       = ann.beanId ?? null;
   const grinder      = ann.grinder?.trim().toLowerCase();
@@ -165,6 +172,7 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   const comparable = allShots.filter(s => {
     if (s.id === shot.id) return false;
     const a  = s.annotation || {};
+    if (isBeanMix(s.annotation)) return false;
     if (!sameBean(a)) return false;
     if (a.grinder?.trim().toLowerCase() !== grinder) return false;
     if ((s.profile?.name || s.profileName || '').trim().toLowerCase() !== profile) return false;
@@ -230,6 +238,9 @@ export function calcBestGrindCombosForBean(
 
   const scored = allShots.filter(s => {
     const a = s.annotation || {};
+    // #1837: a mixed shot's grind says nothing about how THIS bean dials in —
+    // only the primary part is named at the top level, so skip it entirely.
+    if (isBeanMix(s.annotation)) return false;
     // #456: beanId-first, name fallback — see calcComparativeGrindAdvice.
     const sameBean = beanId != null && a.beanId != null
       ? a.beanId === beanId
@@ -294,6 +305,9 @@ export function suggestGrindDoseForBean(
   const lastForBean = [...(allShots || [])]
     .filter(s => {
       const a = s.annotation || {};
+      // #1837: never prefill from a mixed shot — the dose/grind it recorded are
+      // the mix's, not this bean's on its own.
+      if (isBeanMix(s.annotation)) return false;
       return beanId != null && a.beanId != null
         ? a.beanId === beanId
         : (a.coffee || '').trim().toLowerCase() === name.toLowerCase();

@@ -210,3 +210,48 @@ func TestComputeComparativeGrindAdvice_TiedAverageIsDeterministic(t *testing.T) 
 		t.Errorf("BestGrindSetting = %v, want 3.0 (the documented tiebreak: lower grind setting wins an exact tie)", first.BestGrindSetting)
 	}
 }
+
+// mixInto turns s into a mixed shot (#1837) naming coffee as its primary bean
+// plus a second bean, so everything else about the shot stays comparable.
+func mixInto(s Shot, coffee string) Shot {
+	ann, _ := s["annotation"].(map[string]any)
+	ann["beanMix"] = []any{
+		map[string]any{"coffee": coffee, "grams": float64(10)},
+		map[string]any{"coffee": coffee + " B", "grams": float64(8)},
+	}
+	s["annotation"] = ann
+	return s
+}
+
+// TestComputeComparativeGrindAdvice_MixedShotHasNoAdvice pins #1837: a mix has
+// no single bean, so it never acts as the reference shot.
+func TestComputeComparativeGrindAdvice_MixedShotHasNoAdvice(t *testing.T) {
+	shot := mixInto(comparableShot(1, "Kenya AA", "Niche Zero", "5.0", 18, "Espresso"), "Kenya AA")
+	others := []Shot{
+		comparableShot(2, "Kenya AA", "Niche Zero", "3.0", 18, "Espresso"),
+	}
+	if advice := ComputeComparativeGrindAdvice(shot, others); advice != nil {
+		t.Errorf("expected nil advice for a mixed reference shot, got %+v", advice)
+	}
+}
+
+// TestComputeComparativeGrindAdvice_MixedShotIsNotASibling pins #1837: a mixed
+// shot is neither of its beans, so it never counts as a comparable sibling —
+// its grind setting must not feed the ranking even when its primary bean,
+// grinder, profile and dose all match.
+func TestComputeComparativeGrindAdvice_MixedShotIsNotASibling(t *testing.T) {
+	shot := comparableShot(1, "Kenya AA", "Niche Zero", "5.0", 18, "Espresso")
+	mixed := mixInto(comparableShot(2, "Kenya AA", "Niche Zero", "3.0", 18, "Espresso"), "Kenya AA")
+	if advice := ComputeComparativeGrindAdvice(shot, []Shot{mixed}); advice != nil {
+		t.Errorf("expected nil advice (the only other shot is a mix), got %+v", advice)
+	}
+
+	plain := comparableShot(3, "Kenya AA", "Niche Zero", "3.0", 18, "Espresso")
+	advice := ComputeComparativeGrindAdvice(shot, []Shot{mixed, plain})
+	if advice == nil {
+		t.Fatal("expected the plain sibling to still produce advice")
+	}
+	if advice.SampleCount != 1 {
+		t.Errorf("SampleCount = %d, want 1 (the mix is not a sibling)", advice.SampleCount)
+	}
+}

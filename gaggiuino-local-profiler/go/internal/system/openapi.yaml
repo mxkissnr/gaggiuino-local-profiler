@@ -114,6 +114,15 @@ components:
 
     # ── Shots ──────────────────────────────────────────────────────────────
 
+    AnnotationBean:
+      type: object
+      description: "One bean's share of a mixed shot's dose (#1837) — the parts' grams should add up to the annotation's dose, and bean stock is booked per part."
+      required: [coffee, grams]
+      properties:
+        beanId: { type: integer, nullable: true, description: Library bean this part used; null when the bean is not in the library }
+        coffee: { type: string, maxLength: 200, description: Bean name for this part }
+        grams:  { type: number, minimum: 0, maximum: 100, description: "Grams this part contributed — must be greater than 0" }
+
     Annotation:
       type: object
       description: User-supplied metadata attached to a shot.
@@ -142,6 +151,18 @@ components:
         drinkType:       { type: string, nullable: true, description: Barista-order drink type (orders feature) }
         milkType:        { type: integer, nullable: true, description: Barista-order milk type id (orders feature) }
         score:           { type: number, nullable: true, description: Score snapshot read by the live view's reference-shot selector }
+        beanMix:
+          type: array
+          nullable: true
+          minItems: 2
+          maxItems: 4
+          description: >
+            Present only on a mixed shot (#1837): the several beans that made up
+            the dose, 2-4 parts. The dose should equal the sum of grams; bean
+            stock uses the grams per bean (never the top-level dose). The
+            top-level beanId/coffee still name the primary bean (the part with
+            the most grams), so mix-unaware readers see a normal single bean.
+          items: { $ref: '#/components/schemas/AnnotationBean' }
 
     AnnotateResult:
       type: object

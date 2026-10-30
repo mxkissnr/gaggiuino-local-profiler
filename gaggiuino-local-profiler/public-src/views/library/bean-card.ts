@@ -8,6 +8,8 @@ import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
 import { miniWheelSvg, flavorChipsHtml } from '../../components/flavor-mini-wheel.js';
 import { calcBestGrindCombosForBean } from '../shots/grind.js';
+import { isBeanMix } from '../../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 import { COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, STAR_ICON_SVG, EDIT_ICON_SVG } from '../../icons.js';
 import { classifyBeanBags, renderBagCard, _expandedPastSections } from './bags.js';
 import { _beanList, _field, _el } from './bean-shared.js';
@@ -47,9 +49,15 @@ type BeanShotRow = ShotMeta & {
     beanId?: number | null;
     coffee?: string | null;
     rating?: string | null;
+    beanMix?: readonly BeanMixPartInput[] | null;
   };
 };
 function _shots(): BeanShotRow[] { return S.shots as BeanShotRow[]; }
+// #1837: mixed shots never feed per-bean statistics — the rating a mixed shot
+// carries is the mix's, not the primary bean's on its own.
+function _singleBeanShots(shots: BeanShotRow[]): BeanShotRow[] {
+  return shots.filter(s => !isBeanMix(s.annotation));
+}
 
 // Bean origin display — beans predating the blend feature (or ones without an
 // origins[] array yet) fall back to the legacy singular `origin` field.
@@ -74,11 +82,14 @@ export function originDisplay(bean: OriginBean): string {
 // (#456), and the same "most recent shot for this bean" concept as that
 // function's lastForBean — just without its dose/priority-fallback logic,
 // since this only ever wants the plain last annotated grind.
+// #1837: a mixed shot is skipped — the grind it recorded is the mix's, not
+// this bean's on its own, so it says nothing about picking this bean up again.
 function lastUsedGrindForBean(bean: BeanListRow, shots: BeanShotRow[]): { grinder: string; grindSetting: string; timestamp: number } | null {
   const name = bean.name?.trim().toLowerCase();
   const match = (shots || [])
     .filter(s => {
       const a = s.annotation || {};
+      if (isBeanMix(s.annotation)) return false;
       if (!a.grinder?.trim() || !a.grindSetting) return false;
       return bean.id != null && a.beanId != null
         ? a.beanId === bean.id
@@ -226,7 +237,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
   }))}</div>` : esc('');
 
-  const rating = calcBeanRating(b, _shots(), S.coffeeLibrary?.beans);
+  const rating = calcBeanRating(b, _singleBeanShots(_shots()), S.coffeeLibrary?.beans);
   const ratingHtml: Html = rating ? html`<div class="lib-rating-row" title="${esc(t('bean_rating_tooltip', rating.count))}">
     ${joinHtml(Array.from({ length: 5 }, (_, i) => html`<span class="lib-star${esc(i < Math.round(rating.avg) ? ' on' : '')}">${STAR_ICON_SVG}</span>`))}
     <span class="lib-rating-num">${esc(rating.avg.toFixed(1))}</span>

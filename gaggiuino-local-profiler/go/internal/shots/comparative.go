@@ -88,9 +88,13 @@ type comparableSibling struct {
 }
 
 // newComparativeMatch returns shot's comparison key, or nil when shot has
-// no coffee or grinder (no advice is possible then).
+// no coffee or grinder (no advice is possible then), or is a mixed shot
+// (#1837): a bean mix has no single bean to compare grind settings against.
 func newComparativeMatch(shot Shot) *comparativeMatch {
 	ann := toMap(shot["annotation"])
+	if IsBeanMix(ann) {
+		return nil
+	}
 	coffee := strings.ToLower(strings.TrimSpace(annotationStr(ann, "coffee")))
 	grinder := strings.ToLower(strings.TrimSpace(annotationStr(ann, "grinder")))
 	if coffee == "" || grinder == "" {
@@ -115,7 +119,8 @@ func (m *comparativeMatch) grindOf(s Shot) (float64, bool) {
 		return 0, false
 	}
 	a := toMap(s["annotation"])
-	if !comparativeSameBean(m.ann, a) {
+	// A mixed shot is neither bean, so it never counts as a sibling (#1837).
+	if IsBeanMix(a) || !comparativeSameBean(m.ann, a) {
 		return 0, false
 	}
 	if strings.ToLower(strings.TrimSpace(annotationStr(a, "grinder"))) != m.grinder {

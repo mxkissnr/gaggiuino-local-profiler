@@ -250,7 +250,8 @@ func (c *cardModel) svg() string {
 	if profileName == "" {
 		profileName = cardText(c.lang, "unknown")
 	}
-	bean := strField(ann, "coffee")
+	// A mixed shot (#1837) names every bean in its dose: "A + B".
+	bean := BeanLabel(ann)
 	machine := firstNonEmpty(strField(ann, "machine"), strField(c.shot, "machine"))
 
 	var dose *float64
@@ -283,9 +284,12 @@ func (c *cardModel) svg() string {
 	tgtPressVal, hasTgtPress := lastPositive(tgtPress)
 	tgtPressVal = math.Round(tgtPressVal*10) / 10
 
+	// The origin map is keyed by a single bean, so a mixed shot keeps the
+	// primary bean for the origin chip while the headline shows every bean.
+	primaryBean := strField(ann, "coffee")
 	originCode := ""
-	if c.deps.beanOriginCode != nil && bean != "" {
-		originCode = c.deps.beanOriginCode(bean)
+	if c.deps.beanOriginCode != nil && primaryBean != "" {
+		originCode = c.deps.beanOriginCode(primaryBean)
 	}
 	installCode := ""
 	if c.deps.installCode != nil {

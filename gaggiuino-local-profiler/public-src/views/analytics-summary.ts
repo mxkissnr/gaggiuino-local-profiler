@@ -1,5 +1,7 @@
 import type { ShotMeta } from '../state/index.js';
 import { localDateKey } from '../utils.js';
+import { isBeanMix } from '../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../shared/bean-mix.js';
 
 // Same metadata-only shot view as views/analytics.ts's ShotRow: only the
 // annotation id/name and the profile name are read, scores come from the
@@ -12,6 +14,7 @@ export interface SummaryShot extends ShotMeta {
   annotation?: {
     beanId?: number | null | undefined;
     coffee?: string | null | undefined;
+    beanMix?: readonly BeanMixPartInput[] | null | undefined;
   } | null;
 }
 
@@ -106,6 +109,9 @@ export function summaryLine(
       sum7 += sc;
       n7++;
     }
+    // #1837: the period's best bean skips mixed shots — their top-level bean is
+    // only the primary part, so the mix's score is not that bean's own.
+    if (isBeanMix(s.annotation)) continue;
     const beanId = s.annotation?.beanId;
     const name = s.annotation?.coffee;
     if (typeof beanId === 'number' && name) {
