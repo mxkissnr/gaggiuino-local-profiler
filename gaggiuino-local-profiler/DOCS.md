@@ -40,7 +40,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of two installable pieces 
   ┌─────────────────────────────────────────────────────────┐
   │  GLP HA Integration  (custom component)                 │
   │  creates sensors, fires HA events                       │
-  │  bundles both cards — no separate HACS install          │
+  │  bundles both cards — no separate card install          │
   │  ┌───────────────────────┐   ┌───────────────────────┐  │
   │  │ GLP Shot Card         │   │ GLP Order Card        │  │
   │  │ machine status,       │   │ customer ordering,    │  │
@@ -67,9 +67,9 @@ The central piece. It syncs shot history from Gaggiuino and GaggiMate machines, 
 
 A custom component that polls the app every 60 s (configurable). It exposes all GLP data as native HA sensors — shot count, last shot profile, score, duration, weight, maintenance status, preheat state, etc. — so they can be used in automations, energy dashboards, and Lovelace dashboards.
 
-Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
+Install via the Marketplace (HA 2026.11+) or HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
-**The integration bundles the GLP Shot Card and GLP Order Card** — no separate HACS listing or card download. Installing/updating the integration via HACS registers both automatically as dashboard resources; add a `type: custom:glp-card` or `type: custom:glp-order-card` card to your dashboard.
+**The integration bundles the GLP Shot Card and GLP Order Card** — no separate card download. Installing/updating the integration (Marketplace or HACS) registers both automatically as dashboard resources; add a `type: custom:glp-card` or `type: custom:glp-order-card` card to your dashboard.
 
 #### Shot Card (bundled)
 
@@ -302,7 +302,7 @@ options](#configuration-options) above.
 | MQTT auto-discovery | ✅ | ❌ — enter the broker host/port/user/password manually under Settings → MQTT (already the fallback path on HA OS too when no MQTT service is registered) |
 | App configuration (`sync_interval`, etc.) | ✅ App Configuration page | ✅ via env vars, see table above |
 | Machine configuration (Settings → Machines) | ✅ | ✅ identical, unchanged |
-| GLP Integration (HACS) — sensors, Order/Shot Card zero-config mode | ✅ auto-discovers the app | ✅ — enter the GLP URL manually on the integration's config step (auto-discovery needs a Supervisor) |
+| GLP Integration (Marketplace / HACS) — sensors, Order/Shot Card zero-config mode | ✅ auto-discovers the app | ✅ — enter the GLP URL manually on the integration's config step (auto-discovery needs a Supervisor) |
 | Backup/restore (in-app export) | ✅ | ✅ identical, unchanged |
 
 ## Multi-machine (v2.0.0)
