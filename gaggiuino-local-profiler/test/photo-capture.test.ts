@@ -323,13 +323,13 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
 
   it('releases a stream that arrives after the modal was closed', async () => {
     const { stream, tracks } = fakeStream();
-    let resolveStream: (s: FakeStream) => void = () => {};
-    stubCamera(() => new Promise<FakeStream>(resolve => { resolveStream = resolve; }));
+    let grantAccess: ((s: FakeStream) => void) | undefined;
+    stubCamera(() => new Promise<FakeStream>(resolve => { grantAccess = resolve; }));
     const dom = stubDom();
     const input = fakeInput();
     openPhotoInput(asInput(input), { camera: true });
     dom.cancel.fire('click');
-    resolveStream(stream);
+    grantAccess?.(stream);
     await flush();
     expect(tracks.every(t => t.stopped)).toBe(true);
     expect(dom.video.srcObject).toBe(null);

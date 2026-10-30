@@ -132,6 +132,13 @@ export async function openCameraModal(input: HTMLInputElement): Promise<void> {
     for (const track of stream.getTracks()) track.stop();
     return;
   }
+  attachPreview(el, stream);
+}
+
+// Kept out of the async opener so the module-level `_stream` write does not
+// read as a race with closeCameraModal() (require-atomic-updates); the stale
+// check above is what actually guards it.
+function attachPreview(el: CameraModalElements, stream: MediaStream): void {
   _stream = stream;
   el.video.srcObject = stream;
   el.video.classList.remove('photo-video-off');
