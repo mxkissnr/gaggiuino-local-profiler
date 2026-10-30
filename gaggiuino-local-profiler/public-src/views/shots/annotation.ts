@@ -5,7 +5,7 @@ import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
 import type { AnnotateResult, ShotDefaults } from '../../api/types.js';
-import { esc, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
+import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
 import { suggestGrindDoseForBean } from './grind.js';
@@ -604,14 +604,21 @@ export function updateDegassing(val: string | null | undefined): void {
   const days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
   tracker.style.display = 'block';
-  const pct = Math.min(100, (days / 42) * 100);
+  // #1835: the bands come from the shared freshness windows; the bar keeps its
+  // 42-day scale, measured from the end of the fading band so a wider window
+  // still fills the bar at the same point.
+  const w = freshnessWindows();
+  const pct = Math.min(100, (days / (w.fadingUntil + 7)) * 100);
   fill.style.width = pct + '%';
+  const state = freshnessState(days) ?? 'old';
   let color: string, text: string;
-  if      (days < 4)  { color = '#52525b'; text = t('degas_too_fresh', days); }
-  else if (days < 7)  { color = '#eab308'; text = t('degas_almost',    days); }
-  else if (days <= 21){ color = '#22c55e'; text = t('degas_optimal',   days); }
-  else if (days <= 35){ color = '#f97316'; text = t('degas_aging',     days); }
-  else                { color = '#ef4444'; text = t('degas_old',       days); }
+  switch (state) {
+    case 'degassing': color = '#52525b'; text = t('degas_too_fresh', days); break;
+    case 'almost':    color = '#eab308'; text = t('degas_almost',    days); break;
+    case 'peak':      color = '#22c55e'; text = t('degas_optimal',   days); break;
+    case 'fading':    color = '#f97316'; text = t('degas_aging',     days); break;
+    default:          color = '#ef4444'; text = t('degas_old',       days);
+  }
   fill.style.background = color;
   label.style.color     = color;
   label.textContent     = text;
