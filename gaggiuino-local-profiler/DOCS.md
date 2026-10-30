@@ -524,6 +524,10 @@ A dedicated **Achievements** view shows a printed-cardboard "stamp card": 63 bad
 
 ⚙ Settings → **Shot logging defaults** lets you configure optional default values for Drink Type, Coffee/Bean, Basket, Puck Screen, Grinder and Dose — the fields most home baristas re-enter identically on every shot with a single primary setup. Leave any field blank to keep selecting it manually as before. A configured default is auto-prefilled the moment you open a brand-new, not-yet-annotated shot's panel; every prefilled field stays fully editable, and it never touches a shot that already has any annotation data, even a single field.
 
+### Bean freshness
+
+⚙ Settings → **Bean freshness** sets the four day bounds that separate the freshness bands (degassing until, peak from, peak until, fading until) and the grams below which a tracked bag counts as running low. Both used to be fixed values; the card makes them yours. The badge on a bean, the degassing tracker in a shot's annotation panel and the "bean running low" notification all read these settings, and they are stored with your other shared UI preferences — so they follow you to another device and travel with a backup. Leave the defaults untouched to keep the behaviour every earlier version had (4 / 7 / 21 / 35 days, 100 g).
+
 ### Backup & Restore
 
 ⚙ Settings → **Backup & Restore** opens a modal for downloading or restoring your GLP database as a **ZIP file**: `backup.json` (shots including trash, annotations, the coffee library — beans, grinders, recipes, milks, baskets, puck screens — maintenance tasks and the maintenance log, orders, all configured machines, and app settings such as order menu/notification routing/import preferences/MQTT transport settings) plus every shot/bean/grinder/basket/puck-screen photo as a real image file alongside it, openable with any normal file browser or archive tool — not re-encoded into the JSON.

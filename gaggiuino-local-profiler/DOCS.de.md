@@ -527,6 +527,10 @@ Eine eigene **Erfolge**-Ansicht zeigt eine Pappkarte im Stempelkarten-Look: 63 A
 
 ⚙ Einstellungen → **Standardwerte für Shot-Notizen** erlaubt das Konfigurieren optionaler Standardwerte für Getränk, Kaffee/Bohne, Sieb, Puck Screen, Mühle und Dosis — die Felder, die die meisten Home-Baristas mit einem primären Setup bei jedem Shot identisch erneut eingeben. Leer gelassene Felder werden weiterhin manuell ausgewählt wie bisher. Ein konfigurierter Standardwert wird automatisch vorausgefüllt, sobald ein neuer, noch nicht bewerteter Shot geöffnet wird — jedes vorausgefüllte Feld bleibt dabei änderbar, und ein bereits angemerkter Shot wird nie überschrieben, auch nicht bei nur einem gesetzten Feld.
 
+### Bohnen-Frische
+
+⚙ Einstellungen → **Bohnen-Frische** legt die vier Tagesgrenzen fest, die die Frische-Bänder trennen (Degasen bis, Optimal ab, Optimal bis, Abbauend bis), sowie die Gramm, unter denen eine geführte Packung als fast leer gilt. Beides war bisher fest verdrahtet; die Karte macht es einstellbar. Das Badge an einer Bohne, der Degassing-Tracker im Annotationsbereich eines Shots und die Benachrichtigung „Bohne fast leer" lesen alle diese Einstellungen, und sie liegen bei deinen übrigen geteilten UI-Einstellungen — sie folgen dir also auf ein anderes Gerät und wandern in ein Backup mit. Bleiben die Standardwerte unverändert, verhält sich die App wie jede frühere Version (4 / 7 / 21 / 35 Tage, 100 g).
+
 ### Backup & Wiederherstellung
 
 ⚙ Einstellungen → **Backup & Restore** öffnet ein Fenster zum Herunterladen oder Wiederherstellen deiner GLP-Datenbank als **ZIP-Datei**: `backup.json` (Shots inklusive Papierkorb, Anmerkungen, die Kaffee-Bibliothek — Bohnen, Mühlen, Rezepte, Milch, Siebträger-Körbe, Puckscreens —, Wartungsaufgaben und das Wartungsprotokoll, Bestellungen, alle konfigurierten Maschinen sowie App-Einstellungen wie Bestell-Menü/Benachrichtigungs-Zuordnung/Import-Einstellungen/MQTT-Transport-Einstellungen) plus jedes Shot-/Bohnen-/Mühlen-/Siebträger-/Puckscreen-Foto als echte Bilddatei daneben, öffenbar mit jedem normalen Dateibrowser oder Archivprogramm — nicht in die JSON hineinkodiert.
