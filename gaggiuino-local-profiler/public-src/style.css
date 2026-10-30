@@ -1854,6 +1854,18 @@
         .scan-hint[hidden] { display:none; }
         .scan-photo-btn { white-space:nowrap; }
 
+        /* ── In-app camera modal (#1836) ── same overlay/viewport language as
+           the scan modal above; only the action row is its own. */
+        #photoCameraModal { display:none; position:fixed; inset:0; z-index: var(--z-modal); background:color-mix(in srgb, var(--scrim) 85%, transparent); flex-direction:column; align-items:center; justify-content:center; gap: var(--sp-4); padding: var(--sp-5); }
+        #photoCameraModal.open { display:flex; }
+        #photoCameraViewport { position:relative; width:100%; max-width:420px; border-radius:var(--radius); overflow:hidden; background:var(--scrim); aspect-ratio:1; }
+        #photoCameraViewport video { width:100%; height:100%; object-fit:cover; display:block; }
+        /* No stream yet: hide the <video> so Android's WebView does not show
+           its play-button poster in the empty viewport (same as #1536). */
+        #photoCameraViewport video.photo-video-off { visibility:hidden; }
+        .photo-camera-actions { display:flex; align-items:center; gap: var(--sp-3); width:100%; max-width:420px; justify-content:space-between; }
+        .photo-camera-shutter { flex:1 1 auto; }
+
         /* ── Backup export/restore modal ── */
         #backupModal { display:none; position:fixed; inset:0; z-index: var(--z-modal); background:color-mix(in srgb, var(--scrim) 85%, transparent); align-items:center; justify-content:center; padding: var(--sp-5); overflow-y:auto; }
         #backupModal.open { display:flex; }
