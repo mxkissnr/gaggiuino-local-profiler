@@ -31,7 +31,7 @@ const (
 )
 
 type listShotsInput struct {
-	Bean      string `json:"bean,omitempty" jsonschema:"case-insensitive substring of the shot's bean (coffee) name annotation"`
+	Bean      string `json:"bean,omitempty" jsonschema:"case-insensitive substring of one of the shot's bean (coffee) names; a mixed shot matches on any of its beans"`
 	MachineID int64  `json:"machine_id,omitempty" jsonschema:"only shots pulled on this machine id; omit or 0 for all machines"`
 	MinRating int    `json:"min_rating,omitempty" jsonschema:"only shots whose 1-5 star rating is at least this value"`
 	Since     string `json:"since,omitempty" jsonschema:"only shots at or after this date-time, RFC 3339 e.g. 2026-01-31T00:00:00Z"`
@@ -45,7 +45,7 @@ type shotSummary struct {
 	Timestamp    string   `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
 	MachineID    int64    `json:"machine_id" jsonschema:"machine that pulled the shot"`
 	ProfileName  string   `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
-	Bean         string   `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation"`
+	Bean         string   `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
 	DoseInG      *float64 `json:"dose_in_g,omitempty" jsonschema:"ground coffee dosed in, grams (annotation dose)"`
 	DoseOutG     *float64 `json:"dose_out_g,omitempty" jsonschema:"final yield in the cup, grams"`
 	Ratio        *float64 `json:"ratio,omitempty" jsonschema:"yield-to-dose ratio, expressed as 1:X where X is this value"`
@@ -104,7 +104,7 @@ type getShotOutput struct {
 	Timestamp         string             `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
 	MachineID         int64              `json:"machine_id" jsonschema:"machine that pulled the shot"`
 	ProfileName       string             `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
-	Bean              string             `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation"`
+	Bean              string             `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
 	DoseInG           *float64           `json:"dose_in_g,omitempty" jsonschema:"ground coffee dosed in, grams"`
 	DoseOutG          *float64           `json:"dose_out_g,omitempty" jsonschema:"final yield in the cup, grams"`
 	Ratio             *float64           `json:"ratio,omitempty" jsonschema:"yield-to-dose ratio as 1:X"`
@@ -114,6 +114,7 @@ type getShotOutput struct {
 	GrindSetting      string             `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
 	Notes             string             `json:"notes,omitempty" jsonschema:"short user notes"`
 	UsedBeanTarget    bool               `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
+	BeanComponents    []beanComponent    `json:"bean_components,omitempty" jsonschema:"a mixed shot's beans in dose order; omitted for a single-bean shot"`
 	Metrics           *shotMetrics       `json:"metrics,omitempty" jsonschema:"derived recipe/duration/channeling figures"`
 	Annotation        map[string]any     `json:"annotation,omitempty" jsonschema:"the raw shot annotation (coffee, grinder, dose, notes, flavours, ...)"`
 	ComparativeAdvice *comparativeAdvice `json:"comparative_grind_advice,omitempty" jsonschema:"history-aware grind advice, when comparable shots exist"`
@@ -127,7 +128,7 @@ type compareShotsInput struct {
 type compareShot struct {
 	ID           int64    `json:"id" jsonschema:"shot id"`
 	ProfileName  string   `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
-	Bean         string   `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation"`
+	Bean         string   `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
 	DoseInG      *float64 `json:"dose_in_g,omitempty" jsonschema:"ground coffee dosed in, grams"`
 	DoseOutG     *float64 `json:"dose_out_g,omitempty" jsonschema:"final yield, grams"`
 	Ratio        *float64 `json:"ratio,omitempty" jsonschema:"yield-to-dose ratio as 1:X"`
@@ -149,6 +150,13 @@ type compareMetric struct {
 type compareShotsOutput struct {
 	Shots  []compareShot   `json:"shots" jsonschema:"the compared shots, in the requested order"`
 	Deltas []compareMetric `json:"deltas" jsonschema:"per-metric deltas against the first shot"`
+}
+
+// beanComponent is one bean's share of a mixed shot's dose.
+type beanComponent struct {
+	Bean   string  `json:"bean" jsonschema:"the bean's display name"`
+	BeanID *int64  `json:"bean_id,omitempty" jsonschema:"the library bean id, when the part names one"`
+	Grams  float64 `json:"grams" jsonschema:"grams this bean contributed to the dose"`
 }
 
 func readOnlyAnnotations(title string) *mcpsdk.ToolAnnotations {
@@ -384,10 +392,11 @@ func getShot(svc *shots.Service, in getShotInput) (getShotOutput, error) {
 		Timestamp:      formatTimestamp(shot),
 		MachineID:      machineIDOf(shot),
 		ProfileName:    profileNameOf(shot),
-		Bean:           annotationString(shot, "coffee"),
+		Bean:           shotBeanLabel(shot),
 		GrindSetting:   annotationString(shot, "grindSetting"),
 		UsedBeanTarget: svc.ComputeScoreDetail(shot).UsedBeanTarget,
 	}
+	out.BeanComponents = beanComponents(shot)
 	out.Notes = truncate(annotationString(shot, "notes"), 200)
 	if score != nil {
 		s := *score
@@ -516,7 +525,7 @@ func toCompareShot(shot shots.Shot, score *int) compareShot {
 	out := compareShot{
 		ID:           intField(shot, "id"),
 		ProfileName:  profileNameOf(shot),
-		Bean:         annotationString(shot, "coffee"),
+		Bean:         shotBeanLabel(shot),
 		GrindSetting: annotationString(shot, "grindSetting"),
 	}
 	if score != nil {
@@ -540,7 +549,7 @@ func toShotSummary(shot shots.Shot, score *int) shotSummary {
 		Timestamp:    formatTimestamp(shot),
 		MachineID:    machineIDOf(shot),
 		ProfileName:  profileNameOf(shot),
-		Bean:         annotationString(shot, "coffee"),
+		Bean:         shotBeanLabel(shot),
 		GrindSetting: annotationString(shot, "grindSetting"),
 	}
 	out.Notes = truncate(annotationString(shot, "notes"), 200)
@@ -604,6 +613,44 @@ func buildCurve(shot shots.Shot, points int) *shotCurve {
 	}
 }
 
+// shotBeanLabel is the bean name the read tools report: "A + B" for a mixed
+// shot, its single coffee name otherwise.
+func shotBeanLabel(shot shots.Shot) string {
+	return shots.BeanLabel(annotationMap(shot))
+}
+
+// shotBeanMatches reports whether the (already lowercased) bean filter needle
+// matches one of the shot's beans: the coffee annotation as before, plus any
+// part of a mixed shot.
+func shotBeanMatches(shot shots.Shot, bean string) bool {
+	if bean == "" {
+		return true
+	}
+	if strings.Contains(strings.ToLower(annotationString(shot, "coffee")), bean) {
+		return true
+	}
+	for _, part := range shots.BeanMix(annotationMap(shot)) {
+		if strings.Contains(strings.ToLower(part.Coffee), bean) {
+			return true
+		}
+	}
+	return false
+}
+
+// beanComponents lists a mixed shot's parts in dose order; nil (and so omitted
+// from the JSON) for a single-bean shot.
+func beanComponents(shot shots.Shot) []beanComponent {
+	parts := shots.BeanMix(annotationMap(shot))
+	if len(parts) == 0 {
+		return nil
+	}
+	out := make([]beanComponent, len(parts))
+	for i, part := range parts {
+		out[i] = beanComponent{Bean: part.Coffee, BeanID: part.BeanID, Grams: part.Grams}
+	}
+	return out
+}
+
 func matchesFilters(shot shots.Shot, bean string, minRating int, lo, hi int64) bool {
 	if lo > 0 || hi > 0 {
 		ts, _ := shot["timestamp"].(int64)
@@ -620,7 +667,7 @@ func matchesFilters(shot shots.Shot, bean string, minRating int, lo, hi int64) b
 			return false
 		}
 	}
-	if bean != "" && !strings.Contains(strings.ToLower(annotationString(shot, "coffee")), bean) {
+	if !shotBeanMatches(shot, bean) {
 		return false
 	}
 	return true

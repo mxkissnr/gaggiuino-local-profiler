@@ -491,6 +491,55 @@ func TestExportShotsDatasetListedWithOptIn(t *testing.T) {
 	}
 }
 
+// TestExportShotsDatasetBeanMix covers #1837: a mixed shot exports as "A + B"
+// with its parts, the bean filter matches any part, and a single-bean row keeps
+// its old shape (no bean_components key).
+func TestExportShotsDatasetBeanMix(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 1, 1000, nil, map[string]any{
+		"coffee":  "Alpha Blend",
+		"beanMix": []any{
+			map[string]any{"coffee": "Alpha Blend", "beanId": float64(1), "grams": float64(12)},
+			map[string]any{"coffee": "Beta Roast", "beanId": float64(2), "grams": float64(6)},
+		},
+	})
+	insertShot(t, sqlDB, 2, 1001, nil, map[string]any{"coffee": "Gamma Light"})
+	session := connect(t, ts.URL+Path)
+
+	all := structured(t, call(t, session, "export_shots_dataset", map[string]any{}))
+	mixed := datasetRowByID(t, objects(all, "shots"), 1)
+	if got, _ := mixed["bean"].(string); got != "Alpha Blend + Beta Roast" {
+		t.Fatalf("mixed row bean = %q, want \"Alpha Blend + Beta Roast\"", got)
+	}
+	components := objects(mixed, "bean_components")
+	if len(components) != 2 {
+		t.Fatalf("bean_components = %d entries, want 2", len(components))
+	}
+	second := components[1].(map[string]any)
+	if got, _ := second["bean"].(string); got != "Beta Roast" {
+		t.Fatalf("component[1].bean = %v, want Beta Roast", got)
+	}
+	if got, ok := second["grams"].(float64); !ok || got != 6 {
+		t.Fatalf("component[1].grams = %v, want 6", second["grams"])
+	}
+
+	single := datasetRowByID(t, objects(all, "shots"), 2)
+	if got, _ := single["bean"].(string); got != "Gamma Light" {
+		t.Fatalf("single row bean = %q, want Gamma Light", got)
+	}
+	if _, ok := single["bean_components"]; ok {
+		t.Fatalf("single-bean row carries a bean_components key")
+	}
+
+	filtered := structured(t, call(t, session, "export_shots_dataset", map[string]any{"bean": "beta"}))
+	if got := numberField(t, filtered, "count"); got != 1 {
+		t.Fatalf("bean=beta count = %v, want 1 (any part matches)", got)
+	}
+	if got, _ := objects(filtered, "shots")[0].(map[string]any)["bean"].(string); got != "Alpha Blend + Beta Roast" {
+		t.Fatalf("filtered row bean = %q, want the mix label", got)
+	}
+}
+
 func datasetRowByID(t *testing.T, rows []any, id float64) map[string]any {
 	t.Helper()
 	for _, raw := range rows {
