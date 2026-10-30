@@ -269,11 +269,11 @@ func TestCard_MixedShotBeanLine(t *testing.T) {
 	data := cardShotData()
 	ann, _ := data["annotation"].(map[string]any)
 	ann["beanMix"] = []any{
-		map[string]any{"coffee": "Colombia Huila", "grams": float64(10)},
-		map[string]any{"coffee": "Kenya AA", "grams": float64(8)},
+		map[string]any{"coffee": "Colombia", "grams": float64(10)},
+		map[string]any{"coffee": "Kenya", "grams": float64(8)},
 	}
 	svg := newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
-	if !strings.Contains(svg, "Colombia Huila + Kenya AA") {
+	if !strings.Contains(svg, "Colombia + Kenya") {
 		t.Error("mixed shot card does not name both beans on the headline")
 	}
 
