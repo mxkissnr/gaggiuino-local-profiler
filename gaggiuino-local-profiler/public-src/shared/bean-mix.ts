@@ -36,6 +36,13 @@ export interface BeanMixPart {
 
 const MIN_PARTS = 2;
 
+// Array.isArray() types its argument as any[] in the narrowed branch, which
+// would make every read below an unsafe-any access; this keeps the elements
+// typed.
+function _isPartList(v: unknown): v is readonly BeanMixPartInput[] {
+  return Array.isArray(v);
+}
+
 /** Grams as the label shows them: "18 g", "10.5 g" — no trailing zeros. */
 function _grams(n: number): string {
   return `${Number.isInteger(n) ? n : Math.round(n * 10) / 10} g`;
@@ -49,10 +56,10 @@ function _grams(n: number): string {
  */
 export function beanMix(ann: BeanMixAnnotation | null | undefined): BeanMixPart[] | null {
   const raw = ann?.beanMix;
-  if (!Array.isArray(raw) || raw.length < MIN_PARTS) return null;
+  if (!_isPartList(raw) || raw.length < MIN_PARTS) return null;
   const parts: BeanMixPart[] = [];
   for (const entry of raw) {
-    const coffee = (entry?.coffee ?? '').trim();
+    const coffee = (entry.coffee ?? '').trim();
     const grams = entry?.grams;
     if (!coffee || typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0) continue;
     const beanId = typeof entry.beanId === 'number' && Number.isInteger(entry.beanId) ? entry.beanId : null;

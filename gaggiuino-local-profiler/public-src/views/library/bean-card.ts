@@ -8,6 +8,8 @@ import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
 import { miniWheelSvg, flavorChipsHtml } from '../../components/flavor-mini-wheel.js';
 import { calcBestGrindCombosForBean } from '../shots/grind.js';
+import { isBeanMix } from '../../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 import { COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, STAR_ICON_SVG, EDIT_ICON_SVG } from '../../icons.js';
 import { classifyBeanBags, renderBagCard, _expandedPastSections } from './bags.js';
 import { _beanList, _field, _el } from './bean-shared.js';
@@ -47,6 +49,7 @@ type BeanShotRow = ShotMeta & {
     beanId?: number | null;
     coffee?: string | null;
     rating?: string | null;
+    beanMix?: readonly BeanMixPartInput[] | null;
   };
 };
 function _shots(): BeanShotRow[] { return S.shots as BeanShotRow[]; }
@@ -74,11 +77,14 @@ export function originDisplay(bean: OriginBean): string {
 // (#456), and the same "most recent shot for this bean" concept as that
 // function's lastForBean — just without its dose/priority-fallback logic,
 // since this only ever wants the plain last annotated grind.
+// #1837: a mixed shot is skipped — the grind it recorded is the mix's, not
+// this bean's on its own, so it says nothing about picking this bean up again.
 function lastUsedGrindForBean(bean: BeanListRow, shots: BeanShotRow[]): { grinder: string; grindSetting: string; timestamp: number } | null {
   const name = bean.name?.trim().toLowerCase();
   const match = (shots || [])
     .filter(s => {
       const a = s.annotation || {};
+      if (isBeanMix(s.annotation)) return false;
       if (!a.grinder?.trim() || !a.grindSetting) return false;
       return bean.id != null && a.beanId != null
         ? a.beanId === bean.id

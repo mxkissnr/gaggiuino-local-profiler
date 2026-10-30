@@ -153,7 +153,7 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   // #1837: a mixed shot has no single bean to compare against — its top-level
   // coffee/beanId only name the primary part, so neither it nor any other mixed
   // shot may feed this comparison.
-  if (isBeanMix(ann)) return null;
+  if (isBeanMix(shot.annotation)) return null;
   const coffee       = ann.coffee?.trim().toLowerCase();
   const beanId       = ann.beanId ?? null;
   const grinder      = ann.grinder?.trim().toLowerCase();
