@@ -336,7 +336,7 @@ async function cropToPreview(photo: Blob, video: HTMLVideoElement): Promise<Blob
     const region = coverRegion(image.width, image.height, box.width, box.height);
     return await drawRegion(image, region);
   } finally {
-    image.close?.();
+    image.close();
   }
 }
 
