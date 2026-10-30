@@ -14,10 +14,10 @@ type BeanMixModule = typeof import('../public-src/shared/bean-mix.js');
 type GrindModule = typeof import('../public-src/views/shots/grind.js');
 type ShotUtils = typeof import('../public-src/views/shots/utils.js');
 type AnalyticsShared = typeof import('../public-src/views/analytics/shared.js');
-type AnalyticsModule = typeof import('../public-src/views/analytics.js');
+type BeanShelfModule = typeof import('../public-src/views/analytics/bean-shelf.js');
 type SummaryModule = typeof import('../public-src/views/analytics-summary.js');
 type BeanCardModule = typeof import('../public-src/views/library/bean-card.js');
-type RankShot = Parameters<AnalyticsModule['_computeBeanRanking']>[0][number];
+type RankShot = Parameters<BeanShelfModule['_computeBeanRanking']>[0][number];
 type BeanCardRow = Parameters<BeanCardModule['renderBeanCard']>[0];
 
 let beanMix: BeanMixModule['beanMix'];
@@ -29,7 +29,7 @@ let suggestGrindDoseForBean: GrindModule['suggestGrindDoseForBean'];
 let findPreviousShotForBean: ShotUtils['findPreviousShotForBean'];
 let isNewestShotForBean: ShotUtils['isNewestShotForBean'];
 let _beanGroup: AnalyticsShared['_beanGroup'];
-let _computeBeanRanking: AnalyticsModule['_computeBeanRanking'];
+let _computeBeanRanking: BeanShelfModule['_computeBeanRanking'];
 let summaryLine: SummaryModule['summaryLine'];
 let renderBeanCard: BeanCardModule['renderBeanCard'];
 
@@ -58,7 +58,9 @@ beforeAll(async () => {
     await import('../public-src/views/shots/grind.js'));
   ({ findPreviousShotForBean, isNewestShotForBean } = await import('../public-src/views/shots/utils.js'));
   ({ _beanGroup } = await import('../public-src/views/analytics/shared.js'));
-  ({ _computeBeanRanking } = await import('../public-src/views/analytics.js'));
+  // bean-shelf.ts directly: views/analytics.ts pulls in chart.js for the whole
+  // page, which this pure aggregation does not need.
+  ({ _computeBeanRanking } = await import('../public-src/views/analytics/bean-shelf.js'));
   ({ summaryLine } = await import('../public-src/views/analytics-summary.js'));
   ({ renderBeanCard } = await import('../public-src/views/library/bean-card.js'));
 });
