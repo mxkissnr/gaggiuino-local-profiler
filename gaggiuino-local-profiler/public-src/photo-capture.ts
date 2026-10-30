@@ -307,7 +307,7 @@ async function takePhoto(stream: MediaStream | null): Promise<Blob | null> {
   }
 }
 
-function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
+async function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
   const width = video.videoWidth;
   const height = video.videoHeight;
   if (!width || !height) return null;
