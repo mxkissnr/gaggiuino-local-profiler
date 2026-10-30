@@ -60,7 +60,7 @@ export function beanMix(ann: BeanMixAnnotation | null | undefined): BeanMixPart[
   const parts: BeanMixPart[] = [];
   for (const entry of raw) {
     const coffee = (entry.coffee ?? '').trim();
-    const grams = entry?.grams;
+    const grams = entry.grams;
     if (!coffee || typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0) continue;
     const beanId = typeof entry.beanId === 'number' && Number.isInteger(entry.beanId) ? entry.beanId : null;
     parts.push({ beanId, coffee, grams });
