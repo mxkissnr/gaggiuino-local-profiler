@@ -14,6 +14,9 @@ import type { BeanMixAnnotation, BeanMixPart, BeanMixPartInput } from '../../sha
 /** A shot's dose splits over at most four beans (the server's limit). */
 export const MAX_MIX_ROWS = 4;
 
+/** One part's grams share, capped at the server's per-part maximum. */
+export const MAX_PART_GRAMS = 100;
+
 /** annotation.ts's _renderBeanSelect, injected by initBeanMix(). */
 export type BeanSelectRenderer =
   (selectedName: string | null, selectedBeanId: number | null, selectId?: string) => void;
@@ -29,7 +32,9 @@ const singleRow = (): MixRow[] => [{ coffee: '', beanId: null, grams: '' }];
 let _rows: MixRow[] = singleRow();
 let _renderBeanSelect: BeanSelectRenderer | null = null;
 let _scheduleAutoSave: (() => void) | null = null;
-let _primaryWired = false;
+// The select row 1 reads, so a fresh panel element gets wired again (tests
+// swap the fake DOM between cases; a boolean would keep the old one wired).
+let _primaryWiredTo: HTMLSelectElement | null = null;
 
 const _gramsId  = (i: number): string => `annMixGrams${i}`;
 const _selectId = (i: number): string => `annMixBean${i}`;
@@ -38,34 +43,59 @@ function _el<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
 
-// A bean select's chosen option carries data-bean-id only for a real library
-// bean (see _renderBeanSelect) — the same contract _buildAnnotationPayload uses.
-function _beanIdOf(select: HTMLSelectElement | null): number | null {
-  const raw = select?.selectedOptions[0]?.dataset.beanId;
+// A bean <option> carries data-bean-id only for a real library bean (see
+// _renderBeanSelect) — the same contract _buildAnnotationPayload uses.
+function _optionBeanId(option: { dataset?: Record<string, string | undefined> } | undefined): number | null {
+  const raw = option?.dataset?.beanId;
   if (raw == null || raw === '') return null;
   const id = parseInt(String(raw), 10);
   return Number.isFinite(id) ? id : null;
+}
+
+function _beanIdOf(select: HTMLSelectElement | null): number | null {
+  return _optionBeanId(select?.selectedOptions[0]);
 }
 
 function _rowSelect(i: number): HTMLSelectElement | null {
   return _el<HTMLSelectElement>(i === 0 ? 'annCoffee' : _selectId(i));
 }
 
+// A row's usable grams: nothing for an empty or non-positive entry, and never
+// above the server's per-part ceiling — a single out-of-range part fails the
+// whole annotation save, which would also drop the rating and notes.
 function _gramsOf(row: MixRow): number {
   const grams = parseFloat(row.grams);
-  return Number.isFinite(grams) ? grams : 0;
+  if (!Number.isFinite(grams) || grams <= 0) return 0;
+  return Math.min(grams, MAX_PART_GRAMS);
 }
 
 /**
  * The mix rows as payload parts: every row with a bean name and grams above
- * zero. Fewer than two such rows describe no mix, and the caller sends null.
+ * zero. Two rows naming the same bean are one share whose grams add up (the
+ * server rejects a beanMix that names a bean twice, and a rejected save drops
+ * the whole annotation), so those merge into the row seen first. Rows are
+ * matched on the bean id when they have one and on the name otherwise, so an
+ * id-bearing row and a stale name-only row still count as the same bean.
+ * Fewer than two such parts describe no mix, and the caller sends null.
  */
 export function mixParts(): BeanMixPart[] {
   const parts: BeanMixPart[] = [];
+  const byId = new Map<number, BeanMixPart>();
+  const byName = new Map<string, BeanMixPart>();
   for (const row of _rows) {
     const coffee = row.coffee.trim();
     const grams = _gramsOf(row);
-    if (coffee && grams > 0) parts.push({ beanId: row.beanId, coffee, grams });
+    if (!coffee || grams <= 0) continue;
+    const name = coffee.toLowerCase();
+    const existing = (row.beanId != null ? byId.get(row.beanId) : undefined) ?? byName.get(name);
+    if (existing) {
+      existing.grams = Math.min(existing.grams + grams, MAX_PART_GRAMS);
+      continue;
+    }
+    const part: BeanMixPart = { beanId: row.beanId, coffee, grams };
+    if (row.beanId != null) byId.set(row.beanId, part);
+    byName.set(name, part);
+    parts.push(part);
   }
   return parts;
 }
@@ -161,8 +191,8 @@ export function initBeanMix(renderBeanSelect: BeanSelectRenderer, scheduleAutoSa
 // bean change re-labels row 1 and recomputes the dose, and the panel's own
 // bean-change handler must then leave the dose alone (see boot/annotation.ts).
 function _wirePrimarySelect(select: HTMLSelectElement | null): void {
-  if (!select || _primaryWired || typeof select.addEventListener !== 'function') return;
-  _primaryWired = true;
+  if (!select || select === _primaryWiredTo || typeof select.addEventListener !== 'function') return;
+  _primaryWiredTo = select;
   select.addEventListener('change', () => {
     if (!isMixActive()) return;
     const row = _rows[0];
@@ -206,6 +236,7 @@ export function renderBeanMix(): void {
     const row = _rows[i];
     if (row) _renderBeanSelect?.(row.coffee || null, row.beanId, _selectId(i));
   }
+  _disableUsedBeans();
   container.querySelectorAll<HTMLSelectElement>('select[data-mix-bean]').forEach(select => {
     select.addEventListener('change', () => {
       setMixRowBean(Number(select.dataset.mixBean), String(select.value), _beanIdOf(select));
@@ -219,6 +250,41 @@ export function renderBeanMix(): void {
   container.querySelectorAll<HTMLElement>('button[data-mix-remove]').forEach(btn => {
     btn.addEventListener('click', () => removeMixRow(Number(btn.dataset.mixRemove)));
   });
+}
+
+// A bean already taken by another row cannot be picked again: the server
+// rejects a repeated beanId, and picking the same bean twice is one share, not
+// two. The row's own current bean stays selectable so the select keeps showing
+// it, and a name-only row (no library id) is matched by name.
+function _disableUsedBeans(): void {
+  const usedIds = new Set<number>();
+  const usedNames = new Set<string>();
+  _rows.forEach((row, i) => {
+    const select = _rowSelect(i);
+    // The select is authoritative when it shows a bean, the row state
+    // otherwise (a freshly added row has a select but nothing chosen in it).
+    const coffee = String(select && String(select.value) ? select.value : row.coffee).trim();
+    if (!coffee) return;
+    const beanId = (select ? _beanIdOf(select) : null) ?? row.beanId;
+    if (beanId != null) usedIds.add(beanId);
+    usedNames.add(coffee.toLowerCase());
+  });
+
+  for (let i = 1; i < _rows.length; i++) {
+    const row = _rows[i];
+    const select = _el<HTMLSelectElement>(_selectId(i));
+    const options = select ? Array.from(select.options ?? []) : [];
+    if (!row || !options.length) continue;
+    for (const opt of options) {
+      // Either identity marks a bean as taken: a row may carry an id, a stale
+      // name, or both, and two rows naming one bean are always the same bean.
+      const beanId = _optionBeanId(opt);
+      const name = String(opt.value).toLowerCase();
+      const taken = (beanId != null && usedIds.has(beanId)) || usedNames.has(name);
+      const own = String(opt.value) === row.coffee;
+      opt.disabled = taken && !own;
+    }
+  }
 }
 
 /**
