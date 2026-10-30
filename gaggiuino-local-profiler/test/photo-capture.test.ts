@@ -433,7 +433,8 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
 
   it('the shutter takes the photo through ImageCapture when it exists', async () => {
     class FakeImageCapture {
-      constructor(readonly track: { id?: string }) {}
+      readonly track: { id?: string };
+      constructor(track: { id?: string }) { this.track = track; }
       takePhoto(): Promise<Blob> {
         return Promise.resolve(new Blob(['sensor', this.track.id ?? ''], { type: 'image/jpeg' }));
       }
