@@ -435,9 +435,7 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     class FakeImageCapture {
       constructor(readonly track: { id?: string }) {}
       takePhoto(): Promise<Blob> {
-        return this.track
-          ? Promise.resolve(new Blob(['sensor'], { type: 'image/jpeg' }))
-          : Promise.reject(new Error('no track'));
+        return Promise.resolve(new Blob(['sensor', this.track.id ?? ''], { type: 'image/jpeg' }));
       }
     }
     const { stream } = fakeStream();
