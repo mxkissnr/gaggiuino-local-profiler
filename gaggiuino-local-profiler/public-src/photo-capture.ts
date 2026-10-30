@@ -307,15 +307,14 @@ async function takePhoto(stream: MediaStream | null): Promise<Blob | null> {
   }
 }
 
-async function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
+function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
   const width = video.videoWidth;
   const height = video.videoHeight;
-  if (!width || !height) return null;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
+  const ctx = width && height ? canvas.getContext('2d') : null;
+  if (!ctx) return Promise.resolve(null);
   ctx.drawImage(video, 0, 0, width, height);
   return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
 }
