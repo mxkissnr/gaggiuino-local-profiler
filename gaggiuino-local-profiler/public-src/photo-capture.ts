@@ -262,7 +262,7 @@ function clamp01(value: number): number {
 // through, so a missing host never blocks the tap.
 function showFocusRing(el: CameraModalElements, clientX: number, clientY: number): void {
   const host = el.video.parentElement;
-  if (!host || typeof document.createElement !== 'function' || typeof host.appendChild !== 'function') return;
+  if (!host) return;
   const rect = el.video.getBoundingClientRect();
   const ring = document.createElement('div');
   ring.className = 'photo-focus-ring';
