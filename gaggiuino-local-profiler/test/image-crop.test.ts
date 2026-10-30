@@ -70,10 +70,10 @@ describe('clampOffset', () => {
 
 describe('cropExportSize (#1836)', () => {
   it('exports a 1600 px square for a large source', () => {
-    // A 4000x3000 photo at cover scale .08 has 12.5 source px per preview px,
-    // far more than the 5x the export needs.
-    const out = cropExportSize('square', 0.08);
-    expect(out).toEqual({ width: 1600, height: 1600, factor: 5 });
+    // A 4000x3000 photo in the 320 px square preview: ~9 source px per
+    // preview px, far more than the 5x the export needs.
+    expect(cropExportSize('square', coverBaseScale(4000, 3000, 320, 320)))
+      .toEqual({ width: 1600, height: 1600, factor: 5 });
   });
 
   it('exports 1200x1600 for a large source in the portrait shape', () => {
