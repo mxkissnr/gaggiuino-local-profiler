@@ -427,18 +427,19 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 			log.Printf("main: low-stock: reading library: %v", err)
 			return
 		}
-		beanID := library.ResolveLowStockBeanID(shots.Shot{"annotation": ann}, lib.Beans)
-		if beanID == 0 {
-			return
-		}
-		if err := library.CheckLowStock(libRepo, shotsRepo.GetAnnotatedDoses, beanID, lowStockThresholdG(uiprefsRepo), func(name string, remainingG int64) bool {
-			lang := haClient.GetHaLanguage(ctx)
-			return baristaNotify(ctx, "notify_low_stock",
-				ha.NotifyText(lang, "low_stock_title"),
-				ha.NotifyText(lang, "low_stock_body", name, remainingG),
-				fmt.Sprintf("glp_low_stock_%d", beanID))
-		}); err != nil {
-			log.Printf("main: low-stock notification for shot %d failed: %v", shotID, err)
+		// A mixed shot (#1837) can take several beans below the threshold at
+		// once, so each of its bean ids is checked with the same threshold.
+		thresholdG := lowStockThresholdG(uiprefsRepo)
+		for _, beanID := range library.ResolveLowStockBeanIDs(shots.Shot{"annotation": ann}, lib.Beans) {
+			if err := library.CheckLowStock(libRepo, shotsRepo.GetAnnotatedDoses, beanID, thresholdG, func(name string, remainingG int64) bool {
+				lang := haClient.GetHaLanguage(ctx)
+				return baristaNotify(ctx, "notify_low_stock",
+					ha.NotifyText(lang, "low_stock_title"),
+					ha.NotifyText(lang, "low_stock_body", name, remainingG),
+					fmt.Sprintf("glp_low_stock_%d", beanID))
+			}); err != nil {
+				log.Printf("main: low-stock notification for shot %d (bean %d) failed: %v", shotID, beanID, err)
+			}
 		}
 	})
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)

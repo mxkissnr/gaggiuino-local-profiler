@@ -262,3 +262,23 @@ func TestCardAndDetailShareYieldAndPhases(t *testing.T) {
 		t.Errorf("preinfusion: card = %v, detail = %v", fig.preinfusion, m.PreinfusionSecs)
 	}
 }
+
+// TestCard_MixedShotBeanLine pins #1837: the share card's bean line names every
+// bean of a mixed shot ("A + B"), while a single-bean shot keeps the plain name.
+func TestCard_MixedShotBeanLine(t *testing.T) {
+	data := cardShotData()
+	ann, _ := data["annotation"].(map[string]any)
+	ann["beanMix"] = []any{
+		map[string]any{"coffee": "Colombia Huila", "grams": float64(10)},
+		map[string]any{"coffee": "Kenya AA", "grams": float64(8)},
+	}
+	svg := newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
+	if !strings.Contains(svg, "Colombia Huila + Kenya AA") {
+		t.Error("mixed shot card does not name both beans on the headline")
+	}
+
+	plain := newCardModel(Shot(cardShotData()), nil, "square", "", "dark", "en", cardDeps{}).svg()
+	if !strings.Contains(plain, "Colombia Huila") || strings.Contains(plain, "Colombia Huila + ") {
+		t.Error("single-bean card headline changed")
+	}
+}
