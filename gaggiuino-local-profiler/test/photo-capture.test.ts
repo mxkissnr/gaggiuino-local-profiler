@@ -137,10 +137,16 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     return el;
   }
 
+  interface FakeContext {
+    drawImage: (...args: unknown[]) => void;
+    imageSmoothingEnabled?: boolean;
+    imageSmoothingQuality?: string;
+  }
+
   interface FakeCanvas {
     width: number;
     height: number;
-    getContext: () => { drawImage: () => void } | null;
+    getContext: () => FakeContext | null;
     toBlob: (cb: (blob: Blob | null) => void, type?: string, quality?: number) => void;
   }
 
@@ -153,6 +159,7 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     const cancel = fakeEl('photoCameraCancelBtn');
     const keydown = new Set<KeydownFn>();
     const canvases: FakeCanvas[] = [];
+    const draws: unknown[][] = [];
     const rings: FakeEl[] = [];
     // The viewport wrapper that receives the tap-to-focus ring.
     video.parentElement = { appendChild: (child: FakeEl): void => { rings.push(child); } };
@@ -167,7 +174,13 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
         const canvas: FakeCanvas = {
           width: 0,
           height: 0,
-          getContext: () => (drawable ? { drawImage: () => {} } : null),
+          getContext: (): FakeContext | null => (drawable
+            ? {
+              imageSmoothingEnabled: false,
+              imageSmoothingQuality: 'low',
+              drawImage: (...args: unknown[]): void => { draws.push(args); },
+            }
+            : null),
           toBlob: (cb): void => {
             cb(withBlob ? new Blob(['jpeg'], { type: 'image/jpeg' }) : null);
           },
@@ -186,7 +199,7 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
       },
     };
     return {
-      modal, video, shutter, cancel, canvases, rings,
+      modal, video, shutter, cancel, canvases, draws, rings,
       escape(): void { for (const fn of keydown) fn({ key: 'Escape', preventDefault: () => {} }); },
       keydownCount: (): number => keydown.size,
     };
@@ -469,6 +482,81 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     expect(dom.canvases[0]?.width).toBe(640);
     expect(input.files?.[0]?.name).toBe('camera.jpg');
     expect(input.events.map(e => e.type)).toEqual(['change']);
+  });
+
+  it('crops the ImageCapture photo to the box the preview shows', async () => {
+    class FakeImageCapture {
+      takePhoto(): Promise<Blob> { return Promise.resolve(new Blob(['sensor'], { type: 'image/jpeg' })); }
+    }
+    const { stream } = fakeStream();
+    let closed = false;
+    stubCamera(() => Promise.resolve(stream), {
+      ImageCapture: FakeImageCapture,
+      // A 16:9 stream (640x480 here) recorded at 4:3 by the sensor: the photo
+      // is wider than the square preview box, so the sides are cut off.
+      createImageBitmap: (): Promise<{ width: number; height: number; close: () => void }> =>
+        Promise.resolve({ width: 4032, height: 3024, close: () => { closed = true; } }),
+    });
+    const dom = stubDom();
+    const input = fakeInput();
+    // The phone shows the square preview box; the photo must match that box,
+    // not the frame the sensor happened to return.
+    dom.video.getBoundingClientRect = (): { left: number; top: number; width: number; height: number } => ({
+      left: 0, top: 0, width: 360, height: 360,
+    });
+    openPhotoInput(asInput(input), { camera: true });
+    await flush();
+    dom.shutter.fire('click');
+    await flush();
+    // 4:3 cropped to 1:1 => 3024x3024 from x = 504.
+    expect(dom.canvases[0]?.width).toBe(3024);
+    expect(dom.canvases[0]?.height).toBe(3024);
+    expect(dom.draws[0]?.slice(1)).toEqual([504, 0, 3024, 3024, 0, 0, 3024, 3024]);
+    expect(closed).toBe(true);
+    expect(input.files?.[0]?.name).toBe('camera.jpg');
+    expect(input.files?.[0]?.type).toBe('image/jpeg');
+    expect(input.events.map(e => e.type)).toEqual(['change']);
+  });
+
+  it('crops the canvas fallback to the same region', async () => {
+    const { stream } = fakeStream();
+    stubCamera(() => Promise.resolve(stream));
+    const dom = stubDom();
+    const input = fakeInput();
+    // A 3:4 box (what the portrait phone viewport is) around a 16:9 stream.
+    dom.video.getBoundingClientRect = (): { left: number; top: number; width: number; height: number } => ({
+      left: 0, top: 0, width: 360, height: 480,
+    });
+    dom.video.videoWidth = 1920;
+    dom.video.videoHeight = 1080;
+    openPhotoInput(asInput(input), { camera: true });
+    await flush();
+    dom.shutter.fire('click');
+    await flush();
+    // cover on 1920x1080 in a 360x480 box => 810x1080 from x = 555.
+    expect(dom.canvases[0]?.width).toBe(810);
+    expect(dom.canvases[0]?.height).toBe(1080);
+    expect(dom.draws[0]?.slice(1)).toEqual([555, 0, 810, 1080, 0, 0, 810, 1080]);
+    expect(input.files?.[0]?.type).toBe('image/jpeg');
+  });
+
+  it('keeps the untouched photo when it cannot be decoded', async () => {
+    class FakeImageCapture {
+      takePhoto(): Promise<Blob> { return Promise.resolve(new Blob(['sensor'], { type: 'image/jpeg' })); }
+    }
+    const { stream } = fakeStream();
+    stubCamera(() => Promise.resolve(stream), {
+      ImageCapture: FakeImageCapture,
+      createImageBitmap: (): Promise<never> => Promise.reject(new Error('no decoder')),
+    });
+    const dom = stubDom();
+    const input = fakeInput();
+    openPhotoInput(asInput(input), { camera: true });
+    await flush();
+    dom.shutter.fire('click');
+    await flush();
+    expect(dom.canvases).toEqual([]);
+    expect(input.files?.[0]?.name).toBe('camera.jpg');
   });
 
   it('the gallery path still just clears capture and clicks the input', () => {
