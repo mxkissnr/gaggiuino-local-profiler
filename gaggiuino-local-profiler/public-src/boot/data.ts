@@ -150,6 +150,7 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
     // load unawaited could let that first render see S.shotDefaults still null
     // with nothing to re-render it once the fetch actually completes. The other
     // cards stay fire-and-forget as before.
+    //
     // Ordered after "ui prefs": the bean-freshness card is pre-filled from the
     // shared preferences, and rendering it before the merge would show a fresh
     // device the defaults instead of the configured set.
