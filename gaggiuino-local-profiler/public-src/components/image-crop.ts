@@ -12,10 +12,12 @@ import type { DialogKeyboardHandle } from './dialog-a11y.js';
 type CropAspect = 'square' | 'portrait';
 
 // Per-aspect canvas boxes: CSS px == canvas px for the preview (no DPR scaling
-// needed), the export is a larger buffer of the same shape.
+// needed), the export is a larger buffer of the same shape. 1600 px on the long
+// edge is what the server keeps anyway, and small enough not to upscale on
+// phones whose photos are already close to it (#1836).
 const BOX = {
-  square:   { previewW: 320, previewH: 320, exportW: 480, exportH: 480 },
-  portrait: { previewW: 240, previewH: 320, exportW: 600, exportH: 800 },
+  square:   { previewW: 320, previewH: 320, exportW: 1600, exportH: 1600 },
+  portrait: { previewW: 240, previewH: 320, exportW: 1200, exportH: 1600 },
 } satisfies Record<CropAspect, { previewW: number; previewH: number; exportW: number; exportH: number }>;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -27,6 +29,21 @@ interface Point {
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+// Size of the exported JPEG for `aspect` at the current zoom. `renderScale` is
+// preview px per source px, so `1 / renderScale` is the source pixels actually
+// inside the crop window and caps the export: a small source is never blown up
+// past its own resolution (#1836).
+export function cropExportSize(aspect: CropAspect, renderScale: number): { width: number; height: number; factor: number } {
+  const box = BOX[aspect];
+  const target = Math.min(box.exportW / box.previewW, box.exportH / box.previewH);
+  const factor = renderScale > 0 ? Math.min(target, 1 / renderScale) : target;
+  return {
+    width: Math.round(box.previewW * factor),
+    height: Math.round(box.previewH * factor),
+    factor,
+  };
 }
 
 // Computes the zoom/pan → source-rect crop math shared between the live
@@ -227,18 +244,17 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
 
   (overlay.querySelector('.crop-editor-apply') as HTMLElement).addEventListener('click', () => {
-    const exportScaleX = box.exportW / previewW;
-    const exportScaleY = box.exportH / previewH;
     const scale = baseScale * zoom;
-    const exportOffsetX = offsetX * exportScaleX;
-    const exportOffsetY = offsetY * exportScaleY;
+    const out = cropExportSize(aspect, scale);
 
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = box.exportW;
-    outCanvas.height = box.exportH;
+    outCanvas.width = out.width;
+    outCanvas.height = out.height;
     const outCtx = outCanvas.getContext('2d') as CanvasRenderingContext2D;
-    outCtx.drawImage(img, exportOffsetX, exportOffsetY, naturalW * scale * exportScaleX, naturalH * scale * exportScaleY);
-    outCanvas.toBlob((blob) => close(blob), 'image/jpeg', 0.9);
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = 'high';
+    outCtx.drawImage(img, offsetX * out.factor, offsetY * out.factor, naturalW * scale * out.factor, naturalH * scale * out.factor);
+    outCanvas.toBlob((blob) => close(blob), 'image/jpeg', 0.92);
   });
 
   dialog = attachDialogKeyboard(overlay, () => close(null), { initialFocus: slider });
