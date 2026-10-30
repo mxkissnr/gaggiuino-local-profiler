@@ -301,8 +301,7 @@ async function takePhoto(stream: MediaStream | null): Promise<Blob | null> {
     : (window as unknown as { ImageCapture?: StillCameraCtor }).ImageCapture;
   if (!track || typeof ctor !== 'function') return null;
   try {
-    const blob = await new ctor(track).takePhoto();
-    return blob ?? null;
+    return await new ctor(track).takePhoto();
   } catch {
     return null;
   }
