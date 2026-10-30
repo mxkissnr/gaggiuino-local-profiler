@@ -152,14 +152,21 @@ type AnnotatedDose struct {
 // GetAnnotatedDoses returns the annotated-dose tuples used by the
 // library/orders domains' bean-stock math (computeBeanRemaining,
 // getActiveBeans).
+//
+// A mixed shot (#1837) yields one tuple per bean-mix part, each carrying its
+// own grams as the dose, and its top-level dose is NOT also emitted — the parts
+// already account for the whole shot, so adding the total would count it twice.
+// Every other annotated shot yields exactly the single tuple it always did.
 func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 	rows, err := r.db.Query(`
-		SELECT json_extract(a.data, '$.coffee') AS coffee,
-		       json_extract(a.data, '$.beanId') AS beanId,
-		       json_extract(a.data, '$.dose')   AS dose,
-		       s.timestamp                      AS timestamp
+		SELECT json_extract(a.data, '$.coffee')   AS coffee,
+		       json_extract(a.data, '$.beanId')   AS beanId,
+		       json_extract(a.data, '$.dose')     AS dose,
+		       json_extract(a.data, '$.beanMix')  AS beanMix,
+		       s.timestamp                        AS timestamp
 		FROM annotations a JOIN shots s ON s.id = a.shot_id
-		WHERE json_extract(a.data, '$.coffee') IS NOT NULL
+		WHERE (json_extract(a.data, '$.coffee') IS NOT NULL
+		    OR json_extract(a.data, '$.beanMix') IS NOT NULL)
 		  AND s.id NOT IN (SELECT shot_id FROM trash)
 	`)
 	if err != nil {
@@ -173,10 +180,20 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 			coffee    sql.NullString
 			beanID    sql.NullInt64
 			dose      sql.NullFloat64
+			beanMix   sql.NullString
 			timestamp int64
 		)
-		if err := rows.Scan(&coffee, &beanID, &dose, &timestamp); err != nil {
+		if err := rows.Scan(&coffee, &beanID, &dose, &beanMix, &timestamp); err != nil {
 			return nil, fmt.Errorf("shots: scanning annotated dose: %w", err)
+		}
+		if beanMix.Valid {
+			if parts := rawBeanMixParts(beanMix.String); len(parts) >= minBeanMixParts {
+				for _, part := range parts {
+					grams := part.Grams
+					out = append(out, AnnotatedDose{Coffee: part.Coffee, BeanID: part.BeanID, Dose: &grams, Timestamp: timestamp})
+				}
+				continue
+			}
 		}
 		d := AnnotatedDose{Coffee: coffee.String, Timestamp: timestamp}
 		if beanID.Valid {
@@ -190,6 +207,17 @@ func (r *Repository) GetAnnotatedDoses() ([]AnnotatedDose, error) {
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// rawBeanMixParts decodes a json_extract'd `beanMix` value into its usable
+// parts; anything unparseable yields nil so the caller falls back to the
+// single-bean tuple.
+func rawBeanMixParts(raw string) []BeanMixPart {
+	var decoded any
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		return nil
+	}
+	return beanMixParts(decoded)
 }
 
 // Light reads (#1616) select a shot's timestamp and annotation straight
