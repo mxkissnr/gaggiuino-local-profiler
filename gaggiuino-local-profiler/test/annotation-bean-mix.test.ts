@@ -215,6 +215,36 @@ describe('bean mix rows (#1837)', () => {
     expect(mix.mixParts().map(p => p.coffee)).toEqual(['Bean B', 'Bean A']);
   });
 
+  it('skips rows without grams when building the payload parts', () => {
+    mix.resetBeanMix();
+    mix.addMixRow();
+    mix.addMixRow();
+    mix.setMixRowBean(0, 'Bean A', 11);
+    mix.setMixRowGrams(0, 10);
+    mix.setMixRowBean(1, 'Bean B', 12);
+    mix.setMixRowGrams(1, '');
+    mix.setMixRowBean(2, 'Bean C', 13);
+    mix.setMixRowGrams(2, 6);
+
+    expect(mix.mixParts().map(p => p.coffee)).toEqual(['Bean A', 'Bean C']);
+    expect(el('annDose').value).toBe('16');
+  });
+
+  it('keeps at most four rows when a saved mix holds more parts', () => {
+    mix.loadBeanMix({
+      coffee: 'Bean A',
+      beanMix: [
+        { beanId: 11, coffee: 'Bean A', grams: 5 },
+        { beanId: 12, coffee: 'Bean B', grams: 5 },
+        { beanId: 13, coffee: 'Bean C', grams: 5 },
+        { beanId: 14, coffee: 'Bean D', grams: 5 },
+        { beanId: 15, coffee: 'Bean E', grams: 5 },
+      ],
+    });
+    expect(mix.mixRowCount()).toBe(4);
+    expect(el('annDose').value).toBe('20');
+  });
+
   it('drops the mix when a shot without one is loaded', () => {
     twoBeans(10, 8);
     expect(mix.mixRowCount()).toBe(2);
