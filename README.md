@@ -136,13 +136,15 @@ Click the button above to add this repository directly to your Home Assistant �
 
 The [GLP HA Integration](https://github.com/mxkissnr/glp-integration) exposes all app data as native HA sensors — usable in automations, energy dashboards and Lovelace cards. Required for the GLP Shot Card and GLP Order Card.
 
-**Install via HACS:** HACS is the community store for Home Assistant — one-time setup guide at [hacs.xyz](https://hacs.xyz) if you don't have it yet.
+**Home Assistant 2026.11 or newer:** open **Settings → Marketplace**, search for **Gaggiuino Local Profiler** (the GLP integration, `glp-integration`) and click **Install** — you land straight in the setup flow, no restart needed. An existing HACS installation is migrated automatically when Home Assistant starts after updating to 2026.11.
+
+**Older Home Assistant versions — install via HACS:** HACS is the community store for Home Assistant — one-time setup guide at [hacs.xyz](https://hacs.xyz) if you don't have it yet.
 
 <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=mxkissnr&repository=glp-integration&category=integration">
   <img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Add GLP Integration via HACS" height="40"/>
 </a>
 
-After installing, go to **Settings → Devices & Services → Add Integration** and search for **Gaggiuino Local Profiler**.
+After installing (or if the setup flow did not open), go to **Settings → Devices & Services → Add Integration** and search for **Gaggiuino Local Profiler**.
 
 ### Step 3 — Open the dashboard
 
