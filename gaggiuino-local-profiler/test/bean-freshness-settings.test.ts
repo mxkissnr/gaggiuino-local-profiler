@@ -16,9 +16,8 @@ g.window ??= {};
 
 // setUiPref() debounces its PUT; a stub that always answers ok keeps that
 // background flush from rejecting.
-globalThis.fetch = (() =>
-  Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as unknown as Response)
-) as unknown as typeof fetch;
+globalThis.fetch = () =>
+  Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as unknown as Response);
 
 interface FakeInput { value: string }
 
