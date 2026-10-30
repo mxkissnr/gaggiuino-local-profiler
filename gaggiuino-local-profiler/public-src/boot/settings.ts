@@ -14,6 +14,7 @@ import { saveNotifySettings } from '../components/notify-settings.js';
 import { renderMcpSettingsCard, saveMcpSettings } from '../components/mcp-settings.js';
 import { saveMachineControlSetting } from '../components/machine-control.js';
 import { saveShotDefaultsSettings } from '../components/shot-defaults-settings.js';
+import { saveBeanFreshnessSettings, resetBeanFreshnessSettings } from '../components/bean-freshness-settings.js';
 
 // ── API token (Settings view) ──────────────────────────────────────────────
 // Shows the token once the session holds one. #803: when expose_api_port is
@@ -92,4 +93,6 @@ export function wireSettings(): void {
   // #1324: opt-in machine control saves immediately on toggle (there is no Save button).
   document.getElementById('machineControlEnabled')?.addEventListener('change', () => { void saveMachineControlSetting(); });
   document.getElementById('shotDefaultsSaveBtn')?.addEventListener('click', () => { void saveShotDefaultsSettings(); });
+  document.getElementById('bfSaveBtn')?.addEventListener('click', saveBeanFreshnessSettings);
+  document.getElementById('bfResetBtn')?.addEventListener('click', resetBeanFreshnessSettings);
 }

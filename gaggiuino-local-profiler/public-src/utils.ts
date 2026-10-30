@@ -136,13 +136,91 @@ export function isoDateInputToMs(value: string | null | undefined): number | nul
   return isNaN(d.getTime()) ? null : d.getTime();
 }
 
-// Same windows as the degassing tracker in the annotation panel.
+// One source for the freshness bands: the shot badge, the annotation panel's
+// degassing tracker and the bean cards all read these windows instead of
+// carrying their own copies of the same numbers (#1835). The values live in
+// the server-synced ui-prefs store under `bean_freshness`, so they follow the
+// user across devices and ride along in backup/restore.
+export interface FreshnessWindows {
+  /** Days below this still count as degassing. */
+  degasUntil: number;
+  /** Days from this on are past degassing ("almost"). */
+  peakFrom: number;
+  /** Last day that still counts as peak. */
+  peakUntil: number;
+  /** Last day that still counts as fading; beyond it the beans are old. */
+  fadingUntil: number;
+}
+
+export const DEFAULT_FRESHNESS_WINDOWS: FreshnessWindows = {
+  degasUntil: 4,
+  peakFrom: 7,
+  peakUntil: 21,
+  fadingUntil: 35,
+};
+
+// Mirror of ui-prefs.ts's STORAGE_KEY. utils.ts cannot import getUiPref()
+// directly: constants.ts imports this module and ui-prefs.ts reaches
+// state/index.ts, which reads TRANSLATIONS at module-eval time — the resulting
+// cycle throws a ReferenceError in every entry point that starts at
+// constants.ts. The localStorage cache is written on every setUiPref() and
+// every server merge, so reading it here sees the same values.
+const UI_PREFS_STORAGE_KEY = 'glp_ui_prefs';
+
+let _windowsCacheRaw: string | null = null;
+let _windowsCache: unknown = undefined;
+
+// A window bound is a whole number of days, within a range no real roast can
+// exceed. Anything else (a string, a negative, a fraction) makes the whole
+// stored set untrustworthy.
+function _isWindowDay(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 365;
+}
+
+/** The configurable freshness windows from the ui-prefs store. */
+function _readStoredWindows(): unknown {
+  const raw = safeLocalStorage.getItem(UI_PREFS_STORAGE_KEY);
+  if (raw === _windowsCacheRaw) return _windowsCache;
+  _windowsCacheRaw = raw;
+  _windowsCache = undefined;
+  if (!raw) return undefined;
+  try {
+    const prefs = JSON.parse(raw) as unknown;
+    _windowsCache = prefs && typeof prefs === 'object' && !Array.isArray(prefs)
+      ? (prefs as Record<string, unknown>).bean_freshness
+      : undefined;
+  } catch {
+    _windowsCache = undefined; // a corrupt cache reads as "unset"
+  }
+  return _windowsCache;
+}
+
+/**
+ * Reads the configured freshness windows. A missing, partial, non-numeric or
+ * non-ascending set falls back to the defaults as a whole — a half-applied set
+ * would silently shift bands the user never touched.
+ */
+export function freshnessWindows(): FreshnessWindows {
+  const raw = _readStoredWindows();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_FRESHNESS_WINDOWS };
+  const { degasUntil, peakFrom, peakUntil, fadingUntil } = raw as Record<string, unknown>;
+  if (!_isWindowDay(degasUntil) || !_isWindowDay(peakFrom) || !_isWindowDay(peakUntil) || !_isWindowDay(fadingUntil)) {
+    return { ...DEFAULT_FRESHNESS_WINDOWS };
+  }
+  if (!(degasUntil < peakFrom && peakFrom < peakUntil && peakUntil < fadingUntil)) {
+    return { ...DEFAULT_FRESHNESS_WINDOWS };
+  }
+  return { degasUntil, peakFrom, peakUntil, fadingUntil };
+}
+
+/** Freshness band for a roast age in days, using the configured windows. */
 export function freshnessState(days: number | null | undefined): 'degassing' | 'almost' | 'peak' | 'fading' | 'old' | null {
   if (days == null) return null;
-  if (days < 4)   return 'degassing';
-  if (days < 7)   return 'almost';
-  if (days <= 21) return 'peak';
-  if (days <= 35) return 'fading';
+  const w = freshnessWindows();
+  if (days < w.degasUntil) return 'degassing';
+  if (days < w.peakFrom)   return 'almost';
+  if (days <= w.peakUntil) return 'peak';
+  if (days <= w.fadingUntil) return 'fading';
   return 'old';
 }
 
