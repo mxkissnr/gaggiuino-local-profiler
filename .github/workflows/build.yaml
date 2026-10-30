@@ -69,6 +69,15 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version $VERSION for ${{ matrix.arch }}"
 
+      - name: Verify release tag signature
+        env:
+          TAG: ${{ github.ref_name }}
+          ALLOWED_SIGNERS: ${{ vars.RELEASE_ALLOWED_SIGNERS }}
+        run: |
+          git fetch --no-tags --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          printf '%s\n' "$ALLOWED_SIGNERS" > "$RUNNER_TEMP/allowed_signers"
+          git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile="$RUNNER_TEMP/allowed_signers" verify-tag "$TAG"
+
       - name: Build and push
         id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
