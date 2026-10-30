@@ -510,7 +510,7 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     await flush();
     dom.shutter.fire('click');
     await flush();
-    // 4:3 cropped to 3:4 => 2268x3024 from x = 882.
+    // The 4:3 photo cropped to the 3:4 box => 2268x3024 from x = 882.
     expect(dom.canvases[0]?.width).toBe(2268);
     expect(dom.canvases[0]?.height).toBe(3024);
     expect(dom.draws[0]?.slice(1)).toEqual([882, 0, 2268, 3024, 0, 0, 2268, 3024]);

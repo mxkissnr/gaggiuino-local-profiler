@@ -303,15 +303,6 @@ interface Rect {
   height: number;
 }
 
-interface Size {
-  width: number;
-  height: number;
-}
-
-interface DecodedImage extends Size {
-  close?: () => void;
-}
-
 // Region of a `sourceW × sourceH` image that `object-fit: cover` paints inside
 // a `boxW × boxH` element: a centred crop of the box's aspect ratio, i.e. the
 // part of the frame the preview actually shows.
@@ -327,10 +318,10 @@ export function coverRegion(sourceW: number, sourceH: number, boxW: number, boxH
 
 // On-screen box of the preview; a hidden or not-yet-laid-out element falls back
 // to the stream's own size so the crop is at worst a no-op.
-function previewBox(video: HTMLVideoElement): Size {
+function previewBox(video: HTMLVideoElement): Rect {
   const rect = video.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) return { width: rect.width, height: rect.height };
-  return { width: video.videoWidth, height: video.videoHeight };
+  if (rect.width > 0 && rect.height > 0) return { x: 0, y: 0, width: rect.width, height: rect.height };
+  return { x: 0, y: 0, width: video.videoWidth, height: video.videoHeight };
 }
 
 // The saved file is the previewed region of the photo itself: a photo whose
@@ -343,7 +334,7 @@ async function cropToPreview(photo: Blob, video: HTMLVideoElement): Promise<Blob
   try {
     const box = previewBox(video);
     const region = coverRegion(image.width, image.height, box.width, box.height);
-    return await drawRegion(image as unknown as CanvasImageSource, region);
+    return await drawRegion(image, region);
   } finally {
     image.close?.();
   }
@@ -351,10 +342,10 @@ async function cropToPreview(photo: Blob, video: HTMLVideoElement): Promise<Blob
 
 // createImageBitmap is missing on older WebViews; a browser that has it gets
 // the photo cropped, the others keep the untouched frame.
-async function decodeImage(blob: Blob): Promise<DecodedImage | null> {
+async function decodeImage(blob: Blob): Promise<ImageBitmap | null> {
   const host = typeof window === 'undefined'
     ? undefined
-    : window as unknown as { createImageBitmap?: (source: Blob) => Promise<DecodedImage> };
+    : window as unknown as { createImageBitmap?: (source: Blob) => Promise<ImageBitmap> };
   if (!host || typeof host.createImageBitmap !== 'function') return null;
   try {
     return await host.createImageBitmap(blob);
