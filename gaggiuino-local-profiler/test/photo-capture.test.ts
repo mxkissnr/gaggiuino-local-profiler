@@ -50,15 +50,33 @@ afterEach(() => {
 });
 
 describe('openPhotoInput() with a live camera (#1836)', () => {
-  interface FakeTrack { stopped: boolean; stop: () => void }
-  interface FakeStream { getTracks: () => FakeTrack[] }
+  interface FakeTrack {
+    stopped: boolean;
+    stop: () => void;
+    getCapabilities?: () => FocusCaps;
+    applyConstraints: (constraints: unknown) => Promise<void>;
+  }
+  interface FocusCaps { focusMode?: string[]; pointsOfInterest?: unknown }
+  interface FakeStream { getTracks: () => FakeTrack[]; getVideoTracks: () => FakeTrack[] }
 
-  function fakeStream(): { stream: FakeStream; tracks: FakeTrack[] } {
-    const tracks: FakeTrack[] = [
-      { stopped: false, stop(): void { this.stopped = true; } },
-      { stopped: false, stop(): void { this.stopped = true; } },
-    ];
-    return { stream: { getTracks: () => tracks }, tracks };
+  function fakeStream(caps?: FocusCaps): { stream: FakeStream; tracks: FakeTrack[]; applied: unknown[] } {
+    const applied: unknown[] = [];
+    const track = (): FakeTrack => ({
+      stopped: false,
+      stop(): void { this.stopped = true; },
+      applyConstraints: (constraints): Promise<void> => {
+        applied.push(constraints);
+        return Promise.resolve();
+      },
+    });
+    const video = track();
+    if (caps) video.getCapabilities = (): FocusCaps => caps;
+    const tracks: FakeTrack[] = [video, track()];
+    return {
+      stream: { getTracks: () => tracks, getVideoTracks: () => [video] },
+      tracks,
+      applied,
+    };
   }
 
   interface FakeEl {
@@ -69,14 +87,19 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     videoWidth: number;
     videoHeight: number;
     attrs: Map<string, string>;
-    listeners: Map<string, () => void>;
+    listeners: Map<string, (event?: unknown) => void>;
+    style: Record<string, string>;
+    className: string;
+    parentElement: { appendChild: (child: FakeEl) => void } | null;
     setAttribute: (name: string, value: string) => void;
     hasAttribute: (name: string) => boolean;
     focus: () => void;
     querySelectorAll: () => unknown[];
-    addEventListener: (type: string, fn: () => void, opts?: { signal?: AbortSignal }) => void;
+    getBoundingClientRect: () => { left: number; top: number; width: number; height: number };
+    addEventListener: (type: string, fn: (event?: unknown) => void, opts?: { signal?: AbortSignal }) => void;
     removeEventListener: (type: string) => void;
-    fire: (type: string) => void;
+    fire: (type: string, event?: unknown) => void;
+    remove: () => void;
   }
 
   function fakeEl(id: string): FakeEl {
@@ -92,17 +115,24 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
       videoWidth: 640,
       videoHeight: 480,
       attrs: new Map<string, string>(),
-      listeners: new Map<string, () => void>(),
+      listeners: new Map<string, (event?: unknown) => void>(),
+      style: {},
+      className: '',
+      parentElement: null,
       setAttribute: (name, value): void => { el.attrs.set(name, value); },
       hasAttribute: (name): boolean => el.attrs.has(name),
       focus: (): void => {},
       querySelectorAll: (): unknown[] => [],
+      getBoundingClientRect: (): { left: number; top: number; width: number; height: number } => ({
+        left: 0, top: 0, width: 640, height: 480,
+      }),
       addEventListener: (type, fn, opts): void => {
         el.listeners.set(type, fn);
         opts?.signal?.addEventListener('abort', () => el.listeners.delete(type));
       },
       removeEventListener: (type): void => { el.listeners.delete(type); },
-      fire: (type): void => { el.listeners.get(type)?.(); },
+      fire: (type, event?: unknown): void => { el.listeners.get(type)?.(event); },
+      remove: (): void => { el.tone.add('removed'); },
     };
     return el;
   }
@@ -123,13 +153,17 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     const cancel = fakeEl('photoCameraCancelBtn');
     const keydown = new Set<KeydownFn>();
     const canvases: FakeCanvas[] = [];
+    const rings: FakeEl[] = [];
+    // The viewport wrapper that receives the tap-to-focus ring.
+    video.parentElement = { appendChild: (child: FakeEl): void => { rings.push(child); } };
     const els: Record<string, FakeEl> = {
       photoCameraModal: modal, photoCameraVideo: video,
       photoCameraShutter: shutter, photoCameraCancelBtn: cancel,
     };
     g.document = {
       getElementById: (id: string): FakeEl | null => els[id] ?? null,
-      createElement: (): FakeCanvas => {
+      createElement: (tag?: string): FakeCanvas | FakeEl => {
+        if (tag === 'div') return fakeEl('div');
         const canvas: FakeCanvas = {
           width: 0,
           height: 0,
@@ -152,7 +186,7 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
       },
     };
     return {
-      modal, video, shutter, cancel, canvases,
+      modal, video, shutter, cancel, canvases, rings,
       escape(): void { for (const fn of keydown) fn({ key: 'Escape', preventDefault: () => {} }); },
       keydownCount: (): number => keydown.size,
     };
@@ -165,11 +199,12 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     get files(): File[] { return this.added; }
   }
 
-  function stubCamera(getUserMedia: (constraints: MediaStreamConstraints) => Promise<FakeStream>): {
-    calls: MediaStreamConstraints[];
-  } {
+  function stubCamera(
+    getUserMedia: (constraints: MediaStreamConstraints) => Promise<FakeStream>,
+    windowExtra: Record<string, unknown> = {},
+  ): { calls: MediaStreamConstraints[] } {
     const calls: MediaStreamConstraints[] = [];
-    g.window = { isSecureContext: true };
+    g.window = { isSecureContext: true, ...windowExtra };
     g.navigator = {
       language: 'en-US',
       mediaDevices: {
@@ -200,7 +235,15 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     openPhotoInput(asInput(input), { camera: true });
     await flush();
     expect(input.clicks).toBe(0);
-    expect(calls).toEqual([{ video: { facingMode: 'environment' } }]);
+    // Asking for a size is what gets a sharp photo instead of the 640x480
+    // default stream.
+    expect(calls).toEqual([{
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 3840 },
+        height: { ideal: 2160 },
+      },
+    }]);
     expect(dom.modal.classList.contains('open')).toBe(true);
     expect(dom.video.srcObject).toBeTruthy();
     expect(dom.video.tone.has('photo-video-off')).toBe(false);
@@ -335,6 +378,96 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     expect(dom.video.srcObject).toBe(null);
     // Backing out never re-opens the phone's camera app behind the user.
     expect(input.clicks).toBe(0);
+  });
+
+  it('applies continuous autofocus when the camera supports it', async () => {
+    const { stream, applied } = fakeStream({ focusMode: ['continuous', 'single-shot'] });
+    stubCamera(() => Promise.resolve(stream));
+    stubDom();
+    openPhotoInput(asInput(fakeInput()), { camera: true });
+    await flush();
+    expect(applied).toEqual([{ advanced: [{ focusMode: 'continuous' }] }]);
+  });
+
+  it('skips continuous autofocus when the camera does not offer it', async () => {
+    const { stream, applied } = fakeStream({ focusMode: ['none'] });
+    stubCamera(() => Promise.resolve(stream));
+    stubDom();
+    openPhotoInput(asInput(fakeInput()), { camera: true });
+    await flush();
+    expect(applied).toEqual([]);
+  });
+
+  it('a tap focuses at the tapped point and draws a ring there', async () => {
+    const { stream, applied } = fakeStream({
+      focusMode: ['continuous', 'single-shot'],
+      pointsOfInterest: {},
+    });
+    stubCamera(() => Promise.resolve(stream));
+    const dom = stubDom();
+    openPhotoInput(asInput(fakeInput()), { camera: true });
+    await flush();
+    dom.video.fire('pointerdown', { clientX: 160, clientY: 120 });
+    await flush();
+    // A 640x480 frame painted 1:1 into a 640x480 box: a quarter in from the
+    // left and top edges.
+    expect(applied[1]).toEqual({
+      advanced: [{ pointsOfInterest: [{ x: 0.25, y: 0.25 }], focusMode: 'single-shot' }],
+    });
+    expect(dom.rings[0]?.className).toBe('photo-focus-ring');
+    expect(dom.rings[0]?.style.left).toBe('160px');
+    expect(dom.rings[0]?.style.top).toBe('120px');
+  });
+
+  it('a tap does nothing when the camera reports no focus modes', async () => {
+    const { stream, applied } = fakeStream();
+    stubCamera(() => Promise.resolve(stream));
+    const dom = stubDom();
+    openPhotoInput(asInput(fakeInput()), { camera: true });
+    await flush();
+    dom.video.fire('pointerdown', { clientX: 320, clientY: 240 });
+    await flush();
+    expect(applied).toEqual([]);
+    expect(dom.rings).toEqual([]);
+  });
+
+  it('the shutter takes the photo through ImageCapture when it exists', async () => {
+    class FakeImageCapture {
+      constructor(track: unknown) { void track; }
+      takePhoto(): Promise<Blob> {
+        return Promise.resolve(new Blob(['sensor'], { type: 'image/jpeg' }));
+      }
+    }
+    const { stream } = fakeStream();
+    stubCamera(() => Promise.resolve(stream), { ImageCapture: FakeImageCapture });
+    const dom = stubDom();
+    const input = fakeInput();
+    openPhotoInput(asInput(input), { camera: true });
+    await flush();
+    dom.shutter.fire('click');
+    await flush();
+    // The sensor path is used instead of a canvas frame.
+    expect(dom.canvases).toEqual([]);
+    expect(input.files?.[0]?.name).toBe('camera.jpg');
+    expect(input.files?.[0]?.type).toBe('image/jpeg');
+    expect(input.events.map(e => e.type)).toEqual(['change']);
+  });
+
+  it('falls back to the canvas frame when ImageCapture rejects', async () => {
+    class BrokenImageCapture {
+      takePhoto(): Promise<Blob> { return Promise.reject(new Error('nope')); }
+    }
+    const { stream } = fakeStream();
+    stubCamera(() => Promise.resolve(stream), { ImageCapture: BrokenImageCapture });
+    const dom = stubDom();
+    const input = fakeInput();
+    openPhotoInput(asInput(input), { camera: true });
+    await flush();
+    dom.shutter.fire('click');
+    await flush();
+    expect(dom.canvases[0]?.width).toBe(640);
+    expect(input.files?.[0]?.name).toBe('camera.jpg');
+    expect(input.events.map(e => e.type)).toEqual(['change']);
   });
 
   it('the gallery path still just clears capture and clicks the input', () => {
