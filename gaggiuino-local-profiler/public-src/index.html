@@ -1575,6 +1575,31 @@
                 <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
             </div>
         </div>
+        <!-- Bean freshness windows and the low-stock threshold (#1835) — the
+             same two ui-prefs entries utils.ts's freshnessWindows() and the Go
+             low-stock check read, so this card is the only place they are
+             edited. Saves through setUiPref() (components/bean-freshness-
+             settings.ts); the bindings are numeric so a bad value cannot be
+             typed in the first place, and Save still validates. -->
+        <div class="settings-card" id="beanFreshnessCard">
+            <h3 class="settings-card-title" data-i18n="bf_title">Bohnen-Frische</h3>
+            <p class="settings-card-desc" data-i18n="bf_desc">Ab welchem Alter eine Röstung als degasend, optimal oder alt gilt — und ab wie vielen Gramm eine Packung als fast leer gemeldet wird.</p>
+            <label for="bfDegasUntil" class="machine-form-label" data-i18n="bf_degas_until">Degasen bis (Tage)</label>
+            <input type="number" id="bfDegasUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfPeakFrom" class="machine-form-label" data-i18n="bf_peak_from">Optimal ab (Tage)</label>
+            <input type="number" id="bfPeakFrom" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfPeakUntil" class="machine-form-label" data-i18n="bf_peak_until">Optimal bis (Tage)</label>
+            <input type="number" id="bfPeakUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfFadingUntil" class="machine-form-label" data-i18n="bf_fading_until">Abbauend bis (Tage)</label>
+            <input type="number" id="bfFadingUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfLowStock" class="machine-form-label" data-i18n="bf_low_stock">Warnung unter (g)</label>
+            <input type="number" id="bfLowStock" class="machine-form-input" step="1" min="1" max="5000" inputmode="numeric">
+            <div id="bfError" class="machine-form-test-result" role="alert" style="display:none;color:var(--err)"></div>
+            <div class="machine-form-actions">
+                <button id="bfSaveBtn" type="button" class="backup-btn" data-i18n="bf_save">Speichern</button>
+                <button id="bfResetBtn" type="button" class="backup-btn" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
+            </div>
+        </div>
         <!-- Live-data transport (#598) — self-contained card, does not touch
              the machine registry card below it. Connection fields are only
              shown once "MQTT" is picked (renderMqttSettingsCard() toggles

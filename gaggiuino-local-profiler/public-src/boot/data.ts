@@ -24,6 +24,7 @@ import { loadNotifySettingsCard } from '../components/notify-settings.js';
 import { loadMcpSettingsCard } from '../components/mcp-settings.js';
 import { loadMachineControlSetting } from '../components/machine-control.js';
 import { loadShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
+import { renderBeanFreshnessSettings } from '../components/bean-freshness-settings.js';
 import { renderApiTokenCard } from './settings.js';
 import { runBootTasks } from './run-step.js';
 import type { BootOutcome } from './run-step.js';
@@ -70,6 +71,7 @@ async function loadSettingsState(): Promise<void> {
   void loadMcpSettingsCard();
   void loadMachineControlSetting();
   void loadMachines();
+  renderBeanFreshnessSettings();
   await loadShotDefaultsSettingsCard();
 }
 
@@ -148,7 +150,10 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
     // load unawaited could let that first render see S.shotDefaults still null
     // with nothing to re-render it once the fetch actually completes. The other
     // cards stay fire-and-forget as before.
-    { name: 'settings', requires: ['token'], run: loadSettingsState },
+    // Ordered after "ui prefs": the bean-freshness card is pre-filled from the
+    // shared preferences, and rendering it before the merge would show a fresh
+    // device the defaults instead of the configured set.
+    { name: 'settings', requires: ['token'], after: ['ui prefs'], run: loadSettingsState },
     { name: 'notify settings', requires: ['token'], run: loadNotifySettingsCard },
     { name: 'drink menu', requires: ['token'], run: loadDrinkMenu },
     { name: 'milk types', requires: ['token'], run: loadMilkTypes },
