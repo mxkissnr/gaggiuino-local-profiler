@@ -14,6 +14,14 @@ import { switchLibTab, openBeanForm, discardBeanForm, saveBean, saveBeanNoBag, s
 import { closeProfileForm, openNewProfileForm, applyBeanSuggestion, addProfilePhase, sendProfileToMachine,
          renderProfilePreviewChart } from '../views/library-profile-editor.js';
 import { openNewGaggiMateProfile } from '../views/gaggimate-profile-editor.js';
+import { openPhotoInput, showCameraButtons } from '../photo-capture.js';
+
+// #1836: one hidden file input per photo field, opened either from the gallery
+// (pick button) or straight from the camera (camera button, touch devices only).
+const CAMERA_BUTTONS = [
+  'grinderFormImageCameraBtn', 'beanFormImageCameraBtn',
+  'basketFormImageCameraBtn', 'puckScreenFormImageCameraBtn',
+];
 
 // Profile creation/editing branches to the GaggiMate editor instead of the
 // Gaggiuino one for GaggiMate machines — checked here and by the click delegation.
@@ -43,11 +51,13 @@ export function wireLibrary(): void {
   document.getElementById('closeGrinderFormBtn')!.addEventListener('click', closeGrinderForm);
   document.getElementById('saveGrinderBtn')!.addEventListener('click', () => { void saveGrinder(); });
   document.getElementById('grinderAddTrigger')!.addEventListener('click', () => openGrinderForm());
-  document.getElementById('grinderFormImagePickBtn')!.addEventListener('click', () => document.getElementById('grinderFormImage')!.click());
+  document.getElementById('grinderFormImagePickBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('grinderFormImage') as HTMLInputElement, { camera: false }));
+  document.getElementById('grinderFormImageCameraBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('grinderFormImage') as HTMLInputElement, { camera: true }));
   document.getElementById('grinderFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     if (S.grinderEditId) void uploadGrinderImage(S.grinderEditId, this);
   });
-  document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => document.getElementById('beanFormImage')!.click());
+  document.getElementById('beanFormImagePickBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('beanFormImage') as HTMLInputElement, { camera: false }));
+  document.getElementById('beanFormImageCameraBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('beanFormImage') as HTMLInputElement, { camera: true }));
   document.getElementById('beanFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     // #1329 part 2: creating stages the cropped photo until the bean is saved.
     if (S.beanEditId) void uploadBeanImage(S.beanEditId, this);
@@ -63,17 +73,20 @@ export function wireLibrary(): void {
   document.getElementById('milkAddTrigger')!.addEventListener('click', openMilkForm);
   document.getElementById('libTabBaskets')!.addEventListener('click', () => switchLibTab('baskets'));
   document.getElementById('libTabPuckScreens')!.addEventListener('click', () => switchLibTab('puckscreens'));
+  showCameraButtons(CAMERA_BUTTONS);
   document.getElementById('closeBasketFormBtn')!.addEventListener('click', closeBasketForm);
   document.getElementById('saveBasketBtn')!.addEventListener('click', () => { void saveBasket(); });
   document.getElementById('basketAddTrigger')!.addEventListener('click', () => openBasketForm());
-  document.getElementById('basketFormImagePickBtn')!.addEventListener('click', () => document.getElementById('basketFormImage')!.click());
+  document.getElementById('basketFormImagePickBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('basketFormImage') as HTMLInputElement, { camera: false }));
+  document.getElementById('basketFormImageCameraBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('basketFormImage') as HTMLInputElement, { camera: true }));
   document.getElementById('basketFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     if (S.basketEditId) void uploadBasketImage(S.basketEditId, this);
   });
   document.getElementById('closePuckScreenFormBtn')!.addEventListener('click', closePuckScreenForm);
   document.getElementById('savePuckScreenBtn')!.addEventListener('click', () => { void savePuckScreen(); });
   document.getElementById('puckScreenAddTrigger')!.addEventListener('click', () => openPuckScreenForm());
-  document.getElementById('puckScreenFormImagePickBtn')!.addEventListener('click', () => document.getElementById('puckScreenFormImage')!.click());
+  document.getElementById('puckScreenFormImagePickBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('puckScreenFormImage') as HTMLInputElement, { camera: false }));
+  document.getElementById('puckScreenFormImageCameraBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('puckScreenFormImage') as HTMLInputElement, { camera: true }));
   document.getElementById('puckScreenFormImage')!.addEventListener('change', function (this: HTMLInputElement) {
     if (S.puckScreenEditId) void uploadPuckScreenImage(S.puckScreenEditId, this);
   });
