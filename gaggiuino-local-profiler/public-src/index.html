@@ -1805,6 +1805,19 @@
     <button class="scan-close-btn" id="closeScanModalBtn" data-i18n="scan_close">Schließen</button>
 </div>
 
+<!-- ── In-app camera modal (#1836) ── the Companion app's WebView ignores the
+     file input's `capture` attribute, so "Take photo" streams the live camera
+     here instead (same getUserMedia path as #scanModal). -->
+<div id="photoCameraModal" role="dialog" aria-modal="true" aria-label="Foto aufnehmen" data-i18n-aria-label="photo_take_btn">
+    <div id="photoCameraViewport">
+        <video id="photoCameraVideo" class="photo-video-off" autoplay muted playsinline></video>
+    </div>
+    <div class="photo-camera-actions">
+        <button type="button" id="photoCameraCancelBtn" class="scan-close-btn" data-i18n="photo_camera_cancel">Abbrechen</button>
+        <button type="button" id="photoCameraShutter" class="lib-save-btn photo-camera-shutter" data-i18n="photo_camera_shutter">Auslösen</button>
+    </div>
+</div>
+
 <!-- ── Backup export/restore modal ── shared by both flows, see
      public-src/components/backup-modal.js for why. -->
 <div id="backupModal" role="dialog" aria-modal="true" aria-labelledby="backupModalTitle" aria-describedby="backupModalDesc">
