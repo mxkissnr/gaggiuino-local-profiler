@@ -492,26 +492,28 @@ describe('openPhotoInput() with a live camera (#1836)', () => {
     let closed = false;
     stubCamera(() => Promise.resolve(stream), {
       ImageCapture: FakeImageCapture,
-      // A 16:9 stream (640x480 here) recorded at 4:3 by the sensor: the photo
-      // is wider than the square preview box, so the sides are cut off.
+      // The sensor's own 4:3 frame, while the preview box is a 3:4 portrait:
+      // the photo is wider than the box, so cover cuts its sides off.
       createImageBitmap: (): Promise<{ width: number; height: number; close: () => void }> =>
         Promise.resolve({ width: 4032, height: 3024, close: () => { closed = true; } }),
     });
     const dom = stubDom();
     const input = fakeInput();
-    // The phone shows the square preview box; the photo must match that box,
+    // The phone shows the portrait preview box; the photo must match that box,
     // not the frame the sensor happened to return.
     dom.video.getBoundingClientRect = (): { left: number; top: number; width: number; height: number } => ({
-      left: 0, top: 0, width: 360, height: 360,
+      left: 0, top: 0, width: 360, height: 480,
     });
+    dom.video.videoWidth = 1920;
+    dom.video.videoHeight = 1080;
     openPhotoInput(asInput(input), { camera: true });
     await flush();
     dom.shutter.fire('click');
     await flush();
-    // 4:3 cropped to 1:1 => 3024x3024 from x = 504.
-    expect(dom.canvases[0]?.width).toBe(3024);
+    // 4:3 cropped to 3:4 => 2268x3024 from x = 882.
+    expect(dom.canvases[0]?.width).toBe(2268);
     expect(dom.canvases[0]?.height).toBe(3024);
-    expect(dom.draws[0]?.slice(1)).toEqual([504, 0, 3024, 3024, 0, 0, 3024, 3024]);
+    expect(dom.draws[0]?.slice(1)).toEqual([882, 0, 2268, 3024, 0, 0, 2268, 3024]);
     expect(closed).toBe(true);
     expect(input.files?.[0]?.name).toBe('camera.jpg');
     expect(input.files?.[0]?.type).toBe('image/jpeg');
