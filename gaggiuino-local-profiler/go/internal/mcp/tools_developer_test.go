@@ -497,7 +497,7 @@ func TestExportShotsDatasetListedWithOptIn(t *testing.T) {
 func TestExportShotsDatasetBeanMix(t *testing.T) {
 	ts, sqlDB := newDeveloperServer(t, true, false)
 	insertShot(t, sqlDB, 1, 1000, nil, map[string]any{
-		"coffee":  "Alpha Blend",
+		"coffee": "Alpha Blend",
 		"beanMix": []any{
 			map[string]any{"coffee": "Alpha Blend", "beanId": float64(1), "grams": float64(12)},
 			map[string]any{"coffee": "Beta Roast", "beanId": float64(2), "grams": float64(6)},

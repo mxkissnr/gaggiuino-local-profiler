@@ -388,7 +388,7 @@ func hasTask(tasks []any, name string) bool {
 // (most grams), Beta Roast as the second part.
 func beanMixAnnotation() map[string]any {
 	return map[string]any{
-		"coffee":  "Alpha Blend",
+		"coffee": "Alpha Blend",
 		"beanMix": []any{
 			map[string]any{"coffee": "Alpha Blend", "beanId": float64(1), "grams": float64(12)},
 			map[string]any{"coffee": "Beta Roast", "beanId": float64(2), "grams": float64(6)},
