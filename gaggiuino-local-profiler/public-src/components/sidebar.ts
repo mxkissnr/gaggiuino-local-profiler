@@ -299,11 +299,11 @@ function shotMatchesBeanFilter(shot: SidebarShot): boolean {
     });
   }
   const resolved = resolveBeanForAnnotation(shot.annotation, S.coffeeLibrary?.beans);
-  if (resolved) return resolved.id === S.beanFilter.id;
+  if (resolved) return resolved.id === filter.id;
   // No library bean resolves for this shot (predates beanId, or its bean
   // was since deleted/renamed) — fall back to the raw annotated name so a
   // filter set from a still-existing bean can still match its own history.
-  return (shot.annotation?.coffee || '').toLowerCase() === S.beanFilter.name.toLowerCase();
+  return (shot.annotation?.coffee || '').toLowerCase() === filter.name.toLowerCase();
 }
 
 // #969: build any month bodies still rendered lazily (collapsed = empty
