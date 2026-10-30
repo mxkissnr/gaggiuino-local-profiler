@@ -343,12 +343,9 @@ async function cropToPreview(photo: Blob, video: HTMLVideoElement): Promise<Blob
 // createImageBitmap is missing on older WebViews; a browser that has it gets
 // the photo cropped, the others keep the untouched frame.
 async function decodeImage(blob: Blob): Promise<ImageBitmap | null> {
-  const host = typeof window === 'undefined'
-    ? undefined
-    : window as unknown as { createImageBitmap?: (source: Blob) => Promise<ImageBitmap> };
-  if (!host || typeof host.createImageBitmap !== 'function') return null;
+  if (typeof window === 'undefined' || typeof window.createImageBitmap !== 'function') return null;
   try {
-    return await host.createImageBitmap(blob);
+    return await window.createImageBitmap(blob);
   } catch {
     return null;
   }
