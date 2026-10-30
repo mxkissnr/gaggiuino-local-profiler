@@ -281,7 +281,7 @@ describe('per-bean views skip mixed shots, overall stats keep them (#1837)', () 
       { id: 2, timestamp: 1002, score: 60, annotation: { beanId: 7, coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '14', beanMix: MIX } },
     ];
     const bean: BeanCardRow = {
-      id: 7, name: 'Bean A', roastDate: '2024-01-01', bags: [], consumedG: 0, remainingG: null,
+      id: 7, name: 'Bean A', roastDate: '2024-01-01', bags: [],
     };
 
     const card = renderBeanCard(bean, [bean]);
