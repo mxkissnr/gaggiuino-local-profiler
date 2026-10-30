@@ -282,7 +282,7 @@ describe('bean rating ignores mixed shots (#1837)', () => {
       { annotation: MIX },
       { annotation: { coffee: 'Ethiopia Guji', beanId: 1, rating: '3' } },
     ];
-    expect(calcBeanRating(beans[0]!, shots, beans)).toEqual({ avg: 3, count: 1 });
+    expect(calcBeanRating(beans[0], shots, beans)).toEqual({ avg: 3, count: 1 });
   });
 
   it('counts every single-bean shot as before', () => {
@@ -290,7 +290,7 @@ describe('bean rating ignores mixed shots (#1837)', () => {
       { annotation: { coffee: 'Ethiopia Guji', beanId: 1, rating: '4' } },
       { annotation: { coffee: 'Ethiopia Guji', beanId: 1, rating: '2' } },
     ];
-    expect(calcBeanRating(beans[0]!, shots, beans)).toEqual({ avg: 3, count: 2 });
+    expect(calcBeanRating(beans[0], shots, beans)).toEqual({ avg: 3, count: 2 });
   });
 
   it('does not count a mixed shot on the name-only fallback path either', () => {
