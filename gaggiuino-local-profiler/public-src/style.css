@@ -812,6 +812,7 @@
         .machine-form-actions { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
         .machine-form-actions .backup-btn { display:inline-block; }
         .machine-form-test-result { font-size: var(--fs-1); color:var(--gray-400); min-height:1em; }
+        .bf-error { font-size: var(--fs-1); color:var(--err); margin-top: var(--sp-1); }
 
         /* Firmware update (#1044, moved from #machineFormCard onto the
            machines-list row's expand panel by #1046) — badge styling is

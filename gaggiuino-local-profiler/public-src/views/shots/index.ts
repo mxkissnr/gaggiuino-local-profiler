@@ -9,7 +9,7 @@ import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPha
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
-  chartColors, html, joinHtml
+  chartColors, freshnessState, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
@@ -743,7 +743,10 @@ export async function updateView(): Promise<void> {
   const beanAge  = shotBeanAge(ann, shotA.timestamp, { relativeToNow: !shotB });
   if (beanAge != null && beanAge.days >= 0 && beanAge.days <= 365) {
     const ageAtShot = beanAge.days;
-    const cls = ageAtShot <= 21 ? 'freshness-fresh' : ageAtShot <= 35 ? 'freshness-ok' : 'freshness-old';
+    // #1835: the badge follows the same shared freshness windows as the
+    // annotation panel's tracker; degassing/almost/peak all read as "fresh".
+    const state = freshnessState(ageAtShot);
+    const cls = state === 'fading' ? 'freshness-ok' : state === 'old' ? 'freshness-old' : 'freshness-fresh';
     freshEl.className   = `freshness-badge ${cls}`;
     freshEl.textContent = beanAge.atShot ? t('bean_age_badge', ageAtShot) : t('freshness_badge', ageAtShot);
     freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot);
