@@ -23,7 +23,9 @@ export interface BeanMixPartInput {
  * is named here; `coffee` keeps the generated Annotation schema's type.
  */
 export type BeanMixAnnotation = {
-  coffee?: ShotAnnotation['coffee'] | null;
+  // `| undefined` keeps the view-local annotation aliases (which spell it out
+  // for exactOptionalPropertyTypes) assignable here.
+  coffee?: ShotAnnotation['coffee'] | null | undefined;
   beanMix?: readonly BeanMixPartInput[] | null | undefined;
 };
 
