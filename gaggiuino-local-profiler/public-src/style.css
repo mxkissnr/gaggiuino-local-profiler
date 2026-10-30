@@ -1863,6 +1863,11 @@
         /* No stream yet: hide the <video> so Android's WebView does not show
            its play-button poster in the empty viewport (same as #1536). */
         #photoCameraViewport video.photo-video-off { visibility:hidden; }
+        /* Tap-to-focus feedback (#1836): a ring drawn where the tap landed and
+           removed again by the script after ~600ms. */
+        .photo-focus-ring { position:absolute; width:48px; height:48px; margin:-24px 0 0 -24px; border:2px solid var(--accent); border-radius:50%; box-shadow:0 0 0 1px var(--scrim); pointer-events:none; animation: photo-focus-ring-in .6s ease-out forwards; }
+        @keyframes photo-focus-ring-in { from { opacity:1; transform:scale(1.35); } to { opacity:0; transform:scale(.85); } }
+        @media (prefers-reduced-motion: reduce) { .photo-focus-ring { animation:none; } }
         .photo-camera-actions { display:flex; align-items:center; gap: var(--sp-3); width:100%; max-width:420px; justify-content:space-between; }
         .photo-camera-shutter { flex:1 1 auto; }
 
