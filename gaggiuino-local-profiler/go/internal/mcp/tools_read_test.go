@@ -384,6 +384,101 @@ func hasTask(tasks []any, name string) bool {
 	return false
 }
 
+// beanMixAnnotation is a two-part mixed shot: Alpha Blend as the primary bean
+// (most grams), Beta Roast as the second part.
+func beanMixAnnotation() map[string]any {
+	return map[string]any{
+		"coffee": "Alpha Blend",
+		"beanMix": []any{
+			map[string]any{"coffee": "Alpha Blend", "beanId": float64(1), "grams": float64(12)},
+			map[string]any{"coffee": "Beta Roast", "beanId": float64(2), "grams": float64(6)},
+		},
+	}
+}
+
+// TestShotReadToolsShowBeanMix covers #1837: a mixed shot reads as "A + B",
+// get_shot lists its parts, and the bean filter matches any part. A
+// single-bean shot keeps its old output, with no bean_components key.
+func TestShotReadToolsShowBeanMix(t *testing.T) {
+	ts, sqlDB := newTestServer(t)
+	insertShot(t, sqlDB, 1, 1000, nil, beanMixAnnotation())
+	insertShot(t, sqlDB, 2, 1001, nil, map[string]any{"coffee": "Gamma Light"})
+	session := connect(t, ts.URL+Path)
+
+	detail := structured(t, call(t, session, "get_shot", map[string]any{"id": 1}))
+	if got, _ := detail["bean"].(string); got != "Alpha Blend + Beta Roast" {
+		t.Fatalf("mixed shot bean = %q, want \"Alpha Blend + Beta Roast\"", got)
+	}
+	components := objects(detail, "bean_components")
+	if len(components) != 2 {
+		t.Fatalf("bean_components = %d entries, want 2", len(components))
+	}
+	first := components[0].(map[string]any)
+	if got, _ := first["bean"].(string); got != "Alpha Blend" {
+		t.Fatalf("component[0].bean = %v, want Alpha Blend", got)
+	}
+	if got, ok := first["bean_id"].(float64); !ok || got != 1 {
+		t.Fatalf("component[0].bean_id = %v, want 1", first["bean_id"])
+	}
+	if got, ok := first["grams"].(float64); !ok || got != 12 {
+		t.Fatalf("component[0].grams = %v, want 12", first["grams"])
+	}
+	second := components[1].(map[string]any)
+	if got, _ := second["bean"].(string); got != "Beta Roast" {
+		t.Fatalf("component[1].bean = %v, want Beta Roast", got)
+	}
+
+	single := structured(t, call(t, session, "get_shot", map[string]any{"id": 2}))
+	if got, _ := single["bean"].(string); got != "Gamma Light" {
+		t.Fatalf("single shot bean = %q, want Gamma Light", got)
+	}
+	if _, ok := single["bean_components"]; ok {
+		t.Fatalf("single-bean shot carries a bean_components key")
+	}
+
+	mixedFilter := structured(t, call(t, session, "list_shots", map[string]any{"bean": "beta"}))
+	if got := len(objects(mixedFilter, "shots")); got != 1 {
+		t.Fatalf("bean=beta = %d shots, want 1 (any part matches)", got)
+	}
+	summary := objects(mixedFilter, "shots")[0].(map[string]any)
+	if got, _ := summary["bean"].(string); got != "Alpha Blend + Beta Roast" {
+		t.Fatalf("summary bean = %q, want the mix label", got)
+	}
+
+	singleFilter := structured(t, call(t, session, "list_shots", map[string]any{"bean": "gamma"}))
+	if got := len(objects(singleFilter, "shots")); got != 1 {
+		t.Fatalf("bean=gamma = %d shots, want 1", got)
+	}
+	if got, _ := objects(singleFilter, "shots")[0].(map[string]any)["bean"].(string); got != "Gamma Light" {
+		t.Fatalf("single summary bean = %q, want Gamma Light", got)
+	}
+
+	compared := structured(t, call(t, session, "compare_shots", map[string]any{"ids": []int64{1, 2}}))
+	comparedShots := objects(compared, "shots")
+	if len(comparedShots) != 2 {
+		t.Fatalf("compare_shots returned %d shots, want 2", len(comparedShots))
+	}
+	if got, _ := comparedShots[0].(map[string]any)["bean"].(string); got != "Alpha Blend + Beta Roast" {
+		t.Fatalf("compare bean = %q, want the mix label", got)
+	}
+
+	analytics := structured(t, call(t, session, "get_analytics_summary", map[string]any{
+		"since": "1970-01-01T00:00:00Z",
+		"until": "1970-01-02T00:00:00Z",
+		"bean":  "beta",
+	}))
+	if got := numberField(t, analytics, "shot_count"); got != 1 {
+		t.Fatalf("analytics bean=beta shot_count = %v, want 1 (any part matches)", got)
+	}
+	topBeans := objects(analytics, "top_beans")
+	if len(topBeans) != 1 {
+		t.Fatalf("top_beans = %d entries, want 1", len(topBeans))
+	}
+	if got, _ := topBeans[0].(map[string]any)["bean"].(string); got != "Alpha Blend + Beta Roast" {
+		t.Fatalf("top bean = %q, want the mix label", got)
+	}
+}
+
 func TestAggregateAnalytics(t *testing.T) {
 	// 2026-01-05 is a Monday; +2d stays in the same ISO week, +8d moves to
 	// the next one.

@@ -27,6 +27,7 @@ import { openLightbox }                                       from '../../compon
 import { showToast }                                          from '../../components/toast.js';
 import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
+import { beanLabel }                                          from '../../shared/bean-mix.js';
 import { _shots }                                             from './shared.js';
 import type { ShotRow }                                       from './shared.js';
 import { safeLocalStorage } from '../../storage.js';
@@ -731,7 +732,8 @@ export async function updateView(): Promise<void> {
   // folded straight into this label ("Mahlgrad X (zuletzt Y)") instead of
   // a separate chip — one place to look instead of two.
   const grinderLabel = buildGrinderGrindLabel(_shots(), shotA, !shotB, t);
-  _el('beanVal').textContent    = ann.coffee || '–';
+  // #1837: a mixed shot names every bean and its share ("A 10 g + B 8 g").
+  _el('beanVal').textContent    = beanLabel(ann, true) || '–';
   _el('grinderVal').textContent = grinderLabel || '–';
 
   // Freshness badge — #1788: follows the library's current roast date instead

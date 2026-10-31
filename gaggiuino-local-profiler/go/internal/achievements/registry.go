@@ -9,7 +9,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// The achievements ("stamp card") catalogue — 56 open + 7 secret badges
+// The achievements ("stamp card") catalogue — 56 open + 8 secret badges
 // across 8 categories. The registry contract is
 // id/card/stamp/check/progress/secret; every check() aggregates across ALL
 // machines rather than scoping to the default one.
@@ -486,6 +486,14 @@ func badges() []badge {
 		}},
 		{ID: "secret_wish", Card: "secret", Secret: true, Check: func(c *Context) bool {
 			return anyShotLocalParts(c, func(p dateParts) bool { return p.hour == 11 && p.minute == 11 })
+		}},
+		{ID: "secret_house_blend", Card: "secret", Secret: true, Check: func(c *Context) bool {
+			for _, s := range c.Shots {
+				if ann, _ := s["annotation"].(map[string]any); shots.IsBeanMix(ann) {
+					return true
+				}
+			}
+			return false
 		}},
 	}
 }

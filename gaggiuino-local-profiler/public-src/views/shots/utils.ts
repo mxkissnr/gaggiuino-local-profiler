@@ -3,6 +3,8 @@ import { mapShotDatapoints, parseRoastDate, resolveBeanForAnnotation as _resolve
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 import type { PressureNote } from '../../shared/score.js';
+import { isBeanMix } from '../../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 
 // state/index.ts types shot rows as metadata-only `ShotMeta` with an index
 // signature; these local aliases name the fields these helpers actually read
@@ -12,6 +14,7 @@ interface ShotAnnotationLike {
   coffee?: string | null;
   grindSetting?: string | number | null;
   grinder?: string | null;
+  beanMix?: readonly BeanMixPartInput[] | null;
 }
 
 export interface ShotLike {
@@ -205,7 +208,11 @@ export function findPreviousShot(shots: ShotLike[], shot: ShotLike): ShotLike | 
 // when either annotation can't be resolved to a current bean (predates
 // beanId, or its bean was deleted), falls back to comparing the raw coffee
 // name strings as recorded at save time.
+// #1837: a mixed shot is never "the same bean" as anything — its top-level
+// beanId/coffee only name the primary part, so its grind is not that bean's
+// own baseline and no mixed shot can serve as one.
 function _sameBean(annA: ShotAnnotationLike | null | undefined, annB: ShotAnnotationLike | null | undefined): boolean {
+  if (isBeanMix(annA) || isBeanMix(annB)) return false;
   const beanA = resolveBeanForAnnotation(annA);
   const beanB = resolveBeanForAnnotation(annB);
   if (beanA && beanB) return beanA.id === beanB.id;
@@ -217,6 +224,7 @@ function _sameBean(annA: ShotAnnotationLike | null | undefined, annB: ShotAnnota
 export function findPreviousShotForBean(shots: ShotLike[], shot: ShotLike): ShotLike | null {
   const ann = shot?.annotation;
   if (!ann?.coffee && ann?.beanId == null) return null;
+  if (isBeanMix(ann)) return null;
   let prev: ShotLike | null = null;
   for (const s of shots) {
     if (s.id === shot.id) continue;
@@ -234,6 +242,7 @@ export function findPreviousShotForBean(shots: ShotLike[], shot: ShotLike): Shot
 export function isNewestShotForBean(shots: ShotLike[], shot: ShotLike): boolean {
   const ann = shot?.annotation;
   if (!ann?.coffee && ann?.beanId == null) return false;
+  if (isBeanMix(ann)) return false;
   return !shots.some(s =>
     s.id !== shot.id &&
     _sameBean(ann, s.annotation) &&

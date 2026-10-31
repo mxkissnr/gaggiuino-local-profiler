@@ -269,6 +269,10 @@
     {
       "id": "secret_wish",
       "unlocked": false
+    },
+    {
+      "id": "secret_house_blend",
+      "unlocked": false
     }
   ],
   "shotScores": [

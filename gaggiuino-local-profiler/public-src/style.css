@@ -1118,6 +1118,15 @@
         .annotation-field select:focus { border-color: var(--gray-500); }
         .annotation-field textarea { resize: vertical; min-height: 58px; }
         .annotation-field.full-width { grid-column: 1 / -1; }
+        /* Bean mix (#1837): one row per bean of a split dose. Row 1's bean is
+           the select above, so its name is shown as text here. */
+        .ann-mix-rows { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); }
+        .ann-mix-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+        .ann-mix-row-name { flex: 1; min-width: 0; font-size: var(--fs-2); color: var(--gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .annotation-field .ann-mix-row-select { flex: 1; min-width: 0; width: auto; }
+        .annotation-field .ann-mix-row-grams { width: 84px; flex: 0 0 auto; }
+        .ann-mix-row-spacer { width: 28px; flex: 0 0 auto; }
+        .ann-mix-add { margin-top: var(--sp-2); }
         .annotation-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 
         /* ── Live pre-shot setup panel (Material Design card) ─────── */

@@ -99,6 +99,7 @@ const es: Partial<Translations> = {
     ann_grinder:'Molino', ann_grinder_ph:'ej. Niche Zero',
     ann_grind_setting:'Molturación', ann_grind_ph:'ej. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'ej. 18',
+    ann_add_bean:'Añadir otro grano', ann_remove_bean:'Quitar grano',
 
     ann_tds_optional:'(opcional)',
     ann_tds_ph:'ej. 9.2', ann_notes:'Notas',

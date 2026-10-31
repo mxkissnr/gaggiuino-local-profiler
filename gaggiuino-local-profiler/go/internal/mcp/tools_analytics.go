@@ -27,7 +27,7 @@ type analyticsSummaryInput struct {
 	Since     string `json:"since,omitempty" jsonschema:"start of the window, RFC 3339; defaults to 30 days before until"`
 	Until     string `json:"until,omitempty" jsonschema:"end of the window (exclusive), RFC 3339; defaults to now"`
 	MachineID int64  `json:"machine_id,omitempty" jsonschema:"only shots pulled on this machine id; omit or 0 for all machines"`
-	Bean      string `json:"bean,omitempty" jsonschema:"case-insensitive substring of the shot's bean (coffee) name annotation"`
+	Bean      string `json:"bean,omitempty" jsonschema:"case-insensitive substring of one of the shot's bean (coffee) names; a mixed shot matches on any of its beans"`
 }
 
 type analyticsBeanStat struct {
@@ -124,7 +124,7 @@ func getAnalyticsSummary(svc *shots.Service, in analyticsSummaryInput) (analytic
 			if ts < sinceSec || ts >= untilSec {
 				continue
 			}
-			if bean != "" && !strings.Contains(strings.ToLower(annotationString(row.Shot, "coffee")), bean) {
+			if !shotBeanMatches(row.Shot, bean) {
 				continue
 			}
 			samples = append(samples, analyticsSampleOf(row))
@@ -148,7 +148,7 @@ func analyticsSampleOf(row shots.PageRow) analyticsSample {
 	s := analyticsSample{
 		Timestamp: ts,
 		Score:     row.Score,
-		Bean:      annotationString(row.Shot, "coffee"),
+		Bean:      shotBeanLabel(row.Shot),
 	}
 	if r, ok := ratingOf(row.Shot); ok {
 		s.Rating = &r

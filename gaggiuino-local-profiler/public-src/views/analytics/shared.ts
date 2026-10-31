@@ -2,6 +2,8 @@ import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { esc, html, localDateKey, utcDateKey, scoreColor, themeColor } from '../../utils.js';
 import { resolveBeanForAnnotation } from '../shots/utils.js';
+import { isBeanMix } from '../../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 import { filterAnalyticsShots } from '../analytics-summary.js';
 import type { AnalyticsPageFilter } from '../analytics-summary.js';
 import type { LibraryRow, MachineRecord, ShotMeta } from '../../state/index.js';
@@ -18,6 +20,7 @@ export interface ShotAnnotation {
   grinder?: string | null | undefined;
   grindSetting?: string | number | null | undefined;
   dose?: number | null | undefined;
+  beanMix?: readonly BeanMixPartInput[] | null | undefined;
 }
 
 export interface ShotRow extends ShotMeta {
@@ -219,7 +222,12 @@ export function _scoreChartColor(sc: number | null): string {
 // coffee name ('name:<name>'). The label is the library bean's CURRENT name,
 // so a rename follows the id; an unresolved bean keeps its annotated name.
 // Returns null when the shot names no bean and resolves to none either.
+// #1837: a mixed shot also returns null — its top-level beanId/coffee only name
+// the primary part, so grouping it under that bean would charge the whole
+// mixed dose's score to one bean. Per-bean views (shelf, ranking, dial-in
+// progression) therefore leave mixed shots out.
 export function _beanGroup(annotation: ShotAnnotation | null | undefined, beans: SharedBean[]): { key: string; label: string; beanId: number | null } | null {
+  if (isBeanMix(annotation)) return null;
   const resolved = resolveBeanForAnnotation(annotation, beans);
   if (resolved) {
     return { key: `id:${resolved.id}`, label: String(resolved.name || annotation?.coffee || ''), beanId: resolved.id ?? null };

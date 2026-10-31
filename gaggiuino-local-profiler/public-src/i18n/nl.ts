@@ -99,6 +99,7 @@ const nl: Partial<Translations> = {
     ann_grinder:'Molen', ann_grinder_ph:'bijv. Niche Zero',
     ann_grind_setting:'Maalgraad', ann_grind_ph:'bijv. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'bijv. 18',
+    ann_add_bean:'Nog een boon toevoegen', ann_remove_bean:'Boon verwijderen',
 
     ann_tds_optional:'(optioneel)',
     ann_tds_ph:'bijv. 9.2', ann_notes:'Notities',

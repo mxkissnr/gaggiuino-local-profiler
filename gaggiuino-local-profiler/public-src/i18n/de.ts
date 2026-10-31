@@ -99,6 +99,7 @@ const de: Partial<Translations> = {
     ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
     ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'z.B. 18',
+    ann_add_bean:'Weitere Bohne', ann_remove_bean:'Bohne entfernen',
 
     ann_tds_optional:'(optional)',
     ann_tds_ph:'z.B. 9.2', ann_notes:'Notizen',

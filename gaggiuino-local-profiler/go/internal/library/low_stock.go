@@ -13,12 +13,46 @@ import (
 // `bean_low_stock_g` (#1835). Same value the legacy Node backend used.
 const DefaultLowStockThresholdG int64 = 100
 
-// ResolveLowStockBeanID resolves the library bean id a shot's annotation
+// ResolveLowStockBeanIDs resolves the library bean ids a shot's annotation
 // refers to, beanId-first with a coffee-name fallback (ResolveBeanForShot),
-// or 0 when the annotation matches no bean. cmd/server's annotation-saved
-// hook uses it to pick the bean CheckLowStock inspects.
-func ResolveLowStockBeanID(shot shots.Shot, beans []Entity) int64 {
-	bean := ResolveBeanForShot(shot, beans)
+// skipping parts that match no bean. A mixed shot (#1837) yields one id per
+// bean-mix part, deduplicated (two parts may name the same bean); a
+// single-bean shot yields its one bean, exactly as before. cmd/server's
+// annotation-saved hook runs CheckLowStock once per returned id.
+func ResolveLowStockBeanIDs(shot shots.Shot, beans []Entity) []int64 {
+	ann, _ := shot["annotation"].(map[string]any)
+	parts := shots.BeanMix(ann)
+	if len(parts) == 0 {
+		id := resolveLowStockBeanID(ann, beans)
+		if id == 0 {
+			return nil
+		}
+		return []int64{id}
+	}
+	ids := make([]int64, 0, len(parts))
+	seen := make(map[int64]bool, len(parts))
+	for _, part := range parts {
+		partAnn := map[string]any{"coffee": part.Coffee}
+		if part.BeanID != nil {
+			partAnn["beanId"] = *part.BeanID
+		}
+		id := resolveLowStockBeanID(partAnn, beans)
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// resolveLowStockBeanID resolves one annotation map to its library bean id,
+// or 0 when it matches no bean.
+func resolveLowStockBeanID(ann map[string]any, beans []Entity) int64 {
+	if ann == nil {
+		return 0
+	}
+	bean := ResolveBeanForShot(shots.Shot{"annotation": ann}, beans)
 	if bean == nil {
 		return 0
 	}
