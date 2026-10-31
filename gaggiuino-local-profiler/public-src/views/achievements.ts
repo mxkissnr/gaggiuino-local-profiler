@@ -1,4 +1,4 @@
-// #812: the achievements ("stamp card") view. Renders the 63-badge catalogue
+// #812: the achievements ("stamp card") view. Renders the 64-badge catalogue
 // (go/internal/achievements) as a
 // printed cardboard card, per PLAN.md section 5 — not an app panel, not a
 // level/score UI. Eight categories sit side by side from the very first
