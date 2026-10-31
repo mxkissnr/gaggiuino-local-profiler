@@ -13,10 +13,10 @@ import (
 // file pins the invariants that hold for every response regardless of DB
 // state.
 
-// TestContract_AchievementsResponseShape: { cards: [8 keys], badges: [63] },
+// TestContract_AchievementsResponseShape: { cards: [8 keys], badges: [64] },
 // every badge carries id/card/secret/unlocked, every badge's card is one of
 // the eight CARD_KEYS (every non-secret card holds exactly 8), and exactly 7
-// badges are secret (56 open + 7 secret, the "stamp card" the frontend
+// badges are secret (56 open + 8 secret, the "stamp card" the frontend
 // renders).
 func TestContract_AchievementsResponseShape(t *testing.T) {
 	env := newTestEnv(t)
@@ -35,8 +35,8 @@ func TestContract_AchievementsResponseShape(t *testing.T) {
 	}
 
 	badges, _ := body["badges"].([]any)
-	if len(badges) != 63 {
-		t.Fatalf("badge count = %d, want 63 (56 open + 7 secret)", len(badges))
+	if len(badges) != 64 {
+		t.Fatalf("badge count = %d, want 64 (56 open + 8 secret)", len(badges))
 	}
 
 	seen := map[string]bool{}
@@ -83,8 +83,8 @@ func TestContract_AchievementsResponseShape(t *testing.T) {
 			}
 		}
 	}
-	if secrets != 7 {
-		t.Errorf("secret badge count = %d, want 7", secrets)
+	if secrets != 8 {
+		t.Errorf("secret badge count = %d, want 8", secrets)
 	}
 	for _, key := range cardKeys {
 		if key == "secret" {

@@ -578,6 +578,13 @@
       "secret": true,
       "unlocked": false,
       "unlockedAt": null
+    },
+    {
+      "id": "secret_house_blend",
+      "card": "secret",
+      "secret": true,
+      "unlocked": false,
+      "unlockedAt": null
     }
   ]
 }
