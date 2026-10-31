@@ -277,7 +277,12 @@ async function captureCameraFrame(): Promise<void> {
   const input = _input;
   if (!el || !input) return;
   const photo = await takePhoto(_stream);
-  const blob = photo ?? (await grabFrame(el.video));
+  // Both paths hand back the region the preview showed, never the whole frame:
+  // ImageCapture's full sensor frame is cropped below, the canvas grab is
+  // cropped from the stream. Without any crop the untouched photo is still
+  // preferable to no photo at all.
+  const cropped = photo ? await cropToPreview(photo, el.video) : null;
+  const blob = cropped ?? photo ?? (await grabFrame(el.video));
   closeCameraModal();
   if (!blob) {
     openCaptureFallback(input);
@@ -289,6 +294,73 @@ async function captureCameraFrame(): Promise<void> {
   transfer.items.add(new File([blob], 'camera.jpg', { type: 'image/jpeg' }));
   input.files = transfer.files;
   input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// Region of a `sourceW × sourceH` image that `object-fit: cover` paints inside
+// a `boxW × boxH` element: a centred crop of the box's aspect ratio, i.e. the
+// part of the frame the preview actually shows.
+export function coverRegion(sourceW: number, sourceH: number, boxW: number, boxH: number): Rect {
+  if (!(sourceW > 0) || !(sourceH > 0) || !(boxW > 0) || !(boxH > 0)) {
+    return { x: 0, y: 0, width: sourceW, height: sourceH };
+  }
+  const scale = Math.max(boxW / sourceW, boxH / sourceH);
+  const width = Math.min(sourceW, boxW / scale);
+  const height = Math.min(sourceH, boxH / scale);
+  return { x: (sourceW - width) / 2, y: (sourceH - height) / 2, width, height };
+}
+
+// On-screen box of the preview; a hidden or not-yet-laid-out element falls back
+// to the stream's own size so the crop is at worst a no-op.
+function previewBox(video: HTMLVideoElement): Rect {
+  const rect = video.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) return { x: 0, y: 0, width: rect.width, height: rect.height };
+  return { x: 0, y: 0, width: video.videoWidth, height: video.videoHeight };
+}
+
+// The saved file is the previewed region of the photo itself: a photo whose
+// aspect differs from the stream (ImageCapture returns the full sensor frame)
+// is cropped to the preview box's shape, scaled about the centre the way cover
+// does — never stretched.
+async function cropToPreview(photo: Blob, video: HTMLVideoElement): Promise<Blob | null> {
+  const image = await decodeImage(photo);
+  if (!image) return null;
+  try {
+    const box = previewBox(video);
+    const region = coverRegion(image.width, image.height, box.width, box.height);
+    return await drawRegion(image, region);
+  } finally {
+    image.close();
+  }
+}
+
+// createImageBitmap is missing on older WebViews; a browser that has it gets
+// the photo cropped, the others keep the untouched frame.
+async function decodeImage(blob: Blob): Promise<ImageBitmap | null> {
+  if (typeof window === 'undefined' || typeof window.createImageBitmap !== 'function') return null;
+  try {
+    return await window.createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+}
+
+function drawRegion(source: CanvasImageSource, region: Rect): Promise<Blob | null> {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(region.width);
+  canvas.height = Math.round(region.height);
+  const ctx = canvas.width && canvas.height ? canvas.getContext('2d') : null;
+  if (!ctx) return Promise.resolve(null);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
+  return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
 }
 
 // ImageCapture reads the sensor at its full resolution and lets the camera run
@@ -308,15 +380,9 @@ async function takePhoto(stream: MediaStream | null): Promise<Blob | null> {
 }
 
 function grabFrame(video: HTMLVideoElement): Promise<Blob | null> {
-  const width = video.videoWidth;
-  const height = video.videoHeight;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = width && height ? canvas.getContext('2d') : null;
-  if (!ctx) return Promise.resolve(null);
-  ctx.drawImage(video, 0, 0, width, height);
-  return new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+  if (!video.videoWidth || !video.videoHeight) return Promise.resolve(null);
+  const box = previewBox(video);
+  return drawRegion(video, coverRegion(video.videoWidth, video.videoHeight, box.width, box.height));
 }
 
 // Touch devices get a second "Take photo" button; a desktop webcam capture has
