@@ -9,7 +9,7 @@
 import { t } from '../../i18n.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import { beanMix } from '../../shared/bean-mix.js';
-import type { BeanMixAnnotation, BeanMixPart, BeanMixPartInput } from '../../shared/bean-mix.js';
+import type { BeanMixAnnotation, BeanMixPart, BeanMixPartPayload } from '../../shared/bean-mix.js';
 
 /** A shot's dose splits over at most four beans (the server's limit). */
 export const MAX_MIX_ROWS = 4;
@@ -149,7 +149,7 @@ export function setMixRowBean(index: number, coffee: string, beanId: number | nu
 
 /** The applied mix for a save: null for anything below two usable parts. */
 export interface MixFields {
-  beanMix: BeanMixPartInput[];
+  beanMix: BeanMixPartPayload[];
   coffee: string;
   beanId: number | null;
   dose: number;

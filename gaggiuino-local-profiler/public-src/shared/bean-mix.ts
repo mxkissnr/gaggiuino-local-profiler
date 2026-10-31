@@ -18,9 +18,15 @@ export interface BeanMixPartInput {
 }
 
 /**
- * The annotation fields the mix helpers read. openapi.yaml documents `beanMix`
- * (#1837), but schema.gen.ts has not been regenerated for it yet, so the field
- * is named here; `coffee` keeps the generated Annotation schema's type.
+ * A part as the API accepts it: the generated AnnotationBean shape, with the
+ * required coffee/grams and the optional beanId spelled exactly as the spec
+ * does. The mix editor sends this shape; BeanMixPartInput stays the looser
+ * read-side type, since a stored annotation may carry partial parts.
+ */
+export type BeanMixPartPayload = NonNullable<ShotAnnotation['beanMix']>[number];
+
+/**
+ * The annotation fields the mix helpers read.
  */
 export type BeanMixAnnotation = {
   // `| undefined` keeps the view-local annotation aliases (which spell it out

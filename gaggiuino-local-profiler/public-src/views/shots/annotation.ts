@@ -14,7 +14,7 @@ import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
-import type { BeanMixPartInput } from '../../shared/bean-mix.js';
+import type { BeanMixPartInput, BeanMixPartPayload } from '../../shared/bean-mix.js';
 import { initBeanMix, loadBeanMix, mixFields, mixParts, resetBeanMix } from './annotation-mix.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
@@ -84,7 +84,7 @@ interface AnnotationPayload {
   beanAgeDays: number | null;
   frozenPortionId: number | null;
   // #1837: null clears a previously saved mix (PatchAnnotation drops null keys).
-  beanMix: BeanMixPartInput[] | null;
+  beanMix: BeanMixPartPayload[] | null;
 }
 
 interface DrinkRow extends LibraryRow { id: string; name?: string; emoji?: string; milkMl?: number }
