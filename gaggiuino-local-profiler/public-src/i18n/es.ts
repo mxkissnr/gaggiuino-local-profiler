@@ -323,7 +323,7 @@ const es: Partial<Translations> = {
     trash_days_left:(d)=>`eliminado en ${d} día${d!==1?'s':''}`,
     trash_restore_label:'↩ Restaurar', trash_delete_title:'Eliminar ahora',
     trash_moved_toast:'Shot movido a la papelera', trash_undo_label:'Deshacer',
-    freshness_title:(d)=>`Tostado hace ${d} días (óptimo: 7–21 días)`,
+    freshness_title:(d,from,to)=>`Tostado hace ${d} días (óptimo: ${from}–${to} días)`,
     bean_age_at_shot:(d)=>`${d} días al momento del shot`,
     bean_age_badge:(d)=>`${d}d al shot`,
     freshness_badge:(d)=>`${d}d`,
