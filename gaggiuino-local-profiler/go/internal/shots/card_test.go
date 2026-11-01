@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -280,5 +281,81 @@ func TestCard_MixedShotBeanLine(t *testing.T) {
 	plain := newCardModel(Shot(cardShotData()), nil, "square", "", "dark", "en", cardDeps{}).svg()
 	if !strings.Contains(plain, "Colombia Huila") || strings.Contains(plain, "Colombia Huila + ") {
 		t.Error("single-bean card headline changed")
+	}
+}
+
+// cardHeadlineText returns the share card's bean headline — its rendered font
+// size and its text — located by the fixed HERO baseline.
+func cardHeadlineText(t *testing.T, svg string) (float64, string) {
+	t.Helper()
+	re := regexp.MustCompile(`<text [^>]*y="130" [^>]*font-size="([0-9.]+)"[^>]*>([^<]*)</text>`)
+	m := re.FindStringSubmatch(svg)
+	if m == nil {
+		t.Fatal("card SVG has no headline text element")
+	}
+	size, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		t.Fatalf("headline font-size %q: %v", m[1], err)
+	}
+	return size, m[2]
+}
+
+// cardSVGWithBeans renders a card for a shot pulled from the given beans; two
+// or more make it a mixed shot, one leaves it a plain single-bean shot.
+func cardSVGWithBeans(coffees ...string) string {
+	data := cardShotData()
+	ann := data["annotation"].(map[string]any)
+	ann["coffee"] = coffees[0]
+	if len(coffees) > 1 {
+		parts := make([]any, len(coffees))
+		for i, coffee := range coffees {
+			parts[i] = map[string]any{"coffee": coffee, "grams": float64(9)}
+		}
+		ann["beanMix"] = parts
+	}
+	return newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
+}
+
+// TestCard_MixedHeadlineFitsBothBeans pins #1853: a mixed headline steps its
+// font down instead of being cut, so both bean names stay complete.
+func TestCard_MixedHeadlineFitsBothBeans(t *testing.T) {
+	const first, second = "Ethiopia Guji Konga", "Brazil Santos Nova"
+	size, headline := cardHeadlineText(t, cardSVGWithBeans(first, second))
+
+	if want := first + " + " + second; headline != want {
+		t.Errorf("headline = %q, want %q", headline, want)
+	}
+	if size >= 52 || size < 36 {
+		t.Errorf("mixed headline font-size = %v, want stepped down from 52 and at least 36", size)
+	}
+}
+
+// TestCard_ShortHeadlineKeepsFullSize pins that a headline that already fits
+// at the full size renders exactly as before.
+func TestCard_ShortHeadlineKeepsFullSize(t *testing.T) {
+	size, headline := cardHeadlineText(t, cardSVGWithBeans("Colombia Huila"))
+
+	if size != 52 {
+		t.Errorf("short headline font-size = %v, want 52", size)
+	}
+	if headline != "Colombia Huila" {
+		t.Errorf("short headline = %q, want %q", headline, "Colombia Huila")
+	}
+}
+
+// TestCard_LongHeadlineTruncatedAtMinSize pins that a headline too long even
+// at the smallest step is truncated there with an ellipsis.
+func TestCard_LongHeadlineTruncatedAtMinSize(t *testing.T) {
+	name := strings.Repeat("Konga Blend ", 10)
+	size, headline := cardHeadlineText(t, cardSVGWithBeans(name))
+
+	if size != 36 {
+		t.Errorf("overlong headline font-size = %v, want the 36 minimum", size)
+	}
+	if !strings.HasSuffix(headline, "…") {
+		t.Errorf("overlong headline = %q, want a trailing ellipsis", headline)
+	}
+	if len(headline) >= len(name) {
+		t.Errorf("overlong headline %q is not shorter than the name", headline)
 	}
 }
