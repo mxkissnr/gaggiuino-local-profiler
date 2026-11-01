@@ -27,8 +27,12 @@ func jsonShotImageBundle(t *testing.T, withImage bool) map[string]any {
 	return map[string]any{
 		"glp_backup": true,
 		"shots": []any{map[string]any{
-			"id": int64(7), "timestamp": int64(1700000000), "duration": int64(30000),
-			"profileName": "Test Profile", "machineId": int64(1), "image": "jpg",
+			"id":          int64(7),
+			"timestamp":   int64(1700000000),
+			"duration":    int64(30000),
+			"profileName": "Test Profile",
+			"machineId":   int64(1),
+			"image":       "jpg",
 		}},
 		"images": images,
 	}
