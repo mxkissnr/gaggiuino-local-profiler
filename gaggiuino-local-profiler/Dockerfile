@@ -34,7 +34,7 @@
 # output is architecture-independent, so that has no bearing here.
 # Digest-pinned (multi-arch manifest) like the alpine runtime stage below;
 # Renovate's dockerfile manager keeps it current.
-FROM --platform=$BUILDPLATFORM node:24-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS frontend-deps
+FROM --platform=$BUILDPLATFORM node:24-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS frontend-deps
 
 WORKDIR /app
 
