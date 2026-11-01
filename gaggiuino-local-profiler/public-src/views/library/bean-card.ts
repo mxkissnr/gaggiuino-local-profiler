@@ -3,7 +3,7 @@ import * as libraryApi from '../../api/library.js';
 import { S } from '../../state/index.js';
 import type { ShotMeta } from '../../state/index.js';
 import { localeFor, countryName } from '../../constants.js';
-import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, freshnessWindows, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
 import { miniWheelSvg, flavorChipsHtml } from '../../components/flavor-mini-wheel.js';
@@ -107,8 +107,9 @@ export function beanFreshBadge(b: BeanListRow): Html {
   const activeBag = current?.bg || null;
   const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
   const remaining = b.remainingG ?? null;
+  const windows = freshnessWindows();
   return (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
-    ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(roastAge))}" title="${esc(t('freshness_title', roastAge))}">${esc(roastAge)}d</span>`
+    ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(roastAge))}" title="${esc(t('freshness_title', roastAge, windows.peakFrom, windows.peakUntil))}">${esc(roastAge)}d</span>`
     : esc('');
 }
 
