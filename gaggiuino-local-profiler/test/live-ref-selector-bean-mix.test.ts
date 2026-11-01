@@ -47,8 +47,11 @@ describe('Live reference dropdown bean names (#1853)', () => {
     S.refShotId = null;
   });
 
-  const optionFor = (id: number): string =>
-    select.options.find(o => o.value === String(id))!.textContent;
+  const optionFor = (id: number): string => {
+    const opt = select.options.find(o => o.value === String(id));
+    if (!opt) throw new Error(`no reference option for shot ${id}`);
+    return opt.textContent;
+  };
 
   it('names every bean of a mixed shot', () => {
     S.shots = [{
