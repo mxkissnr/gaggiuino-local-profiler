@@ -319,14 +319,33 @@ func cardSVGWithBeans(coffees ...string) string {
 // TestCard_MixedHeadlineFitsBothBeans pins #1853: a mixed headline steps its
 // font down instead of being cut, so both bean names stay complete.
 func TestCard_MixedHeadlineFitsBothBeans(t *testing.T) {
-	const first, second = "Ethiopia Guji Konga", "Brazil Santos Nova"
+	// The fixture carries no origin code, so the headline owns the full width.
+	budget := 1080 - 2*cardPX - 20
+
+	// Two ~20-character bean names: long enough that "A + B" overflows at the
+	// full size, short enough to fit at the 36 minimum. Grown here rather than
+	// hard-coded so the test tracks the card font's real metrics.
+	first, second := "", ""
+	for textWidth(first+" + "+second, 36, true) > budget {
+		if len(first) > 200 {
+			t.Fatal("could not build a name that fits the headline at the minimum size")
+		}
+		first += "Ab"
+		second += "Cd"
+	}
 	size, headline := cardHeadlineText(t, cardSVGWithBeans(first, second))
 
 	if want := first + " + " + second; headline != want {
 		t.Errorf("headline = %q, want %q", headline, want)
 	}
+	if textWidth(headline, 52, true) <= budget {
+		t.Fatalf("fixture headline %q already fits at 52; it must overflow to exercise the stepping", headline)
+	}
 	if size >= 52 || size < 36 {
 		t.Errorf("mixed headline font-size = %v, want stepped down from 52 and at least 36", size)
+	}
+	if got := textWidth(headline, size, true); got > budget {
+		t.Errorf("headline width at %v = %v, want it to fit in %v", size, got, budget)
 	}
 }
 
