@@ -323,7 +323,7 @@ const de: Partial<Translations> = {
     trash_days_left:(d)=>`wird in ${d} Tag${d!==1?'en':''} gelöscht`,
     trash_restore_label:'↩ Wiederherstellen', trash_delete_title:'Jetzt löschen',
     trash_moved_toast:'Shot in den Papierkorb verschoben', trash_undo_label:'Rückgängig',
-    freshness_title:(d)=>`${d} Tage seit Röstung (Optimum: 7–21 Tage)`,
+    freshness_title:(d,from,to)=>`${d} Tage seit Röstung (Optimum: ${from}–${to} Tage)`,
     bean_age_at_shot:(d)=>`${d} Tage alt beim Shot`,
     bean_age_badge:(d)=>`${d} Tage beim Shot`,
     freshness_badge:(d)=>`${d} Tage`,

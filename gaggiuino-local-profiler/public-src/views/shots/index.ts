@@ -9,7 +9,7 @@ import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPha
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
-  chartColors, freshnessState, html, joinHtml
+  chartColors, freshnessState, freshnessWindows, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
@@ -749,9 +749,10 @@ export async function updateView(): Promise<void> {
     // annotation panel's tracker; degassing/almost/peak all read as "fresh".
     const state = freshnessState(ageAtShot);
     const cls = state === 'fading' ? 'freshness-ok' : state === 'old' ? 'freshness-old' : 'freshness-fresh';
+    const windows = freshnessWindows();
     freshEl.className   = `freshness-badge ${cls}`;
     freshEl.textContent = beanAge.atShot ? t('bean_age_badge', ageAtShot) : t('freshness_badge', ageAtShot);
-    freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot);
+    freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot, windows.peakFrom, windows.peakUntil);
     freshEl.style.display = '';
   } else { freshEl.style.display = 'none'; }
 
