@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 616" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
 <title id="t">AI model breakdown (by commits)</title>
-<desc id="d">Bar chart: Claude Sonnet 5 829, DeepSeek V4.1 Flash 612, Claude Sonnet 4.6 355, Claude Opus 5.5 76, Claude Opus 5 55, Claude Opus 4.8 47, Claude Fable 5 41, Claude Sonnet 5.5 24, Claude (version not recorded) 12, DeepSeek V4 Flash 9, Claude Haiku 4.5 4, Claude Haiku 5.5 1, Big Pickle 1.</desc>
+<desc id="d">Bar chart: Claude Sonnet 5 829, DeepSeek V4.1 Flash 727, Claude Sonnet 4.6 355, Claude Opus 5.5 98, Claude Opus 5 55, Claude Opus 4.8 47, Claude Fable 5 41, Claude Sonnet 5.5 28, Claude (version not recorded) 12, DeepSeek V4 Flash 9, Claude Haiku 4.5 5, Claude Haiku 5.5 2, Big Pickle 1.</desc>
 <rect x="12" y="12" width="868" height="604" fill="#0b0b0b"/>
 <rect x="5.5" y="5.5" width="868" height="604" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"/>
 <text x="26" y="40" fill="#0b0b0b" font-weight="800" font-size="19" letter-spacing="0.5">AI MODEL BREAKDOWN (BY COMMITS)</text>
@@ -15,14 +15,14 @@
 <rect x="237.5" y="98" width="562" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
 <text x="810" y="114" fill="#0b0b0b" font-weight="800" font-size="14">829</text>
 <text x="222" y="152" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">DeepSeek V4.1 Flash</text>
-<rect x="237.5" y="136" width="415" height="24" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="3"/>
-<text x="663" y="152" fill="#0b0b0b" font-weight="800" font-size="14">612</text>
+<rect x="237.5" y="136" width="493" height="24" fill="#ff5a1f" stroke="#0b0b0b" stroke-width="3"/>
+<text x="741" y="152" fill="#0b0b0b" font-weight="800" font-size="14">727</text>
 <text x="222" y="190" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Sonnet 4.6</text>
 <rect x="237.5" y="174" width="241" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
 <text x="489" y="190" fill="#0b0b0b" font-weight="800" font-size="14">355</text>
 <text x="222" y="228" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Opus 5.5</text>
-<rect x="237.5" y="212" width="52" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
-<text x="300" y="228" fill="#0b0b0b" font-weight="800" font-size="14">76</text>
+<rect x="237.5" y="212" width="66" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
+<text x="314" y="228" fill="#0b0b0b" font-weight="800" font-size="14">98</text>
 <text x="222" y="266" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Opus 5</text>
 <rect x="237.5" y="250" width="37" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
 <text x="285" y="266" fill="#0b0b0b" font-weight="800" font-size="14">55</text>
@@ -33,8 +33,8 @@
 <rect x="237.5" y="326" width="28" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
 <text x="276" y="342" fill="#0b0b0b" font-weight="800" font-size="14">41</text>
 <text x="222" y="380" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Sonnet 5.5</text>
-<rect x="237.5" y="364" width="16" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
-<text x="264" y="380" fill="#0b0b0b" font-weight="800" font-size="14">24</text>
+<rect x="237.5" y="364" width="19" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
+<text x="267" y="380" fill="#0b0b0b" font-weight="800" font-size="14">28</text>
 <text x="222" y="418" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude (version not recorded)</text>
 <rect x="237.5" y="402" width="8" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
 <text x="256" y="418" fill="#0b0b0b" font-weight="800" font-size="14">12</text>
@@ -43,10 +43,10 @@
 <text x="254" y="456" fill="#0b0b0b" font-weight="800" font-size="14">9</text>
 <text x="222" y="494" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Haiku 4.5</text>
 <rect x="237.5" y="478" width="4" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
-<text x="252" y="494" fill="#0b0b0b" font-weight="800" font-size="14">4</text>
+<text x="252" y="494" fill="#0b0b0b" font-weight="800" font-size="14">5</text>
 <text x="222" y="532" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Haiku 5.5</text>
 <rect x="237.5" y="516" width="4" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
-<text x="252" y="532" fill="#0b0b0b" font-weight="800" font-size="14">1</text>
+<text x="252" y="532" fill="#0b0b0b" font-weight="800" font-size="14">2</text>
 <text x="222" y="570" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Big Pickle</text>
 <rect x="237.5" y="554" width="4" height="24" fill="#6b6b6b" stroke="#0b0b0b" stroke-width="3"/>
 <text x="252" y="570" fill="#0b0b0b" font-weight="800" font-size="14">1</text>

@@ -21,6 +21,12 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.6.0', date: '2026-11-01', highlights: [
+        'Mix beans in one shot: split a dose over up to four beans, each bag deducted by its own grams.',
+        'Take photos with a camera inside the app, on every photo field.',
+        'Set your own bean freshness windows and low-stock threshold in Settings.',
+        'The guest kiosk can use its own orders-only key with a ready-made link.',
+    ] },
     { version: '3.5.1', date: '2026-10-23', highlights: [
         'Fixed: a bag\'s roast date can be corrected after the first shot, machine settings answer at once when the machine is off, and the Live page, language switch and maintenance labels follow your changes without a reload.',
         'Security: the live-update stream no longer accepts the API token in the address, and the app is built with a patched Go release.',
