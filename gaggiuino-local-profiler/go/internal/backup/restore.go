@@ -279,14 +279,15 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 // shot's `.image` against imgs, queueing the ones whose bytes are present.
 // Only the legacy JSON form needs it: a zip bundle's images are available
 // during pass 1 already. The bundle is re-opened rather than kept in memory,
-// so peak memory stays one shot plus one image body (#959).
+// and every key but `shots` is skipped without decoding, so peak memory stays
+// one shot plus one image body (#959).
 func validateShotImages(openBundle func() (io.ReadCloser, error), imgs restoreImages, pending *[]pendingImageWrite) error {
 	rc, err := openBundle()
 	if err != nil {
 		return err
 	}
 	defer rc.Close()
-	_, _, _, err = parseBundleStream(rc, func(raw json.RawMessage) error {
+	return streamShotBodies(rc, func(raw json.RawMessage) error {
 		var m map[string]any
 		if json.Unmarshal(raw, &m) != nil {
 			return nil // pass 1 already rejected a malformed shot
@@ -294,7 +295,54 @@ func validateShotImages(openBundle func() (io.ReadCloser, error), imgs restoreIm
 		validateEntityImages([]map[string]any{m}, "shot-", imgs, pending)
 		return nil
 	})
-	return err
+}
+
+// streamShotBodies walks a backup bundle JSON object and hands every element
+// of its `shots` array to onShot, discarding every other top-level key without
+// decoding it — parseBundleStream's lean counterpart, for a pass that only
+// needs the shots and must not materialise the bundle's inline `images` map a
+// second time.
+func streamShotBodies(r io.Reader, onShot func(json.RawMessage) error) error {
+	dec := json.NewDecoder(r)
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		return fmt.Errorf("invalid backup file (backup.json is not a JSON object)")
+	}
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if key, _ := keyTok.(string); key != "shots" {
+			if err := skipJSONValue(dec); err != nil {
+				return err
+			}
+			continue
+		}
+		openTok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if d, ok := openTok.(json.Delim); !ok || d != '[' {
+			return nil // `shots` is not an array; pass 1 already rejected that
+		}
+		for dec.More() {
+			var raw json.RawMessage
+			if err := dec.Decode(&raw); err != nil {
+				return err
+			}
+			if err := onShot(raw); err != nil {
+				return err
+			}
+		}
+		if _, err := dec.Token(); err != nil { // closing ']'
+			return err
+		}
+	}
+	return nil
 }
 
 func boolToInt(b bool) int {
