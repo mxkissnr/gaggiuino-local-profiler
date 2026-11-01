@@ -73,9 +73,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
     { version: '3.0.2', date: '2026-09-11', highlights: [
         'Fixed: the machine firmware check no longer stops reporting the installed version when GitHub is temporarily unreachable.',
     ] },
-    { version: '3.0.1', date: '2026-09-10', highlights: [
-        'Fixed: demo mode\'s shot detail (curve chart, P·Q view and average pressure/temperature) is no longer blank.',
-    ] },
 ];
 
 const MAX_ENTRIES = 8;
