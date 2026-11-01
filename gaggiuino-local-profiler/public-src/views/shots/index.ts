@@ -9,7 +9,7 @@ import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPha
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
-  chartColors, html, joinHtml
+  chartColors, freshnessState, freshnessWindows, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
@@ -27,6 +27,7 @@ import { openLightbox }                                       from '../../compon
 import { showToast }                                          from '../../components/toast.js';
 import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
+import { beanLabel }                                          from '../../shared/bean-mix.js';
 import { _shots }                                             from './shared.js';
 import type { ShotRow }                                       from './shared.js';
 import { safeLocalStorage } from '../../storage.js';
@@ -731,7 +732,8 @@ export async function updateView(): Promise<void> {
   // folded straight into this label ("Mahlgrad X (zuletzt Y)") instead of
   // a separate chip — one place to look instead of two.
   const grinderLabel = buildGrinderGrindLabel(_shots(), shotA, !shotB, t);
-  _el('beanVal').textContent    = ann.coffee || '–';
+  // #1837: a mixed shot names every bean and its share ("A 10 g + B 8 g").
+  _el('beanVal').textContent    = beanLabel(ann, true) || '–';
   _el('grinderVal').textContent = grinderLabel || '–';
 
   // Freshness badge — #1788: follows the library's current roast date instead
@@ -743,10 +745,14 @@ export async function updateView(): Promise<void> {
   const beanAge  = shotBeanAge(ann, shotA.timestamp, { relativeToNow: !shotB });
   if (beanAge != null && beanAge.days >= 0 && beanAge.days <= 365) {
     const ageAtShot = beanAge.days;
-    const cls = ageAtShot <= 21 ? 'freshness-fresh' : ageAtShot <= 35 ? 'freshness-ok' : 'freshness-old';
+    // #1835: the badge follows the same shared freshness windows as the
+    // annotation panel's tracker; degassing/almost/peak all read as "fresh".
+    const state = freshnessState(ageAtShot);
+    const cls = state === 'fading' ? 'freshness-ok' : state === 'old' ? 'freshness-old' : 'freshness-fresh';
+    const windows = freshnessWindows();
     freshEl.className   = `freshness-badge ${cls}`;
     freshEl.textContent = beanAge.atShot ? t('bean_age_badge', ageAtShot) : t('freshness_badge', ageAtShot);
-    freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot);
+    freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot, windows.peakFrom, windows.peakUntil);
     freshEl.style.display = '';
   } else { freshEl.style.display = 'none'; }
 

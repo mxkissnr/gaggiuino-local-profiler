@@ -5,6 +5,7 @@ import { localeFor } from '../../constants.js';
 import { avg, avgActive, max, shareOrDownloadBlob, mapShotDatapoints } from '../../utils.js';
 import { getShotCurve, ensureCurves, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import type { ShotSeries } from '../../utils.js';
+import { beanLabel } from '../../shared/bean-mix.js';
 import { _equipmentName, _libCollection, _shots } from './shared.js';
 import type { ShotRow } from './shared.js';
 
@@ -28,6 +29,8 @@ export function neutraliseCsvText(value: string | number | null | undefined): st
 // datapoints (#957).
 function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
   const ann    = shot.annotation || {};
+  // #1837: a mixed shot's coffee cell lists every bean and its grams.
+  const coffee = beanLabel(ann, true);
   const avgP   = avgActive(d.pressure.map(p => p.y), 1.5);
   const finalW = max(d.weight.map(p => p.y));
   const avgT   = avg(d.temp.map(p => p.y));
@@ -42,7 +45,7 @@ function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
     finalW != null ? finalW.toFixed(1) : '',
     ann.dose || '', ratio,
     avgT   != null ? avgT.toFixed(1)   : '',
-    ann.rating || '', neutraliseCsvText(ann.coffee || ''), neutraliseCsvText(ann.grinder || ''),
+    ann.rating || '', neutraliseCsvText(coffee), neutraliseCsvText(ann.grinder || ''),
     neutraliseCsvText(ann.grindSetting || ''),
     neutraliseCsvText(_equipmentName(_libCollection('baskets'), ann.basketId) || ''),
     neutraliseCsvText(_equipmentName(_libCollection('puckScreens'), ann.puckScreenId) || ''),
@@ -92,6 +95,8 @@ export async function exportShot(): Promise<void> {
   if (!shot) return;
   const d   = await getShotCurve(shot.id);
   const ann = shot.annotation || {};
+  // #1837: a mixed shot's Visualizer description names every bean and grams.
+  const coffeeLabel = beanLabel(ann, true);
   const timeArr = d.timeInShot || [];
 
   const tcl = (arr: unknown[] | null | undefined): string => arr?.length ? `{${arr.map(v => ((v as number) / 10).toFixed(2)).join(' ')}}` : '{}';
@@ -106,7 +111,7 @@ export async function exportShot(): Promise<void> {
     `clock ${shot.timestamp}`,
     `date ${date}`,
     `profile_title {${(shot.profile?.name || shot.profileName || 'Unknown').replace(/[{}]/g, '')}}`,
-    ann.coffee       ? `bean_desc {${ann.coffee.replace(/[{}]/g, '')}}` : '',
+    coffeeLabel      ? `bean_desc {${coffeeLabel.replace(/[{}]/g, '')}}` : '',
     ann.grinder      ? `grinder_model {${ann.grinder.replace(/[{}]/g, '')}}` : '',
     ann.grindSetting != null && ann.grindSetting !== '' ? `grinder_setting {${String(ann.grindSetting).replace(/[{}]/g, '')}}` : '',
     basketName       ? `basket {${basketName.replace(/[{}]/g, '')}}` : '',

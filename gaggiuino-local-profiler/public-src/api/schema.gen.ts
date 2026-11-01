@@ -4289,6 +4289,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orders/kiosk-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get (creating on first call) the guest kiosk's orders-only key
+         * @description Returns the kiosk key: a second credential accepted only on `GET /api/menu`, `GET /api/orders/settings`, `GET /api/orders/queue-eta`, `GET /api/orders` and `POST /api/orders`. Every other route needs the full API token. The key is generated on the first call, so an install that never uses a kiosk never stores one.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The current kiosk key */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KioskKey"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orders/kiosk-key/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the guest kiosk's orders-only key
+         * @description Generates and stores a new kiosk key and returns it. The previous key stops authenticating immediately.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The new kiosk key */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KioskKey"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/token": {
         parameters: {
             query?: never;
@@ -7430,6 +7508,15 @@ export interface components {
                 ratio?: number;
             };
         };
+        /** @description One bean's share of a mixed shot's dose (#1837) — the parts' grams should add up to the annotation's dose, and bean stock is booked per part. */
+        AnnotationBean: {
+            /** @description Library bean this part used; null when the bean is not in the library */
+            beanId?: number | null;
+            /** @description Bean name for this part */
+            coffee: string;
+            /** @description Grams this part contributed — must be greater than 0 */
+            grams: number;
+        };
         /** @description User-supplied metadata attached to a shot. */
         Annotation: {
             rating?: number | null;
@@ -7465,6 +7552,8 @@ export interface components {
             milkType?: number | null;
             /** @description Score snapshot read by the live view's reference-shot selector */
             score?: number | null;
+            /** @description Present only on a mixed shot (#1837): the several beans that made up the dose, 2-4 parts. The dose should equal the sum of grams; bean stock uses the grams per bean (never the top-level dose). The top-level beanId/coffee still name the primary bean (the part with the most grams), so mix-unaware readers see a normal single bean. */
+            beanMix?: components["schemas"]["AnnotationBean"][] | null;
         };
         AnnotateResult: {
             /** @example true */
@@ -7837,6 +7926,10 @@ export interface components {
         /** @description Map of haUserId → notify service name (e.g. "notify.mobile_app_phone") */
         NotifyMapping: {
             [key: string]: string;
+        };
+        KioskKey: {
+            /** @description 64-char hex token, accepted only on the kiosk's orders-only routes (#1731) */
+            kioskKey: string;
         };
         /** @description Public fields are always present; the block below marked "authenticated only" is omitted entirely (H1) unless the request carries a valid X-GLP-Token header. Arriving via HA Ingress is not enough. */
         Status: {

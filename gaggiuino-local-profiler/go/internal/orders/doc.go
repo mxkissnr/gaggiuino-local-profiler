@@ -30,6 +30,8 @@
 //	                place|accept|complete|declineOrder
 //	handlers.go     route registration and shared handler plumbing
 //	handlers_orders.go / handlers_shop.go  the REST handlers
+//	handlers_kioskkey.go  GET /api/orders/kiosk-key and its rotate route
+//	                (#1731), backed by internal/auth's KioskKeyStore
 //	normalize.go    menu-item normalisation (NormalizeMenuItem)
 //
 // The barista "preheat ready" HA push is internal/system's (see that

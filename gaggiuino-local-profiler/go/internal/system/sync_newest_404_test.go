@@ -17,6 +17,9 @@ var systemBackfillLogs = backfillLogs{prefix: "system: sync", notFoundSuffix: " 
 // machine that reports its newest id a moment before that shot is readable
 // must not have it blocklisted forever. The first run skips it without a
 // blocklist entry; a later run that can read it imports it.
+//
+// Since #1824 that first run also reads nothing at all, so it now reports the
+// retryable all-404 error — what this test pins is that it blocklists nothing.
 func TestBackfillShots_NewestShotNotFoundIsRetried(t *testing.T) {
 	p, sqlDB := newTestPoller(t, &fakeAdapter{})
 	repo := shots.NewRepository(sqlDB)
@@ -30,8 +33,12 @@ func TestBackfillShots_NewestShotNotFoundIsRetried(t *testing.T) {
 		return true, nil
 	}
 
-	if _, err := p.backfillShots(context.Background(), 1, 5, notFound, keep, systemBackfillLogs); err != nil {
-		t.Fatalf("first backfillShots: %v", err)
+	recordErr, err := p.backfillShots(context.Background(), 1, 5, notFound, keep, systemBackfillLogs)
+	if !errors.Is(err, errAllShotsNotFound) {
+		t.Fatalf("first backfillShots error = %v, want the #1824 all-404 retry error", err)
+	}
+	if !recordErr {
+		t.Fatal("an all-404 run must report recordErr=true")
 	}
 	block, err := repo.GetBlocklist()
 	if err != nil {

@@ -15,6 +15,9 @@
 //     and ?ticket= query-param (for /api/events only) checks, the Ingress/
 //     status/token/non-API bypasses, and the JSON 401/503 error shapes, in
 //     that order. The long-lived token is never accepted in the query.
+//   - KioskKeyStore is the guest kiosk's second, orders-only credential
+//     (#1731), kept next to the API token file and accepted by RequireToken
+//     only on the exact method+path pairs in kioskRoutes.
 //
 // See go/README.md for the security guarantees this model must preserve.
 //

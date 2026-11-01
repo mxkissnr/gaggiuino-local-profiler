@@ -116,7 +116,110 @@ func ValidateAnnotation(body map[string]any) []ValidationIssue {
 	checkInt(&issues, body, "frozenPortionId", true)
 	checkInt(&issues, body, "basketId", true)
 	checkInt(&issues, body, "puckScreenId", true)
+	checkBeanMix(&issues, body)
 	return issues
+}
+
+// checkBeanMix validates the optional `beanMix` annotation key (#1837): absent
+// or null for a single-bean shot, otherwise 2-4 parts with a required 1-200
+// char coffee name, an optional integer beanId (unique across the parts) and a
+// required 1-100 grams share each. The grams are deliberately NOT summed
+// against the dose: the dose is the whole shot's output, the parts are how it
+// was made up, and a mismatch is a user-visible inconsistency rather than a
+// reason to drop the whole annotation (a restore drops any annotation with an
+// issue; PatchAnnotation validates only the keys it sets).
+func checkBeanMix(issues *[]ValidationIssue, body map[string]any) {
+	v, present := body["beanMix"]
+	if !present || v == nil {
+		return
+	}
+	list, ok := v.([]any)
+	if !ok {
+		*issues = append(*issues, ValidationIssue{"beanMix", "expected array"})
+		return
+	}
+	if len(list) < minBeanMixParts || len(list) > maxBeanMixParts {
+		*issues = append(*issues, ValidationIssue{"beanMix", fmt.Sprintf("Array must contain %d to %d items", minBeanMixParts, maxBeanMixParts)})
+		return
+	}
+	seenBeanIDs := make(map[int64]bool, len(list))
+	for i, raw := range list {
+		path := fmt.Sprintf("beanMix[%d]", i)
+		part, ok := raw.(map[string]any)
+		if !ok {
+			*issues = append(*issues, ValidationIssue{path, "expected object"})
+			continue
+		}
+		checkBeanMixCoffee(issues, part, path+".coffee")
+		checkBeanMixBeanID(issues, part, path+".beanId", seenBeanIDs)
+		checkBeanMixGrams(issues, part, path+".grams")
+	}
+}
+
+// checkBeanMixCoffee validates one part's required coffee name.
+func checkBeanMixCoffee(issues *[]ValidationIssue, part map[string]any, path string) {
+	v, present := part["coffee"]
+	if !present || v == nil {
+		*issues = append(*issues, ValidationIssue{path, "Required"})
+		return
+	}
+	s, ok := v.(string)
+	if !ok {
+		*issues = append(*issues, ValidationIssue{path, "expected string"})
+		return
+	}
+	if utf8.RuneCountInString(s) < 1 {
+		*issues = append(*issues, ValidationIssue{path, "String must contain at least 1 character(s)"})
+	}
+	if utf8.RuneCountInString(s) > 200 {
+		*issues = append(*issues, ValidationIssue{path, "String must contain at most 200 character(s)"})
+	}
+}
+
+// checkBeanMixBeanID validates one part's optional beanId and records it in
+// seenBeanIDs, reporting the second and later occurrence of a non-null id.
+func checkBeanMixBeanID(issues *[]ValidationIssue, part map[string]any, path string, seenBeanIDs map[int64]bool) {
+	v, present := part["beanId"]
+	if !present || v == nil {
+		return
+	}
+	f, ok := v.(float64)
+	if !ok {
+		*issues = append(*issues, ValidationIssue{path, "expected number"})
+		return
+	}
+	if !isJSONInt(f) {
+		*issues = append(*issues, ValidationIssue{path, "expected integer, received float"})
+		return
+	}
+	id, ok := jsonInt64(f)
+	if !ok {
+		return
+	}
+	if seenBeanIDs[id] {
+		*issues = append(*issues, ValidationIssue{path, "Duplicate bean in beanMix"})
+	}
+	seenBeanIDs[id] = true
+}
+
+// checkBeanMixGrams validates one part's required grams share: a JSON number
+// greater than 0 and at most 100.
+func checkBeanMixGrams(issues *[]ValidationIssue, part map[string]any, path string) {
+	v, present := part["grams"]
+	if !present || v == nil {
+		*issues = append(*issues, ValidationIssue{path, "Required"})
+		return
+	}
+	f, ok := v.(float64)
+	if !ok {
+		*issues = append(*issues, ValidationIssue{path, "expected number"})
+		return
+	}
+	if f <= 0 {
+		*issues = append(*issues, ValidationIssue{path, "Number must be greater than 0"})
+	} else if f > 100 {
+		*issues = append(*issues, ValidationIssue{path, "Number must be less than or equal to 100"})
+	}
 }
 
 // ValidateShotDefaults validates a shot-defaults body (#654). Unlike the

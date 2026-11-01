@@ -2,7 +2,7 @@ package achievements
 
 import "encoding/base64"
 
-// The 7 secret badges' name/description text, deliberately kept out of
+// The 8 secret badges' name/description text, deliberately kept out of
 // registry.go and out of the public i18n bundle.
 //
 // What the base64 here does and does NOT do: GLP is open source, so nothing
@@ -72,6 +72,14 @@ var secretsTable = map[string]secretCopy{
 		"fr": {"Tm9tYnJlIGQnb3I=", "VW4gcmF0aW8gZG9zZS9yZW5kZW1lbnQgdG9tYmFudCBleGFjdGVtZW50IHN1ciBsZSBub21icmUgZCdvciDigJQgMToxLDYxOC4="},
 		"es": {"UHJvcG9yY2nDs24gw6F1cmVh", "VW5hIHByb3BvcmNpw7NuIGRlIGRvc2lzIGEgcmVuZGltaWVudG8gZXhhY3RhbWVudGUgZW4gbGEgcHJvcG9yY2nDs24gw6F1cmVhIOKAlCAxOjEsNjE4Lg=="},
 		"nl": {"R3VsZGVuIHNuZWRl", "RWVuIGRvc2lzLXRvdC15aWVsZC12ZXJob3VkaW5nIGRpZSBwcmVjaWVzIG9wIGRlIGd1bGRlbiBzbmVkZSB1aXRrb210IOKAlCAxOjEsNjE4Lg=="},
+	}},
+	"secret_house_blend": {stamp: "bean", langs: map[string][2]string{
+		"de": {"SGF1c21pc2NodW5n", "RWluIEJlenVnIGF1cyBtZWhyIGFscyBlaW5lciBCb2huZS4="},
+		"en": {"SG91c2UgQmxlbmQ=", "QSBzaG90IHB1bGxlZCBmcm9tIG1vcmUgdGhhbiBvbmUgYmVhbi4="},
+		"it": {"TWlzY2VsYSBkZWxsYSBjYXNh", "VW4nZXN0cmF6aW9uZSBkYSBwacO5IGRpIHVuYSB2YXJpZXTDoCBkaSBjYWZmw6gu"},
+		"fr": {"TcOpbGFuZ2UgbWFpc29u", "VW5lIGV4dHJhY3Rpb24gw6AgcGFydGlyIGRlIHBsdXNpZXVycyB2YXJpw6l0w6lzIGRlIGNhZsOpLg=="},
+		"es": {"TWV6Y2xhIGRlIGxhIGNhc2E=", "VW5hIGV4dHJhY2Npw7NuIGNvbiBtw6FzIGRlIHVuIHRpcG8gZGUgY2Fmw6ku"},
+		"nl": {"SHVpc21lbGFuZ2U=", "RWVuIHNob3QgZ2V6ZXQgdWl0IG1lZXIgZGFuIMOpw6luIHNvb3J0IGJvb24u"},
 	}},
 	"secret_wish": {stamp: "star", langs: map[string][2]string{
 		"de": {"V3Vuc2NoemVpdA==", "RWluIEJlenVnIGdlbmF1IHVtIDExOjExIFVoci4="},

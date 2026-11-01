@@ -12,7 +12,7 @@ import (
 // the long-lived token.
 
 func newTicketHandler(tickets *TicketStore) http.Handler {
-	return RequireToken(testToken, tickets)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return RequireToken(testToken, tickets, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 }
@@ -124,7 +124,7 @@ func TestTicketHandler_IssuesUsableTicket(t *testing.T) {
 // The ticket endpoint itself needs the token like any other /api/ route.
 func TestTicketRoute_RequiresToken(t *testing.T) {
 	tickets := NewTicketStore()
-	h := RequireToken(testToken, tickets)(TicketHandler(tickets))
+	h := RequireToken(testToken, tickets, nil)(TicketHandler(tickets))
 	req := httptest.NewRequest(http.MethodPost, "/api/events/ticket", nil)
 	req.RemoteAddr = "192.168.1.50:1234"
 	rec := httptest.NewRecorder()

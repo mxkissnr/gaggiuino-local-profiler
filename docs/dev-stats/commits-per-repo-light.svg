@@ -1,17 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 192" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img">
-<title>Commits per repo</title>
-<text x="20" y="28" fill="#0b0b0b" font-size="15" font-weight="600">Commits per repo</text>
-<line x1="220" y1="38" x2="220" y2="176" stroke="#d6d5cf" stroke-width="1"/>
-<text x="208" y="61" fill="#52514e" font-size="13" text-anchor="end">gaggiuino-local-profiler</text>
-<path d="M220,46 H816 Q820,46 820,50 V64 Q820,68 816,68 H220 Z" fill="#2a78d6"/>
-<text x="830" y="61" fill="#0b0b0b" font-size="13" font-weight="600">2061</text>
-<text x="208" y="97" fill="#52514e" font-size="13" text-anchor="end">glp-integration</text>
-<path d="M220,82 H286 Q290,82 290,86 V100 Q290,104 286,104 H220 Z" fill="#2a78d6"/>
-<text x="300" y="97" fill="#0b0b0b" font-size="13" font-weight="600">239</text>
-<text x="208" y="133" fill="#52514e" font-size="13" text-anchor="end">glp-lovelace-card</text>
-<path d="M220,118 H269 Q273,118 273,122 V136 Q273,140 269,140 H220 Z" fill="#2a78d6"/>
-<text x="283" y="133" fill="#0b0b0b" font-size="13" font-weight="600">183</text>
-<text x="208" y="169" fill="#52514e" font-size="13" text-anchor="end">glp-order-card</text>
-<path d="M220,154 H265 Q269,154 269,158 V172 Q269,176 265,176 H220 Z" fill="#2a78d6"/>
-<text x="279" y="169" fill="#0b0b0b" font-size="13" font-weight="600">169</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Commits per repo</title>
+<desc id="d">Bar chart: gaggiuino-local-profiler 2189, glp-integration 280, glp-lovelace-card 184, glp-order-card 170.</desc>
+<rect x="12" y="12" width="868" height="236" fill="#0b0b0b"/>
+<rect x="5.5" y="5.5" width="868" height="236" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"/>
+<text x="26" y="40" fill="#0b0b0b" font-weight="800" font-size="19" letter-spacing="0.5">COMMITS PER REPO</text>
+<line x1="236" y1="64" x2="236" y2="218" stroke="#0b0b0b" stroke-width="3"/>
+<text x="222" y="88" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">gaggiuino-local-profiler</text>
+<rect x="237.5" y="72" width="562" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
+<text x="810" y="88" fill="#0b0b0b" font-weight="800" font-size="14">2189</text>
+<text x="222" y="126" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">glp-integration</text>
+<rect x="237.5" y="110" width="72" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
+<text x="320" y="126" fill="#0b0b0b" font-weight="800" font-size="14">280</text>
+<text x="222" y="164" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">glp-lovelace-card</text>
+<rect x="237.5" y="148" width="47" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
+<text x="295" y="164" fill="#0b0b0b" font-weight="800" font-size="14">184</text>
+<text x="222" y="202" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">glp-order-card</text>
+<rect x="237.5" y="186" width="44" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
+<text x="292" y="202" fill="#0b0b0b" font-weight="800" font-size="14">170</text>
 </svg>

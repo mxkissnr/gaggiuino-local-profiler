@@ -11,7 +11,9 @@ import { THEME_STORAGE_KEY, applyTheme, watchSystemTheme } from './theme.js';
 import { esc, html, joinHtml } from './utils.js';
 import type { Html } from './utils.js';
 import { initToken } from './api/transport.js';
-import { etaText, isEinkMode, toggleVariantSelection, variantOrderField } from './kiosk-helpers.js';
+import {
+  adoptKioskKey, etaText, isEinkMode, startKioskAuth, toggleVariantSelection, variantOrderField,
+} from './kiosk-helpers.js';
 import { safeLocalStorage } from './storage.js';
 
 // The ordering kiosk (#1267): a second, tablet-facing page that shares the
@@ -30,6 +32,16 @@ const NAME_MAX = 50;
 const NOTE_MAX = 200;
 
 type Step = 'name' | 'menu' | 'thanks';
+
+// Set once bootstrap has adopted an orders-only kiosk key (#1731). A 401 then
+// means the key was rotated, not that the page simply lacks a token.
+let usingKioskKey = false;
+
+// The hint appended to a failure the kiosk key explains: the link on this
+// tablet was replaced by a newer one.
+function kioskKeyError(base: string): string {
+  return usingKioskKey ? `${base} ${t('kiosk_renewed')}` : base;
+}
 
 interface KioskState {
   guestName: string;
@@ -204,7 +216,9 @@ async function submitOrder(): Promise<void> {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
       errorEl.textContent = res.status === 429
         ? t('kiosk_rate_limited')
-        : (body?.error ?? t('kiosk_order_failed'));
+        : res.status === 401
+          ? kioskKeyError(body?.error ?? t('kiosk_order_failed'))
+          : (body?.error ?? t('kiosk_order_failed'));
       placeBtn.disabled = false;
       return;
     }
@@ -288,14 +302,14 @@ async function refreshQueue(): Promise<void> {
 type SettingsProbe =
   | { kind: 'ok'; settings: OrdersSettings }
   | { kind: 'disabled' }
-  | { kind: 'error' };
+  | { kind: 'error'; status: number };
 
 // apiFetchJson cannot tell the kiosk's "feature disabled" 404 apart from a
 // real failure, so this one probe stays on apiFetch to read the status.
 async function probeSettings(): Promise<SettingsProbe> {
   const r = await apiFetch('api/orders/settings');
   if (r.status === 404) return { kind: 'disabled' };
-  if (!r.ok) return { kind: 'error' };
+  if (!r.ok) return { kind: 'error', status: r.status };
   return { kind: 'ok', settings: (await r.json()) as OrdersSettings };
 }
 
@@ -309,7 +323,10 @@ async function checkOpenAndLoadMenu(): Promise<void> {
   try {
     const probe = await probeSettings();
     if (probe.kind === 'disabled') { setBanner(t('kiosk_disabled')); return; }
-    if (probe.kind === 'error') { setBanner(t('kiosk_connection_failed')); return; }
+    if (probe.kind === 'error') {
+      setBanner(probe.status === 401 ? kioskKeyError(t('kiosk_connection_failed')) : t('kiosk_connection_failed'));
+      return;
+    }
     setBanner(probe.settings.enabled === false ? t('kiosk_closed') : null);
     state.menu = await getMenu();
     renderMenu();
@@ -348,7 +365,17 @@ async function bootstrap(): Promise<void> {
   wireStaticControls();
   showStep('name');
 
-  await initToken();
+  // A kiosk link carries its own orders-only key (#1731); the tablet then
+  // never asks /api/token for the full API token. Without a key the page
+  // keeps its token bootstrap, so kiosks already in use keep working.
+  const kioskKey = adoptKioskKey({
+    hash: location.hash,
+    href: location.href,
+    storage: safeLocalStorage,
+    replaceUrl: (url) => { history.replaceState(null, '', url); },
+  });
+  usingKioskKey = await startKioskAuth(kioskKey, initToken);
+
   await checkOpenAndLoadMenu();
   await refreshQueue();
   setInterval(() => { void refreshQueue(); }, QUEUE_POLL_MS);

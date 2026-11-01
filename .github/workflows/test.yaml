@@ -99,13 +99,20 @@ jobs:
         # apt-get (triggered by --with-deps) can hang indefinitely when the
         # runner's regional Ubuntu mirror is unreachable (#882) -- a short
         # per-attempt timeout + retry lets a single mirror hiccup self-heal
-        # within this run instead of needing a manual rerun.
+        # within this run instead of needing a manual rerun. apt gets its own
+        # retries and a short HTTP timeout, and a failed attempt stops the
+        # apt-get it leaves behind: `timeout` only ends npx, the root apt-get
+        # survives and holds the dpkg lock, so every retry failed (#1821).
         run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
           for attempt in 1 2 3; do
             if timeout 300 npx playwright install --with-deps chromium; then
               exit 0
             fi
             echo "Playwright install attempt $attempt/3 failed or timed out, retrying..."
+            sudo pkill -x apt-get || true
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done
+            sudo dpkg --configure -a || true
             sleep 10
           done
           echo "::error::Playwright Chromium install failed after 3 attempts"
@@ -154,6 +161,9 @@ jobs:
     # mirror runner.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
+    env:
+      # Raised at each minor release, never lowered (docs/MAINTAINING.md).
+      GO_COVERAGE_MIN: "75.0"
     defaults:
       run:
         working-directory: gaggiuino-local-profiler/go
@@ -202,8 +212,7 @@ jobs:
       - name: go build
         run: go build ./...
 
-      # Coverage is reported, not gated (#1560); a threshold follows once two
-      # releases show a stable baseline.
+      # Coverage is reported in the summary, then gated against GO_COVERAGE_MIN (#1560).
       - name: go test -race
         # bash = -eo pipefail, so a failing test fails the step despite tee (#1595).
         shell: bash
@@ -219,6 +228,15 @@ jobs:
             awk '/coverage:/ { pkg = ($1 == "ok" || $1 == "?") ? $2 : $1; sub(/.*\/go\//, "", pkg)
               for (i = 1; i <= NF; i++) if ($i == "coverage:") print "| " pkg " | " $(i+1) " |" }' test.out
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage threshold
+        run: |
+          total="$(go tool cover -func=coverage.out | tail -1 | awk '{sub(/%/, "", $NF); print $NF}')"
+          if awk -v t="$total" -v m="$GO_COVERAGE_MIN" 'BEGIN { exit !(t < m) }'; then
+            echo "::error::Go coverage ${total}% is below the threshold ${GO_COVERAGE_MIN}%"
+            exit 1
+          fi
+          echo "Go coverage ${total}% (threshold ${GO_COVERAGE_MIN}%)"
 
       # BLOCKING govulncheck gate (#998, security audit #977 round 3
       # finding 2.3). Fails the build on any *called* vulnerability — one on
@@ -329,6 +347,19 @@ jobs:
           cache-to: |
             type=gha,mode=max,scope=root-shared
             type=gha,mode=max,scope=root-${{ matrix.arch }}
+
+      # Fixable HIGH/CRITICAL findings in the shipped image (Alpine base +
+      # runtime-stage apk packages) fail the PR gate (#1828). amd64 only: the
+      # other arches share the base image and packages. The daily
+      # security-scan.yml covers newly published CVEs between PRs.
+      - name: Trivy image scan (amd64)
+        if: matrix.arch == 'amd64'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: glp-root:amd64
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
       - name: Smoke test (amd64 image, native container run)
         if: matrix.arch == 'amd64'

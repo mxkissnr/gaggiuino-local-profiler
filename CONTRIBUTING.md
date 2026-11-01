@@ -134,7 +134,7 @@ restores the placeholder), which is why the E2E job asserts against the real bun
 ## Screenshots
 
 `gaggiuino-local-profiler/scripts/screenshots.mts` regenerates `docs/screenshots/*.png` for the
-README and wiki from the built-in demo seed; run it from `gaggiuino-local-profiler/`:
+README and wiki; run it from `gaggiuino-local-profiler/`:
 
 ```sh
 node scripts/screenshots.mts [path/to/wiki-repo]
@@ -143,19 +143,23 @@ node scripts/screenshots.mts [path/to/wiki-repo]
 It needs `npx playwright install chromium` once beforehand. With the optional wiki-repo argument
 it also copies the PNGs into that repo's `images/`.
 
-To build the screenshots from real data instead of the synthetic seed, point the script at a GLP
-backup zip (created via Settings → Backup in the app):
+By default the views are rendered from the sanitized demo backup committed at
+`gaggiuino-local-profiler/demo/glp-demo-backup.zip`, so a plain run and a release run both produce
+screenshots of realistic data. To use a different backup (created via Settings → Backup in the
+app) point the script at it:
 
 ```sh
 GLP_SCREENSHOT_BACKUP=/path/to/backup.zip node scripts/screenshots.mts
 ```
 
 The zip is restored into the throwaway instance through the app's own `POST /api/restore`; a
-restore that fails aborts the run. `gaggiuino-local-profiler/scripts/*.zip` is git-ignored, so keep
-the backup there or outside the repo — never commit it. Review the resulting PNGs for personal
-data before committing them.
+restore that fails aborts the run. If `GLP_SCREENSHOT_BACKUP` is unset and the committed demo zip
+is missing, the script falls back to the built-in demo seed. `gaggiuino-local-profiler/scripts/*.zip`
+is git-ignored, so keep a personal backup there or outside the repo — never commit it. Review the
+resulting PNGs for personal data before committing them.
 
-In backup mode every screenshot except `live.png` and `orders.png` comes from the restored backup:
+In backup mode — the default — every screenshot except `live.png` and `orders.png` comes from the
+restored backup:
 `shots.png`, `library.png`, `flavor-wheel.png`, `analytics.png`, `analytics-machines.png`,
 `maintenance.png`, `dialin.png` and `settings.png`. `live.png` and `orders.png` always come from the
 seeded demo instance — a real backup is normally all completed orders against a machine the

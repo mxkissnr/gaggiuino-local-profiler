@@ -6,6 +6,7 @@
 import { quickClone, uploadShotImage, removeShotImage, openShotPhotoLightbox, switchChartTab,
          openChartFullscreen, closeChartFullscreen, switchFsTab, exportAllCSV, exportShot, exportProfile,
          shareCard } from '../views/shots.js';
+import { openPhotoInput, showCameraButtons } from '../photo-capture.js';
 
 // #957: shot curve data is fetched lazily per shot (list rows are
 // metadata-only). Views reach the cache through these window globals, same
@@ -37,7 +38,9 @@ export function wireShotDetail(): void {
   document.getElementById('fsTabPQ')!.addEventListener('click', () => switchFsTab('pq'));
   document.getElementById('closeFullscreenBtn')!.addEventListener('click', closeChartFullscreen);
   document.getElementById('quickCloneBtn')!.addEventListener('click', quickClone);
-  document.getElementById('annPhotoPickBtn')!.addEventListener('click', () => document.getElementById('annPhotoInput')!.click());
+  document.getElementById('annPhotoPickBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('annPhotoInput') as HTMLInputElement, { camera: false }));
+  document.getElementById('annPhotoCameraBtn')!.addEventListener('click', () => openPhotoInput(document.getElementById('annPhotoInput') as HTMLInputElement, { camera: true }));
+  showCameraButtons(['annPhotoCameraBtn']);
   document.getElementById('annPhotoInput')!.addEventListener('change', function (this: HTMLInputElement) { void uploadShotImage(this); });
   document.getElementById('annPhotoRemoveBtn')!.addEventListener('click', () => { void removeShotImage(); });
   document.getElementById('annPhotoThumb')!.addEventListener('click', openShotPhotoLightbox);

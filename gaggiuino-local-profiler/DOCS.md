@@ -40,7 +40,7 @@ The GLP (Gaggiuino Local Profiler) ecosystem consists of two installable pieces 
   ┌─────────────────────────────────────────────────────────┐
   │  GLP HA Integration  (custom component)                 │
   │  creates sensors, fires HA events                       │
-  │  bundles both cards — no separate HACS install          │
+  │  bundles both cards — no separate card install          │
   │  ┌───────────────────────┐   ┌───────────────────────┐  │
   │  │ GLP Shot Card         │   │ GLP Order Card        │  │
   │  │ machine status,       │   │ customer ordering,    │  │
@@ -67,9 +67,9 @@ The central piece. It syncs shot history from Gaggiuino and GaggiMate machines, 
 
 A custom component that polls the app every 60 s (configurable). It exposes all GLP data as native HA sensors — shot count, last shot profile, score, duration, weight, maintenance status, preheat state, etc. — so they can be used in automations, energy dashboards, and Lovelace dashboards.
 
-Install via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
+Install via the Marketplace (HA 2026.11+) or HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
-**The integration bundles the GLP Shot Card and GLP Order Card** — no separate HACS listing or card download. Installing/updating the integration via HACS registers both automatically as dashboard resources; add a `type: custom:glp-card` or `type: custom:glp-order-card` card to your dashboard.
+**The integration bundles the GLP Shot Card and GLP Order Card** — no separate card download. Installing/updating the integration (Marketplace or HACS) registers both automatically as dashboard resources; add a `type: custom:glp-card` or `type: custom:glp-order-card` card to your dashboard.
 
 #### Shot Card (bundled)
 
@@ -92,6 +92,10 @@ A self-contained ordering page for a tablet that stays on the table: a guest ent
 Next to the order flow, a queue panel lists the active orders (waiting / being prepared) with their estimated times and refreshes every 8 seconds; the menu and the open/closed state refresh every 30 seconds.
 
 Reachable at `kiosk.html` — through the Ingress prefix on Home Assistant, or at `http://<host>:<port>/kiosk.html` on a standalone Docker install; the old `/ui/kiosk` address redirects there. The page follows the app's light/dark theme and language (the app's stored choice, otherwise the system/browser setting, falling back to English), and `?eink=1` switches it to a high-contrast black/white mode without animations for e-ink tablets. It needs the ordering feature to be enabled (`enable_orders: true`); without it the page shows a "not enabled" banner. No separate login is required.
+
+The page needs no separate login. **Orders → Kiosk link** (open the section by clicking its title) shows a ready-made link for the tablet: `http://<host>:8099/kiosk.html#key=<key>`. Open it once on the tablet — the page stores the key and removes it from the address bar, so it is not left visible on a device that sits in the open. That key is a second, separate credential: it only allows reading the menu and the order queue and placing an order (`GET /api/menu`, `GET`/`POST /api/orders`, `GET /api/orders/settings`, `GET /api/orders/queue-eta`). Nothing else — no settings, no menu edits, no order status changes, no backup — works with it. "New link" replaces the key; the link already on the tablet stops working immediately, and the kiosk page then says the link was renewed.
+
+⚠ A kiosk key is not a lock on the install. With `expose_api_port` left at its default, `GET /api/token` still hands the full API token to anyone who can reach port 8099 on your LAN (see [the trust model](#trust-model)), so the kiosk key only saves the tablet from holding that bigger token — it does not stop a LAN user from obtaining it. A genuinely locked-down kiosk therefore needs `expose_api_port: false`: HA keeps working through Ingress and the integration proxy, the kiosk link keeps working on the direct port because a request carrying the kiosk key is authenticated by that key and not by `/api/token`, and the installable PWA on the direct port then has no token at all (it shows the "direct port access is off" notice).
 
 ### API token
 
@@ -298,7 +302,7 @@ options](#configuration-options) above.
 | MQTT auto-discovery | ✅ | ❌ — enter the broker host/port/user/password manually under Settings → MQTT (already the fallback path on HA OS too when no MQTT service is registered) |
 | App configuration (`sync_interval`, etc.) | ✅ App Configuration page | ✅ via env vars, see table above |
 | Machine configuration (Settings → Machines) | ✅ | ✅ identical, unchanged |
-| GLP Integration (HACS) — sensors, Order/Shot Card zero-config mode | ✅ auto-discovers the app | ✅ — enter the GLP URL manually on the integration's config step (auto-discovery needs a Supervisor) |
+| GLP Integration (Marketplace / HACS) — sensors, Order/Shot Card zero-config mode | ✅ auto-discovers the app | ✅ — enter the GLP URL manually on the integration's config step (auto-discovery needs a Supervisor) |
 | Backup/restore (in-app export) | ✅ | ✅ identical, unchanged |
 
 ## Multi-machine (v2.0.0)
@@ -369,7 +373,17 @@ An alternative to the WebSocket connection above for getting live sensor/system 
 | **Dial-in** | Dial-in assistant: compare a target shot with recent attempts. The shot view's grind advice additionally flags brew ratios outside the classic espresso window (1:1.8–2.2) when the duration itself is fine. A **Guided Dial-In wizard** — see [below](#guided-dial-in-wizard) — walks through the whole set-grind → pull-shot → evaluate → next-grind loop step by step. |
 | **Maintenance** | A dashboard-style overview: **summary tiles** (due / soon / OK counts plus log entries this year) and a **"Next up" banner** naming the single most-overdue task and machine with an inline done-button (only shown when something is actually due). Five built-in machine maintenance reminders (descaling, backflush, group head service, gaskets & screens, water filter) plus a per-grinder cleaning schedule, shown as compact tiles (status pill, progress bar, machine tag). You can also **add your own custom tasks** (a name plus an optional shots and/or days interval), **rename** or **delete** those, and **enable/disable any task** — a disabled task collapses into its own section at the bottom instead of being removed, keeping its history; custom tasks are tracked per machine like the built-in ones. In [multi-machine](#multi-machine-v200) setups, a **machine filter segment control** (local to this view, independent of the topbar switcher) scopes the whole dashboard to one machine or "all" — descaling/backflush/group head/gaskets are tracked **per machine**; water filter and grinder cleaning remain **global** ("shared" tag, shown once) since that equipment is genuinely shared across machines. Each tile's threshold input, shots/days toggle and **guided walkthrough** (a step-by-step checklist that unlocks the done button once every step is ticked) live behind a "Details" expand instead of always-visible controls. Below the tiles: a **Maintenance Log** table (date, task, machine badge, shot count at time, notes) filtered to whichever scope is selected. Entries are created automatically when marking a task done; past events can be back-filled via the "Add entry" form (task, date, notes). Each entry can be deleted. Stored in `/data/maintenance_log.json`. On Gaggiuino firmware build 7889b7d+, **descaling and backflush also auto-sync from the machine's own native Service Log**: if the machine reports a newer descale/backflush event than GLP last saw, the task is marked done automatically (backdated to the machine's real timestamp) and tagged **"Auto"** on the tile — older firmware is unaffected; every other task (group head, gaskets, water filter, grinder cleaning) and every GaggiMate stays manual. |
 | **Achievements** | The stamp-card view — see [Achievements (stamp card)](#achievements-stamp-card) below. |
-| **Orders** | Barista order management backend *(requires `enable_orders: true`)*. Toggle order acceptance on/off, manage the drink menu (emoji + name + optional **variants** — either manually entered strings, automatically sourced from the active bean library via the 🫘 toggle, or from the active milk library via the 🥛 toggle, persisted in `/data/menu.json`), an optional milk amount per order (**ml**) that is deducted from the matching milk in the library on order completion — milks with no stock left drop out of the active list, see the live order queue with auto-suggested ETAs based on current queue length, and history. Accept orders with an ETA picker (pre-filled with queue estimate), or decline with a free-text reason. Customer statistics panel shows total orders and per-customer breakdown. **Push notifications** (collapsible section): four independent sub-sections — (1) **Notification types**: one on/off toggle per Orders-specific automatic notification (shop opened/closed broadcast, new order to barista, order status to customer) — preheat-ready and low-stock bean warning toggles moved to a "Notifications" card on the main Settings page since they fire regardless of Orders being enabled; all default to on, so an existing install's notification behavior is unchanged until a toggle is explicitly turned off; (2) **Broadcast recipients**: select one or more `notify.mobile_app_*` devices that receive a broadcast when orders open ("☕ open — order via the Kaffeebar menu"; preheat-aware: "opens in ~X min" while warming up) or close ("🚫 closed"); (3) **Barista notification**: one device that is notified instantly when any new order is placed (title: drink name, body: customer + note), when the machine finishes warming up ("☕ Machine ready — Warm-up complete — ready to brew"), and once per bag when a bean's remaining stock drops below 100 g ("🫘 Bean running low"); (4) **Per-customer mapping**: assign a specific device to each HA user (all `person.*` entities are listed, plus anyone who has already placed an order) — that device is notified when their individual order is accepted, completed, or declined. Requires `homeassistant_api: true` and the HA Companion app. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-integration/blob/main/DOCS.md#order-card); a tablet that stays on a table can also order through the [kiosk page](#kiosk-mode). |
+| **Orders** | Barista order management backend *(requires `enable_orders: true`)*. Toggle order acceptance on/off, manage the drink menu (emoji + name + optional **variants** — either manually entered strings, automatically sourced from the active bean library via the 🫘 toggle, or from the active milk library via the 🥛 toggle, persisted in `/data/menu.json`), an optional milk amount per order (**ml**) that is deducted from the matching milk in the library on order completion — milks with no stock left drop out of the active list, see the live order queue with auto-suggested ETAs based on current queue length, and history. Accept orders with an ETA picker (pre-filled with queue estimate), or decline with a free-text reason. Customer statistics panel shows total orders and per-customer breakdown. **Push notifications** (collapsible section): four independent sub-sections — (1) **Notification types**: one on/off toggle per Orders-specific automatic notification (shop opened/closed broadcast, new order to barista, order status to customer) — preheat-ready and low-stock bean warning toggles moved to a "Notifications" card on the main Settings page since they fire regardless of Orders being enabled; all default to on, so an existing install's notification behavior is unchanged until a toggle is explicitly turned off; (2) **Broadcast recipients**: select one or more `notify.mobile_app_*` devices that receive a broadcast when orders open ("☕ open — order via the Kaffeebar menu"; preheat-aware: "opens in ~X min" while warming up) or close ("🚫 closed"); (3) **Barista notification**: one device that is notified instantly when any new order is placed (title: drink name, body: customer + note), when the machine finishes warming up ("☕ Machine ready — Warm-up complete — ready to brew"), and once per bag when a bean's remaining stock drops below the low-stock threshold ("🫘 Bean running low"; 100 g by default, see [Bean freshness](#bean-freshness)); (4) **Per-customer mapping**: assign a specific device to each HA user (all `person.*` entities are listed, plus anyone who has already placed an order) — that device is notified when their individual order is accepted, completed, or declined. Requires `homeassistant_api: true` and the HA Companion app. Customer-facing order placement is handled by the [GLP Order Card](https://github.com/mxkissnr/glp-integration/blob/main/DOCS.md#order-card); a tablet that stays on a table can also order through the [kiosk page](#kiosk-mode). |
+
+### Bean freshness and photos
+
+**Settings → Bean freshness** sets the roast-age bands behind the freshness badge on bean cards (degassing, peak, fading) and the number of grams left in a bag that counts as running low. The badge tooltip shows your own windows; **Reset to defaults** restores the built-in ones.
+
+Every photo field has two buttons: **Choose photo** opens the gallery, **Take photo** opens a camera inside the app (it needs an HTTPS connection to Home Assistant, like the barcode scanner). Tap the preview to focus; the photo is cropped to exactly what the preview showed, then goes through the crop editor.
+
+### Mixing beans in one shot
+
+A shot can use more than one bean. In the shot's annotation sheet you add up to four beans and set the grams each one contributed to the dose; the app then deducts every bag by its own share instead of taking the whole dose from a single bag. The bean with the most grams counts as the shot's bean — it is the one named in the shot header and used for the score target. Because a mixed shot is deliberately not a single-bean reference, it is left out of the per-bean rating and of the grind suggestions built from a bean's own history; overall shot counts, kilos and scores still include it.
 
 ### Machine profile editor
 
@@ -510,7 +524,7 @@ Independent of the Dark/Light toggle, ⚙ Settings → Color scheme now offers t
 
 ### Achievements (stamp card)
 
-A dedicated **Achievements** view shows a printed-cardboard "stamp card": 63 badges across 8 categories (basics, craft, beans, endurance, moments, care, house and a secret category), each unlocked automatically as you brew — no manual claiming. Unlocking is event-driven (checked right after a shot, maintenance entry or library change) plus a one-time retroactive pass over your existing history the first time the view loads, so upgrading doesn't leave earlier shots uncounted. Every badge field is pre-printed identically; only the stamp — a rough ink mark, slightly askew at a fixed angle per badge — distinguishes earned from unearned. Secret badges show only a "?" until unlocked; their name and description never reach the browser before that. A category with every badge earned gets a diagonal, dated "Full" overprint. There is no level, rank or point score — it's a keepsake, not a leaderboard. Achievements are per-install, not per-machine: multi-machine setups share one collection.
+A dedicated **Achievements** view shows a printed-cardboard "stamp card": 64 badges across 8 categories (basics, craft, beans, endurance, moments, care, house and a secret category), each unlocked automatically as you brew — no manual claiming. Unlocking is event-driven (checked right after a shot, maintenance entry or library change) plus a one-time retroactive pass over your existing history the first time the view loads, so upgrading doesn't leave earlier shots uncounted. Every badge field is pre-printed identically; only the stamp — a rough ink mark, slightly askew at a fixed angle per badge — distinguishes earned from unearned. Secret badges show only a "?" until unlocked; their name and description never reach the browser before that. A category with every badge earned gets a diagonal, dated "Full" overprint. There is no level, rank or point score — it's a keepsake, not a leaderboard. Achievements are per-install, not per-machine: multi-machine setups share one collection.
 
 ### What's New (in-app changelog, v2.28.0)
 
@@ -519,6 +533,10 @@ A dedicated **Achievements** view shows a printed-cardboard "stamp card": 63 bad
 ### Shot logging defaults
 
 ⚙ Settings → **Shot logging defaults** lets you configure optional default values for Drink Type, Coffee/Bean, Basket, Puck Screen, Grinder and Dose — the fields most home baristas re-enter identically on every shot with a single primary setup. Leave any field blank to keep selecting it manually as before. A configured default is auto-prefilled the moment you open a brand-new, not-yet-annotated shot's panel; every prefilled field stays fully editable, and it never touches a shot that already has any annotation data, even a single field.
+
+### Bean freshness
+
+⚙ Settings → **Bean freshness** sets the four day bounds that separate the freshness bands (degassing until, peak from, peak until, fading until) and the grams below which a tracked bag counts as running low. Both used to be fixed values; the card makes them yours. The badge on a bean, the degassing tracker in a shot's annotation panel and the "bean running low" notification all read these settings, and they are stored with your other shared UI preferences — so they follow you to another device and travel with a backup. Leave the defaults untouched to keep the behaviour every earlier version had (4 / 7 / 21 / 35 days, 100 g).
 
 ### Backup & Restore
 
@@ -562,6 +580,16 @@ As of glp-integration v1.9.0, you no longer need to install [ALERTua/hass-gaggiu
 The profile endpoint design in GLP was inspired by the pioneering work in ALERTua/hass-gaggiuino. Thank you to [@ALERTua](https://github.com/ALERTua) for the original integration.
 
 For full documentation — features, live mode, analytics, shot score, exports, compatibility — see the [Wiki](https://github.com/mxkissnr/gaggiuino-local-profiler/wiki).
+
+## Verify the image
+
+Every released image carries a signed build attestation that ties it to this repository's release workflow and the exact commit it was built from, plus an SBOM listing its packages. To check an image before or after installing it, use the GitHub CLI:
+
+```bash
+gh attestation verify oci://ghcr.io/mxkissnr/gaggiuino-local-profiler/amd64:<version> --owner mxkissnr
+```
+
+Replace `amd64` with `aarch64` or `armv7` for other architectures. A failed verification means the image was not built by this repository's workflow; do not run it.
 
 ## Community and support
 

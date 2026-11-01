@@ -216,8 +216,9 @@ func SecurityHeaders(next http.Handler) http.Handler {
 // It must run behind SecurityHeaders and ahead of any route — see
 // cmd/server's middleware chain, whose ordering is security headers, then
 // the rate limiter, then this. tickets backs GET /api/events' ?ticket=
-// (#1626); nil accepts no ticket.
-func RequireToken(token string, tickets *TicketStore) func(http.Handler) http.Handler {
+// (#1626); nil accepts no ticket. kiosk backs the guest kiosk's orders-only
+// key (#1731) on exactly the routes in kioskRoutes; nil accepts none.
+func RequireToken(token string, tickets *TicketStore, kiosk *KioskKeyStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Fail closed, not open: if no token is available, deny
@@ -232,6 +233,14 @@ func RequireToken(token string, tickets *TicketStore) func(http.Handler) http.Ha
 			}
 
 			authenticated := IsTokenValid(token, r.Header.Get("X-GLP-Token"))
+			// #1731: the kiosk key is a second, orders-only credential. It rides
+			// in the same X-GLP-Token header (so a kiosk client has one code path)
+			// but authenticates only on kioskRoutes' exact method+path pairs.
+			// Anywhere else it is exactly as wrong as a random string: the request
+			// falls through to the 401 below.
+			if !authenticated && kioskRouteAllowed(r) && kiosk.Valid(r.Header.Get("X-GLP-Token")) {
+				authenticated = true
+			}
 			// #735: EventSource can't send custom headers, so /api/events —
 			// and only that route — also accepts a credential in the query.
 			// #1626: the header, a ?ticket=, or HA Ingress authenticates the
