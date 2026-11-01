@@ -326,12 +326,12 @@ func TestCard_MixedHeadlineFitsBothBeans(t *testing.T) {
 	// full size, short enough to fit at the 36 minimum. Grown here rather than
 	// hard-coded so the test tracks the card font's real metrics.
 	first, second := "", ""
-	for textWidth(first+" + "+second, 36, true) > budget {
-		if len(first) > 200 {
-			t.Fatal("could not build a name that fits the headline at the minimum size")
-		}
+	for textWidth(first+" + "+second, 52, true) <= budget {
 		first += "Ab"
 		second += "Cd"
+	}
+	if textWidth(first+" + "+second, 36, true) > budget {
+		t.Fatalf("%q does not fit the headline at the minimum size either", first+" + "+second)
 	}
 	size, headline := cardHeadlineText(t, cardSVGWithBeans(first, second))
 
