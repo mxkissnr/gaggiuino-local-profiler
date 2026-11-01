@@ -8,12 +8,6 @@ import (
 	"testing"
 )
 
-// fakeJPEG returns a minimal blob that passes img's JPEG magic-byte check and
-// is small enough for img.WriteOptimized to store unchanged.
-func fakeJPEG() []byte {
-	return []byte{0xFF, 0xD8, 0xFF, 0xD9, 0, 0, 0, 0, 0, 0, 0, 0}
-}
-
 // jsonShotImageBundle builds a legacy self-contained JSON bundle (the shape
 // GET /api/backup returns) with one shot whose `image` is "shot-7.jpg". With
 // withImage the bundle also carries that file's bytes base64-encoded under
@@ -22,7 +16,7 @@ func jsonShotImageBundle(t *testing.T, withImage bool) map[string]any {
 	t.Helper()
 	images := map[string]any{}
 	if withImage {
-		images["shot-7.jpg"] = base64.StdEncoding.EncodeToString(fakeJPEG())
+		images["shot-7.jpg"] = base64.StdEncoding.EncodeToString(tinyJPEG(t, 48, 36))
 	}
 	shot := map[string]any{
 		"id":          int64(7),
