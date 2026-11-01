@@ -7,9 +7,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 type LibraryModule = typeof import('../public-src/views/library/bean-card.js');
 type BeanRow = Parameters<LibraryModule['beanFreshBadge']>[0];
 
-// bean-card pulls in state/index.ts and i18n.ts, which read localStorage,
-// navigator and (transitively) document at module load - stub the minimum,
-// same approach as bean-mix-learning.test.ts.
+// bean-card pulls in state/index.ts and i18n.ts, which read localStorage and
+// navigator at module load - stub those two only, same approach as
+// bean-mix-learning.test.ts. `document` is deliberately left undefined so the
+// module-level pointerdown listener in bags.ts guards itself out.
 const store = new Map<string, string>();
 function stub(name: string, value: unknown): void {
   Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
@@ -20,7 +21,6 @@ stub('localStorage', {
   removeItem: (k: string) => { store.delete(k); },
 });
 stub('navigator', { language: 'en' });
-stub('document', { documentElement: { lang: 'en' }, getElementById: () => null, querySelectorAll: () => [] });
 stub('window', { calcShotScore: () => null, getShotData: () => ({}) });
 
 const { S } = await import('../public-src/state/index.js');
