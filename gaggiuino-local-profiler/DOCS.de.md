@@ -40,7 +40,7 @@ Das GLP-Ökosystem (GLP = Gaggiuino Local Profiler) besteht aus zwei installierb
   ┌─────────────────────────────────────────────────────────┐
   │  GLP HA-Integration  (Custom Component)                 │
   │  erstellt Sensoren, feuert HA-Events                    │
-  │  bündelt beide Karten, keine separate HACS-Listung      │
+  │  bündelt beide Karten, keine separate Karteninstallation│
   │  ┌───────────────────────┐   ┌───────────────────────┐  │
   │  │ GLP Shot Card         │   │ GLP Order Card        │  │
   │  │ Maschinenstatus,      │   │ Kundenbestellung,     │  │
@@ -67,9 +67,9 @@ Das zentrale Stück. Es synchronisiert den Shot-Verlauf von Gaggiuino- und Gaggi
 
 Ein Custom Component, das die App alle 60 Sekunden abfragt (konfigurierbar). Es stellt alle GLP-Daten als native HA-Sensoren bereit — Shot-Anzahl, letztes Profil, Score, Dauer, Gewicht, Wartungsstatus, Aufwärmstatus usw. — sodass sie in Automationen, Energie-Dashboards und Lovelace-Dashboards verwendet werden können.
 
-Installation via HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
+Installation über den Marketplace (HA 2026.11+) oder HACS: [github.com/mxkissnr/glp-integration](https://github.com/mxkissnr/glp-integration)
 
-**Die Integration bündelt die GLP Shot Card und die GLP Order Card** — keine eigene HACS-Listung, kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration über HACS werden beide automatisch als Dashboard-Ressourcen registriert; einfach eine Karte vom Typ `custom:glp-card` oder `custom:glp-order-card` zum Dashboard hinzufügen.
+**Die Integration bündelt die GLP Shot Card und die GLP Order Card** — kein separater Karten-Download nötig. Beim Installieren/Aktualisieren der Integration (Marketplace oder HACS) werden beide automatisch als Dashboard-Ressourcen registriert; einfach eine Karte vom Typ `custom:glp-card` oder `custom:glp-order-card` zum Dashboard hinzufügen.
 
 #### Shot Card (gebündelt)
 
@@ -305,7 +305,7 @@ früheren Supervisor-Installation), hat sie immer Vorrang vor diesen Env-Vars
 | MQTT-Auto-Discovery | ✅ | ❌ — Broker-Host/Port/User/Passwort manuell unter Einstellungen → MQTT eintragen (schon auf HA OS der Fallback, wenn kein MQTT-Service registriert ist) |
 | App-Konfiguration (`sync_interval` etc.) | ✅ App-Configuration-Seite | ✅ per Env-Vars, siehe Tabelle oben |
 | Maschinen-Konfiguration (Einstellungen → Maschinen) | ✅ | ✅ identisch, unverändert |
-| GLP-Integration (HACS) — Sensoren, Order/Shot-Card Zero-Config-Modus | ✅ entdeckt die App automatisch | ✅ — GLP-URL im Config-Schritt der Integration manuell eintragen (Auto-Discovery braucht einen Supervisor) |
+| GLP-Integration (Marketplace / HACS) — Sensoren, Order/Shot-Card Zero-Config-Modus | ✅ entdeckt die App automatisch | ✅ — GLP-URL im Config-Schritt der Integration manuell eintragen (Auto-Discovery braucht einen Supervisor) |
 | Backup/Restore (App-eigener Export) | ✅ | ✅ identisch, unverändert |
 
 ## Multi-Maschinen-Modus (v2.0.0)
