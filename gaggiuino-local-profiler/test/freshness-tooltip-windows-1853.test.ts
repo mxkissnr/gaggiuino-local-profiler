@@ -23,9 +23,8 @@ stub('navigator', { language: 'en' });
 stub('document', { documentElement: { lang: 'en' }, getElementById: () => null, querySelectorAll: () => [] });
 stub('window', { calcShotScore: () => null, getShotData: () => ({}) });
 
-let beanFreshBadge: LibraryModule['beanFreshBadge'];
 const { S } = await import('../public-src/state/index.js');
-({ beanFreshBadge } = await import('../public-src/views/library/bean-card.js'));
+const { beanFreshBadge } = await import('../public-src/views/library/bean-card.js');
 
 const CUSTOM_WINDOWS = { degasUntil: 2, peakFrom: 10, peakUntil: 25, fadingUntil: 40 };
 
@@ -44,7 +43,7 @@ function beanAgedDays(days: number): BeanRow {
     stock_g: 250,
     remainingG: 240,
     bags: [{ id: 7, roastDate: iso, stock_g: 250, consumedG: 10, remainingG: 240, current: true }],
-  } as unknown as BeanRow;
+  };
 }
 
 function badgeTitle(): string {
