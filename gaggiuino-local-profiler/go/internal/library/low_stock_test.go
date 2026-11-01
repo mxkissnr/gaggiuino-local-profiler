@@ -71,7 +71,7 @@ func TestCheckLowStock_NotifiesOncePerBag(t *testing.T) {
 		return true
 	}
 
-	if err := CheckLowStock(repo, noDoses, 10, notify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, notify); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if calls != 1 {
@@ -84,7 +84,7 @@ func TestCheckLowStock_NotifiesOncePerBag(t *testing.T) {
 		t.Fatal("lowStockNotifiedAt not stored on the notified bag")
 	}
 
-	if err := CheckLowStock(repo, noDoses, 10, notify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, notify); err != nil {
 		t.Fatalf("second CheckLowStock: %v", err)
 	}
 	if calls != 1 {
@@ -96,7 +96,7 @@ func TestCheckLowStock_NewCurrentBagRearms(t *testing.T) {
 	_, repo, _ := newTestHandlers(t)
 	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 84))
 	alwaysNotify := func(string, int64) bool { return true }
-	if err := CheckLowStock(repo, noDoses, 10, alwaysNotify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, alwaysNotify); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if _, ok := bagStamp(t, repo, 11); !ok {
@@ -106,7 +106,7 @@ func TestCheckLowStock_NewCurrentBagRearms(t *testing.T) {
 	// A new bag becomes current: the first is empty, the second carries stock.
 	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 0), lowStockBag(12, 2_000, 84))
 	var calls int
-	if err := CheckLowStock(repo, noDoses, 10, func(string, int64) bool { calls++; return true }); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, func(string, int64) bool { calls++; return true }); err != nil {
 		t.Fatalf("CheckLowStock (new bag): %v", err)
 	}
 	if calls != 1 {
@@ -123,13 +123,13 @@ func TestCheckLowStock_NotStampedWhenNotifyFails(t *testing.T) {
 
 	var calls int
 	fail := func(string, int64) bool { calls++; return false }
-	if err := CheckLowStock(repo, noDoses, 10, fail); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, fail); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if _, ok := bagStamp(t, repo, 11); ok {
 		t.Fatal("lowStockNotifiedAt stored despite the push failing")
 	}
-	if err := CheckLowStock(repo, noDoses, 10, fail); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, fail); err != nil {
 		t.Fatalf("second CheckLowStock: %v", err)
 	}
 	if calls != 2 {
@@ -139,10 +139,10 @@ func TestCheckLowStock_NotStampedWhenNotifyFails(t *testing.T) {
 
 func TestCheckLowStock_AtThresholdNoNotify(t *testing.T) {
 	_, repo, _ := newTestHandlers(t)
-	saveLowStockBean(t, repo, lowStockBag(11, 1_000, lowStockThresholdG))
+	saveLowStockBean(t, repo, lowStockBag(11, 1_000, float64(DefaultLowStockThresholdG)))
 
 	var calls int
-	if err := CheckLowStock(repo, noDoses, 10, func(string, int64) bool { calls++; return true }); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, func(string, int64) bool { calls++; return true }); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if calls != 0 {
@@ -158,11 +158,41 @@ func TestCheckLowStock_UnknownBeanNoop(t *testing.T) {
 	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 84))
 
 	var calls int
-	if err := CheckLowStock(repo, noDoses, 999, func(string, int64) bool { calls++; return true }); err != nil {
+	if err := CheckLowStock(repo, noDoses, 999, DefaultLowStockThresholdG, func(string, int64) bool { calls++; return true }); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if calls != 0 {
 		t.Fatalf("notify called %d times for an unknown bean, want 0", calls)
+	}
+}
+
+// TestCheckLowStock_CustomThreshold pins #1835: the caller's threshold decides
+// the notification, not the built-in default. 84 g left stays quiet under a
+// 50 g threshold and fires under a 90 g one.
+func TestCheckLowStock_CustomThreshold(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	saveLowStockBean(t, repo, lowStockBag(11, 1_000, 84))
+
+	var calls int
+	notify := func(string, int64) bool { calls++; return true }
+	if err := CheckLowStock(repo, noDoses, 10, 50, notify); err != nil {
+		t.Fatalf("CheckLowStock below a 50 g threshold: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("notify called %d times with a 50 g threshold and 84 g left, want 0", calls)
+	}
+	if _, ok := bagStamp(t, repo, 11); ok {
+		t.Fatal("bag stamped although the threshold was not crossed")
+	}
+
+	if err := CheckLowStock(repo, noDoses, 10, 90, notify); err != nil {
+		t.Fatalf("CheckLowStock below a 90 g threshold: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("notify called %d times with a 90 g threshold and 84 g left, want 1", calls)
+	}
+	if _, ok := bagStamp(t, repo, 11); !ok {
+		t.Fatal("lowStockNotifiedAt not stored after crossing a custom threshold")
 	}
 }
 
@@ -190,7 +220,7 @@ func TestCheckLowStock_NotifyRunsOutsideTheLibraryLock(t *testing.T) {
 		return true
 	}
 
-	if err := CheckLowStock(repo, noDoses, 10, notify); err != nil {
+	if err := CheckLowStock(repo, noDoses, 10, DefaultLowStockThresholdG, notify); err != nil {
 		t.Fatalf("CheckLowStock: %v", err)
 	}
 	if !notified {
@@ -198,5 +228,112 @@ func TestCheckLowStock_NotifyRunsOutsideTheLibraryLock(t *testing.T) {
 	}
 	if _, ok := bagStamp(t, repo, 11); !ok {
 		t.Fatal("lowStockNotifiedAt not stored after a delivered push")
+	}
+}
+
+// saveTwoLowStockBeans writes two stock-tracked beans (ids 12 and 7), each with
+// one open bag holding 105 g, so the 10 g + 8 g mix below drops both below a
+// 100 g threshold.
+func saveTwoLowStockBeans(t *testing.T, repo *Repository) {
+	t.Helper()
+	lib := Library{Beans: []Entity{
+		{"id": float64(12), "name": "Bean A", "bags": []any{lowStockBag(101, 1_000, 105)}},
+		{"id": float64(7), "name": "Bean B", "bags": []any{lowStockBag(102, 1_000, 105)}},
+	}}
+	if err := repo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+}
+
+// mixDoses returns the annotated doses mixAnnotationBody describes: 10 g of
+// bean 12 plus 8 g of bean 7.
+func mixDoses() ([]shots.AnnotatedDose, error) {
+	beanA, beanB := int64(12), int64(7)
+	g10, g8 := 10.0, 8.0
+	return []shots.AnnotatedDose{
+		{Coffee: "Bean A", BeanID: &beanA, Dose: &g10, Timestamp: 1_700_000_000},
+		{Coffee: "Bean B", BeanID: &beanB, Dose: &g8, Timestamp: 1_700_000_000},
+	}, nil
+}
+
+// TestResolveLowStockBeanIDs_Mix pins #1837: a mixed shot resolves to one bean
+// id per part, deduplicated, while a single-bean annotation still resolves to
+// its one bean.
+func TestResolveLowStockBeanIDs_Mix(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	saveTwoLowStockBeans(t, repo)
+	lib, err := repo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+
+	ids := ResolveLowStockBeanIDs(shots.Shot{"annotation": mixAnnotationBody()}, lib.Beans)
+	if len(ids) != 2 || ids[0] != 12 || ids[1] != 7 {
+		t.Fatalf("ResolveLowStockBeanIDs(mix) = %v, want [12 7]", ids)
+	}
+
+	// Two parts naming the same bean must not check (and notify about) it twice.
+	sameBean := mixAnnotationBody()
+	sameBean["beanMix"] = []any{
+		map[string]any{"beanId": float64(12), "coffee": "Bean A", "grams": float64(10)},
+		map[string]any{"beanId": float64(12), "coffee": "Bean A", "grams": float64(8)},
+	}
+	if ids := ResolveLowStockBeanIDs(shots.Shot{"annotation": sameBean}, lib.Beans); len(ids) != 1 || ids[0] != 12 {
+		t.Fatalf("ResolveLowStockBeanIDs(same bean twice) = %v, want [12]", ids)
+	}
+
+	single := shots.Shot{"annotation": map[string]any{"coffee": "Bean B", "beanId": float64(7), "dose": float64(18)}}
+	if ids := ResolveLowStockBeanIDs(single, lib.Beans); len(ids) != 1 || ids[0] != 7 {
+		t.Fatalf("ResolveLowStockBeanIDs(single bean) = %v, want [7]", ids)
+	}
+
+	if ids := ResolveLowStockBeanIDs(shots.Shot{"annotation": map[string]any{"coffee": "Unknown"}}, lib.Beans); ids != nil {
+		t.Fatalf("ResolveLowStockBeanIDs(unknown bean) = %v, want nil", ids)
+	}
+}
+
+// TestCheckLowStock_MixNotifiesEachBeanOnce pins the mixed-shot low-stock path:
+// both beans fall below the threshold on the same annotation, so each is
+// notified exactly once and its bag stamped once.
+func TestCheckLowStock_MixNotifiesEachBeanOnce(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	saveTwoLowStockBeans(t, repo)
+	lib, err := repo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+
+	notified := map[string]int64{}
+	notify := func(name string, remainingG int64) bool {
+		notified[name] = remainingG
+		return true
+	}
+
+	check := func() {
+		t.Helper()
+		for _, beanID := range ResolveLowStockBeanIDs(shots.Shot{"annotation": mixAnnotationBody()}, lib.Beans) {
+			if err := CheckLowStock(repo, mixDoses, beanID, DefaultLowStockThresholdG, notify); err != nil {
+				t.Fatalf("CheckLowStock(bean %d): %v", beanID, err)
+			}
+		}
+	}
+
+	check()
+	if len(notified) != 2 {
+		t.Fatalf("notified %v, want one push per bean", notified)
+	}
+	if notified["Bean A"] != 95 || notified["Bean B"] != 97 {
+		t.Fatalf("notified %v, want Bean A at 95 g and Bean B at 97 g", notified)
+	}
+	if _, ok := bagStamp(t, repo, 101); !ok {
+		t.Fatal("Bean A's bag not stamped")
+	}
+	if _, ok := bagStamp(t, repo, 102); !ok {
+		t.Fatal("Bean B's bag not stamped")
+	}
+
+	check()
+	if len(notified) != 2 {
+		t.Fatalf("notified %v after a second annotation, want still one push per bean", notified)
 	}
 }

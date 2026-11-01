@@ -99,6 +99,7 @@ const fr: Partial<Translations> = {
     ann_grinder:'Moulin', ann_grinder_ph:'ex. Niche Zero',
     ann_grind_setting:'Mouture', ann_grind_ph:'ex. 23 Clics',
     ann_dose:'Dose (g)', ann_dose_ph:'ex. 18',
+    ann_add_bean:'Ajouter un autre grain', ann_remove_bean:'Retirer le grain',
 
     ann_tds_optional:'(optionnel)',
     ann_tds_ph:'ex. 9.2', ann_notes:'Notes',
@@ -351,6 +352,10 @@ const fr: Partial<Translations> = {
     settings_mcp_title:'Assistants IA (MCP)', settings_mcp_desc:'Permets aux assistants IA comme Claude de lire tes shots, grains et analyses via le serveur MCP intégré.', settings_mcp_enabled:'Activer le serveur MCP', settings_mcp_write:'Autoriser les outils d’écriture — ils modifient tes données', settings_mcp_dev:'Autoriser les outils de développement — sortie de diagnostic brute et volumineuse',
     settings_shot_defaults_title:'Valeurs par défaut pour la saisie des shots', settings_shot_defaults_desc:'Pré-remplies automatiquement à l\'ouverture d\'un nouveau shot pas encore annoté — restent modifiables à tout moment.',
     sd_none:'— aucune valeur par défaut —', sd_save:'Enregistrer', sd_saved:'Enregistré',
+    bf_title:'Fraîcheur du café', bf_desc:'À quel âge une torréfaction compte comme en dégazage, optimale ou vieille — et à partir de combien de grammes un sachet est signalé comme presque vide.',
+    bf_degas_until:'Dégazage jusqu\'à (jours)', bf_peak_from:'Optimal à partir de (jours)', bf_peak_until:'Optimal jusqu\'à (jours)', bf_fading_until:'Déclin jusqu\'à (jours)', bf_low_stock:'Alerter en dessous de (g)',
+    bf_save:'Enregistrer', bf_saved:'Enregistré', bf_reset:'Rétablir les valeurs par défaut',
+    bf_err_days:'Saisissez des jours entiers de 1 à 365.', bf_err_grams:'Saisissez des grammes entiers de 1 à 5000.', bf_err_order:'Les limites doivent être croissantes : dégazage < optimal dès <= optimal jusqu\'à < déclin.',
     settings_machines:'Machines', settings_machines_desc:'Gérez les machines à espresso surveillées par cette application.', settings_machines_add:'+ Ajouter une machine',
     settings_machine_name:'Nom', settings_machine_type:'Type', settings_machine_host:'Hôte', settings_machine_switch:'Entité switch HA (optionnel)', settings_machine_water_sensor:'Capteur de niveau d\'eau installé (ALBA)',
     settings_machine_theme:'Couleur', settings_machine_theme_gradient:'Dégradé', settings_machine_theme_none:'Aucune', settings_machine_theme_custom:'Personnalisée',
@@ -689,6 +694,8 @@ const fr: Partial<Translations> = {
     'demo.simulate':'Simuler un shot',
     'demo.getApp':"Installer l'appli",
     photo_pick_btn:'Choisir une photo',
+    photo_take_btn:'Prendre une photo',
+    photo_camera_shutter:'Déclencher', photo_camera_cancel:'Annuler',
     crop_editor_title:'Recadrer la photo', crop_editor_apply:'Appliquer', crop_editor_zoom:'Zoom',
     sticker_title:'Détourer en sticker', sticker_step:(step,total,label)=>`Étape ${step} sur ${total} : ${label}`, sticker_stage_download:'récupérer les outils de découpe', sticker_stage_background:'distinguer le sachet de l\'arrière-plan', sticker_stage_subject:'tracer les contours', sticker_add:'Garder', sticker_remove:'Retirer', sticker_hint_keep:'Touche ou peins les parties qui manquent', sticker_hint_remove:'Touche ou peins l\'arrière-plan à enlever', sticker_hint_zoom:'Deux doigts pour zoomer et déplacer', sticker_reset_confirm:'Touche encore pour tout annuler', sticker_brush_size:'Taille du pinceau', sticker_undo:'Annuler', sticker_reset:'Recommencer', sticker_original:'Original', sticker_apply:'Utiliser le sticker', sticker_failed:'Cette photo ne veut pas se décoller. Tu peux quand même l\'utiliser telle quelle.', sticker_download_failed:'Les outils de découpe n\'ont pas pu être récupérés. Le premier détourage a besoin d\'internet une fois — réessaie plus tard.', sticker_fit:'Ajuster', sticker_close:'Fermer', sticker_done:'Décollé et collé sur l\'étagère.',
 

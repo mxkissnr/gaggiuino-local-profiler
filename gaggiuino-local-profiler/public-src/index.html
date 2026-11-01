@@ -355,6 +355,7 @@
                     <img class="shot-photo-thumb" id="annPhotoThumb" alt="" style="display:none">
                     <input type="file" id="annPhotoInput" aria-label="Add a photo to this shot" data-i18n-aria-label="ann_photo_upload" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                     <button type="button" class="lib-open-btn" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
+                    <button type="button" class="lib-open-btn" id="annPhotoCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
                     <button type="button" class="lib-btn-sm del" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
                 </div>
                 <div class="annotation-fields">
@@ -376,6 +377,9 @@
                         <label for="annCoffee" data-i18n="ann_coffee">Kaffee / Bohne</label>
                         <select id="annCoffee"></select>
                         <div id="beanAgeHint" class="bean-age-hint" style="display:none"></div>
+                        <div id="annMixRows" class="ann-mix-rows" style="display:none"></div>
+                        <button type="button" class="lib-btn-sm ann-mix-add" id="annMixAddBtn"
+                            data-i18n="ann_add_bean">Weitere Bohne</button>
                     </div>
                     <div class="annotation-field">
                         <label for="annBasket" data-i18n="ann_basket">Sieb</label>
@@ -667,6 +671,7 @@
                                 <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="lib-open-btn" id="beanFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
                                     <button type="button" class="lib-open-btn" id="beanFormStickerBtn" data-i18n="sticker_title" style="display:none">Als Sticker freistellen</button>
                                     <span class="lib-form-hint lib-form-hint-staged" id="beanFormImageStaged" data-i18n="bean_image_staged" style="display:none">Foto wird beim Speichern hinzugefügt</span>
                                 </div>
@@ -744,6 +749,7 @@
                                 <input type="file" id="grinderFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="lib-open-btn" id="grinderFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
                                 </div>
                             </div>
                             <div class="lib-form-field" id="grinderFormZeroPointField" style="display:none">
@@ -915,6 +921,7 @@
                                 <input type="file" id="basketFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="basketFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="lib-open-btn" id="basketFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
                                 </div>
                             </div>
                         </div>
@@ -957,6 +964,7 @@
                                 <input type="file" id="puckScreenFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="puckScreenFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="lib-open-btn" id="puckScreenFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
                                 </div>
                             </div>
                         </div>
@@ -1575,6 +1583,31 @@
                 <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
             </div>
         </div>
+        <!-- Bean freshness windows and the low-stock threshold (#1835) — the
+             same two ui-prefs entries utils.ts's freshnessWindows() and the Go
+             low-stock check read, so this card is the only place they are
+             edited. Saves through setUiPref() (components/bean-freshness-
+             settings.ts); the bindings are numeric so a bad value cannot be
+             typed in the first place, and Save still validates. -->
+        <div class="settings-card" id="beanFreshnessCard">
+            <h3 class="settings-card-title" data-i18n="bf_title">Bohnen-Frische</h3>
+            <p class="settings-card-desc" data-i18n="bf_desc">Ab welchem Alter eine Röstung als degasend, optimal oder alt gilt — und ab wie vielen Gramm eine Packung als fast leer gemeldet wird.</p>
+            <label for="bfDegasUntil" class="machine-form-label" data-i18n="bf_degas_until">Degasen bis (Tage)</label>
+            <input type="number" id="bfDegasUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfPeakFrom" class="machine-form-label" data-i18n="bf_peak_from">Optimal ab (Tage)</label>
+            <input type="number" id="bfPeakFrom" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfPeakUntil" class="machine-form-label" data-i18n="bf_peak_until">Optimal bis (Tage)</label>
+            <input type="number" id="bfPeakUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfFadingUntil" class="machine-form-label" data-i18n="bf_fading_until">Abbauend bis (Tage)</label>
+            <input type="number" id="bfFadingUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
+            <label for="bfLowStock" class="machine-form-label" data-i18n="bf_low_stock">Warnung unter (g)</label>
+            <input type="number" id="bfLowStock" class="machine-form-input" step="1" min="1" max="5000" inputmode="numeric">
+            <div id="bfError" class="bf-error" role="alert" style="display:none"></div>
+            <div class="machine-form-actions">
+                <button id="bfSaveBtn" type="button" class="backup-btn" data-i18n="bf_save">Speichern</button>
+                <button id="bfResetBtn" type="button" class="backup-btn" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
+            </div>
+        </div>
         <!-- Live-data transport (#598) — self-contained card, does not touch
              the machine registry card below it. Connection fields are only
              shown once "MQTT" is picked (renderMqttSettingsCard() toggles
@@ -1773,6 +1806,19 @@
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
     <button class="scan-close-btn" id="closeScanModalBtn" data-i18n="scan_close">Schließen</button>
+</div>
+
+<!-- ── In-app camera modal (#1836) ── the Companion app's WebView ignores the
+     file input's `capture` attribute, so "Take photo" streams the live camera
+     here instead (same getUserMedia path as #scanModal). -->
+<div id="photoCameraModal" role="dialog" aria-modal="true" aria-label="Foto aufnehmen" data-i18n-aria-label="photo_take_btn">
+    <div id="photoCameraViewport">
+        <video id="photoCameraVideo" class="photo-video-off" autoplay muted playsinline></video>
+    </div>
+    <div class="photo-camera-actions">
+        <button type="button" id="photoCameraCancelBtn" class="scan-close-btn" data-i18n="photo_camera_cancel">Abbrechen</button>
+        <button type="button" id="photoCameraShutter" class="lib-save-btn photo-camera-shutter" data-i18n="photo_camera_shutter">Auslösen</button>
+    </div>
 </div>
 
 <!-- ── Backup export/restore modal ── shared by both flows, see

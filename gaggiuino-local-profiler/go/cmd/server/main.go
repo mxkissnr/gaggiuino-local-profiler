@@ -379,6 +379,8 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	haClient := ha.NewClientFromEnv()
 	ordersRepo := orders.NewRepository(sqlDB)
+	// #1835: shared by the ui-prefs routes and the low-stock threshold read.
+	uiprefsRepo := uiprefs.NewRepository(sqlDB)
 	// #1411: annotating a shot books milk stock and frozen-portion counts on
 	// the server inside the same locked save; injected here because
 	// internal/shots cannot import internal/library or internal/orders, like
@@ -425,18 +427,19 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 			log.Printf("main: low-stock: reading library: %v", err)
 			return
 		}
-		beanID := library.ResolveLowStockBeanID(shots.Shot{"annotation": ann}, lib.Beans)
-		if beanID == 0 {
-			return
-		}
-		if err := library.CheckLowStock(libRepo, shotsRepo.GetAnnotatedDoses, beanID, func(name string, remainingG int64) bool {
-			lang := haClient.GetHaLanguage(ctx)
-			return baristaNotify(ctx, "notify_low_stock",
-				ha.NotifyText(lang, "low_stock_title"),
-				ha.NotifyText(lang, "low_stock_body", name, remainingG),
-				fmt.Sprintf("glp_low_stock_%d", beanID))
-		}); err != nil {
-			log.Printf("main: low-stock notification for shot %d failed: %v", shotID, err)
+		// A mixed shot (#1837) can take several beans below the threshold at
+		// once, so each of its bean ids is checked with the same threshold.
+		thresholdG := lowStockThresholdG(uiprefsRepo)
+		for _, beanID := range library.ResolveLowStockBeanIDs(shots.Shot{"annotation": ann}, lib.Beans) {
+			if err := library.CheckLowStock(libRepo, shotsRepo.GetAnnotatedDoses, beanID, thresholdG, func(name string, remainingG int64) bool {
+				lang := haClient.GetHaLanguage(ctx)
+				return baristaNotify(ctx, "notify_low_stock",
+					ha.NotifyText(lang, "low_stock_title"),
+					ha.NotifyText(lang, "low_stock_body", name, remainingG),
+					fmt.Sprintf("glp_low_stock_%d", beanID))
+			}); err != nil {
+				log.Printf("main: low-stock notification for shot %d (bean %d) failed: %v", shotID, beanID, err)
+			}
 		}
 	})
 	ordersHandlers := orders.NewHandlers(ordersRepo, shotsRepo, libRepo, registry, haClient)
@@ -526,7 +529,7 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 
 	// #1375: per-install UI choices (view/filter/sort) that follow the user
 	// across devices, kept in the kv table under 'ui_prefs'.
-	uiprefsHandlers := uiprefs.NewHandlers(uiprefs.NewRepository(sqlDB))
+	uiprefsHandlers := uiprefs.NewHandlers(uiprefsRepo)
 	uiprefsHandlers.RegisterRoutes(mux)
 
 	// Prime a newly-connected client with the current preheat/live snapshot
@@ -767,6 +770,25 @@ func getEnvNumber(name string, def float64, min float64) float64 {
 		return def
 	}
 	return n
+}
+
+// lowStockThresholdG reads the remaining-grams threshold for the "bean
+// running low" notification from the ui-prefs store (#1835), so it shares one
+// source with the freshness windows and rides along in backup/restore. Read per
+// notification rather than once at startup, so a changed value takes effect
+// without a restart. Anything other than a whole number in 1..5000 (JSON
+// numbers arrive as float64) falls back to DefaultLowStockThresholdG.
+func lowStockThresholdG(repo *uiprefs.Repository) int64 {
+	prefs, err := repo.Get()
+	if err != nil {
+		log.Printf("main: low-stock: reading ui prefs: %v", err)
+		return library.DefaultLowStockThresholdG
+	}
+	g, ok := prefs["bean_low_stock_g"].(float64)
+	if !ok || g < 1 || g > 5000 || g != math.Trunc(g) {
+		return library.DefaultLowStockThresholdG
+	}
+	return int64(g)
 }
 
 // tcpNoDelayListener explicitly disables Nagle's algorithm on every

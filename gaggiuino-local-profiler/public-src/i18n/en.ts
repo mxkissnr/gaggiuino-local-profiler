@@ -99,6 +99,7 @@ const en: Translations = {
     ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
     ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
     ann_dose:'Dose (g)', ann_dose_ph:'e.g. 18',
+    ann_add_bean:'Add another bean', ann_remove_bean:'Remove bean',
 
     ann_tds_optional:'(optional)',
     ann_tds_ph:'e.g. 9.2', ann_notes:'Notes',
@@ -351,6 +352,10 @@ const en: Translations = {
     settings_mcp_title:'AI assistants (MCP)', settings_mcp_desc:'Let AI assistants such as Claude read your shots, beans and analytics through the built-in MCP server.', settings_mcp_enabled:'Enable the MCP server', settings_mcp_write:'Allow write tools — these change your data', settings_mcp_dev:'Allow developer tools — large, raw diagnostic output',
     settings_shot_defaults_title:'Shot logging defaults', settings_shot_defaults_desc:'Auto-prefilled when opening a new, not-yet-annotated shot — stays fully editable.',
     sd_none:'— no default —', sd_save:'Save', sd_saved:'Saved',
+    bf_title:'Bean freshness', bf_desc:'At what age a roast counts as degassing, peak or old — and how many grams left in a bag count as running low.',
+    bf_degas_until:'Degassing until (days)', bf_peak_from:'Peak from (days)', bf_peak_until:'Peak until (days)', bf_fading_until:'Fading until (days)', bf_low_stock:'Warn below (g)',
+    bf_save:'Save', bf_saved:'Saved', bf_reset:'Reset to defaults',
+    bf_err_days:'Enter whole days from 1 to 365.', bf_err_grams:'Enter whole grams from 1 to 5000.', bf_err_order:'The bounds must ascend: degassing < peak from <= peak until < fading.',
     settings_machines:'Machines', settings_machines_desc:'Manage the espresso machines this app monitors.', settings_machines_add:'+ Add machine',
     settings_machine_name:'Name', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch entity (optional)', settings_machine_water_sensor:'Water level sensor installed (ALBA)',
     settings_machine_theme:'Color', settings_machine_theme_gradient:'Gradient', settings_machine_theme_none:'None', settings_machine_theme_custom:'Custom',
@@ -689,6 +694,8 @@ const en: Translations = {
     'demo.simulate':'Simulate a shot',
     'demo.getApp':'Get the app',
     photo_pick_btn:'Choose photo',
+    photo_take_btn:'Take photo',
+    photo_camera_shutter:'Take photo', photo_camera_cancel:'Cancel',
     crop_editor_title:'Crop photo', crop_editor_apply:'Apply', crop_editor_zoom:'Zoom',
     sticker_title:'Cut out as sticker', sticker_step:(step,total,label)=>`Step ${step} of ${total}: ${label}`, sticker_stage_download:'fetching the cutting tools', sticker_stage_background:'telling the bag from the background', sticker_stage_subject:'tracing the edges', sticker_add:'Keep', sticker_remove:'Remove', sticker_hint_keep:'Tap or paint over parts that are missing', sticker_hint_remove:'Tap or paint over background that should go', sticker_hint_zoom:'Two fingers to zoom and move', sticker_reset_confirm:'Tap again to discard all', sticker_brush_size:'Brush size', sticker_undo:'Undo', sticker_reset:'Start over', sticker_original:'Original', sticker_apply:'Use sticker', sticker_failed:'This photo would not peel. You can still use it as it is.', sticker_download_failed:'The cut-out tools could not be fetched. The first cut-out needs internet once — try again later.', sticker_fit:'Fit', sticker_close:'Close', sticker_done:'Peeled off and stuck on the shelf.',
 

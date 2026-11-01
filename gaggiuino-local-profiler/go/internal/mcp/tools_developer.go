@@ -429,7 +429,7 @@ const (
 )
 
 type exportShotsDatasetInput struct {
-	Bean      string `json:"bean,omitempty" jsonschema:"case-insensitive substring of the shot's bean (coffee) name annotation"`
+	Bean      string `json:"bean,omitempty" jsonschema:"case-insensitive substring of one of the shot's bean (coffee) names; a mixed shot matches on any of its beans"`
 	MachineID int64  `json:"machine_id,omitempty" jsonschema:"only shots pulled on this machine id; omit or 0 for all machines"`
 	MinRating int    `json:"min_rating,omitempty" jsonschema:"only shots whose 1-5 star rating is at least this value"`
 	Since     string `json:"since,omitempty" jsonschema:"only shots at or after this date-time, RFC 3339 e.g. 2026-01-31T00:00:00Z"`
@@ -443,17 +443,18 @@ type exportShotsDatasetInput struct {
 // derives for get_shot (embedded, so those fields sit at the top level rather
 // than in a nested object). No curve data.
 type datasetRow struct {
-	ID             int64    `json:"id" jsonschema:"the shot's stable id"`
-	Timestamp      string   `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
-	MachineID      int64    `json:"machine_id" jsonschema:"machine that pulled the shot"`
-	ProfileName    string   `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
-	Bean           string   `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation"`
-	Score          *int     `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
-	UsedBeanTarget bool     `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
-	Rating         *int     `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating"`
-	GrindSetting   string   `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
-	TDSPct         *float64 `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
-	Notes          string   `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
+	ID             int64           `json:"id" jsonschema:"the shot's stable id"`
+	Timestamp      string          `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
+	MachineID      int64           `json:"machine_id" jsonschema:"machine that pulled the shot"`
+	ProfileName    string          `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
+	Bean           string          `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
+	Score          *int            `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
+	UsedBeanTarget bool            `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
+	BeanComponents []beanComponent `json:"bean_components,omitempty" jsonschema:"a mixed shot's beans in dose order; omitted for a single-bean shot"`
+	Rating         *int            `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating"`
+	GrindSetting   string          `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
+	TDSPct         *float64        `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
+	Notes          string          `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
 	shotMetrics
 }
 
@@ -514,8 +515,9 @@ func toDatasetRow(row shots.PageRow) datasetRow {
 		Timestamp:      formatTimestamp(shot),
 		MachineID:      machineIDOf(shot),
 		ProfileName:    profileNameOf(shot),
-		Bean:           annotationString(shot, "coffee"),
+		Bean:           shotBeanLabel(shot),
 		UsedBeanTarget: row.UsedBeanTarget,
+		BeanComponents: beanComponents(shot),
 		GrindSetting:   annotationString(shot, "grindSetting"),
 		Notes:          truncate(annotationString(shot, "notes"), maxDatasetNotes),
 		shotMetrics:    *buildMetrics(shot),

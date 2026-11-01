@@ -99,6 +99,7 @@ const de: Partial<Translations> = {
     ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
     ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'z.B. 18',
+    ann_add_bean:'Weitere Bohne', ann_remove_bean:'Bohne entfernen',
 
     ann_tds_optional:'(optional)',
     ann_tds_ph:'z.B. 9.2', ann_notes:'Notizen',
@@ -351,6 +352,10 @@ const de: Partial<Translations> = {
     settings_mcp_title:'KI-Assistenten (MCP)', settings_mcp_desc:'Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.', settings_mcp_enabled:'MCP-Server aktivieren', settings_mcp_write:'Schreib-Tools erlauben — diese verändern deine Daten', settings_mcp_dev:'Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben',
     settings_shot_defaults_title:'Standardwerte für Shot-Notizen', settings_shot_defaults_desc:'Werden beim Öffnen eines neuen, noch nicht bewerteten Shots automatisch vorausgefüllt — bleiben dabei jederzeit änderbar.',
     sd_none:'— keine Vorgabe —', sd_save:'Speichern', sd_saved:'Gespeichert',
+    bf_title:'Bohnen-Frische', bf_desc:'Ab welchem Alter eine Röstung als degasend, optimal oder alt gilt — und ab wie vielen Gramm eine Packung als fast leer gemeldet wird.',
+    bf_degas_until:'Degasen bis (Tage)', bf_peak_from:'Optimal ab (Tage)', bf_peak_until:'Optimal bis (Tage)', bf_fading_until:'Abbauend bis (Tage)', bf_low_stock:'Warnung unter (g)',
+    bf_save:'Speichern', bf_saved:'Gespeichert', bf_reset:'Auf Standard zurücksetzen',
+    bf_err_days:'Bitte ganze Tage von 1 bis 365 eingeben.', bf_err_grams:'Bitte ganze Gramm von 1 bis 5000 eingeben.', bf_err_order:'Die Grenzen müssen aufsteigend sein: Degasen < Optimal ab <= Optimal bis < Abbauend.',
     settings_machines:'Maschinen', settings_machines_desc:'Verwalte die Espressomaschinen, die diese App überwacht.', settings_machines_add:'+ Maschine hinzufügen',
     settings_machine_name:'Name', settings_machine_type:'Typ', settings_machine_host:'Host', settings_machine_switch:'HA Switch-Entität (optional)', settings_machine_water_sensor:'Wasserstandssensor verbaut (ALBA)',
     settings_machine_theme:'Farbe', settings_machine_theme_gradient:'Verlauf', settings_machine_theme_none:'Keine', settings_machine_theme_custom:'Eigene',
@@ -664,6 +669,8 @@ const de: Partial<Translations> = {
     'demo.simulate':'Shot simulieren',
     'demo.getApp':'App installieren',
     photo_pick_btn:'Foto auswählen',
+    photo_take_btn:'Foto aufnehmen',
+    photo_camera_shutter:'Auslösen', photo_camera_cancel:'Abbrechen',
     crop_editor_title:'Foto zuschneiden', crop_editor_apply:'Übernehmen', crop_editor_zoom:'Zoom',
     sticker_title:'Als Sticker freistellen', sticker_step:(step,total,label)=>`Schritt ${step} von ${total}: ${label}`, sticker_stage_download:'Schneidwerkzeug wird geholt', sticker_stage_background:'Beutel wird vom Hintergrund unterschieden', sticker_stage_subject:'Kanten werden nachgezogen', sticker_add:'Behalten', sticker_remove:'Wegnehmen', sticker_hint_keep:'Tippe auf fehlende Stellen oder male sie nach', sticker_hint_remove:'Tippe auf Hintergrund, der weg soll, oder male ihn weg', sticker_hint_zoom:'Mit zwei Fingern zoomen und verschieben', sticker_reset_confirm:'Nochmal tippen: alles verwerfen', sticker_brush_size:'Pinselgröße', sticker_undo:'Rückgängig', sticker_reset:'Neu beginnen', sticker_original:'Original', sticker_apply:'Sticker übernehmen', sticker_failed:'Dieses Foto wollte sich nicht ablösen. Du kannst es trotzdem so verwenden.', sticker_download_failed:'Das Freistell-Werkzeug ließ sich nicht laden. Fürs erste Freistellen braucht die App einmal Internet — versuch es später noch einmal.', sticker_fit:'Einpassen', sticker_close:'Schließen', sticker_done:'Abgezogen und ins Regal geklebt.',
 

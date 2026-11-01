@@ -250,7 +250,8 @@ func (c *cardModel) svg() string {
 	if profileName == "" {
 		profileName = cardText(c.lang, "unknown")
 	}
-	bean := strField(ann, "coffee")
+	// A mixed shot (#1837) names every bean in its dose: "A + B".
+	bean := BeanLabel(ann)
 	machine := firstNonEmpty(strField(ann, "machine"), strField(c.shot, "machine"))
 
 	var dose *float64
@@ -283,9 +284,12 @@ func (c *cardModel) svg() string {
 	tgtPressVal, hasTgtPress := lastPositive(tgtPress)
 	tgtPressVal = math.Round(tgtPressVal*10) / 10
 
+	// The origin map is keyed by a single bean, so a mixed shot keeps the
+	// primary bean for the origin chip while the headline shows every bean.
+	primaryBean := strField(ann, "coffee")
 	originCode := ""
-	if c.deps.beanOriginCode != nil && bean != "" {
-		originCode = c.deps.beanOriginCode(bean)
+	if c.deps.beanOriginCode != nil && primaryBean != "" {
+		originCode = c.deps.beanOriginCode(primaryBean)
 	}
 	installCode := ""
 	if c.deps.installCode != nil {
@@ -332,8 +336,15 @@ func (c *cardModel) svg() string {
 	}
 	headline := firstNonEmpty(bean, profileName)
 	nameMaxW := c.w - 2*cardPX - 20
-	headline = truncateToWidth(headline, nameMaxW-leadW, 52, true)
-	s.text(cardPX+leadW, headlineBaseline, 52, true, p.text, "", headline)
+	// #1853: cutting a mixed headline ("Bean A + Bean B") at the full size
+	// usually hid the second bean. Step the size down first so both names
+	// stay readable, and truncate only what still overflows at the minimum.
+	headlineSize := 52.0
+	for headlineSize > 36 && textWidth(headline, headlineSize, true) > nameMaxW-leadW {
+		headlineSize -= 4
+	}
+	headline = truncateToWidth(headline, nameMaxW-leadW, headlineSize, true)
+	s.text(cardPX+leadW, headlineBaseline, headlineSize, true, p.text, "", headline)
 
 	cursorY := headlineBaseline + 32
 	phrase := scoreTierPhrase(c.score, c.lang)

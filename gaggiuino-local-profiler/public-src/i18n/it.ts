@@ -99,6 +99,7 @@ const it: Partial<Translations> = {
     ann_grinder:'Macinino', ann_grinder_ph:'es. Niche Zero',
     ann_grind_setting:'Macinatura', ann_grind_ph:'es. 23 Click',
     ann_dose:'Dose (g)', ann_dose_ph:'es. 18',
+    ann_add_bean:'Aggiungi un altro caffè', ann_remove_bean:'Rimuovi caffè',
 
     ann_tds_optional:'(opzionale)',
     ann_tds_ph:'es. 9.2', ann_notes:'Note',
@@ -351,6 +352,10 @@ const it: Partial<Translations> = {
     settings_mcp_title:'Assistenti IA (MCP)', settings_mcp_desc:'Consenti agli assistenti IA come Claude di leggere i tuoi shot, caffè e analisi tramite il server MCP integrato.', settings_mcp_enabled:'Attiva il server MCP', settings_mcp_write:'Consenti gli strumenti di scrittura — modificano i tuoi dati', settings_mcp_dev:'Consenti gli strumenti di sviluppo — output di diagnostica grezzo e grande',
     settings_shot_defaults_title:'Valori predefiniti per la registrazione shot', settings_shot_defaults_desc:'Vengono precompilati automaticamente all\'apertura di uno shot nuovo non ancora annotato — restano sempre modificabili.',
     sd_none:'— nessun valore predefinito —', sd_save:'Salva', sd_saved:'Salvato',
+    bf_title:'Freschezza del caffè', bf_desc:'A che età una tostatura conta come in degasaggio, ottimale o vecchia — e sotto quanti grammi una confezione risulta quasi vuota.',
+    bf_degas_until:'Degasaggio fino a (giorni)', bf_peak_from:'Ottimale da (giorni)', bf_peak_until:'Ottimale fino a (giorni)', bf_fading_until:'In declino fino a (giorni)', bf_low_stock:'Avvisa sotto (g)',
+    bf_save:'Salva', bf_saved:'Salvato', bf_reset:'Ripristina i valori predefiniti',
+    bf_err_days:'Inserisci giorni interi da 1 a 365.', bf_err_grams:'Inserisci grammi interi da 1 a 5000.', bf_err_order:'I limiti devono essere crescenti: degasaggio < ottimale da <= ottimale fino a < declino.',
     settings_machines:'Macchine', settings_machines_desc:'Gestisci le macchine espresso monitorate da questa app.', settings_machines_add:'+ Aggiungi macchina',
     settings_machine_name:'Nome', settings_machine_type:'Tipo', settings_machine_host:'Host', settings_machine_switch:'Entità switch HA (opzionale)', settings_machine_water_sensor:'Sensore livello acqua installato (ALBA)',
     settings_machine_theme:'Colore', settings_machine_theme_gradient:'Sfumatura', settings_machine_theme_none:'Nessuno', settings_machine_theme_custom:'Personalizzato',
@@ -689,6 +694,8 @@ const it: Partial<Translations> = {
     'demo.simulate':'Simula uno shot',
     'demo.getApp':"Installa l'app",
     photo_pick_btn:'Scegli foto',
+    photo_take_btn:'Scatta foto',
+    photo_camera_shutter:'Scatta', photo_camera_cancel:'Annulla',
     crop_editor_title:'Ritaglia foto', crop_editor_apply:'Applica', crop_editor_zoom:'Zoom',
     sticker_title:'Ritaglia come adesivo', sticker_step:(step,total,label)=>`Passo ${step} di ${total}: ${label}`, sticker_stage_download:'recupero gli strumenti da taglio', sticker_stage_background:'distinguo il sacchetto dallo sfondo', sticker_stage_subject:'traccio i bordi', sticker_add:'Tieni', sticker_remove:'Togli', sticker_hint_keep:'Tocca o dipingi le parti che mancano', sticker_hint_remove:'Tocca o dipingi lo sfondo da togliere', sticker_hint_zoom:'Due dita per zoomare e spostare', sticker_reset_confirm:'Tocca di nuovo per scartare tutto', sticker_brush_size:'Dimensione pennello', sticker_undo:'Annulla', sticker_reset:'Ricomincia', sticker_original:'Originale', sticker_apply:'Usa adesivo', sticker_failed:'Questa foto non si stacca. Puoi comunque usarla così.', sticker_download_failed:'Non è stato possibile scaricare gli strumenti di ritaglio. Il primo ritaglio richiede internet una volta — riprova più tardi.', sticker_fit:'Adatta', sticker_close:'Chiudi', sticker_done:'Staccato e attaccato allo scaffale.',
 

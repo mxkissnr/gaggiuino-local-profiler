@@ -55,6 +55,7 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Compare mode & ghost curve** - overlay any two shots by hand, or let the shot detail auto-compare against the previous shot on the same profile with delta chips and a dashed ghost curve.
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
 - **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
+- **Multiple beans in one shot** - log a shot with up to four beans and the grams of each; every bag is deducted by its own share, and the largest share is the shot's bean.
 - **Sticker cut-out** - cut a bean photo out as a sticker right in the app, on your own device (the models download once on first use).
 - **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
 - **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.

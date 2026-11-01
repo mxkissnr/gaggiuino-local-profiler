@@ -99,6 +99,7 @@ const nl: Partial<Translations> = {
     ann_grinder:'Molen', ann_grinder_ph:'bijv. Niche Zero',
     ann_grind_setting:'Maalgraad', ann_grind_ph:'bijv. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'bijv. 18',
+    ann_add_bean:'Nog een boon toevoegen', ann_remove_bean:'Boon verwijderen',
 
     ann_tds_optional:'(optioneel)',
     ann_tds_ph:'bijv. 9.2', ann_notes:'Notities',
@@ -351,6 +352,10 @@ const nl: Partial<Translations> = {
     settings_mcp_title:'AI-assistenten (MCP)', settings_mcp_desc:'Laat AI-assistenten zoals Claude je shots, bonen en analyses lezen via de ingebouwde MCP-server.', settings_mcp_enabled:'MCP-server inschakelen', settings_mcp_write:'Schrijftools toestaan — deze wijzigen je gegevens', settings_mcp_dev:'Ontwikkelaarstools toestaan — grote, ruwe diagnostische uitvoer',
     settings_shot_defaults_title:'Standaardwaarden voor shot-registratie', settings_shot_defaults_desc:'Worden automatisch ingevuld bij het openen van een nieuwe, nog niet geannoteerde shot — blijven volledig aanpasbaar.',
     sd_none:'— geen standaardwaarde —', sd_save:'Opslaan', sd_saved:'Opgeslagen',
+    bf_title:'Bonenversheid', bf_desc:'Bij welke leeftijd een branding als degassend, optimaal of oud telt — en onder hoeveel gram een zak als bijna leeg geldt.',
+    bf_degas_until:'Degassen tot (dagen)', bf_peak_from:'Optimaal vanaf (dagen)', bf_peak_until:'Optimaal tot (dagen)', bf_fading_until:'Afnemend tot (dagen)', bf_low_stock:'Waarschuwen onder (g)',
+    bf_save:'Opslaan', bf_saved:'Opgeslagen', bf_reset:'Standaardwaarden herstellen',
+    bf_err_days:'Vul hele dagen van 1 tot 365 in.', bf_err_grams:'Vul hele grammen van 1 tot 5000 in.', bf_err_order:'De grenzen moeten oplopen: degassen < optimaal vanaf <= optimaal tot < afnemend.',
     settings_machines:'Machines', settings_machines_desc:'Beheer de espressomachines die deze app volgt.', settings_machines_add:'+ Machine toevoegen',
     settings_machine_name:'Naam', settings_machine_type:'Type', settings_machine_host:'Host', settings_machine_switch:'HA switch-entiteit (optioneel)', settings_machine_water_sensor:'Waterniveausensor geïnstalleerd (ALBA)',
     settings_machine_theme:'Kleur', settings_machine_theme_gradient:'Verloop', settings_machine_theme_none:'Geen', settings_machine_theme_custom:'Aangepast',
@@ -689,6 +694,8 @@ const nl: Partial<Translations> = {
     'demo.simulate':'Shot simuleren',
     'demo.getApp':'App installeren',
     photo_pick_btn:'Foto kiezen',
+    photo_take_btn:'Foto maken',
+    photo_camera_shutter:'Vastleggen', photo_camera_cancel:'Annuleren',
     crop_editor_title:'Foto bijsnijden', crop_editor_apply:'Toepassen', crop_editor_zoom:'Zoom',
     sticker_title:'Uitknippen als sticker', sticker_step:(step,total,label)=>`Stap ${step} van ${total}: ${label}`, sticker_stage_download:'snijgereedschap wordt opgehaald', sticker_stage_background:'zak wordt van de achtergrond onderscheiden', sticker_stage_subject:'randen worden nagetrokken', sticker_add:'Behouden', sticker_remove:'Weghalen', sticker_hint_keep:'Tik op of schilder over delen die ontbreken', sticker_hint_remove:'Tik op of schilder over achtergrond die weg moet', sticker_hint_zoom:'Twee vingers om te zoomen en te verplaatsen', sticker_reset_confirm:'Tik nogmaals om alles weg te gooien', sticker_brush_size:'Penseelgrootte', sticker_undo:'Ongedaan maken', sticker_reset:'Opnieuw beginnen', sticker_original:'Origineel', sticker_apply:'Sticker gebruiken', sticker_failed:'Deze foto wilde niet loslaten. Je kunt hem gewoon zo gebruiken.', sticker_download_failed:'Het uitknipgereedschap kon niet worden opgehaald. De eerste keer uitknippen heeft één keer internet nodig — probeer het later opnieuw.', sticker_fit:'Passend', sticker_close:'Sluiten', sticker_done:'Losgetrokken en op de plank geplakt.',
 

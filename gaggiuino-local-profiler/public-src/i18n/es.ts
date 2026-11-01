@@ -99,6 +99,7 @@ const es: Partial<Translations> = {
     ann_grinder:'Molino', ann_grinder_ph:'ej. Niche Zero',
     ann_grind_setting:'Molturación', ann_grind_ph:'ej. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'ej. 18',
+    ann_add_bean:'Añadir otro grano', ann_remove_bean:'Quitar grano',
 
     ann_tds_optional:'(opcional)',
     ann_tds_ph:'ej. 9.2', ann_notes:'Notas',
@@ -351,6 +352,10 @@ const es: Partial<Translations> = {
     settings_mcp_title:'Asistentes de IA (MCP)', settings_mcp_desc:'Permite que asistentes de IA como Claude lean tus shots, cafés y análisis a través del servidor MCP integrado.', settings_mcp_enabled:'Activar el servidor MCP', settings_mcp_write:'Permitir herramientas de escritura — modifican tus datos', settings_mcp_dev:'Permitir herramientas de desarrollo — salida de diagnóstico grande y sin formato',
     settings_shot_defaults_title:'Valores predeterminados para el registro de shots', settings_shot_defaults_desc:'Se autocompletan al abrir un shot nuevo aún sin anotar — siguen siendo totalmente editables.',
     sd_none:'— sin valor predeterminado —', sd_save:'Guardar', sd_saved:'Guardado',
+    bf_title:'Frescura del café', bf_desc:'A partir de qué edad un tueste cuenta como desgasificando, óptimo o viejo — y a partir de cuántos gramos queda poco en una bolsa.',
+    bf_degas_until:'Desgasificación hasta (días)', bf_peak_from:'Óptimo desde (días)', bf_peak_until:'Óptimo hasta (días)', bf_fading_until:'En declive hasta (días)', bf_low_stock:'Avisar por debajo de (g)',
+    bf_save:'Guardar', bf_saved:'Guardado', bf_reset:'Restablecer valores predeterminados',
+    bf_err_days:'Introduce días enteros de 1 a 365.', bf_err_grams:'Introduce gramos enteros de 1 a 5000.', bf_err_order:'Los límites deben ser ascendentes: desgasificación < óptimo desde <= óptimo hasta < declive.',
     settings_machines:'Máquinas', settings_machines_desc:'Gestiona las máquinas de espresso que monitoriza esta app.', settings_machines_add:'+ Añadir máquina',
     settings_machine_name:'Nombre', settings_machine_type:'Tipo', settings_machine_host:'Host', settings_machine_switch:'Entidad switch de HA (opcional)', settings_machine_water_sensor:'Sensor de nivel de agua instalado (ALBA)',
     settings_machine_theme:'Color', settings_machine_theme_gradient:'Degradado', settings_machine_theme_none:'Ninguno', settings_machine_theme_custom:'Personalizado',
@@ -689,6 +694,8 @@ const es: Partial<Translations> = {
     'demo.simulate':'Simular un shot',
     'demo.getApp':'Instalar la app',
     photo_pick_btn:'Elegir foto',
+    photo_take_btn:'Hacer foto',
+    photo_camera_shutter:'Disparar', photo_camera_cancel:'Cancelar',
     crop_editor_title:'Recortar foto', crop_editor_apply:'Aplicar', crop_editor_zoom:'Zoom',
     sticker_title:'Recortar como pegatina', sticker_step:(step,total,label)=>`Paso ${step} de ${total}: ${label}`, sticker_stage_download:'buscando las herramientas de corte', sticker_stage_background:'distinguiendo la bolsa del fondo', sticker_stage_subject:'trazando los bordes', sticker_add:'Conservar', sticker_remove:'Quitar', sticker_hint_keep:'Toca o pinta las partes que faltan', sticker_hint_remove:'Toca o pinta el fondo que debe desaparecer', sticker_hint_zoom:'Dos dedos para hacer zoom y mover', sticker_reset_confirm:'Toca de nuevo para descartar todo', sticker_brush_size:'Tamaño del pincel', sticker_undo:'Deshacer', sticker_reset:'Empezar de nuevo', sticker_original:'Original', sticker_apply:'Usar pegatina', sticker_failed:'Esta foto no se quiere despegar. Puedes usarla tal cual.', sticker_download_failed:'No se pudieron descargar las herramientas de recorte. El primer recorte necesita internet una vez — inténtalo más tarde.', sticker_fit:'Ajustar', sticker_close:'Cerrar', sticker_done:'Despegado y pegado en la estantería.',
 

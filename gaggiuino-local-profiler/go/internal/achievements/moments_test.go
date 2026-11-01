@@ -271,6 +271,40 @@ func TestEndurance_YearRound(t *testing.T) {
 	}
 }
 
+// withAnnotation attaches an annotation map the way buildContext hands it to
+// a check.
+func withAnnotation(s shots.Shot, ann map[string]any) shots.Shot {
+	s["annotation"] = ann
+	return s
+}
+
+func TestSecret_HouseBlendUnlocksOnABeanMix(t *testing.T) {
+	mix := map[string]any{"beanMix": []any{
+		map[string]any{"coffee": "A", "grams": float64(12)},
+		map[string]any{"coffee": "B", "grams": float64(6)},
+	}}
+	if !unlockCheck(t, "secret_house_blend", ctxWith(withAnnotation(newShot(1, 1, 1, 90), mix))) {
+		t.Error("secret_house_blend should unlock on a two-part mix")
+	}
+
+	single := map[string]any{"coffee": "A", "dose": float64(18)}
+	if unlockCheck(t, "secret_house_blend", ctxWith(withAnnotation(newShot(1, 1, 1, 90), single))) {
+		t.Error("secret_house_blend should stay locked for a single-bean shot")
+	}
+
+	// A one-part "mix" is not a mix at all — shots.IsBeanMix needs two parts.
+	onePart := map[string]any{"beanMix": []any{
+		map[string]any{"coffee": "A", "grams": float64(18)},
+	}}
+	if unlockCheck(t, "secret_house_blend", ctxWith(withAnnotation(newShot(1, 1, 1, 90), onePart))) {
+		t.Error("secret_house_blend should stay locked for a one-part beanMix")
+	}
+
+	if unlockCheck(t, "secret_house_blend", ctxWith(newShot(1, 1, 1, 90))) {
+		t.Error("secret_house_blend should stay locked for an unannotated shot")
+	}
+}
+
 func TestSecret_WishOnlyAt1111(t *testing.T) {
 	at1111 := ctxWith(newShot(1, localUnix(2026, time.May, 1, 11, 11), 1, 90))
 	if !unlockCheck(t, "secret_wish", at1111) {

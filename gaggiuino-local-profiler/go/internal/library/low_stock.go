@@ -7,17 +7,52 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
-// lowStockThresholdG is the remaining-grams threshold below which a bean's
-// current bag triggers the one-time "bean running low" notification (#228,
-// restored in Go for #1671). Same constant the legacy Node backend used.
-const lowStockThresholdG = 100
+// DefaultLowStockThresholdG is the remaining-grams threshold below which a
+// bean's current bag triggers the one-time "bean running low" notification
+// (#228, restored in Go for #1671), used when the ui-prefs store holds no valid
+// `bean_low_stock_g` (#1835). Same value the legacy Node backend used.
+const DefaultLowStockThresholdG int64 = 100
 
-// ResolveLowStockBeanID resolves the library bean id a shot's annotation
+// ResolveLowStockBeanIDs resolves the library bean ids a shot's annotation
 // refers to, beanId-first with a coffee-name fallback (ResolveBeanForShot),
-// or 0 when the annotation matches no bean. cmd/server's annotation-saved
-// hook uses it to pick the bean CheckLowStock inspects.
-func ResolveLowStockBeanID(shot shots.Shot, beans []Entity) int64 {
-	bean := ResolveBeanForShot(shot, beans)
+// skipping parts that match no bean. A mixed shot (#1837) yields one id per
+// bean-mix part, deduplicated (two parts may name the same bean); a
+// single-bean shot yields its one bean, exactly as before. cmd/server's
+// annotation-saved hook runs CheckLowStock once per returned id.
+func ResolveLowStockBeanIDs(shot shots.Shot, beans []Entity) []int64 {
+	ann, _ := shot["annotation"].(map[string]any)
+	parts := shots.BeanMix(ann)
+	if len(parts) == 0 {
+		id := resolveLowStockBeanID(ann, beans)
+		if id == 0 {
+			return nil
+		}
+		return []int64{id}
+	}
+	ids := make([]int64, 0, len(parts))
+	seen := make(map[int64]bool, len(parts))
+	for _, part := range parts {
+		partAnn := map[string]any{"coffee": part.Coffee}
+		if part.BeanID != nil {
+			partAnn["beanId"] = *part.BeanID
+		}
+		id := resolveLowStockBeanID(partAnn, beans)
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// resolveLowStockBeanID resolves one annotation map to its library bean id,
+// or 0 when it matches no bean.
+func resolveLowStockBeanID(ann map[string]any, beans []Entity) int64 {
+	if ann == nil {
+		return 0
+	}
+	bean := ResolveBeanForShot(shots.Shot{"annotation": ann}, beans)
 	if bean == nil {
 		return 0
 	}
@@ -28,7 +63,7 @@ func ResolveLowStockBeanID(shot shots.Shot, beans []Entity) int64 {
 // CheckLowStock sends the one-time "bean running low" HA notification for
 // beanID's current bag (#228, restored in Go for #1671). It notifies only
 // when the bean is stock-tracked, its current bag has never been notified,
-// and the bean's remaining grams are below lowStockThresholdG; notify reports
+// and the bean's remaining grams are below thresholdG; notify reports
 // whether the push was delivered, and only then is the bag's
 // lowStockNotifiedAt stamped so a second annotation does not re-notify. A new
 // current bag carries no stamp, so it re-arms automatically.
@@ -40,7 +75,7 @@ func ResolveLowStockBeanID(shot shots.Shot, beans []Entity) int64 {
 // skipping the stamp if a concurrent check already set it. ErrSkipSave means
 // "nothing to notify" and is reported as a nil result, like the other library
 // bookkeeping helpers.
-func CheckLowStock(repo *Repository, doses func() ([]shots.AnnotatedDose, error), beanID int64, notify func(beanName string, remainingG int64) bool) error {
+func CheckLowStock(repo *Repository, doses func() ([]shots.AnnotatedDose, error), beanID int64, thresholdG int64, notify func(beanName string, remainingG int64) bool) error {
 	if beanID <= 0 {
 		return nil
 	}
@@ -62,7 +97,7 @@ func CheckLowStock(repo *Repository, doses func() ([]shots.AnnotatedDose, error)
 		return nil
 	}
 	remaining, tracked := ComputeBeanRemaining(bean, doseRows, lib.Beans)
-	if !tracked || remaining >= lowStockThresholdG {
+	if !tracked || remaining >= thresholdG {
 		return nil
 	}
 	bagID, ok := idOf(bag, "id")

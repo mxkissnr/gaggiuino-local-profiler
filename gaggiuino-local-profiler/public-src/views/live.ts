@@ -19,6 +19,8 @@ import { localeFor } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
 import { safeLocalStorage } from '../storage.js';
+import { beanLabel } from '../shared/bean-mix.js';
+import type { BeanMixPartInput } from '../shared/bean-mix.js';
 
 // GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
 // view reads off the poll payload. Named locally rather than reusing
@@ -90,6 +92,7 @@ interface LiveSetupDraft {
 interface LiveShotAnnotation {
   coffee?: string | null;
   beanId?: number | null;
+  beanMix?: readonly BeanMixPartInput[] | null;
   grinder?: string | null;
   grindSetting?: string | null;
   dose?: number | null;
@@ -366,7 +369,10 @@ export function populateRefSelector(): void {
       const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
       const ann     = (s.annotation as LiveShotAnnotation | undefined) || {};
       const score   = ann.score != null ? ` · ${ann.score}` : '';
-      const coffee  = ann.coffee ? ` — ${ann.coffee}` : '';
+      // #1853: a mixed shot names every bean here, like the shot list does;
+      // a single-bean shot keeps its plain coffee name.
+      const beans   = beanLabel(ann);
+      const coffee  = beans ? ` — ${beans}` : '';
       const opt = document.createElement('option');
       opt.value       = String(s.id);
       opt.textContent = `${date} · ${profile}${coffee}${score}`;

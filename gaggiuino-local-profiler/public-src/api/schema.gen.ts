@@ -7508,6 +7508,15 @@ export interface components {
                 ratio?: number;
             };
         };
+        /** @description One bean's share of a mixed shot's dose (#1837) — the parts' grams should add up to the annotation's dose, and bean stock is booked per part. */
+        AnnotationBean: {
+            /** @description Library bean this part used; null when the bean is not in the library */
+            beanId?: number | null;
+            /** @description Bean name for this part */
+            coffee: string;
+            /** @description Grams this part contributed — must be greater than 0 */
+            grams: number;
+        };
         /** @description User-supplied metadata attached to a shot. */
         Annotation: {
             rating?: number | null;
@@ -7543,6 +7552,8 @@ export interface components {
             milkType?: number | null;
             /** @description Score snapshot read by the live view's reference-shot selector */
             score?: number | null;
+            /** @description Present only on a mixed shot (#1837): the several beans that made up the dose, 2-4 parts. The dose should equal the sum of grams; bean stock uses the grams per bean (never the top-level dose). The top-level beanId/coffee still name the primary bean (the part with the most grams), so mix-unaware readers see a normal single bean. */
+            beanMix?: components["schemas"]["AnnotationBean"][] | null;
         };
         AnnotateResult: {
             /** @example true */
