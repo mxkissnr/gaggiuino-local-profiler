@@ -24,17 +24,18 @@ func jsonShotImageBundle(t *testing.T, withImage bool) map[string]any {
 	if withImage {
 		images["shot-7.jpg"] = base64.StdEncoding.EncodeToString(fakeJPEG())
 	}
+	shot := map[string]any{
+		"id":          int64(7),
+		"timestamp":   int64(1700000000),
+		"duration":    int64(30000),
+		"profileName": "Test Profile",
+		"machineId":   int64(1),
+		"image":       "jpg",
+	}
 	return map[string]any{
 		"glp_backup": true,
-		"shots": []any{map[string]any{
-			"id":          int64(7),
-			"timestamp":   int64(1700000000),
-			"duration":    int64(30000),
-			"profileName": "Test Profile",
-			"machineId":   int64(1),
-			"image":       "jpg",
-		}},
-		"images": images,
+		"shots":      []any{shot},
+		"images":     images,
 	}
 }
 
