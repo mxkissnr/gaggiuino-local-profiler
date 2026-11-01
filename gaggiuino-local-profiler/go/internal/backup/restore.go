@@ -24,9 +24,11 @@ import (
 // JSON is parsed twice with a streaming decoder (parseBundleStream): pass 1
 // validates every shot and gathers the small sections for the dry-run
 // preview; pass 2 (real restore only) re-streams the shots array straight
-// into the batched upsert transaction. Restore images are read one body at
-// a time from the zip on disk. Peak memory is O(one shot + one image + the
-// small sections), independent of dataset size.
+// into the batched upsert transaction. A legacy self-contained JSON bundle
+// needs one extra shots pass between them (validateShotImages), because its
+// inline images are only decoded once pass 1 has finished (#1852). Restore
+// images are read one body at a time from the zip on disk. Peak memory is
+// O(one shot + one image + the small sections), independent of dataset size.
 //
 // # Atomicity: narrowed, not eliminated
 //
@@ -126,8 +128,12 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		// Shot image validation happens here (one image body in memory at
 		// most). Its cleared `.image` field only affects this in-memory
 		// copy: pass 2 re-parses the raw entry, so the stored row is
-		// sanitised by shots.shotInsertArgs instead.
-		validateEntityImages([]map[string]any{m}, "shot-", images, &shotPending)
+		// sanitised by shots.shotInsertArgs instead. A legacy JSON bundle's
+		// inline images are not decoded yet at this point, so its shots are
+		// validated by validateShotImages below instead (#1852).
+		if isZip {
+			validateEntityImages([]map[string]any{m}, "shot-", images, &shotPending)
+		}
 		return nil
 	})
 	rc.Close()
@@ -205,6 +211,17 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// #1852: pass 1 ran before a legacy JSON bundle's inline images were
+	// decoded, so none of its shots' photos could be validated there. Stream
+	// the shots array once more (one shot in memory at a time, as in pass 1)
+	// to queue only the photos whose bytes really are in the bundle.
+	if !isZip && wantsShots {
+		if err := validateShotImages(openBundle, images, &shotPending); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	plan := buildRestorePlan(b, images, shotCount)
 	if plan.planErr != nil {
 		writeError(w, http.StatusBadRequest, plan.planErr.Error())
@@ -256,6 +273,28 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		"imagesFailed":   failed,
 		"secretsPresent": plan.secretsPresent, "secretsRestored": plan.secretsRestored,
 	})
+}
+
+// validateShotImages streams the bundle's shots array once to validate each
+// shot's `.image` against imgs, queueing the ones whose bytes are present.
+// Only the legacy JSON form needs it: a zip bundle's images are available
+// during pass 1 already. The bundle is re-opened rather than kept in memory,
+// so peak memory stays one shot plus one image body (#959).
+func validateShotImages(openBundle func() (io.ReadCloser, error), imgs restoreImages, pending *[]pendingImageWrite) error {
+	rc, err := openBundle()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	_, _, _, err = parseBundleStream(rc, func(raw json.RawMessage) error {
+		var m map[string]any
+		if json.Unmarshal(raw, &m) != nil {
+			return nil // pass 1 already rejected a malformed shot
+		}
+		validateEntityImages([]map[string]any{m}, "shot-", imgs, pending)
+		return nil
+	})
+	return err
 }
 
 func boolToInt(b bool) int {
