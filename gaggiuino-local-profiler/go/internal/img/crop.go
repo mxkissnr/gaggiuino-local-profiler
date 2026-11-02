@@ -126,7 +126,7 @@ func CropJPEG(original []byte, c Crop) ([]byte, error) {
 	b := src.Bounds()
 	rect := cropRect(c, b.Dx(), b.Dy())
 	dst := image.NewRGBA(image.Rect(0, 0, rect.Dx(), rect.Dy()))
-	draw.Draw(dst, dst.Bounds(), src, rect.Min, draw.Src)
+	draw.Draw(dst, dst.Bounds(), src, b.Min.Add(rect.Min), draw.Src)
 
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: JPEGQuality}); err != nil {
