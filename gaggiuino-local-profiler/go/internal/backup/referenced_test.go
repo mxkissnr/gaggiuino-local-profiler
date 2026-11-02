@@ -241,3 +241,89 @@ func TestRemoveUnreferencedImages_GracePeriod(t *testing.T) {
 		t.Fatalf("expired orphan must be removed (err=%v)", err)
 	}
 }
+
+// TestBackup_BundlesReferencedOriginals is the #1845 counterpart of
+// TestBackup_BundlesReferencedImagesOnly: an entity or shot with an image also
+// keeps its uncropped original, which the zip carries, while an original no
+// entry refers to stays out.
+func TestBackup_BundlesReferencedOriginals(t *testing.T) {
+	imgDir := useImageDir(t)
+	for _, name := range []string{
+		"1.jpg", "1.orig.jpg",
+		"shot-42.png", "shot-42.orig.jpg",
+		"99.orig.jpg", "shot-99.orig.jpg",
+	} {
+		if err := os.WriteFile(filepath.Join(imgDir, name), []byte{0x01, 0x02, 0x03, 0x04}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h, deps, _ := newTestHandlers(t)
+	if err := deps.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{{"id": int64(1), "name": "B", "image": "jpg"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := deps.ShotsRepo.Upsert(shots.Shot{
+		"id": int64(42), "timestamp": int64(1), "duration": int64(1),
+		"profileName": "p", "machineId": int64(1), "image": "png",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, newMux(h), http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	names, err := zipReaderFromBytes(rec.Body.Bytes())
+	if err != nil {
+		t.Fatalf("reading zip: %v", err)
+	}
+	got := make(map[string]bool, len(names))
+	for _, n := range names {
+		got[n] = true
+	}
+	for _, want := range []string{"images/1.orig.jpg", "images/shot-42.orig.jpg"} {
+		if !got[want] {
+			t.Errorf("referenced original %q missing from backup; entries=%v", want, names)
+		}
+	}
+	for _, unwanted := range []string{"images/99.orig.jpg", "images/shot-99.orig.jpg"} {
+		if got[unwanted] {
+			t.Errorf("orphaned original %q bundled into backup; entries=%v", unwanted, names)
+		}
+	}
+}
+
+// TestRemoveUnreferencedImages_Originals: a referenced original survives the
+// sweep, an original whose entity has no image is removed once it is past the
+// grace period, and neither is ever mistaken for a foreign name.
+func TestRemoveUnreferencedImages_Originals(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte{0x01}, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		old := time.Now().Add(-11 * time.Minute)
+		if err := os.Chtimes(filepath.Join(dir, name), old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("1.jpg")
+	write("1.orig.jpg")
+	write("2.orig.jpg")
+
+	removed, _ := removeUnreferencedImages(dir, map[string]struct{}{"1.jpg": {}, "1.orig.jpg": {}}, t.Logf)
+	if removed != 1 {
+		t.Errorf("removed = %d; want 1 (only 2.orig.jpg)", removed)
+	}
+	for _, keep := range []string{"1.jpg", "1.orig.jpg"} {
+		if _, err := os.Stat(filepath.Join(dir, keep)); err != nil {
+			t.Errorf("%q should have been kept: %v", keep, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "2.orig.jpg")); !os.IsNotExist(err) {
+		t.Errorf("2.orig.jpg should have been removed (err=%v)", err)
+	}
+}
