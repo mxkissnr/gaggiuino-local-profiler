@@ -21,11 +21,14 @@ import (
 // exists — trashed shots included, since their rows (and therefore their
 // photos) are still live until the trash purge drops them.
 //
-// Only main images are returned; thumbnails are derived from a full image
-// (see img.FullImageName) and are kept or dropped with it. The set lives in
-// this package because internal/img cannot import internal/library or
-// internal/shots (both import img), so a shared builder here is importable by
-// both the backup path and cmd/server's startup cleanup.
+// Only main images and uncropped originals are returned; thumbnails are
+// derived from a full image (see img.FullImageName) and are kept or dropped
+// with it. An original is listed for every entity that has an image, so it
+// outlives a re-crop of that image and is bundled even before the imageCrop
+// field exists — a listed name with no file on disk is harmless. The set
+// lives in this package because internal/img cannot import internal/library
+// or internal/shots (both import img), so a shared builder here is importable
+// by both the backup path and cmd/server's startup cleanup.
 func referencedImageNames(libRepo *library.Repository, shotsRepo *shots.Repository) (map[string]struct{}, error) {
 	names := make(map[string]struct{})
 
@@ -43,6 +46,7 @@ func referencedImageNames(libRepo *library.Repository, shotsRepo *shots.Reposito
 	// count, and hydrating every shot's datapoints here would undo that.
 	err = shotsRepo.ForEachImageRef(func(id int64, ext string) error {
 		names[img.Filename(id, ext, "shot-")] = struct{}{}
+		names[img.OriginalFilename(id, "shot-")] = struct{}{}
 		return nil
 	})
 	if err != nil {
@@ -52,7 +56,8 @@ func referencedImageNames(libRepo *library.Repository, shotsRepo *shots.Reposito
 }
 
 // addEntityImage records the image file name entity's `image` extension and
-// numeric `id` resolve to under prefix, if both are present and valid.
+// numeric `id` resolve to under prefix, plus the uncropped original that goes
+// with it, if both are present and valid.
 func addEntityImage(names map[string]struct{}, entity map[string]any, prefix string) {
 	ext, _ := entity["image"].(string)
 	if ext == "" {
@@ -63,6 +68,7 @@ func addEntityImage(names map[string]struct{}, entity map[string]any, prefix str
 		return
 	}
 	names[img.Filename(id, ext, prefix)] = struct{}{}
+	names[img.OriginalFilename(id, prefix)] = struct{}{}
 }
 
 // libraryEntitiesFor returns the entity list a libraryImageEntityTypes key

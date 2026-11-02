@@ -18,7 +18,7 @@ var imagePrefixes = []string{"grinder-", "basket-", "puckscreen-", "shot-", ""}
 // Reports ok=false for a thumbnail, an unknown extension, or a name that
 // does not match any known prefix + numeric id.
 func parseImageName(name string) (id int64, ext, prefix string, ok bool) {
-	if strings.Contains(name, ".thumb.") {
+	if strings.Contains(name, ".thumb.") || strings.Contains(name, ".orig.") {
 		return 0, "", "", false
 	}
 	ext = strings.TrimPrefix(filepath.Ext(name), ".")
@@ -43,14 +43,43 @@ func parseImageName(name string) (id int64, ext, prefix string, ok bool) {
 	return 0, "", "", false
 }
 
+// parseOriginalName splits "<prefix><id>.orig.jpg" into its id and prefix,
+// the shape OriginalFilename writes. Thumbnails and unknown extensions never
+// match, so an original is never mistaken for a main image and vice versa.
+func parseOriginalName(name string) (id int64, prefix string, ok bool) {
+	const suffix = ".orig.jpg"
+	if !strings.HasSuffix(name, suffix) {
+		return 0, "", false
+	}
+	base := strings.TrimSuffix(name, suffix)
+	for _, p := range imagePrefixes {
+		if !strings.HasPrefix(base, p) {
+			continue
+		}
+		digits := strings.TrimPrefix(base, p)
+		if digits == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(digits, 10, 64)
+		if err != nil || n <= 0 {
+			continue
+		}
+		return n, p, true
+	}
+	return 0, "", false
+}
+
 // KnownImageName reports whether name is one of the app's own full-image file
-// names — "<prefix><id>.<ext>" with a whitelisted extension, the same shape
-// parseImageName recognizes. Exported so callers (internal/backup's backup
-// image filter and its orphan sweep) can tell an app file from a foreign one:
-// a name matching none of the patterns must never be attributed to an entry,
-// bundled by the backup, or deleted by the sweep.
+// names — "<prefix><id>.<ext>" with a whitelisted extension, the shape
+// parseImageName recognizes — or an uncropped original. Exported so callers
+// (internal/backup's backup image filter and its orphan sweep) can tell an app
+// file from a foreign one: a name matching none of the patterns must never be
+// attributed to an entry, bundled by the backup, or deleted by the sweep.
 func KnownImageName(name string) bool {
-	_, _, _, ok := parseImageName(name)
+	if _, _, _, ok := parseImageName(name); ok {
+		return true
+	}
+	_, _, ok := parseOriginalName(name)
 	return ok
 }
 
