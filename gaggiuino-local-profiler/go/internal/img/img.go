@@ -119,27 +119,58 @@ func ThumbPath(dir string, id int64, ext, prefix string) string {
 	return filepath.Join(dir, ThumbFilename(id, ext, prefix))
 }
 
+// OriginalFilename is the uncropped-original sibling of an image — always
+// JPEG, whatever the main image's extension, so a re-crop never depends on
+// the current format.
+func OriginalFilename(id int64, prefix string) string {
+	return fmt.Sprintf("%s%d.orig.jpg", prefix, id)
+}
+
+// OriginalPath is Path for the uncropped-original variant.
+func OriginalPath(dir string, id int64, prefix string) string {
+	return filepath.Join(dir, OriginalFilename(id, prefix))
+}
+
 // thumbPathFor derives the ".thumb.<ext>" sibling of a full-image path,
 // e.g. "/d/grinder-5.jpg" -> "/d/grinder-5.thumb.jpg".
 func thumbPathFor(path, ext string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path)) + ".thumb." + ext
 }
 
-// Delete is the best-effort removal of a stored image AND its thumbnail,
-// silently ignoring an already-missing file. A stored extension is
-// caller-supplied data (sync, restore, import), so an extension outside the
-// whitelist is ignored rather than turned into a path.
+// Delete is the best-effort removal of a stored image, its thumbnail AND its
+// uncropped original, silently ignoring an already-missing file. A stored
+// extension is caller-supplied data (sync, restore, import), so an extension
+// outside the whitelist is ignored rather than turned into a path.
 func Delete(dir string, id int64, ext, prefix string) {
 	if !KnownExt(ext) {
 		return
 	}
-	cleanDir := filepath.Clean(dir)
-	for _, path := range []string{
+	removeStoredImages(dir,
 		Path(dir, id, ext, prefix),
 		ThumbPath(dir, id, ext, prefix),
-	} {
-		// Second floor: KnownExt already rules out separators and "..", but
-		// never remove a path that resolves outside dir.
+		OriginalPath(dir, id, prefix),
+	)
+}
+
+// DeleteMain removes only the main image and its thumbnail, leaving the
+// uncropped original in place. Callers that replace an image's extension use
+// this so the original survives the switch.
+func DeleteMain(dir string, id int64, ext, prefix string) {
+	if !KnownExt(ext) {
+		return
+	}
+	removeStoredImages(dir,
+		Path(dir, id, ext, prefix),
+		ThumbPath(dir, id, ext, prefix),
+	)
+}
+
+// removeStoredImages removes paths, never one that resolves outside dir.
+// KnownExt already rules out separators and "..", but this is the second
+// floor for any caller that builds a path from stored data.
+func removeStoredImages(dir string, paths ...string) {
+	cleanDir := filepath.Clean(dir)
+	for _, path := range paths {
 		if !strings.HasPrefix(filepath.Clean(path), cleanDir+string(os.PathSeparator)) {
 			continue
 		}
