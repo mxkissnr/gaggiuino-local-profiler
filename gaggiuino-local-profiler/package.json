@@ -36,8 +36,8 @@
     "openapi-typescript": "7.13.0",
     "playwright": "^1.62.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.71.2",
-    "vite": "8.3.4",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.5",
     "vitest": "5.0.5"
   },
   "overrides": {
