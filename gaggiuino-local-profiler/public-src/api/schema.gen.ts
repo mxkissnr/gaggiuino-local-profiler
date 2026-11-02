@@ -1383,7 +1383,12 @@ export interface paths {
         /** Serve a bean's photo (auto-imported or uploaded) */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the bean has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -1411,17 +1416,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a bean photo manually (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a bean photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -1447,6 +1460,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a bean without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1798,7 +1818,12 @@ export interface paths {
         /** Serve a grinder's photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the grinder has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -1826,17 +1851,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a grinder photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a grinder photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -1862,6 +1895,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a grinder without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2078,7 +2118,12 @@ export interface paths {
         /** Serve a basket's photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the basket has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -2106,17 +2151,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a basket photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a basket photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -2142,6 +2195,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a basket without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2352,7 +2412,12 @@ export interface paths {
         /** Serve a puck screen's photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the puck screen has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -2380,17 +2445,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a puck screen photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a puck screen photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -2416,6 +2489,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a puck screen without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -7608,6 +7688,17 @@ export interface components {
             previousShotId?: number | null;
             previousShot?: components["schemas"]["HydratedShot"] | null;
         };
+        /** @description The rectangle a library photo was cropped to, as fractions of the uncropped original's width and height — so it survives any later downscale. (#1845) An entity carries `imageCrop` exactly when its uncropped original is stored, i.e. when `GET .../image?original=1` and a re-crop are available. */
+        ImageCrop: {
+            /** @description Left edge */
+            x: number;
+            /** @description Top edge */
+            y: number;
+            /** @description Width */
+            w: number;
+            /** @description Height */
+            h: number;
+        };
         /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/flavors/origins are allowlist-validated, not just trimmed). */
         Bean: {
             /** @description Unix ms timestamp used as ID */
@@ -7659,6 +7750,7 @@ export interface components {
             location?: Record<string, never> | null;
             /** @description File extension of the stored photo, if any — see GET .../image */
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description Import source URL domain */
             source?: string;
             sourceUrl?: string | null;
@@ -7713,6 +7805,7 @@ export interface components {
             burrsResetAt?: string;
             /** @description File extension of the stored photo, if any */
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description Chronological log of every zero-point activation (PUT .../zero-point) — the last entry is the current value. Absent/empty for a grinder that has never had one set, in which case grind settings display and compare as raw recorded values unchanged. */
             zeroPointHistory?: {
                 zeroPoint?: number;
@@ -7737,6 +7830,7 @@ export interface components {
             holeCount?: string;
             notes?: string;
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description Unix ms */
             updatedAt?: number;
         };
@@ -7749,6 +7843,7 @@ export interface components {
             material?: string;
             notes?: string;
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description Unix ms */
             updatedAt?: number;
         };

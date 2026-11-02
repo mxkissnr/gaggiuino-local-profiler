@@ -165,6 +165,13 @@ func DeleteMain(dir string, id int64, ext, prefix string) {
 	)
 }
 
+// DeleteOriginal removes only the uncropped original, leaving the main image
+// and its thumbnail in place — a freshly uploaded photo replaces the original
+// along with the crop that pointed into it.
+func DeleteOriginal(dir string, id int64, prefix string) {
+	removeStoredImages(dir, OriginalPath(dir, id, prefix))
+}
+
 // removeStoredImages removes paths, never one that resolves outside dir.
 // KnownExt already rules out separators and "..", but this is the second
 // floor for any caller that builds a path from stored data.

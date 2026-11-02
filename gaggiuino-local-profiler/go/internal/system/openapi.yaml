@@ -225,6 +225,21 @@ components:
 
     # ── Library ────────────────────────────────────────────────────────────
 
+    ImageCrop:
+      type: object
+      description: >
+        The rectangle a library photo was cropped to, as fractions of the
+        uncropped original's width and height — so it survives any later
+        downscale. (#1845) An entity carries `imageCrop` exactly when its
+        uncropped original is stored, i.e. when `GET .../image?original=1`
+        and a re-crop are available.
+      required: [x, y, w, h]
+      properties:
+        x: { type: number, minimum: 0, maximum: 1, description: Left edge, 0..1 }
+        y: { type: number, minimum: 0, maximum: 1, description: Top edge, 0..1 }
+        w: { type: number, minimum: 0, maximum: 1, description: Width, 0..1 }
+        h: { type: number, minimum: 0, maximum: 1, description: Height, 0..1 }
+
     Bean:
       type: object
       required: [id, name]
@@ -271,6 +286,7 @@ components:
         batchNumber:   { type: string, maxLength: 50, description: "Write-only convenience field on create/new-bag — mirrored into the active bag, not stored top-level" }
         location:      { type: object, nullable: true, description: "Geocoded {lat,lng} from `region`, best-effort, cleared when region changes" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any — see GET .../image" }
+        imageCrop:     { $ref: '#/components/schemas/ImageCrop' }
         source:        { type: string, maxLength: 200, description: Import source URL domain }
         sourceUrl:     { type: string, nullable: true }
         importedAt:    { type: string, format: date, maxLength: 10 }
@@ -323,6 +339,7 @@ components:
         purchaseDate:  { type: string, maxLength: 10 }
         burrsResetAt:  { type: string, description: "ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any" }
+        imageCrop:     { $ref: '#/components/schemas/ImageCrop' }
         zeroPointHistory:
           type: array
           description: "Chronological log of every zero-point activation (PUT .../zero-point) — the last entry is the current value. Absent/empty for a grinder that has never had one set, in which case grind settings display and compare as raw recorded values unchanged."
@@ -351,6 +368,7 @@ components:
         holeCount:    { type: string, maxLength: 50 }
         notes:        { type: string, maxLength: 1000 }
         image:        { type: string, nullable: true }
+        imageCrop:    { $ref: '#/components/schemas/ImageCrop' }
         updatedAt:    { type: integer, description: Unix ms }
 
     PuckScreen:
@@ -364,6 +382,7 @@ components:
         material:  { type: string, maxLength: 200 }
         notes:     { type: string, maxLength: 1000 }
         image:     { type: string, nullable: true }
+        imageCrop: { $ref: '#/components/schemas/ImageCrop' }
         updatedAt: { type: integer, description: Unix ms }
 
     Recipe:
@@ -1683,24 +1702,51 @@ paths:
       summary: Serve a bean's photo (auto-imported or uploaded)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            bean has both a stored `imageCrop` and its original file. Wins
+            over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this bean }
     post:
       tags: [Library]
-      summary: Upload a bean photo manually (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a bean photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a bean without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/grinder:
@@ -1810,24 +1856,51 @@ paths:
       summary: Serve a grinder's photo
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            grinder has both a stored `imageCrop` and its original file. Wins
+            over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this grinder }
     post:
       tags: [Library]
-      summary: Upload a grinder photo (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a grinder photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a grinder without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/baskets:
@@ -1897,24 +1970,51 @@ paths:
       summary: Serve a basket's photo
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            basket has both a stored `imageCrop` and its original file. Wins
+            over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this basket }
     post:
       tags: [Library]
-      summary: Upload a basket photo (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a basket photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated basket, content: { application/json: { schema: { $ref: '#/components/schemas/Basket' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a basket without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/puckscreens:
@@ -1980,24 +2080,51 @@ paths:
       summary: Serve a puck screen's photo
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            puck screen has both a stored `imageCrop` and its original file.
+            Wins over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this puck screen }
     post:
       tags: [Library]
-      summary: Upload a puck screen photo (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a puck screen photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated puck screen, content: { application/json: { schema: { $ref: '#/components/schemas/PuckScreen' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a puck screen without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/milks:
