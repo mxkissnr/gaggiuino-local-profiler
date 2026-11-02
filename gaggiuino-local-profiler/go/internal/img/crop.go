@@ -102,8 +102,10 @@ func ReadOriginal(dir, prefix string, id int64) ([]byte, error) {
 
 // CropJPEG re-encodes original cropped to c as a JPEG at JPEGQuality. The
 // fractions are rounded to a pixel rect clamped to the image bounds, so the
-// result is always at least 1x1. The result is meant to be handed to Save as
-// the new main image.
+// result is always at least 1x1. No orientation is applied: an original is
+// written EXIF-free by WriteOriginal, and rotating it here would shift the
+// rectangle the caller chose. The result is meant to be handed to Save as the
+// new main image.
 func CropJPEG(original []byte, c Crop) ([]byte, error) {
 	if !c.Valid() {
 		return nil, fmt.Errorf("img: crop %+v is outside the unit square", c)
@@ -118,9 +120,6 @@ func CropJPEG(original []byte, c Crop) ([]byte, error) {
 	src, _, err := image.Decode(bytes.NewReader(original))
 	if err != nil {
 		return nil, fmt.Errorf("img: crop: decode: %w", err)
-	}
-	if MatchesMagicBytes(original, "jpg") {
-		src = applyOrientation(src, exifOrientation(original))
 	}
 
 	b := src.Bounds()
