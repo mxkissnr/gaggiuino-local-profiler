@@ -434,4 +434,3 @@ func TestDelete_RemovesMainThumbAndOriginal(t *testing.T) {
 		})
 	}
 }
-
