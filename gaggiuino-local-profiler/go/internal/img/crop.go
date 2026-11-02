@@ -93,11 +93,9 @@ func WriteOriginal(dir, prefix string, id int64, data []byte) error {
 // ReadOriginal returns the stored uncropped original. A missing file reports
 // os.ErrNotExist so callers can fall back to the main image.
 func ReadOriginal(dir, prefix string, id int64) ([]byte, error) {
-	data, err := os.ReadFile(OriginalPath(dir, id, prefix))
-	if err != nil {
-		return nil, fmt.Errorf("img: read original %s%d: %w", prefix, id, err)
-	}
-	return data, nil
+	// The raw *PathError is returned unwrapped so both os.IsNotExist and
+	// errors.Is(err, os.ErrNotExist) recognize a missing original.
+	return os.ReadFile(OriginalPath(dir, id, prefix))
 }
 
 // CropJPEG re-encodes original cropped to c as a JPEG at JPEGQuality. The
