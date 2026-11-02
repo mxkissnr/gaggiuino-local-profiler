@@ -38,13 +38,41 @@
 // modes too; the Orders view gets three demo orders created by this script
 // through the instance's HTTP API, so the queue is never empty.
 
-import { mkdirSync, cpSync, existsSync } from 'fs';
+import { mkdirSync, cpSync, existsSync, writeFileSync } from 'fs';
+import { execFileSync } from 'child_process';
 import path from 'path';
 import { chromium } from 'playwright';
 import type { Page } from 'playwright';
 import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harness.mts';
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
+const repoRoot = path.join(appRoot, '..');
+
+// #1867: the git tree hash of public-src/ the PNGs were rendered from, so
+// release-check's freshness check can accept a regeneration that came out
+// byte-identical — git then has no new commit to date the images with.
+const sourceTreeStampName = '.source-tree';
+const publicSrcRel = path.relative(repoRoot, path.join(appRoot, 'public-src'));
+
+function writeSourceTreeStamp(): void {
+    try {
+        const dirty = execFileSync(
+            'git', ['status', '--porcelain', '--', publicSrcRel],
+            { cwd: repoRoot, encoding: 'utf8' }
+        ).trim();
+        // A render from uncommitted UI code must never count as fresh.
+        const value = dirty
+            ? 'dirty'
+            : execFileSync(
+                'git', ['rev-parse', `HEAD:${publicSrcRel}`],
+                { cwd: repoRoot, encoding: 'utf8' }
+            ).trim();
+        writeFileSync(path.join(outDir, sourceTreeStampName), `${value}\n`);
+    } catch (err) {
+        // Missing git or a detached checkout must not lose the screenshots.
+        console.warn(`could not write ${sourceTreeStampName}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
 
 // #1181: real-backup mode. The committed sanitized demo backup is the default;
 // GLP_SCREENSHOT_BACKUP overrides it; the demo seed is the fallback.
@@ -449,12 +477,18 @@ async function main(): Promise<void> {
     await context.close();
     await browser.close();
     console.log(`Screenshots written to ${outDir}`);
+    writeSourceTreeStamp();
 
     const wikiDir = process.argv[2];
     if (wikiDir && existsSync(wikiDir)) {
         const wikiImages = path.join(wikiDir, 'images');
         mkdirSync(wikiImages, { recursive: true });
-        cpSync(outDir, wikiImages, { recursive: true });
+        // The stamp describes this repo's docs/screenshots only: copying it
+        // into the wiki would go stale there and mean nothing.
+        cpSync(outDir, wikiImages, {
+            recursive: true,
+            filter: (src) => path.basename(src) !== sourceTreeStampName,
+        });
         console.log(`Copied screenshots into wiki repo at ${wikiImages}`);
     }
 
