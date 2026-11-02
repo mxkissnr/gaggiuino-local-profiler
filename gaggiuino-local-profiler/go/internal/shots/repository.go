@@ -534,8 +534,22 @@ func shotInsertArgs(shot Shot) (shotInsertRow, error) {
 			if ext, ok := v.(string); ok && img.KnownExt(ext) {
 				rest[k] = v
 			}
+		case "imageCrop":
+			// Deliberately deferred to the check below: a crop is only meaningful
+			// next to a kept photo.
 		default:
 			rest[k] = v
+		}
+	}
+	// imageCrop is an invariant, not free-form data: it says "an original file
+	// exists for this photo", so a restored shot keeps it only when it names a
+	// complete, valid rectangle AND its photo extension survived the filter
+	// above. Otherwise it is dropped rather than left orphaned in the blob.
+	if _, ok := shot["imageCrop"]; ok {
+		if _, hasImage := rest["image"]; hasImage {
+			if c, ok := shotCrop(shot); ok {
+				rest["imageCrop"] = cropShot(c)
+			}
 		}
 	}
 	data, err := json.Marshal(rest)
@@ -613,9 +627,42 @@ func (r *Repository) FindPreviousByProfile(shotID int64, profileName string, mac
 }
 
 // SetImage merges the `image` key into the shot's JSON blob without
-// disturbing the rest of the payload. Returns (nil, nil) if the shot doesn't
-// exist.
+// disturbing the rest of the payload, and drops `imageCrop`: a new photo
+// replaces the picture the old crop rectangle described. Returns (nil, nil)
+// if the shot doesn't exist.
 func (r *Repository) SetImage(id int64, ext string) (Shot, error) {
+	return r.setImageKeys(id, ext, nil)
+}
+
+// SetImageCrop records a re-cropped photo in one write: `image` becomes ext
+// and `imageCrop` becomes c, in the same UPDATE so no reader ever sees a crop
+// that disagrees with the extension. Returns (nil, nil) if the shot doesn't
+// exist.
+func (r *Repository) SetImageCrop(id int64, ext string, c img.Crop) (Shot, error) {
+	return r.setImageKeys(id, ext, cropShot(c))
+}
+
+// SetCrop records only the crop of a shot whose main image already exists —
+// the `?original=1&crop=` path, where the stored photo is untouched. Returns
+// (nil, nil) if the shot doesn't exist.
+func (r *Repository) SetCrop(id int64, c img.Crop) (Shot, error) {
+	data, err := r.rawData(id)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, nil
+	}
+	data["imageCrop"] = cropShot(c)
+	if err := r.writeData(id, data); err != nil {
+		return nil, err
+	}
+	return r.FindByID(id)
+}
+
+// setImageKeys sets `image` to ext and `imageCrop` to crop, or removes
+// `imageCrop` when crop is nil, in a single write.
+func (r *Repository) setImageKeys(id int64, ext string, crop map[string]any) (Shot, error) {
 	data, err := r.rawData(id)
 	if err != nil {
 		return nil, err
@@ -624,13 +671,19 @@ func (r *Repository) SetImage(id int64, ext string) (Shot, error) {
 		return nil, nil
 	}
 	data["image"] = ext
+	if crop == nil {
+		delete(data, "imageCrop")
+	} else {
+		data["imageCrop"] = crop
+	}
 	if err := r.writeData(id, data); err != nil {
 		return nil, err
 	}
 	return r.FindByID(id)
 }
 
-// ClearImage removes the `image` key from the shot's JSON blob.
+// ClearImage removes the `image` and `imageCrop` keys from the shot's JSON
+// blob: without a photo neither has anything left to describe.
 func (r *Repository) ClearImage(id int64) (Shot, error) {
 	data, err := r.rawData(id)
 	if err != nil {
@@ -640,6 +693,7 @@ func (r *Repository) ClearImage(id int64) (Shot, error) {
 		return nil, nil
 	}
 	delete(data, "image")
+	delete(data, "imageCrop")
 	if err := r.writeData(id, data); err != nil {
 		return nil, err
 	}

@@ -334,7 +334,12 @@ export interface paths {
         /** Serve a shot's uploaded photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the shot has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: string;
@@ -362,17 +367,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a shot photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a shot photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: string;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -398,6 +411,13 @@ export interface paths {
                 };
                 /** @description Shot not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a shot without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -7669,6 +7689,8 @@ export interface components {
             };
             /** @description Stored photo extension (see GET /api/shots/{id}/image), if any */
             image?: string | null;
+            /** @description The rectangle the current photo was cropped to. Present exactly when the shot also has its uncropped original stored, i.e. when `GET /api/shots/{id}/image?original=1` and a re-crop are available. (#1845) */
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description GaggiMate BLE-scale flag, merged from the machine payload */
             gaggimateBleScale?: boolean | null;
             annotation: components["schemas"]["Annotation"];

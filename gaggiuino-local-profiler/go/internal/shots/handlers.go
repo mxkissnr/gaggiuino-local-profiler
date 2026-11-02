@@ -589,6 +589,11 @@ func (h *Handlers) delete(w http.ResponseWriter, r *http.Request) {
 // served with a revalidation-only cache header: the URL stays the same when a
 // photo is replaced, so clients must revalidate. http.ServeFile already sets
 // Last-Modified and answers If-Modified-Since with 304.
+//
+// `?original=1` serves the uncropped original instead of the cropped main
+// image — but only when the shot records a valid imageCrop, the invariant
+// that ties an original file to a shot. It wins over `?thumb=1`; a thumbnail
+// of an original is never generated.
 func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	var shot Shot
@@ -606,6 +611,10 @@ func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no image")
 		return
 	}
+	if r.URL.Query().Get("original") == "1" {
+		h.serveOriginal(w, r, shot, id)
+		return
+	}
 	// `?thumb=1` serves the downscaled variant when present and otherwise
 	// falls back to the full image — a missing thumbnail never 404s.
 	thumb := r.URL.Query().Get("thumb") == "1"
@@ -619,8 +628,37 @@ func (h *Handlers) getImage(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+// serveOriginal serves the uncropped original behind a cropped main image.
+// The crop is what the client re-crops against, so a shot without a valid
+// imageCrop has no original to serve even if a stray file exists.
+func (h *Handlers) serveOriginal(w http.ResponseWriter, r *http.Request, shot Shot, id int64) {
+	if _, ok := shotCrop(shot); !ok {
+		writeError(w, http.StatusNotFound, "no image")
+		return
+	}
+	path := img.OriginalPath(h.imageDir, id, "shot-")
+	if _, err := os.Stat(path); err != nil {
+		writeError(w, http.StatusNotFound, "no image")
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Content-Type", "image/jpeg")
+	http.ServeFile(w, r, path)
+}
+
 // postImage serves POST /api/shots/{id}/image (raw body upload, no URL fetch
 // — see image.go's doc comment).
+//
+// The ordering is part of the contract and must stay: rate limit -> parse id ->
+// existence check before the upload is read/validated -> dispatch on the query
+// -> read/validate the body -> write files -> write the row. The 30/min limit
+// covers every variant.
+//
+// The query selects one of three variants; anything else is a 400:
+//   - none: a new photo, which also drops any previous original and crop.
+//   - crop=x,y,w,h: re-crop the stored original, body ignored.
+//   - original=1&crop=x,y,w,h: keep this upload as the uncropped original of
+//     the current photo; the main image is untouched.
 func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 	if !h.rl.Allow("image:"+auth.RemoteIP(r), imageRateLimitPerMin) {
 		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
@@ -641,23 +679,34 @@ func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
-	_, typeKnown := img.ContentTypeKnown(contentType)
-
-	r.Body = http.MaxBytesReader(w, r.Body, img.MaxBytes)
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, "request entity too large")
+	q := r.URL.Query()
+	if !validImageQuery(q) {
+		writeError(w, http.StatusBadRequest, "invalid image request")
 		return
 	}
-	// An unrecognized content type reaches the same "no image data" branch an
-	// empty body does, distinctly from img.Save's own "unsupported image" check
-	// below: the raw body is only accepted for a known content type.
-	if !typeKnown || len(data) == 0 {
-		writeError(w, http.StatusBadRequest, "no image data")
+	// validImageQuery has already rejected a repeated `crop`, so Get returns
+	// the single value.
+	_, hasCrop := q["crop"]
+	switch {
+	case q.Get("original") == "1" && hasCrop:
+		h.storeOriginal(w, r, id, shot, q.Get("crop"))
+	case q.Get("original") == "1":
+		writeError(w, http.StatusBadRequest, "invalid crop")
+	case hasCrop:
+		h.recropImage(w, id, shot, q.Get("crop"))
+	default:
+		h.replaceImage(w, r, id, shot)
+	}
+}
+
+// replaceImage stores a newly uploaded photo as the main image, dropping the
+// previous crop and the previous uncropped original (both describe the picture
+// being replaced).
+func (h *Handlers) replaceImage(w http.ResponseWriter, r *http.Request, id int64, shot Shot) {
+	data, contentType, ok := readShotImageBody(w, r)
+	if !ok {
 		return
 	}
-
 	ext, ok := img.Save(h.imageDir, "shot-", id, data, contentType, img.ModeUpload)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported image")
@@ -671,7 +720,118 @@ func (h *Handlers) postImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	// Only `score` is added here, not `usedBeanTarget`.
+	img.DeleteOriginal(h.imageDir, id, "shot-")
+	writeImageResponse(w, h, updated)
+}
+
+// recropImage rebuilds the main image from the stored uncropped original. The
+// upload body is ignored: a re-crop is a pure server-side operation on bytes
+// that are already on disk.
+func (h *Handlers) recropImage(w http.ResponseWriter, id int64, shot Shot, raw string) {
+	crop, ok := parseCropParam(raw)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid crop")
+		return
+	}
+	original, err := img.ReadOriginal(h.imageDir, "shot-", id)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusConflict, "no original")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	data, err := img.CropJPEG(original, crop)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	ext, ok := img.Save(h.imageDir, "shot-", id, data, "image/jpeg", img.ModeUpload)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unsupported image")
+		return
+	}
+	updated, err := h.service.SetImageCrop(id, ext, crop)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if updated == nil {
+		// The shot vanished between the read and the write; the fresh main image
+		// has no owner. DeleteMain, never Delete: the stored original still
+		// belongs to it if the shot comes back (e.g. a concurrent restore).
+		img.DeleteMain(h.imageDir, id, ext, "shot-")
+		writeError(w, http.StatusNotFound, "Shot not found")
+		return
+	}
+	if oldExt := shot.imageExt(); oldExt != "" && oldExt != ext {
+		// DeleteMain, never Delete: the original is what future re-crops read.
+		img.DeleteMain(h.imageDir, id, oldExt, "shot-")
+	}
+	writeImageResponse(w, h, updated)
+}
+
+// storeOriginal keeps an upload as the uncropped original of the shot's
+// current photo and records the crop that produced that photo. The main image
+// is untouched.
+func (h *Handlers) storeOriginal(w http.ResponseWriter, r *http.Request, id int64, shot Shot, raw string) {
+	crop, ok := parseCropParam(raw)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid crop")
+		return
+	}
+	if shot.imageExt() == "" {
+		writeError(w, http.StatusConflict, "no image")
+		return
+	}
+	data, _, ok := readShotImageBody(w, r)
+	if !ok {
+		return
+	}
+	if err := img.WriteOriginal(h.imageDir, "shot-", id, data); err != nil {
+		writeError(w, http.StatusBadRequest, "unsupported image")
+		return
+	}
+	updated, err := h.service.SetCrop(id, crop)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if updated == nil {
+		// No shot to own the original we just wrote.
+		img.DeleteOriginal(h.imageDir, id, "shot-")
+		writeError(w, http.StatusNotFound, "Shot not found")
+		return
+	}
+	writeImageResponse(w, h, updated)
+}
+
+// readShotImageBody reads the raw upload the image routes accept: an
+// unrecognized Content-Type or an empty body is "no image data" (400), an
+// oversized body is rejected by MaxBytesReader before img's own size check.
+func readShotImageBody(w http.ResponseWriter, r *http.Request) (data []byte, contentType string, ok bool) {
+	contentType = r.Header.Get("Content-Type")
+	_, typeKnown := img.ContentTypeKnown(contentType)
+	r.Body = http.MaxBytesReader(w, r.Body, img.MaxBytes)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "request entity too large")
+		return nil, "", false
+	}
+	// An unrecognized content type reaches the same "no image data" branch an
+	// empty body does, distinctly from img.Save's own "unsupported image" check:
+	// the raw body is only accepted for a known content type.
+	if !typeKnown || len(data) == 0 {
+		writeError(w, http.StatusBadRequest, "no image data")
+		return nil, "", false
+	}
+	return data, contentType, true
+}
+
+// writeImageResponse answers an image write with the updated shot. Only
+// `score` is added here, not `usedBeanTarget`.
+func writeImageResponse(w http.ResponseWriter, h *Handlers, updated Shot) {
 	resp := updated.clone()
 	resp["score"] = h.service.ComputeScore(updated)
 	writeJSON(w, http.StatusOK, resp)
