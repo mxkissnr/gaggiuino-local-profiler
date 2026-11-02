@@ -1,1 +1,0 @@
-- **Shot photos keep their uncropped original, so they can be re-cropped.** Part of #1845
