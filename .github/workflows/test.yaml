@@ -290,14 +290,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # #1872: pushes to ppops/** (pipeline fix rounds) build amd64 only; every other trigger,
+      # in particular pull_request and dev/main pushes, keeps the full three-arch matrix, so the
+      # QEMU check described above still gates every merge.
       matrix:
-        include:
-          - arch: amd64
-            platform: linux/amd64
-          - arch: arm64
-            platform: linux/arm64
-          - arch: armv7
-            platform: linux/arm/v7
+        include: ${{ fromJSON(github.event_name == 'push' && startsWith(github.ref, 'refs/heads/ppops/') && '[{"arch":"amd64","platform":"linux/amd64"}]' || '[{"arch":"amd64","platform":"linux/amd64"},{"arch":"arm64","platform":"linux/arm64"},{"arch":"armv7","platform":"linux/arm/v7"}]') }}
     defaults:
       run:
         working-directory: gaggiuino-local-profiler
