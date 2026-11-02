@@ -728,7 +728,7 @@ func (h *Handlers) replaceImage(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	img.DeleteOriginal(h.imageDir, id, "shot-")
-	writeImageResponse(w, h, updated)
+	h.writeImageResponse(w, updated)
 }
 
 // recropImage rebuilds the main image from the stored uncropped original. The
@@ -776,7 +776,7 @@ func (h *Handlers) recropImage(w http.ResponseWriter, id int64, shot Shot, raw s
 		// DeleteMain, never Delete: the original is what future re-crops read.
 		img.DeleteMain(h.imageDir, id, oldExt, "shot-")
 	}
-	writeImageResponse(w, h, updated)
+	h.writeImageResponse(w, updated)
 }
 
 // storeOriginal keeps an upload as the uncropped original of the shot's
@@ -811,7 +811,7 @@ func (h *Handlers) storeOriginal(w http.ResponseWriter, r *http.Request, id int6
 		writeError(w, http.StatusNotFound, "Shot not found")
 		return
 	}
-	writeImageResponse(w, h, updated)
+	h.writeImageResponse(w, updated)
 }
 
 // readShotImageBody reads the raw upload the image routes accept: an
@@ -838,7 +838,7 @@ func readShotImageBody(w http.ResponseWriter, r *http.Request) (data []byte, con
 
 // writeImageResponse answers an image write with the updated shot. Only
 // `score` is added here, not `usedBeanTarget`.
-func writeImageResponse(w http.ResponseWriter, h *Handlers, updated Shot) {
+func (h *Handlers) writeImageResponse(w http.ResponseWriter, updated Shot) {
 	resp := updated.clone()
 	resp["score"] = h.service.ComputeScore(updated)
 	writeJSON(w, http.StatusOK, resp)
