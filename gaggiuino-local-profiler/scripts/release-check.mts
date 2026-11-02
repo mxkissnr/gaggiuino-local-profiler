@@ -18,7 +18,11 @@
 //     doubt (merge commits, binary diffs, unrecognized file types, git
 //     errors) it's treated as visually relevant — false positives (an
 //     unneeded screenshot re-run) are cheap, false negatives (stale
-//     screenshots shipped) are not.
+//     screenshots shipped) are not. A committed docs/screenshots/.source-tree
+//     whose tree hash still matches HEAD's public-src/ short-circuits the
+//     comparison: the images were rendered from the current UI, which is what
+//     the v3.6.0 case needed (a byte-identical regeneration has no commit to
+//     date the PNGs with). See #1867.
 //  4. DEVELOPMENT.md is older (by last commit) than the most recent commit
 //     touching go/ or public-src/
 //  5. DOCS.md and DOCS.de.md have different heading level+order sequences
@@ -463,6 +467,30 @@ export function isVisuallyRelevantCommit(gitRoot: string, hash: string, pathSpec
     return false;
 }
 
+// #1867: scripts/screenshots.mts writes docs/screenshots/.source-tree with the
+// public-src/ tree hash it rendered from. When that stamp still matches the
+// working HEAD, the PNGs were verifiably rendered from the current UI even
+// though git has no newer commit to date them with — a regeneration that comes
+// out byte-identical leaves nothing to commit, so the commit-time rule below
+// could never be satisfied (seen in the v3.6.0 release). A "dirty" stamp means
+// the render came from uncommitted code and is never trusted; any git or read
+// error falls through to the commit-time rule (conservative).
+function sourceTreeStampMatches(gitRoot: string, publicSrcRel: string, screenshotsDirRel: string): boolean {
+    const stamp = readTextOrNull(path.join(gitRoot, screenshotsDirRel, '.source-tree'));
+    if (stamp == null) return false;
+    const stamped = stamp.trim();
+    if (!stamped || stamped === 'dirty') return false;
+    try {
+        const current = execFileSync(
+            'git', ['rev-parse', `HEAD:${publicSrcRel}`],
+            { cwd: gitRoot, encoding: 'utf8' }
+        ).trim();
+        return current !== '' && current === stamped;
+    } catch {
+        return false;
+    }
+}
+
 // Check 3 as its own exported function so it can be exercised against real
 // temporary git repos in tests without running the rest of this script
 // (which assumes it's sitting inside the actual gaggiuino-local-profiler
@@ -476,6 +504,8 @@ export function checkScreenshotFreshness(gitRoot: string, publicSrcRel: string, 
         failures.push(`Check 3 (screenshot freshness): ${screenshotsDirAbs} does not exist`);
         return failures;
     }
+
+    if (sourceTreeStampMatches(gitRoot, publicSrcRel, screenshotsDirRel)) return [];
 
     const publicSrcCommits = commitsTouching(gitRoot, publicSrcRel);
     if (publicSrcCommits.length === 0) {

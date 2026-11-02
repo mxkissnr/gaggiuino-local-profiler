@@ -270,6 +270,105 @@ describe('release-check screenshot freshness (#537)', () => {
     });
 });
 
+// #1867: a regeneration that produces byte-identical PNGs gives git nothing
+// to commit, so the images' commit times can never catch up with a newer
+// public-src/ commit and check 3 could never pass (v3.6.0). The screenshot
+// script now records which public-src/ tree it rendered from; the check
+// accepts that stamp when it still matches HEAD.
+describe('release-check screenshot freshness source-tree stamp (#1867)', () => {
+    const repos: string[] = [];
+
+    afterEach(() => {
+        while (repos.length) {
+            rmSync(repos.pop()!, { recursive: true, force: true });
+        }
+    });
+
+    function run(repo: string, args: string[]): string {
+        return execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+    }
+
+    let commitSeq = 0;
+    function commitAll(repo: string, message: string): void {
+        commitSeq += 1;
+        const iso = `2026-02-01T00:${String(commitSeq).padStart(2, '0')}:00Z`;
+        run(repo, ['add', '-A']);
+        execFileSync('git', ['commit', '--quiet', '-m', message], {
+            cwd: repo,
+            env: { ...process.env, GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso },
+        });
+    }
+
+    function makeRepo(): string {
+        const repo = mkdtempSync(join(tmpdir(), 'glp-release-check-stamp-'));
+        repos.push(repo);
+        run(repo, ['init', '--quiet', '-b', 'main']);
+        run(repo, ['config', 'user.email', 'test@example.com']);
+        run(repo, ['config', 'user.name', 'Test']);
+        mkdirSync(join(repo, 'public-src'), { recursive: true });
+        mkdirSync(join(repo, 'docs', 'screenshots'), { recursive: true });
+        return repo;
+    }
+
+    function writeStamp(repo: string, value: string): void {
+        writeFileSync(join(repo, 'docs', 'screenshots', '.source-tree'), `${value}\n`);
+    }
+
+    function currentTree(repo: string, pathSpec = 'public-src'): string {
+        return run(repo, ['rev-parse', `HEAD:${pathSpec}`]).trim();
+    }
+
+    // One commit seeds the screenshot and public-src/ together, then a second
+    // commit makes a real UI change, leaving the PNG stale by commit time.
+    function staleScreenshotRepo(): string {
+        const repo = makeRepo();
+        writeFileSync(join(repo, 'public-src', 'index.html'), '<div>Hello</div>\n');
+        writeFileSync(join(repo, 'docs', 'screenshots', 'shot.png'), Buffer.from([0, 1, 2, 3]));
+        commitAll(repo, 'initial: seed screenshot + public-src');
+
+        writeFileSync(join(repo, 'public-src', 'index.html'), '<div>Hello World</div>\n');
+        commitAll(repo, 'real ui change');
+        return repo;
+    }
+
+    it('accepts a stale PNG when the stamp matches the current public-src/ tree', () => {
+        const repo = staleScreenshotRepo();
+        expect(checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots')).toHaveLength(1);
+
+        writeStamp(repo, currentTree(repo));
+        expect(checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots')).toEqual([]);
+    });
+
+    it('fails again when a later visually relevant public-src/ commit lands after the stamp', () => {
+        const repo = staleScreenshotRepo();
+        writeStamp(repo, currentTree(repo));
+        expect(checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots')).toEqual([]);
+
+        writeFileSync(join(repo, 'public-src', 'index.html'), '<div>Hello Again</div>\n');
+        commitAll(repo, 'a later real ui change');
+
+        const failures = checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots');
+        expect(failures).toHaveLength(1);
+        expect(failures[0]).toContain('older than a visually-relevant public-src/ commit');
+    });
+
+    it('behaves like no stamp when it says dirty', () => {
+        const repo = staleScreenshotRepo();
+        writeStamp(repo, 'dirty');
+
+        const failures = checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots');
+        expect(failures).toHaveLength(1);
+        expect(failures[0]).toContain('older than a visually-relevant public-src/ commit');
+    });
+
+    it('ignores a stamp that no longer matches the current tree', () => {
+        const repo = staleScreenshotRepo();
+        writeStamp(repo, '0'.repeat(40));
+
+        expect(checkScreenshotFreshness(repo, 'public-src', 'docs/screenshots')).toHaveLength(1);
+    });
+});
+
 // Pure comment strippers used by the commit-relevance scan above. No git
 // involved — these pin down string/template-literal awareness and the
 // conservative token-boundary handling (a stripped comment becomes a
