@@ -1,6 +1,9 @@
 package shots
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // TestUpsert_PreservesAnnotationAndTrash is the #1150 regression: a sync
 // re-upserts a shot that already exists locally (its payload carries no
@@ -73,5 +76,55 @@ func TestMaxNativeShotID_IncludesTrashedHighest(t *testing.T) {
 	}
 	if max != 3 {
 		t.Fatalf("MaxNativeShotID(1) = %d, want 3 (trashed highest shot must count)", max)
+	}
+}
+
+// TestShotInsertArgs_ImageCrop pins the restore/import half of the crop
+// invariant: an `imageCrop` only survives into the stored blob when it is a
+// complete, valid rectangle AND its photo extension is one the app accepts.
+// A malformed rectangle or an orphaned crop (no image) would otherwise enter
+// the DB as data no route can honour.
+func TestShotInsertArgs_ImageCrop(t *testing.T) {
+	validCrop := map[string]any{"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.6}
+	cases := []struct {
+		name string
+		shot Shot
+		want bool
+	}{
+		{"valid crop with image", Shot{"id": int64(1), "image": "jpg", "imageCrop": validCrop}, true},
+		{"valid crop, unknown image", Shot{"id": int64(1), "image": "jpeg", "imageCrop": validCrop}, false},
+		{"valid crop, no image", Shot{"id": int64(1), "imageCrop": validCrop}, false},
+		{"crop missing a side", Shot{"id": int64(1), "image": "jpg", "imageCrop": map[string]any{"x": 0.1, "y": 0.2, "w": 0.5}}, false},
+		{"crop out of range", Shot{"id": int64(1), "image": "jpg", "imageCrop": map[string]any{"x": 0.5, "y": 0.5, "w": 0.9, "h": 0.9}}, false},
+		{"crop not an object", Shot{"id": int64(1), "image": "jpg", "imageCrop": "0,0,1,1"}, false},
+		{"crop with a non-number", Shot{"id": int64(1), "image": "jpg", "imageCrop": map[string]any{"x": "0", "y": 0, "w": 1, "h": 1}}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			row, err := shotInsertArgs(tc.shot)
+			if err != nil {
+				t.Fatalf("shotInsertArgs: %v", err)
+			}
+			var stored map[string]any
+			if err := json.Unmarshal([]byte(row.data), &stored); err != nil {
+				t.Fatalf("decoding stored data %q: %v", row.data, err)
+			}
+			got, ok := stored["imageCrop"]
+			if ok != tc.want {
+				t.Fatalf("imageCrop present = %v, want %v (data=%s)", ok, tc.want, row.data)
+			}
+			if !tc.want {
+				return
+			}
+			crop, ok := got.(map[string]any)
+			if !ok {
+				t.Fatalf("imageCrop = %#v, want an object", got)
+			}
+			for _, key := range []string{"x", "y", "w", "h"} {
+				if crop[key] != validCrop[key] {
+					t.Fatalf("imageCrop[%q] = %#v, want %#v", key, crop[key], validCrop[key])
+				}
+			}
+		})
 	}
 }

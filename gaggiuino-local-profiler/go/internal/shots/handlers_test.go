@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 )
 
 func doJSON(t testing.TB, mux *http.ServeMux, method, path string, body []byte) *httptest.ResponseRecorder {
@@ -666,13 +669,15 @@ func TestPostImage_RateLimited(t *testing.T) {
 	}
 }
 
-// TestDeleteShot_RemovesPhotoAndThumbnail (#1525): permanently deleting a shot
-// removes its photo and thumbnail from disk as well as its rows.
-func TestDeleteShot_RemovesPhotoAndThumbnail(t *testing.T) {
+// TestDeleteShot_RemovesPhotoThumbnailAndOriginal (#1525, #1845): permanently
+// deleting a shot removes its photo, thumbnail and uncropped original from
+// disk as well as its rows.
+func TestDeleteShot_RemovesPhotoThumbnailAndOriginal(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	mux := newMux(h)
 	insertShot(t, sqlDB, 1, 1000, nil, "Espresso", map[string]any{"image": "jpg"}, nil)
-	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+	names := []string{"shot-1.jpg", "shot-1.thumb.jpg", "shot-1.orig.jpg"}
+	for _, name := range names {
 		if err := os.WriteFile(filepath.Join(h.imageDir, name), []byte{0x01}, 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -682,9 +687,314 @@ func TestDeleteShot_RemovesPhotoAndThumbnail(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+	for _, name := range names {
 		if _, err := os.Stat(filepath.Join(h.imageDir, name)); !os.IsNotExist(err) {
 			t.Errorf("%s should have been removed (err=%v)", name, err)
+		}
+	}
+}
+
+// ── shot photo originals and re-cropping (#1845) ───────────────────────
+
+// postShotImage posts body to path as contentType. An empty contentType sends
+// no Content-Type header — the shape a body-less re-crop request has.
+func postShotImage(t *testing.T, mux *http.ServeMux, path, contentType string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	var req *http.Request
+	if body == nil {
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+	} else {
+		req = httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+// jpegConfig returns the header dimensions of a JPEG, failing the test when
+// the bytes are not a decodable JPEG.
+func jpegConfig(t *testing.T, data []byte) image.Config {
+	t.Helper()
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decoding JPEG header: %v", err)
+	}
+	return cfg
+}
+
+// shotImagePath is the on-disk path of one stored shot photo variant
+// ("" = main, "thumb" and "orig" the two siblings the crop pipeline adds).
+func shotImagePath(h *Handlers, id int64, variant, ext string) string {
+	switch variant {
+	case "thumb":
+		return img.ThumbPath(h.imageDir, id, ext, "shot-")
+	case "orig":
+		return img.OriginalPath(h.imageDir, id, "shot-")
+	}
+	return img.Path(h.imageDir, id, ext, "shot-")
+}
+
+func requireShotFile(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected stored file %s: %v", path, err)
+	}
+}
+
+func requireNoShotFile(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected %s to be absent, stat err = %v", path, err)
+	}
+}
+
+// mustShot reads a shot back, failing the test when it is gone.
+func mustShot(t *testing.T, h *Handlers, id int64) Shot {
+	t.Helper()
+	shot, err := h.repo.FindByID(id)
+	if err != nil {
+		t.Fatalf("FindByID(%d): %v", id, err)
+	}
+	if shot == nil {
+		t.Fatalf("shot %d missing", id)
+	}
+	return shot
+}
+
+// requireShotCrop asserts the shot's stored imageCrop.
+func requireShotCrop(t *testing.T, shot Shot, want img.Crop) {
+	t.Helper()
+	got, ok := shotCrop(shot)
+	if !ok {
+		t.Fatalf("shot has no valid imageCrop: %v", shot)
+	}
+	if diff := math.Abs(got.X-want.X) + math.Abs(got.Y-want.Y) + math.Abs(got.W-want.W) + math.Abs(got.H-want.H); diff > 1e-9 {
+		t.Fatalf("imageCrop = %+v, want %+v", got, want)
+	}
+}
+
+// TestPostImage_NewPhotoDropsOriginalAndCrop pins the "a new photo replaces
+// everything that described the old one" rule: the stored original and the
+// crop rectangle go away with the picture they belonged to.
+func TestPostImage_NewPhotoDropsOriginalAndCrop(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "Espresso", nil, nil)
+
+	if rec := postShotImage(t, mux, "/api/shots/1/image", "image/jpeg", testJPEG(t, 200, 100)); rec.Code != http.StatusOK {
+		t.Fatalf("new photo status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0,0,0.5,0.5", "image/jpeg", testJPEG(t, 200, 100)); rec.Code != http.StatusOK {
+		t.Fatalf("store original status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	requireShotFile(t, shotImagePath(h, 1, "orig", "jpg"))
+	requireShotCrop(t, mustShot(t, h, 1), img.Crop{X: 0, Y: 0, W: 0.5, H: 0.5})
+
+	if rec := postShotImage(t, mux, "/api/shots/1/image", "image/jpeg", testJPEG(t, 200, 100)); rec.Code != http.StatusOK {
+		t.Fatalf("replacement photo status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	updated := mustShot(t, h, 1)
+	if _, ok := updated["imageCrop"]; ok {
+		t.Fatalf("imageCrop survived a new photo: %v", updated)
+	}
+	requireNoShotFile(t, shotImagePath(h, 1, "orig", "jpg"))
+}
+
+// TestPostImage_StoreOriginal covers `?original=1&crop=`: the upload becomes
+// the uncropped original, the crop is recorded, and the main image is left
+// alone. Also pins the four rejections that guard it.
+func TestPostImage_StoreOriginal(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "Espresso", nil, nil)
+
+	if rec := postShotImage(t, mux, "/api/shots/1/image", "image/jpeg", testJPEG(t, 64, 48)); rec.Code != http.StatusOK {
+		t.Fatalf("upload status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	mainBefore, err := os.ReadFile(shotImagePath(h, 1, "", "jpg"))
+	if err != nil {
+		t.Fatalf("reading stored main image: %v", err)
+	}
+
+	want := img.Crop{X: 0.1, Y: 0.2, W: 0.5, H: 0.6}
+	rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0.1,0.2,0.5,0.6", "image/jpeg", testJPEG(t, 200, 100))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("store original status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	requireShotCrop(t, mustShot(t, h, 1), want)
+	mainAfter, err := os.ReadFile(shotImagePath(h, 1, "", "jpg"))
+	if err != nil {
+		t.Fatalf("reading stored main image: %v", err)
+	}
+	if !bytes.Equal(mainBefore, mainAfter) {
+		t.Fatalf("storing an original rewrote the main image")
+	}
+	orig, err := os.ReadFile(shotImagePath(h, 1, "orig", "jpg"))
+	if err != nil {
+		t.Fatalf("reading stored original: %v", err)
+	}
+	if cfg := jpegConfig(t, orig); cfg.Width != 200 || cfg.Height != 100 {
+		t.Fatalf("stored original = %dx%d, want 200x100", cfg.Width, cfg.Height)
+	}
+	if resp := decodeBody(t, rec.Body.Bytes()); resp["image"] != "jpg" {
+		t.Fatalf("response image = %v, want jpg (main untouched)", resp["image"])
+	}
+
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0.1,0.2,0.5,0.6", "image/png", pngMagic); rec.Code != http.StatusBadRequest {
+		t.Fatalf("PNG original status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0,0,2,2", "image/jpeg", testJPEG(t, 40, 30)); rec.Code != http.StatusBadRequest {
+		t.Fatalf("out-of-range crop status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1", "image/jpeg", testJPEG(t, 40, 30)); rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing crop status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0,0,0.5,0.5&thumb=1", "image/jpeg", testJPEG(t, 40, 30)); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unsupported query status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	insertShot(t, sqlDB, 2, 2000, &dur, "Espresso", nil, nil)
+	rec = postShotImage(t, mux, "/api/shots/2/image?original=1&crop=0,0,0.5,0.5", "image/jpeg", testJPEG(t, 40, 30))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("original without a photo status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+	requireNoShotFile(t, shotImagePath(h, 2, "orig", "jpg"))
+}
+
+// TestPostImage_Recrop covers `?crop=` alone: the main image is rebuilt from
+// the stored original at the requested size, the original survives, and a
+// main-image extension change drops the old main but never the original.
+func TestPostImage_Recrop(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "Espresso", nil, nil)
+
+	// A PNG main makes the later re-crop's jpg a real extension change.
+	if rec := postShotImage(t, mux, "/api/shots/1/image", "image/png", pngMagic); rec.Code != http.StatusOK {
+		t.Fatalf("png upload status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0,0,1,1", "image/jpeg", testJPEG(t, 200, 100)); rec.Code != http.StatusOK {
+		t.Fatalf("store original status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	// No body at all: a re-crop reads the original, not the request.
+	rec := postShotImage(t, mux, "/api/shots/1/image?crop=0,0,0.5,0.5", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-crop status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	main, err := os.ReadFile(shotImagePath(h, 1, "", "jpg"))
+	if err != nil {
+		t.Fatalf("reading re-cropped main image: %v", err)
+	}
+	if cfg := jpegConfig(t, main); cfg.Width != 100 || cfg.Height != 50 {
+		t.Fatalf("re-cropped main = %dx%d, want 100x50", cfg.Width, cfg.Height)
+	}
+	updated := mustShot(t, h, 1)
+	requireShotCrop(t, updated, img.Crop{X: 0, Y: 0, W: 0.5, H: 0.5})
+	if updated.imageExt() != "jpg" {
+		t.Fatalf("image = %v, want jpg", updated.imageExt())
+	}
+	requireShotFile(t, shotImagePath(h, 1, "orig", "jpg"))
+	requireNoShotFile(t, shotImagePath(h, 1, "", "png"))
+
+	if rec := postShotImage(t, mux, "/api/shots/1/image?crop=0,0", "", nil); rec.Code != http.StatusBadRequest {
+		t.Fatalf("malformed crop status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	insertShot(t, sqlDB, 2, 2000, &dur, "Espresso", map[string]any{"image": "jpg"}, nil)
+	rec = postShotImage(t, mux, "/api/shots/2/image?crop=0,0,0.5,0.5", "", nil)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("re-crop without original status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestGetImage_Original covers the read side of the invariant: the original is
+// served only for a shot that both records a crop and still has the file.
+func TestGetImage_Original(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "Espresso", nil, nil)
+
+	if rec := postShotImage(t, mux, "/api/shots/1/image", "image/jpeg", testJPEG(t, 64, 48)); rec.Code != http.StatusOK {
+		t.Fatalf("upload status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0,0,0.5,0.5", "image/jpeg", testJPEG(t, 200, 100)); rec.Code != http.StatusOK {
+		t.Fatalf("store original status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	// `original=1` wins over `thumb=1`: there is no thumbnail of an original.
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots/1/image?original=1&thumb=1", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET original status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/jpeg" {
+		t.Fatalf("GET original Content-Type = %q, want image/jpeg", got)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "private, no-cache" {
+		t.Fatalf("GET original Cache-Control = %q, want private, no-cache", cc)
+	}
+	if cfg := jpegConfig(t, rec.Body.Bytes()); cfg.Width != 200 || cfg.Height != 100 {
+		t.Fatalf("served original = %dx%d, want 200x100", cfg.Width, cfg.Height)
+	}
+
+	// The crop is what ties the file to the shot: without it the original is
+	// not served even though it is on disk.
+	insertShot(t, sqlDB, 2, 2000, &dur, "Espresso", map[string]any{"image": "jpg"}, nil)
+	if err := os.WriteFile(shotImagePath(h, 2, "orig", "jpg"), testJPEG(t, 20, 10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if rec := doJSON(t, mux, http.MethodGet, "/api/shots/2/image?original=1", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("GET original without imageCrop status = %d, want 404", rec.Code)
+	}
+
+	os.Remove(shotImagePath(h, 1, "orig", "jpg"))
+	if rec := doJSON(t, mux, http.MethodGet, "/api/shots/1/image?original=1", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("GET original with a missing file status = %d, want 404", rec.Code)
+	}
+}
+
+// TestDeleteImage_RemovesMainThumbAndOriginal pins that DELETE .../image takes
+// the thumbnail and the uncropped original with it, plus the crop that
+// pointed into it.
+func TestDeleteImage_RemovesMainThumbAndOriginal(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "Espresso", nil, nil)
+
+	if rec := postShotImage(t, mux, "/api/shots/1/image", "image/jpeg", testJPEG(t, 800, 600)); rec.Code != http.StatusOK {
+		t.Fatalf("upload status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := postShotImage(t, mux, "/api/shots/1/image?original=1&crop=0,0,0.5,0.5", "image/jpeg", testJPEG(t, 200, 100)); rec.Code != http.StatusOK {
+		t.Fatalf("store original status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	paths := []string{
+		shotImagePath(h, 1, "", "jpg"),
+		shotImagePath(h, 1, "thumb", "jpg"),
+		shotImagePath(h, 1, "orig", "jpg"),
+	}
+	for _, p := range paths {
+		requireShotFile(t, p)
+	}
+
+	rec := doJSON(t, mux, http.MethodDelete, "/api/shots/1/image", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	for _, p := range paths {
+		requireNoShotFile(t, p)
+	}
+	updated := mustShot(t, h, 1)
+	for _, key := range []string{"image", "imageCrop"} {
+		if _, ok := updated[key]; ok {
+			t.Fatalf("%s survived DELETE .../image: %v", key, updated)
 		}
 	}
 }
