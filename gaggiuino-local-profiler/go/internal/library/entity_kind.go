@@ -142,15 +142,17 @@ func (h *Handlers) postEntityImage(w http.ResponseWriter, r *http.Request, k ent
 		writeError(w, http.StatusBadRequest, "invalid image request")
 		return
 	}
-	cropValues, hasCrop := q["crop"]
+	// validImageQuery has already rejected a repeated `crop`, so Get returns
+	// the single value.
+	_, hasCrop := q["crop"]
 	wantOriginal := q.Get("original") == "1"
 	switch {
 	case wantOriginal && hasCrop:
-		h.storeEntityOriginal(w, r, id, entity, k, respond, cropValues[0])
+		h.storeEntityOriginal(w, r, id, entity, k, respond, q.Get("crop"))
 	case wantOriginal:
 		writeError(w, http.StatusBadRequest, "invalid crop")
 	case hasCrop:
-		h.recropEntityImage(w, r, id, k, respond, cropValues[0])
+		h.recropEntityImage(w, id, k, respond, q.Get("crop"))
 	default:
 		h.replaceEntityImage(w, r, id, noMatch, k, respond)
 	}
@@ -164,6 +166,9 @@ func validImageQuery(q url.Values) bool {
 	for name, values := range q {
 		switch name {
 		case "crop":
+			if len(values) != 1 {
+				return false
+			}
 		case "original":
 			if len(values) != 1 || values[0] != "1" {
 				return false
@@ -223,7 +228,7 @@ func (h *Handlers) replaceEntityImage(w http.ResponseWriter, r *http.Request, id
 // recropEntityImage rebuilds the main image from the stored uncropped
 // original. The upload body is ignored: a re-crop is a pure server-side
 // operation on bytes that are already on disk.
-func (h *Handlers) recropEntityImage(w http.ResponseWriter, r *http.Request, id int64, k entityKind, respond func(http.ResponseWriter, Entity), raw string) {
+func (h *Handlers) recropEntityImage(w http.ResponseWriter, id int64, k entityKind, respond func(http.ResponseWriter, Entity), raw string) {
 	crop, ok := parseCropParam(raw)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid crop")

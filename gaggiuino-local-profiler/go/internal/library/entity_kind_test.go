@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"math"
 	"net/http"
@@ -144,6 +145,17 @@ func makePNG(t testing.TB, w, h int) []byte {
 	return buf.Bytes()
 }
 
+// jpegConfig returns the header dimensions of a JPEG, failing the test when
+// the bytes are not a decodable JPEG.
+func jpegConfig(t *testing.T, data []byte) image.Config {
+	t.Helper()
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decoding JPEG header: %v", err)
+	}
+	return cfg
+}
+
 // postImageRaw posts body to path as contentType. An empty contentType sends
 // no Content-Type header — the shape a body-less re-crop request has.
 func postImageRaw(t *testing.T, mux *http.ServeMux, path, contentType string, body []byte) *httptest.ResponseRecorder {
@@ -279,8 +291,8 @@ func TestPostImage_StoreOriginal(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reading stored original: %v", err)
 			}
-			if cfg, _, err := image.DecodeConfig(bytes.NewReader(orig)); err != nil || cfg.Width != 200 || cfg.Height != 100 {
-				t.Fatalf("stored original = %dx%d (err %v), want 200x100", cfg.Width, cfg.Height, err)
+			if cfg := jpegConfig(t, orig); cfg.Width != 200 || cfg.Height != 100 {
+				t.Fatalf("stored original = %dx%d, want 200x100", cfg.Width, cfg.Height)
 			}
 
 			if rec := postImageRaw(t, mux, base+"?original=1&crop=0.1,0.2,0.5,0.6", "image/png", makePNG(t, 40, 30)); rec.Code != http.StatusBadRequest {
@@ -331,11 +343,7 @@ func TestPostImage_Recrop(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reading re-cropped main image: %v", err)
 			}
-			cfg, _, err := image.DecodeConfig(bytes.NewReader(main))
-			if err != nil {
-				t.Fatalf("decoding re-cropped main image: %v", err)
-			}
-			if cfg.Width != 100 || cfg.Height != 50 {
+			if cfg := jpegConfig(t, main); cfg.Width != 100 || cfg.Height != 50 {
 				t.Fatalf("re-cropped main = %dx%d, want 100x50", cfg.Width, cfg.Height)
 			}
 			requireImageCrop(t, storedEntity(t, h, c, id), img.Crop{X: 0, Y: 0, W: 0.5, H: 0.5})
@@ -374,8 +382,8 @@ func TestGetImage_Original(t *testing.T) {
 			if got := rec.Header().Get("Content-Type"); got != "image/jpeg" {
 				t.Fatalf("GET original Content-Type = %q, want image/jpeg", got)
 			}
-			if cfg, _, err := image.DecodeConfig(bytes.NewReader(rec.Body.Bytes())); err != nil || cfg.Width != 200 || cfg.Height != 100 {
-				t.Fatalf("served original = %dx%d (err %v), want 200x100", cfg.Width, cfg.Height, err)
+			if cfg := jpegConfig(t, rec.Body.Bytes()); cfg.Width != 200 || cfg.Height != 100 {
+				t.Fatalf("served original = %dx%d, want 200x100", cfg.Width, cfg.Height)
 			}
 
 			// The crop is what ties the file to the entity: without it the
