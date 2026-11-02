@@ -188,3 +188,52 @@ func TestMoveShotImageFiles_IgnoresUnknownExtension(t *testing.T) {
 		t.Fatalf("shot-2.jpeg should not exist (err=%v)", err)
 	}
 }
+
+// TestMoveShotImageFiles_MovesOriginal pins that the uncropped original moves
+// with the row it belongs to: a moved shot whose imageCrop still names a
+// rectangle must find its original file under the new id.
+func TestMoveShotImageFiles_MovesOriginal(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"shot-1.png", "shot-1.thumb.png", "shot-1.orig.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("keep"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	MoveShotImageFiles(dir, 1, 2, "png")
+
+	for _, name := range []string{"shot-2.png", "shot-2.thumb.png", "shot-2.orig.jpg"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatalf("%s missing after the move: %v", name, err)
+		}
+	}
+	for _, name := range []string{"shot-1.png", "shot-1.thumb.png", "shot-1.orig.jpg"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Fatalf("%s should be gone after the move (err=%v)", name, err)
+		}
+	}
+}
+
+// TestMoveShotImageFiles_DoesNotClobberOriginal: an existing target original
+// wins, matching the main/thumbnail rule.
+func TestMoveShotImageFiles_DoesNotClobberOriginal(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "shot-1.orig.jpg")
+	dst := filepath.Join(dir, "shot-2.orig.jpg")
+	if err := os.WriteFile(src, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	MoveShotImageFiles(dir, 1, 2, "jpg")
+
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new" {
+		t.Fatalf("target original = %q, want it untouched", got)
+	}
+}

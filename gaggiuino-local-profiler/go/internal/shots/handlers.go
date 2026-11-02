@@ -720,6 +720,13 @@ func (h *Handlers) replaceImage(w http.ResponseWriter, r *http.Request, id int64
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	if updated == nil {
+		// The shot vanished between the existence check and the write; the
+		// just-saved file has no owner, so drop it.
+		img.Delete(h.imageDir, id, ext, "shot-")
+		writeError(w, http.StatusNotFound, "Shot not found")
+		return
+	}
 	img.DeleteOriginal(h.imageDir, id, "shot-")
 	writeImageResponse(w, h, updated)
 }
