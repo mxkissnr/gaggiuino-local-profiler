@@ -1,3 +1,19 @@
+## [3.6.0] - 2026-11-01
+
+### Added
+- **The guest kiosk can use its own orders-only key, with a ready-made kiosk link in the Orders settings (copy, or replace the key with «New link»), so a kiosk tablet no longer needs full API access.** Refs #1731
+- **Released images now carry a signed build attestation and an SBOM, so you can verify that an image was built by this repository.** Refs #1829
+- **Settings now has a bean freshness card where you can set the freshness bands and the grams that count as running low; the freshness badge tooltip shows your own windows.** Refs #1835, #1853
+- **Photos can now be taken with a camera inside the app, with a camera button on every photo field next to the gallery pick, so it works in the Home Assistant Companion app too, and photos come out sharp and cropped to what the preview showed.** Refs #1836
+- **Bean mix: a shot can now be split over up to four beans, with the grams of each bean set in the annotation sheet and each bag deducted by its own share.** Part of #1837
+- **Mixed shots name every bean in the shot list, shot detail, CSV export, share card, Live reference list and the assistant's shot tools, and stay out of per-bean ratings, dial-in progression and grind suggestions.** Part of #1837, #1853
+### Changed
+- **The automated checks now fail when backend test coverage drops below the level of the last release.** Closes #1560
+- **The README and app docs now explain how to install the companion integration from the Home Assistant 2026.11 Marketplace, with HACS remaining the route for older versions.** Refs #1825
+### Fixed
+- **Shots sync again after the machine's shot history was cleared or its SD card was formatted.** Refs #1824
+- **Restoring a JSON backup keeps the shot photos again; only the zip backup restored them before.** Refs #1852
+
 ## [3.5.1] - 2026-10-23
 
 ### Fixed
