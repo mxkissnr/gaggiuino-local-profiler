@@ -350,7 +350,7 @@ func TestScheduler_RetentionPrunesOnlyScheduledRows(t *testing.T) {
 	putSettings(t, h, 1, ScheduleDaily, 2)
 	var stored []int64
 	for day := 0; day < 4; day++ {
-		stored = append(stored, e.clock.Unix()*1000)
+		stored = append(stored, e.clock.Unix())
 		e.tick()
 		e.advance(24 * time.Hour)
 	}
@@ -375,13 +375,14 @@ func TestScheduler_RetentionPrunesOnlyScheduledRows(t *testing.T) {
 	}
 
 	putSettings(t, h, 1, ScheduleDaily, 3)
+	e.advance(24 * time.Hour)
 	e.tick()
 	wantScheduled(3)
-	e.advance(24 * time.Hour)
 
 	putSettings(t, h, 1, ScheduleDaily, 1)
 	wantScheduled(3) // lowering the retention prunes nothing at save time
-	last := e.clock.Unix() * 1000
+	e.advance(24 * time.Hour)
+	last := e.clock.Unix()
 	e.tick()
 	wantScheduled(1)
 	if got := scheduled(1)[0].createdAt; got != last {
