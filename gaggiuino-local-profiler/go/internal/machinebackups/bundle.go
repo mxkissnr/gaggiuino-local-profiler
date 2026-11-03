@@ -152,9 +152,6 @@ func RestoreBundle(db *sql.DB, raw json.RawMessage, now time.Time) (restored, sk
 			return 0, skipped, fmt.Errorf("machinebackups: restoring machine backups: %w", err)
 		}
 	}
-	if err := stmt.Close(); err != nil {
-		return 0, skipped, fmt.Errorf("machinebackups: restoring machine backups: %w", err)
-	}
 	if err := tx.Commit(); err != nil {
 		return 0, skipped, fmt.Errorf("machinebackups: restoring machine backups: %w", err)
 	}
