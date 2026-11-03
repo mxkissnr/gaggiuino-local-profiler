@@ -36,7 +36,7 @@ export type LibraryPhotoKind = 'bean' | 'grinder' | 'basket' | 'puckscreen';
  * `photo-upload.ts` appends the `?original=1` / `?crop=` queries.
  */
 export function libraryImageUrl(kind: LibraryPhotoKind, id: number): string {
-  return `api/library/${kind}/${pathSeg(id)}/image`;
+  return `api/library/${pathSeg(kind)}/${pathSeg(id)}/image`;
 }
 
 // ── Beans ────────────────────────────────────────────────────────────────
