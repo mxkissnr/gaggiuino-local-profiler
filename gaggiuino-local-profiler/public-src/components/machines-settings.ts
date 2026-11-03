@@ -643,9 +643,9 @@ export function firmwareErrorDetail(p: FirmwareProgress): string | null {
 }
 
 export function firmwareProgressPercent(p: FirmwareProgress): number {
-  const migration = p.migration;
-  const raw = isMigrationBusy(migration) && typeof migration?.percent === 'number' && Number.isFinite(migration.percent)
-    ? migration.percent
+  const migrationPercent = p.migration?.percent;
+  const raw = isMigrationBusy(p.migration) && typeof migrationPercent === 'number' && Number.isFinite(migrationPercent)
+    ? migrationPercent
     : p.progress;
   return Math.round(Math.max(0, Math.min(100, Number(raw) || 0)));
 }
