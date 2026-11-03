@@ -340,7 +340,7 @@ func TestStartSupervisorDiscovery_HidesSecretsOnFailure(t *testing.T) {
 	done := c.StartSupervisorDiscovery(context.Background(), "glp", 8099)
 	waitClosed(t, done)
 
-	err := c.announceDiscovery(context.Background(), "glp", 8099)
+	_, err := c.announceDiscovery(context.Background(), "glp", 8099)
 	if err == nil {
 		t.Fatal("announceDiscovery against a 403: want an error, got nil")
 	}
