@@ -23,6 +23,12 @@ export type ShotAnnotation = components['schemas']['Annotation'];
 export type AnnotateResult = components['schemas']['AnnotateResult'];
 
 /**
+ * The rectangle a photo was cropped to, as fractions of the uncropped
+ * original's width/height (#1845). Present exactly when the original is stored.
+ */
+export type ImageCrop = components['schemas']['ImageCrop'];
+
+/**
  * POST /api/shots/{id}/annotate body. The generated Annotation schema types
  * `dose` as number|null and `roastDate` as a non-null string, but the manual
  * panel and both dial-in wizards pass the raw form value (string or number) and
