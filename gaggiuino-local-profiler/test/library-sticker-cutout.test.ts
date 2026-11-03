@@ -62,6 +62,18 @@ const library = (await import('../public-src/views/library.js')) as unknown as L
 const { adjustBeanImage } = (await import('../public-src/views/library/bean-sticker.js')) as unknown as {
   adjustBeanImage: () => Promise<void>;
 };
+// The photo client itself, for the two bean photo paths this slice adds. The
+// view tests above reach them through the form; these pin them directly (the
+// shared photo-upload tests are out of this slice's file set).
+const { saveNewPhoto, adjustPhoto } = (await import('../public-src/photo-upload.js')) as unknown as {
+  saveNewPhoto: (imageUrl: string, photo: unknown) => Promise<Response>;
+  adjustPhoto: (
+    imageUrl: string,
+    imageCrop: unknown,
+    shape: Record<string, string>,
+    finish?: (cropped: Blob) => Promise<Blob | null>,
+  ) => Promise<Response | null>;
+};
 const { renderShelfTile } = (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
 const { S } = await import('../public-src/state/index.js');
 const { t } = await import('../public-src/i18n.js');
@@ -508,6 +520,119 @@ describe('cutOutBeanSticker (#1336)', () => {
     expect(await bodyText(posted[0])).toBe('png');
     expect(posted[1]?.url).toBe(`api/library/bean/42/image?original=1&crop=${CROP_QUERY}`);
     expect(await bodyText(posted[1])).toBe('staged-original');
+  });
+});
+
+describe('saveNewPhoto (#1845)', () => {
+  beforeEach(() => {
+    resetAll();
+  });
+
+  it('posts the main image, then the original with its crop', async () => {
+    const mainResponse = json({ id: 7 });
+    const storedResponse = json({ id: 7, imageCrop: CROP });
+    mocks.apiFetch.mockResolvedValueOnce(mainResponse).mockResolvedValueOnce(storedResponse);
+
+    const r = await saveNewPhoto(route(7), { blob: jpeg('main'), crop: CROP, original: jpeg('orig') });
+
+    expect(r).toBe(storedResponse);
+    const [main, original] = calls();
+    expect(main?.url).toBe(route(7));
+    expect(main?.opts?.method).toBe('POST');
+    expect(contentType(main)).toBe('image/jpeg');
+    expect(await bodyText(main)).toBe('main');
+    expect(original?.url).toBe(`${route(7)}?original=1&crop=${CROP_QUERY}`);
+    expect(await bodyText(original)).toBe('orig');
+  });
+
+  it('posts a photo with no known crop alone and warns once', async () => {
+    const mainResponse = json({ id: 7 });
+    mocks.apiFetch.mockResolvedValueOnce(mainResponse);
+
+    const r = await saveNewPhoto(route(7), { blob: jpeg('main'), crop: null, original: jpeg('orig') });
+
+    expect(r).toBe(mainResponse);
+    expect(calls()).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the main response when the original POST fails', async () => {
+    const mainResponse = json({ id: 7 });
+    mocks.apiFetch.mockResolvedValueOnce(mainResponse).mockResolvedValueOnce(json({ error: 'slow' }, 429));
+
+    const r = await saveNewPhoto(route(7), { blob: jpeg('main'), crop: CROP, original: jpeg('orig') });
+
+    expect(r).toBe(mainResponse);
+    expect(calls()).toHaveLength(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('adjustPhoto finish step (#1845)', () => {
+  beforeEach(() => {
+    resetAll();
+  });
+
+  it('crops the stored original, finishes it, and re-saves the fetched original', async () => {
+    const cropped = jpeg('cropped');
+    const finished = png();
+    const mainResponse = json({ id: 7 });
+    const storedResponse = json({ id: 7, imageCrop: NEW_CROP });
+    mocks.apiFetch
+      .mockResolvedValueOnce(image(jpeg('original')))
+      .mockResolvedValueOnce(mainResponse)
+      .mockResolvedValueOnce(storedResponse);
+    mocks.openCropEditor.mockResolvedValue({ blob: cropped, crop: NEW_CROP, original: jpeg('re-encoded') });
+    const finish = vi.fn<(b: Blob) => Promise<Blob | null>>().mockResolvedValue(finished);
+
+    const r = await adjustPhoto(route(7), CROP, BEAN_PHOTO_OPTS, finish);
+
+    expect(r).toBe(storedResponse);
+    expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
+    expect(finish).toHaveBeenCalledWith(cropped);
+
+    const [original, posted, stored] = calls();
+    expect(original?.url).toBe(`${route(7)}?original=1`);
+    expect(posted?.url).toBe(route(7));
+    expect(contentType(posted)).toBe('image/png');
+    expect(await bodyText(posted)).toBe('png');
+    expect(stored?.url).toBe(`${route(7)}?original=1&crop=${NEW_CROP_QUERY}`);
+    // The same stored original is re-saved, not the re-encoded dialog copy.
+    expect(await bodyText(stored)).toBe('original');
+    expect(calls().some(c => c.url.includes('?crop=') && !c.url.includes('original=1'))).toBe(false);
+  });
+
+  it('sends nothing without a valid stored crop', async () => {
+    const finish = vi.fn<(b: Blob) => Promise<Blob | null>>();
+
+    expect(await adjustPhoto(route(7), undefined, BEAN_PHOTO_OPTS, finish)).toBeNull();
+
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
+    expect(mocks.openCropEditor).not.toHaveBeenCalled();
+    expect(finish).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to the current main image when the original is gone', async () => {
+    const missing = json({ error: 'no original' }, 404);
+    mocks.apiFetch.mockResolvedValueOnce(missing);
+    const finish = vi.fn<(b: Blob) => Promise<Blob | null>>();
+
+    expect(await adjustPhoto(route(7), CROP, BEAN_PHOTO_OPTS, finish)).toBe(missing);
+
+    expect(calls()).toHaveLength(1);
+    expect(mocks.openCropEditor).not.toHaveBeenCalled();
+    expect(finish).not.toHaveBeenCalled();
+  });
+
+  it('posts nothing when the finish step resolves null', async () => {
+    mocks.apiFetch.mockResolvedValueOnce(image(jpeg('original')));
+    mocks.openCropEditor.mockResolvedValue({ blob: jpeg('cropped'), crop: NEW_CROP, original: jpeg() });
+    const finish = vi.fn<(b: Blob) => Promise<Blob | null>>().mockResolvedValue(null);
+
+    expect(await adjustPhoto(route(7), CROP, BEAN_PHOTO_OPTS, finish)).toBeNull();
+
+    expect(calls()).toHaveLength(1);
+    expect(finish).toHaveBeenCalledTimes(1);
   });
 });
 
