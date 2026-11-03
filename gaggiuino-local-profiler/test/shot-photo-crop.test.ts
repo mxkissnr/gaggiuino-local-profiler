@@ -27,6 +27,9 @@ vi.mock('../public-src/api/transport.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/transport.js')>();
   return { ...actual, apiFetch: mocks.apiFetch };
 });
+// openCropEditor is replaced wholesale here, so this suite never runs the crop
+// export and needs no canvas fake (the white fill of #1889 is covered in
+// test/image-crop-dialog.test.ts).
 vi.mock('../public-src/components/image-crop.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/components/image-crop.js')>();
   return { ...actual, openCropEditor: mocks.openCropEditor };
