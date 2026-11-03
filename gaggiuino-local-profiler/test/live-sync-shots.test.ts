@@ -120,6 +120,9 @@ async function flushPromises(times = 8): Promise<void> {
   for (let i = 0; i < times; i += 1) await Promise.resolve();
 }
 
+// #1845: the crop rectangle a stored shot photo carries next to its image.
+const CROP = { x: 0.125, y: 0, w: 0.75, h: 1 };
+
 // Routes the real apiFetch: GET /api/shots/{id} serves the registered single
 // shot (or 404), the trash fetch fails so loadTrashData() bails before its DOM
 // render, and the plain list returns an empty page.
@@ -189,6 +192,27 @@ describe('refreshShots (#1539 slice 4)', () => {
     const row = S.allShots[0] as unknown as Record<string, unknown>;
     expect('image' in row).toBe(false);
     expect(spies.invalidateShotImage).toHaveBeenCalledWith(7);
+  });
+
+  // #1845: the crop marks the stored original, so it travels with the image.
+  it('takes imageCrop from the refreshed shot', async () => {
+    S.allShots = [{ id: 7, timestamp: 1000, image: 'jpg' }];
+    detailById.set(7, { id: 7, annotation: {}, image: 'jpg', imageCrop: CROP, score: 80 });
+
+    await refreshShots(['7']);
+
+    expect((S.allShots[0] as unknown as Record<string, unknown>).imageCrop).toEqual(CROP);
+  });
+
+  it('drops a stale imageCrop when the refreshed shot has none', async () => {
+    S.allShots = [{ id: 7, timestamp: 1000, image: 'jpg', imageCrop: CROP }];
+    detailById.set(7, { id: 7, annotation: {}, image: 'jpg', score: 80 });
+
+    await refreshShots(['7']);
+
+    const row = S.allShots[0] as unknown as Record<string, unknown>;
+    expect('imageCrop' in row).toBe(false);
+    expect(row.image).toBe('jpg');
   });
 
   it('re-renders the sidebar once for a batch of dirtied ids', async () => {
