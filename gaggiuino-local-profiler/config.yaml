@@ -34,6 +34,13 @@ ingress_port: 8099
 # the Mosquitto broker add-on) *is* present.
 services:
   - mqtt:want
+# #1848: announce the app to Home Assistant through Supervisor discovery so
+# HA offers the GLP integration as "discovered" without typing a URL. The
+# entry must equal the integration's domain (ha.DiscoveryService in the Go
+# code). POST/DELETE /discovery are open to every app's own token, so this
+# needs no new permission.
+discovery:
+  - gaggiuino_profiler
 ports:
   8099/tcp: 8099
 ports_description:
