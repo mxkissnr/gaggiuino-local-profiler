@@ -21,10 +21,13 @@ type entityKind struct {
 	list        func(*Library) *[]Entity
 	hasImage    bool
 	imagePrefix string
+	// stickers marks the only kind whose photo may be a sticker cut-out
+	// (`imageSticker`, #1884): beans.
+	stickers bool
 }
 
 var (
-	beanKind       = entityKind{list: func(l *Library) *[]Entity { return &l.Beans }, hasImage: true, imagePrefix: ""}
+	beanKind       = entityKind{list: func(l *Library) *[]Entity { return &l.Beans }, hasImage: true, imagePrefix: "", stickers: true}
 	grinderKind    = entityKind{list: func(l *Library) *[]Entity { return &l.Grinders }, hasImage: true, imagePrefix: "grinder-"}
 	basketKind     = entityKind{list: func(l *Library) *[]Entity { return &l.Baskets }, hasImage: true, imagePrefix: "basket-"}
 	puckScreenKind = entityKind{list: func(l *Library) *[]Entity { return &l.PuckScreens }, hasImage: true, imagePrefix: "puckscreen-"}
@@ -94,6 +97,24 @@ func cropEntity(c img.Crop) Entity {
 	return Entity{"x": c.X, "y": c.Y, "w": c.W, "h": c.H}
 }
 
+// normalizeBeanSticker makes a bean's `imageSticker` explicit (#1884): removed
+// without a photo; otherwise a bool that can only be true for a PNG. A bean
+// stored before the flag existed (or restored from such a backup) has no
+// flag; every PNG bean photo was a sticker cut-out then, so it defaults to
+// ext == "png" and keeps its look until a new photo or a re-crop clears it.
+func normalizeBeanSticker(bean Entity) {
+	ext, _ := bean["image"].(string)
+	if ext == "" {
+		delete(bean, "imageSticker")
+		return
+	}
+	sticker, ok := bean["imageSticker"].(bool)
+	if !ok {
+		sticker = ext == "png"
+	}
+	bean["imageSticker"] = sticker && ext == "png"
+}
+
 // parseCropParam parses a `crop=x,y,w,h` query value, reporting false for
 // both a malformed and an out-of-range rectangle.
 func parseCropParam(raw string) (img.Crop, bool) {
@@ -116,6 +137,8 @@ func parseCropParam(raw string) (img.Crop, bool) {
 //
 // The query selects one of three variants; anything else is a 400:
 //   - none: a new photo, which also drops any previous original and crop.
+//     With `sticker=1` (beans only) the new photo is marked as a sticker
+//     cut-out.
 //   - crop=x,y,w,h: re-crop the stored original, body ignored.
 //   - original=1&crop=x,y,w,h: keep this upload as the uncropped original of
 //     the current photo; the main image is untouched.
@@ -138,7 +161,7 @@ func (h *Handlers) postEntityImage(w http.ResponseWriter, r *http.Request, k ent
 	}
 
 	q := r.URL.Query()
-	if !validImageQuery(q) {
+	if !validImageQuery(q, k.stickers) {
 		writeError(w, http.StatusBadRequest, "invalid image request")
 		return
 	}
@@ -146,6 +169,11 @@ func (h *Handlers) postEntityImage(w http.ResponseWriter, r *http.Request, k ent
 	// the single value.
 	_, hasCrop := q["crop"]
 	wantOriginal := q.Get("original") == "1"
+	sticker := q.Get("sticker") == "1"
+	if sticker && (wantOriginal || hasCrop) {
+		writeError(w, http.StatusBadRequest, "invalid image request")
+		return
+	}
 	switch {
 	case wantOriginal && hasCrop:
 		h.storeEntityOriginal(w, r, id, entity, k, respond, q.Get("crop"))
@@ -154,15 +182,16 @@ func (h *Handlers) postEntityImage(w http.ResponseWriter, r *http.Request, k ent
 	case hasCrop:
 		h.recropEntityImage(w, id, k, respond, q.Get("crop"))
 	default:
-		h.replaceEntityImage(w, r, id, noMatch, k, respond)
+		h.replaceEntityImage(w, r, id, noMatch, k, respond, sticker)
 	}
 }
 
 // validImageQuery reports whether the query is one of the three supported
 // image-request shapes: no parameters, `crop` alone, or `original=1` with
 // `crop`. `original` must be exactly "1" — the value the GET route treats as
-// "serve the original".
-func validImageQuery(q url.Values) bool {
+// "serve the original". `sticker=1` marks a new photo as a sticker cut-out
+// and is accepted for beans only (`allowSticker`).
+func validImageQuery(q url.Values, allowSticker bool) bool {
 	for name, values := range q {
 		switch name {
 		case "crop":
@@ -171,6 +200,10 @@ func validImageQuery(q url.Values) bool {
 			}
 		case "original":
 			if len(values) != 1 || values[0] != "1" {
+				return false
+			}
+		case "sticker":
+			if !allowSticker || len(values) != 1 || values[0] != "1" {
 				return false
 			}
 		default:
@@ -182,8 +215,8 @@ func validImageQuery(q url.Values) bool {
 
 // replaceEntityImage stores a newly uploaded photo as the main image, dropping
 // the previous crop and the previous uncropped original (both describe the
-// picture being replaced).
-func (h *Handlers) replaceEntityImage(w http.ResponseWriter, r *http.Request, id int64, noMatch bool, k entityKind, respond func(http.ResponseWriter, Entity)) {
+// picture being replaced). It also sets or clears the bean's sticker flag.
+func (h *Handlers) replaceEntityImage(w http.ResponseWriter, r *http.Request, id int64, noMatch bool, k entityKind, respond func(http.ResponseWriter, Entity), sticker bool) {
 	data, contentType, ok := readUploadedImage(w, r)
 	if !ok {
 		return
@@ -208,6 +241,9 @@ func (h *Handlers) replaceEntityImage(w http.ResponseWriter, r *http.Request, id
 		oldExt, _ = entity["image"].(string)
 		entity["image"] = ext
 		delete(entity, "imageCrop")
+		if k.stickers {
+			entity["imageSticker"] = sticker && ext == "png"
+		}
 		(*items)[idx] = entity
 		return nil
 	})
@@ -265,6 +301,10 @@ func (h *Handlers) recropEntityImage(w http.ResponseWriter, id int64, k entityKi
 		oldExt, _ = entity["image"].(string)
 		entity["image"] = ext
 		entity["imageCrop"] = cropEntity(crop)
+		if k.stickers {
+			// A re-crop is always a plain JPEG, never a cut-out (#1884).
+			entity["imageSticker"] = false
+		}
 		(*items)[idx] = entity
 		return nil
 	})
