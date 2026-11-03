@@ -1,9 +1,9 @@
 // #1845 slice 6b: the shot photo keeps its uncropped original and can be
 // re-cropped later. The annotation panel's photo section now goes through
-// photo-upload.ts (cropAndUploadPhoto / adjustPhoto / savedPhotoRow), and
-// refreshShots() keeps the row's imageCrop in sync with the image. vitest runs
-// in the node environment, so the globals the module chain reads at load are
-// stubbed here (same pattern as test/live-sync-shots.test.ts).
+// photo-upload.ts (cropAndUploadPhoto / adjustPhoto / savedPhotoRow); the
+// refreshShots() side of imageCrop is covered in test/live-sync-shots.test.ts.
+// vitest runs in the node environment, so the globals the module chain reads at
+// load are stubbed here (same pattern as that suite).
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { CropEditorOptions, CropEditorResult } from '../public-src/components/image-crop.js';
 
@@ -52,7 +52,7 @@ const { S } = await import('../public-src/state/index.js');
 const { t } = await import('../public-src/i18n.js');
 // views/shots/index.js first, at module load, before any fake `document`: its
 // import chain registers load-time listeners only when `document` exists.
-const { refreshShots } = await import('../public-src/views/shots/index.js');
+await import('../public-src/views/shots/index.js');
 const { uploadShotImage, adjustShotImage, removeShotImage, _renderShotPhoto } =
   await import('../public-src/views/shots/annotation.js');
 
@@ -311,32 +311,5 @@ describe('Crop photo button on a shot (#1845)', () => {
     expect('image' in row()).toBe(false);
     expect('imageCrop' in row()).toBe(false);
     expect(adjustBtn.style.display).toBe('none');
-  });
-});
-
-describe('refreshShots keeps imageCrop in sync (#1845)', () => {
-  beforeEach(() => {
-    S.primaryShotId = null;
-  });
-
-  it('takes the crop from the refreshed shot', async () => {
-    mocks.apiFetch.mockResolvedValueOnce(
-      json({ id: 7, annotation: {}, image: 'jpg', imageCrop: CROP, score: 80 }),
-    );
-
-    await refreshShots(['7']);
-
-    expect(row()['imageCrop']).toEqual(CROP);
-  });
-
-  it('drops a stale crop when the refreshed shot has none', async () => {
-    S.allShots = [{ id: 7, timestamp: 1000, image: 'jpg', imageCrop: CROP }];
-    S.shots = S.allShots;
-    mocks.apiFetch.mockResolvedValueOnce(json({ id: 7, annotation: {}, image: 'jpg', score: 80 }));
-
-    await refreshShots(['7']);
-
-    expect('imageCrop' in row()).toBe(false);
-    expect(row()['image']).toBe('jpg');
   });
 });
