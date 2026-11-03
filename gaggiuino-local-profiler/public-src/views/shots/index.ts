@@ -261,8 +261,9 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
 //    fetch) falls back to the quiet list reload, since the row left the page.
 //  - an id outside S.allShots (older than the loaded window) is ignored.
 //  - otherwise every field the detail returns is patched: annotation, score,
-//    usedBeanTarget, and the image (deleted when the payload no longer has one,
-//    i.e. a removed photo). The cached photo/thumbnail is dropped, the sidebar
+//    usedBeanTarget, and the image with its imageCrop (each deleted when the
+//    payload no longer has it, e.g. a removed photo). The cached
+//    photo/thumbnail is dropped, the sidebar
 //    and its highlighting re-render once after the loop, and the open shot's
 //    panel refreshes once. The scheduler's canRun held this run back while an
 //    edit or save was pending, so it cannot clobber one; and because the loop's
@@ -300,6 +301,11 @@ export async function refreshShots(ids: string[] | null): Promise<void> {
     entry.usedBeanTarget = shot.usedBeanTarget;
     if (shot.image) entry.image = shot.image;
     else delete entry.image;
+    // #1845: the crop marks the stored original. A missing one would send Crop
+    // photo down the older-photo path and overwrite the real original; a stale
+    // one would open the dialog at the wrong crop.
+    if (shot.imageCrop) entry.imageCrop = shot.imageCrop;
+    else delete entry.imageCrop;
     invalidateShotImage(id);
     changed = true;
     if (id === S.primaryShotId) openEntry = entry;

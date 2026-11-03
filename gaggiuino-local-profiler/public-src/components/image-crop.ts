@@ -200,21 +200,6 @@ export function openCropEditor(file: Blob, opts: CropEditorOptions = {}): Promis
   });
 }
 
-// Opens the crop editor for `file`. `shape` ('circle' | 'square') picks the
-// preview guide, `aspect` ('square' | 'portrait') picks the 1:1 vs 3:4 export
-// shape — the exported JPEG matches the box, consistent with how
-// object-fit:cover + border-radius renders thumbnails elsewhere in the app.
-// Resolves with a Blob on Apply, or null on Cancel / load failure.
-// Blob-only wrapper for the five photo fields; removed in slice 6b, once they
-// consume CropEditorResult themselves.
-export async function openImageCropEditor(
-  file: Blob,
-  { shape = 'circle', aspect = 'square' }: { shape?: 'circle' | 'square'; aspect?: CropAspect } = {},
-): Promise<Blob | null> {
-  const result = await openCropEditor(file, { shape, aspect });
-  return result?.blob ?? null;
-}
-
 function _buildEditor(
   img: HTMLImageElement, shape: 'circle' | 'square', aspect: CropAspect,
   opts: CropEditorOptions, resolve: (value: CropEditorResult | null) => void,

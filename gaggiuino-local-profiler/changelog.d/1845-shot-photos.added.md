@@ -1,0 +1,1 @@
+- **Shot photos can be re-cropped later** with the Crop photo button next to the photo. Part of #1845
