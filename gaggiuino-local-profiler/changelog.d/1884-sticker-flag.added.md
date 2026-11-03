@@ -1,1 +1,0 @@
-- **Bean photos remember whether they are a sticker cut-out**, so a shop photo and a cut-out sticker stay apart through re-crops and backups. Part of #1884
