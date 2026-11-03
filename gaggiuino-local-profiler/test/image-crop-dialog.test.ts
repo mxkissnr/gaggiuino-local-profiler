@@ -8,10 +8,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 
-// The dialog only needs a handle back; the real helper reads document events.
-vi.mock('../public-src/components/dialog-a11y.js', () => ({
-  attachDialogKeyboard: () => ({ release: () => {} }),
-}));
+// The dialog only needs a handle back; the real helper needs a live document.
+vi.mock('../public-src/components/dialog-a11y.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../public-src/components/dialog-a11y.js')>();
+  return { ...actual, attachDialogKeyboard: () => ({ release: () => {} }) };
+});
 
 const { openCropEditor, openImageCropEditor, viewToCrop, coverBaseScale } =
   await import('../public-src/components/image-crop.js');
