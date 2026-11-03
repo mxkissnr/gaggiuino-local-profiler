@@ -4,9 +4,8 @@ import * as libraryApi from '../../api/library.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { apiFetch } from '../../api/transport.js';
 import { openCropEditor, isValidCrop } from '../../components/image-crop.js';
-import type { CropEditorResult } from '../../components/image-crop.js';
 import { cropAndUploadPhoto, adjustPhoto, saveNewPhoto, savedPhotoRow } from '../../photo-upload.js';
-import type { PhotoCropShape } from '../../photo-upload.js';
+import type { NewPhoto, PhotoCropShape } from '../../photo-upload.js';
 import { _beanList } from './bean-shared.js';
 import type { BeanListRow } from './bean-shared.js';
 import * as libraryView from '../library.js';
@@ -21,11 +20,11 @@ const BEAN_PHOTO: PhotoCropShape = { shape: 'square', aspect: 'portrait' };
 // Photo chosen while *creating* a bean: the crop result can't be uploaded yet
 // (no id), so it waits here until saveBeanInternal has created the bean. The
 // cropped blob, its crop and the uncropped original all wait together, so the
-// save path can store the original too.
-let _stagedBeanImage: CropEditorResult | null = null;
+// save path can store the original too. A staged cut-out also carries `sticker`.
+let _stagedBeanImage: NewPhoto | null = null;
 
 // The bean form reads and clears the staged create-mode photo through these.
-export function stagedBeanImage(): CropEditorResult | null { return _stagedBeanImage; }
+export function stagedBeanImage(): NewPhoto | null { return _stagedBeanImage; }
 export function clearStagedBeanImage(): void { _stagedBeanImage = null; }
 
 export async function stageNewBeanImage(input: HTMLInputElement): Promise<void> {
@@ -83,7 +82,9 @@ function stickerSegmentModule() {
 
 // Whether the bean form offers the Crop photo action: just the bean's row, and
 // for a sticker additionally its stored original plus the cut-out models.
-// A sticker main image is the finished PNG cut-out, so re-cropping it needs the
+// A sticker is decided by the bean's `imageSticker` flag (#1884), not by the
+// file type, so a PNG product photo from a shop import is a normal photo. A
+// sticker main image is the finished PNG cut-out, so re-cropping it needs the
 // original behind it; without one (or without the models) there is nothing to
 // crop and the button stays hidden.
 function _beanPhotoAdjustable(cutoutAvailable: boolean): boolean {
@@ -91,7 +92,7 @@ function _beanPhotoAdjustable(cutoutAvailable: boolean): boolean {
   if (id == null) return false;
   const row = _beanList().find(b => b.id === id);
   if (!row?.image) return false;
-  if (row.image !== 'png') return true;
+  if (row.imageSticker !== true) return true;
   return isValidCrop(row.imageCrop) && cutoutAvailable;
 }
 
@@ -145,7 +146,7 @@ export async function adjustBeanImage(): Promise<void> {
   const row = _beanList().find(b => b.id === id);
   if (!row?.image) return;
   const url = libraryApi.libraryImageUrl('bean', id);
-  const sticker = row.image === 'png';
+  const sticker = row.imageSticker === true;
   const r = await adjustPhoto(url, row.imageCrop, BEAN_PHOTO, sticker
     ? async (cropped) => (await stickerEditorModule()).openStickerEditor(cropped)
     : undefined);
@@ -192,13 +193,13 @@ export async function cutOutBeanSticker(): Promise<void> {
         const stored = await apiFetch(`${url}?original=1`, { cache: 'no-cache' });
         if (stored.ok) original = await stored.blob();
       }
-      const uploaded = await _storeBeanPhoto(id, await saveNewPhoto(url, { blob: png, crop, original }));
+      const uploaded = await _storeBeanPhoto(id, await saveNewPhoto(url, { blob: png, crop, original, sticker: true }));
       if (uploaded) window.showToast?.(t('sticker_done'));
     } else {
-      // Replace only the blob: the crop and uncropped original stay staged, so
-      // saveBeanInternal still posts the whole result.
+      // Replace only the blob and mark it as a sticker: the crop and uncropped
+      // original stay staged, so saveBeanInternal still posts the whole result.
       // eslint-disable-next-line require-atomic-updates -- single-flight: the disabled-button guard above prevents overlapping runs
-      if (_stagedBeanImage) _stagedBeanImage = { ..._stagedBeanImage, blob: png };
+      if (_stagedBeanImage) _stagedBeanImage = { ..._stagedBeanImage, blob: png, sticker: true };
       const hint = document.getElementById('beanFormImageStaged');
       if (hint) hint.style.display = '';
       void updateStickerButton();

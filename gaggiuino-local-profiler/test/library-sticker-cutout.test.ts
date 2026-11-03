@@ -221,9 +221,17 @@ describe('bean-form Crop photo button (#1845)', () => {
     expect(adjustBtn().style.display).toBe('');
   });
 
+  it('shows it at once for a PNG photo that is not a sticker (shop import, #1884)', async () => {
+    S.beanEditId = 5;
+    S.coffeeLibrary.beans = [{ id: 5, image: 'png', imageSticker: false }];
+    mocks.isStickerCutoutAvailable.mockResolvedValue(false);
+    await library.updateStickerButton();
+    expect(adjustBtn().style.display).toBe('');
+  });
+
   it('hides it for a legacy sticker without a stored crop', async () => {
     S.beanEditId = 5;
-    S.coffeeLibrary.beans = [{ id: 5, name: 'B', image: 'png', bags: [] }];
+    S.coffeeLibrary.beans = [{ id: 5, name: 'B', image: 'png', imageSticker: true, bags: [] }];
     mocks.isStickerCutoutAvailable.mockResolvedValue(true);
     await library.updateStickerButton();
     expect(adjustBtn().style.display).toBe('none');
@@ -231,7 +239,7 @@ describe('bean-form Crop photo button (#1845)', () => {
 
   it('hides it for a sticker with a crop when the cut-out is unavailable', async () => {
     S.beanEditId = 5;
-    S.coffeeLibrary.beans = [{ id: 5, name: 'B', image: 'png', imageCrop: CROP, bags: [] }];
+    S.coffeeLibrary.beans = [{ id: 5, name: 'B', image: 'png', imageSticker: true, imageCrop: CROP, bags: [] }];
     mocks.isStickerCutoutAvailable.mockResolvedValue(false);
     await library.updateStickerButton();
     expect(adjustBtn().style.display).toBe('none');
@@ -239,7 +247,7 @@ describe('bean-form Crop photo button (#1845)', () => {
 
   it('shows it for a sticker with a crop when the cut-out is available', async () => {
     S.beanEditId = 5;
-    S.coffeeLibrary.beans = [{ id: 5, name: 'B', image: 'png', imageCrop: CROP, bags: [] }];
+    S.coffeeLibrary.beans = [{ id: 5, name: 'B', image: 'png', imageSticker: true, imageCrop: CROP, bags: [] }];
     mocks.isStickerCutoutAvailable.mockResolvedValue(true);
     await library.updateStickerButton();
     expect(adjustBtn().style.display).toBe('');
@@ -362,16 +370,45 @@ describe('adjustBeanImage (#1845)', () => {
     expect(S.coffeeLibrary.beans[0]?.imageCrop).toEqual(NEW_CROP);
   });
 
+  it('crops an imported PNG photo through the older-photo path (#1884)', async () => {
+    S.beanEditId = 5;
+    S.coffeeLibrary.beans = [{ id: 5, name: 'Shop', image: 'png', imageSticker: false, bags: [] }];
+    const cropped = jpeg('cropped');
+    mocks.apiFetch
+      .mockResolvedValueOnce(image(jpeg('current')))
+      .mockResolvedValueOnce(json({ id: 5, name: 'Shop', image: 'png', imageSticker: false, bags: [] }))
+      .mockResolvedValueOnce(json({ id: 5, name: 'Shop', image: 'png', imageSticker: false, imageCrop: NEW_CROP, bags: [] }));
+    mocks.openCropEditor.mockResolvedValue({ blob: cropped, crop: NEW_CROP, original: jpeg('original') });
+
+    await adjustBeanImage();
+
+    const [main, posted, stored] = calls();
+    expect(main?.url).toBe(route(5));
+    expect(main?.opts?.cache).toBe('no-cache');
+    expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), {
+      shape: 'square', aspect: 'portrait', hint: t('crop_editor_legacy_hint'),
+    });
+    expect(mocks.openCropEditor.mock.calls[0]?.[1]?.['initialCrop']).toBeUndefined();
+    expect(mocks.openStickerEditor).not.toHaveBeenCalled();
+    expect(posted?.url).toBe(route(5));
+    expect(posted?.opts?.method).toBe('POST');
+    expect(await bodyText(posted)).toBe('cropped');
+    expect(stored?.url).toBe(`${route(5)}?original=1&crop=${NEW_CROP_QUERY}`);
+    expect(S.coffeeLibrary.beans[0]?.imageSticker).toBe(false);
+    expect(S.coffeeLibrary.beans[0]?.imageCrop).toEqual(NEW_CROP);
+    expect(mocks.showToast).not.toHaveBeenCalled();
+  });
+
   it('crops a sticker first, cuts it out, and re-saves the original with the new crop', async () => {
     S.beanEditId = 8;
-    S.coffeeLibrary.beans = [{ id: 8, name: 'S', image: 'png', imageCrop: CROP, bags: [] }];
+    S.coffeeLibrary.beans = [{ id: 8, name: 'S', image: 'png', imageSticker: true, imageCrop: CROP, bags: [] }];
     const original = jpeg('original');
     const cropped = jpeg('cropped');
     const cutout = png();
     mocks.apiFetch
       .mockResolvedValueOnce(image(original))
-      .mockResolvedValueOnce(json({ id: 8, name: 'S', image: 'png', bags: [] }))
-      .mockResolvedValueOnce(json({ id: 8, name: 'S', image: 'png', imageCrop: NEW_CROP, bags: [] }));
+      .mockResolvedValueOnce(json({ id: 8, name: 'S', image: 'png', imageSticker: true, bags: [] }))
+      .mockResolvedValueOnce(json({ id: 8, name: 'S', image: 'png', imageSticker: true, imageCrop: NEW_CROP, bags: [] }));
     mocks.openCropEditor.mockResolvedValue({ blob: cropped, crop: NEW_CROP, original: jpeg('re-encoded') });
     mocks.openStickerEditor.mockResolvedValue(cutout);
 
@@ -385,7 +422,7 @@ describe('adjustBeanImage (#1845)', () => {
 
     const [storedOriginal, posted, resaved] = calls();
     expect(storedOriginal?.url).toBe(`${route(8)}?original=1`);
-    expect(posted?.url).toBe(route(8));
+    expect(posted?.url).toBe(`${route(8)}?sticker=1`);
     expect(posted?.opts?.method).toBe('POST');
     expect(contentType(posted)).toBe('image/png');
     expect(await bodyText(posted)).toBe('png');
@@ -398,7 +435,7 @@ describe('adjustBeanImage (#1845)', () => {
 
   it('never opens the sticker editor when the sticker crop dialog is cancelled', async () => {
     S.beanEditId = 8;
-    const bean = { id: 8, name: 'S', image: 'png', imageCrop: CROP, bags: [] };
+    const bean = { id: 8, name: 'S', image: 'png', imageSticker: true, imageCrop: CROP, bags: [] };
     S.coffeeLibrary.beans = [bean];
     mocks.apiFetch.mockResolvedValueOnce(image(jpeg('original')));
     mocks.openCropEditor.mockResolvedValue(null);
@@ -412,7 +449,7 @@ describe('adjustBeanImage (#1845)', () => {
 
   it('sends nothing when the sticker editor is cancelled after the crop', async () => {
     S.beanEditId = 8;
-    const bean = { id: 8, name: 'S', image: 'png', imageCrop: CROP, bags: [] };
+    const bean = { id: 8, name: 'S', image: 'png', imageSticker: true, imageCrop: CROP, bags: [] };
     S.coffeeLibrary.beans = [bean];
     mocks.apiFetch.mockResolvedValueOnce(image(jpeg('original')));
     mocks.openCropEditor.mockResolvedValue({ blob: jpeg('cropped'), crop: NEW_CROP, original: jpeg() });
@@ -440,8 +477,8 @@ describe('cutOutBeanSticker (#1336)', () => {
     mocks.apiFetch
       .mockResolvedValueOnce(image(jpeg('photo')))
       .mockResolvedValueOnce(image(original))
-      .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', bags: [] }))
-      .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', imageCrop: CROP, bags: [] }));
+      .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', imageSticker: true, bags: [] }))
+      .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', imageSticker: true, imageCrop: CROP, bags: [] }));
     mocks.openStickerEditor.mockResolvedValue(cutout);
 
     await library.cutOutBeanSticker();
@@ -453,11 +490,12 @@ describe('cutOutBeanSticker (#1336)', () => {
     expect(fetchedOriginal?.url).toBe(`${route(7)}?original=1`);
     expect(fetchedOriginal?.opts?.cache).toBe('no-cache');
     expect(mocks.openStickerEditor).toHaveBeenCalledWith(expect.any(Blob));
-    expect(posted?.url).toBe(route(7));
+    expect(posted?.url).toBe(`${route(7)}?sticker=1`);
     expect(posted?.opts?.method).toBe('POST');
     expect(contentType(posted)).toBe('image/png');
     expect(await bodyText(posted)).toBe('png');
     expect(stored?.url).toBe(`${route(7)}?original=1&crop=${CROP_QUERY}`);
+    expect(stored?.url).not.toContain('sticker');
     expect(contentType(stored)).toBe('image/jpeg');
     expect(await bodyText(stored)).toBe('original');
     expect(S.coffeeLibrary.beans[0]?.image).toBe('png');
@@ -472,13 +510,13 @@ describe('cutOutBeanSticker (#1336)', () => {
     S.coffeeLibrary.beans = [{ id: 7, name: 'B', image: 'jpg', bags: [] }];
     mocks.apiFetch
       .mockResolvedValueOnce(image(jpeg('photo')))
-      .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', bags: [] }));
+      .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', imageSticker: true, bags: [] }));
     mocks.openStickerEditor.mockResolvedValue(png());
 
     await library.cutOutBeanSticker();
 
     expect(calls()).toHaveLength(2);
-    expect(calls()[1]?.url).toBe(route(7));
+    expect(calls()[1]?.url).toBe(`${route(7)}?sticker=1`);
     expect(calls()[1]?.opts?.method).toBe('POST');
     expect(calls().some(c => c.url.includes('original=1'))).toBe(false);
     expect(warn).toHaveBeenCalledTimes(1);
@@ -503,8 +541,8 @@ describe('cutOutBeanSticker (#1336)', () => {
     mocks.openStickerEditor.mockResolvedValue(png());
     mocks.saveBean.mockResolvedValue({ id: 42, name: 'New Bean', bags: [] });
     mocks.apiFetch
-      .mockResolvedValueOnce(json({ id: 42, name: 'New Bean', image: 'png', bags: [] }))
-      .mockResolvedValueOnce(json({ id: 42, name: 'New Bean', image: 'png', imageCrop: CROP, bags: [] }));
+      .mockResolvedValueOnce(json({ id: 42, name: 'New Bean', image: 'png', imageSticker: true, bags: [] }))
+      .mockResolvedValueOnce(json({ id: 42, name: 'New Bean', image: 'png', imageSticker: true, imageCrop: CROP, bags: [] }));
 
     const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
     await library.stageNewBeanImage(input);
@@ -515,7 +553,7 @@ describe('cutOutBeanSticker (#1336)', () => {
     await library.saveBeanNoBag();
     const posted = calls().filter(c => c.url.startsWith('api/library/bean/42/image'));
     expect(posted).toHaveLength(2);
-    expect(posted[0]?.url).toBe('api/library/bean/42/image');
+    expect(posted[0]?.url).toBe('api/library/bean/42/image?sticker=1');
     expect(contentType(posted[0])).toBe('image/png');
     expect(await bodyText(posted[0])).toBe('png');
     expect(posted[1]?.url).toBe(`api/library/bean/42/image?original=1&crop=${CROP_QUERY}`);
@@ -543,6 +581,17 @@ describe('saveNewPhoto (#1845)', () => {
     expect(await bodyText(main)).toBe('main');
     expect(original?.url).toBe(`${route(7)}?original=1&crop=${CROP_QUERY}`);
     expect(await bodyText(original)).toBe('orig');
+  });
+
+  it('posts a sticker to ?sticker=1 and its original without it', async () => {
+    mocks.apiFetch.mockResolvedValueOnce(json({ id: 7 })).mockResolvedValueOnce(json({ id: 7 }));
+
+    await saveNewPhoto(route(7), { blob: png(), crop: CROP, original: jpeg('orig'), sticker: true });
+
+    const [main, original] = calls();
+    expect(main?.url).toBe(`${route(7)}?sticker=1`);
+    expect(original?.url).toBe(`${route(7)}?original=1&crop=${CROP_QUERY}`);
+    expect(original?.url).not.toContain('sticker');
   });
 
   it('posts a photo with no known crop alone and warns once', async () => {
@@ -593,7 +642,7 @@ describe('adjustPhoto finish step (#1845)', () => {
 
     const [original, posted, stored] = calls();
     expect(original?.url).toBe(`${route(7)}?original=1`);
-    expect(posted?.url).toBe(route(7));
+    expect(posted?.url).toBe(`${route(7)}?sticker=1`);
     expect(contentType(posted)).toBe('image/png');
     expect(await bodyText(posted)).toBe('png');
     expect(stored?.url).toBe(`${route(7)}?original=1&crop=${NEW_CROP_QUERY}`);
@@ -637,10 +686,14 @@ describe('adjustPhoto finish step (#1845)', () => {
 });
 
 describe('shelf sticker look (#1336)', () => {
-  it('marks only png photos as stickers', () => {
-    const pngTile = renderShelfTile({ id: 1, name: 'A', image: 'png', bags: [] }, { muted: false });
-    const jpgTile = renderShelfTile({ id: 2, name: 'B', image: 'jpg', bags: [] }, { muted: false });
-    expect(pngTile).toContain('is-sticker');
+  it("follows the bean's sticker flag (#1884)", () => {
+    const flagged = renderShelfTile({ id: 1, name: 'A', image: 'png', imageSticker: true }, { muted: false });
+    const imported = renderShelfTile({ id: 2, name: 'B', image: 'png', imageSticker: false }, { muted: false });
+    const unflagged = renderShelfTile({ id: 3, name: 'C', image: 'png' }, { muted: false });
+    const jpgTile = renderShelfTile({ id: 4, name: 'D', image: 'jpg', imageSticker: false }, { muted: false });
+    expect(flagged).toContain('is-sticker');
+    expect(imported).not.toContain('is-sticker');
+    expect(unflagged).not.toContain('is-sticker');
     expect(jpgTile).not.toContain('is-sticker');
   });
 });

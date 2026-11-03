@@ -215,7 +215,7 @@ export function renderBeanSheet(enter = false): void {
       ${_sheetBar(bean)}
       <div class="lib-sheet-hero">
         <div class="lib-sheet-photo">${bean.image
-          ? html`<img class="lib-bean-thumb${esc(bean.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(bean.id)}" alt="">`
+          ? html`<img class="lib-bean-thumb${esc(bean.imageSticker === true ? ' is-sticker' : '')}" data-bean-id="${esc(bean.id)}" alt="">`
           : html`<span class="lib-sheet-initials" aria-hidden="true">${esc(beanInitials(bean.roaster || bean.name || ''))}</span>`}</div>
         <div class="lib-sheet-titles">
           ${origin ? html`<div class="lib-item-origin-eyebrow">${esc(origin)}</div>` : esc('')}

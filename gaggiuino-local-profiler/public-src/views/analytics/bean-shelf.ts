@@ -125,6 +125,7 @@ function _shelfImageBean(row: BeanRankRow, bean: SharedBean | null): ShelfBagIma
     name: bean.name,
     roaster: typeof bean.roaster === 'string' ? bean.roaster : null,
     image: typeof bean.image === 'string' ? bean.image : null,
+    imageSticker: bean.imageSticker === true,
   };
 }
 
