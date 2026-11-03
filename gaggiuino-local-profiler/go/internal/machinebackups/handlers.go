@@ -52,12 +52,14 @@ func NewHandlers(d HandlerDeps) *Handlers {
 	return &Handlers{deps: d, rl: ratelimit.NewKeyed()}
 }
 
-// RegisterRoutes mounts the three machine settings backup routes. They sit
+// RegisterRoutes mounts the five machine settings backup routes. They sit
 // behind the global token/ingress auth and are not on the kiosk allow-list.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/machine/backups", h.list)
 	mux.HandleFunc("POST /api/machine/backups", h.backUpNow)
 	mux.HandleFunc("DELETE /api/machine/backups/{id}", h.remove)
+	mux.HandleFunc("GET /api/machine/backups/settings", h.getSettings)
+	mux.HandleFunc("PUT /api/machine/backups/settings", h.putSettings)
 }
 
 func (h *Handlers) now() time.Time {
@@ -194,4 +196,76 @@ func (h *Handlers) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// requireGaggiuino answers 404/501/500 and returns false when the machine cannot
+// have settings backups. It checks the type, not the Client lookup: a Gaggiuino
+// machine without a host may still be configured.
+func (h *Handlers) requireGaggiuino(w http.ResponseWriter, id int64) bool {
+	m, err := h.deps.Machines.GetMachine(id)
+	if err != nil {
+		httputil.InternalError(w, "machinebackups", err)
+		return false
+	}
+	if m == nil {
+		httputil.WriteError(w, http.StatusNotFound, "Unknown machine")
+		return false
+	}
+	if m.Type != "gaggiuino" {
+		writeCodeError(w, http.StatusNotImplemented, codeUnsupportedMachine,
+			"Settings backups are only available for Gaggiuino machines")
+		return false
+	}
+	return true
+}
+
+func (h *Handlers) getSettings(w http.ResponseWriter, r *http.Request) {
+	machineID, err := strconv.ParseInt(r.URL.Query().Get("machineId"), 10, 64)
+	if err != nil || machineID < 1 {
+		httputil.WriteError(w, http.StatusBadRequest, "Invalid machineId")
+		return
+	}
+	if !h.requireGaggiuino(w, machineID) {
+		return
+	}
+	s, err := h.deps.Repo.settingsFor(machineID)
+	if err != nil {
+		httputil.InternalError(w, "machinebackups", err)
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, machineSettings{MachineID: machineID, Settings: s})
+}
+
+func (h *Handlers) putSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		MachineID     *int64  `json:"machineId"`
+		Schedule      *string `json:"schedule"`
+		KeepAutomatic *int    `json:"keepAutomatic"`
+	}
+	if !httputil.DecodeJSONBodyInto(w, r, maxRequestBytes, &body) {
+		return
+	}
+	if body.MachineID == nil || *body.MachineID < 1 {
+		httputil.WriteError(w, http.StatusBadRequest, "machineId required")
+		return
+	}
+	if body.Schedule == nil || !validSchedule(*body.Schedule) {
+		httputil.WriteError(w, http.StatusBadRequest, "schedule must be off, daily or weekly")
+		return
+	}
+	if body.KeepAutomatic == nil || !validKeepAutomatic(*body.KeepAutomatic) {
+		httputil.WriteError(w, http.StatusBadRequest, "keepAutomatic must be a whole number from 1 to 100")
+		return
+	}
+	id := *body.MachineID
+	if !h.requireGaggiuino(w, id) {
+		return
+	}
+	s := Settings{Schedule: *body.Schedule, KeepAutomatic: *body.KeepAutomatic}
+	if err := h.deps.Repo.saveSettings(id, s); err != nil {
+		httputil.InternalError(w, "machinebackups", err)
+		return
+	}
+	log.Printf("machinebackups: machine %d automatic backups set to %s, keep %d", id, s.Schedule, s.KeepAutomatic)
+	httputil.WriteJSON(w, http.StatusOK, machineSettings{MachineID: id, Settings: s})
 }

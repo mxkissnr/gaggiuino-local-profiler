@@ -3,13 +3,14 @@
 // (see secretPaths), so no Wi-Fi, MQTT or visualizer credential ever reaches the
 // database; entries live in the machine_backups table keyed by machine id.
 //
-// This slice adds the automatic daily backup (Scheduler): the first time a
-// Gaggiuino machine is reachable on a given local day its settings backup is
-// fetched and stored as a new entry, but only when the content differs from the
-// newest stored backup of that machine. It also adds the list, back up now and
-// delete routes (handlers.go). Later slices add the schedule settings, the
-// pre-update backup, download/upload, the restore path and the GLP backup
-// bundle.
+// This slice adds the automatic backup (Scheduler): the first time a Gaggiuino
+// machine is reachable in a given local day or ISO week, per its schedule, its
+// settings backup is fetched and stored as a new entry, but only when the
+// content differs from the newest stored backup of that machine. It also adds
+// the list, back up now and delete routes (handlers.go). Each machine has its
+// own schedule (off/daily/weekly) and retention of automatic backups
+// (settings.go). Later slices add the pre-update backup, download/upload, the
+// restore path and the GLP backup bundle.
 package machinebackups
 
 import (
@@ -222,6 +223,9 @@ type Repository struct {
 	// here because main shares one Repository between the scheduler and the
 	// handlers, the same way ProfilesRepository.MachineLock is shared.
 	locks sync.Map // map[int64]*sync.Mutex
+
+	// settingsMu serializes saveSettings' read-modify-write of the one kv row.
+	settingsMu sync.Mutex
 }
 
 func NewRepository(db *sql.DB) *Repository {
@@ -324,6 +328,27 @@ func (r *Repository) remove(id int64) (bool, error) {
 	return n == 1, nil
 }
 
+// pruneScheduled deletes the oldest automatic (scheduled) backups of
+// machineID beyond keep. Manual, pre-update and uploaded backups are never
+// touched. keep below 1 is refused, so a bug can never delete every automatic
+// backup.
+func (r *Repository) pruneScheduled(machineID int64, keep int) (int64, error) {
+	if keep < minKeepAutomatic {
+		return 0, fmt.Errorf("machinebackups: refusing to keep %d automatic backups", keep)
+	}
+	res, err := r.db.Exec(`DELETE FROM machine_backups WHERE id IN (
+		SELECT id FROM machine_backups WHERE machine_id = ? AND kind = 'scheduled'
+		ORDER BY created_at DESC, id DESC LIMIT -1 OFFSET ?)`, machineID, keep)
+	if err != nil {
+		return 0, fmt.Errorf("machinebackups: removing old automatic backups of machine %d: %w", machineID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("machinebackups: removing old automatic backups of machine %d: %w", machineID, err)
+	}
+	return n, nil
+}
+
 // newestHash returns the content hash of the newest backup of machineID, of any
 // kind. found is false when the machine has no backup yet.
 func (r *Repository) newestHash(machineID int64) (hash string, found bool, err error) {
@@ -414,9 +439,12 @@ type SchedulerDeps struct {
 	Now          func() time.Time
 }
 
-// Scheduler takes one automatic settings backup per machine per local day.
-// checked, retryAt and unsupportedLogged are keyed by machine id and only ever
-// touched by the scheduler goroutine, so there is no mutex here; the per-machine
+// Scheduler takes one automatic settings backup per machine per local day or ISO
+// week, per that machine's Settings; off machines are never contacted. The
+// in-memory checked map means a GLP restart re-checks once per period, and change
+// detection keeps that a no-op unless the content changed. checked, retryAt and
+// unsupportedLogged are keyed by machine id and only ever touched by the
+// scheduler goroutine, so there is no mutex here; the per-machine
 // Repository.machineLock serializes its machine calls with Back up now.
 type Scheduler struct {
 	deps              SchedulerDeps
@@ -460,17 +488,26 @@ func (s *Scheduler) tick(ctx context.Context) {
 		log.Printf("machinebackups: listing machines: %s", redact.Redact(err.Error()))
 		return
 	}
+	settings, err := s.deps.Repo.allSettings()
+	if err != nil {
+		// Never guess: the default retention could prune rows a user chose to keep.
+		log.Printf("machinebackups: reading backup settings: %s", redact.Redact(err.Error()))
+		return
+	}
 	for i := range list {
-		s.backupIfDue(ctx, &list[i])
+		s.backupIfDue(ctx, &list[i], settings.forMachine(list[i].ID))
 	}
 }
 
-func (s *Scheduler) backupIfDue(ctx context.Context, m *machines.Machine) {
+func (s *Scheduler) backupIfDue(ctx context.Context, m *machines.Machine, set Settings) {
 	if m == nil || !m.Enabled || m.Type != "gaggiuino" || strings.TrimSpace(m.Host) == "" {
 		return
 	}
+	if set.Schedule == ScheduleOff {
+		return
+	}
 	now := s.now()
-	if at, ok := s.checked[m.ID]; ok && sameLocalDay(at, now) {
+	if at, ok := s.checked[m.ID]; ok && checkedThisPeriod(set.Schedule, at, now) {
 		return
 	}
 	if at, ok := s.retryAt[m.ID]; ok && now.Before(at) {
@@ -525,6 +562,11 @@ func (s *Scheduler) backupIfDue(ctx context.Context, m *machines.Machine) {
 	}
 	s.checked[m.ID] = now
 	log.Printf("machinebackups: stored automatic backup of machine %d (%d profiles, %d bytes)", m.ID, p.ProfileCount, len(p.Data))
+	if removed, err := s.deps.Repo.pruneScheduled(m.ID, set.KeepAutomatic); err != nil {
+		log.Printf("machinebackups: removing old automatic backups of machine %d failed: %s", m.ID, redact.Redact(err.Error()))
+	} else if removed > 0 {
+		log.Printf("machinebackups: removed %d old automatic backups of machine %d (keeping %d)", removed, m.ID, set.KeepAutomatic)
+	}
 }
 
 // failed backs the machine off for schedulerRetryAfter and logs the redacted
@@ -546,4 +588,21 @@ func (s *Scheduler) now() time.Time {
 func sameLocalDay(a, b time.Time) bool {
 	a, b = a.Local(), b.Local()
 	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
+}
+
+// checkedThisPeriod reports whether a check at `at` already covers now under
+// schedule: the same local day for daily, the same local ISO week for weekly.
+func checkedThisPeriod(schedule string, at, now time.Time) bool {
+	if schedule == ScheduleWeekly {
+		return sameISOWeek(at, now)
+	}
+	return sameLocalDay(at, now)
+}
+
+// sameISOWeek compares the local ISO week, so a weekly schedule resets on Monday
+// rather than on the first of the month.
+func sameISOWeek(a, b time.Time) bool {
+	ay, aw := a.Local().ISOWeek()
+	by, bw := b.Local().ISOWeek()
+	return ay == by && aw == bw
 }
