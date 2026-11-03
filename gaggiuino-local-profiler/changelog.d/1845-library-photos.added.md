@@ -1,0 +1,1 @@
+- **Grinder, basket and puck screen photos can be re-cropped later** with the new Crop photo button, starting from the uncropped original. Part of #1845
