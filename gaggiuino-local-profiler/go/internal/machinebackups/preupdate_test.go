@@ -126,35 +126,37 @@ func TestPreUpdate_FailuresStopTheUpdate(t *testing.T) {
 		closeDB bool
 	}{
 		{
-			name:   "offline",
-			client: func() *fakeClient { return &fakeClient{statusErr: errors.New("dial tcp 192.168.1.50:80: connection refused")} },
+			name: "offline",
+			client: func() *fakeClient {
+				return &fakeClient{statusErr: errors.New("dial tcp 192.168.1.50:80: connection refused")}
+			},
 		},
 		{
-			name:   "brewing",
+			name: "brewing",
 			client: func() *fakeClient {
 				return &fakeClient{status: machines.Status{Brewing: true}, docs: []string{fixtureDoc}}
 			},
 		},
 		{
-			name:   "steaming",
+			name: "steaming",
 			client: func() *fakeClient {
 				return &fakeClient{status: machines.Status{SteamOn: &steamOn}, docs: []string{fixtureDoc}}
 			},
 		},
 		{
-			name:   "backup transport error",
+			name: "backup transport error",
 			client: func() *fakeClient {
 				return &fakeClient{docs: []string{fixtureDoc}, backupErr: errors.New("read tcp 192.168.1.50:80: i/o timeout")}
 			},
 		},
 		{
-			name:   "backup too large",
+			name: "backup too large",
 			client: func() *fakeClient {
 				return &fakeClient{docs: []string{fixtureDoc}, backupErr: machines.ErrSettingsBackupTooLarge}
 			},
 		},
 		{
-			name:   "unknown document format",
+			name: "unknown document format",
 			client: func() *fakeClient {
 				return &fakeClient{docs: []string{`{"format":"other","version":1}`}}
 			},
