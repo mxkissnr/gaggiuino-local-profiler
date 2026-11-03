@@ -278,9 +278,9 @@ func newTestEnv(t *testing.T, list ...machines.Machine) *testEnv {
 		clock:         time.Date(2026, 11, 3, 9, 0, 0, 0, time.Local),
 	}
 	e.sched = NewScheduler(SchedulerDeps{
-		Repo:         e.repo,
-		Machines:     &fakeLister{list: list},
-		Client:       func(m *machines.Machine) (Client, bool) {
+		Repo:     e.repo,
+		Machines: &fakeLister{list: list},
+		Client: func(m *machines.Machine) (Client, bool) {
 			e.clientLookups[m.ID]++
 			c, ok := e.clients[m.ID]
 			return c, ok
