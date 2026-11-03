@@ -135,6 +135,9 @@ export async function updateStickerButton(): Promise<void> {
  * when it has none, opened on the current image and saved with an original);
  * a sticker crop runs first and the sticker editor turns the cropped area into
  * the new PNG photo, so the original survives the re-crop.
+ *
+ * Imported straight from here by bean-form-sheet.ts: views/library.ts only
+ * re-exports the form's own entry points, so its list stays untouched.
  */
 export async function adjustBeanImage(): Promise<void> {
   const id = S.beanEditId;

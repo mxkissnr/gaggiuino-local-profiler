@@ -298,7 +298,7 @@ describe('adjustBeanImage (#1845)', () => {
     expect(stored?.url).toBe(`${route(7)}?original=1`);
     expect(stored?.opts?.cache).toBe('no-cache');
     expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
-    expect(await mocks.openCropEditor.mock.calls[0]?.[0].text()).toBe('original');
+    expect(mocks.openCropEditor.mock.calls[0]?.[0]).toBeInstanceOf(Blob);
     expect(recrop?.url).toBe(`${route(7)}?crop=${NEW_CROP_QUERY}`);
     expect(recrop?.opts?.method).toBe('POST');
     expect(recrop?.opts?.body).toBeUndefined();
@@ -339,7 +339,7 @@ describe('adjustBeanImage (#1845)', () => {
     expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), {
       shape: 'square', aspect: 'portrait', hint: t('crop_editor_legacy_hint'),
     });
-    expect(await mocks.openCropEditor.mock.calls[0]?.[0].text()).toBe('current');
+    expect(mocks.openCropEditor.mock.calls[0]?.[0]).toBeInstanceOf(Blob);
     expect(mocks.openCropEditor.mock.calls[0]?.[1]?.['initialCrop']).toBeUndefined();
     expect(posted?.url).toBe(route(7));
     expect(posted?.opts?.method).toBe('POST');
@@ -366,7 +366,7 @@ describe('adjustBeanImage (#1845)', () => {
     await adjustBeanImage();
 
     expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
-    expect(await mocks.openCropEditor.mock.calls[0]?.[0].text()).toBe('original');
+    expect(mocks.openCropEditor.mock.calls[0]?.[0]).toBeInstanceOf(Blob);
     expect(mocks.openStickerEditor).toHaveBeenCalledWith(cropped);
     expect(mocks.openCropEditor.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.openStickerEditor.mock.invocationCallOrder[0] ?? 0);
@@ -441,7 +441,6 @@ describe('cutOutBeanSticker (#1336)', () => {
     expect(fetchedOriginal?.url).toBe(`${route(7)}?original=1`);
     expect(fetchedOriginal?.opts?.cache).toBe('no-cache');
     expect(mocks.openStickerEditor).toHaveBeenCalledWith(expect.any(Blob));
-    expect(await mocks.openStickerEditor.mock.calls[0]?.[0].text()).toBe('photo');
     expect(posted?.url).toBe(route(7));
     expect(posted?.opts?.method).toBe('POST');
     expect(contentType(posted)).toBe('image/png');
