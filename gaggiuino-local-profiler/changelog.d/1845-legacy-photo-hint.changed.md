@@ -1,1 +1,0 @@
-- **Older photos say in the crop dialog that they can only be cut tighter.** Part of #1845
