@@ -1,7 +1,7 @@
 // Reusable zoom + pan crop editor for photo uploads (#286).
 // Opens a modal over the picked file, lets the user zoom (slider/wheel/pinch)
 // and pan (drag/touch) an image against a fixed crop guide, then exports a
-// JPEG blob that feeds into the existing upload flow unchanged.
+// JPEG blob plus the crop rectangle and the uncropped original (#1845).
 import { t } from '../i18n.js';
 import { esc, html } from '../utils.js';
 import { attachDialogKeyboard } from './dialog-a11y.js';
@@ -205,8 +205,8 @@ export function openCropEditor(file: Blob, opts: CropEditorOptions = {}): Promis
 // shape — the exported JPEG matches the box, consistent with how
 // object-fit:cover + border-radius renders thumbnails elsewhere in the app.
 // Resolves with a Blob on Apply, or null on Cancel / load failure.
-// Blob-only view of openCropEditor for the five photo fields; removed in slice
-// 6b, once they consume CropEditorResult themselves.
+// Blob-only wrapper for the five photo fields; removed in slice 6b, once they
+// consume CropEditorResult themselves.
 export async function openImageCropEditor(
   file: Blob,
   { shape = 'circle', aspect = 'square' }: { shape?: 'circle' | 'square'; aspect?: CropAspect } = {},
