@@ -30,6 +30,11 @@ import (
 // images are read one body at a time from the zip on disk. Peak memory is
 // O(one shot + one image + the small sections), independent of dataset size.
 //
+// A shot's uncropped original (#1845) is validated with its photo in pass 1
+// (or the extra pass), and pass 2 drops the shot's `imageCrop` unless that
+// original was queued — the same "crop iff a real original" invariant the
+// library entities get from validateEntityImages.
+//
 // # Atomicity: narrowed, not eliminated
 //
 // Each section commits in its own transaction, so a failure partway through
@@ -222,6 +227,18 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// #1845: a shot keeps its `imageCrop` only when this restore really queued
+	// that shot's uncropped original. Its `.image` is sanitised by
+	// shots.shotInsertArgs during pass 2, but that insert cannot see the
+	// bundle's image bytes — so pass 2 below drops the crop unless the id is
+	// in this set.
+	shotCrops := make(map[int64]struct{})
+	for _, w := range shotPending {
+		if w.original {
+			shotCrops[w.id] = struct{}{}
+		}
+	}
+
 	plan := buildRestorePlan(b, images, shotCount)
 	if plan.planErr != nil {
 		writeError(w, http.StatusBadRequest, plan.planErr.Error())
@@ -247,6 +264,16 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return err
+			}
+			// #1845: the row keeps `imageCrop` only when validation queued this
+			// shot's uncropped original; this is where the stored row learns
+			// that the bundle's original was missing or not a JPEG.
+			if _, hasCrop := m["imageCrop"]; hasCrop {
+				if id, ok := jsIntStrict(m["id"]); !ok || id <= 0 {
+					delete(m, "imageCrop")
+				} else if _, ok := shotCrops[id]; !ok {
+					delete(m, "imageCrop")
+				}
 			}
 			return yield(shots.Shot(m))
 		})
