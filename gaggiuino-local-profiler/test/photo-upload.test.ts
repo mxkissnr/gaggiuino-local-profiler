@@ -26,6 +26,7 @@ vi.mock('../public-src/components/image-crop.js', async (importOriginal) => {
 });
 
 const { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } = await import('../public-src/photo-upload.js');
+const { t } = await import('../public-src/i18n.js');
 const { libraryImageUrl } = await import('../public-src/api/library.js');
 
 const ROUTE = 'api/library/grinder/7/image';
@@ -72,6 +73,13 @@ describe('cropAndUploadPhoto', () => {
     mocks.openCropEditor.mockResolvedValue(null);
     expect(await cropAndUploadPhoto(ROUTE, mainBlob(), SHAPE)).toBeNull();
     expect(mocks.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('opens the dialog on a new photo without a hint', async () => {
+    mocks.openCropEditor.mockResolvedValue(null);
+    expect(await cropAndUploadPhoto(ROUTE, mainBlob(), SHAPE)).toBeNull();
+    expect(mocks.openCropEditor).toHaveBeenCalledTimes(1);
+    expect(mocks.openCropEditor.mock.calls[0]?.[1]?.hint).toBeUndefined();
   });
 
   it('posts the main crop, then the original with its crop, and resolves the second response', async () => {
@@ -141,6 +149,16 @@ describe('adjustPhoto', () => {
     expect(recrop?.opts?.body).toBeUndefined();
   });
 
+  it('opens the re-crop dialog on the stored original without a hint', async () => {
+    mocks.apiFetch.mockResolvedValueOnce(image(origBlob())).mockResolvedValueOnce(json({ id: 7 }));
+    mocks.openCropEditor.mockResolvedValue(cropResult());
+
+    expect(await adjustPhoto(ROUTE, CROP, SHAPE)).not.toBeNull();
+
+    expect(mocks.openCropEditor).toHaveBeenCalledTimes(1);
+    expect(mocks.openCropEditor.mock.calls[0]?.[1]?.hint).toBeUndefined();
+  });
+
   it('resolves null and posts nothing when the re-crop dialog is cancelled', async () => {
     mocks.apiFetch.mockResolvedValueOnce(image(origBlob()));
     mocks.openCropEditor.mockResolvedValue(null);
@@ -173,6 +191,20 @@ describe('adjustPhoto', () => {
       expect(original?.url).toBe(`${ROUTE}?original=1&crop=${CROP_QUERY}`);
     },
   );
+
+  it('opens the older-photo dialog with the hint that only a tighter crop is possible', async () => {
+    mocks.apiFetch
+      .mockResolvedValueOnce(image(mainBlob()))
+      .mockResolvedValueOnce(json({ id: 7 }))
+      .mockResolvedValueOnce(json({ id: 7, imageCrop: CROP }));
+    mocks.openCropEditor.mockResolvedValue(cropResult());
+
+    expect(await adjustPhoto(ROUTE, undefined, SHAPE)).not.toBeNull();
+
+    expect(mocks.openCropEditor).toHaveBeenCalledTimes(1);
+    expect(mocks.openCropEditor.mock.calls[0]?.[1]?.hint).toBe(t('crop_editor_legacy_hint'));
+    expect(t('crop_editor_legacy_hint')).not.toBe('crop_editor_legacy_hint');
+  });
 
   it('falls back to the current image when the stored original is gone', async () => {
     const storedResponse = json({ id: 7, imageCrop: CROP });

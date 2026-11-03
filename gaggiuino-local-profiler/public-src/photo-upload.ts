@@ -67,7 +67,9 @@ export async function adjustPhoto(imageUrl: string, imageCrop: unknown, shape: P
     }
     const current = await apiFetch(imageUrl, { cache: 'no-cache' });
     if (!current.ok) return current;
-    const result = await openCropEditor(await current.blob(), { ...shape });
+    // The dialog shows the already-cropped image, so the user can only cut it
+    // tighter — say so, or the missing widened area looks like a bug.
+    const result = await openCropEditor(await current.blob(), { ...shape, hint: t('crop_editor_legacy_hint') });
     if (!result) return null;
     return saveNewPhoto(imageUrl, result);
   } finally {
