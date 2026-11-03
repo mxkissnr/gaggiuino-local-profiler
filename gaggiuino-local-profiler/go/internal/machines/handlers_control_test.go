@@ -200,6 +200,60 @@ func TestFirmwareProgress_HappyPath(t *testing.T) {
 	}
 }
 
+// #1876: the machine's progress body must reach the client byte-for-byte.
+// Firmware main-8aaf6f0 and later append a migration object that GLP has no
+// model for, so any re-marshal would silently drop it.
+func TestFirmwareProgress_PassesMigrationThrough(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	const payload = `{"progress":95,"status":"IN_PROGRESS","type":"F_FW","migration":{"layoutVersion":2,"layout":"s3-v2","phase":7,"attempts":1,"retryAllowed":false,"error":"","productionVersion":"8aaf6f0","target":"s3-lcd","headless":false,"runningVersion":"8aaf6f0","available":true,"active":true,"state":"working","message":"","operation":"Downloading update","operationDone":0,"operationTotal":0,"activityAgeMs":0,"percent":95,"page":"/migration"}}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/firmware/progress" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(payload))
+	}))
+	defer srv.Close()
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Migrating"), Type: strPtr("gaggiuino"), Host: strPtr(srv.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/firmware/progress?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET firmware/progress status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", ct)
+	}
+	if got := rec.Body.String(); got != payload {
+		t.Fatalf("progress body was re-marshalled:\n got %s\nwant %s", got, payload)
+	}
+
+	body := decodeBody(t, rec.Body.Bytes())
+	migration, ok := body["migration"].(map[string]any)
+	if !ok {
+		t.Fatalf("migration missing from decoded body: %v", body)
+	}
+	if migration["active"] != true {
+		t.Fatalf("migration.active = %v, want true", migration["active"])
+	}
+	if migration["operation"] != "Downloading update" {
+		t.Fatalf("migration.operation = %v, want Downloading update", migration["operation"])
+	}
+	if migration["percent"] != float64(95) {
+		t.Fatalf("migration.percent = %v, want 95", migration["percent"])
+	}
+}
+
 // #1044: mirrors TestHandlers_SettingsProxy_CapabilityGating (handlers_test.go)
 // for the two firmware routes that test didn't cover.
 func TestFirmwareUpdateAndProgress_RequireSettingsProxySupport(t *testing.T) {

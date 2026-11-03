@@ -828,6 +828,7 @@
         .machine-firmware-update-banner a { color:var(--accent-text); font-size: var(--fs-1); text-decoration:underline; white-space:nowrap; }
         .machine-firmware-progress-bar { display:flex; align-items:center; gap: var(--sp-2); }
         .machine-firmware-progress-bar .machine-firmware-progress-label { font-size: var(--fs-1); color:var(--gray-500); white-space:nowrap; }
+        .machine-firmware-power-hint { font-size: var(--fs-1); color: var(--gray-400); }
 
         /* Machine colour theme (#594) */
         .machine-theme-picker-row { display:flex; align-items:center; gap: var(--sp-4); }
@@ -3281,6 +3282,7 @@
             overflow: hidden;
         }
         .sync-progress-fill {
+            display: block; /* the firmware panel's fill is a <span>; inline boxes ignore width/height */
             height: 100%;
             width: 0%;
             border-radius: 2px;

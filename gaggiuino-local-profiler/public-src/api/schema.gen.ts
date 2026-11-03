@@ -5571,7 +5571,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description { progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS } */
+                /** @description { progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS, optional migration object (firmware main-8aaf6f0 and later) } */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -8441,9 +8441,28 @@ export interface components {
             updateAvailable: boolean;
             releaseUrl: string | null;
         };
-        /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim (progress/status/type today). */
+        /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim. Firmware main-8aaf6f0 and later add an optional migration object for the partition migration that runs after an update; older firmware omits it. */
         FirmwareProgress: {
+            /** @description IDLE | IN_PROGRESS | SUCCESS | ERROR */
             status?: string;
+            progress?: number;
+            /** @description C_FW | F_FW | F_FS */
+            type?: string;
+            migration?: components["schemas"]["FirmwareMigration"];
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Post-update partition migration state as reported by the machine (Gaggiuino main-8aaf6f0 and later). Only the fields GLP reads are listed; the machine sends more. */
+        FirmwareMigration: {
+            active?: boolean;
+            /** @description idle | working | complete (observed values) */
+            state?: string;
+            phase?: number;
+            /** @description Human-readable current step, e.g. Downloading update */
+            operation?: string;
+            percent?: number;
+            /** @description Empty while no error */
+            error?: string;
         } & {
             [key: string]: unknown;
         };
