@@ -49,6 +49,7 @@ type fakeSupervisor struct {
 	blockAnnounce chan struct{}
 	blockDelete   chan struct{}
 
+	// posted closes when the first discovery POST arrives.
 	posted     chan struct{}
 	postedOnce sync.Once
 }
@@ -85,7 +86,9 @@ func (f *fakeSupervisor) handle(w http.ResponseWriter, r *http.Request) {
 	status, respBody := f.status, f.body
 	blockAnnounce, blockDelete := f.blockAnnounce, f.blockDelete
 	f.mu.Unlock()
-	f.postedOnce.Do(func() { close(f.posted) })
+	if r.Method == http.MethodPost {
+		f.postedOnce.Do(func() { close(f.posted) })
+	}
 
 	if status != 0 || respBody != "" {
 		if status != 0 {
@@ -263,11 +266,14 @@ func assertKeys(t *testing.T, m map[string]any, want ...string) {
 func TestStartSupervisorDiscovery_Announces(t *testing.T) {
 	f := newFakeSupervisor(t)
 	c := newSupervisorTestClient(t, f.srv)
+	logs := captureLogs(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := c.StartSupervisorDiscovery(ctx, "abc-gaggiuino-local-profiler", 8099)
 	f.waitPosted(t)
+	// Cancelling before the announce response lands would skip the withdraw.
+	waitAnnounced(t, logs, 1)
 	cancel()
 	waitClosed(t, done)
 
@@ -307,6 +313,7 @@ func TestStartSupervisorDiscovery_RejectsBadUUID(t *testing.T) {
 				f.body = `{"result":"ok","data":{"uuid":"` + bad + `"}}`
 			})
 			c := newSupervisorTestClient(t, f.srv)
+			captureLogs(t)
 
 			if _, err := c.announceDiscovery(context.Background(), "glp", 8099); err == nil {
 				t.Fatal("announceDiscovery with a malformed id: want an error, got nil")
