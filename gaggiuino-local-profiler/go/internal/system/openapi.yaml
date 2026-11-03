@@ -693,6 +693,15 @@ components:
         error: { type: string }
         code:  { type: string, enum: [unsupported_machine, unsupported_firmware, machine_unreachable, invalid_backup, machine_busy, operation_running] }
 
+    MachineBackupSettings:
+      type: object
+      description: "Automatic backup schedule and retention of one Gaggiuino machine (#1878); defaults daily and 10. keepAutomatic limits only scheduled backups: manual, pre-update and uploaded backups are never removed automatically"
+      required: [machineId, schedule, keepAutomatic]
+      properties:
+        machineId:     { type: integer, minimum: 1 }
+        schedule:      { type: string, enum: ["off", daily, weekly] }
+        keepAutomatic: { type: integer, minimum: 1, maximum: 100 }
+
     MachineInput:
       type: object
       required: [name, type, host]
@@ -3498,6 +3507,48 @@ paths:
               schema: { $ref: '#/components/schemas/MachineBackupError' }
         "502":
           description: "machine_unreachable when the status or settings fetch failed; invalid_backup when the machine's document cannot be stored"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+
+  /api/machine/backups/settings:
+    get:
+      tags: [MachineBackups]
+      summary: Read one machine's automatic backup schedule and retention
+      parameters:
+        - { name: machineId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: That machine's settings; defaults daily and 10 when never saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupSettings' }
+        "400": { description: Invalid machineId, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+    put:
+      tags: [MachineBackups]
+      summary: Replace one machine's automatic backup schedule and retention
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineBackupSettings' }
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupSettings' }
+        "400": { description: "Invalid JSON body, or machineId, schedule or keepAutomatic missing or out of range", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "413": { description: Request body over 4 KiB }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MachineBackupError' }

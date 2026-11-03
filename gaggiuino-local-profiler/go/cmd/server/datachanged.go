@@ -140,8 +140,9 @@ func buildDataRoutes() map[string]sse.Route {
 	add("POST /api/machine/profile/set", routeProfiles)
 	add("POST /api/machine/profile/save", routeProfiles)
 
-	// settings — the shot defaults, the machine registry, and the broker/MCP/
-	// import/machine-control options, all stored in GLP's own database.
+	// settings — the shot defaults, the machine registry, the broker/MCP/
+	// import/machine-control options, and the machine backup schedule, all
+	// stored in GLP's own database.
 	add("POST /api/shots/defaults", routeSettings)
 	add("POST /api/machines", routeSettings)
 	add("PUT /api/machines/{id}", routeSettings)
@@ -151,6 +152,7 @@ func buildDataRoutes() map[string]sse.Route {
 	add("POST /api/mcp/settings", routeSettings)
 	add("POST /api/import/settings", routeSettings)
 	add("POST /api/machine/control/settings", routeSettings)
+	add("PUT /api/machine/backups/settings", routeSettings)
 
 	// all — a whole-database change: every kind is bumped and one all event
 	// tells the client to refetch everything.

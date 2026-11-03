@@ -6466,6 +6466,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/machine/backups/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one machine's automatic backup schedule and retention */
+        get: {
+            parameters: {
+                query: {
+                    machineId: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description That machine's settings; defaults daily and 10 when never saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupSettings"];
+                    };
+                };
+                /** @description Invalid machineId */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        /** Replace one machine's automatic backup schedule and retention */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MachineBackupSettings"];
+                };
+            };
+            responses: {
+                /** @description The saved settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupSettings"];
+                    };
+                };
+                /** @description Invalid JSON body, or machineId, schedule or keepAutomatic missing or out of range */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Request body over 4 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/machine/backups/{id}": {
         parameters: {
             query?: never;
@@ -8335,6 +8458,13 @@ export interface components {
             error: string;
             /** @enum {string} */
             code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running";
+        };
+        /** @description Automatic backup schedule and retention of one Gaggiuino machine (#1878); defaults daily and 10. keepAutomatic limits only scheduled backups: manual, pre-update and uploaded backups are never removed automatically */
+        MachineBackupSettings: {
+            machineId: number;
+            /** @enum {string} */
+            schedule: "off" | "daily" | "weekly";
+            keepAutomatic: number;
         };
         MachineInput: {
             name: string;
