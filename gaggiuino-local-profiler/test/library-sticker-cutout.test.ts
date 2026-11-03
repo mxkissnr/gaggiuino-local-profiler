@@ -256,24 +256,23 @@ describe('bean-form Crop photo button (#1845)', () => {
     expect(adjustBtn().style.display).toBe('none');
   });
 
-  it('wires the button with onclick and opens the stored original', async () => {
+  it('wires the button with onclick and re-crops at the stored crop', async () => {
     const bean = { id: 9, name: 'B', image: 'jpg', imageCrop: CROP, bags: [] };
     S.coffeeLibrary.beans = [bean];
     mocks.isStickerCutoutAvailable.mockResolvedValue(true);
-    mocks.apiFetch.mockResolvedValue(image(jpeg('original')));
-    mocks.openCropEditor.mockResolvedValue(null);
+    mocks.apiFetch
+      .mockResolvedValueOnce(image(jpeg('original')))
+      .mockResolvedValueOnce(json({ id: 9, name: 'B', image: 'jpg', imageCrop: NEW_CROP, bags: [] }));
+    mocks.openCropEditor.mockResolvedValue({ blob: jpeg('cropped'), crop: NEW_CROP, original: jpeg() });
 
     library.openBeanForm(bean);
     expect(typeof adjustBtn().onclick).toBe('function');
 
     adjustBtn().onclick?.();
     await vi.waitFor(() => {
-      expect(calls().some(c => c.url === `${route(9)}?original=1`)).toBe(true);
+      expect(S.coffeeLibrary.beans[0]?.imageCrop).toEqual(NEW_CROP);
     });
-    // Let the dialog's cancelled result settle before the single-flight flag is
-    // read by the next test.
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(mocks.openCropEditor).toHaveBeenCalledTimes(1);
+    expect(calls().map(c => c.url)).toContain(`${route(9)}?original=1`);
   });
 });
 
@@ -299,7 +298,7 @@ describe('adjustBeanImage (#1845)', () => {
     expect(stored?.url).toBe(`${route(7)}?original=1`);
     expect(stored?.opts?.cache).toBe('no-cache');
     expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
-    expect(await (mocks.openCropEditor.mock.calls[0]?.[0] as Blob).text()).toBe('original');
+    expect(await mocks.openCropEditor.mock.calls[0]?.[0].text()).toBe('original');
     expect(recrop?.url).toBe(`${route(7)}?crop=${NEW_CROP_QUERY}`);
     expect(recrop?.opts?.method).toBe('POST');
     expect(recrop?.opts?.body).toBeUndefined();
@@ -340,7 +339,7 @@ describe('adjustBeanImage (#1845)', () => {
     expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), {
       shape: 'square', aspect: 'portrait', hint: t('crop_editor_legacy_hint'),
     });
-    expect(await (mocks.openCropEditor.mock.calls[0]?.[0] as Blob).text()).toBe('current');
+    expect(await mocks.openCropEditor.mock.calls[0]?.[0].text()).toBe('current');
     expect(mocks.openCropEditor.mock.calls[0]?.[1]?.['initialCrop']).toBeUndefined();
     expect(posted?.url).toBe(route(7));
     expect(posted?.opts?.method).toBe('POST');
@@ -367,7 +366,7 @@ describe('adjustBeanImage (#1845)', () => {
     await adjustBeanImage();
 
     expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
-    expect(await (mocks.openCropEditor.mock.calls[0]?.[0] as Blob).text()).toBe('original');
+    expect(await mocks.openCropEditor.mock.calls[0]?.[0].text()).toBe('original');
     expect(mocks.openStickerEditor).toHaveBeenCalledWith(cropped);
     expect(mocks.openCropEditor.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.openStickerEditor.mock.invocationCallOrder[0] ?? 0);
@@ -424,11 +423,10 @@ describe('cutOutBeanSticker (#1336)', () => {
   it('fetches the photo, uploads the PNG and re-saves the original of a cropped photo', async () => {
     S.beanEditId = 7;
     S.coffeeLibrary.beans = [{ id: 7, name: 'B', image: 'jpg', imageCrop: CROP, bags: [] }];
-    const photo = jpeg('photo');
     const original = jpeg('original');
     const cutout = png();
     mocks.apiFetch
-      .mockResolvedValueOnce(image(photo))
+      .mockResolvedValueOnce(image(jpeg('photo')))
       .mockResolvedValueOnce(image(original))
       .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', bags: [] }))
       .mockResolvedValueOnce(json({ id: 7, name: 'B', image: 'png', imageCrop: CROP, bags: [] }));
@@ -443,7 +441,7 @@ describe('cutOutBeanSticker (#1336)', () => {
     expect(fetchedOriginal?.url).toBe(`${route(7)}?original=1`);
     expect(fetchedOriginal?.opts?.cache).toBe('no-cache');
     expect(mocks.openStickerEditor).toHaveBeenCalledWith(expect.any(Blob));
-    expect(await (mocks.openStickerEditor.mock.calls[0]?.[0] as Blob).text()).toBe('photo');
+    expect(await mocks.openStickerEditor.mock.calls[0]?.[0].text()).toBe('photo');
     expect(posted?.url).toBe(route(7));
     expect(posted?.opts?.method).toBe('POST');
     expect(contentType(posted)).toBe('image/png');
