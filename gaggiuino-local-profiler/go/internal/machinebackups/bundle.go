@@ -82,7 +82,7 @@ func ExportSettings(db *sql.DB) (map[int64]Settings, error) {
 // stored backups untouched rather than destroying them.
 func RestoreBundle(db *sql.DB, raw json.RawMessage, now time.Time) (restored, skipped int, err error) {
 	var items []json.RawMessage
-	if err := json.Unmarshal(raw, &items); err != nil || items == nil {
+	if json.Unmarshal(raw, &items) != nil || items == nil {
 		log.Printf("machinebackups: restore: machine_backups is not a list, stored backups left untouched")
 		return 0, 0, nil
 	}

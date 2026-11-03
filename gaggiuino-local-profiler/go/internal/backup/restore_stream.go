@@ -191,16 +191,16 @@ func decodeInlineImages(v any) map[string][]byte {
 // writeBundleJSON / gatherSmallSections can export (glp_backup, version,
 // created, sections, shots, annotations, coffee_library, blocklist, trash,
 // maintenance, maintenance_log, orders, machines, machine_backups,
-// achievements, kv, secrets,
-// images) plus the request-only keys the handler injects (dryRun, passphrase,
-// sections). parseBundleStream keeps every one of these in memory — they are
-// all small relative to a shots array — and skips any other key without
-// decoding it (#1601).
+// achievements, kv, secrets, images) plus the request-only keys the handler
+// injects (dryRun, passphrase, sections). parseBundleStream keeps every one of
+// these in memory — they are all small relative to a shots array — and skips
+// any other key without decoding it (#1601).
 var knownBundleKeys = map[string]bool{
 	"glp_backup": true, "version": true, "created": true, "sections": true,
 	"shots": true, "annotations": true, "coffee_library": true, "blocklist": true,
 	"trash": true, "maintenance": true, "maintenance_log": true, "orders": true,
-	"machines": true, "machine_backups": true, "achievements": true, "kv": true, "secrets": true,
+	"machines": true, "machine_backups": true, "achievements": true, "kv": true,
+	"secrets": true,
 	"images": true, "dryRun": true, "passphrase": true,
 }
 
