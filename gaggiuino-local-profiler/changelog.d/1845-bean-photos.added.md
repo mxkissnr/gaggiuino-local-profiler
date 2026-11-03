@@ -1,1 +1,0 @@
-- **Bean photos can be re-cropped later** with the Crop photo button, sticker cut-outs included. Part of #1845
