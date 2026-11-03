@@ -148,6 +148,10 @@ EXPOSE 8099
 # GET / serves internal/webapp's SPA shell — always 200 without a token
 # (auth.RequireToken's GET/HEAD static bypass), so this only proves the
 # HTTP server itself answers, not DB/auth state.
+# Home Assistant Supervisor acts on this check (#1850): with the app's
+# Watchdog switch on, an "unhealthy" container is restarted. That is why
+# config.yaml has no `watchdog:` URL -- it would only poll the same page a
+# second time.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD wget -q --spider http://localhost:8099/ || exit 1
 
