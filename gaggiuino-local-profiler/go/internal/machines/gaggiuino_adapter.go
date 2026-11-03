@@ -238,6 +238,30 @@ func (a *GaggiuinoAdapter) GetServiceLog(ctx context.Context, m *Machine) (Servi
 	}, nil
 }
 
+// epochSecondsToTime converts one of the service log's epoch-second
+// timestamp fields to a UTC time.Time, returning the zero time for 0 (never),
+// a missing field, or any non-numeric value.
+func epochSecondsToTime(v any) time.Time {
+	var sec int64
+	switch t := v.(type) {
+	case float64:
+		if t <= 0 || t > float64(math.MaxInt64) {
+			return time.Time{}
+		}
+		sec = int64(t)
+	case int64:
+		sec = t
+	case int:
+		sec = int64(t)
+	default:
+		return time.Time{}
+	}
+	if sec <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(sec, 0).UTC()
+}
+
 // ── #1878 machine settings backup ───────────────────────────────────────
 
 // MaxSettingsBackupBytes is the machine's own restore limit (256 KiB), so a
@@ -280,30 +304,6 @@ func (a *GaggiuinoAdapter) GetSettingsBackup(ctx context.Context, m *Machine) ([
 		return nil, ErrSettingsBackupTooLarge
 	}
 	return body, nil
-}
-
-// epochSecondsToTime converts one of the service log's epoch-second
-// timestamp fields to a UTC time.Time, returning the zero time for 0 (never),
-// a missing field, or any non-numeric value.
-func epochSecondsToTime(v any) time.Time {
-	var sec int64
-	switch t := v.(type) {
-	case float64:
-		if t <= 0 || t > float64(math.MaxInt64) {
-			return time.Time{}
-		}
-		sec = int64(t)
-	case int64:
-		sec = t
-	case int:
-		sec = int64(t)
-	default:
-		return time.Time{}
-	}
-	if sec <= 0 {
-		return time.Time{}
-	}
-	return time.Unix(sec, 0).UTC()
 }
 
 // ── #597 settings/control proxy ─────────────────────────────────────────
