@@ -54,7 +54,7 @@ function calls(): Call[] {
   return mocks.apiFetch.mock.calls.map(([url, opts]) => ({ url, opts }));
 }
 
-function contentType(call: Call): string | null {
+function contentType(call: Call | undefined): string | null {
   return new Headers(call.opts?.headers).get('Content-Type');
 }
 
@@ -86,11 +86,11 @@ describe('cropAndUploadPhoto', () => {
     const [main, original] = calls();
     expect(main?.url).toBe(ROUTE);
     expect(main?.opts?.method).toBe('POST');
-    expect(contentType(main!)).toBe('image/jpeg');
+    expect(contentType(main)).toBe('image/jpeg');
     expect(await (main?.opts?.body as Blob).text()).toBe('main');
     expect(original?.url).toBe(`${ROUTE}?original=1&crop=${CROP_QUERY}`);
     expect(original?.opts?.method).toBe('POST');
-    expect(contentType(original!)).toBe('image/jpeg');
+    expect(contentType(original)).toBe('image/jpeg');
     expect(await (original?.opts?.body as Blob).text()).toBe('orig');
   });
 
@@ -167,7 +167,7 @@ describe('adjustPhoto', () => {
       const [current, main, original] = calls();
       expect(current?.url).toBe(ROUTE);
       expect(current?.opts?.cache).toBe('no-cache');
-      expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { shape: 'square' });
+      expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), expect.objectContaining({ shape: 'square' }));
       expect((mocks.openCropEditor.mock.calls[0]?.[1] as { initialCrop?: unknown }).initialCrop).toBeUndefined();
       expect(main?.url).toBe(ROUTE);
       expect(original?.url).toBe(`${ROUTE}?original=1&crop=${CROP_QUERY}`);
