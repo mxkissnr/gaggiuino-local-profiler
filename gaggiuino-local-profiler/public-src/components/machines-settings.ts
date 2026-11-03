@@ -19,7 +19,7 @@ import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
 import { esc as escapeHtml, html, joinHtml, safeHttpUrl } from '../utils.js';
 import type { Html } from '../utils.js';
 import type { MachineRecord } from '../state/index.js';
-import type { FirmwareVersion, MachineSaveInput } from '../api/types.js';
+import type { FirmwareProgress, FirmwareVersion, MachineSaveInput } from '../api/types.js';
 import { safeLocalStorage } from '../storage.js';
 
 // The edit form's theme selection (a preset key, or custom {a,b} stops), the
@@ -36,13 +36,18 @@ interface MachineView extends MachineRecord {
   hasWaterSensor?: boolean;
   isDefault?: boolean;
 }
-interface FirmwareProgress { status?: string; progress?: number | string; type?: string }
+type FirmwareMigration = NonNullable<FirmwareProgress['migration']>;
 interface FirmwarePoll {
   timer?: ReturnType<typeof setTimeout>;
-  ticks: number;
+  startedAt: number;
   failCount: number;
   seenActive: boolean;
 }
+export type FirmwarePollStep =
+  | { kind: 'show'; progress: FirmwareProgress }
+  | { kind: 'restarting' }
+  | { kind: 'wait' }
+  | { kind: 'done'; result: 'success' | 'failed' | 'error' | 'timeout'; detail?: string };
 
 // preset key -> i18n label key, e.g. 'ember-espresso' -> 'theme_preset_ember_espresso'.
 export function presetLabelKey(key: string): string {
@@ -603,16 +608,94 @@ async function _saveReleaseChannel(machineId: string | number): Promise<void> {
 // progress on the backend, so this is polling-only throughout.
 
 const FIRMWARE_POLL_INTERVAL_MS = 2000;
-// ~10 minutes of polling before giving up inconclusively -- a real OTA
-// (download + flash + reboot) normally finishes well inside this.
-const FIRMWARE_POLL_MAX_TICKS = 300;
+// #1876: ~20 minutes of wall clock before giving up inconclusively -- about
+// twice the ~9 minutes observed for update plus migration on main-8aaf6f0.
+// Wall clock rather than successful polls, so the unreachable stretches (the
+// machine reboots several times) count towards it too.
+export const FIRMWARE_POLL_MAX_MS = 20 * 60 * 1000;
+// #1876: the machine reboots once more right after reporting the migration
+// complete, so the badge's status reload waits for that reboot to finish.
+export const FIRMWARE_STATUS_RELOAD_DELAY_MS = 15000;
 
-// machineId -> { timer, ticks, failCount, seenActive } -- one entry per
+// machineId -> { timer, startedAt, failCount, seenActive } -- one entry per
 // machine currently polling update progress. Every Gaggiuino machine's row
 // can poll independently now that this lives in the list rather than the
 // single-machine-at-a-time edit form, so a Map replaces the old
 // _firmwarePollTimer/_firmwarePollMachineId single-poll pair.
 const _firmwarePolls = new Map<number, FirmwarePoll>();
+
+// #1876: an active migration always counts as busy, whatever `status` says --
+// the machine reports IDLE between the flash and the migration start.
+function isMigrationBusy(migration: FirmwareMigration | undefined): boolean {
+  return migration?.active === true || String(migration?.state ?? '').toLowerCase() === 'working';
+}
+
+export function isFirmwareBusy(p: FirmwareProgress): boolean {
+  return String(p.status || '').toUpperCase() === 'IN_PROGRESS' || isMigrationBusy(p.migration);
+}
+
+// Machine-provided text ends up in a nowrap toast, so cap it; '' means "the
+// firmware reported ERROR without a migration error to explain it".
+export function firmwareErrorDetail(p: FirmwareProgress): string | null {
+  const raw = p.migration?.error;
+  if (typeof raw === 'string' && raw.trim()) return raw.trim().slice(0, 120);
+  return String(p.status || '').toUpperCase() === 'ERROR' ? '' : null;
+}
+
+export function firmwareProgressPercent(p: FirmwareProgress): number {
+  const migration = p.migration;
+  const raw = isMigrationBusy(migration) && typeof migration?.percent === 'number' && Number.isFinite(migration.percent)
+    ? migration.percent
+    : p.progress;
+  return Math.round(Math.max(0, Math.min(100, Number(raw) || 0)));
+}
+
+// #1876: one poll step, driven by what the machine reports rather than by a
+// failure count. Observed on main-8aaf6f0 (2026-11-03): three update stages,
+// reboot/unreachable, IDLE with migration.active, a migration outage of about
+// four minutes, then SUCCESS with migration complete. Older firmware sends no
+// migration at all and goes busy -> idle/success, or busy -> unreachable ->
+// idle; the "seen active" rules below cover both shapes.
+export function firmwarePollStep(poll: FirmwarePoll, progress: FirmwareProgress | null, now: number): FirmwarePollStep {
+  let step: FirmwarePollStep;
+  if (progress && isFirmwareBusy(progress)) {
+    // Busy wins over an error field: never tell the user it is over while the
+    // machine reports an active migration.
+    poll.failCount = 0;
+    poll.seenActive = true;
+    step = { kind: 'show', progress };
+  } else if (progress) {
+    const detail = firmwareErrorDetail(progress);
+    if (detail !== null) {
+      poll.failCount++;
+      step = poll.seenActive || poll.failCount >= 3
+        ? { kind: 'done', result: 'error', detail }
+        : { kind: 'wait' };
+    } else if (poll.seenActive) {
+      step = { kind: 'done', result: 'success' };
+    } else {
+      // Not started yet -- the trigger may just not have reached the machine.
+      poll.failCount = 0;
+      step = { kind: 'wait' };
+    }
+  } else if (poll.seenActive) {
+    step = { kind: 'restarting' }; // expected reboot or migration outage
+  } else {
+    poll.failCount++;
+    step = poll.failCount >= 3 ? { kind: 'done', result: 'failed' } : { kind: 'wait' };
+  }
+  if (step.kind !== 'done' && now - poll.startedAt >= FIRMWARE_POLL_MAX_MS) {
+    return { kind: 'done', result: 'timeout' };
+  }
+  return step;
+}
+
+export function setFirmwareUpdateBusy(row: HTMLElement, busy: boolean): void {
+  const banner = row.querySelector<HTMLElement>('.machine-firmware-update-banner');
+  if (banner) banner.style.display = busy ? 'none' : '';
+  const btn = row.querySelector<HTMLButtonElement>('.machine-firmware-update-btn');
+  if (btn) btn.disabled = busy;
+}
 
 function stopFirmwarePolling(machineId: number): void {
   const poll = _firmwarePolls.get(machineId);
@@ -684,6 +767,7 @@ function renderFirmwarePanelHtml(): Html {
       <span class="machine-firmware-progress-label"></span>
       <span class="sync-progress-track"><span class="sync-progress-fill"></span></span>
     </span>
+    <span class="machine-firmware-power-hint" style="display:none">${escapeHtml(t('settings_machine_firmware_keep_powered'))}</span>
   </span>`;
 }
 
@@ -698,89 +782,101 @@ function toggleMachineFirmwarePanel(row: HTMLElement): void {
   badge?.setAttribute('aria-expanded', String(show));
 }
 
-async function triggerMachineFirmwareUpdate(machineId: number, row: HTMLElement): Promise<void> {
-  const btn = row.querySelector<HTMLButtonElement>('.machine-firmware-update-btn');
-  if (btn) btn.disabled = true;
+export async function triggerMachineFirmwareUpdate(machineId: number, row: HTMLElement): Promise<void> {
+  setFirmwareUpdateBusy(row, true);
+  // A reload mid-update re-renders the banner with an enabled button even
+  // though the machine is still flashing -- adopt the running update instead
+  // of posting a second one.
+  try {
+    const current = await machinesApi.getFirmwareProgress(machineId);
+    if (current && isFirmwareBusy(current)) {
+      startFirmwarePolling(machineId, row, true);
+      return;
+    }
+  } catch { /* fall through and post the update as usual */ }
   try {
     const r = await machinesApi.triggerFirmwareUpdate(machineId);
     if (!r.ok) {
       const data = await r.json().catch(() => ({})) as { error?: string; id?: number; reachable?: boolean };
       if (window.showToast) window.showToast(t('settings_machine_firmware_trigger_failed', data.error || r.status));
-      if (btn) btn.disabled = false;
+      setFirmwareUpdateBusy(row, false);
       return;
     }
     startFirmwarePolling(machineId, row);
   } catch {
     if (window.showToast) window.showToast(t('settings_machine_firmware_trigger_failed', ''));
-    if (btn) btn.disabled = false;
+    setFirmwareUpdateBusy(row, false);
   }
 }
 
-function startFirmwarePolling(machineId: number, row: HTMLElement): void {
+function startFirmwarePolling(machineId: number, row: HTMLElement, seenActive = false): void {
   stopFirmwarePolling(machineId);
-  const btn = row.querySelector<HTMLButtonElement>('.machine-firmware-update-btn');
-  if (btn) btn.disabled = true;
-  const poll: FirmwarePoll = { ticks: 0, failCount: 0, seenActive: false };
+  setFirmwareUpdateBusy(row, true);
+  const poll: FirmwarePoll = { startedAt: Date.now(), failCount: 0, seenActive };
   _firmwarePolls.set(machineId, poll);
   void _pollFirmwareProgressTick(machineId, row, poll);
 }
 
-// #1044: the machine reboots to apply the OTA near the end of a real
-// update, so a short run of fetch failures right after having seen active
-// progress is the expected "device is rebooting" shape, not a genuine
-// error -- treated as success below. A failure run with no active progress
-// ever observed (machine simply unreachable) is a genuine failure instead.
+// #1876: the machine reboots to apply the OTA and again for the migration, so
+// an unreachable stretch after active progress is expected and is shown as
+// "restarting", not counted as a failure. Only an ERROR answer, a migration
+// error, an unreachable machine that never started, or the wall-clock cap ends
+// the poll without success.
 async function _pollFirmwareProgressTick(machineId: number, row: HTMLElement, poll: FirmwarePoll): Promise<void> {
   // A stale cycle (row replaced by a later renderMachinesList() call, or a
   // second trigger click that restarted polling for this machine) must not
   // keep writing into now-irrelevant DOM/state -- mirrors the connection
   // test's own still-current-machine guard.
   if (_firmwarePolls.get(machineId) !== poll) return;
-  let ok = false;
   let progress: FirmwareProgress | null = null;
   try {
     progress = await machinesApi.getFirmwareProgress(machineId);
-    ok = progress !== null;
-  } catch { /* ok stays false */ }
+  } catch { /* treated as unreachable, same as null */ }
   if (_firmwarePolls.get(machineId) !== poll) return; // went stale while the fetch was in flight
 
-  if (!ok || !progress) {
-    poll.failCount++;
-    if (poll.failCount >= 3) { finishFirmwarePolling(machineId, row, poll.seenActive); return; }
-    poll.timer = setTimeout(() => void _pollFirmwareProgressTick(machineId, row, poll), FIRMWARE_POLL_INTERVAL_MS);
+  const step = firmwarePollStep(poll, progress, Date.now());
+  if (step.kind === 'show') {
+    renderFirmwareProgressBar(row, step.progress);
+  } else if (step.kind === 'restarting') {
+    renderFirmwareRestarting(row);
+  } else if (step.kind === 'done') {
+    finishFirmwarePolling(machineId, row, step.result, step.detail);
     return;
   }
-  poll.failCount = 0;
-
-  const active = String(progress.status || '').toUpperCase() !== 'IDLE';
-  if (active) {
-    poll.seenActive = true;
-    renderFirmwareProgressBar(row, progress);
-  } else if (poll.seenActive) {
-    // Was active, now idle again -- the update ran to completion.
-    finishFirmwarePolling(machineId, row, true);
-    return;
-  }
-  // else: still idle and never seen active yet -- the trigger may not have
-  // taken effect on the machine's side yet, keep polling.
-
-  poll.ticks++;
-  if (poll.ticks >= FIRMWARE_POLL_MAX_TICKS) { finishFirmwarePolling(machineId, row, null); return; }
   poll.timer = setTimeout(() => void _pollFirmwareProgressTick(machineId, row, poll), FIRMWARE_POLL_INTERVAL_MS);
 }
 
-// success: true = update completed, false = genuinely unreachable/failed,
-// null = gave up inconclusively (safety-cap timeout) without claiming either.
-function finishFirmwarePolling(machineId: number, row: HTMLElement, success: boolean | null): void {
+function finishFirmwarePolling(
+  machineId: number,
+  row: HTMLElement,
+  result: 'success' | 'failed' | 'error' | 'timeout',
+  detail?: string,
+): void {
   stopFirmwarePolling(machineId);
   renderFirmwareProgressBar(row, null);
-  const btn = row.querySelector<HTMLButtonElement>('.machine-firmware-update-btn');
-  if (btn) btn.disabled = false;
-  if (success === true) {
+  if (result === 'success') {
     if (window.showToast) window.showToast(t('settings_machine_firmware_update_success_toast'));
-    void loadFirmwareStatus(machineId, row);
-  } else if (success === false) {
+    row.querySelector<HTMLElement>('.machine-row-firmware-panel')?.remove();
+    const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
+    if (badge) {
+      badge.textContent = t('settings_machine_firmware_checking');
+      badge.className = 'machine-row-firmware-badge machine-row-firmware-badge-muted';
+      badge.removeAttribute('title');
+    }
+    // The banner stays gone until the status reload says an update is
+    // available again, so it can never offer a second start in between.
+    setTimeout(() => void loadFirmwareStatus(machineId, row), FIRMWARE_STATUS_RELOAD_DELAY_MS);
+    return;
+  }
+  setFirmwareUpdateBusy(row, false);
+  if (result === 'failed') {
     if (window.showToast) window.showToast(t('settings_machine_firmware_update_failed_toast'));
+  } else if (result === 'error') {
+    if (window.showToast) {
+      window.showToast(detail
+        ? t('settings_machine_firmware_migration_failed_toast', detail)
+        : t('settings_machine_firmware_update_failed_toast'));
+    }
   } else {
     if (window.showToast) window.showToast(t('settings_machine_firmware_update_timeout_toast'));
   }
@@ -802,6 +898,10 @@ const FIRMWARE_STAGE_KEYS: Record<string, string> = {
 // "updating firmware" label otherwise -- an unrecognised (or absent) type
 // must still render something sane rather than an empty label.
 export function firmwareProgressLabel(progress: FirmwareProgress | null | undefined, pct: number): string {
+  if (isMigrationBusy(progress?.migration)) {
+    const op = String(progress?.migration?.operation ?? '').trim().slice(0, 80);
+    return t('settings_machine_firmware_migration_label', op, pct);
+  }
   const stageKey = FIRMWARE_STAGE_KEYS[String(progress?.type || '').toUpperCase()];
   return stageKey
     ? t('settings_machine_firmware_progress_stage_label', t(stageKey), pct)
@@ -814,13 +914,31 @@ export function firmwareProgressLabel(progress: FirmwareProgress | null | undefi
 function renderFirmwareProgressBar(row: HTMLElement, progress: FirmwareProgress | null): void {
   const bar = row.querySelector<HTMLElement>('.machine-firmware-progress-bar');
   if (!bar) return;
-  if (!progress) { bar.style.display = 'none'; return; }
+  const hint = row.querySelector<HTMLElement>('.machine-firmware-power-hint');
+  if (!progress) {
+    bar.style.display = 'none';
+    if (hint) hint.style.display = 'none';
+    return;
+  }
   const label = bar.querySelector('.machine-firmware-progress-label');
   const fill = bar.querySelector<HTMLElement>('.sync-progress-fill');
-  const pct = Math.round(Math.max(0, Math.min(100, Number(progress.progress) || 0)));
+  const pct = firmwareProgressPercent(progress);
   if (fill) fill.style.width = `${pct}%`;
   if (label) label.textContent = firmwareProgressLabel(progress, pct);
   bar.style.display = '';
+  if (hint) hint.style.display = '';
+}
+
+// The machine is unreachable between reboots: keep the bar (and the
+// keep-powered hint) visible, but say what is actually happening.
+function renderFirmwareRestarting(row: HTMLElement): void {
+  const bar = row.querySelector<HTMLElement>('.machine-firmware-progress-bar');
+  if (!bar) return;
+  const label = bar.querySelector('.machine-firmware-progress-label');
+  if (label) label.textContent = t('settings_machine_firmware_restarting');
+  const hint = row.querySelector<HTMLElement>('.machine-firmware-power-hint');
+  bar.style.display = '';
+  if (hint) hint.style.display = '';
 }
 
 // #1547: the machine form's fields are static in index.html; this module only
