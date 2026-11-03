@@ -177,6 +177,12 @@ func buildDataIgnored() map[string]string {
 	add("POST /api/orders/kiosk-key/rotate", "rotates the kiosk's own credential file; no database row or client-visible data changes")
 	add("/api/mcp", "MCP write tools publish their own data-changed events (slice 2)")
 
+	// #1878 machine settings backups: not part of live sync (like achievements);
+	// the backups sheet reloads its own list, and the daily scheduler stores rows
+	// without any route at all.
+	add("POST /api/machine/backups", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
+	add("DELETE /api/machine/backups/{id}", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
+
 	// Machine-side control: the controller acts, GLP's database does not change.
 	add("POST /api/machine/flush/start", "machine-side only: starts a flush on the controller")
 	add("POST /api/machine/flush/stop", "machine-side only: stops a flush on the controller")

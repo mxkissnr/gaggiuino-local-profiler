@@ -669,6 +669,29 @@ components:
         enabled:      { type: boolean }
         createdAt:    { type: integer, description: Unix ms }
 
+    MachineBackup:
+      type: object
+      description: "A stored Gaggiuino settings backup (#1878), metadata only; GLP never stores the machine's Wi-Fi block or its MQTT/visualizer credentials"
+      required: [id, machineId, createdAt, kind, firmwareCore, firmwareFrontend, profileCount, sizeBytes, contentHash, note]
+      properties:
+        id:               { type: integer }
+        machineId:        { type: integer, description: "may name a deleted machine; its backups are kept" }
+        createdAt:        { type: integer, description: Unix ms }
+        kind:             { type: string, enum: [manual, scheduled, pre_update, uploaded] }
+        firmwareCore:     { type: string }
+        firmwareFrontend: { type: string }
+        profileCount:     { type: integer }
+        sizeBytes:        { type: integer }
+        contentHash:      { type: string }
+        note:             { type: string, maxLength: 200 }
+
+    MachineBackupError:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string }
+        code:  { type: string, enum: [unsupported_machine, unsupported_firmware, machine_unreachable, invalid_backup, machine_busy, operation_running] }
+
     MachineInput:
       type: object
       required: [name, type, host]
@@ -3418,6 +3441,72 @@ paths:
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
 
+  /api/machine/backups:
+    get:
+      tags: [MachineBackups]
+      summary: List stored machine settings backups, newest first (deleted machines included)
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer, minimum: 1 }, description: "Only this machine's backups; omitted means every machine" }
+      responses:
+        "200":
+          description: Array of backups, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MachineBackup' } }
+        "400": { description: Invalid machineId, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      tags: [MachineBackups]
+      summary: Back up now — fetch the machine's settings and store a new manual entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [machineId]
+              properties:
+                machineId: { type: integer, minimum: 1 }
+                note:      { type: string }
+      responses:
+        "201":
+          description: The stored backup
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackup' }
+        "400": { description: Invalid JSON body, or machineId missing or below 1, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "409":
+          description: "operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "413": { description: Request body over 4 KiB }
+        "429": { description: Rate limit exceeded — per-IP back-up-now limit, 10/min }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "502":
+          description: "machine_unreachable when the status or settings fetch failed; invalid_backup when the machine's document cannot be stored"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+
+  /api/machine/backups/{id}:
+    delete:
+      tags: [MachineBackups]
+      summary: Delete one stored backup, of any kind (also one of a deleted machine)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: "{ ok: true }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        "404": { description: Backup not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
   /api/machines:
     get:
       tags: [Machines]
@@ -4043,6 +4132,8 @@ tags:
     description: App status, manual sync, machine switch, live data, preheat
   - name: Machines
     description: "Multi-machine registry (#317) — add/remove/test additional Gaggiuino or GaggiMate machines"
+  - name: MachineBackups
+    description: "Gaggiuino machine settings backups (#1878) — stored without Wi-Fi/MQTT secrets; Gaggiuino machines only"
   - name: Backup
     description: Full backup and restore
   - name: Import

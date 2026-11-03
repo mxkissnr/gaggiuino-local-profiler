@@ -521,6 +521,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		KnownOffline: poller.MachineKnownOffline,
 	}).Start(ctx)
 
+	// #1878: list / back up now / delete routes. They share machineBackupsRepo,
+	// and with it the per-machine lock, with the scheduler above.
+	machinebackups.NewHandlers(machinebackups.HandlerDeps{
+		Repo:     machineBackupsRepo,
+		Machines: registry,
+		Client:   machinebackups.ClientFor(machinesHandlers),
+	}).RegisterRoutes(mux)
+
 	// #1152: purge expired trash once at startup and then every 24h —
 	// StartTrashPurge does the immediate purge plus a 24h ticker bound to ctx.
 	shots.StartTrashPurge(ctx, shots.NewService(shotsRepo), 24*time.Hour)
