@@ -238,6 +238,50 @@ func (a *GaggiuinoAdapter) GetServiceLog(ctx context.Context, m *Machine) (Servi
 	}, nil
 }
 
+// ── #1878 machine settings backup ───────────────────────────────────────
+
+// MaxSettingsBackupBytes is the machine's own restore limit (256 KiB), so a
+// larger document could never be restored and is not worth storing.
+const MaxSettingsBackupBytes = 256 << 10
+
+// ErrSettingsBackupUnsupported reports that the machine's firmware has no
+// /api/settings/backup endpoint (HTTP 404 — firmware older than main-8aaf6f0).
+var ErrSettingsBackupUnsupported = errors.New("machine firmware has no settings backup")
+
+// ErrSettingsBackupTooLarge reports that the machine's settings backup exceeds
+// the size the machine itself accepts on restore.
+var ErrSettingsBackupTooLarge = errors.New("machine settings backup is larger than 256 KiB")
+
+// GetSettingsBackup fetches the machine's full settings backup document
+// (#1878). Gaggiuino-only and deliberately not on the Adapter interface, same
+// as GetServiceLog: only the Gaggiuino firmware serves this endpoint. The body
+// holds the machine's Wi-Fi and MQTT secrets, so callers must strip them
+// before storing it and must never log it. A 404 maps to
+// ErrSettingsBackupUnsupported.
+func (a *GaggiuinoAdapter) GetSettingsBackup(ctx context.Context, m *Machine) ([]byte, error) {
+	baseURL, err := BaseURLFor(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	body, err := httpGetBytesCapped(ctx, baseURL+"/api/settings/backup", 10*time.Second, MaxSettingsBackupBytes+1)
+	if err != nil {
+		var httpErr *machineHTTPError
+		if errors.As(err, &httpErr) {
+			if httpErr.Status == http.StatusNotFound {
+				return nil, ErrSettingsBackupUnsupported
+			}
+			// The response body is dropped on purpose: it could carry part of
+			// the backup, which contains the machine's secrets.
+			return nil, fmt.Errorf("machine settings backup: machine responded %d", httpErr.Status)
+		}
+		return nil, err
+	}
+	if len(body) > MaxSettingsBackupBytes {
+		return nil, ErrSettingsBackupTooLarge
+	}
+	return body, nil
+}
+
 // epochSecondsToTime converts one of the service log's epoch-second
 // timestamp fields to a UTC time.Time, returning the zero time for 0 (never),
 // a missing field, or any non-numeric value.

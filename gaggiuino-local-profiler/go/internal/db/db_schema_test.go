@@ -85,11 +85,13 @@ func TestSchemaMatchesNodeFixture(t *testing.T) {
 	goOnlyTables := map[string]bool{
 		"shot_score_cache": true, // #957 read-through score cache
 		"machine_profiles": true, // offline profile editor local cache/outbox
+		"machine_backups":  true, // #1878 machine settings backups
 	}
 	goOnlyIndexes := map[string]bool{
 		"idx_shots_ts_id":              true, // #957 keyset-page order
 		"idx_machine_profiles_machine": true,
 		"idx_machine_profiles_remote":  true,
+		"idx_machine_backups_machine":  true,
 	}
 	for name := range goOnlyTables {
 		if _, ok := got.Tables[name]; !ok {
