@@ -13,16 +13,22 @@ g.navigator ??= { language: 'en-US' };
 // (vi.hoisted keeps the spies out of the module factory's temporal dead zone).
 const mocks = vi.hoisted(() => ({
   saveBean: vi.fn(),
-  uploadBeanImage: vi.fn(),
-  crop: vi.fn(),
+  apiFetch: vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(),
+  crop: vi.fn<(file: Blob, opts?: Record<string, unknown>) => Promise<unknown>>(),
 }));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
-  return { ...actual, saveBean: mocks.saveBean, uploadBeanImage: mocks.uploadBeanImage };
+  return { ...actual, saveBean: mocks.saveBean };
+});
+// photo-upload.ts reads transport.ts's apiFetch at call time, so this stub
+// intercepts the bean photo POSTs.
+vi.mock('../public-src/api/transport.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../public-src/api/transport.js')>();
+  return { ...actual, apiFetch: mocks.apiFetch };
 });
 vi.mock('../public-src/components/image-crop.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/components/image-crop.js')>();
-  return { ...actual, openImageCropEditor: mocks.crop };
+  return { ...actual, openCropEditor: mocks.crop };
 });
 
 interface ShelfBuckets {
@@ -437,35 +443,54 @@ function fakeLibraryDom(beanNameArg: string) {
 describe('staged new-bean photo (#1329 part 2)', () => {
   beforeEach(() => {
     mocks.saveBean.mockReset();
-    mocks.uploadBeanImage.mockReset();
+    mocks.apiFetch.mockReset();
     mocks.crop.mockReset();
+    g.alert = vi.fn();
     S.beanEditId = null;
     S.coffeeLibrary = { beans: [], recipes: [], grinders: [] };
     S._urlImportSource = null;
   });
 
-  it('uploads a staged photo after the bean is created', async () => {
+  it('uploads a staged photo plus its original after the bean is created', async () => {
     const { doc } = fakeLibraryDom('New Bean');
     g.document = doc;
-    mocks.crop.mockResolvedValue({});
+    const CROP = { x: 0, y: 0, w: 1, h: 0.75 };
+    const cropped = new Blob(['cropped'], { type: 'image/jpeg' });
+    const original = new Blob(['original'], { type: 'image/jpeg' });
+    mocks.crop.mockResolvedValue({ blob: cropped, crop: CROP, original });
     mocks.saveBean.mockResolvedValue({ id: 42, name: 'New Bean', bags: [] });
-    mocks.uploadBeanImage.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ id: 42, name: 'New Bean', image: 'jpg', bags: [] }),
-    });
+    mocks.apiFetch
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ id: 42, name: 'New Bean', image: 'jpg', bags: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ id: 42, name: 'New Bean', image: 'jpg', imageCrop: CROP, bags: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ));
 
     const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
     await library.stageNewBeanImage(input);
     await library.saveBeanNoBag();
 
-    expect(mocks.uploadBeanImage).toHaveBeenCalledTimes(1);
-    expect(mocks.uploadBeanImage.mock.calls[0]?.[0]).toBe(42);
+    const calls = mocks.apiFetch.mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.[0]).toBe('api/library/bean/42/image');
+    expect(calls[0]?.[1]?.method).toBe('POST');
+    expect(await (calls[0]?.[1]?.body as Blob).text()).toBe('cropped');
+    expect(calls[1]?.[0]).toBe('api/library/bean/42/image?original=1&crop=0,0,1,0.75');
+    expect(await (calls[1]?.[1]?.body as Blob).text()).toBe('original');
+    expect(S.coffeeLibrary.beans[0]?.imageCrop).toEqual(CROP);
   });
 
   it('does not upload after closeBeanForm() cleared the staged photo', async () => {
     const { doc } = fakeLibraryDom('Another Bean');
     g.document = doc;
-    mocks.crop.mockResolvedValue({});
+    mocks.crop.mockResolvedValue({
+      blob: new Blob(['cropped'], { type: 'image/jpeg' }),
+      crop: { x: 0, y: 0, w: 1, h: 0.75 },
+      original: new Blob(['original'], { type: 'image/jpeg' }),
+    });
     mocks.saveBean.mockResolvedValue({ id: 43, name: 'Another Bean', bags: [] });
 
     const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
@@ -473,7 +498,8 @@ describe('staged new-bean photo (#1329 part 2)', () => {
     library.closeBeanForm();
     await library.saveBeanNoBag();
 
-    expect(mocks.uploadBeanImage).not.toHaveBeenCalled();
+    const urls = mocks.apiFetch.mock.calls.map(([url]) => url);
+    expect(urls.some(url => url.includes('/image'))).toBe(false);
   });
 });
 
