@@ -190,7 +190,8 @@ func decodeInlineImages(v any) map[string][]byte {
 // knownBundleKeys is every top-level key the restore understands: each key
 // writeBundleJSON / gatherSmallSections can export (glp_backup, version,
 // created, sections, shots, annotations, coffee_library, blocklist, trash,
-// maintenance, maintenance_log, orders, machines, achievements, kv, secrets,
+// maintenance, maintenance_log, orders, machines, machine_backups,
+// achievements, kv, secrets,
 // images) plus the request-only keys the handler injects (dryRun, passphrase,
 // sections). parseBundleStream keeps every one of these in memory — they are
 // all small relative to a shots array — and skips any other key without
@@ -199,7 +200,7 @@ var knownBundleKeys = map[string]bool{
 	"glp_backup": true, "version": true, "created": true, "sections": true,
 	"shots": true, "annotations": true, "coffee_library": true, "blocklist": true,
 	"trash": true, "maintenance": true, "maintenance_log": true, "orders": true,
-	"machines": true, "achievements": true, "kv": true, "secrets": true,
+	"machines": true, "machine_backups": true, "achievements": true, "kv": true, "secrets": true,
 	"images": true, "dryRun": true, "passphrase": true,
 }
 
@@ -298,6 +299,17 @@ func parseBundleStream(r io.Reader, onShot func(raw json.RawMessage) error) (b m
 			if err := skipJSONValue(dec); err != nil {
 				return nil, 0, false, fmt.Errorf("invalid backup file (backup.json is not valid JSON)")
 			}
+			continue
+		}
+
+		if key == "machine_backups" {
+			// #1878: kept undecoded so each machine document's number literals
+			// survive byte for byte (a decode into any makes them float64).
+			var raw json.RawMessage
+			if err := dec.Decode(&raw); err != nil {
+				return nil, 0, false, fmt.Errorf("invalid backup file (backup.json is not valid JSON)")
+			}
+			b[key] = raw
 			continue
 		}
 

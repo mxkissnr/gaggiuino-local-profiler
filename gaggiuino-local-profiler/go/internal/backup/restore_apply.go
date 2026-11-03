@@ -1,14 +1,17 @@
 package backup
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machinebackups"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
@@ -62,6 +65,14 @@ func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Sh
 	if p.wantsMachines {
 		if _, err := d.Registry.RestoreMachines(p.restoredMachines); err != nil {
 			return err
+		}
+		// #1878: machine settings backups travel with the machines section. Ids
+		// may name other machines after the registry restore, so they are
+		// replaced, not merged; a bundle without the key leaves them alone.
+		if raw, ok := p.b["machine_backups"].(json.RawMessage); ok {
+			if _, _, err := machinebackups.RestoreBundle(d.DB, raw, time.Now()); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -164,6 +175,15 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 		if err := saveMqttSettings(d.DB, rest); err != nil {
 			return err
 		}
+	}
+	// #1878: per-machine backup schedule; machines are applied before kv, so
+	// only entries of Gaggiuino machines in the restored registry are kept.
+	keep := func(id int64) bool {
+		m, err := d.Registry.GetMachine(id)
+		return err == nil && m != nil && m.Type == "gaggiuino"
+	}
+	if err := machinebackups.RestoreSettings(d.DB, kv["machine_backup_settings"], keep); err != nil {
+		return err
 	}
 	return nil
 }
