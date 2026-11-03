@@ -64,6 +64,7 @@ const { adjustBeanImage } = (await import('../public-src/views/library/bean-stic
 };
 const { renderShelfTile } = (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
 const { S } = await import('../public-src/state/index.js');
+const { t } = await import('../public-src/i18n.js');
 
 const CROP = { x: 0.125, y: 0, w: 0.75, h: 1 };
 const CROP_QUERY = '0.125,0,0.75,1';
@@ -269,6 +270,10 @@ describe('bean-form Crop photo button (#1845)', () => {
     await vi.waitFor(() => {
       expect(calls().some(c => c.url === `${route(9)}?original=1`)).toBe(true);
     });
+    // Let the dialog's cancelled result settle before the single-flight flag is
+    // read by the next test.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(mocks.openCropEditor).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -293,7 +298,8 @@ describe('adjustBeanImage (#1845)', () => {
     const [stored, recrop] = calls();
     expect(stored?.url).toBe(`${route(7)}?original=1`);
     expect(stored?.opts?.cache).toBe('no-cache');
-    expect(mocks.openCropEditor).toHaveBeenCalledWith(original, { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
+    expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
+    expect(await (mocks.openCropEditor.mock.calls[0]?.[0] as Blob).text()).toBe('original');
     expect(recrop?.url).toBe(`${route(7)}?crop=${NEW_CROP_QUERY}`);
     expect(recrop?.opts?.method).toBe('POST');
     expect(recrop?.opts?.body).toBeUndefined();
@@ -331,12 +337,11 @@ describe('adjustBeanImage (#1845)', () => {
 
     const [main, posted, stored] = calls();
     expect(main?.url).toBe(route(7));
-    const opts = mocks.openCropEditor.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(opts['shape']).toBe('square');
-    expect(opts['aspect']).toBe('portrait');
-    expect(opts['initialCrop']).toBeUndefined();
-    expect(typeof opts['hint']).toBe('string');
-    expect(mocks.openCropEditor).toHaveBeenCalledWith(current, expect.objectContaining(opts));
+    expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), {
+      shape: 'square', aspect: 'portrait', hint: t('crop_editor_legacy_hint'),
+    });
+    expect(await (mocks.openCropEditor.mock.calls[0]?.[0] as Blob).text()).toBe('current');
+    expect(mocks.openCropEditor.mock.calls[0]?.[1]?.['initialCrop']).toBeUndefined();
     expect(posted?.url).toBe(route(7));
     expect(posted?.opts?.method).toBe('POST');
     expect(await bodyText(posted)).toBe('cropped');
@@ -361,7 +366,8 @@ describe('adjustBeanImage (#1845)', () => {
 
     await adjustBeanImage();
 
-    expect(mocks.openCropEditor).toHaveBeenCalledWith(original, { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
+    expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), { ...BEAN_PHOTO_OPTS, initialCrop: CROP });
+    expect(await (mocks.openCropEditor.mock.calls[0]?.[0] as Blob).text()).toBe('original');
     expect(mocks.openStickerEditor).toHaveBeenCalledWith(cropped);
     expect(mocks.openCropEditor.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.openStickerEditor.mock.invocationCallOrder[0] ?? 0);
@@ -436,7 +442,8 @@ describe('cutOutBeanSticker (#1336)', () => {
     expect(fetched?.opts).toBeUndefined();
     expect(fetchedOriginal?.url).toBe(`${route(7)}?original=1`);
     expect(fetchedOriginal?.opts?.cache).toBe('no-cache');
-    expect(mocks.openStickerEditor).toHaveBeenCalledWith(photo);
+    expect(mocks.openStickerEditor).toHaveBeenCalledWith(expect.any(Blob));
+    expect(await (mocks.openStickerEditor.mock.calls[0]?.[0] as Blob).text()).toBe('photo');
     expect(posted?.url).toBe(route(7));
     expect(posted?.opts?.method).toBe('POST');
     expect(contentType(posted)).toBe('image/png');

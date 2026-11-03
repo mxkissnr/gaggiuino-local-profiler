@@ -13,8 +13,8 @@ g.navigator ??= { language: 'en-US' };
 // (vi.hoisted keeps the spies out of the module factory's temporal dead zone).
 const mocks = vi.hoisted(() => ({
   saveBean: vi.fn(),
-  apiFetch: vi.fn(),
-  crop: vi.fn(),
+  apiFetch: vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(),
+  crop: vi.fn<(file: Blob, opts?: Record<string, unknown>) => Promise<unknown>>(),
 }));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
@@ -473,7 +473,7 @@ describe('staged new-bean photo (#1329 part 2)', () => {
     await library.stageNewBeanImage(input);
     await library.saveBeanNoBag();
 
-    const calls = mocks.apiFetch.mock.calls as Array<[string, RequestInit | undefined]>;
+    const calls = mocks.apiFetch.mock.calls;
     expect(calls).toHaveLength(2);
     expect(calls[0]?.[0]).toBe('api/library/bean/42/image');
     expect(calls[0]?.[1]?.method).toBe('POST');
@@ -498,7 +498,7 @@ describe('staged new-bean photo (#1329 part 2)', () => {
     library.closeBeanForm();
     await library.saveBeanNoBag();
 
-    const urls = (mocks.apiFetch.mock.calls as Array<[string]>).map(([url]) => url);
+    const urls = mocks.apiFetch.mock.calls.map(([url]) => url);
     expect(urls.some(url => url.includes('/image'))).toBe(false);
   });
 });

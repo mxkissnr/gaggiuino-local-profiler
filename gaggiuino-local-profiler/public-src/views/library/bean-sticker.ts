@@ -192,13 +192,10 @@ export async function cutOutBeanSticker(): Promise<void> {
       const uploaded = await _storeBeanPhoto(id, await saveNewPhoto(url, { blob: png, crop, original }));
       if (uploaded) window.showToast?.(t('sticker_done'));
     } else {
-      const staged = _stagedBeanImage;
-      if (staged) {
-        // Only the blob becomes the cut-out; the crop and original stay staged,
-        // so the save path still stores the original with them.
-        // eslint-disable-next-line require-atomic-updates -- single-flight: the disabled-button guard above prevents overlapping runs
-        _stagedBeanImage = { ...staged, blob: png };
-      }
+      // Replace only the blob: the crop and uncropped original stay staged, so
+      // saveBeanInternal still posts the whole result.
+      // eslint-disable-next-line require-atomic-updates -- single-flight: the disabled-button guard above prevents overlapping runs
+      if (_stagedBeanImage) _stagedBeanImage = { ..._stagedBeanImage, blob: png };
       const hint = document.getElementById('beanFormImageStaged');
       if (hint) hint.style.display = '';
       void updateStickerButton();
