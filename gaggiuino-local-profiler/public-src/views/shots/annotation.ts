@@ -660,7 +660,7 @@ export function _renderShotPhoto(shot: { id: number; image?: string | null | und
     thumb.removeAttribute('data-clickable');
     remove.style.display = 'none';
   }
-  const adjust = document.getElementById('annPhotoAdjustBtn') as HTMLElement | null;
+  const adjust = document.getElementById('annPhotoAdjustBtn');
   if (adjust) {
     adjust.style.display = shot.image ? '' : 'none';
     // `onclick`, not addEventListener: re-rendering the panel must not stack handlers.
@@ -679,7 +679,6 @@ export async function uploadShotImage(input: HTMLInputElement): Promise<void> {
   if (!file || !S.primaryShotId) return;
   const id = S.primaryShotId;
   const r = await cropAndUploadPhoto(shotImageUrl(id), file, SHOT_PHOTO);
-  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
   if (!r) return;
   await _storeShotPhoto(id, r);

@@ -111,7 +111,7 @@ function calls(): Call[] {
 }
 
 function row(): Record<string, unknown> {
-  return (S.allShots[0] ?? {}) as unknown as Record<string, unknown>;
+  return S.allShots[0] ?? {};
 }
 
 async function flush(): Promise<void> {
