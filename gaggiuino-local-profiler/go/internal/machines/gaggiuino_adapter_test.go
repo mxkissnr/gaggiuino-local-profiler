@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -360,17 +361,28 @@ func TestGaggiuinoAdapter_ProfileActionsRejectNonNumericIDs(t *testing.T) {
 func TestGaggiuinoAdapter_GetSettingsBackup(t *testing.T) {
 	allowLoopbackMachineHost(t)
 
-	var (
-		status = http.StatusOK
-		body   = []byte(`{"format":"gaggiuino-settings","version":1}`)
-	)
+	status := http.StatusOK
+	body := []byte(`{"format":"gaggiuino-settings","version":1}`)
+	want := append([]byte(nil), body...)
+	var mu sync.Mutex
+	reply := func(w http.ResponseWriter) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.WriteHeader(status)
+		w.Write(body)
+	}
+	setReply := func(newStatus int, newBody []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		status, body = newStatus, newBody
+	}
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/settings/backup" {
 			http.NotFound(w, r)
 			return
 		}
-		w.WriteHeader(status)
-		w.Write(body)
+		reply(w)
 	}))
 	defer srv.Close()
 
@@ -382,17 +394,16 @@ func TestGaggiuinoAdapter_GetSettingsBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSettingsBackup: %v", err)
 	}
-	if string(got) != string(body) {
-		t.Fatalf("GetSettingsBackup body = %q, want %q", got, body)
+	if string(got) != string(want) {
+		t.Fatalf("GetSettingsBackup body = %q, want %q", got, want)
 	}
 
-	status = http.StatusNotFound
+	setReply(http.StatusNotFound, nil)
 	if _, err := a.GetSettingsBackup(ctx, m); !errors.Is(err, ErrSettingsBackupUnsupported) {
 		t.Fatalf("404 error = %v, want ErrSettingsBackupUnsupported", err)
 	}
 
-	status = http.StatusInternalServerError
-	body = []byte(`{"error":"SECRET-in-error-body"}`)
+	setReply(http.StatusInternalServerError, []byte(`{"error":"SECRET-in-error-body"}`))
 	_, err = a.GetSettingsBackup(ctx, m)
 	if err == nil {
 		t.Fatal("500 response returned nil error")
@@ -401,8 +412,7 @@ func TestGaggiuinoAdapter_GetSettingsBackup(t *testing.T) {
 		t.Fatalf("error leaks the machine's response body: %v", err)
 	}
 
-	status = http.StatusOK
-	body = bytes.Repeat([]byte("a"), MaxSettingsBackupBytes)
+	setReply(http.StatusOK, bytes.Repeat([]byte("a"), MaxSettingsBackupBytes))
 	got, err = a.GetSettingsBackup(ctx, m)
 	if err != nil {
 		t.Fatalf("GetSettingsBackup at the size cap: %v", err)
@@ -411,7 +421,7 @@ func TestGaggiuinoAdapter_GetSettingsBackup(t *testing.T) {
 		t.Fatalf("GetSettingsBackup at the size cap returned %d bytes, want %d", len(got), MaxSettingsBackupBytes)
 	}
 
-	body = bytes.Repeat([]byte("a"), MaxSettingsBackupBytes+1)
+	setReply(http.StatusOK, bytes.Repeat([]byte("a"), MaxSettingsBackupBytes+1))
 	if _, err := a.GetSettingsBackup(ctx, m); !errors.Is(err, ErrSettingsBackupTooLarge) {
 		t.Fatalf("oversized document error = %v, want ErrSettingsBackupTooLarge", err)
 	}
