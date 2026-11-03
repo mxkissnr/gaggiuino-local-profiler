@@ -3,11 +3,13 @@
 // (see secretPaths), so no Wi-Fi, MQTT or visualizer credential ever reaches the
 // database; entries live in the machine_backups table keyed by machine id.
 //
-// This slice adds the automatic daily backup: the first time a Gaggiuino
-// machine is reachable on a given local day, its settings backup is fetched and
-// stored as a new entry, but only when the content differs from the newest
-// stored backup of that machine. Later slices add the routes, the restore path
-// and the GLP backup bundle.
+// This slice adds the automatic daily backup (Scheduler): the first time a
+// Gaggiuino machine is reachable on a given local day its settings backup is
+// fetched and stored as a new entry, but only when the content differs from the
+// newest stored backup of that machine. It also adds the list, back up now and
+// delete routes (handlers.go). Later slices add the schedule settings, the
+// pre-update backup, download/upload, the restore path and the GLP backup
+// bundle.
 package machinebackups
 
 import (
@@ -22,6 +24,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
@@ -211,14 +214,47 @@ func shortString(value any) string {
 }
 
 // Repository reads and writes machine backup rows.
-type Repository struct{ db *sql.DB }
+type Repository struct {
+	db *sql.DB
+
+	// locks serializes all backup work on one machine (the scheduler,
+	// Back up now and, from slice 5b, restore), keyed by machine id. It lives
+	// here because main shares one Repository between the scheduler and the
+	// handlers, the same way ProfilesRepository.MachineLock is shared.
+	locks sync.Map // map[int64]*sync.Mutex
+}
 
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// insert stores one backup row and returns its id.
-func (r *Repository) insert(machineID int64, kind, note string, p prepared, at time.Time) (int64, error) {
+// machineLock returns the mutex for one machine's backup work. Callers
+// TryLock: the scheduler skips a busy machine until the next tick, the
+// handlers answer 409 operation_running.
+func (r *Repository) machineLock(machineID int64) *sync.Mutex {
+	mu, _ := r.locks.LoadOrStore(machineID, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+// Entry is the metadata of one stored backup, the JSON shape of the API's
+// MachineBackup. The stored document is deliberately not a field, so no list or
+// create response can carry it.
+type Entry struct {
+	ID               int64  `json:"id"`
+	MachineID        int64  `json:"machineId"`
+	CreatedAt        int64  `json:"createdAt"` // Unix ms in the API, stored as Unix seconds
+	Kind             string `json:"kind"`
+	FirmwareCore     string `json:"firmwareCore"`
+	FirmwareFrontend string `json:"firmwareFrontend"`
+	ProfileCount     int    `json:"profileCount"`
+	SizeBytes        int    `json:"sizeBytes"`
+	ContentHash      string `json:"contentHash"`
+	Note             string `json:"note"`
+}
+
+// insert stores one backup row and returns it in the API's shape, so a create
+// response equals the later list row exactly.
+func (r *Repository) insert(machineID int64, kind, note string, p prepared, at time.Time) (Entry, error) {
 	res, err := r.db.Exec(`INSERT INTO machine_backups (
 		machine_id, created_at, kind, firmware_core, firmware_frontend,
 		profile_count, size_bytes, content_hash, note, data
@@ -226,9 +262,66 @@ func (r *Repository) insert(machineID int64, kind, note string, p prepared, at t
 		machineID, at.Unix(), kind, p.FirmwareCore, p.FirmwareFrontend,
 		p.ProfileCount, len(p.Data), p.Hash, note, string(p.Data))
 	if err != nil {
-		return 0, fmt.Errorf("machinebackups: storing backup of machine %d: %w", machineID, err)
+		return Entry{}, fmt.Errorf("machinebackups: storing backup of machine %d: %w", machineID, err)
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Entry{}, fmt.Errorf("machinebackups: storing backup of machine %d: %w", machineID, err)
+	}
+	return Entry{
+		ID:               id,
+		MachineID:        machineID,
+		CreatedAt:        at.Unix() * 1000,
+		Kind:             kind,
+		FirmwareCore:     p.FirmwareCore,
+		FirmwareFrontend: p.FirmwareFrontend,
+		ProfileCount:     p.ProfileCount,
+		SizeBytes:        len(p.Data),
+		ContentHash:      p.Hash,
+		Note:             note,
+	}, nil
+}
+
+// list returns the metadata of the stored backups, newest first. machineID 0
+// means every machine, including ones deleted from the registry: their backups
+// stay listable.
+func (r *Repository) list(machineID int64) ([]Entry, error) {
+	rows, err := r.db.Query(`SELECT id, machine_id, created_at, kind, firmware_core,
+		firmware_frontend, profile_count, size_bytes, content_hash, note
+		FROM machine_backups WHERE (? = 0 OR machine_id = ?)
+		ORDER BY created_at DESC, id DESC`, machineID, machineID)
+	if err != nil {
+		return nil, fmt.Errorf("machinebackups: listing backups: %w", err)
+	}
+	defer rows.Close()
+	out := []Entry{}
+	for rows.Next() {
+		var e Entry
+		if err := rows.Scan(&e.ID, &e.MachineID, &e.CreatedAt, &e.Kind, &e.FirmwareCore,
+			&e.FirmwareFrontend, &e.ProfileCount, &e.SizeBytes, &e.ContentHash, &e.Note); err != nil {
+			return nil, fmt.Errorf("machinebackups: listing backups: %w", err)
+		}
+		e.CreatedAt *= 1000
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("machinebackups: listing backups: %w", err)
+	}
+	return out, nil
+}
+
+// remove deletes one backup row, of any kind and also one of a deleted machine.
+// found is false when no row has that id.
+func (r *Repository) remove(id int64) (bool, error) {
+	res, err := r.db.Exec(`DELETE FROM machine_backups WHERE id = ?`, id)
+	if err != nil {
+		return false, fmt.Errorf("machinebackups: deleting backup %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("machinebackups: deleting backup %d: %w", id, err)
+	}
+	return n == 1, nil
 }
 
 // newestHash returns the content hash of the newest backup of machineID, of any
@@ -281,6 +374,31 @@ const (
 	schedulerRetryAfter = 30 * time.Minute
 )
 
+var (
+	errMachineOffline = errors.New("machine did not answer the status request")
+	errMachineBusy    = errors.New("machine is brewing or steaming")
+)
+
+// fetchPrepared fetches the machine's settings backup and prepares it for
+// storing, unless the machine is off or busy. The scheduler and Back up now both
+// use it, so they follow the same rules (never load the machine during a shot or
+// while steaming). The status error is dropped on purpose: it can carry the
+// machine's host.
+func fetchPrepared(ctx context.Context, c Client, m *machines.Machine) (prepared, error) {
+	status, err := c.GetStatus(ctx, m)
+	if err != nil {
+		return prepared{}, errMachineOffline
+	}
+	if status.Brewing || (status.SteamOn != nil && *status.SteamOn) {
+		return prepared{}, errMachineBusy
+	}
+	raw, err := c.GetSettingsBackup(ctx, m)
+	if err != nil {
+		return prepared{}, err
+	}
+	return prepare(raw)
+}
+
 // MachineLister lists the machines the scheduler should consider.
 type MachineLister interface {
 	ListMachines() ([]machines.Machine, error)
@@ -298,7 +416,8 @@ type SchedulerDeps struct {
 
 // Scheduler takes one automatic settings backup per machine per local day.
 // checked, retryAt and unsupportedLogged are keyed by machine id and only ever
-// touched by the scheduler goroutine, so there is no mutex in this slice.
+// touched by the scheduler goroutine, so there is no mutex here; the per-machine
+// Repository.machineLock serializes its machine calls with Back up now.
 type Scheduler struct {
 	deps              SchedulerDeps
 	checked           map[int64]time.Time
@@ -364,33 +483,31 @@ func (s *Scheduler) backupIfDue(ctx context.Context, m *machines.Machine) {
 	if !ok || c == nil {
 		return
 	}
-	// A machine being off is the normal case for most of the day: try again on
-	// the next tick, with no backoff and no log line.
-	status, err := c.GetStatus(ctx, m)
-	if err != nil {
-		return
+	mu := s.deps.Repo.machineLock(m.ID)
+	if !mu.TryLock() {
+		return // Back up now (or a restore) is busy with this machine: try next tick
 	}
-	if status.Brewing || (status.SteamOn != nil && *status.SteamOn) {
+	defer mu.Unlock()
+	p, err := fetchPrepared(ctx, c, m)
+	switch {
+	case errors.Is(err, errMachineOffline), errors.Is(err, errMachineBusy):
+		// A machine being off is the normal case for most of the day, and a busy
+		// one is left alone: try again on the next tick, with no backoff and no log.
 		return
-	}
-	raw, err := c.GetSettingsBackup(ctx, m)
-	if err != nil {
-		if errors.Is(err, machines.ErrSettingsBackupUnsupported) {
-			s.checked[m.ID] = now
-			if !s.unsupportedLogged[m.ID] {
-				s.unsupportedLogged[m.ID] = true
-				log.Printf("machinebackups: machine %d firmware has no settings backup (needs Gaggiuino main-8aaf6f0 or later)", m.ID)
-			}
-			return
+	case errors.Is(err, machines.ErrSettingsBackupUnsupported):
+		s.checked[m.ID] = now
+		if !s.unsupportedLogged[m.ID] {
+			s.unsupportedLogged[m.ID] = true
+			log.Printf("machinebackups: machine %d firmware has no settings backup (needs Gaggiuino main-8aaf6f0 or later)", m.ID)
 		}
-		s.failed(m.ID, now, err)
 		return
-	}
-	p, err := prepare(raw)
-	if err != nil {
+	case errors.Is(err, ErrInvalidDocument):
 		// A document GLP cannot read will not become readable today.
 		s.checked[m.ID] = now
 		log.Printf("machinebackups: machine %d sent a settings backup GLP cannot store: %s", m.ID, redact.Redact(err.Error()))
+		return
+	case err != nil:
+		s.failed(m.ID, now, err)
 		return
 	}
 	hash, found, err := s.deps.Repo.newestHash(m.ID)
