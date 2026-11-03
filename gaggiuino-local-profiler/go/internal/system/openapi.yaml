@@ -3473,7 +3473,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MachineBackup' }
-        "400": { description: Invalid JSON body, or machineId missing or below 1, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "400": { description: "Invalid JSON body, or machineId missing or below 1", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         "409":
           description: "operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming"
@@ -3481,7 +3481,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MachineBackupError' }
         "413": { description: Request body over 4 KiB }
-        "429": { description: Rate limit exceeded — per-IP back-up-now limit, 10/min }
+        "429": { description: "Rate limit exceeded — per-IP back-up-now limit, 10/min" }
         "501":
           description: "unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup"
           content:

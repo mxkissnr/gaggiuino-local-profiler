@@ -6397,7 +6397,7 @@ export interface paths {
                         "application/json": components["schemas"]["MachineBackup"];
                     };
                 };
-                /** @description Invalid JSON body */
+                /** @description Invalid JSON body, or machineId missing or below 1 */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -6431,7 +6431,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Rate limit exceeded — per-IP back-up-now limit */
+                /** @description Rate limit exceeded — per-IP back-up-now limit, 10/min */
                 429: {
                     headers: {
                         [name: string]: unknown;
