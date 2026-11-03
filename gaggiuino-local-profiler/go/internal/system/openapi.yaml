@@ -1090,9 +1090,29 @@ components:
       type: object
       description: >
         GET /api/machine/firmware/progress — the machine's own OTA progress
-        payload, passed through verbatim (progress/status/type today).
+        payload, passed through verbatim. Firmware main-8aaf6f0 and later add
+        an optional migration object for the partition migration that runs
+        after an update; older firmware omits it.
       properties:
-        status: { type: string }
+        status: { type: string, description: "IDLE | IN_PROGRESS | SUCCESS | ERROR" }
+        progress: { type: number }
+        type: { type: string, description: "C_FW | F_FW | F_FS" }
+        migration: { $ref: '#/components/schemas/FirmwareMigration' }
+      additionalProperties: true
+
+    FirmwareMigration:
+      type: object
+      description: >
+        Post-update partition migration state as reported by the machine
+        (Gaggiuino main-8aaf6f0 and later). Only the fields GLP reads are
+        listed; the machine sends more.
+      properties:
+        active: { type: boolean }
+        state: { type: string, description: "idle | working | complete (observed values)" }
+        phase: { type: integer }
+        operation: { type: string, description: "Human-readable current step, e.g. Downloading update" }
+        percent: { type: number }
+        error: { type: string, description: "Empty while no error" }
       additionalProperties: true
 
     MachineSaveInput:
@@ -3202,7 +3222,7 @@ paths:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
         "200":
-          description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS }"
+          description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS, optional migration object (firmware main-8aaf6f0 and later) }"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FirmwareProgress' }
