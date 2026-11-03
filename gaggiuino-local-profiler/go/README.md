@@ -20,7 +20,7 @@ cross-compile → Alpine runtime) for amd64, armv7 and aarch64.
   auth), listens on port 8099.
 - One package per concern under `internal/`: `shots`, `library`,
   `machines` (+ `machines/proto` for the Gaggiuino binary WS codec),
-  `orders`, `maintenance`, `backup`, `importer`, `db`, `auth`,
+  `orders`, `machinebackups`, `maintenance`, `backup`, `importer`, `db`, `auth`,
   `ratelimit`, `redact`, `sse`, `system` (status/preheat/version/demo), `ha`,
   `mqtt`, `mcp`, `img`, `achievements`, `netguard`, `uiprefs`, `cutoutmodels`,
   `config`, `httputil`, `logbuf`, `debug`, `webapp` (SPA embed + serve).
@@ -95,6 +95,7 @@ go/
     logbuf/        ring buffer of recent log lines for diagnostics
     machines/      machine registry + control proxy + per-type adapters
       proto/         Gaggiuino's binary WS codec
+    machinebackups/ automatic daily machine settings backups (secrets stripped)
     maintenance/   maintenance tasks + log
     mcp/           built-in MCP server exposing shot history to AI assistants
     mqtt/          MQTT live-data transport
