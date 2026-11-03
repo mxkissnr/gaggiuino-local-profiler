@@ -1438,7 +1438,7 @@ export interface paths {
         put?: never;
         /**
          * Upload, re-crop or store the original of a bean photo
-         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `sticker=1` alone does the same and marks the photo as a sticker cut-out (#1884); a re-crop always clears that mark. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
          */
         post: {
             parameters: {
@@ -1447,6 +1447,8 @@ export interface paths {
                     crop?: string;
                     /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
                     original?: "1";
+                    /** @description Set to "1" on a new-photo upload (no other parameter) to mark the photo as a sticker cut-out. Only a photo stored as PNG becomes a sticker; an opaque image is stored as JPEG and is not one. (#1884) */
+                    sticker?: "1";
                 };
                 header?: never;
                 path: {
@@ -7954,6 +7956,8 @@ export interface components {
             /** @description File extension of the stored photo, if any — see GET .../image */
             image?: string | null;
             imageCrop?: components["schemas"]["ImageCrop"];
+            /** @description Whether the stored photo is a sticker cut-out (a transparent PNG from the sticker editor). Present whenever the bean has a photo. Set by a new-photo upload with `sticker=1`, cleared by any other new photo, by a re-crop and by a shop import; photos stored before this flag existed count as stickers when they are PNG. (#1884) */
+            imageSticker?: boolean;
             /** @description Import source URL domain */
             source?: string;
             sourceUrl?: string | null;
