@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machinebackups"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 )
 
@@ -25,7 +26,9 @@ const glpVersion = "3.6.0"
 // gatherSmallSections collects every bundle section that is small
 // regardless of shot/image count: coffee_library, blocklist, trash (via
 // the lightweight TrashMap, not FindTrashed), maintenance, maintenance_log,
-// orders, machines, kv, and — when a passphrase is supplied and there is
+// orders, machines, machine_backups (the machine settings backups, #1878),
+// kv (including their per-machine machine_backup_settings, #1878), and —
+// when a passphrase is supplied and there is
 // something to protect — the encrypted secrets block. shots/annotations/
 // images are added by writeBundleJSON. The returned map's values are
 // marshalled straight into the bundle JSON, so this stays the single
@@ -67,6 +70,14 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
+	machineBackups, err := machinebackups.ExportBundle(d.DB)
+	if err != nil {
+		return nil, err
+	}
+	machineBackupSettings, err := machinebackups.ExportSettings(d.DB)
+	if err != nil {
+		return nil, err
+	}
 	menu, err := d.OrdersRepo.GetMenu()
 	if err != nil {
 		return nil, err
@@ -104,11 +115,13 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 		"maintenance_log": maintLogRaw,
 		"orders":          allOrders,
 		"machines":        allMachines,
+		"machine_backups": machineBackups,
 		"achievements":    achievementsForBundle(allAchievements),
 		"kv": map[string]any{
 			"menu": menu, "orders_settings": ordersSettings, "notify_mapping": notifyMapping,
 			"import_settings": importSettings, "mqtt_settings": safeMqtt,
 			"shot_defaults": shotDefaults, "ui_prefs": uiPrefs,
+			"machine_backup_settings": machineBackupSettings,
 		},
 	}
 
