@@ -168,7 +168,7 @@ describe('adjustPhoto', () => {
       expect(current?.url).toBe(ROUTE);
       expect(current?.opts?.cache).toBe('no-cache');
       expect(mocks.openCropEditor).toHaveBeenCalledWith(expect.any(Blob), expect.objectContaining({ shape: 'square' }));
-      expect((mocks.openCropEditor.mock.calls[0]?.[1] as { initialCrop?: unknown }).initialCrop).toBeUndefined();
+      expect(mocks.openCropEditor.mock.calls[0]?.[1]?.initialCrop).toBeUndefined();
       expect(main?.url).toBe(ROUTE);
       expect(original?.url).toBe(`${ROUTE}?original=1&crop=${CROP_QUERY}`);
     },
@@ -189,7 +189,7 @@ describe('adjustPhoto', () => {
     expect(missingOriginal?.url).toBe(`${ROUTE}?original=1`);
     expect(current?.url).toBe(ROUTE);
     expect(original?.url).toBe(`${ROUTE}?original=1&crop=${CROP_QUERY}`);
-    expect((mocks.openCropEditor.mock.calls[0]?.[1] as { initialCrop?: unknown }).initialCrop).toBeUndefined();
+    expect(mocks.openCropEditor.mock.calls[0]?.[1]?.initialCrop).toBeUndefined();
   });
 
   it('resolves the failed current-image GET without opening the dialog', async () => {
