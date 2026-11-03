@@ -4,6 +4,7 @@
 // globals the module chain reads at load are stubbed here (same pattern as
 // test/library-sticker-cutout.test.ts).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
@@ -50,7 +51,7 @@ function calls(): Call[] {
   return mocks.apiFetch.mock.calls.map(([url, opts]) => ({ url: url as string, opts: opts as RequestInit | undefined }));
 }
 
-let warn: ReturnType<typeof vi.spyOn>;
+let warn: MockInstance<typeof console.warn>;
 
 beforeEach(() => {
   mocks.apiFetch.mockReset();
