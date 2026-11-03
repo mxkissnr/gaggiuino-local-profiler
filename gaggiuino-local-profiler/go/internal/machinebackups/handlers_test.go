@@ -222,7 +222,7 @@ func TestBackUpNow_Errors(t *testing.T) {
 			docs: func(*testing.T) []string { return []string{fixtureDoc} },
 			body: `{"machineId":1,"note":"` + strings.Repeat("a", 5000) + `"}`, wantStatus: http.StatusRequestEntityTooLarge},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e, h := newHandlerEnv(t, tc.machine)
