@@ -158,6 +158,12 @@ export function originalExportSize(naturalW: number, naturalH: number): { width:
   };
 }
 
+// JPEG has no alpha: paint white first so transparent pixels of a PNG do not turn black (#1889).
+function fillWhite(c: CanvasRenderingContext2D, width: number, height: number): void {
+  c.fillStyle = '#fff';
+  c.fillRect(0, 0, width, height);
+}
+
 export interface CropEditorResult {
   /** The cropped JPEG the photo field uploads as the main image. */
   blob: Blob;
@@ -379,6 +385,7 @@ function _buildEditor(
     const outCtx = outCanvas.getContext('2d') as CanvasRenderingContext2D;
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = 'high';
+    fillWhite(outCtx, out.width, out.height);
     outCtx.drawImage(img, offsetX * out.factor, offsetY * out.factor, naturalW * scale * out.factor, naturalH * scale * out.factor);
 
     // Both encodings start together so Apply waits on the slower one only.
@@ -389,6 +396,7 @@ function _buildEditor(
     const origCtx = origCanvas.getContext('2d') as CanvasRenderingContext2D;
     origCtx.imageSmoothingEnabled = true;
     origCtx.imageSmoothingQuality = 'high';
+    fillWhite(origCtx, originalSize.width, originalSize.height);
     origCtx.drawImage(img, 0, 0, originalSize.width, originalSize.height);
 
     let pending = 2;
