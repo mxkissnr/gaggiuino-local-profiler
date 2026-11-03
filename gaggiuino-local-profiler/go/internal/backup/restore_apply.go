@@ -261,10 +261,10 @@ func (h *Handlers) applyRestoredToken(token string) bool {
 // photo" path, so it is logged and skipped rather than counted.
 func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImageWrite) (written, failed int) {
 	for _, w := range pending {
-		buf, ok := imgs.getForWrite(w.srcName)
 		if !w.original {
 			img.DeleteOriginal(imageDir, w.id, w.prefix)
 		}
+		buf, ok := imgs.getForWrite(w.srcName)
 		if !ok || len(buf) == 0 || len(buf) > imageMaxBytes {
 			log.Printf("backup: restore failed to write image %s (source %q unreadable/empty/oversized)", w.path, w.srcName)
 			if !w.original {
