@@ -55,7 +55,7 @@ function calls(): Call[] {
 }
 
 function contentType(call: Call | undefined): string | null {
-  return new Headers(call.opts?.headers).get('Content-Type');
+  return new Headers(call?.opts?.headers).get('Content-Type');
 }
 
 const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
