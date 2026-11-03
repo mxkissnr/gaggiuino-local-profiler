@@ -366,7 +366,7 @@ describe('triggerMachineFirmwareUpdate (#1876)', () => {
     apiMocks.triggerFirmwareUpdate.mockResolvedValue({
       ok: false,
       status: 502,
-      json: async () => ({ error: 'unreachable' }),
+      json: () => Promise.resolve({ error: 'unreachable' }),
     } as unknown as Response);
     const { row, els } = fakeRow();
 
