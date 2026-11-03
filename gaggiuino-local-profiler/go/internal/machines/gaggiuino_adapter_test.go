@@ -1,12 +1,16 @@
 package machines
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -346,5 +350,79 @@ func TestGaggiuinoAdapter_ProfileActionsRejectNonNumericIDs(t *testing.T) {
 	defer fake.Close()
 	if _, err := a.DeleteProfile(ctx, testMachine(fake.URL), "5"); err != nil {
 		t.Fatalf("DeleteProfile(\"5\"): %v", err)
+	}
+}
+
+// TestGaggiuinoAdapter_GetSettingsBackup pins #1878: the settings backup is
+// fetched byte-for-byte, an older firmware's 404 maps to
+// ErrSettingsBackupUnsupported, a non-404 error never carries the machine's
+// response body (it can contain secrets), and an over-cap document is
+// rejected.
+func TestGaggiuinoAdapter_GetSettingsBackup(t *testing.T) {
+	allowLoopbackMachineHost(t)
+
+	status := http.StatusOK
+	body := []byte(`{"format":"gaggiuino-settings","version":1}`)
+	want := append([]byte(nil), body...)
+	var mu sync.Mutex
+	reply := func(w http.ResponseWriter) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.WriteHeader(status)
+		w.Write(body)
+	}
+	setReply := func(newStatus int, newBody []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		status, body = newStatus, newBody
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/settings/backup" {
+			http.NotFound(w, r)
+			return
+		}
+		reply(w)
+	}))
+	defer srv.Close()
+
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+	m := testMachine(srv.URL)
+	ctx := context.Background()
+
+	got, err := a.GetSettingsBackup(ctx, m)
+	if err != nil {
+		t.Fatalf("GetSettingsBackup: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("GetSettingsBackup body = %q, want %q", got, want)
+	}
+
+	setReply(http.StatusNotFound, nil)
+	if _, err := a.GetSettingsBackup(ctx, m); !errors.Is(err, ErrSettingsBackupUnsupported) {
+		t.Fatalf("404 error = %v, want ErrSettingsBackupUnsupported", err)
+	}
+
+	setReply(http.StatusInternalServerError, []byte(`{"error":"SECRET-in-error-body"}`))
+	_, err = a.GetSettingsBackup(ctx, m)
+	if err == nil {
+		t.Fatal("500 response returned nil error")
+	}
+	if strings.Contains(err.Error(), "SECRET-in-error-body") {
+		t.Fatalf("error leaks the machine's response body: %v", err)
+	}
+
+	setReply(http.StatusOK, bytes.Repeat([]byte("a"), MaxSettingsBackupBytes))
+	got, err = a.GetSettingsBackup(ctx, m)
+	if err != nil {
+		t.Fatalf("GetSettingsBackup at the size cap: %v", err)
+	}
+	if len(got) != MaxSettingsBackupBytes {
+		t.Fatalf("GetSettingsBackup at the size cap returned %d bytes, want %d", len(got), MaxSettingsBackupBytes)
+	}
+
+	setReply(http.StatusOK, bytes.Repeat([]byte("a"), MaxSettingsBackupBytes+1))
+	if _, err := a.GetSettingsBackup(ctx, m); !errors.Is(err, ErrSettingsBackupTooLarge) {
+		t.Fatalf("oversized document error = %v, want ErrSettingsBackupTooLarge", err)
 	}
 }

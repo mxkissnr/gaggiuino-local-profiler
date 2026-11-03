@@ -48,6 +48,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/importer"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machinebackups"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
@@ -509,6 +510,16 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	mqtt.NewHandlers(mqttRepo, mqttTransport, registry, machinesHandlers, haClient).RegisterRoutes(mux)
 
 	poller.Start(ctx)
+
+	// #1878: daily machine settings backups (secrets stripped before storing),
+	// taken the first time each Gaggiuino machine is reachable that day.
+	machineBackupsRepo := machinebackups.NewRepository(sqlDB)
+	machinebackups.NewScheduler(machinebackups.SchedulerDeps{
+		Repo:         machineBackupsRepo,
+		Machines:     registry,
+		Client:       machinebackups.ClientFor(machinesHandlers),
+		KnownOffline: poller.MachineKnownOffline,
+	}).Start(ctx)
 
 	// #1152: purge expired trash once at startup and then every 24h —
 	// StartTrashPurge does the immediate purge plus a 24h ticker bound to ctx.
