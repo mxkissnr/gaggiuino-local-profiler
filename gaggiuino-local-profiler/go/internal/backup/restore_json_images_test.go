@@ -126,9 +126,6 @@ func TestRestore_JSONBundleMissingShotImage(t *testing.T) {
 
 // ── #1845: uncropped originals in the legacy JSON form ──────────────────
 
-// jsonBundleCrop is a valid imageCrop rectangle for the JSON-bundle tests.
-var jsonBundleCrop = map[string]any{"x": 0.0, "y": 0.1, "w": 0.4, "h": 0.5}
-
 // TestRestore_JSONBundleKeepsShotOriginal (#1845): the legacy self-contained
 // form gets the same treatment as the zip. With the inline original present
 // the shot keeps its crop and the original is written; the photo counts stay
@@ -139,7 +136,7 @@ func TestRestore_JSONBundleKeepsShotOriginal(t *testing.T) {
 		h, deps, _ := newTestHandlers(t)
 		mux := newMux(h)
 
-		dryRun := jsonShotImageBundleWithOriginal(t, true, jsonBundleCrop, true)
+		dryRun := jsonShotImageBundleWithOriginal(t, true, testCrop, true)
 		dryRun["dryRun"] = true
 		rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, dryRun))
 		if rec.Code != http.StatusOK {
@@ -150,7 +147,7 @@ func TestRestore_JSONBundleKeepsShotOriginal(t *testing.T) {
 			t.Errorf("dry-run preview.images = %v, want 1 (main only)", preview["images"])
 		}
 
-		rec = doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, jsonShotImageBundleWithOriginal(t, true, jsonBundleCrop, true)))
+		rec = doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, jsonShotImageBundleWithOriginal(t, true, testCrop, true)))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
 		}
@@ -175,7 +172,7 @@ func TestRestore_JSONBundleKeepsShotOriginal(t *testing.T) {
 		h, deps, _ := newTestHandlers(t)
 		mux := newMux(h)
 
-		rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, jsonShotImageBundleWithOriginal(t, true, jsonBundleCrop, false)))
+		rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, jsonShotImageBundleWithOriginal(t, true, testCrop, false)))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
 		}
