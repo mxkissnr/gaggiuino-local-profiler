@@ -7,7 +7,8 @@ import (
 
 // This file holds validateEntityImages/validateRestoredLibraryImages — the
 // path-traversal / integrity guard a restored entity's `.image` field must
-// pass before its bytes are ever written to a real filesystem path. The
+// pass before its bytes are ever written to a real filesystem path, and the
+// matching guard for its `imageCrop` + uncropped original (#1845). The
 // filename / path / magic-byte helpers live in internal/img, shared with
 // internal/shots and internal/library (see that package's doc.go).
 
@@ -36,9 +37,56 @@ func extAllowed(ext string) bool {
 // source entry name (never the bytes): writePendingImages streams the bytes
 // from the restore image source zip-entry -> disk, so many restored images
 // never sum up in memory (#959).
+//
+// An entry is either a main image (original == false) or the uncropped
+// original that goes with one (original == true, same id/prefix). id and
+// prefix are kept so the applier can address the original's path and delete
+// a stale copy through internal/img's helpers.
 type pendingImageWrite struct {
-	path    string
-	srcName string
+	path     string
+	srcName  string
+	id       int64
+	prefix   string
+	original bool
+}
+
+// mainImageCount is how many photos (not files) a queue would write: the
+// entries that are not an uncropped original. The dry-run preview and the
+// restore response both report this, so adding originals never looks like
+// "twice as many photos".
+func mainImageCount(pending []pendingImageWrite) int {
+	n := 0
+	for _, w := range pending {
+		if !w.original {
+			n++
+		}
+	}
+	return n
+}
+
+// restoredCrop reads an entity's `imageCrop` from a decoded bundle. It is
+// deliberately stricter than the route readers (library.entityCrop,
+// shots.shotCrop): all four values must be JSON numbers that pass
+// jsFiniteNumber — a string is rejected, not parsed — and the rectangle must
+// be Valid(). Restore only ever drops a crop, never invents one.
+func restoredCrop(v any) (img.Crop, bool) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return img.Crop{}, false
+	}
+	values := make([]float64, 4)
+	for i, key := range []string{"x", "y", "w", "h"} {
+		n, ok := jsFiniteNumber(m[key])
+		if !ok {
+			return img.Crop{}, false
+		}
+		values[i] = n
+	}
+	c := img.Crop{X: values[0], Y: values[1], W: values[2], H: values[3]}
+	if !c.Valid() {
+		return img.Crop{}, false
+	}
+	return c, true
 }
 
 // validateEntityImages validates one entity list's id/image fields against
@@ -49,6 +97,13 @@ type pendingImageWrite struct {
 // in place. The image bytes are read once here (capped at imageMaxBytes) for
 // the magic-byte + size checks and dropped; writePendingImages re-reads them
 // lazily to write.
+//
+// `imageCrop` is validated with the photo it belongs to (#1845). The
+// invariant is "a valid crop <=> a valid original file exists", so a crop is
+// kept only when the bundle also carries that photo's `<prefix><id>.orig.jpg`
+// as a JPEG within imageMaxBytes; the original is then queued immediately
+// after the photo. In every other case the crop is dropped, and an original
+// without a crop is never queued — restore cannot create a half-pair.
 func validateEntityImages(list []map[string]any, prefix string, imgs restoreImages, pending *[]pendingImageWrite) {
 	for _, entity := range list {
 		if entity == nil {
@@ -56,24 +111,50 @@ func validateEntityImages(list []map[string]any, prefix string, imgs restoreImag
 		}
 		ext, _ := entity["image"].(string)
 		if ext == "" {
+			delete(entity, "imageCrop")
 			continue
 		}
 		if !extAllowed(ext) {
 			entity["image"] = nil
+			delete(entity, "imageCrop")
 			continue
 		}
 		id, ok := jsIntStrict(entity["id"])
 		if !ok || id <= 0 {
 			entity["image"] = nil
+			delete(entity, "imageCrop")
 			continue
 		}
 		filename := img.Filename(id, ext, prefix)
 		buf, present := imgs.get(filename)
 		if !present || len(buf) == 0 || len(buf) > imageMaxBytes || !img.MatchesMagicBytes(buf, ext) {
 			entity["image"] = nil
+			delete(entity, "imageCrop")
 			continue
 		}
-		*pending = append(*pending, pendingImageWrite{path: imagePath(id, ext, prefix), srcName: filename})
+		*pending = append(*pending, pendingImageWrite{
+			path: imagePath(id, ext, prefix), srcName: filename, id: id, prefix: prefix,
+		})
+
+		crop, ok := restoredCrop(entity["imageCrop"])
+		if !ok {
+			delete(entity, "imageCrop")
+			continue
+		}
+		origName := img.OriginalFilename(id, prefix)
+		obuf, present := imgs.get(origName)
+		if !present || len(obuf) == 0 || len(obuf) > imageMaxBytes || !img.MatchesMagicBytes(obuf, "jpg") {
+			delete(entity, "imageCrop")
+			continue
+		}
+		entity["imageCrop"] = map[string]any{"x": crop.X, "y": crop.Y, "w": crop.W, "h": crop.H}
+		*pending = append(*pending, pendingImageWrite{
+			path:     img.OriginalPath(imageDir, id, prefix),
+			srcName:  origName,
+			id:       id,
+			prefix:   prefix,
+			original: true,
+		})
 	}
 }
 

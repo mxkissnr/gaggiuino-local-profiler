@@ -328,7 +328,9 @@ func reDecode(v any, out any) error {
 	return json.Unmarshal(b, out)
 }
 
-// preview builds the dry-run response's `preview` object.
+// preview builds the dry-run response's `preview` object. Its `images` count
+// is main images only: a queued uncropped original rides along with its photo
+// and must not inflate the count (#1845).
 func (p restorePlan) preview() map[string]any {
 	shotsCount := 0
 	if p.wantsShots {
@@ -345,7 +347,7 @@ func (p restorePlan) preview() map[string]any {
 		"ordersTotal":         p.ordersTotal,
 		"machines":            machineCountForPreview(p),
 		"settings":            p.wantsSettings && p.b["kv"] != nil,
-		"images":              len(p.pending),
+		"images":              mainImageCount(p.pending),
 		"secretsPresent":      p.secretsPresent,
 		"secretsRestored":     p.secretsRestored,
 		"sectionsPresent":     sectionsPresent(p.b),
