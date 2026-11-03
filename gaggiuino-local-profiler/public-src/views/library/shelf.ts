@@ -121,13 +121,16 @@ export interface ShelfBagImageBean {
   name?: string | null | undefined;
   roaster?: string | null | undefined;
   image?: string | null | undefined;
+  imageSticker?: boolean | null | undefined;
 }
 
 // Shared photo block: the bean's image or its initials placeholder. The
 // lib-shelf-img class + data-bean-id let loadBeanThumbnails fill the blob URL.
+// The sticker look follows the bean's flag, not the file type (#1884): a PNG
+// product photo from a shop import is a normal photo.
 export function shelfBagImage(b: ShelfBagImageBean): Html {
   return b.image
-    ? html`<img class="lib-shelf-img${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">`
+    ? html`<img class="lib-shelf-img${esc(b.imageSticker === true ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">`
     : html`<span class="lib-shelf-ph" aria-hidden="true">${esc(beanInitials(b.roaster || b.name || ''))}</span>`;
 }
 

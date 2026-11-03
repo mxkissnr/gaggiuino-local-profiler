@@ -1,11 +1,13 @@
 // The one client of the photo route contract shared by every photo field
-// (#1845). A route answers with the updated entity JSON and takes three
+// (#1845). A route answers with the updated entity JSON and takes four
 // request shapes:
 //   POST <route>                         — a new photo (drops any original);
+//   POST <route>?sticker=1               — a new photo that is a sticker
+//                                          cut-out (beans only, #1884);
 //   POST <route>?original=1&crop=x,y,w,h — the uncropped original of the
 //                                          photo just stored, plus its crop;
 //   POST <route>?crop=x,y,w,h            — re-crop the stored original.
-// All three answer with the entity, so the caller can replace its row.
+// All four answer with the entity, so the caller can replace its row.
 import { apiFetch } from './api/fetch.js';
 import type { ImageCrop } from './api/types.js';
 import { t } from './i18n.js';
@@ -16,15 +18,21 @@ import type { CropEditorOptions, CropEditorResult } from './components/image-cro
 export type PhotoCropShape = Pick<CropEditorOptions, 'shape' | 'aspect'>;
 
 /** A new photo plus, when known, the uncropped original and the crop that produced it. */
-export type NewPhoto = Pick<CropEditorResult, 'blob' | 'original'> & { crop: ImageCrop | null };
+export type NewPhoto = Pick<CropEditorResult, 'blob' | 'original'> & {
+  crop: ImageCrop | null;
+  /** Marks a sticker cut-out, stored as a PNG (bean photos only, #1884). */
+  sticker?: boolean;
+};
 
 /**
  * Upload `photo` as the photo behind `imageUrl`: the main image first, then —
  * when the uncropped original and the crop that produced it are known — the
- * original with its crop, so the photo can be re-cropped later.
+ * original with its crop, so the photo can be re-cropped later. A `sticker`
+ * photo marks the main image as a sticker cut-out; the original never carries
+ * that flag.
  */
 export async function saveNewPhoto(imageUrl: string, photo: NewPhoto): Promise<Response> {
-  const main = await apiFetch(imageUrl, {
+  const main = await apiFetch(photo.sticker ? `${imageUrl}?sticker=1` : imageUrl, {
     method: 'POST',
     headers: { 'Content-Type': photo.blob.type },
     body: photo.blob,
@@ -60,9 +68,9 @@ let adjusting = false;
  * Reopen the crop dialog on the photo behind `imageUrl` at its stored crop.
  * A photo that predates the original storage (or lost it) is opened on the
  * current image and then saved as a new photo plus original. Null when the
- * dialog is cancelled or another adjustment is already running. `finish` (a
- * step that turns the cropped image into the final one, e.g. the sticker
- * cut-out) re-saves the result as a new photo plus the same original.
+ * dialog is cancelled or another adjustment is already running. `finish` is the
+ * sticker cut-out step (bean photos only): its result is re-saved as a new
+ * sticker photo plus the same original.
  */
 export async function adjustPhoto(
   imageUrl: string,
@@ -87,7 +95,7 @@ export async function adjustPhoto(
       // The finished image is a new photo (the server drops the old original),
       // then the fetched original is re-saved with the new crop — not
       // `result.original`, so it is not re-encoded on every adjust.
-      return saveNewPhoto(imageUrl, { blob: finished, crop: result.crop, original });
+      return saveNewPhoto(imageUrl, { blob: finished, crop: result.crop, original, sticker: true });
     }
     if (isValidCrop(imageCrop)) {
       const original = await apiFetch(`${imageUrl}?original=1`, { cache: 'no-cache' });
