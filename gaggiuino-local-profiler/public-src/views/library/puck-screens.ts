@@ -118,10 +118,9 @@ export async function savePuckScreen(): Promise<void> {
 export async function uploadPuckScreenImage(id: number, input: HTMLInputElement): Promise<void> {
   const file = input.files![0];
   if (!file) return;
-  const pending = cropAndUploadPhoto(libraryApi.libraryImageUrl('puckscreen', id), file, PUCK_SCREEN_PHOTO);
+  const r = await cropAndUploadPhoto(libraryApi.libraryImageUrl('puckscreen', id), file, PUCK_SCREEN_PHOTO);
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
-  const r = await pending;
   if (!r) return;
   await _storePuckScreenPhoto(id, r);
 }

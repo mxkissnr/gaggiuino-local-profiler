@@ -129,10 +129,9 @@ export async function saveBasket(): Promise<void> {
 export async function uploadBasketImage(id: number, input: HTMLInputElement): Promise<void> {
   const file = input.files![0];
   if (!file) return;
-  const pending = cropAndUploadPhoto(libraryApi.libraryImageUrl('basket', id), file, BASKET_PHOTO);
+  const r = await cropAndUploadPhoto(libraryApi.libraryImageUrl('basket', id), file, BASKET_PHOTO);
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
-  const r = await pending;
   if (!r) return;
   await _storeBasketPhoto(id, r);
 }

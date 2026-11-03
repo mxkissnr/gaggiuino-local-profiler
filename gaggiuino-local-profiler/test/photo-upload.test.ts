@@ -3,7 +3,7 @@
 // the stored original. vitest runs in the node environment, so the browser
 // globals the module chain reads at load are stubbed here (same pattern as
 // test/library-sticker-cutout.test.ts).
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
@@ -50,11 +50,17 @@ function calls(): Call[] {
   return mocks.apiFetch.mock.calls.map(([url, opts]) => ({ url: url as string, opts: opts as RequestInit | undefined }));
 }
 
+let warn: ReturnType<typeof vi.spyOn>;
+
 beforeEach(() => {
   mocks.apiFetch.mockReset();
   mocks.openCropEditor.mockReset();
   alertMock.mockReset();
-  vi.restoreAllMocks();
+  warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  warn.mockRestore();
 });
 
 describe('cropAndUploadPhoto', () => {
@@ -98,7 +104,6 @@ describe('cropAndUploadPhoto', () => {
     mocks.openCropEditor.mockResolvedValue({ ...result(), original: null });
     const mainResponse = json({ id: 7 });
     mocks.apiFetch.mockResolvedValueOnce(mainResponse);
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(await cropAndUploadPhoto(ROUTE, mainBlob(), SHAPE)).toBe(mainResponse);
     expect(calls()).toHaveLength(1);
@@ -109,7 +114,6 @@ describe('cropAndUploadPhoto', () => {
     mocks.openCropEditor.mockResolvedValue(result());
     const mainResponse = json({ id: 7 });
     mocks.apiFetch.mockResolvedValueOnce(mainResponse).mockResolvedValueOnce(json({ error: 'slow down' }, 429));
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(await cropAndUploadPhoto(ROUTE, mainBlob(), SHAPE)).toBe(mainResponse);
     expect(calls()).toHaveLength(2);
@@ -199,7 +203,7 @@ describe('adjustPhoto', () => {
   it('ignores a second call while one is already running', async () => {
     let release: (value: unknown) => void = () => {};
     mocks.apiFetch.mockResolvedValueOnce(new Response(origBlob(), { status: 200 })).mockResolvedValueOnce(json({ id: 7 }));
-    mocks.openCropEditor.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    mocks.openCropEditor.mockImplementationOnce(() => new Promise<unknown>(resolve => { release = resolve; }));
 
     const first = adjustPhoto(ROUTE, CROP, SHAPE);
     await vi.waitFor(() => { expect(mocks.openCropEditor).toHaveBeenCalledTimes(1); });
