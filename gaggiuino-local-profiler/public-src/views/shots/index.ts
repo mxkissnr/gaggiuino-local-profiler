@@ -262,13 +262,13 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
 //  - an id outside S.allShots (older than the loaded window) is ignored.
 //  - otherwise every field the detail returns is patched: annotation, score,
 //    usedBeanTarget, and the image with its imageCrop (each deleted when the
-//    payload no longer has it, e.g. a removed photo). The cached
-//    photo/thumbnail is dropped, the sidebar
-//    and its highlighting re-render once after the loop, and the open shot's
-//    panel refreshes once. The scheduler's canRun held this run back while an
-//    edit or save was pending, so it cannot clobber one; and because the loop's
-//    sequential fetches give an edit time to start mid-run, the guard is
-//    re-checked for the open shot right before it is patched (see below).
+//    payload no longer has it, e.g. a removed photo). The cached photo and
+//    thumbnail are dropped, the sidebar and its highlighting re-render once
+//    after the loop, and the open shot's panel refreshes once. The scheduler's
+//    canRun held this run back while an edit or save was pending, so it cannot
+//    clobber one; and because the loop's sequential fetches give an edit time
+//    to start mid-run, the guard is re-checked for the open shot right before
+//    it is patched (see below).
 const REFRESH_INLINE_MAX = 5;
 
 export async function refreshShots(ids: string[] | null): Promise<void> {

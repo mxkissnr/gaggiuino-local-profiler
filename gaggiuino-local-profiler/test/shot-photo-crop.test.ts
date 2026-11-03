@@ -70,8 +70,6 @@ interface FakeThumb {
   hasAttribute(name: string): boolean;
 }
 
-let thumb: FakeThumb;
-let removeBtn: FakeBtn;
 let adjustBtn: FakeBtn;
 
 function makeThumb(): FakeThumb {
@@ -87,8 +85,8 @@ function makeThumb(): FakeThumb {
 }
 
 function installDocument(withAdjustBtn = true): void {
-  thumb = makeThumb();
-  removeBtn = { style: { display: '' }, onclick: null };
+  const thumb = makeThumb();
+  const removeBtn: FakeBtn = { style: { display: '' }, onclick: null };
   adjustBtn = { style: { display: 'none' }, onclick: null };
   const elements: Record<string, unknown> = {
     annPhotoThumb: thumb,
