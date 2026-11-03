@@ -26,6 +26,19 @@ export async function getLibrary(): Promise<CoffeeLibrary | null> {
   return jsonOrNull<CoffeeLibrary>(await apiFetch('api/library'));
 }
 
+// ── Photos (#1845) ───────────────────────────────────────────────────────
+
+/** The library entity kinds that carry a photo. */
+export type LibraryPhotoKind = 'bean' | 'grinder' | 'basket' | 'puckscreen';
+
+/**
+ * GET/POST /api/library/{kind}/{id}/image — the entity's photo route.
+ * `photo-upload.ts` appends the `?original=1` / `?crop=` queries.
+ */
+export function libraryImageUrl(kind: LibraryPhotoKind, id: number): string {
+  return `api/library/${pathSeg(kind)}/${pathSeg(id)}/image`;
+}
+
 // ── Beans ────────────────────────────────────────────────────────────────
 
 /**
@@ -94,7 +107,7 @@ export function deleteBeanPermanently(id: number): Promise<Response> {
 
 /** POST /api/library/bean/{id}/image — upload a (cropped) bean photo; raw Response so the caller can read the JSON error/statusText. */
 export function uploadBeanImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/bean/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+  return apiFetch(libraryImageUrl('bean', id), { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
 }
 
 // ── Grinders ─────────────────────────────────────────────────────────────
@@ -123,11 +136,6 @@ export async function setGrinderZeroPoint(id: number, zeroPoint: number, since?:
 /** DELETE /api/library/grinder/{id}/zero-point/{since} — remove one history entry. */
 export async function deleteGrinderZeroPoint(id: number, since: number): Promise<Grinder | null> {
   return jsonOrNull<Grinder>(await apiFetch(`api/library/grinder/${pathSeg(id)}/zero-point/${pathSeg(since)}`, { method: 'DELETE' }));
-}
-
-/** POST /api/library/grinder/{id}/image — upload a (cropped) grinder photo; raw Response. */
-export function uploadGrinderImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/grinder/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
 }
 
 /** POST /api/library/grinder/{id}/delete — permanently delete a grinder. */
@@ -178,11 +186,6 @@ export async function saveBasket(id: number | null, payload: unknown): Promise<B
   return jsonOrNull<Basket>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
 }
 
-/** POST /api/library/basket/{id}/image — upload a (cropped) basket photo; raw Response. */
-export function uploadBasketImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/basket/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
-}
-
 /** DELETE /api/library/basket/{id} — permanently delete a basket. */
 export function deleteBasketById(id: number): Promise<Response> {
   return apiFetch(`api/library/basket/${pathSeg(id)}`, { method: 'DELETE' });
@@ -194,11 +197,6 @@ export function deleteBasketById(id: number): Promise<Response> {
 export async function savePuckScreen(id: number | null, payload: unknown): Promise<PuckScreen | null> {
   const url = id != null ? `api/library/puckscreen/${pathSeg(id)}` : 'api/library/puckscreen';
   return jsonOrNull<PuckScreen>(await apiFetch(url, jsonBody(payload, id != null ? 'PUT' : 'POST')));
-}
-
-/** POST /api/library/puckscreen/{id}/image — upload a (cropped) puck-screen photo; raw Response. */
-export function uploadPuckScreenImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(`api/library/puckscreen/${pathSeg(id)}/image`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
 }
 
 /** DELETE /api/library/puckscreen/{id} — permanently delete a puck screen. */

@@ -7,7 +7,8 @@ import { esc, html, joinHtml, toIsoDateInput, localMidnightMs } from '../../util
 import type { Html } from '../../utils.js';
 import { WRENCH_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
-import { openImageCropEditor } from '../../components/image-crop.js';
+import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
+import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { loadGrinderImageBlobUrl, invalidateGrinderImage } from '../../bean-image.js';
 import { currentGrinderZeroPoint } from '../../grind-zero.js';
@@ -17,6 +18,9 @@ import * as libraryView from '../library.js';
 // Circular with library.ts (it re-exports this module): only ever touched at
 // call time, never read at module load.
 const library = libraryView;
+
+// Same 1:1 crop the grinder photo always had.
+const GRINDER_PHOTO: PhotoCropShape = { shape: 'square' };
 
 const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 
@@ -131,6 +135,9 @@ export function openGrinderForm(grinder?: GrinderRow | null): void {
   attachAutocomplete(_input('grinderFormBurrType'), () => _burrTypeSuggestions());
   _input('grinderFormPurchaseDate').value = toIsoDateInput(grinder?.purchaseDate);
   _el('grinderFormImageField').style.display = grinder ? '' : 'none';
+  _el('grinderFormImageAdjustBtn').style.display = grinder?.image ? '' : 'none';
+  // onclick, not addEventListener: reopening the form must not stack handlers.
+  _el('grinderFormImageAdjustBtn').onclick = () => { if (S.grinderEditId) void _adjustGrinderImage(S.grinderEditId); };
   // Zero-point tracking only makes sense once a grinder already has shot
   // history to correct — hidden for a brand-new grinder, same as the photo
   // field above.
@@ -244,18 +251,30 @@ export async function resetGrinderBurrs(id: number): Promise<void> {
 export async function uploadGrinderImage(id: number, input: HTMLInputElement): Promise<void> {
   const file = input.files![0];
   if (!file) return;
-  const blob = await openImageCropEditor(file, { shape: 'square' });
+  const r = await cropAndUploadPhoto(libraryApi.libraryImageUrl('grinder', id), file, GRINDER_PHOTO);
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
-  if (!blob) return;
-  const r = await libraryApi.uploadGrinderImage(id, blob);
-  if (!r.ok) { alert(t('error_generic', ((await r.json().catch(() => ({}))) as { error?: string }).error || r.statusText)); return; }
-  const saved = await r.json() as GrinderRow;
+  if (!r) return;
+  await _storeGrinderPhoto(id, r);
+}
+
+async function _adjustGrinderImage(id: number): Promise<void> {
+  const grinder = _grinders().find(g => g.id === id);
+  if (!grinder?.image) return;
+  const r = await adjustPhoto(libraryApi.libraryImageUrl('grinder', id), grinder.imageCrop, GRINDER_PHOTO);
+  if (!r) return;
+  await _storeGrinderPhoto(id, r);
+}
+
+async function _storeGrinderPhoto(id: number, r: Response): Promise<void> {
+  const saved = await savedPhotoRow<GrinderRow>(r);
+  if (!saved) return;
   const grinders = _grinders();
   const idx = grinders.findIndex(g => g.id === id);
   if (idx !== -1) grinders[idx] = saved;
   invalidateGrinderImage(id);
   renderGrinderList();
+  if (S.grinderEditId === id) _el('grinderFormImageAdjustBtn').style.display = '';
 }
 
 export async function deleteGrinder(id: number): Promise<void> {
