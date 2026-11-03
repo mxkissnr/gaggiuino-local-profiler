@@ -8,12 +8,13 @@ import type { BeanRow } from './bags.js';
 import { _beanList, _state, _field, _el } from './bean-shared.js';
 import type { BeanListRow } from './bean-shared.js';
 import { populateOriginSelect, bindOriginInput, setFormOrigins, populateSuggestionDatalists, bindFlavorInput, setFormFlavors, commitFlavorInput, formFlavors, formOrigins } from './bean-form-chips.js';
-import { updateStickerButton, clearStagedBeanImage, stagedBeanImage } from './bean-sticker.js';
+import { updateStickerButton, clearStagedBeanImage, stagedBeanImage, adjustBeanImage } from './bean-sticker.js';
 import {
   sheetBeanId, forgetSheetReturnFocus, openBeanSheet, closeBeanSheet,
   _overlayShieldsSheets, _trapTab, _dropNewShelfTile,
 } from './bean-sheet.js';
 import * as libraryApi from '../../api/library.js';
+import { saveNewPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { Bean } from '../../api/types.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { renderRecipeList } from './recipes.js';
@@ -328,6 +329,10 @@ export function openBeanForm(bean?: BeanRow | null): void {
   const stagedHint = document.getElementById('beanFormImageStaged');
   if (stagedHint) stagedHint.style.display = 'none';
   void updateStickerButton();
+  // `onclick`, not `addEventListener`, so reopening the form never stacks
+  // handlers (same as the grinder form).
+  const adjustBtn = document.getElementById('beanFormImageAdjustBtn');
+  if (adjustBtn) adjustBtn.onclick = () => { void adjustBeanImage(); };
   // Edit mode keeps a single Speichern; creating a new bean instead offers
   // "Speichern und Packung hinzufügen" / "Speichern ohne Packung" — there's
   // nothing to combine-with-a-bag-dialog once the bean already exists.
@@ -358,6 +363,8 @@ export function closeBeanForm(): void {
   if (stagedHint) stagedHint.style.display = 'none';
   const stickerBtn = document.getElementById('beanFormStickerBtn');
   if (stickerBtn) stickerBtn.style.display = 'none';
+  const adjustBtn = document.getElementById('beanFormImageAdjustBtn');
+  if (adjustBtn) adjustBtn.style.display = 'none';
   const extraEl = document.getElementById('beanFormExtraRecipes');
   if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = html``; }
   _hideFormConfirm();
@@ -496,15 +503,12 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     const staged = stagedBeanImage();
     if (wasCreate && staged) {
       clearStagedBeanImage();
-      const uploaded = await libraryApi.uploadBeanImage(saved.id, staged);
-      if (uploaded.ok) {
-        const withImage = (await uploaded.json()) as BeanListRow;
+      const r = await saveNewPhoto(libraryApi.libraryImageUrl('bean', saved.id), staged);
+      const withImage = await savedPhotoRow<BeanListRow>(r);
+      if (withImage) {
         const imgIdx = _beanList().findIndex(b => b.id === saved.id);
         if (imgIdx !== -1) _beanList()[imgIdx] = withImage;
         invalidateBeanImage(saved.id);
-      } else {
-        const err = (await uploaded.json().catch(() => ({}))) as { error?: string };
-        alert(t('error_generic', err.error || uploaded.statusText));
       }
     }
     for (const recipe of extraRecipesToImport) {

@@ -105,11 +105,6 @@ export function deleteBeanPermanently(id: number): Promise<Response> {
   return apiFetch(`api/library/bean/${pathSeg(id)}/delete`, { method: 'POST' });
 }
 
-/** POST /api/library/bean/{id}/image — upload a (cropped) bean photo; raw Response so the caller can read the JSON error/statusText. */
-export function uploadBeanImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(libraryImageUrl('bean', id), { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
-}
-
 // ── Grinders ─────────────────────────────────────────────────────────────
 
 /** POST/PUT /api/library/grinder[/{id}] — create (`id` null) or update a grinder. */
