@@ -7,6 +7,7 @@
 //   POST <route>?crop=x,y,w,h            — re-crop the stored original.
 // All three answer with the entity, so the caller can replace its row.
 import { apiFetch } from './api/fetch.js';
+import type { ImageCrop } from './api/types.js';
 import { t } from './i18n.js';
 import { openCropEditor, cropQuery, isValidCrop } from './components/image-crop.js';
 import type { CropEditorOptions, CropEditorResult } from './components/image-crop.js';
@@ -14,21 +15,29 @@ import type { CropEditorOptions, CropEditorResult } from './components/image-cro
 /** The crop-editor settings a photo field picks, e.g. `{ shape: 'square' }`. */
 export type PhotoCropShape = Pick<CropEditorOptions, 'shape' | 'aspect'>;
 
-async function saveNewPhoto(imageUrl: string, result: CropEditorResult): Promise<Response> {
+/** A new photo plus, when known, the uncropped original and the crop that produced it. */
+export type NewPhoto = Pick<CropEditorResult, 'blob' | 'original'> & { crop: ImageCrop | null };
+
+/**
+ * Upload `photo` as the photo behind `imageUrl`: the main image first, then —
+ * when the uncropped original and the crop that produced it are known — the
+ * original with its crop, so the photo can be re-cropped later.
+ */
+export async function saveNewPhoto(imageUrl: string, photo: NewPhoto): Promise<Response> {
   const main = await apiFetch(imageUrl, {
     method: 'POST',
-    headers: { 'Content-Type': result.blob.type },
-    body: result.blob,
+    headers: { 'Content-Type': photo.blob.type },
+    body: photo.blob,
   });
   if (!main.ok) return main;
-  if (result.original === null) {
+  if (photo.original === null || photo.crop === null) {
     console.warn('photo-upload: no uncropped original, the photo cannot be re-cropped later');
     return main;
   }
-  const stored = await apiFetch(`${imageUrl}?original=1&crop=${cropQuery(result.crop)}`, {
+  const stored = await apiFetch(`${imageUrl}?original=1&crop=${cropQuery(photo.crop)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'image/jpeg' },
-    body: result.original,
+    body: photo.original,
   });
   if (stored.ok) return stored;
   console.warn(`photo-upload: storing the original failed (${stored.status}), the photo is saved without one`);
@@ -51,12 +60,35 @@ let adjusting = false;
  * Reopen the crop dialog on the photo behind `imageUrl` at its stored crop.
  * A photo that predates the original storage (or lost it) is opened on the
  * current image and then saved as a new photo plus original. Null when the
- * dialog is cancelled or another adjustment is already running.
+ * dialog is cancelled or another adjustment is already running. `finish` (a
+ * step that turns the cropped image into the final one, e.g. the sticker
+ * cut-out) re-saves the result as a new photo plus the same original.
  */
-export async function adjustPhoto(imageUrl: string, imageCrop: unknown, shape: PhotoCropShape): Promise<Response | null> {
+export async function adjustPhoto(
+  imageUrl: string,
+  imageCrop: unknown,
+  shape: PhotoCropShape,
+  finish?: (cropped: Blob) => Promise<Blob | null>,
+): Promise<Response | null> {
   if (adjusting) return null;
   adjusting = true;
   try {
+    if (finish) {
+      // The stored main image is the finished cut-out: cropping it again would
+      // flatten its transparency to JPEG, so there is no older-photo fallback.
+      if (!isValidCrop(imageCrop)) return null;
+      const stored = await apiFetch(`${imageUrl}?original=1`, { cache: 'no-cache' });
+      if (!stored.ok) return stored;
+      const original = await stored.blob();
+      const result = await openCropEditor(original, { ...shape, initialCrop: imageCrop });
+      if (!result) return null;
+      const finished = await finish(result.blob);
+      if (!finished) return null;
+      // The finished image is a new photo (the server drops the old original),
+      // then the fetched original is re-saved with the new crop — not
+      // `result.original`, so it is not re-encoded on every adjust.
+      return saveNewPhoto(imageUrl, { blob: finished, crop: result.crop, original });
+    }
     if (isValidCrop(imageCrop)) {
       const original = await apiFetch(`${imageUrl}?original=1`, { cache: 'no-cache' });
       if (original.ok) {
