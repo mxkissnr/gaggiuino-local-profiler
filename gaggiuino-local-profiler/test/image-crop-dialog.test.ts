@@ -24,9 +24,17 @@ interface BlobCall {
   height: number;
 }
 
+interface DrawOp {
+  op: 'fillRect' | 'drawImage';
+  fillStyle?: string;
+  w?: number;
+  h?: number;
+}
+
 interface FakeCanvas extends FakeEl {
   width: number;
   height: number;
+  ops: DrawOp[];
   toBlob: (cb: (blob: Blob | null) => void, type?: string, quality?: number) => void;
   getContext: () => Record<string, unknown>;
 }
@@ -75,9 +83,16 @@ function fakeDocument(): Record<string, unknown> {
         const canvas = new FakeEl() as FakeCanvas;
         canvas.width = 0;
         canvas.height = 0;
+        canvas.ops = [];
+        let fillStyle = '';
         canvas.getContext = (): Record<string, unknown> => ({
           clearRect: () => {},
-          drawImage: () => {},
+          get fillStyle(): string { return fillStyle; },
+          set fillStyle(value: string) { fillStyle = value; },
+          fillRect: (_x: number, _y: number, w: number, h: number): void => {
+            canvas.ops.push({ op: 'fillRect', fillStyle, w, h });
+          },
+          drawImage: (): void => { canvas.ops.push({ op: 'drawImage' }); },
           imageSmoothingEnabled: false,
           imageSmoothingQuality: 'low',
         });
@@ -225,6 +240,24 @@ describe('openCropEditor() apply (#1845)', () => {
 
     expect(result?.blob).toBeTruthy();
     expect(result?.original).toBeNull();
+  });
+});
+
+describe('openCropEditor() export background (#1889)', () => {
+  it('fills both export canvases white before drawing (#1889)', async () => {
+    const pending = openCropEditor(FILE);
+    await flush();
+    part('.crop-editor-apply').fire('click');
+    await pending;
+
+    const canvases = (g.document as { canvases: FakeCanvas[] }).canvases;
+    expect(canvases.map((c) => `${c.width}x${c.height}`)).toEqual(['1600x1600', '1600x1200']);
+    for (const canvas of canvases) {
+      expect(canvas.ops.slice(0, 2)).toEqual([
+        { op: 'fillRect', fillStyle: '#fff', w: canvas.width, h: canvas.height },
+        { op: 'drawImage' },
+      ]);
+    }
   });
 });
 
