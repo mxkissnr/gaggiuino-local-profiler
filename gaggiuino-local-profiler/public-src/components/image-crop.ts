@@ -6,6 +6,7 @@ import { t } from '../i18n.js';
 import { esc, html } from '../utils.js';
 import { attachDialogKeyboard } from './dialog-a11y.js';
 import type { DialogKeyboardHandle } from './dialog-a11y.js';
+import type { ImageCrop } from '../api/types.js';
 
 // 'square' is the historical 1:1 crop (grinders, baskets, puck screens, shots);
 // 'portrait' is the 3:4 bag shape bean photos are shown at on the shelf (#1346).
@@ -21,6 +22,12 @@ const BOX = {
 } satisfies Record<CropAspect, { previewW: number; previewH: number; exportW: number; exportH: number }>;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
+
+// Mirror the server's stored-original cap and JPEG quality (decision
+// 2026-11-02): originals are kept at a long edge <= 1600 px and re-encoded at
+// quality 85. The main crop export stays at 0.92.
+export const ORIGINAL_MAX_EDGE = 1600;
+export const ORIGINAL_JPEG_QUALITY = 0.85;
 
 interface Point {
   x: number;
@@ -63,29 +70,155 @@ export function clampOffset(offsetX: number, offsetY: number, naturalW: number, 
   };
 }
 
-// Opens the crop editor for `file`. `shape` ('circle' | 'square') picks the
-// preview guide, `aspect` ('square' | 'portrait') picks the 1:1 vs 3:4 export
-// shape — the exported JPEG matches the box, consistent with how
-// object-fit:cover + border-radius renders thumbnails elsewhere in the app.
-// Resolves with a Blob on Apply, or null on Cancel / load failure.
-export function openImageCropEditor(
-  file: Blob,
-  { shape = 'circle', aspect = 'square' }: { shape?: 'circle' | 'square'; aspect?: CropAspect } = {},
-): Promise<Blob | null> {
+function clampNum(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+// The 6-decimal rounding keeps the fractions printable without exponent
+// notation and well inside the server's 1e-3 tolerance.
+function round6(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+// A crop edge as a fraction of the source: always inside (0, 1] so the server
+// accepts it even for a degenerate view.
+function fraction(value: number): number {
+  return Number.isFinite(value) ? clampNum(value, 1e-6, 1) : 1;
+}
+
+function offsetFraction(value: number, limit: number): number {
+  return Number.isFinite(value) ? clampNum(value, 0, limit) : 0;
+}
+
+// The source rectangle currently visible in the crop box, as fractions of the
+// uncropped source (#1845). `scale` is preview px per source px.
+export function viewToCrop(
+  offsetX: number, offsetY: number, scale: number,
+  naturalW: number, naturalH: number, boxW: number, boxH: number,
+): ImageCrop {
+  const scaledW = naturalW * scale;
+  const scaledH = naturalH * scale;
+  const w = round6(fraction(boxW / scaledW));
+  const h = round6(fraction(boxH / scaledH));
+  return {
+    x: round6(offsetFraction(-offsetX / scaledW, 1 - w)),
+    y: round6(offsetFraction(-offsetY / scaledH, 1 - h)),
+    w,
+    h,
+  };
+}
+
+// Inverse of viewToCrop: the zoom/pan that shows `crop` inside the box.
+export function cropToView(
+  crop: ImageCrop, naturalW: number, naturalH: number, boxW: number, boxH: number,
+): { zoom: number; offsetX: number; offsetY: number } {
+  const base = coverBaseScale(naturalW, naturalH, boxW, boxH);
+  const needed = Math.max(boxW / (crop.w * naturalW), boxH / (crop.h * naturalH));
+  const zoom = clampNum(needed / base, MIN_ZOOM, MAX_ZOOM);
+  const scale = base * zoom;
+  const offset = clampOffset(-crop.x * naturalW * scale, -crop.y * naturalH * scale, naturalW, naturalH, scale, boxW, boxH);
+  return { zoom, offsetX: offset.x, offsetY: offset.y };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+// The server's rule (go/internal/img/crop.go): four finite numbers, a positive
+// size inside the unit square, the far edge tolerated by 1e-3.
+export function isValidCrop(c: unknown): c is ImageCrop {
+  if (typeof c !== 'object' || c === null) return false;
+  const { x, y, w, h } = c as Record<string, unknown>;
+  if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(w) || !isFiniteNumber(h)) return false;
+  if (x < 0 || y < 0) return false;
+  if (w <= 0 || w > 1 || h <= 0 || h > 1) return false;
+  return x + w <= 1.001 && y + h <= 1.001;
+}
+
+// "x,y,w,h" for the ?crop= query parameter. Fixed-point first, because
+// String(1e-7) is '1e-7' and the server parses plain decimals only.
+function cropNumber(value: number): string {
+  const fixed = value.toFixed(6);
+  return fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed;
+}
+
+export function cropQuery(c: ImageCrop): string {
+  return [c.x, c.y, c.w, c.h].map(cropNumber).join(',');
+}
+
+// Size of the uncropped original sent alongside a new photo: long edge capped
+// at ORIGINAL_MAX_EDGE and never upscaled, aspect kept.
+export function originalExportSize(naturalW: number, naturalH: number): { width: number; height: number } {
+  const long = Math.max(naturalW, naturalH);
+  if (!Number.isFinite(long) || long <= 0) return { width: 0, height: 0 };
+  const factor = long > ORIGINAL_MAX_EDGE ? ORIGINAL_MAX_EDGE / long : 1;
+  return {
+    width: Math.round(naturalW * factor),
+    height: Math.round(naturalH * factor),
+  };
+}
+
+export interface CropEditorResult {
+  /** The cropped JPEG the photo field uploads as the main image. */
+  blob: Blob;
+  /** Where `blob` sits inside the uncropped original. */
+  crop: ImageCrop;
+  /** The uncropped source as a JPEG (long edge <= 1600), or null if encoding failed. */
+  original: Blob | null;
+}
+
+export interface CropEditorOptions {
+  shape?: 'circle' | 'square';
+  aspect?: CropAspect;
+  /** Pre-position the view, e.g. when re-cropping a photo that already has a crop. */
+  initialCrop?: ImageCrop;
+  /** Already-translated line under the title; omitted entirely when absent. */
+  hint?: string;
+}
+
+// Opens the crop editor for `file` and resolves with the cropped JPEG plus the
+// crop rectangle and uncropped original a re-crop needs (#1845). `shape`
+// ('circle' | 'square') picks the preview guide, `aspect` ('square' |
+// 'portrait') picks the 1:1 vs 3:4 export shape — the exported JPEG matches
+// the box, consistent with how object-fit:cover + border-radius renders
+// thumbnails elsewhere in the app.
+// Resolves with null on Cancel / load failure; `original` is null when the
+// browser could not encode it.
+export function openCropEditor(file: Blob, opts: CropEditorOptions = {}): Promise<CropEditorResult | null> {
+  const shape = opts.shape ?? 'circle';
+  const aspect = opts.aspect ?? 'square';
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onerror = () => resolve(null);
     reader.onload = () => {
       const img = new Image();
       img.onerror = () => resolve(null);
-      img.onload = () => _buildEditor(img, shape, aspect, resolve);
+      img.onload = () => _buildEditor(img, shape, aspect, opts, resolve);
       img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   });
 }
 
-function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect: CropAspect, resolve: (value: Blob | null) => void): void {
+// Opens the crop editor for `file`. `shape` ('circle' | 'square') picks the
+// preview guide, `aspect` ('square' | 'portrait') picks the 1:1 vs 3:4 export
+// shape — the exported JPEG matches the box, consistent with how
+// object-fit:cover + border-radius renders thumbnails elsewhere in the app.
+// Resolves with a Blob on Apply, or null on Cancel / load failure.
+// Blob-only view of openCropEditor for the five photo fields; removed in slice
+// 6b, once they consume CropEditorResult themselves.
+export async function openImageCropEditor(
+  file: Blob,
+  { shape = 'circle', aspect = 'square' }: { shape?: 'circle' | 'square'; aspect?: CropAspect } = {},
+): Promise<Blob | null> {
+  const result = await openCropEditor(file, { shape, aspect });
+  return result?.blob ?? null;
+}
+
+function _buildEditor(
+  img: HTMLImageElement, shape: 'circle' | 'square', aspect: CropAspect,
+  opts: CropEditorOptions, resolve: (value: CropEditorResult | null) => void,
+): void {
   const box = BOX[aspect];
   const previewW = box.previewW;
   const previewH = box.previewH;
@@ -93,9 +226,14 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
   const naturalH = img.naturalHeight;
   const baseScale = coverBaseScale(naturalW, naturalH, previewW, previewH);
 
-  let zoom = MIN_ZOOM;
-  let offsetX = (previewW - naturalW * baseScale) / 2;
-  let offsetY = (previewH - naturalH * baseScale) / 2;
+  // A stored crop positions the view; anything else starts centred at zoom 1.
+  const initial = opts.initialCrop !== undefined && isValidCrop(opts.initialCrop)
+    ? cropToView(opts.initialCrop, naturalW, naturalH, previewW, previewH)
+    : null;
+
+  let zoom = initial?.zoom ?? MIN_ZOOM;
+  let offsetX = initial?.offsetX ?? (previewW - naturalW * baseScale) / 2;
+  let offsetY = initial?.offsetY ?? (previewH - naturalH * baseScale) / 2;
 
   const guideClass = shape === 'square' ? 'square' : 'circle';
   const portraitClass = aspect === 'portrait' ? ' crop-editor-canvas-portrait' : '';
@@ -108,6 +246,7 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
   overlay.innerHTML = html`
     <div class="crop-editor-modal">
       <h3 class="crop-editor-title" id="cropEditorTitle">${esc(t('crop_editor_title'))}</h3>
+      ${opts.hint ? html`<p class="lib-form-hint crop-editor-hint">${esc(opts.hint)}</p>` : esc('')}
       <canvas class="${esc(canvasClass)}"
               width="${esc(previewW)}" height="${esc(previewH)}"></canvas>
       <div class="crop-editor-zoom-row">
@@ -125,6 +264,7 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
   const canvas = overlay.querySelector('.crop-editor-canvas') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
   const slider = overlay.querySelector('.crop-editor-zoom-slider') as HTMLInputElement;
+  slider.value = String(zoom);
 
   function draw(): void {
     ctx.clearRect(0, 0, previewW, previewH);
@@ -233,7 +373,7 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
 
   // ── Apply / Cancel ────────────────────────────────────────────────────
   let dialog: DialogKeyboardHandle | null = null;
-  function close(result: Blob | null): void {
+  function close(result: CropEditorResult | null): void {
     dialog?.release();
     dialog = null;
     overlay.remove();
@@ -245,6 +385,7 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
 
   (overlay.querySelector('.crop-editor-apply') as HTMLElement).addEventListener('click', () => {
     const scale = baseScale * zoom;
+    const crop = viewToCrop(offsetX, offsetY, scale, naturalW, naturalH, previewW, previewH);
     const out = cropExportSize(aspect, scale);
 
     const outCanvas = document.createElement('canvas');
@@ -254,7 +395,29 @@ function _buildEditor(img: HTMLImageElement, shape: 'circle' | 'square', aspect:
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = 'high';
     outCtx.drawImage(img, offsetX * out.factor, offsetY * out.factor, naturalW * scale * out.factor, naturalH * scale * out.factor);
-    outCanvas.toBlob((blob) => close(blob), 'image/jpeg', 0.92);
+
+    // Both encodings start together so Apply waits on the slower one only.
+    const originalSize = originalExportSize(naturalW, naturalH);
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = originalSize.width;
+    origCanvas.height = originalSize.height;
+    const origCtx = origCanvas.getContext('2d') as CanvasRenderingContext2D;
+    origCtx.imageSmoothingEnabled = true;
+    origCtx.imageSmoothingQuality = 'high';
+    origCtx.drawImage(img, 0, 0, originalSize.width, originalSize.height);
+
+    let pending = 2;
+    let mainBlob: Blob | null = null;
+    let originalBlob: Blob | null = null;
+    function encoded(): void {
+      pending -= 1;
+      if (pending > 0) return;
+      const blob = mainBlob;
+      if (blob === null) { close(null); return; }
+      close({ blob, crop, original: originalBlob });
+    }
+    outCanvas.toBlob((blob) => { mainBlob = blob; encoded(); }, 'image/jpeg', 0.92);
+    origCanvas.toBlob((blob) => { originalBlob = blob; encoded(); }, 'image/jpeg', ORIGINAL_JPEG_QUALITY);
   });
 
   dialog = attachDialogKeyboard(overlay, () => close(null), { initialFocus: slider });

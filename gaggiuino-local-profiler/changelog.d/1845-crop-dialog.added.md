@@ -1,0 +1,1 @@
+- **The crop dialog remembers where a photo was cut**, the groundwork for re-cropping saved photos later. Part of #1845
