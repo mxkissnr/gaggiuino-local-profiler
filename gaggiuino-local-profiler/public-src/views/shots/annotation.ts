@@ -702,7 +702,7 @@ async function _storeShotPhoto(id: number, r: Response): Promise<void> {
   if (!saved) return;
   const entry = _shots().find(s => s.id === id);
   if (entry) {
-    entry.image = saved.image;
+    entry.image = saved.image ?? null;
     if (saved.imageCrop) entry.imageCrop = saved.imageCrop;
     else delete entry.imageCrop;
   }

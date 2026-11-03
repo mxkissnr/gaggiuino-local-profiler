@@ -14,7 +14,7 @@ vi.mock('../public-src/components/dialog-a11y.js', async (importOriginal) => {
   return { ...actual, attachDialogKeyboard: () => ({ release: () => {} }) };
 });
 
-const { openCropEditor, openImageCropEditor, viewToCrop, coverBaseScale } =
+const { openCropEditor, viewToCrop, coverBaseScale } =
   await import('../public-src/components/image-crop.js');
 
 interface BlobCall {
@@ -268,13 +268,15 @@ describe('openCropEditor() cancel (#1845)', () => {
   });
 });
 
-describe('openImageCropEditor() wrapper (#1845)', () => {
-  it('still resolves the main blob only', async () => {
-    const pending = openImageCropEditor(FILE, { aspect: 'portrait' });
+describe('openCropEditor() portrait export (#1845)', () => {
+  it('exports the main image in the portrait box and the original in the source aspect', async () => {
+    const pending = openCropEditor(FILE, { aspect: 'portrait' });
     await flush();
     part('.crop-editor-apply').fire('click');
-    const blob = await pending;
-    expect(blob).toBeTruthy();
+    const result = await pending;
+
+    expect(result?.blob).toBeTruthy();
+    expect(result?.original).toBeTruthy();
     // Main export follows the portrait box; the original keeps the source aspect.
     expect(blobCalls.map((c) => `${c.width}x${c.height}`)).toEqual(['1200x1600', '1600x1200']);
   });
