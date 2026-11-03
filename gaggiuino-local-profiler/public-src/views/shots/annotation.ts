@@ -3,19 +3,20 @@ import type { LibraryRow, ShotMeta } from '../../state/index.js';
 import { t, tHtml }                       from '../../i18n.js';
 import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
-import { annotateShot, getShotDefaults, postShotImage, deleteShotImage } from '../../api/shots.js';
-import type { AnnotateResult, ShotDefaults } from '../../api/types.js';
+import { annotateShot, getShotDefaults, deleteShotImage, shotImageUrl } from '../../api/shots.js';
+import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js';
 import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
 import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
-import { openImageCropEditor } from '../../components/image-crop.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
 import type { BeanMixPartInput, BeanMixPartPayload } from '../../shared/bean-mix.js';
 import { initBeanMix, loadBeanMix, mixFields, mixParts, resetBeanMix } from './annotation-mix.js';
+import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
+import type { PhotoCropShape } from '../../photo-upload.js';
 
 // state/index.ts types shot rows as metadata-only ShotMeta (id/timestamp plus
 // an index signature) and the library rows as Record<string, unknown>; these
@@ -59,6 +60,7 @@ interface AnnotationShot {
 // fields through this alias, same pattern as analytics.ts's _shots().
 interface AnnotationShotRow extends ShotMeta {
   image?: string | null;
+  imageCrop?: ImageCrop | null;
   annotation?: AnnotationData | null | undefined;
 }
 function _shots(): AnnotationShotRow[] { return S.shots; }
@@ -639,7 +641,11 @@ export function updateDegassing(val: string | null | undefined): void {
 
 // ── Shot photo ────────────────────────────────────────────────────────────
 
-function _renderShotPhoto(shot: { id: number; image?: string | null | undefined }): void {
+// Same crop as the shot photo always had: circle guide, square export.
+const SHOT_PHOTO: PhotoCropShape = { shape: 'circle' };
+
+// Exported for the tests, same as the other underscore helpers here.
+export function _renderShotPhoto(shot: { id: number; image?: string | null | undefined }): void {
   const thumb  = document.getElementById('annPhotoThumb') as HTMLImageElement;
   const remove = document.getElementById('annPhotoRemoveBtn') as HTMLElement;
   if (!thumb || !remove) return;
@@ -654,6 +660,12 @@ function _renderShotPhoto(shot: { id: number; image?: string | null | undefined 
     thumb.removeAttribute('data-clickable');
     remove.style.display = 'none';
   }
+  const adjust = document.getElementById('annPhotoAdjustBtn') as HTMLElement | null;
+  if (adjust) {
+    adjust.style.display = shot.image ? '' : 'none';
+    // `onclick`, not addEventListener: re-rendering the panel must not stack handlers.
+    adjust.onclick = () => { void adjustShotImage(); };
+  }
 }
 
 export function openShotPhotoLightbox(): void {
@@ -666,25 +678,37 @@ export async function uploadShotImage(input: HTMLInputElement): Promise<void> {
   const file = input.files?.[0];
   if (!file || !S.primaryShotId) return;
   const id = S.primaryShotId;
-  const blob = await openImageCropEditor(file, { shape: 'circle' });
-
+  const r = await cropAndUploadPhoto(shotImageUrl(id), file, SHOT_PHOTO);
+  // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
-  if (!blob) return;
-  const r = await postShotImage(id, blob);
-  if (!r.ok) {
-    const body: unknown = await r.json().catch(() => null);
-    const err = (body as { error?: string } | null)?.error;
-    alert(t('error_generic', err || r.statusText));
-    return;
-  }
-  const saved = await r.json() as { image?: string | null };
-  const idx = S.shots.findIndex(s => s.id === id);
-  if (idx !== -1) {
-    const entry = S.shots[idx];
-    if (entry) entry.image = saved.image;
+  if (!r) return;
+  await _storeShotPhoto(id, r);
+}
+
+/** Reopen the crop dialog on the shot photo, re-cropping its stored original. */
+export async function adjustShotImage(): Promise<void> {
+  const id = S.primaryShotId;
+  if (!id) return;
+  const row = _shots().find(s => s.id === id);
+  if (!row?.image) return;
+  const r = await adjustPhoto(shotImageUrl(id), row.imageCrop, SHOT_PHOTO);
+  if (!r) return;
+  await _storeShotPhoto(id, r);
+}
+
+// Patches only the two photo fields: the response is the whole shot, datapoints included.
+async function _storeShotPhoto(id: number, r: Response): Promise<void> {
+  const saved = await savedPhotoRow<{ image?: string | null; imageCrop?: ImageCrop | null }>(r);
+  if (!saved) return;
+  const entry = _shots().find(s => s.id === id);
+  if (entry) {
+    entry.image = saved.image;
+    if (saved.imageCrop) entry.imageCrop = saved.imageCrop;
+    else delete entry.imageCrop;
   }
   invalidateShotImage(id);
-  _renderShotPhoto({ id, image: saved.image });
+  // The open panel may show another shot by now.
+  if (S.primaryShotId === id) _renderShotPhoto({ id, image: saved.image });
   renderSidebar();
   updateSidebarHighlighting();
 }
@@ -697,7 +721,8 @@ export async function removeShotImage(): Promise<void> {
   const idx = S.shots.findIndex(s => s.id === id);
   if (idx !== -1) {
     const entry = S.shots[idx];
-    if (entry) delete entry.image;
+    // The server drops the image and the original together.
+    if (entry) { delete entry.image; delete entry.imageCrop; }
   }
   invalidateShotImage(id);
   _renderShotPhoto({ id, image: null });
