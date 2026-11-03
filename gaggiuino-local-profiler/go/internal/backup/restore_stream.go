@@ -201,7 +201,7 @@ var knownBundleKeys = map[string]bool{
 	"trash": true, "maintenance": true, "maintenance_log": true, "orders": true,
 	"machines": true, "machine_backups": true, "achievements": true, "kv": true,
 	"secrets": true,
-	"images": true, "dryRun": true, "passphrase": true,
+	"images":  true, "dryRun": true, "passphrase": true,
 }
 
 // skipJSONValue consumes exactly one JSON value from dec without
