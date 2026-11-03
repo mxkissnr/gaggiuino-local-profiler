@@ -6330,6 +6330,187 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/machine/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stored machine settings backups, newest first (deleted machines included) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Only this machine's backups; omitted means every machine */
+                    machineId?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Array of backups, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackup"][];
+                    };
+                };
+                /** @description Invalid machineId */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Back up now — fetch the machine's settings and store a new manual entry */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        machineId: number;
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The stored backup */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackup"];
+                    };
+                };
+                /** @description Invalid JSON body, or machineId missing or below 1 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description Request body over 4 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP back-up-now limit, 10/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description machine_unreachable when the status or settings fetch failed; invalid_backup when the machine's document cannot be stored */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one stored backup, of any kind (also one of a deleted machine) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { ok: true } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Ok"];
+                    };
+                };
+                /** @description Backup not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/machines": {
         parameters: {
             query?: never;
@@ -8129,6 +8310,27 @@ export interface components {
             enabled: boolean;
             /** @description Unix ms */
             createdAt: number;
+        };
+        /** @description A stored Gaggiuino settings backup (#1878), metadata only; GLP never stores the machine's Wi-Fi block or its MQTT/visualizer credentials */
+        MachineBackup: {
+            id: number;
+            /** @description may name a deleted machine; its backups are kept */
+            machineId: number;
+            /** @description Unix ms */
+            createdAt: number;
+            /** @enum {string} */
+            kind: "manual" | "scheduled" | "pre_update" | "uploaded";
+            firmwareCore: string;
+            firmwareFrontend: string;
+            profileCount: number;
+            sizeBytes: number;
+            contentHash: string;
+            note: string;
+        };
+        MachineBackupError: {
+            error: string;
+            /** @enum {string} */
+            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running";
         };
         MachineInput: {
             name: string;
