@@ -539,6 +539,15 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		Client:   machinebackups.ClientFor(machinesHandlers),
 	}).RegisterRoutes(mux)
 
+	// #1878: a settings backup before every firmware update started from GLP;
+	// a failed backup stops the update unless the user skips it. Shares
+	// machineBackupsRepo, and with it the per-machine lock, with the scheduler
+	// and the routes above.
+	machinesHandlers.SetBeforeFirmwareUpdate(machinebackups.PreUpdate{
+		Repo:   machineBackupsRepo,
+		Client: machinebackups.ClientFor(machinesHandlers),
+	}.Backup)
+
 	// #1152: purge expired trash once at startup and then every 24h —
 	// StartTrashPurge does the immediate purge plus a 24h ticker bound to ctx.
 	shots.StartTrashPurge(ctx, shots.NewService(shotsRepo), 24*time.Hour)
