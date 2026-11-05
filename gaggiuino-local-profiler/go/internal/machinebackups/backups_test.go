@@ -197,6 +197,184 @@ func TestPrepare_HashIgnoresSecretsAndFormatting(t *testing.T) {
 	}
 }
 
+// ── stored document, merge and upload ───────────────────────────────────
+
+func TestNewestHash_IgnoresUploadedEntries(t *testing.T) {
+	e := newTestEnv(t, gaggiuinoMachine(1))
+
+	if _, found, err := e.repo.newestHash(1); err != nil || found {
+		t.Fatalf("newestHash without a row = found %v, err %v; want false, nil", found, err)
+	}
+
+	scheduled, err := prepare([]byte(fixtureDoc))
+	if err != nil {
+		t.Fatalf("prepare scheduled: %v", err)
+	}
+	uploaded, err := prepare([]byte(strings.Replace(fixtureDoc, `"steamSetPoint": 145`, `"steamSetPoint": 146`, 1)))
+	if err != nil {
+		t.Fatalf("prepare uploaded: %v", err)
+	}
+	if _, err := e.repo.insert(1, KindScheduled, "", scheduled, e.clock); err != nil {
+		t.Fatalf("insert scheduled: %v", err)
+	}
+	if _, err := e.repo.insert(1, KindUploaded, "", uploaded, e.clock.Add(time.Hour)); err != nil {
+		t.Fatalf("insert uploaded: %v", err)
+	}
+
+	hash, found, err := e.repo.newestHash(1)
+	if err != nil {
+		t.Fatalf("newestHash: %v", err)
+	}
+	if !found || hash != scheduled.Hash {
+		t.Fatalf("newestHash = %q (found %v), want the scheduled hash %q", hash, found, scheduled.Hash)
+	}
+
+	if _, err := e.repo.insert(2, KindUploaded, "", uploaded, e.clock); err != nil {
+		t.Fatalf("insert uploaded for machine 2: %v", err)
+	}
+	if _, found, err := e.repo.newestHash(2); err != nil || found {
+		t.Fatalf("newestHash with only an uploaded row = found %v, err %v; want false, nil", found, err)
+	}
+}
+
+func TestMergeSecrets_CopiesEverySecretPath(t *testing.T) {
+	p, err := prepare([]byte(fixtureDoc))
+	if err != nil {
+		t.Fatalf("prepare fixture: %v", err)
+	}
+	stored, err := parseDocument(p.Data)
+	if err != nil {
+		t.Fatalf("parse prepared: %v", err)
+	}
+	current, err := parseDocument([]byte(fixtureDocReordered))
+	if err != nil {
+		t.Fatalf("parse current: %v", err)
+	}
+
+	if copied := mergeSecrets(stored, current); copied != len(secretPaths) {
+		t.Fatalf("mergeSecrets copied %d secrets, want %d", copied, len(secretPaths))
+	}
+	for _, path := range secretPaths {
+		got, ok := valueAt(stored, path)
+		if !ok {
+			t.Errorf("stored has no %v after the merge", path)
+			continue
+		}
+		want, ok := valueAt(current, path)
+		if !ok {
+			t.Fatalf("current has no %v", path)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%v = %#v, want %#v", path, got, want)
+		}
+	}
+	wifi, ok := stored["wifi"].(map[string]any)
+	if !ok {
+		t.Fatalf("stored wifi = %#v, want an object", stored["wifi"])
+	}
+	if wifi["ssid"] != "SECRET-ssid-zzz" || wifi["password"] != "SECRET-wifi-pass-zzz" {
+		t.Errorf("stored wifi = %#v, want the current secret values", wifi)
+	}
+}
+
+func TestMergeSecrets_CreatesMissingParentsAndSkipsMissingSecrets(t *testing.T) {
+	current, err := parseDocument([]byte(fixtureDocReordered))
+	if err != nil {
+		t.Fatalf("parse current: %v", err)
+	}
+
+	stored, err := parseDocument([]byte(`{"format":"gaggiuino-settings","version":1}`))
+	if err != nil {
+		t.Fatalf("parse minimal stored: %v", err)
+	}
+	if copied := mergeSecrets(stored, current); copied != len(secretPaths) {
+		t.Fatalf("mergeSecrets copied %d secrets, want %d", copied, len(secretPaths))
+	}
+	if got, _ := valueAt(stored, []string{"settings", "system", "mqttPassword"}); got != "SECRET-mqtt-pass-zzz" {
+		t.Errorf("settings.system.mqttPassword = %#v, want the current secret", got)
+	}
+
+	stored, err = parseDocument([]byte(`{"format":"gaggiuino-settings","version":1}`))
+	if err != nil {
+		t.Fatalf("parse minimal stored: %v", err)
+	}
+	wifiOnly, err := parseDocument([]byte(`{"format":"gaggiuino-settings","version":1,"wifi":{"ssid":"s"}}`))
+	if err != nil {
+		t.Fatalf("parse wifi-only current: %v", err)
+	}
+	if copied := mergeSecrets(stored, wifiOnly); copied != 1 {
+		t.Fatalf("mergeSecrets copied %d secrets, want 1", copied)
+	}
+	if _, ok := stored["settings"]; ok {
+		t.Errorf("mergeSecrets created a settings key from a document that has none: %#v", stored)
+	}
+
+	stored, err = parseDocument([]byte(`{"format":"gaggiuino-settings","version":1}`))
+	if err != nil {
+		t.Fatalf("parse minimal stored: %v", err)
+	}
+	noSecrets, err := parseDocument([]byte(`{"format":"gaggiuino-settings","version":1,"settings":{"system":{"mqttHost":"broker.local"}}}`))
+	if err != nil {
+		t.Fatalf("parse secret-free current: %v", err)
+	}
+	before, err := encodeCanonical(stored)
+	if err != nil {
+		t.Fatalf("encode before: %v", err)
+	}
+	if copied := mergeSecrets(stored, noSecrets); copied != 0 {
+		t.Fatalf("mergeSecrets copied %d secrets, want 0", copied)
+	}
+	after, err := encodeCanonical(stored)
+	if err != nil {
+		t.Fatalf("encode after: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("mergeSecrets changed a document with no secret: %s -> %s", before, after)
+	}
+}
+
+func TestMergeDocuments(t *testing.T) {
+	p, err := prepare([]byte(fixtureDoc))
+	if err != nil {
+		t.Fatalf("prepare fixture: %v", err)
+	}
+	merged, copied, err := mergeDocuments(p.Data, []byte(fixtureDocReordered))
+	if err != nil {
+		t.Fatalf("mergeDocuments: %v", err)
+	}
+	if copied != len(secretPaths) {
+		t.Fatalf("mergeDocuments copied %d secrets, want %d", copied, len(secretPaths))
+	}
+	for _, want := range []string{"SECRET-wifi-pass-zzz", "93.50", "Bloom <b>&co"} {
+		if !bytes.Contains(merged, []byte(want)) {
+			t.Errorf("merged document lost %s: %s", want, merged)
+		}
+	}
+	reprepared, err := prepare(merged)
+	if err != nil {
+		t.Fatalf("prepare merged: %v", err)
+	}
+	if reprepared.Hash != p.Hash {
+		t.Errorf("merged hash = %q, want the stored hash %q: only secrets were added", reprepared.Hash, p.Hash)
+	}
+
+	for _, current := range []string{`{`, `{"format":"gaggiuino-settings","version":2}`} {
+		if _, _, err := mergeDocuments(p.Data, []byte(current)); !errors.Is(err, ErrInvalidDocument) {
+			t.Errorf("mergeDocuments with current %s error = %v, want ErrInvalidDocument", current, err)
+		}
+	}
+}
+
+func TestPrepare_RejectsDocumentWhoseCanonicalFormIsOverTheCap(t *testing.T) {
+	raw := []byte(`{"format":"gaggiuino-settings","version":1,"pad":"` + strings.Repeat("\u2028", 50000) + `"}`)
+	if len(raw) > machines.MaxSettingsBackupBytes {
+		t.Fatalf("raw document is %d bytes, the test needs it under the cap", len(raw))
+	}
+	if _, err := prepare(raw); !errors.Is(err, ErrInvalidDocument) {
+		t.Fatalf("prepare error = %v, want ErrInvalidDocument: the canonical form is over the cap", err)
+	}
+}
+
 // ── scheduler ───────────────────────────────────────────────────────────
 
 type fakeLister struct{ list []machines.Machine }

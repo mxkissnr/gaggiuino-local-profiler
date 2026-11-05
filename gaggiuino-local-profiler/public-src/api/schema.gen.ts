@@ -6606,7 +6606,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/machine/backups/{id}": {
+    "/api/machine/backups/upload": {
         parameters: {
             query?: never;
             header?: never;
@@ -6614,6 +6614,125 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /** Store an uploaded settings backup file as a new entry; its secrets are removed before anything is written */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        machineId: number;
+                        note?: string;
+                        /** @description The file's JSON object (format gaggiuino-settings, a known version, at most 256 KiB), not a string */
+                        document: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description The stored backup */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackup"];
+                    };
+                };
+                /** @description Invalid JSON body or machineId missing or below 1 (no code); code invalid_backup when the document cannot be stored */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"] | components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Request body over 260 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP upload limit, 10/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one stored backup with its secret-free document (never contacts the machine) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The stored backup with its document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupDetail"];
+                    };
+                };
+                /** @description Backup not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         put?: never;
         post?: never;
         /** Delete one stored backup, of any kind (also one of a deleted machine) */
@@ -6648,6 +6767,80 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a stored backup in the machine's native format, with the machine's current secrets merged in
+         * @description GLP reads the secrets from the backup's own machine right before answering and never stores them. If that machine cannot be read the stored document without secrets is returned instead. A client must warn the user according to X-GLP-Secrets: merged means the file holds the Wi-Fi password, MQTT credentials and tokens in plain text; missing means it holds none and a restore from it does not carry them.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The settings backup file */
+                200: {
+                    headers: {
+                        /** @description merged or missing, see above */
+                        "X-GLP-Secrets"?: "merged" | "missing";
+                        /** @description attachment; filename=gaggiuino-backup-m<machineId>-<YYYY-MM-DD_HHMM>.json */
+                        "Content-Disposition"?: string;
+                        /** @description no-store */
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Backup not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description Rate limit exceeded — per-IP download limit, 10/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8471,6 +8664,13 @@ export interface components {
             contentHash: string;
             note: string;
         };
+        /** @description One stored backup with its document (#1878). The document never holds the machine's Wi-Fi block or its MQTT/visualizer credentials */
+        MachineBackupDetail: components["schemas"]["MachineBackup"] & {
+            /** @description The stored gaggiuino-settings document, without secrets */
+            document: {
+                [key: string]: unknown;
+            };
+        };
         MachineBackupError: {
             error: string;
             /** @enum {string} */
@@ -8596,11 +8796,25 @@ export interface components {
             maintenance_log?: Record<string, never>[];
             orders?: Record<string, never>[];
             machines?: Record<string, never>[];
+            /** @description Stored machine settings backups (#1878), oldest first; never hold a secret */
+            machine_backups?: {
+                machineId: number;
+                /** @description Unix ms */
+                createdAt: number;
+                /** @enum {string} */
+                kind: "manual" | "scheduled" | "pre_update" | "uploaded";
+                note: string;
+                document: {
+                    [key: string]: unknown;
+                };
+            }[];
             kv?: {
                 menu?: unknown[];
                 orders_settings?: Record<string, never>;
                 notify_mapping?: Record<string, never>;
                 import_settings?: Record<string, never>;
+                /** @description Automatic backup schedule and retention per machine id (#1878) */
+                machine_backup_settings?: Record<string, never>;
                 /** @description Never includes username/password — see the `secrets` field for those, encrypted. */
                 mqtt_settings?: Record<string, never>;
             };
