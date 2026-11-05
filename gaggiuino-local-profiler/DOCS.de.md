@@ -237,6 +237,10 @@ Ansicht, Filter und Sortierung werden in der App selbst gespeichert und zwischen
 
 **Maschinen-Host und Switch-Entität werden in der App konfiguriert, nicht hier.** Sie waren früher App-Optionen (`machine_host`/`switch_entity`); seit dieser Version sind sie komplett aus der Configuration-Seite der App entfernt — stattdessen unter **Einstellungen → Maschinen** setzen, für die Standardmaschine (#1) genau wie für jede weitere Maschine. Bereits konfigurierte Werte einer bestehenden Installation werden automatisch übernommen; nichts muss neu eingegeben werden.
 
+### Automatischer Neustart (Watchdog)
+
+Die App prüft sich alle 30 Sekunden selbst, indem sie ihre eigene Startseite lädt – ohne Datenbank und ohne deine Maschine. Antwortet sie dreimal hintereinander nicht, gilt sie als „unhealthy". Home Assistant startet sie dann nur neu, wenn **Watchdog** unter **Einstellungen → Apps → GLP → Info** eingeschaltet ist (standardmäßig aus). Mit Watchdog wird eine hängende App innerhalb von etwa zwei Minuten neu gestartet, und eine unerwartet beendete App wird wieder gestartet. Eine Standalone-Docker-Installation markiert den Container nur als „unhealthy" und startet ihn nicht selbst neu.
+
 ## Standalone Docker Installation
 
 GLP wird als reines Multi-Arch-Docker-Image veröffentlicht
