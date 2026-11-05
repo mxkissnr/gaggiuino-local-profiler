@@ -42,6 +42,12 @@
 //     (sanitizeBeanFields et al.) live in
 //     internal/library/restore_sanitize.go, and are called from this
 //     package's mapToLibrary.
+//   - internal/machinebackups exports and restores the machine settings
+//     backups (bundle key machine_backups, machines section) and their
+//     per-machine schedule (kv machine_backup_settings). Its restore
+//     re-validates every document and refuses any that carries a secret (GLP
+//     never exports one), and replaces the stored backups because restored
+//     machine ids may name other machines.
 //
 // # Memory profile (#959)
 //
