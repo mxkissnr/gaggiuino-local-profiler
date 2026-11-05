@@ -134,6 +134,13 @@ func main() {
 		log.Fatalf("listening on %s: %v", addr, err)
 	}
 
+	// #1848: on Supervisor installs, announce the app to Home Assistant so the
+	// GLP integration is offered without typing a URL; the announcement is
+	// withdrawn when baseCtx is cancelled at shutdown. A no-op elsewhere.
+	port, _ := strconv.Atoi(cfg.port)
+	hostname, _ := os.Hostname()
+	discoveryDone := ha.NewClientFromEnv().StartSupervisorDiscovery(baseCtx, hostname, port)
+
 	// ReadHeaderTimeout stops a slowloris client that dribbles headers forever;
 	// IdleTimeout reaps idle keep-alive connections. ReadTimeout/WriteTimeout are
 	// deliberately unset so large backup uploads and the SSE streams can run long.
@@ -163,6 +170,9 @@ func main() {
 	if err := serveUntilStopped(srv, tcpNoDelayListener{ln}, sigCh, cancelBase); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
+	// The withdraw DELETE is bounded by ha's withdrawTimeout and must finish
+	// before the process exits, or the announcement outlives the app.
+	<-discoveryDone
 }
 
 // serveUntilStopped serves srv on ln and, when a signal arrives on stop,
