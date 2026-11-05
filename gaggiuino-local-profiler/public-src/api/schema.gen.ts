@@ -5615,7 +5615,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Trigger a firmware OTA update from GitHub releases (ESP32 + STM32) — only starts the process, poll firmware/progress for status */
+        /**
+         * Trigger a firmware OTA update from GitHub releases (ESP32 + STM32) — only starts the process, poll firmware/progress for status
+         * @description On a Gaggiuino machine GLP first stores a settings backup (#1878, kind pre_update). If that backup fails the update is not started; the client may resend with skipBackup after the user confirmed updating without a backup. Firmware without the settings backup endpoint updates without a backup.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -5627,6 +5630,11 @@ export interface paths {
                 content: {
                     "application/json": {
                         machineId?: number;
+                        /**
+                         * @description Start the update without the settings backup; send only after the user confirmed it
+                         * @default false
+                         */
+                        skipBackup?: boolean;
                     };
                 };
             };
@@ -5638,6 +5646,15 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description operation_running: another settings backup or restore of this machine is running; the update was not started */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
                 /** @description machine type does not support the settings proxy */
                 501: {
                     headers: {
@@ -5645,7 +5662,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Machine unreachable or returned an error */
+                /** @description The update was not started or failed. code pre_update_backup_failed: the settings backup before the update failed (resend with skipBackup to update anyway); code machine_unreachable: the machine did not answer; no code: the machine returned an error */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -8457,7 +8474,7 @@ export interface components {
         MachineBackupError: {
             error: string;
             /** @enum {string} */
-            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running";
+            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running" | "pre_update_backup_failed";
         };
         /** @description Automatic backup schedule and retention of one Gaggiuino machine (#1878); defaults daily and 10. keepAutomatic limits only scheduled backups: manual, pre-update and uploaded backups are never removed automatically */
         MachineBackupSettings: {
