@@ -355,7 +355,7 @@ func TestMergeDocuments(t *testing.T) {
 		t.Fatalf("prepare merged: %v", err)
 	}
 	if reprepared.Hash != p.Hash {
-		t.Errorf("merged hash = %q, want the stored hash %q: only secrets were added", reprepaired.Hash, p.Hash)
+		t.Errorf("merged hash = %q, want the stored hash %q: only secrets were added", reprepared.Hash, p.Hash)
 	}
 
 	for _, current := range []string{`{`, `{"format":"gaggiuino-settings","version":2}`} {
