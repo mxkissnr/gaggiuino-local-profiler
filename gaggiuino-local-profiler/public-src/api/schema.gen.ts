@@ -6613,6 +6613,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /** Store an uploaded settings backup file as a new entry; its secrets are removed before anything is written */
         post: {
             parameters: {
@@ -6686,8 +6688,6 @@ export interface paths {
                 };
             };
         };
-        get?: never;
-        put?: never;
         delete?: never;
         options?: never;
         head?: never;
