@@ -686,6 +686,18 @@ components:
         contentHash:      { type: string }
         note:             { type: string, maxLength: 200 }
 
+    MachineBackupDetail:
+      description: "One stored backup with its document (#1878). The document never holds the machine's Wi-Fi block or its MQTT/visualizer credentials"
+      allOf:
+        - $ref: '#/components/schemas/MachineBackup'
+        - type: object
+          required: [document]
+          properties:
+            document:
+              type: object
+              additionalProperties: true
+              description: "The stored gaggiuino-settings document, without secrets"
+
     MachineBackupError:
       type: object
       required: [error, code]
@@ -822,6 +834,20 @@ components:
         maintenance_log: { type: array, items: { type: object } }
         orders:          { type: array, items: { type: object } }
         machines:        { type: array, items: { type: object } }
+        machine_backups:
+          description: "Stored machine settings backups (#1878), oldest first; never hold a secret"
+          type: array
+          items:
+            type: object
+            required: [machineId, createdAt, kind, note, document]
+            properties:
+              machineId: { type: integer }
+              createdAt: { type: integer, description: Unix ms }
+              kind:      { type: string, enum: [manual, scheduled, pre_update, uploaded] }
+              note:      { type: string }
+              document:
+                type: object
+                additionalProperties: true
         kv:
           type: object
           properties:
@@ -829,6 +855,9 @@ components:
             orders_settings: { type: object }
             notify_mapping:  { type: object }
             import_settings: { type: object }
+            machine_backup_settings:
+              type: object
+              description: "Automatic backup schedule and retention per machine id (#1878)"
             mqtt_settings:
               description: Never includes username/password — see the `secrets` field for those, encrypted.
               type: object
@@ -3572,7 +3601,60 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MachineBackupError' }
 
+  /api/machine/backups/upload:
+    post:
+      tags: [MachineBackups]
+      summary: Store an uploaded settings backup file as a new entry; its secrets are removed before anything is written
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [machineId, document]
+              properties:
+                machineId: { type: integer, minimum: 1 }
+                note:      { type: string }
+                document:
+                  type: object
+                  additionalProperties: true
+                  description: "The file's JSON object (format gaggiuino-settings, a known version, at most 256 KiB), not a string"
+      responses:
+        "201":
+          description: The stored backup
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackup' }
+        "400":
+          description: "Invalid JSON body or machineId missing or below 1 (no code); code invalid_backup when the document cannot be stored"
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/MachineBackupError'
+                  - $ref: '#/components/schemas/Error'
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "413": { description: Request body over 260 KiB }
+        "429": { description: "Rate limit exceeded — per-IP upload limit, 10/min" }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+
   /api/machine/backups/{id}:
+    get:
+      tags: [MachineBackups]
+      summary: Read one stored backup with its secret-free document (never contacts the machine)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: The stored backup with its document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupDetail' }
+        "404": { description: Backup not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     delete:
       tags: [MachineBackups]
       summary: Delete one stored backup, of any kind (also one of a deleted machine)
@@ -3585,6 +3667,43 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Ok' }
         "404": { description: Backup not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/machine/backups/{id}/download:
+    get:
+      tags: [MachineBackups]
+      summary: Download a stored backup in the machine's native format, with the machine's current secrets merged in
+      description: >
+        GLP reads the secrets from the backup's own machine right before answering and
+        never stores them. If that machine cannot be read the stored document without
+        secrets is returned instead. A client must warn the user according to
+        X-GLP-Secrets: merged means the file holds the Wi-Fi password, MQTT credentials
+        and tokens in plain text; missing means it holds none and a restore from it does
+        not carry them.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: The settings backup file
+          headers:
+            X-GLP-Secrets:
+              description: "merged or missing, see above"
+              schema: { type: string, enum: [merged, missing] }
+            Content-Disposition:
+              description: "attachment; filename=gaggiuino-backup-m<machineId>-<YYYY-MM-DD_HHMM>.json"
+              schema: { type: string }
+            Cache-Control:
+              description: "no-store"
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { description: Backup not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "409":
+          description: "operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "429": { description: "Rate limit exceeded — per-IP download limit, 10/min" }
 
   /api/machines:
     get:

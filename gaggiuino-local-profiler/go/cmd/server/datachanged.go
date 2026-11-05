@@ -184,6 +184,7 @@ func buildDataIgnored() map[string]string {
 	// without any route at all.
 	add("POST /api/machine/backups", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
 	add("DELETE /api/machine/backups/{id}", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
+	add("POST /api/machine/backups/upload", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
 
 	// Machine-side control: the controller acts, GLP's database does not change.
 	add("POST /api/machine/flush/start", "machine-side only: starts a flush on the controller")

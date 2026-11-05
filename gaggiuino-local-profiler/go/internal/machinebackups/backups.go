@@ -9,8 +9,10 @@
 // content differs from the newest stored backup of that machine. It also adds
 // the list, back up now and delete routes (handlers.go). Each machine has its
 // own schedule (off/daily/weekly) and retention of automatic backups
-// (settings.go). Later slices add the pre-update backup, download/upload, the
-// restore path and the GLP backup bundle.
+// (settings.go). handlers.go also serves one stored document, the download (the
+// machine's current secrets are merged into the response only, see
+// mergeSecrets) and the upload (prepare strips the secrets before the insert).
+// The restore path follows in a later slice.
 package machinebackups
 
 import (
@@ -146,6 +148,72 @@ func stripSecrets(doc map[string]any) {
 	}
 }
 
+// mergeSecrets copies every secret path that exists in current, a fresh
+// document from the machine, into stored and returns how many it copied.
+// Missing parents are created; parseDocument already refused a document whose
+// existing parent is not an object, so nothing is overwritten by a parent.
+func mergeSecrets(stored, current map[string]any) int {
+	copied := 0
+	for _, path := range secretPaths {
+		value, ok := valueAt(current, path)
+		if !ok {
+			continue
+		}
+		setValueAt(stored, path, value)
+		copied++
+	}
+	return copied
+}
+
+func valueAt(doc map[string]any, path []string) (any, bool) {
+	current := any(doc)
+	for _, key := range path {
+		obj, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		next, ok := obj[key]
+		if !ok {
+			return nil, false
+		}
+		current = next
+	}
+	return current, true
+}
+
+func setValueAt(doc map[string]any, path []string, value any) {
+	parent := doc
+	for _, key := range path[:len(path)-1] {
+		next, ok := parent[key].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			parent[key] = next
+		}
+		parent = next
+	}
+	parent[path[len(path)-1]] = value
+}
+
+// mergeDocuments returns the stored document with current's secrets, as
+// canonical JSON. The result carries secrets: it goes to the response and
+// nowhere else, never to the database or a log.
+func mergeDocuments(storedData, currentRaw []byte) (merged []byte, copied int, err error) {
+	stored, err := parseDocument(storedData)
+	if err != nil {
+		return nil, 0, err
+	}
+	current, err := parseDocument(currentRaw)
+	if err != nil {
+		return nil, 0, err
+	}
+	copied = mergeSecrets(stored, current)
+	merged, err = encodeCanonical(stored)
+	if err != nil {
+		return nil, 0, err
+	}
+	return merged, copied, nil
+}
+
 // encodeCanonical renders doc as compact JSON. Map keys come out sorted and
 // json.Number keeps the machine's number literals, so equal content always
 // gives equal bytes; HTML escaping is off so the stored document stays exactly
@@ -182,6 +250,12 @@ func prepare(raw []byte) (prepared, error) {
 	data, err := encodeCanonical(doc)
 	if err != nil {
 		return prepared{}, err
+	}
+	// Canonical JSON can be larger than its input (encoding/json always writes
+	// U+2028 and U+2029 as six-byte escapes), so the cap is checked again: GLP
+	// never stores a document the machine could not take back.
+	if len(data) > machines.MaxSettingsBackupBytes {
+		return prepared{}, fmt.Errorf("%w: empty or larger than 256 KiB", ErrInvalidDocument)
 	}
 	sum := sha256.Sum256(data)
 	p := prepared{Data: data, Hash: hex.EncodeToString(sum[:])}
@@ -314,6 +388,24 @@ func (r *Repository) list(machineID int64) ([]Entry, error) {
 	return out, nil
 }
 
+// get reads one stored backup, with its stored document. found is false when no
+// row has that id. The document is secret-free by construction (every write goes
+// through prepare).
+func (r *Repository) get(id int64) (e Entry, data string, found bool, err error) {
+	err = r.db.QueryRow(`SELECT id, machine_id, created_at, kind, firmware_core,
+		firmware_frontend, profile_count, size_bytes, content_hash, note, data
+		FROM machine_backups WHERE id = ?`, id).Scan(&e.ID, &e.MachineID, &e.CreatedAt, &e.Kind,
+		&e.FirmwareCore, &e.FirmwareFrontend, &e.ProfileCount, &e.SizeBytes, &e.ContentHash, &e.Note, &data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Entry{}, "", false, nil
+	}
+	if err != nil {
+		return Entry{}, "", false, fmt.Errorf("machinebackups: reading backup %d: %w", id, err)
+	}
+	e.CreatedAt *= 1000
+	return e, data, true, nil
+}
+
 // remove deletes one backup row, of any kind and also one of a deleted machine.
 // found is false when no row has that id.
 func (r *Repository) remove(id int64) (bool, error) {
@@ -350,10 +442,14 @@ func (r *Repository) pruneScheduled(machineID int64, keep int) (int64, error) {
 }
 
 // newestHash returns the content hash of the newest backup of machineID, of any
-// kind. found is false when the machine has no backup yet.
+// kind except uploaded. An uploaded file does not describe what is on the
+// machine (maintainer decision), so the next automatic backup compares against
+// the newest entry that does, and an unchanged machine stores no extra row
+// after an upload. found is false when no such backup exists.
 func (r *Repository) newestHash(machineID int64) (hash string, found bool, err error) {
 	err = r.db.QueryRow(`SELECT content_hash FROM machine_backups
-		WHERE machine_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, machineID).Scan(&hash)
+		WHERE machine_id = ? AND kind != 'uploaded'
+		ORDER BY created_at DESC, id DESC LIMIT 1`, machineID).Scan(&hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -407,21 +503,28 @@ var (
 // fetchPrepared fetches the machine's settings backup and prepares it for
 // storing, unless the machine is off or busy. The scheduler and Back up now both
 // use it, so they follow the same rules (never load the machine during a shot or
-// while steaming). The status error is dropped on purpose: it can carry the
-// machine's host.
+// while steaming).
 func fetchPrepared(ctx context.Context, c Client, m *machines.Machine) (prepared, error) {
-	status, err := c.GetStatus(ctx, m)
-	if err != nil {
-		return prepared{}, errMachineOffline
-	}
-	if status.Brewing || (status.SteamOn != nil && *status.SteamOn) {
-		return prepared{}, errMachineBusy
-	}
-	raw, err := c.GetSettingsBackup(ctx, m)
+	raw, err := fetchDocument(ctx, c, m)
 	if err != nil {
 		return prepared{}, err
 	}
 	return prepare(raw)
+}
+
+// fetchDocument reads the machine's raw settings backup, unless the machine is
+// off or busy. The returned bytes still carry the machine's secrets, so a caller
+// must never store or log them. The status error is dropped on purpose: it can
+// carry the machine's host.
+func fetchDocument(ctx context.Context, c Client, m *machines.Machine) ([]byte, error) {
+	status, err := c.GetStatus(ctx, m)
+	if err != nil {
+		return nil, errMachineOffline
+	}
+	if status.Brewing || (status.SteamOn != nil && *status.SteamOn) {
+		return nil, errMachineBusy
+	}
+	return c.GetSettingsBackup(ctx, m)
 }
 
 // MachineLister lists the machines the scheduler should consider.
