@@ -623,16 +623,16 @@ function onSheetChange(e: Event): void {
   }
   if (target.classList.contains('mbk-target')) { onTargetChange(sheet, target.value); return; }
   if (target.classList.contains('mbk-schedule')) { onScheduleChange(sheet, target.value); return; }
-  if (target.classList.contains('mbk-pick')) { onPickChange(sheet, target as HTMLInputElement); return; }
+  if (target.classList.contains('mbk-pick')) { onPickChange(sheet, target); return; }
   if (target.classList.contains('mbk-keep')) onKeepChange(sheet, target.value);
 }
 
-function onPickChange(sheet: SheetState, target: HTMLInputElement): void {
+function onPickChange(sheet: SheetState, target: HTMLInputElement | HTMLSelectElement): void {
   const id = Number(target.dataset.id);
   const known = sheet.entries?.some(b => b.id === id) ?? false;
   if (!Number.isInteger(id) || id <= 0 || (!known && !sheet.orphans.some(b => b.id === id))) return;
   const picked = pickedIds(sheet);
-  sheet.picked = target.checked
+  sheet.picked = (target as HTMLInputElement).checked
     ? (picked.includes(id) ? picked : [...picked, id])
     : picked.filter(p => p !== id);
   rerender();
@@ -650,12 +650,9 @@ async function compareSelected(): Promise<void> {
   const [a, b] = await Promise.all([getMachineBackup(p), getMachineBackup(q)]);
   if (_sheet !== sheet) return; // another sheet opened meanwhile
   sheet.comparing = false;
-  if (!a.ok || !b.ok) {
-    if (!a.ok) showToast(backupErrorText(a, 'compare'), 6000);
-    else showToast(backupErrorText(b, 'compare'), 6000);
-    rerender(); // stay on the list
-    return;
-  }
+  // Stay on the list; each failure carries its own status/code for the toast.
+  if (!a.ok) { showToast(backupErrorText(a, 'compare'), 6000); rerender(); return; }
+  if (!b.ok) { showToast(backupErrorText(b, 'compare'), 6000); rerender(); return; }
   const aFirst = a.value.createdAt !== b.value.createdAt
     ? a.value.createdAt < b.value.createdAt
     : a.value.id <= b.value.id;
