@@ -448,35 +448,17 @@ func (c *cardModel) svg() string {
 		}
 	}
 	// right axis ticks
-	rightStep := 25.0
-	switch {
-	case tempMax <= 40:
-		rightStep = 10
-	case tempMax <= 80:
-		rightStep = 20
-	}
+	rightStep := cardRightStep(tempMax)
 	for v, i := rightStep, 0; v < tempMax && i < cardAxisMaxTicks; v, i = v+rightStep, i+1 {
 		gy := yRight(v)
 		s.text(outerX+outerW-chartR+5, gy+5, 15, false, p.textMute, "", num1(v))
 	}
 	// x ticks
-	xTickStep := 5.0
-	switch {
-	case totalSec > 90:
-		xTickStep = 20
-	case totalSec > 40:
-		xTickStep = 10
-	}
+	xTickStep := cardTimeStep(totalSec)
 	for t, i := 0.0, 0; t <= totalSec && i < cardAxisMaxTicks; t, i = t+xTickStep, i+1 {
 		gx := plotX + (t/totalSec)*plotW
 		s.line(gx, plotY, gx, plotY+plotH, p.border, 1, "2,4")
-		m := int(t) / 60
-		sec := int(t) % 60
-		label := fmt.Sprintf("%ds", sec)
-		if m > 0 {
-			label = fmt.Sprintf("%d:%02d", m, sec)
-		}
-		s.text(gx, plotY+plotH+22, 16, false, p.textMute, "middle", label)
+		s.text(gx, plotY+plotH+22, 16, false, p.textMute, "middle", cardTimeLabel(t))
 	}
 
 	// preinfusion tint (computed palette: preinfusion zone only, no divider)
@@ -671,6 +653,38 @@ func (c *cardModel) svg() string {
 const cardChipRadius = 7.0 // RADIUS_SM_PX = round(4 * 1.75)
 
 // ── geometry / misc helpers ────────────────────────────────────────────
+
+// cardTimeStep is the x axis tick step in seconds for a shot of totalSec,
+// shared by the share card and the chart PNG (#1851).
+func cardTimeStep(totalSec float64) float64 {
+	switch {
+	case totalSec > 90:
+		return 20
+	case totalSec > 40:
+		return 10
+	}
+	return 5
+}
+
+// cardRightStep is the tick step of the right (temperature/weight) axis up to max.
+func cardRightStep(max float64) float64 {
+	switch {
+	case max <= 40:
+		return 10
+	case max <= 80:
+		return 20
+	}
+	return 25
+}
+
+// cardTimeLabel formats an x tick: "25s", or "1:05" from one minute on.
+func cardTimeLabel(t float64) string {
+	m, sec := int(t)/60, int(t)%60
+	if m > 0 {
+		return fmt.Sprintf("%d:%02d", m, sec)
+	}
+	return fmt.Sprintf("%ds", sec)
+}
 
 func starPolygon(cx, cy, outerR float64, fill string) string {
 	innerR := outerR * 0.42
