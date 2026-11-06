@@ -197,8 +197,8 @@ describe('the Backups row action (#1878)', () => {
     S.machines = [
       { id: 1, name: 'Gaggia', type: 'gaggiuino', isDefault: true },
       { id: 2, name: 'Mate', type: 'gaggimate' },
-    ] as unknown as typeof S.machines;
-    S.allShots = [] as unknown as typeof S.allShots;
+    ];
+    S.allShots = [];
   });
 
   it('adds the Backups action to Gaggiuino rows only', () => {
