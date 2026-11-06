@@ -5,7 +5,8 @@ import type { BackupChange, BackupDocument, LeafChange } from '../public-src/sha
 
 type Bag = Record<string, unknown>;
 
-/** The hand-built document shape: real key structure, neutral values, no secrets. */
+/** The hand-built document shape: real key structure, neutral values, no secrets.
+ *  Pure Node test: no DOM, locale or timer use, so test/setup.ts has nothing to add here. */
 interface TestDoc {
     firmware: Bag;
     settings: Bag;
