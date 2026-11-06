@@ -14,19 +14,12 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.window ??= globalThis;
 
 interface Fake {
-  innerHTML: string;
-  className: string;
-  textContent: string;
-  title: string;
-  style: Record<string, string>;
-  disabled: boolean;
-  handlers: Record<string, () => void>;
-  children: Fake[];
+  innerHTML: string; className: string; textContent: string; title: string;
+  style: Record<string, string>; disabled: boolean;
+  handlers: Record<string, () => void>; children: Fake[];
   addEventListener(type: string, fn: () => void): void;
   querySelector(sel: string): Fake;
-  removeAttribute(name: string): void;
-  remove(): void;
-  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void; remove(): void; setAttribute(name: string, value: string): void;
   appendChild(child: Fake): void;
 }
 
@@ -39,7 +32,8 @@ function fake(): Fake {
     handlers: {}, children: [],
     addEventListener(type, fn) { el.handlers[type] = fn; },
     querySelector(sel) { return (kids[sel] ??= fake()); },
-    removeAttribute() {}, remove() {}, setAttribute() {}, appendChild(child) { el.children.push(child); },
+    removeAttribute() { /* no-op */ }, remove() { /* no-op */ }, setAttribute() { /* no-op */ },
+    appendChild(child) { el.children.push(child); },
   };
   return el;
 }
@@ -47,13 +41,10 @@ function fake(): Fake {
 const list = fake();
 g.document = {
   getElementById: (id: string) => (id === 'machinesList' ? list : undefined),
-  createElement: () => fake(),
-  querySelectorAll: () => [],
+  createElement: () => fake(), querySelectorAll: () => [],
 };
-
 const toast = vi.fn<(message: string) => void>();
 g.showToast = toast;
-
 const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
 g.fetch = fetchMock;
 
@@ -63,8 +54,11 @@ const apiMocks = vi.hoisted(() => ({
   getFirmwareVersion: vi.fn<(machineId: string | number) => Promise<FirmwareVersion | null>>(),
 }));
 
+type MachinesApi = typeof import('../public-src/api/machines.js');
+type BackupsApi = typeof import('../public-src/components/machine-backups.js');
+
 vi.mock('../public-src/api/machines.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../public-src/api/machines.js')>()),
+  ...(await importOriginal<MachinesApi>()),
   getFirmwareProgress: apiMocks.getFirmwareProgress,
   triggerFirmwareUpdate: apiMocks.triggerFirmwareUpdate,
   getFirmwareVersion: apiMocks.getFirmwareVersion,
@@ -78,12 +72,12 @@ const sheetMock = vi.hoisted(() => ({
 // The button markup stays real; only opening the sheet and the confirm dialog
 // are replaced.
 vi.mock('../public-src/components/machine-backups.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../public-src/components/machine-backups.js')>()),
+  ...(await importOriginal<BackupsApi>()),
   openMachineBackups: sheetMock.openMachineBackups,
   confirmUpdateWithoutBackup: sheetMock.confirmUpdateWithoutBackup,
 }));
 
-const realApi = await vi.importActual<typeof import('../public-src/api/machines.js')>('../public-src/api/machines.js');
+const realApi = await vi.importActual<MachinesApi>('../public-src/api/machines.js');
 const { S } = await import('../public-src/state/index.js');
 const { renderMachinesList, triggerMachineFirmwareUpdate } = await import(
   '../public-src/components/machines-settings.js'
@@ -100,6 +94,10 @@ const failed = (status: number, body: Record<string, unknown>): Response =>
 
 const ok = (): Response => ({ ok: true, status: 200, json: () => Promise.resolve({}) } as unknown as Response);
 
+// The component wants real HTMLElements; the fakes carry exactly the members
+// the firmware path touches.
+const asRow = (el: Fake): HTMLElement => el as unknown as HTMLElement;
+
 const banner = '.machine-firmware-update-banner';
 const button = '.machine-firmware-update-btn';
 
@@ -108,16 +106,14 @@ describe('the firmware update API body (#1878)', () => {
 
   it('sends skipBackup only after the override', async () => {
     fetchMock.mockResolvedValue(ok());
-
     await realApi.triggerFirmwareUpdate(3);
     await realApi.triggerFirmwareUpdate(3, true);
     await realApi.triggerFirmwareUpdate('3', false);
-
     expect(fetchMock).toHaveBeenCalledTimes(3);
     for (const call of fetchMock.mock.calls) expect(call[0]).toBe('api/machine/firmware/update');
-    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toBe('{"machineId":3}');
-    expect(String(fetchMock.mock.calls[1]?.[1]?.body)).toBe('{"machineId":3,"skipBackup":true}');
-    expect(String(fetchMock.mock.calls[2]?.[1]?.body)).toBe('{"machineId":3}');
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe('{"machineId":3}');
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe('{"machineId":3,"skipBackup":true}');
+    expect(fetchMock.mock.calls[2]?.[1]?.body).toBe('{"machineId":3}');
   });
 });
 
@@ -140,13 +136,9 @@ describe('triggerMachineFirmwareUpdate with a failed pre-update backup (#1878)',
 
   it('offers the override when the backup before the update failed', async () => {
     const row = fake();
-    apiMocks.triggerFirmwareUpdate.mockResolvedValue(
-      failed(502, { error: 'x', code: 'pre_update_backup_failed' }),
-    );
+    apiMocks.triggerFirmwareUpdate.mockResolvedValue(failed(502, { error: 'x', code: 'pre_update_backup_failed' }));
     sheetMock.confirmUpdateWithoutBackup.mockReturnValue(false);
-
-    await triggerMachineFirmwareUpdate(9201, row);
-
+    await triggerMachineFirmwareUpdate(9201, asRow(row));
     expect(sheetMock.confirmUpdateWithoutBackup).toHaveBeenCalledTimes(1);
     expect(apiMocks.triggerFirmwareUpdate).toHaveBeenCalledTimes(1);
     expect(apiMocks.triggerFirmwareUpdate).toHaveBeenCalledWith(9201, false);
@@ -161,9 +153,7 @@ describe('triggerMachineFirmwareUpdate with a failed pre-update backup (#1878)',
       .mockResolvedValueOnce(failed(502, { error: 'x', code: 'pre_update_backup_failed' }))
       .mockResolvedValueOnce(ok());
     sheetMock.confirmUpdateWithoutBackup.mockReturnValue(true);
-
-    await triggerMachineFirmwareUpdate(9201, row);
-
+    await triggerMachineFirmwareUpdate(9201, asRow(row));
     expect(apiMocks.triggerFirmwareUpdate).toHaveBeenCalledTimes(2);
     expect(apiMocks.triggerFirmwareUpdate).toHaveBeenNthCalledWith(1, 9201, false);
     expect(apiMocks.triggerFirmwareUpdate).toHaveBeenNthCalledWith(2, 9201, true);
@@ -173,13 +163,10 @@ describe('triggerMachineFirmwareUpdate with a failed pre-update backup (#1878)',
 
   it('keeps the generic toast for every other failure', async () => {
     const expected = formatter(en.settings_machine_firmware_trigger_failed)('busy');
-
     for (const [status, code] of [[409, 'operation_running'], [502, 'machine_unreachable']] as const) {
       apiMocks.triggerFirmwareUpdate.mockResolvedValueOnce(failed(status, { error: 'busy', code }));
       const row = fake();
-
-      await triggerMachineFirmwareUpdate(9203, row);
-
+      await triggerMachineFirmwareUpdate(9203, asRow(row));
       expect(sheetMock.confirmUpdateWithoutBackup).not.toHaveBeenCalled();
       expect(toast).toHaveBeenCalledTimes(1);
       expect(toast).toHaveBeenCalledWith(expected);
@@ -188,13 +175,9 @@ describe('triggerMachineFirmwareUpdate with a failed pre-update backup (#1878)',
   });
 
   it('never offers the override on a post that already skipped the backup', async () => {
-    apiMocks.triggerFirmwareUpdate.mockResolvedValueOnce(
-      failed(502, { error: 'busy', code: 'pre_update_backup_failed' }),
-    );
+    apiMocks.triggerFirmwareUpdate.mockResolvedValueOnce(failed(502, { error: 'busy', code: 'pre_update_backup_failed' }));
     const row = fake();
-
-    await triggerMachineFirmwareUpdate(9202, row, true);
-
+    await triggerMachineFirmwareUpdate(9202, asRow(row), true);
     expect(sheetMock.confirmUpdateWithoutBackup).not.toHaveBeenCalled();
     expect(apiMocks.triggerFirmwareUpdate).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledTimes(1);
@@ -220,11 +203,9 @@ describe('the Backups row action (#1878)', () => {
 
   it('adds the Backups action to Gaggiuino rows only', () => {
     renderMachinesList();
-
     const gaggiuino = list.children[0];
     const gaggimate = list.children[1];
     if (!gaggiuino || !gaggimate) throw new Error('expected two machine rows');
-
     const markup = gaggiuino.innerHTML;
     const edit = markup.indexOf('machine-edit-btn');
     const backups = markup.indexOf('class="machine-backups-btn">Backups</button>');

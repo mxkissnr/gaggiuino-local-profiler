@@ -411,7 +411,7 @@ export function renderMachinesList(): void {
       </span>`;
     (row.querySelector('.machine-edit-btn') as HTMLElement).addEventListener('click', () => openMachineForm(m));
     const backupsBtn = row.querySelector<HTMLElement>('.machine-backups-btn');
-    backupsBtn?.addEventListener('click', () => void openMachineBackups(m.id, backupsBtn));
+    if (backupsBtn) backupsBtn.addEventListener('click', () => void openMachineBackups(m.id, backupsBtn));
     row.querySelector('.machine-set-default-btn')?.addEventListener('click', () => void setDefaultMachine(m.id));
     row.querySelector('.machine-delete-btn')?.addEventListener('click', () => void deleteMachine(m.id, m.isDefault));
     if (isGaggiuino) {
