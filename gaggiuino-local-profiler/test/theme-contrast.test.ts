@@ -207,3 +207,11 @@ describe('design token contrast (#811)', () => {
     });
   });
 });
+
+describe('color-scheme (#1912)', () => {
+  const block = (sel: RegExp): string => { const i = CSS.search(sel); return i === -1 ? '' : CSS.slice(i, CSS.indexOf('}', i)); };
+  it('lets native controls follow the dark and the light theme', () => {
+    expect(block(/:root\s*\{/)).toMatch(/color-scheme:\s*dark\s*;/);
+    expect(block(/\[data-theme="light"\]\s*\{/)).toMatch(/color-scheme:\s*light\s*;/);
+  });
+});
