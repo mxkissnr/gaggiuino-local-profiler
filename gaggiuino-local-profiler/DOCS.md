@@ -487,6 +487,8 @@ The import result shows which of these methods produced the data (e.g. "Source: 
 
 Every import is also checked against your existing library for a likely duplicate — the same URL imported before, or a bean with the same name and roaster — and shows a non-blocking "⚠ May already be in your library: …" hint if one is found; you can still import anyway (e.g. a new bag of the same bean).
 
+**When a shop does not allow automatic requests.** Some Shopify shops answer GLP's requests with HTTP 429, while the same address opens normally in your browser. GLP does not disguise itself as a browser. It tells you that the shop does not allow automatic requests right now and, for a Shopify product, offers a link to the product data: open it in your browser, copy all of the text (if the browser shows a formatted view, switch to its raw view first) and paste it into the field below the link. GLP reads the text with the same parser as a normal import, chosen by the address you entered, and fills the form as usual. Text that is not valid product data, or that is longer than 1 MB, gives an error and nothing is saved. For other shops, enter the details by hand or try again later. If a shop blocks only the product data while its product page still shows the details, GLP fills the form from the page and offers the same paste path for the rest. The product photo is downloaded when you save: if that fails, the bean is saved without a photo and you can add your own.
+
 Fetches are hardened against SSRF: only `https://` URLs are accepted, and the target hostname (and every redirect hop) is resolved and rejected if it points at a private, loopback, link-local or carrier-grade-NAT address instead of a public one.
 
 ### Coffee flavor wheel
