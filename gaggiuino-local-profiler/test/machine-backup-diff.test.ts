@@ -8,12 +8,7 @@ type Bag = Record<string, unknown>;
 /** The hand-built document shape: real key structure, neutral values, no secrets.
  *  Pure Node test: no DOM, locale or timer use, so test/setup.ts has nothing to add here. */
 interface TestDoc {
-    firmware: Bag;
-    settings: Bag;
-    profiles: Bag[];
-    pumpCalibration: Bag;
-    defaultProfileId: unknown;
-    [key: string]: unknown;
+    firmware: Bag; settings: Bag; profiles: Bag[]; pumpCalibration: Bag; defaultProfileId: unknown; [key: string]: unknown;
 }
 
 // A factory, not a shared constant: baseDoc() must give each side its own objects.
@@ -28,6 +23,11 @@ const removed = (from: unknown): ChangeOf => ({ change: 'removed', from });
 
 function isBag(value: unknown): value is Bag {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Array.isArray() would narrow to any[] here, making later reads unsafe-any. */
+function isList(value: unknown): value is readonly unknown[] {
+    return Array.isArray(value);
 }
 
 function container(root: Bag, path: readonly string[]): Bag {
@@ -51,7 +51,7 @@ function deleteAt(root: Bag, path: readonly string[]): void {
 
 function phasesOf(profile: Bag): Bag[] {
     const phases = profile['phases'];
-    return Array.isArray(phases) ? (phases as Bag[]) : [];
+    return isList(phases) ? (phases as Bag[]) : [];
 }
 
 function baseDoc(): TestDoc {
@@ -97,17 +97,17 @@ function orderingPair(): { from: TestDoc; to: TestDoc } {
 
 /** Deep copy with every object's keys reversed and the profiles array reversed. */
 function reorder(value: unknown, top = true): unknown {
-    if (Array.isArray(value)) return value.map((item) => reorder(item, false));
+    if (isList(value)) return value.map((item) => reorder(item, false));
     if (!isBag(value)) return value;
     const out: Bag = {};
     for (const [key, child] of Object.entries(value).reverse()) out[key] = reorder(child, false);
     const profiles = out['profiles'];
-    if (top && Array.isArray(profiles)) out['profiles'] = [...profiles].reverse();
+    if (top && isList(profiles)) out['profiles'] = [...profiles].reverse();
     return out;
 }
 
 function deepFreeze(value: unknown): void {
-    if (!isBag(value) && !Array.isArray(value)) return;
+    if (!isBag(value) && !isList(value)) return;
     for (const child of Object.values(value as Bag)) deepFreeze(child);
     Object.freeze(value);
 }
