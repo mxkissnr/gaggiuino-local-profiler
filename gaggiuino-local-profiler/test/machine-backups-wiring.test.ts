@@ -105,6 +105,7 @@ describe('the firmware update API body (#1878)', () => {
   S.currentLang = 'en';
 
   it('sends skipBackup only after the override', async () => {
+    fetchMock.mockReset();
     fetchMock.mockResolvedValue(ok());
     await realApi.triggerFirmwareUpdate(3);
     await realApi.triggerFirmwareUpdate(3, true);
