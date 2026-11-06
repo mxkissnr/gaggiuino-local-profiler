@@ -628,11 +628,12 @@ function onSheetChange(e: Event): void {
 }
 
 function onPickChange(sheet: SheetState, target: HTMLInputElement | HTMLSelectElement): void {
+  if (!('checked' in target)) return; // only a checkbox ticks a backup
   const id = Number(target.dataset.id);
   const known = sheet.entries?.some(b => b.id === id) ?? false;
   if (!Number.isInteger(id) || id <= 0 || (!known && !sheet.orphans.some(b => b.id === id))) return;
   const picked = pickedIds(sheet);
-  sheet.picked = (target as HTMLInputElement).checked
+  sheet.picked = target.checked
     ? (picked.includes(id) ? picked : [...picked, id])
     : picked.filter(p => p !== id);
   rerender();
