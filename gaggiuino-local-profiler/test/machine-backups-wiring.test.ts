@@ -2,21 +2,6 @@
 // the Backups row action and the "update without a backup" override after a
 // failed pre-update backup. The sheet itself is covered by
 // machine-backups-sheet.test.ts and is mocked here.
-//
-// PLAN-1878 also names files this slice must not touch; they are already
-// complete, so this test only pins their contract:
-// - components/machine-backups.ts (U1-U3): exports the three helpers used here,
-//   and its rows are styled by the mbk-* rules this slice adds.
-// - go/internal/machines/handlers_control.go (S4): reads skipBackup and answers
-//   code pre_update_backup_failed, which the override below keys on.
-// - test/firmware-update-migration.test.ts must stay green unchanged: the new
-//   skipBackup parameter is optional, so its mocks and assertions still hold.
-// - components/toast.ts is untouched on purpose: it pins white-space:nowrap, so
-//   a toast cannot carry the "update without a backup" action; U1 uses the
-//   native confirm() instead (confirmUpdateWithoutBackup).
-// - changelog.d/README.md documents the fragment format and is never collected;
-//   changelog.d/1845.added.md only sets the "Part of #N" precedent that
-//   changelog.d/1878.added.md follows.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { FirmwareProgress, FirmwareVersion } from '../public-src/api/types.js';
@@ -33,12 +18,12 @@ interface Fake {
   style: Record<string, string>; disabled: boolean;
   handlers: Record<string, () => void>; children: Fake[];
   addEventListener(type: string, fn: () => void): void;
-  querySelector(sel: string): Fake;
-  removeAttribute(name: string): void; remove(): void; setAttribute(name: string, value: string): void;
+  querySelector(sel: string): Fake; removeAttribute(name: string): void;
+  remove(): void; setAttribute(name: string, value: string): void;
   appendChild(child: Fake): void;
 }
 
-// Every fake keeps its own querySelector cache, so a listener the component
+// Each fake caches its own querySelector result, so the listener the component
 // binds to `.machine-backups-btn` can be found again by the test.
 function fake(): Fake {
   const kids: Record<string, Fake> = {};
@@ -106,13 +91,9 @@ function formatter(value: TranslationValue | undefined): (...args: unknown[]) =>
 
 const failed = (status: number, body: Record<string, unknown>): Response =>
   ({ ok: false, status, json: () => Promise.resolve(body) } as unknown as Response);
-
 const ok = (): Response => ({ ok: true, status: 200, json: () => Promise.resolve({}) } as unknown as Response);
-
-// The component wants real HTMLElements; the fakes carry exactly the members
-// the firmware path touches.
+// The firmware path only touches the members the fakes carry.
 const asRow = (el: Fake): HTMLElement => el as unknown as HTMLElement;
-
 const banner = '.machine-firmware-update-banner';
 const button = '.machine-firmware-update-btn';
 
