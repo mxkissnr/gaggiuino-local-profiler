@@ -556,6 +556,20 @@ A dedicated **Achievements** view shows a printed-cardboard "stamp card": 64 bad
 
 **Older backups** (`.json` files downloaded before the ZIP format, and even older ones from before selective sections existed — see `CHANGELOG.md`) still restore normally; you don't need to re-export anything already saved. The very oldest `.json` backups (from before sections/photos/maintenance/orders/machines/settings were part of the export at all) contain shots, annotations, the coffee library and blocklist only — that older data was never captured and can't be recovered from those specific files. Take a fresh backup after upgrading if you rely on the newer sections.
 
+### Machine settings backups (Gaggiuino)
+
+Settings → Machines → **Backups** on a Gaggiuino machine opens that machine's backup history: its settings and profiles in the machine's own backup format.
+
+- **Automatic.** GLP backs each Gaggiuino machine up daily (or weekly, or never; set it per machine under "Automatic backups") the first time it is reachable and idle, and stores a new backup only when something changed. It keeps the last 10 automatic backups by default (1–100). After you lower the number, older automatic backups are removed with the next automatic backup.
+- **Before every firmware update** GLP stores a backup. If that fails, the update does not start; you can still confirm updating without a backup.
+- **Back up now, download and upload.** A downloaded file contains the machine's Wi-Fi password and MQTT login in plain text, so GLP asks before saving it; if the machine is not reachable, the file has no passwords. Uploaded files are checked, and their passwords are not stored.
+- **Compare** two backups to see in plain words what changed: settings, profiles and their phases, the default profile and the firmware.
+- **Restore** sends a backup back to its machine, which then restarts. GLP first saves the machine's current state as a new backup and keeps the machine's current Wi-Fi and MQTT settings. It refuses while the machine is brewing, steaming, descaling or updating, or while GLP still has profile changes for it that have not been sent.
+- **Passwords are never stored.** Wi-Fi, MQTT and visualizer/profiler credentials are removed before a backup is saved and are taken fresh from the machine only for a download or a restore.
+- **Manual, uploaded and pre-update backups stay until you delete them.** Deleting a machine keeps its backups: they appear under "Backups of deleted machines" in the Backups sheet of every Gaggiuino machine, where you can download, delete or restore them onto a Gaggiuino machine you choose.
+
+Machine backups are part of GLP's own backup (Machines section). GaggiMate machines have no settings backup API, so they don't get this feature. Gaggiuino firmware main-8aaf6f0 or newer is required.
+
 ### HA theme
 
 A matching Home Assistant theme (`glp-ha-theme.yaml`) is included in the repository root. It provides **GLP Dark** and **GLP Light** variants for the full HA interface (sidebar, cards, inputs, switches, status colours).
