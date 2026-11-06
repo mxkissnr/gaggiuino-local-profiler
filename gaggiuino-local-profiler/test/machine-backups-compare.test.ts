@@ -58,6 +58,12 @@ const detail = (over: Partial<MachineBackup> = {}, document: Record<string, unkn
   ({ ...entry(over), document });
 const okDetail = (d: MachineBackupDetail): { ok: true; value: MachineBackupDetail } => ({ ok: true, value: d });
 const flush = (): Promise<void> => new Promise(resolve => { setTimeout(() => { setTimeout(resolve, 0); }, 0); });
+/** A promise plus its resolver, for a call the test releases by hand. */
+const deferred = (): { promise: Promise<void>; resolve: () => void } => {
+  const gate = { release: (): void => {} };
+  const promise = new Promise<void>(resolve => { gate.release = () => { resolve(); }; });
+  return { promise, resolve: () => { gate.release(); } };
+};
 const click = (action: string): void => {
   handlers.click?.({ target: { closest: () => ({ dataset: { mbkAction: action } }) } });
 };
@@ -262,10 +268,9 @@ describe('machine backup compare (#1878)', () => {
 
   it('drops a compare answer for a sheet that is no longer open', async () => {
     api.list.mockResolvedValue({ ok: true, value: [newer, older] });
-    let release: (() => void) | null = null;
-    const gate = new Promise<void>(resolve => { release = resolve; });
+    const gate = deferred();
     api.get.mockImplementation(async (_id: number) => {
-      await gate;
+      await gate.promise;
       return failure({ status: 404 }); // would toast if it reached the old sheet
     });
     await openMachineBackups(1, null);
@@ -277,7 +282,7 @@ describe('machine backup compare (#1878)', () => {
     el.dataset.machineId = '2'; // the fresh #mbkSheet names machine 2
     el.innerHTML = '';
     await flush();
-    release?.();
+    gate.resolve();
     await flush();
     expect(el.innerHTML).not.toContain('mbk-cmp');
     expect(toast.show).not.toHaveBeenCalled();
