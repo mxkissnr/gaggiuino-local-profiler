@@ -581,6 +581,7 @@ func TestGaggiuinoAdapter_RestoreSettingsBackup(t *testing.T) {
 		t.Fatalf("cut answer = %v, want an empty message", err)
 	}
 
+	setReply(http.StatusOK, nil)
 	before := count()
 	if err := a.RestoreSettingsBackup(ctx, m, bytes.Repeat([]byte("a"), MaxSettingsBackupBytes)); err != nil {
 		t.Fatalf("document at the size cap: %v", err)
