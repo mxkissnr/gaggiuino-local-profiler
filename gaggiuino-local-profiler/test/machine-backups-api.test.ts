@@ -60,13 +60,9 @@ interface Sent {
   readonly body: unknown;
 }
 
+// Headers normalises names to lower case, so the assertions below name them that way.
 function headerRecord(init: RequestInit | undefined): Record<string, string> {
-  const value = init?.headers;
-  if (value === undefined) return {};
-  if (value instanceof Headers) return Object.fromEntries(value.entries());
-  // Object.fromEntries on a plain string[][] falls into its `any` overload.
-  if (Array.isArray(value)) return Object.fromEntries(value.map(([k, v]) => [String(k), String(v)] as const));
-  return { ...value };
+  return Object.fromEntries(new Headers(init?.headers).entries());
 }
 
 function call(i = 0): Sent {
@@ -151,15 +147,15 @@ describe('routes', () => {
       expect({ url: sent.url, method: sent.method }).toStrictEqual({ url: row.url, method: row.method });
       if (row.body === NO_BODY) {
         expect(sent.body).toBeUndefined();
-        expect(sent.headers['Content-Type']).toBeUndefined();
+        expect(sent.headers['content-type']).toBeUndefined();
       } else {
         expect(sent.body).toStrictEqual(row.body);
-        expect(sent.headers['Content-Type']).toBe('application/json');
+        expect(sent.headers['content-type']).toBe('application/json');
       }
       if (row.method === 'GET') {
-        expect(sent.headers['X-GLP-Client']).toBeUndefined();
+        expect(sent.headers['x-glp-client']).toBeUndefined();
       } else {
-        expect(typeof sent.headers['X-GLP-Client']).toBe('string');
+        expect(typeof sent.headers['x-glp-client']).toBe('string');
       }
     }
   });
