@@ -310,3 +310,23 @@ func TestIngressSmoke_MCPSettingsRequireToken(t *testing.T) {
 		t.Errorf("GET /api/mcp with token while disabled: status = %d, want 404", disabled.StatusCode)
 	}
 }
+
+// TestChartPNGRequiresToken pins that GET /api/shots/{id}/chart.png sits behind
+// the usual token check (#1851): unauthenticated it is a 401, with the token it
+// reaches the handler and answers for an unknown shot with 404.
+func TestChartPNGRequiresToken(t *testing.T) {
+	base, token := newSmokeServer(t)
+	const chartPath = "/api/shots/999999/chart.png"
+
+	noAuth := smokeGet(t, base+chartPath, nil)
+	noAuth.Body.Close()
+	if noAuth.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET %s unauthenticated: status = %d, want 401", chartPath, noAuth.StatusCode)
+	}
+
+	withToken := smokeGet(t, base+chartPath, map[string]string{"X-GLP-Token": token})
+	withToken.Body.Close()
+	if withToken.StatusCode != http.StatusNotFound {
+		t.Errorf("GET %s with token: status = %d, want 404 (unknown shot)", chartPath, withToken.StatusCode)
+	}
+}

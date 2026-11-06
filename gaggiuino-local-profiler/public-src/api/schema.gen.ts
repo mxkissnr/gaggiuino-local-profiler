@@ -324,6 +324,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shots/{id}/chart.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Render a shot's curves as a PNG chart
+         * @description Pressure, pump flow, weight and temperature of one shot (Gaggiuino or GaggiMate) as a fixed 960x480 PNG on a light background, in the app chart's colours, rendered server-side on every request. Meant for Home Assistant notifications and dashboards. Only the legend language can be chosen. (#1851)
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Legend language (de/en/es/fr/it/nl, unknown falls back to en) */
+                    lang?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description PNG image */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/png": string;
+                    };
+                };
+                /** @description Invalid shot ID */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Shot not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — dedicated per-IP chart limit, 30/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rendering failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shots/{id}/image": {
         parameters: {
             query?: never;

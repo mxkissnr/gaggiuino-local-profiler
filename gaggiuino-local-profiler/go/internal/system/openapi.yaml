@@ -1459,6 +1459,26 @@ paths:
         "503": { description: Card rendering module not available }
         "429": { description: "Rate limit exceeded — dedicated per-IP card limit, 30/min (#999)" }
 
+  /api/shots/{id}/chart.png:
+    get:
+      tags: [Shots]
+      summary: Render a shot's curves as a PNG chart
+      description: >
+        Pressure, pump flow, weight and temperature of one shot (Gaggiuino or
+        GaggiMate) as a fixed 960x480 PNG on a light background, in the app
+        chart's colours, rendered server-side on every request. Meant for Home
+        Assistant notifications and dashboards. Only the legend language can be
+        chosen. (#1851)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string }, description: "Legend language (de/en/es/fr/it/nl, unknown falls back to en)" }
+      responses:
+        "200": { description: PNG image, content: { image/png: { schema: { type: string, format: binary } } } }
+        "400": { description: Invalid shot ID }
+        "404": { description: Shot not found }
+        "429": { description: "Rate limit exceeded — dedicated per-IP chart limit, 30/min" }
+        "500": { description: Rendering failed }
+
   /api/shots/{id}/image:
     get:
       tags: [Shots]
