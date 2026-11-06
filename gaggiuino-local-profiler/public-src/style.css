@@ -804,6 +804,49 @@
         .machine-row-actions { margin-left: auto; display:flex; gap: var(--sp-2); }
         .machine-row-actions button { background:none; border:none; color:var(--gray-400); cursor:pointer; font-size: var(--fs-1); padding: 2px var(--sp-1); }
         .machine-row-actions button:hover { color:var(--gray-200); }
+        /* #1878: the machine backups sheet (components/machine-backups.ts), opened
+           from a Gaggiuino row's Backups action; wider than the default popover
+           so a row's date, chip and actions fit on one line from 900px. */
+        .lib-sheet.detail-pop:has(.mbk-sheet) { width: min(480px, calc(100vw - 24px)); max-height: min(80vh, 720px); }
+        .mbk-sheet { display:flex; flex-direction:column; gap: var(--sp-3); }
+        .mbk-toolbar, .mbk-actions, .mbk-row-actions { display:flex; flex-wrap:wrap; gap: var(--sp-2); }
+        .mbk-toolbar .mbk-note-field { flex-basis:100%; padding:0; }
+        .mbk-actions { justify-content:flex-end; }
+        .mbk-btn { min-height:44px; padding: 0 var(--sp-3); background:var(--gray-800); border:none; border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-2); cursor:pointer; }
+        .mbk-btn:hover { background:var(--gray-700); }
+        .mbk-btn:disabled { opacity:.5; cursor:default; }
+        .mbk-btn-primary { background:var(--accent); color:var(--accent-text); }
+        .mbk-btn-primary:hover { background:var(--accent); }
+        .mbk-btn-danger { background:color-mix(in srgb, var(--err) 18%, var(--gray-800)); color:var(--err); }
+        .mbk-verdict { margin:0; font-size: var(--fs-2); color:var(--gray-300); font-variant-numeric:tabular-nums; }
+        .mbk-status { margin:0; font-size: var(--fs-1); color:var(--accent-ink); }
+        .mbk-hint { margin:0; font-size: var(--fs-1); color:var(--gray-400); }
+        .mbk-list { display:flex; flex-direction:column; }
+        .mbk-row { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-3) 0; border-bottom:1px solid var(--gray-800); }
+        .mbk-row:last-child { border-bottom:none; }
+        .mbk-row-head { display:flex; align-items:center; gap: var(--sp-2); flex-wrap:wrap; }
+        .mbk-pick-wrap { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; }
+        .mbk-pick { width:20px; height:20px; accent-color:var(--accent); }
+        .mbk-date { font-size: var(--fs-2); color:var(--gray-200); font-variant-numeric:tabular-nums; }
+        .mbk-chip { font-size: var(--fs-1); padding: 2px var(--sp-2); border-radius:var(--radius-sm); background:var(--gray-800); color:var(--gray-300); }
+        .mbk-chip-manual { background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent-ink); }
+        .mbk-chip-pre_update { background:color-mix(in srgb, var(--warn) 15%, transparent); color:var(--warn); }
+        .mbk-meta, .mbk-owner { font-size: var(--fs-1); color:var(--gray-400); font-variant-numeric:tabular-nums; }
+        .mbk-note { font-size: var(--fs-1); color:var(--gray-300); overflow-wrap:anywhere; }
+        .mbk-row-actions .mbk-btn { background:none; color:var(--accent-ink); padding: 0 var(--sp-2); }
+        .mbk-row-actions .mbk-btn:hover { background:var(--gray-800); }
+        .mbk-fold > summary { min-height:44px; display:flex; align-items:center; gap: var(--sp-2); cursor:pointer; color:var(--accent-ink); font-weight:600; }
+        .mbk-fold-count { color:var(--gray-500); font-weight:400; font-variant-numeric:tabular-nums; }
+        .mbk-field { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; font-size: var(--fs-1); color:var(--gray-400); }
+        .mbk-select, .mbk-input { min-height:44px; padding: 0 var(--sp-3); background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-2); }
+        .mbk-restore, .mbk-cmp { display:flex; flex-direction:column; gap: var(--sp-3); }
+        .mbk-restore p { margin:0; font-size: var(--fs-2); color:var(--gray-300); }
+        .mbk-restore-title { margin:0; font-size: var(--fs-3); color:var(--gray-200); }
+        .mbk-restore .mbk-hint { font-size: var(--fs-1); color:var(--gray-400); }
+        .mbk-restore .mbk-warn { font-size: var(--fs-1); color:var(--warn); }
+        .mbk-cmp-list { margin:0; padding-left: var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-2); font-size: var(--fs-2); color:var(--gray-200); overflow-wrap:anywhere; }
+        .mbk-cmp-empty { margin:0; font-size: var(--fs-2); color:var(--gray-200); }
+        .mbk-cmp-egg { margin:0; font-size: var(--fs-1); color:var(--gray-400); font-style:italic; }
         /* #811: -6px pulls the label into the input below it -- a deliberate
            negative overlap, not a spacing-ladder gap, so it stays a literal
            rather than forcing an ugly calc(var(--sp-2) * -1). */

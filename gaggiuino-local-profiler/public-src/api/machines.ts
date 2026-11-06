@@ -82,9 +82,12 @@ export async function getFirmwareVersion(machineId: string | number): Promise<Fi
   return jsonOrNull<FirmwareVersion>(await apiFetch(`api/machine/firmware/version?machineId=${pathSeg(machineId)}`));
 }
 
-/** POST /api/machine/firmware/update — trigger the machine's OTA update. Raw Response (the caller reads the error body on a non-ok). */
-export function triggerFirmwareUpdate(machineId: string | number): Promise<Response> {
-  return apiFetch('api/machine/firmware/update', jsonBody({ machineId: Number(machineId) }));
+/** POST /api/machine/firmware/update — trigger the machine's OTA update. skipBackup is sent only when the user
+ *  confirmed updating without the settings backup GLP takes first (#1878). Raw Response (the caller reads the
+ *  error body and its `code` on a non-ok). */
+export function triggerFirmwareUpdate(machineId: string | number, skipBackup = false): Promise<Response> {
+  const body = skipBackup ? { machineId: Number(machineId), skipBackup: true } : { machineId: Number(machineId) };
+  return apiFetch('api/machine/firmware/update', jsonBody(body));
 }
 
 /** GET /api/machine/firmware/progress?machineId=... — poll update progress. Null on a non-ok or an unparseable body (treated as a transient failure by the poller). */

@@ -16,6 +16,7 @@ import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-pre
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
+import { confirmUpdateWithoutBackup, machineBackupsButtonHtml, openMachineBackups } from './machine-backups.js';
 import { esc as escapeHtml, html, joinHtml, safeHttpUrl } from '../utils.js';
 import type { Html } from '../utils.js';
 import type { MachineRecord } from '../state/index.js';
@@ -404,10 +405,13 @@ export function renderMachinesList(): void {
       ${isGaggiuino ? html`<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : html``}
       <span class="machine-row-actions">
         <button type="button" class="machine-edit-btn">${tHtml('settings_machine_edit')}</button>
+        ${isGaggiuino ? machineBackupsButtonHtml() : html``}
         ${!m.isDefault ? html`<button type="button" class="machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
         <button type="button" class="machine-delete-btn">${tHtml('settings_machine_delete')}</button>
       </span>`;
     (row.querySelector('.machine-edit-btn') as HTMLElement).addEventListener('click', () => openMachineForm(m));
+    const backupsBtn = row.querySelector<HTMLElement>('.machine-backups-btn');
+    backupsBtn?.addEventListener('click', () => void openMachineBackups(m.id, backupsBtn));
     row.querySelector('.machine-set-default-btn')?.addEventListener('click', () => void setDefaultMachine(m.id));
     row.querySelector('.machine-delete-btn')?.addEventListener('click', () => void deleteMachine(m.id, m.isDefault));
     if (isGaggiuino) {
@@ -782,7 +786,9 @@ function toggleMachineFirmwarePanel(row: HTMLElement): void {
   badge?.setAttribute('aria-expanded', String(show));
 }
 
-export async function triggerMachineFirmwareUpdate(machineId: number, row: HTMLElement): Promise<void> {
+// skipBackup is only ever true on the resend after the user confirmed updating
+// without the settings backup GLP takes first (#1878).
+export async function triggerMachineFirmwareUpdate(machineId: number, row: HTMLElement, skipBackup = false): Promise<void> {
   setFirmwareUpdateBusy(row, true);
   // A reload mid-update re-renders the banner with an enabled button even
   // though the machine is still flashing -- adopt the running update instead
@@ -795,9 +801,18 @@ export async function triggerMachineFirmwareUpdate(machineId: number, row: HTMLE
     }
   } catch { /* fall through and post the update as usual */ }
   try {
-    const r = await machinesApi.triggerFirmwareUpdate(machineId);
+    const r = await machinesApi.triggerFirmwareUpdate(machineId, skipBackup);
     if (!r.ok) {
-      const data = await r.json().catch(() => ({})) as { error?: string; id?: number; reachable?: boolean };
+      const data = await r.json().catch(() => ({})) as {
+        error?: string; id?: number; reachable?: boolean; code?: string;
+      };
+      // #1878: the backup before the update failed, so nothing started. Only
+      // the user's explicit yes in the confirm dialog resends without one.
+      if (data.code === 'pre_update_backup_failed' && !skipBackup) {
+        setFirmwareUpdateBusy(row, false);
+        if (confirmUpdateWithoutBackup()) await triggerMachineFirmwareUpdate(machineId, row, true);
+        return;
+      }
       if (window.showToast) window.showToast(t('settings_machine_firmware_trigger_failed', data.error || r.status));
       setFirmwareUpdateBusy(row, false);
       return;
