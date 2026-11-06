@@ -3,10 +3,8 @@
 // shows the list, Back up now with an optional note, Upload, Download and
 // Delete, plus a fold with the backups of deleted machines (Max decision 4:
 // deleting a machine keeps its backups, they stay downloadable and deletable).
-// U2 adds restore and the automatic-backup settings, U3 the compare view.
-// Every async continuation checks it still belongs to the open sheet's machine:
-// in-flight work is keyed by machineId, never by a shared scalar. Notes, names
-// and anything from a document reach the DOM only through esc.
+// U2 adds restore and the per-machine automatic-backup settings; every async
+// continuation checks it still belongs to the open sheet's machine.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
@@ -14,9 +12,22 @@ import { esc, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
 import type { Html } from '../utils.js';
 import { openDetailSheet } from './detail-sheet.js';
 import { showToast } from './toast.js';
-import { backUpMachineNow, deleteMachineBackup, downloadMachineBackup, listMachineBackups, uploadMachineBackup } from '../api/machine-backups.js';
+import {
+  backUpMachineNow, deleteMachineBackup, downloadMachineBackup, getMachineBackupSettings, listMachineBackups,
+  restoreMachineBackup, saveMachineBackupSettings, uploadMachineBackup,
+} from '../api/machine-backups.js';
 import type { MachineBackupFailure } from '../api/machine-backups.js';
-import type { MachineBackup, MachineBackupDocument, MachineBackupErrorCode, MachineBackupKind } from '../api/types.js';
+import { getFirmwareVersion } from '../api/machines.js'; // already answers installed: null when unreachable
+import type {
+  MachineBackup, MachineBackupDocument, MachineBackupErrorCode, MachineBackupKind, MachineBackupSchedule,
+  MachineBackupSettings, MachineBusyReason,
+} from '../api/types.js';
+
+interface RestoreDraft {
+  readonly entryId: number;
+  targetId: number | null;
+  installed: string | null; // the target's installed core, null until it is read
+}
 
 interface SheetState {
   readonly machineId: number;
@@ -24,21 +35,45 @@ interface SheetState {
   orphans: MachineBackup[]; // backups of deleted machines (decision 4)
   failed: boolean; // the first load failed
   note: string; // the Back up now note field, kept across re-renders
+  restore?: RestoreDraft | null; // the open restore confirmation, null for the list
+}
+
+/** One machine's wait for its restart after a restore (#1876 pattern). */
+export interface RestoreWait {
+  readonly startedAt: number;
+  seenDown: boolean; // the poll saw the machine unreachable at least once
+  timer?: ReturnType<typeof setTimeout>;
 }
 
 let _sheet: SheetState | null = null; // the open sheet; one sheet at a time, but it names its machine
-const _busy = new Set<number>(); // machineIds with a running Back up now / Upload
+const _busy = new Set<number>(); // machineIds with a running Back up now / Upload / Restore
+const _restoreWaits = new Map<number, RestoreWait>(); // target machineId -> its restart wait
+const _settings = new Map<number, MachineBackupSettings>(); // machineId -> its schedule/retention
 export const MAX_UPLOAD_BYTES = 256 * 1024;
-export type BackupContext = 'backup' | 'upload' | 'download' | 'delete';
+export const RESTORE_POLL_MS = 3000;
+export const RESTORE_WAIT_MAX_MS = 3 * 60 * 1000;
+export const RESTORE_MIN_BACK_MS = 15000; // before an outage, only a later answer counts as "back"
+export type BackupContext = 'backup' | 'upload' | 'download' | 'delete' | 'restore' | 'settings';
 const KIND_KEYS: Record<MachineBackupKind, string> = {
   manual: 'mbk_kind_manual', scheduled: 'mbk_kind_scheduled', pre_update: 'mbk_kind_pre_update', uploaded: 'mbk_kind_uploaded',
 };
-// U2 turns this into a full Record<MachineBackupErrorCode, string> (busy reasons, restore codes).
-const ERROR_KEYS: Partial<Record<MachineBackupErrorCode, string>> = {
+const ERROR_KEYS: Record<MachineBackupErrorCode, string> = {
   unsupported_machine: 'mbk_err_unsupported_machine', unsupported_firmware: 'mbk_err_unsupported_firmware',
   machine_unreachable: 'mbk_err_unreachable', invalid_backup: 'mbk_err_invalid_backup',
   machine_busy: 'mbk_err_busy', operation_running: 'mbk_err_operation_running',
+  pre_update_backup_failed: 'mbk_preupdate_failed', pending_profile_changes: 'mbk_err_pending_profiles',
+  restore_rejected: 'mbk_err_rejected', no_confirmation: 'mbk_restore_unknown',
+  pre_restore_backup_failed: 'mbk_err_pre_restore',
 };
+const BUSY_KEYS: Record<MachineBusyReason, string> = {
+  brew: 'mbk_err_busy_brew', steam: 'mbk_err_busy_steam', descale: 'mbk_err_busy_descale', firmware_update: 'mbk_err_busy_firmware_update',
+};
+const SCHEDULE_KEYS: Record<MachineBackupSchedule, string> = {
+  daily: 'mbk_schedule_daily', weekly: 'mbk_schedule_weekly', off: 'mbk_schedule_off',
+};
+const SCHEDULE_ORDER: readonly MachineBackupSchedule[] = ['daily', 'weekly', 'off'];
+
+const isSchedule = (v: string): v is MachineBackupSchedule => Object.hasOwn(SCHEDULE_KEYS, v);
 
 function machineName(id: number): string {
   const name = S.machines.find(m => m.id === id)?.name;
@@ -73,19 +108,37 @@ export function relativeTime(ms: number, nowMs: number, locale: string): string 
   return rtf.format(Math.round(hours / 24), 'day');
 }
 
-/** The translated text for a failed call. The server's own `error` text never reaches here. */
+/** The server's own `error` text never reaches the UI; only a code is translated. */
 export function backupErrorText(f: MachineBackupFailure, context: BackupContext): string {
   if (context === 'upload') {
     if (f.status === 413) return t('mbk_upload_too_large');
     if (f.code === 'invalid_backup' || (f.code === null && f.status === 400)) return t('mbk_upload_invalid');
   }
-  if (f.code !== null) {
-    const key = ERROR_KEYS[f.code];
-    if (key !== undefined) return t(key);
-  }
+  // The machine's own text (untrusted) only ever reaches a toast, never innerHTML.
+  if (f.code === 'restore_rejected') return t('mbk_err_rejected', f.machineError ?? '');
+  if (f.code === 'machine_busy' && f.reason !== null) return t(BUSY_KEYS[f.reason]);
+  if (f.code !== null) return t(ERROR_KEYS[f.code]);
   if (f.status === 404) return t('mbk_err_not_found');
   if (f.status === 429) return t('mbk_err_rate_limited');
   return t('mbk_err_generic');
+}
+
+/** Unknown outcome: never say whether anything was restored (the machine may be restarting). */
+export function restoreOutcomeUnknown(f: MachineBackupFailure): boolean {
+  return f.code === 'no_confirmation' || f.status === 0 || (f.code === null && f.status >= 500);
+}
+
+/** A short and a long form of one hash count as equal. */
+export function firmwareDiffers(backupFw: string, installed: string | null): boolean {
+  const a = backupFw.trim().toLowerCase();
+  const b = (installed ?? '').trim().toLowerCase();
+  if (a === '' || b === '') return false;
+  return !a.startsWith(b) && !b.startsWith(a);
+}
+
+/** The Gaggiuino machines a deleted machine's backup may be restored onto. */
+function gaggiuinoMachines(): { id: number; name: string }[] {
+  return S.machines.filter(m => m.type === 'gaggiuino').map(m => ({ id: m.id, name: machineName(m.id) }));
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -123,10 +176,11 @@ export function cleanNote(raw: string): string | undefined {
   return s === '' ? undefined : Array.from(s).slice(0, 200).join('');
 }
 
-function renderRow(b: MachineBackup, locale: string, owner: Html | null): Html {
+function renderRow(b: MachineBackup, locale: string, owner: Html | null, restoreDisabled: boolean): Html {
   const meta: string[] = [];
   if (b.firmwareCore !== '') meta.push(t('settings_machine_firmware_badge_current', b.firmwareCore));
   meta.push(t('mbk_profiles', b.profileCount), t('mbk_size_kb', Math.max(1, Math.round(b.sizeBytes / 1024))));
+  const noRestore = restoreDisabled ? html` disabled` : esc('');
   return html`<div class="mbk-row">
     ${owner === null ? esc('') : html`<div class="mbk-owner">${owner}</div>`}
     <div class="mbk-row-head"><span class="mbk-date">${esc(formatBackupDate(b.createdAt, locale))}</span><span class="mbk-chip mbk-chip-${esc(b.kind)}">${esc(t(KIND_KEYS[b.kind]))}</span></div>
@@ -134,20 +188,67 @@ function renderRow(b: MachineBackup, locale: string, owner: Html | null): Html {
     ${b.note === '' ? esc('') : html`<div class="mbk-note">${esc(b.note)}</div>`}
     <div class="mbk-row-actions">
       <button type="button" class="mbk-btn" data-mbk-action="download" data-id="${esc(b.id)}">${tHtml('mbk_download')}</button>
+      <button type="button" class="mbk-btn" data-mbk-action="restore" data-id="${esc(b.id)}"${noRestore}>${tHtml('mbk_restore')}</button>
       <button type="button" class="mbk-btn" data-mbk-action="delete" data-id="${esc(b.id)}">${tHtml('mbk_delete')}</button>
     </div>
   </div>`;
 }
 
+const optionHtml = (value: string, label: Html, selected: boolean): Html =>
+  html`<option value="${esc(value)}"${selected ? html` selected` : esc('')}>${label}</option>`;
+
+function renderRestore(sheet: SheetState, draft: RestoreDraft, entry: MachineBackup, locale: string): Html {
+  const orphan = sheet.orphans.some(b => b.id === entry.id);
+  const targetId = draft.targetId;
+  const blocked = targetId === null || _busy.has(targetId) || _restoreWaits.has(targetId);
+  const noConfirm = blocked ? html` disabled` : esc('');
+  const parts: Html[] = [html`<section class="mbk-restore">
+    <h3 class="mbk-restore-title">${esc(t('mbk_restore_title', formatBackupDate(entry.createdAt, locale)))}</h3>
+    <p>${tHtml('mbk_restore_body')}</p>
+    <p class="mbk-hint">${tHtml('mbk_restore_before')}</p>`];
+  if (firmwareDiffers(entry.firmwareCore, draft.installed)) {
+    parts.push(html`<p class="mbk-warn" role="note">${esc(t('mbk_restore_fw_mismatch', entry.firmwareCore, draft.installed ?? ''))}</p>`);
+  }
+  if (orphan) {
+    const options = gaggiuinoMachines().map(m => optionHtml(String(m.id), esc(m.name), m.id === draft.targetId));
+    parts.push(html`<label class="mbk-field"><span>${tHtml('mbk_restore_target')}</span><select class="mbk-select mbk-target">${joinHtml(options)}</select></label>`);
+  }
+  parts.push(html`<div class="mbk-actions">
+      <button type="button" class="mbk-btn" data-mbk-action="restore-cancel">${tHtml('settings_machine_cancel')}</button>
+      <button type="button" class="mbk-btn mbk-btn-danger" data-mbk-action="restore-confirm"${noConfirm}>${tHtml('mbk_restore_confirm')}</button>
+    </div>
+  </section>`);
+  return joinHtml(parts);
+}
+
+/** Schedule and retention of one machine (11-03 item 1/3). */
+function renderSettings(settings: MachineBackupSettings, open: boolean): Html {
+  const options = SCHEDULE_ORDER.map(v => optionHtml(v, tHtml(SCHEDULE_KEYS[v]), v === settings.schedule));
+  return html`<details class="mbk-fold" data-fold="auto"${open ? html` open` : esc('')}><summary>${tHtml('mbk_auto_title')}</summary>
+    <label class="mbk-field"><span>${tHtml('mbk_schedule')}</span><select class="mbk-select mbk-schedule">${joinHtml(options)}</select></label>
+    <label class="mbk-field"><span>${tHtml('mbk_keep')}</span><input class="mbk-input mbk-keep" type="number" min="1" max="100" step="1" inputmode="numeric" value="${esc(settings.keepAutomatic)}"></label>
+    <p class="mbk-hint">${esc(t('mbk_keep_hint', settings.keepAutomatic))}</p>
+  </details>`;
+}
+
 export function renderSheetBody(sheet: SheetState, nowMs: number, openFolds: ReadonlySet<string>): Html {
   const locale = localeFor(S.currentLang);
-  const busy = _busy.has(sheet.machineId) ? html` disabled` : esc('');
+  const draft = sheet.restore ?? null;
+  if (draft !== null) {
+    const entry = sheet.entries?.find(b => b.id === draft.entryId) ?? sheet.orphans.find(b => b.id === draft.entryId) ?? null;
+    if (entry !== null) return renderRestore(sheet, draft, entry, locale);
+  }
+  const waiting = _busy.has(sheet.machineId) || _restoreWaits.has(sheet.machineId);
+  const busy = waiting ? html` disabled` : esc('');
   const parts: Html[] = [html`<div class="mbk-toolbar">
     <label class="mbk-field mbk-note-field"><span>${tHtml('mbk_note_label')}</span><input type="text" class="mbk-input mbk-note-input" maxlength="200" autocomplete="off" placeholder="${esc(t('mbk_note_placeholder'))}" value="${esc(sheet.note)}"></label>
     <button type="button" class="mbk-btn mbk-btn-primary" data-mbk-action="backup"${busy}>${tHtml('mbk_backup_now')}</button>
     <button type="button" class="mbk-btn" data-mbk-action="upload"${busy}>${tHtml('mbk_upload')}</button>
     <input type="file" class="mbk-file" accept=".json,application/json" hidden>
   </div>`];
+  if (_restoreWaits.has(sheet.machineId)) {
+    parts.push(html`<p class="mbk-status" role="status">${tHtml('settings_machine_firmware_restarting')}</p>`);
+  }
   if (sheet.entries === null) {
     parts.push(html`<p class="mbk-verdict">${tHtml(sheet.failed ? 'error_load' : 'please_wait')}</p>`);
   } else if (sheet.entries.length === 0) {
@@ -155,12 +256,14 @@ export function renderSheetBody(sheet: SheetState, nowMs: number, openFolds: Rea
   } else {
     const newest = Math.max(...sheet.entries.map(b => b.createdAt));
     parts.push(html`<p class="mbk-verdict">${esc(t('mbk_verdict', sheet.entries.length, relativeTime(newest, nowMs, locale)))}</p>`);
-    parts.push(html`<div class="mbk-list">${joinHtml(sheet.entries.map(b => renderRow(b, locale, null)))}</div>`);
+    parts.push(html`<div class="mbk-list">${joinHtml(sheet.entries.map(b => renderRow(b, locale, null, waiting)))}</div>`);
   }
   if (sheet.orphans.length > 0) {
     const open = openFolds.has('deleted') ? html` open` : esc('');
-    parts.push(html`<details class="mbk-fold" data-fold="deleted"${open}><summary>${tHtml('mbk_deleted_machines')} <span class="mbk-fold-count">${esc(sheet.orphans.length)}</span></summary><div class="mbk-list">${joinHtml(sheet.orphans.map(b => renderRow(b, locale, esc(t('mbk_deleted_machine', b.machineId)))))}</div></details>`);
+    parts.push(html`<details class="mbk-fold" data-fold="deleted"${open}><summary>${tHtml('mbk_deleted_machines')} <span class="mbk-fold-count">${esc(sheet.orphans.length)}</span></summary><div class="mbk-list">${joinHtml(sheet.orphans.map(b => renderRow(b, locale, esc(t('mbk_deleted_machine', b.machineId)), waiting)))}</div></details>`);
   }
+  const settings = _settings.get(sheet.machineId);
+  if (settings !== undefined) parts.push(renderSettings(settings, openFolds.has('auto')));
   return joinHtml(parts);
 }
 
@@ -178,7 +281,7 @@ function rerender(): void {
 }
 
 export async function openMachineBackups(machineId: number, anchor: HTMLElement | null): Promise<void> {
-  const sheet: SheetState = { machineId, entries: null, orphans: [], failed: false, note: '' };
+  const sheet: SheetState = { machineId, entries: null, orphans: [], failed: false, note: '', restore: null };
   _sheet = sheet;
   openDetailSheet({
     title: t('mbk_title', machineName(machineId)),
@@ -190,7 +293,15 @@ export async function openMachineBackups(machineId: number, anchor: HTMLElement 
   el?.addEventListener('click', onSheetClick);
   el?.addEventListener('change', onSheetChange);
   el?.addEventListener('input', onSheetInput);
-  await reload(machineId);
+  await Promise.all([reload(machineId), loadSettings(machineId)]);
+}
+
+/** This machine's schedule and retention; a failure (e.g. 501 for GaggiMate) hides the fold. */
+async function loadSettings(machineId: number): Promise<void> {
+  const r = await getMachineBackupSettings(machineId);
+  if (r.ok) _settings.set(machineId, r.value);
+  else _settings.delete(machineId);
+  if (_sheet?.machineId === machineId) rerender();
 }
 
 async function reload(machineId: number): Promise<void> {
@@ -223,18 +334,161 @@ async function runAction(action: string, id: number | null): Promise<void> {
   const machineId = sheet.machineId;
   if (action === 'backup') { await backUpNow(machineId, cleanNote(sheet.note)); return; }
   if (action === 'upload') { document.getElementById('mbkSheet')?.querySelector<HTMLInputElement>('.mbk-file')?.click(); return; }
+  if (action === 'restore-cancel') { sheet.restore = null; rerender(); return; }
+  if (action === 'restore-confirm') { void confirmRestore(); return; }
   if (id === null) return;
+  if (action === 'restore') { openRestore(id); return; }
   if (action === 'download') { await downloadBackup(id); return; }
   if (action === 'delete') await deleteBackup(machineId, id);
 }
 
-function onSheetChange(e: Event): void {
-  const target = e.target as HTMLInputElement | null;
+/** Only a deleted machine's backup offers a target choice (Max 11-05 item 2). */
+function openRestore(id: number): void {
   const sheet = _sheet;
-  if (!sheet || target === null || !target.classList.contains('mbk-file')) return;
-  const file = target.files?.[0] ?? null;
-  target.value = ''; // the same file can be picked again
-  if (file) void uploadBackupFile(sheet.machineId, file);
+  if (!sheet || sheet.entries === null) return;
+  const entry = sheet.entries.find(b => b.id === id) ?? sheet.orphans.find(b => b.id === id) ?? null;
+  if (entry === null) return;
+  const orphan = sheet.orphans.some(b => b.id === id);
+  const targets = gaggiuinoMachines();
+  const targetId = orphan
+    ? (targets.some(m => m.id === sheet.machineId) ? sheet.machineId : targets[0]?.id ?? null)
+    : entry.machineId;
+  sheet.restore = { entryId: id, targetId, installed: null };
+  rerender();
+  if (targetId !== null) void loadTargetFirmware(sheet.machineId, id, targetId);
+}
+
+/** Applies only while the sheet still shows the same machine and the same draft. */
+async function loadTargetFirmware(sheetMachineId: number, entryId: number, targetId: number): Promise<void> {
+  let installed: string | null = null;
+  try {
+    installed = (await getFirmwareVersion(targetId))?.installed ?? null;
+  } catch {
+    // A throw is "no answer": no mismatch warning, exactly like a null.
+  }
+  const sheet = _sheet;
+  if (!sheet || sheet.machineId !== sheetMachineId) return;
+  const draft = sheet.restore;
+  if (!draft || draft.entryId !== entryId || draft.targetId !== targetId) return;
+  draft.installed = installed;
+  rerender();
+}
+
+export function restoreWaitStep(w: RestoreWait, reachable: boolean, now: number): 'wait' | 'back' | 'timeout' {
+  const elapsed = now - w.startedAt;
+  if (reachable && (w.seenDown || elapsed >= RESTORE_MIN_BACK_MS)) return 'back';
+  if (!reachable) w.seenDown = true;
+  return elapsed >= RESTORE_WAIT_MAX_MS ? 'timeout' : 'wait';
+}
+
+/** The #1876 pattern, keyed by target machineId; it outlives the sheet. */
+function startRestoreWait(machineId: number): void {
+  const w: RestoreWait = { startedAt: Date.now(), seenDown: false };
+  _restoreWaits.set(machineId, w);
+  w.timer = setTimeout(() => { void restoreWaitTick(machineId, w); }, RESTORE_POLL_MS);
+}
+
+/** Every step returns once a newer wait replaced this one. */
+async function restoreWaitTick(machineId: number, w: RestoreWait): Promise<void> {
+  if (_restoreWaits.get(machineId) !== w) return;
+  let reachable = false;
+  try {
+    reachable = !!(await getFirmwareVersion(machineId))?.installed;
+  } catch {
+    // A throw is unreachable; it just keeps `false`.
+  }
+  if (_restoreWaits.get(machineId) !== w) return;
+  const step = restoreWaitStep(w, reachable, Date.now());
+  if (step === 'wait') {
+    w.timer = setTimeout(() => { void restoreWaitTick(machineId, w); }, RESTORE_POLL_MS);
+    return;
+  }
+  _restoreWaits.delete(machineId);
+  showToast(step === 'back'
+    ? t('mbk_restore_done', machineName(machineId))
+    : t('mbk_restore_still_restarting', machineName(machineId)), 8000);
+  rerender();
+}
+
+async function confirmRestore(): Promise<void> {
+  const sheet = _sheet;
+  const draft = sheet?.restore ?? null;
+  if (!sheet || draft === null) return;
+  const targetId = draft.targetId;
+  if (targetId === null || _busy.has(targetId) || _restoreWaits.has(targetId)) return;
+  _busy.add(targetId);
+  rerender();
+  try {
+    const r = await restoreMachineBackup(draft.entryId, targetId);
+    if (r.ok) {
+      startRestoreWait(targetId);
+      showToast(t('settings_machine_firmware_restarting'));
+    } else {
+      showToast(restoreOutcomeUnknown(r) ? t('mbk_restore_unknown') : backupErrorText(r, 'restore'), 8000);
+    }
+  } finally {
+    _busy.delete(targetId);
+    if (_sheet === sheet && sheet.restore?.entryId === draft.entryId) sheet.restore = null;
+    rerender();
+  }
+  // The pre-restore backup row appears; also after an unknown outcome.
+  if (_sheet === sheet) await reload(sheet.machineId);
+}
+
+function onSheetChange(e: Event): void {
+  const target = e.target as HTMLInputElement | HTMLSelectElement | null;
+  const sheet = _sheet;
+  if (!sheet || target === null) return;
+  if (target.classList.contains('mbk-file')) {
+    const file = (target as HTMLInputElement).files?.[0] ?? null;
+    target.value = ''; // the same file can be picked again
+    if (file) void uploadBackupFile(sheet.machineId, file);
+    return;
+  }
+  if (target.classList.contains('mbk-target')) { onTargetChange(sheet, target.value); return; }
+  if (target.classList.contains('mbk-schedule')) { onScheduleChange(sheet, target.value); return; }
+  if (target.classList.contains('mbk-keep')) onKeepChange(sheet, target.value);
+}
+
+function onTargetChange(sheet: SheetState, value: string): void {
+  const draft = sheet.restore;
+  if (!draft || !sheet.orphans.some(b => b.id === draft.entryId)) return;
+  const id = Number(value);
+  if (!gaggiuinoMachines().some(m => m.id === id)) return;
+  draft.targetId = id;
+  draft.installed = null;
+  rerender();
+  void loadTargetFirmware(sheet.machineId, draft.entryId, id);
+}
+
+function onScheduleChange(sheet: SheetState, value: string): void {
+  const current = _settings.get(sheet.machineId);
+  if (!current || !isSchedule(value)) return;
+  void saveSettings(sheet.machineId, { machineId: sheet.machineId, schedule: value, keepAutomatic: current.keepAutomatic });
+}
+
+function onKeepChange(sheet: SheetState, value: string): void {
+  const current = _settings.get(sheet.machineId);
+  if (!current) return;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 100) {
+    showToast(t('mbk_keep_range'));
+    rerender(); // the field snaps back to the stored value
+    return;
+  }
+  if (n === current.keepAutomatic) return;
+  void saveSettings(sheet.machineId, { machineId: sheet.machineId, schedule: current.schedule, keepAutomatic: n });
+}
+
+async function saveSettings(machineId: number, next: MachineBackupSettings): Promise<void> {
+  const r = await saveMachineBackupSettings(next);
+  if (r.ok) {
+    _settings.set(machineId, r.value);
+    showToast(t('autosave_saved'));
+  } else {
+    showToast(backupErrorText(r, 'settings'), 6000); // the stored value stays
+  }
+  if (_sheet?.machineId === machineId) rerender();
 }
 
 function onSheetInput(e: Event): void {

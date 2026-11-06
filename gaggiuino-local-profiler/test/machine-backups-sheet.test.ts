@@ -309,7 +309,9 @@ describe('machine backups sheet (#1878)', () => {
   });
   it('has the new strings in all six languages', () => {
     const keys = Object.keys(en).filter(k => k.startsWith('mbk_'));
-    expect(keys.length).toBe(37);
+    // A floor, not an exact count: later slices (U2 restore and settings) add
+    // mbk_ keys, and the loop below is what actually guards them.
+    expect(keys.length).toBeGreaterThanOrEqual(37);
     for (const key of keys) {
       const ref = en[key];
       for (const [name, dict] of Object.entries(LANGS)) {
