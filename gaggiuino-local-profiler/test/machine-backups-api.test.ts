@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { MachineBackup, MachineBackupDetail, MachineBackupDocument, MachineBackupSecrets } from '../public-src/api/types.js';
+import type {
+  MachineBackup, MachineBackupDetail, MachineBackupDocument, MachineBackupSecrets, MachineBackupSettings,
+} from '../public-src/api/types.js';
 import type { MachineBackupFailure } from '../public-src/api/machine-backups.js';
 
 // The backups client must stay inside GLP: relative URLs only, every id through
@@ -92,7 +94,7 @@ afterEach(() => {
 
 describe('routes', () => {
   it('sends each route with its method, relative URL and body', async () => {
-    const settings = { machineId: 3, schedule: 'weekly', keepAutomatic: 5 };
+    const settings: MachineBackupSettings = { machineId: 3, schedule: 'weekly', keepAutomatic: 5 };
     const rows: {
       readonly run: () => Promise<unknown>;
       readonly response: () => Response;
