@@ -385,7 +385,7 @@ async function loadTargetFirmware(sheetMachineId: number, entryId: number, targe
   try {
     installed = (await getFirmwareVersion(targetId))?.installed ?? null;
   } catch {
-    installed = null;
+    // A throw is "no answer": no mismatch warning, exactly like a null.
   }
   const sheet = _sheet;
   if (!sheet || sheet.machineId !== sheetMachineId) return;
@@ -416,7 +416,7 @@ async function restoreWaitTick(machineId: number, w: RestoreWait): Promise<void>
   try {
     reachable = !!(await getFirmwareVersion(machineId))?.installed;
   } catch {
-    reachable = false;
+    // A throw is unreachable; it just keeps `false`.
   }
   if (_restoreWaits.get(machineId) !== w) return;
   const step = restoreWaitStep(w, reachable, Date.now());
