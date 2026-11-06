@@ -139,6 +139,9 @@ func buildDataRoutes() map[string]sse.Route {
 	add("DELETE /api/machine/profile/{id}", routeProfiles)
 	add("POST /api/machine/profile/set", routeProfiles)
 	add("POST /api/machine/profile/save", routeProfiles)
+	// #1878: a restore replaces the machine's profiles and drops GLP's cached
+	// copy of them for that machine.
+	add("POST /api/machine/backups/{id}/restore", routeProfiles)
 
 	// settings — the shot defaults, the machine registry, the broker/MCP/
 	// import/machine-control options, and the machine backup schedule, all
