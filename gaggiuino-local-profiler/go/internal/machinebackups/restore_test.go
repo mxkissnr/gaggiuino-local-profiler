@@ -556,21 +556,26 @@ func TestRestore_NoRestoreWithoutTheBackupFirst(t *testing.T) {
 	overCap := `{"wifi":{"ssid":"SECRET-s"},"format":"gaggiuino-settings","version":1,"pad":"` +
 		strings.Repeat("\u2028", 50000) + `"}`
 
+	// failInsert makes every insert into machine_backups fail, like a full disk.
+	failInsert := func(re *restoreEnv, _ *fakeRestorer) {
+		if _, err := re.db.Exec(`CREATE TRIGGER fail_insert BEFORE INSERT ON machine_backups BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
+			re.t.Fatalf("creating the trigger: %v", err)
+		}
+	}
+	// unstoreable makes the machine report doc as its current backup: restorable,
+	// but not storable.
+	unstoreable := func(doc string) func(*restoreEnv, *fakeRestorer) {
+		return func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{doc} }
+	}
+
 	cases := []struct {
 		name   string
 		mutate func(*restoreEnv, *fakeRestorer)
 		status int
 		code   string
 	}{
-		{name: "the machine's state cannot be stored", mutate: func(re *restoreEnv, _ *fakeRestorer) {
-			if _, err := re.db.Exec(`CREATE TRIGGER fail_insert BEFORE INSERT ON machine_backups
-				BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
-				re.t.Fatalf("creating the trigger: %v", err)
-			}
-		}, status: http.StatusInternalServerError, code: codePreRestoreBackupFailed},
-		{name: "the machine's state cannot be stored as a backup", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.docs = []string{overCap}
-		}, status: http.StatusBadGateway, code: codeInvalidBackup},
+		{name: "the machine's state cannot be stored", mutate: failInsert, status: http.StatusInternalServerError, code: codePreRestoreBackupFailed},
+		{name: "the machine's state cannot be stored as a backup", mutate: unstoreable(overCap), status: http.StatusBadGateway, code: codeInvalidBackup},
 	}
 
 	for _, tc := range cases {
