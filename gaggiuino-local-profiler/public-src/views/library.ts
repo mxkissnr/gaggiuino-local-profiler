@@ -321,7 +321,7 @@ export {
   saveGrinder, resetGrinderBurrs, uploadGrinderImage, deleteGrinder,
 } from './library/grinders.js';
 export {
-  toggleUrlImport, importFromUrl, toggleImportSettings, addCustomShopifyDomain,
+  toggleUrlImport, importFromUrl, importFromPaste, toggleImportSettings, addCustomShopifyDomain,
   openScanModal, closeScanModal, _runScanLoop, _submitManualScan, _handleScanPhoto, _handleScanResult,
 } from './library/import.js';
 export {
