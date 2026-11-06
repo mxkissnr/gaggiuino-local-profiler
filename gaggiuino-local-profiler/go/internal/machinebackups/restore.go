@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
@@ -24,6 +25,12 @@ import (
 // document, so a restore never changes the machine's network or broker access.
 // The merged document lives only in memory: it goes to the machine and nowhere
 // else, never to the database, a response or a log.
+//
+// Before that post GLP stores the machine's state right now as a manual backup,
+// so every restore can be undone (maintainer decision 11-05 item 1). A backup of
+// a deleted machine may be restored onto a machine the user chose; a backup of a
+// machine that still exists only goes to that machine (11-03 item 4, 11-05
+// item 2).
 
 const (
 	restorePerMinute = 3
@@ -31,6 +38,13 @@ const (
 	codePendingProfileChanges = "pending_profile_changes"
 	codeRestoreRejected       = "restore_rejected"
 	codeNoConfirmation        = "no_confirmation"
+
+	codePreRestoreBackupFailed = "pre_restore_backup_failed"
+
+	// defaultLiveStateWait is how long a restore waits for the machine's first
+	// live system state; liveStatePoll is the pause between reads.
+	defaultLiveStateWait = 3 * time.Second
+	liveStatePoll        = 250 * time.Millisecond
 
 	// reason of a machine_busy answer from the restore route
 	reasonBrew           = "brew"
@@ -75,6 +89,13 @@ type RestoreDeps struct {
 	Machines MachineGetter
 	Client   func(*machines.Machine) (Client, bool)
 	Profiles ProfileCache
+
+	// Now is optional, like HandlerDeps.Now.
+	Now func() time.Time
+
+	// LiveStateWait is optional; how long a restore waits for the machine's first
+	// live system state, default defaultLiveStateWait.
+	LiveStateWait time.Duration
 }
 
 // Restore serves POST /api/machine/backups/{id}/restore (#1878).
@@ -85,6 +106,22 @@ type Restore struct {
 
 func NewRestore(d RestoreDeps) *Restore {
 	return &Restore{deps: d, rl: ratelimit.NewKeyed()}
+}
+
+func (s *Restore) now() time.Time {
+	if s.deps.Now != nil {
+		return s.deps.Now()
+	}
+	return time.Now()
+}
+
+// liveStateWait is how long to wait for the machine's first live system state.
+// A zero or negative setting means the default.
+func (s *Restore) liveStateWait() time.Duration {
+	if s.deps.LiveStateWait > 0 {
+		return s.deps.LiveStateWait
+	}
+	return defaultLiveStateWait
 }
 
 // RegisterRoutes mounts the restore route. It sits behind the global
@@ -166,12 +203,30 @@ func (s *Restore) restore(w http.ResponseWriter, r *http.Request) {
 	if !s.idle(r.Context(), w, c, m) {
 		return
 	}
-	doc, ok := s.mergedDocument(r.Context(), w, c, m, []byte(data))
+	doc, before, ok := s.mergedDocument(r.Context(), w, c, m, []byte(data))
 	if !ok {
 		return
 	}
 
-	err = c.RestoreSettingsBackup(r.Context(), m, doc)
+	// Max 11-05: no restore without a backup of what the machine holds right
+	// now. Stored after every guard, under both locks, so a refused restore
+	// leaves no row; kind manual is never pruned automatically (pruneScheduled
+	// only deletes kind scheduled). No change detection: one row per restore.
+	saved, err := s.deps.Repo.insert(m.ID, KindManual,
+		fmt.Sprintf("Before restoring backup %d", entry.ID), before, s.now())
+	if err != nil {
+		log.Printf("machinebackups: restore of backup %d onto machine %d stopped, storing the machine's current state failed: %s",
+			entry.ID, m.ID, redact.Redact(err.Error()))
+		writeCodeError(w, http.StatusInternalServerError, codePreRestoreBackupFailed,
+			"GLP could not store the machine's current settings first; nothing was restored")
+		return
+	}
+	log.Printf("machinebackups: stored the state of machine %d before restoring backup %d (%d profiles, %d bytes)",
+		m.ID, entry.ID, saved.ProfileCount, saved.SizeBytes)
+
+	// Once the document is on its way, a closed browser tab must not cut the
+	// upload off halfway; the adapter's 30 s timeout still bounds it.
+	err = c.RestoreSettingsBackup(context.WithoutCancel(r.Context()), m, doc)
 	var refused *machines.SettingsRestoreError
 	switch {
 	case err == nil:
@@ -203,14 +258,25 @@ func (s *Restore) restore(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true, "restarting": true})
 }
 
-// target resolves the machine a restore posts to. In this slice the target must
-// be the backup's own, still registered machine; a backup of another machine
-// answers 404 like an unknown backup. S5b-2 widens this for deleted machines
-// (maintainer decision 4).
+// target resolves the machine a restore posts to: the backup's own machine, or,
+// only when that machine was deleted, a registered Gaggiuino machine the user
+// chose (maintainer decision 11-03 item 4). Never from one existing machine onto
+// another (11-05 item 2); that answers 404 like an unknown backup.
 func (s *Restore) target(w http.ResponseWriter, entry Entry, machineID int64) (*machines.Machine, restoreClient, bool) {
 	if machineID != entry.MachineID {
-		httputil.WriteError(w, http.StatusNotFound, "Backup not found")
-		return nil, nil, false
+		owner, err := s.deps.Machines.GetMachine(entry.MachineID)
+		if err != nil {
+			httputil.InternalError(w, "machinebackups", err)
+			return nil, nil, false
+		}
+		if owner != nil {
+			// Never from one existing machine onto another (Max 11-05).
+			httputil.WriteError(w, http.StatusNotFound, "Backup not found")
+			return nil, nil, false
+		}
+		// Max 11-03 item 4: a deleted machine's backups stay, and one of them may
+		// be restored onto an existing machine the user chose. Its secrets then
+		// come from that machine (mergedDocument).
 	}
 	m, err := s.deps.Machines.GetMachine(machineID)
 	if err != nil {
@@ -227,6 +293,10 @@ func (s *Restore) target(w http.ResponseWriter, entry Entry, machineID int64) (*
 		writeCodeError(w, http.StatusNotImplemented, codeUnsupportedMachine,
 			"Settings backups are only available for Gaggiuino machines")
 		return nil, nil, false
+	}
+	if m.ID != entry.MachineID {
+		log.Printf("machinebackups: backup %d of deleted machine %d goes to machine %d",
+			entry.ID, entry.MachineID, m.ID)
 	}
 	return m, rc, true
 }
@@ -256,10 +326,7 @@ func (s *Restore) idle(ctx context.Context, w http.ResponseWriter, c restoreClie
 		return writeBusy(w, reasonSteam)
 	}
 
-	state, err := c.GetLiveSystemState(ctx, m)
-	if err == nil && state == nil {
-		err = errNoLiveState
-	}
+	state, err := liveSystemState(ctx, c, m, s.liveStateWait())
 	if err != nil {
 		return unreadable("its live state", err)
 	}
@@ -281,33 +348,65 @@ func (s *Restore) idle(ctx context.Context, w http.ResponseWriter, c restoreClie
 	return true
 }
 
+// liveSystemState reads the machine's live system state. The first read opens
+// the machine's live session (the poller keeps one only for the default
+// machine), so a missing state is read again until wait has passed. No state at
+// all is errNoLiveState: the guard fails closed.
+func liveSystemState(ctx context.Context, c restoreClient, m *machines.Machine, wait time.Duration) (*proto.SystemStateDto, error) {
+	deadline := time.Now().Add(wait)
+	for {
+		state, err := c.GetLiveSystemState(ctx, m)
+		if err != nil || state != nil {
+			return state, err
+		}
+		if !time.Now().Before(deadline) {
+			return nil, errNoLiveState
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(min(liveStatePoll, wait)):
+		}
+	}
+}
+
 // mergedDocument returns the stored document with the machine's current
-// secrets merged in. Unlike the download it never falls back to the secret-free
-// document, because posting one without the machine's current wifi block could
-// drop the machine off the network.
-func (s *Restore) mergedDocument(ctx context.Context, w http.ResponseWriter, c restoreClient, m *machines.Machine, data []byte) ([]byte, bool) {
+// secrets merged in, plus the machine's state right now as the pre-restore
+// backup. before is secret-free, from the same fresh read whose secrets go into
+// the restore, so no second machine call is needed. Unlike the download it never
+// falls back to the secret-free document, because posting one without the
+// machine's current wifi block could drop the machine off the network.
+func (s *Restore) mergedDocument(ctx context.Context, w http.ResponseWriter, c restoreClient, m *machines.Machine, data []byte) (doc []byte, before prepared, ok bool) {
 	current, err := c.GetSettingsBackup(ctx, m)
 	switch {
 	case errors.Is(err, machines.ErrSettingsBackupUnsupported):
 		writeCodeError(w, http.StatusNotImplemented, codeUnsupportedFirmware,
 			"The machine's firmware has no settings backup (needs Gaggiuino main-8aaf6f0 or later)")
-		return nil, false
+		return nil, prepared{}, false
 	case err != nil && !errors.Is(err, machines.ErrSettingsBackupTooLarge):
 		log.Printf("machinebackups: restore onto machine %d stopped, its current backup could not be read: %s",
 			m.ID, redact.Redact(err.Error()))
 		writeCodeError(w, http.StatusBadGateway, codeMachineUnreachable, "The machine did not answer")
-		return nil, false
+		return nil, prepared{}, false
 	}
 
-	doc, err := restoreDocument(data, current)
+	doc, err = restoreDocument(data, current)
 	if err != nil {
 		log.Printf("machinebackups: restore onto machine %d stopped, its current backup cannot be used: %s",
 			m.ID, redact.Redact(err.Error()))
 		writeCodeError(w, http.StatusBadGateway, codeInvalidBackup,
 			"The machine's current settings backup cannot be read, so its Wi-Fi and MQTT settings cannot be kept; nothing was restored")
-		return nil, false
+		return nil, prepared{}, false
 	}
-	return doc, true
+	before, err = prepare(current)
+	if err != nil {
+		log.Printf("machinebackups: restore onto machine %d stopped, its current backup cannot be stored: %s",
+			m.ID, redact.Redact(err.Error()))
+		writeCodeError(w, http.StatusBadGateway, codeInvalidBackup,
+			"The machine's current settings backup cannot be stored, so nothing was restored")
+		return nil, prepared{}, false
+	}
+	return doc, before, true
 }
 
 // dropProfileCache removes the machine's synced profile rows after a restore.
