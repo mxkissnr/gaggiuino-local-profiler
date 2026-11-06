@@ -77,8 +77,7 @@ const formatter = (v: TranslationValue | undefined): ((...args: unknown[]) => st
   if (typeof v !== 'function') throw new TypeError('expected an i18n formatter');
   return v;
 };
-// Flushes pending microtasks (the mocked calls resolve immediately, but the
-// sheet chains several awaits) without moving the clock forward.
+// Flushes the sheet's chained awaits without moving the clock forward.
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(0);
 };
@@ -94,7 +93,6 @@ const open = async (machineId = 1): Promise<void> => {
   await settle();
 };
 const restorePanel = async (id = 5): Promise<void> => { click('restore', id); await settle(); };
-const confirms = (): number => api.restore.mock.calls.length;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -284,7 +282,7 @@ describe('machine backup restore (#1878 U2)', () => {
     await restorePanel();
     click('restore-confirm');
     await settle();
-    expect(confirms()).toBe(1);
+    expect(api.restore.mock.calls.length).toBe(1);
     expect(el.innerHTML).toContain('data-mbk-action="restore" data-id="5" disabled');
     expect(el.innerHTML).toContain('data-mbk-action="backup" disabled');
     // Reopening the confirmation on the waiting machine shows a blocked Confirm.
@@ -292,7 +290,7 @@ describe('machine backup restore (#1878 U2)', () => {
     expect(el.innerHTML).toContain('data-mbk-action="restore-confirm" disabled');
     click('restore-confirm');
     await settle();
-    expect(confirms()).toBe(1);
+    expect(api.restore.mock.calls.length).toBe(1);
     await open(2);
     expect(el.innerHTML).not.toContain('data-mbk-action="backup" disabled');
     expect(el.innerHTML).toContain('data-mbk-action="restore" data-id="6">');
@@ -339,8 +337,7 @@ describe('machine backup restore (#1878 U2)', () => {
   });
 
   it('treats a throwing firmware read as no answer and as unreachable', async () => {
-    // dev's getFirmwareVersion resolves null on a non-ok answer; a transport throw is the
-    // other "no answer" shape. Neither may show a mismatch warning nor end the wait early.
+    // dev's client resolves null when it cannot answer; a transport throw is the other shape.
     api.list.mockResolvedValue({ ok: true, value: [entry()] });
     fw.get.mockRejectedValue(new Error('network down'));
     await open();
@@ -361,14 +358,11 @@ describe('machine backup restore (#1878 U2)', () => {
   });
 
   it('has the new strings in all six languages', () => {
-    const keys = [
-      'mbk_restore', 'mbk_restore_title', 'mbk_restore_body', 'mbk_restore_before', 'mbk_restore_fw_mismatch',
-      'mbk_restore_target', 'mbk_restore_confirm', 'mbk_restore_done', 'mbk_restore_still_restarting',
-      'mbk_restore_unknown', 'mbk_err_busy_brew', 'mbk_err_busy_steam', 'mbk_err_busy_descale',
-      'mbk_err_busy_firmware_update', 'mbk_err_pending_profiles', 'mbk_err_pre_restore', 'mbk_err_rejected',
-      'mbk_auto_title', 'mbk_schedule', 'mbk_schedule_off', 'mbk_schedule_daily', 'mbk_schedule_weekly',
-      'mbk_keep', 'mbk_keep_range', 'mbk_keep_hint',
-    ];
+    const keys = ('mbk_restore mbk_restore_title mbk_restore_body mbk_restore_before mbk_restore_fw_mismatch'
+      + ' mbk_restore_target mbk_restore_confirm mbk_restore_done mbk_restore_still_restarting mbk_restore_unknown'
+      + ' mbk_err_busy_brew mbk_err_busy_steam mbk_err_busy_descale mbk_err_busy_firmware_update'
+      + ' mbk_err_pending_profiles mbk_err_pre_restore mbk_err_rejected mbk_auto_title mbk_schedule'
+      + ' mbk_schedule_off mbk_schedule_daily mbk_schedule_weekly mbk_keep mbk_keep_range mbk_keep_hint').split(' ');
     for (const key of keys) {
       const ref = en[key];
       expect(ref, `en missing ${key}`).toBeTruthy();

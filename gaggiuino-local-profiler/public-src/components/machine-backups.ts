@@ -3,10 +3,8 @@
 // shows the list, Back up now with an optional note, Upload, Download and
 // Delete, plus a fold with the backups of deleted machines (Max decision 4:
 // deleting a machine keeps its backups, they stay downloadable and deletable).
-// Restore and the per-machine automatic-backup settings are in (U2); U3 adds
-// the compare view. Every async continuation checks it still belongs to the
-// open sheet's machine: in-flight work is keyed by machineId, never by a shared
-// scalar. Notes, names and anything from a document reach the DOM only through esc.
+// U2 adds restore and the per-machine automatic-backup settings; every async
+// continuation checks it still belongs to the open sheet's machine.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
@@ -19,9 +17,7 @@ import {
   restoreMachineBackup, saveMachineBackupSettings, uploadMachineBackup,
 } from '../api/machine-backups.js';
 import type { MachineBackupFailure } from '../api/machine-backups.js';
-// dev's existing client (#1044): it already answers `installed: null` for an offline machine or a
-// failed versions read, which is what the restart wait reads as "not back yet". No API change.
-import { getFirmwareVersion } from '../api/machines.js';
+import { getFirmwareVersion } from '../api/machines.js'; // already answers installed: null when unreachable
 import type {
   MachineBackup, MachineBackupDocument, MachineBackupErrorCode, MachineBackupKind, MachineBackupSchedule,
   MachineBackupSettings, MachineBusyReason,
@@ -30,7 +26,7 @@ import type {
 interface RestoreDraft {
   readonly entryId: number;
   targetId: number | null;
-  installed: string | null; // the target's installed core, null until the first read answers
+  installed: string | null; // the target's installed core, null until it is read
 }
 
 interface SheetState {
@@ -42,7 +38,7 @@ interface SheetState {
   restore?: RestoreDraft | null; // the open restore confirmation, null for the list
 }
 
-/** One machine's wait for its restart after a restore (the #1876 pattern, keyed by machineId). */
+/** One machine's wait for its restart after a restore (#1876 pattern). */
 export interface RestoreWait {
   readonly startedAt: number;
   seenDown: boolean; // the poll saw the machine unreachable at least once
@@ -56,14 +52,11 @@ const _settings = new Map<number, MachineBackupSettings>(); // machineId -> its 
 export const MAX_UPLOAD_BYTES = 256 * 1024;
 export const RESTORE_POLL_MS = 3000;
 export const RESTORE_WAIT_MAX_MS = 3 * 60 * 1000;
-// The first poll can still reach the machine before it goes down for the restart;
-// without a seen outage only an answer this late counts as "back".
-export const RESTORE_MIN_BACK_MS = 15000;
+export const RESTORE_MIN_BACK_MS = 15000; // before an outage, only a later answer counts as "back"
 export type BackupContext = 'backup' | 'upload' | 'download' | 'delete' | 'restore' | 'settings';
 const KIND_KEYS: Record<MachineBackupKind, string> = {
   manual: 'mbk_kind_manual', scheduled: 'mbk_kind_scheduled', pre_update: 'mbk_kind_pre_update', uploaded: 'mbk_kind_uploaded',
 };
-// Full Record: a code added to openapi.yaml is a typecheck error here.
 const ERROR_KEYS: Record<MachineBackupErrorCode, string> = {
   unsupported_machine: 'mbk_err_unsupported_machine', unsupported_firmware: 'mbk_err_unsupported_firmware',
   machine_unreachable: 'mbk_err_unreachable', invalid_backup: 'mbk_err_invalid_backup',
@@ -80,9 +73,7 @@ const SCHEDULE_KEYS: Record<MachineBackupSchedule, string> = {
 };
 const SCHEDULE_ORDER: readonly MachineBackupSchedule[] = ['daily', 'weekly', 'off'];
 
-function isSchedule(v: string): v is MachineBackupSchedule {
-  return Object.hasOwn(SCHEDULE_KEYS, v);
-}
+const isSchedule = (v: string): v is MachineBackupSchedule => Object.hasOwn(SCHEDULE_KEYS, v);
 
 function machineName(id: number): string {
   const name = S.machines.find(m => m.id === id)?.name;
@@ -117,14 +108,13 @@ export function relativeTime(ms: number, nowMs: number, locale: string): string 
   return rtf.format(Math.round(hours / 24), 'day');
 }
 
-/** The translated text for a failed call. The server's own `error` text never reaches here. */
+/** The server's own `error` text never reaches the UI; only a code is translated. */
 export function backupErrorText(f: MachineBackupFailure, context: BackupContext): string {
   if (context === 'upload') {
     if (f.status === 413) return t('mbk_upload_too_large');
     if (f.code === 'invalid_backup' || (f.code === null && f.status === 400)) return t('mbk_upload_invalid');
   }
-  // restore_rejected carries the machine's own text: untrusted, so it only ever goes
-  // into a toast (textContent), never into innerHTML.
+  // The machine's own text (untrusted) only ever reaches a toast, never innerHTML.
   if (f.code === 'restore_rejected') return t('mbk_err_rejected', f.machineError ?? '');
   if (f.code === 'machine_busy' && f.reason !== null) return t(BUSY_KEYS[f.reason]);
   if (f.code !== null) return t(ERROR_KEYS[f.code]);
@@ -133,15 +123,12 @@ export function backupErrorText(f: MachineBackupFailure, context: BackupContext)
   return t('mbk_err_generic');
 }
 
-/** True when the restore's outcome is unknown: nothing may be said about whether
- *  anything was restored. no_confirmation, an unreachable GLP (status 0) and a
- *  server error without a code all leave the machine possibly mid-restart. */
+/** Unknown outcome: never say whether anything was restored (the machine may be restarting). */
 export function restoreOutcomeUnknown(f: MachineBackupFailure): boolean {
   return f.code === 'no_confirmation' || f.status === 0 || (f.code === null && f.status >= 500);
 }
 
-/** True only when both sides name a firmware and they differ. A short and a long
- *  form of the same hash (8aaf6f0 vs 8AAF6F0d2) count as equal. */
+/** A short and a long form of one hash count as equal. */
 export function firmwareDiffers(backupFw: string, installed: string | null): boolean {
   const a = backupFw.trim().toLowerCase();
   const b = (installed ?? '').trim().toLowerCase();
@@ -149,11 +136,9 @@ export function firmwareDiffers(backupFw: string, installed: string | null): boo
   return !a.startsWith(b) && !b.startsWith(a);
 }
 
-/** The registered Gaggiuino machines a deleted machine's backup may be restored onto. */
+/** The Gaggiuino machines a deleted machine's backup may be restored onto. */
 function gaggiuinoMachines(): { id: number; name: string }[] {
-  return S.machines
-    .filter(m => m.type === 'gaggiuino')
-    .map(m => ({ id: m.id, name: machineName(m.id) }));
+  return S.machines.filter(m => m.type === 'gaggiuino').map(m => ({ id: m.id, name: machineName(m.id) }));
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -209,11 +194,10 @@ function renderRow(b: MachineBackup, locale: string, owner: Html | null, restore
   </div>`;
 }
 
-/** The restore confirmation for one entry. `entry` is the backup being restored;
- *  a select for the target machine shows only for a deleted machine's backup. */
-function renderRestore(
-  sheet: SheetState, draft: RestoreDraft, entry: MachineBackup, locale: string,
-): Html {
+const optionHtml = (value: string, label: Html, selected: boolean): Html =>
+  html`<option value="${esc(value)}"${selected ? html` selected` : esc('')}>${label}</option>`;
+
+function renderRestore(sheet: SheetState, draft: RestoreDraft, entry: MachineBackup, locale: string): Html {
   const orphan = sheet.orphans.some(b => b.id === entry.id);
   const targetId = draft.targetId;
   const blocked = targetId === null || _busy.has(targetId) || _restoreWaits.has(targetId);
@@ -226,10 +210,7 @@ function renderRestore(
     parts.push(html`<p class="mbk-warn" role="note">${esc(t('mbk_restore_fw_mismatch', entry.firmwareCore, draft.installed ?? ''))}</p>`);
   }
   if (orphan) {
-    const options = gaggiuinoMachines().map(m => {
-      const sel = m.id === draft.targetId ? html` selected` : esc('');
-      return html`<option value="${esc(m.id)}"${sel}>${esc(m.name)}</option>`;
-    });
+    const options = gaggiuinoMachines().map(m => optionHtml(String(m.id), esc(m.name), m.id === draft.targetId));
     parts.push(html`<label class="mbk-field"><span>${tHtml('mbk_restore_target')}</span><select class="mbk-select mbk-target">${joinHtml(options)}</select></label>`);
   }
   parts.push(html`<div class="mbk-actions">
@@ -240,12 +221,9 @@ function renderRestore(
   return joinHtml(parts);
 }
 
-/** The automatic-backup fold of one machine: schedule and how many to keep (11-03 item 1/3). */
+/** Schedule and retention of one machine (11-03 item 1/3). */
 function renderSettings(settings: MachineBackupSettings, open: boolean): Html {
-  const options = SCHEDULE_ORDER.map(v => {
-    const sel = v === settings.schedule ? html` selected` : esc('');
-    return html`<option value="${esc(v)}"${sel}>${tHtml(SCHEDULE_KEYS[v])}</option>`;
-  });
+  const options = SCHEDULE_ORDER.map(v => optionHtml(v, tHtml(SCHEDULE_KEYS[v]), v === settings.schedule));
   return html`<details class="mbk-fold" data-fold="auto"${open ? html` open` : esc('')}><summary>${tHtml('mbk_auto_title')}</summary>
     <label class="mbk-field"><span>${tHtml('mbk_schedule')}</span><select class="mbk-select mbk-schedule">${joinHtml(options)}</select></label>
     <label class="mbk-field"><span>${tHtml('mbk_keep')}</span><input class="mbk-input mbk-keep" type="number" min="1" max="100" step="1" inputmode="numeric" value="${esc(settings.keepAutomatic)}"></label>
@@ -364,8 +342,7 @@ async function runAction(action: string, id: number | null): Promise<void> {
   if (action === 'delete') await deleteBackup(machineId, id);
 }
 
-/** Opens the restore confirmation for one backup. Only a deleted machine's backup
- *  offers a target choice (Max 11-05 item 2); an own backup is fixed to its machine. */
+/** Only a deleted machine's backup offers a target choice (Max 11-05 item 2). */
 function openRestore(id: number): void {
   const sheet = _sheet;
   if (!sheet || sheet.entries === null) return;
@@ -381,8 +358,7 @@ function openRestore(id: number): void {
   if (targetId !== null) void loadTargetFirmware(sheet.machineId, id, targetId);
 }
 
-/** Reads the target's running firmware for the mismatch warning. Applies only while the
- *  sheet still shows the same machine and the same draft. */
+/** Applies only while the sheet still shows the same machine and the same draft. */
 async function loadTargetFirmware(sheetMachineId: number, entryId: number, targetId: number): Promise<void> {
   let installed: string | null = null;
   try {
@@ -405,19 +381,14 @@ export function restoreWaitStep(w: RestoreWait, reachable: boolean, now: number)
   return elapsed >= RESTORE_WAIT_MAX_MS ? 'timeout' : 'wait';
 }
 
-/** The #1876 restart pattern over getFirmwareVersion: poll every RESTORE_POLL_MS, keyed by
- *  target machineId so one machine's wait never touches another. dev's client already answers
- *  `installed: null` while the machine is unreachable, so no API change is needed; a throw is
- *  treated the same way. The wait outlives the sheet (a restore keeps going when the user
- *  closes it), so each tick re-reads the map and returns once a newer wait replaced it. */
+/** The #1876 pattern, keyed by target machineId; it outlives the sheet. */
 function startRestoreWait(machineId: number): void {
   const w: RestoreWait = { startedAt: Date.now(), seenDown: false };
   _restoreWaits.set(machineId, w);
   w.timer = setTimeout(() => { void restoreWaitTick(machineId, w); }, RESTORE_POLL_MS);
 }
 
-/** One poll of the restarting machine. The wait lives on when the sheet is closed,
- *  and every step returns once a newer wait replaced this one. */
+/** Every step returns once a newer wait replaced this one. */
 async function restoreWaitTick(machineId: number, w: RestoreWait): Promise<void> {
   if (_restoreWaits.get(machineId) !== w) return;
   let reachable = false;
