@@ -238,6 +238,7 @@ func TestRequireToken_KioskKeyRejectedOffAllowList(t *testing.T) {
 		{http.MethodGet, "/api/machine/backups/1"},
 		{http.MethodGet, "/api/machine/backups/1/download"},
 		{http.MethodPost, "/api/machine/backups/upload"},
+		{http.MethodPost, "/api/machine/backups/1/restore"},
 	}
 	for _, c := range denied {
 		if code := serveKiosk(t, h, c.method, c.path, key); code != http.StatusUnauthorized {
