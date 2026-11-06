@@ -6857,7 +6857,7 @@ export interface paths {
         put?: never;
         /**
          * Restore a stored backup onto its machine; the machine applies it and restarts
-         * @description Right before posting, GLP reads the machine's current backup and copies its Wi-Fi block, MQTT credentials and tokens into the stored document, so a restore never changes the machine's network or broker access. Refused while the machine brews, steams, descales or updates its firmware, while GLP has profile changes for it that were not sent, and while another backup or restore of it runs. After the machine accepted the document (and after no_confirmation) GLP drops its cached copy of the machine's profiles; the next profile list rebuilds it. The machine restarts, so a client should expect it to be unreachable for a while.
+         * @description Right before posting, GLP reads the machine's current backup and copies its Wi-Fi block, MQTT credentials and tokens into the stored document, so a restore never changes the machine's network or broker access. Right before posting, GLP stores the machine's current state as a manual backup (note 'Before restoring backup <id>'); if that fails, nothing is restored. Manual backups are never removed automatically. A backup of a deleted machine can be restored onto another registered Gaggiuino machine the user chose; the secrets then come from that machine. A backup of a machine that still exists only goes to that machine. Refused while the machine brews, steams, descales or updates its firmware, while GLP has profile changes for it that were not sent, and while another backup or restore of it runs. GLP waits up to 3 s for the machine's first live system state, because the first read opens its live session. After the machine accepted the document (and after no_confirmation) GLP drops its cached copy of the machine's profiles; the next profile list rebuilds it. The machine restarts, so a client should expect it to be unreachable for a while.
          */
         post: {
             parameters: {
@@ -6871,7 +6871,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        /** @description The backup's own machine */
+                        /** @description The backup's own machine; for a backup of a deleted machine, a registered Gaggiuino machine the user chose */
                         machineId: number;
                     };
                 };
@@ -6898,7 +6898,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description Backup not found (also when it belongs to another machine), or unknown machine */
+                /** @description Backup not found (also when it belongs to another registered machine), or unknown machine */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -6930,6 +6930,15 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description pre_restore_backup_failed: the machine's current state could not be stored first; nothing was sent */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
                 /** @description unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup */
                 501: {
                     headers: {
@@ -6939,7 +6948,7 @@ export interface paths {
                         "application/json": components["schemas"]["MachineBackupError"];
                     };
                 };
-                /** @description machine_unreachable: the machine's state or current backup could not be read, nothing was sent; invalid_backup: the machine's current backup cannot be read, so its secrets cannot be kept, nothing was sent; restore_rejected: the machine refused the backup (machineError holds its text), nothing changed; no_confirmation: the machine did not answer after the backup was sent, it may already be restarting */
+                /** @description machine_unreachable: the machine's state or current backup could not be read, nothing was sent; invalid_backup: the machine's current backup cannot be read, so its secrets cannot be kept, nothing was sent, also when the machine's current backup cannot be stored as the pre-restore backup; restore_rejected: the machine refused the backup (machineError holds its text), nothing changed; no_confirmation: the machine did not answer after the backup was sent, it may already be restarting */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -8784,7 +8793,7 @@ export interface components {
         MachineBackupError: {
             error: string;
             /** @enum {string} */
-            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running" | "pre_update_backup_failed" | "pending_profile_changes" | "restore_rejected" | "no_confirmation";
+            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running" | "pre_update_backup_failed" | "pre_restore_backup_failed" | "pending_profile_changes" | "restore_rejected" | "no_confirmation";
             /**
              * @description Only with code machine_busy from the restore route: what the machine is doing
              * @enum {string}

@@ -12,7 +12,10 @@
 // (settings.go). handlers.go also serves one stored document, the download (the
 // machine's current secrets are merged into the response only, see
 // mergeSecrets) and the upload (prepare strips the secrets before the insert).
-// The restore path follows in a later slice.
+// restore.go restores a stored backup onto a machine: it first stores the
+// machine's current state as a manual backup, then merges the machine's current
+// secrets into the chosen document right before the post; the secrets are never
+// stored.
 package machinebackups
 
 import (
@@ -293,9 +296,10 @@ type Repository struct {
 	db *sql.DB
 
 	// locks serializes all backup work on one machine (the scheduler,
-	// Back up now and, from slice 5b, restore), keyed by machine id. It lives
-	// here because main shares one Repository between the scheduler and the
-	// handlers, the same way ProfilesRepository.MachineLock is shared.
+	// Back up now, the download, the pre-update backup and restore), keyed by
+	// machine id. It lives here because main shares one Repository between the
+	// scheduler and the handlers, the same way ProfilesRepository.MachineLock is
+	// shared.
 	locks sync.Map // map[int64]*sync.Mutex
 
 	// settingsMu serializes saveSettings' read-modify-write of the one kv row.
