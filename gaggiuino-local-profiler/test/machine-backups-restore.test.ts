@@ -2,7 +2,7 @@
 // settings. Every backup/firmware call and the sheet/toast modules are mocked;
 // the renderer, the error mapping and the restart wait run for real.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { MachineBackup } from '../public-src/api/types.js';
+import type { MachineBackup, MachineBackupSchedule, MachineBackupSettings } from '../public-src/api/types.js';
 import type { MachineBackupFailure } from '../public-src/api/machine-backups.js';
 import type { DetailSheetOptions } from '../public-src/components/detail-sheet.js';
 import type { TranslationValue } from '../public-src/i18n.js';
@@ -16,8 +16,9 @@ const el = {
 };
 g.document = { getElementById: (id: string) => (id === 'mbkSheet' ? el : null) };
 
-const settings = (machineId: number, over: Partial<{ schedule: 'off' | 'daily' | 'weekly'; keepAutomatic: number }> = {}) =>
-  ({ machineId, schedule: 'daily' as const, keepAutomatic: 10, ...over });
+const settings = (
+  machineId: number, schedule: MachineBackupSchedule = 'daily', keepAutomatic = 10,
+): MachineBackupSettings => ({ machineId, schedule, keepAutomatic });
 
 type Api = typeof import('../public-src/api/machine-backups.js');
 type MachinesApi = typeof import('../public-src/api/machines.js');
@@ -328,7 +329,7 @@ describe('machine backup restore (#1878 U2)', () => {
     expect(toast.show).toHaveBeenLastCalledWith('Only Gaggiuino machines have settings backups.', 6000);
     expect(el.innerHTML).toContain('<option value="weekly" selected>');
     api.getSettings.mockImplementation((machineId: number) => Promise.resolve({
-      ok: true, value: machineId === 2 ? settings(2, { schedule: 'off', keepAutomatic: 3 }) : settings(1, { schedule: 'weekly', keepAutomatic: 5 }),
+      ok: true, value: machineId === 2 ? settings(2, 'off', 3) : settings(1, 'weekly', 5),
     }));
     api.saveSettings.mockImplementation(s => Promise.resolve({ ok: true, value: s }));
     await open(2);
