@@ -186,6 +186,33 @@ export type MachineControlSettings = components['schemas']['MachineControlSettin
 /** GET /api/live/data's machineControl snapshot for the default machine (#1324). */
 export type MachineControlState = components['schemas']['MachineControlState'];
 
+// ── Machine settings backups (go/internal/machinebackups, #1878) ────────
+
+/** One stored backup, metadata only (GET /api/machine/backups). machineId may name a deleted machine. */
+export type MachineBackup = components['schemas']['MachineBackup'];
+export type MachineBackupKind = MachineBackup['kind'];
+/** GET /api/machine/backups/{id}: the entry plus its secret-free document (input of the C1 compare engine). */
+export type MachineBackupDetail = components['schemas']['MachineBackupDetail'];
+export type MachineBackupDocument = MachineBackupDetail['document'];
+/** GET/PUT /api/machine/backups/settings: one machine's schedule and retention. */
+export type MachineBackupSettings = components['schemas']['MachineBackupSettings'];
+export type MachineBackupSchedule = MachineBackupSettings['schedule'];
+/** The documented error body of the backup routes. */
+export type MachineBackupErrorBody = components['schemas']['MachineBackupError'];
+export type MachineBackupErrorCode = MachineBackupErrorBody['code'];
+export type MachineBusyReason = NonNullable<MachineBackupErrorBody['reason']>;
+/** POST /api/machine/backups body (Back up now). */
+export type MachineBackupCreateInput = paths['/api/machine/backups']['post']['requestBody']['content']['application/json'];
+/** POST /api/machine/backups/upload body. */
+export type MachineBackupUploadInput = paths['/api/machine/backups/upload']['post']['requestBody']['content']['application/json'];
+/** POST /api/machine/backups/{id}/restore body and its 200 answer. */
+export type MachineBackupRestoreInput = paths['/api/machine/backups/{id}/restore']['post']['requestBody']['content']['application/json'];
+export type MachineBackupRestoreResult = paths['/api/machine/backups/{id}/restore']['post']['responses'][200]['content']['application/json'];
+/** DELETE /api/machine/backups/{id} answer. */
+export type MachineBackupDeleteResult = paths['/api/machine/backups/{id}']['delete']['responses'][200]['content']['application/json'];
+/** X-GLP-Secrets of the download: whether the file holds the machine's secrets in plain text. */
+export type MachineBackupSecrets = NonNullable<paths['/api/machine/backups/{id}/download']['get']['responses'][200]['headers']['X-GLP-Secrets']>;
+
 // ── MQTT (go/internal/mqtt) ──────────────────────────────────────────────
 
 /**
