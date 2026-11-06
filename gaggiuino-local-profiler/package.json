@@ -24,7 +24,7 @@
     "barcode-detector": "3.2.3",
     "chart.js": "4.6.1",
     "echarts": "6.1.0",
-    "onnxruntime-web": "1.30.0",
+    "onnxruntime-web": "1.31.1",
     "qrcode": "1.5.4",
     "topojson-client": "3.1.0"
   },
