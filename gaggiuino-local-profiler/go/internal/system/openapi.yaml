@@ -703,7 +703,15 @@ components:
       required: [error, code]
       properties:
         error: { type: string }
-        code:  { type: string, enum: [unsupported_machine, unsupported_firmware, machine_unreachable, invalid_backup, machine_busy, operation_running, pre_update_backup_failed] }
+        code:  { type: string, enum: [unsupported_machine, unsupported_firmware, machine_unreachable, invalid_backup, machine_busy, operation_running, pre_update_backup_failed, pending_profile_changes, restore_rejected, no_confirmation] }
+        reason:
+          type: string
+          enum: [brew, steam, descale, firmware_update]
+          description: "Only with code machine_busy from the restore route: what the machine is doing"
+        machineError:
+          type: string
+          maxLength: 200
+          description: "Only with code restore_rejected: the machine's own error text, untranslated; render escaped"
 
     MachineBackupSettings:
       type: object
@@ -3704,6 +3712,62 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MachineBackupError' }
         "429": { description: "Rate limit exceeded — per-IP download limit, 10/min" }
+
+  /api/machine/backups/{id}/restore:
+    post:
+      tags: [MachineBackups]
+      summary: Restore a stored backup onto its machine; the machine applies it and restarts
+      description: >
+        Right before posting, GLP reads the machine's current backup and copies its
+        Wi-Fi block, MQTT credentials and tokens into the stored document, so a
+        restore never changes the machine's network or broker access. Refused
+        while the machine brews, steams, descales or updates its firmware, while GLP
+        has profile changes for it that were not sent, and while another backup or
+        restore of it runs. After the machine accepted the document (and after
+        no_confirmation) GLP drops its cached copy of the machine's profiles; the
+        next profile list rebuilds it. The machine restarts, so a client should
+        expect it to be unreachable for a while.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [machineId]
+              properties:
+                machineId: { type: integer, minimum: 1, description: "The backup's own machine" }
+      responses:
+        "200":
+          description: The machine accepted the backup and restarts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, restarting]
+                properties:
+                  ok:         { type: boolean }
+                  restarting: { type: boolean }
+        "400": { description: "Invalid JSON body, or machineId missing or below 1", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: "Backup not found (also when it belongs to another machine), or unknown machine", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "409":
+          description: "Nothing was sent to the machine. operation_running: another backup or restore of this machine, or a profile push to it, is running; machine_busy (with reason): brewing, steaming, descaling or a firmware update; pending_profile_changes: GLP has profile changes for this machine that were not sent yet; invalid_backup: this backup with the machine's current secrets is larger than the machine accepts"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "413": { description: Request body over 4 KiB }
+        "429": { description: "Rate limit exceeded — per-IP restore limit, 3/min" }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "502":
+          description: "machine_unreachable: the machine's state or current backup could not be read, nothing was sent; invalid_backup: the machine's current backup cannot be read, so its secrets cannot be kept, nothing was sent; restore_rejected: the machine refused the backup (machineError holds its text), nothing changed; no_confirmation: the machine did not answer after the backup was sent, it may already be restarting"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
 
   /api/machines:
     get:

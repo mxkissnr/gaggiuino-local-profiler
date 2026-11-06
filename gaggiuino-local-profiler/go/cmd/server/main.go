@@ -548,6 +548,17 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		Client: machinebackups.ClientFor(machinesHandlers),
 	}.Backup)
 
+	// #1878: restore a stored backup onto its machine. Shares machineBackupsRepo
+	// (the per-machine backup lock) with the scheduler and the routes above, and
+	// profilesRepo (the per-machine profile lock and cache) with the profile
+	// editor and the sync sweep.
+	machinebackups.NewRestore(machinebackups.RestoreDeps{
+		Repo:     machineBackupsRepo,
+		Machines: registry,
+		Client:   machinebackups.ClientFor(machinesHandlers),
+		Profiles: profilesRepo,
+	}).RegisterRoutes(mux)
+
 	// #1152: purge expired trash once at startup and then every 24h —
 	// StartTrashPurge does the immediate purge plus a 24h ticker bound to ctx.
 	shots.StartTrashPurge(ctx, shots.NewService(shotsRepo), 24*time.Hour)

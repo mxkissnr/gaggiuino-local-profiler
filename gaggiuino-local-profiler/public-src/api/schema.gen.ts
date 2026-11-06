@@ -6846,6 +6846,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/machine/backups/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a stored backup onto its machine; the machine applies it and restarts
+         * @description Right before posting, GLP reads the machine's current backup and copies its Wi-Fi block, MQTT credentials and tokens into the stored document, so a restore never changes the machine's network or broker access. Refused while the machine brews, steams, descales or updates its firmware, while GLP has profile changes for it that were not sent, and while another backup or restore of it runs. After the machine accepted the document (and after no_confirmation) GLP drops its cached copy of the machine's profiles; the next profile list rebuilds it. The machine restarts, so a client should expect it to be unreachable for a while.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description The backup's own machine */
+                        machineId: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description The machine accepted the backup and restarts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            restarting: boolean;
+                        };
+                    };
+                };
+                /** @description Invalid JSON body, or machineId missing or below 1 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Backup not found (also when it belongs to another machine), or unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Nothing was sent to the machine. operation_running: another backup or restore of this machine, or a profile push to it, is running; machine_busy (with reason): brewing, steaming, descaling or a firmware update; pending_profile_changes: GLP has profile changes for this machine that were not sent yet; invalid_backup: this backup with the machine's current secrets is larger than the machine accepts */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description Request body over 4 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP restore limit, 3/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description machine_unreachable: the machine's state or current backup could not be read, nothing was sent; invalid_backup: the machine's current backup cannot be read, so its secrets cannot be kept, nothing was sent; restore_rejected: the machine refused the backup (machineError holds its text), nothing changed; no_confirmation: the machine did not answer after the backup was sent, it may already be restarting */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/machines": {
         parameters: {
             query?: never;
@@ -8674,7 +8784,14 @@ export interface components {
         MachineBackupError: {
             error: string;
             /** @enum {string} */
-            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running" | "pre_update_backup_failed";
+            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running" | "pre_update_backup_failed" | "pending_profile_changes" | "restore_rejected" | "no_confirmation";
+            /**
+             * @description Only with code machine_busy from the restore route: what the machine is doing
+             * @enum {string}
+             */
+            reason?: "brew" | "steam" | "descale" | "firmware_update";
+            /** @description Only with code restore_rejected: the machine's own error text, untranslated; render escaped */
+            machineError?: string;
         };
         /** @description Automatic backup schedule and retention of one Gaggiuino machine (#1878); defaults daily and 10. keepAutomatic limits only scheduled backups: manual, pre-update and uploaded backups are never removed automatically */
         MachineBackupSettings: {
