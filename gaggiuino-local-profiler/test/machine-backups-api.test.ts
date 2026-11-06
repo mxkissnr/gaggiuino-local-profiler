@@ -64,7 +64,8 @@ function headerRecord(init: RequestInit | undefined): Record<string, string> {
   const value = init?.headers;
   if (value === undefined) return {};
   if (value instanceof Headers) return Object.fromEntries(value.entries());
-  if (Array.isArray(value)) return Object.fromEntries(value);
+  // Object.fromEntries on a plain string[][] falls into its `any` overload.
+  if (Array.isArray(value)) return Object.fromEntries(value.map(([k, v]) => [String(k), String(v)] as const));
   return { ...value };
 }
 

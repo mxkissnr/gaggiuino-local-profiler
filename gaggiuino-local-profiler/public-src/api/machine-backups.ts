@@ -128,23 +128,23 @@ function downloadName(header: string | null): string {
  *  included (for "backups of deleted machines"). */
 export function listMachineBackups(machineId: number | null): Promise<MachineBackupResult<MachineBackup[]>> {
   const url = machineId === null ? 'api/machine/backups' : `api/machine/backups?machineId=${pathSeg(machineId)}`;
-  return request(url, undefined, 'list');
+  return request<MachineBackup[]>(url, undefined, 'list');
 }
 
 /** POST /api/machine/backups: Back up now (201 entry). */
 export function backUpMachineNow(machineId: number, note?: string): Promise<MachineBackupResult<MachineBackup>> {
   const body: MachineBackupCreateInput = note === undefined ? { machineId } : { machineId, note };
-  return request('api/machine/backups', jsonBody(body), 'object');
+  return request<MachineBackup>('api/machine/backups', jsonBody(body), 'object');
 }
 
 /** DELETE /api/machine/backups/{id}: any kind, also a deleted machine's backup. */
 export function deleteMachineBackup(id: number): Promise<MachineBackupResult<MachineBackupDeleteResult>> {
-  return request(`api/machine/backups/${pathSeg(id)}`, { method: 'DELETE' }, 'object');
+  return request<MachineBackupDeleteResult>(`api/machine/backups/${pathSeg(id)}`, { method: 'DELETE' }, 'object');
 }
 
 /** GET /api/machine/backups/{id}: entry + secret-free document, for the compare view. */
 export function getMachineBackup(id: number): Promise<MachineBackupResult<MachineBackupDetail>> {
-  return request(`api/machine/backups/${pathSeg(id)}`, undefined, 'object');
+  return request<MachineBackupDetail>(`api/machine/backups/${pathSeg(id)}`, undefined, 'object');
 }
 
 /** GET /api/machine/backups/{id}/download: the native file as a Blob. Check `secrets` and warn
@@ -181,17 +181,17 @@ export function uploadMachineBackup(
   const body: MachineBackupUploadInput = note === undefined
     ? { machineId, document }
     : { machineId, document, note };
-  return request('api/machine/backups/upload', jsonBody(body), 'object');
+  return request<MachineBackup>('api/machine/backups/upload', jsonBody(body), 'object');
 }
 
 /** GET /api/machine/backups/settings?machineId=N: this machine's schedule and retention. */
 export function getMachineBackupSettings(machineId: number): Promise<MachineBackupResult<MachineBackupSettings>> {
-  return request(`api/machine/backups/settings?machineId=${pathSeg(machineId)}`, undefined, 'object');
+  return request<MachineBackupSettings>(`api/machine/backups/settings?machineId=${pathSeg(machineId)}`, undefined, 'object');
 }
 
 /** PUT /api/machine/backups/settings: replace one machine's schedule and retention (machineId inside). */
 export function saveMachineBackupSettings(settings: MachineBackupSettings): Promise<MachineBackupResult<MachineBackupSettings>> {
-  return request('api/machine/backups/settings', jsonBody(settings, 'PUT'), 'object');
+  return request<MachineBackupSettings>('api/machine/backups/settings', jsonBody(settings, 'PUT'), 'object');
 }
 
 /**
@@ -210,5 +210,5 @@ export function saveMachineBackupSettings(settings: MachineBackupSettings): Prom
  */
 export function restoreMachineBackup(id: number, machineId: number): Promise<MachineBackupResult<MachineBackupRestoreResult>> {
   const body: MachineBackupRestoreInput = { machineId };
-  return request(`api/machine/backups/${pathSeg(id)}/restore`, jsonBody(body), 'object');
+  return request<MachineBackupRestoreResult>(`api/machine/backups/${pathSeg(id)}/restore`, jsonBody(body), 'object');
 }
