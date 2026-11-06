@@ -7,7 +7,7 @@ import { closeFlavorWheel } from '../components/flavor-wheel.js';
 import { switchLibTab, openBeanForm, discardBeanForm, saveBean, saveBeanNoBag, saveBeanAddBag,
          uploadBeanImage, stageNewBeanImage, cutOutBeanSticker, openGrinderForm, closeGrinderForm,
          saveGrinder, uploadGrinderImage, openRecipeForm, closeRecipeForm, saveRecipe, addRecipeStep,
-         toggleUrlImport, importFromUrl, toggleImportSettings, addCustomShopifyDomain, openScanModal,
+         toggleUrlImport, importFromUrl, importFromPaste, toggleImportSettings, addCustomShopifyDomain, openScanModal,
          closeScanModal, _handleScanPhoto, openMilkForm, closeMilkForm, saveMilk, openBasketForm,
          closeBasketForm, saveBasket, uploadBasketImage, openPuckScreenForm, closePuckScreenForm,
          savePuckScreen, uploadPuckScreenImage } from '../views/library.js';
@@ -45,6 +45,7 @@ export function wireLibrary(): void {
   document.getElementById('toggleUrlImportBtn')!.addEventListener('click', toggleUrlImport);
   document.getElementById('urlImportInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') void importFromUrl(); });
   document.getElementById('importFromUrlBtn')!.addEventListener('click', () => { void importFromUrl(); });
+  document.getElementById('urlImportPasteBtn')!.addEventListener('click', () => { void importFromPaste(); });
   document.getElementById('toggleImportSettingsBtn')!.addEventListener('click', () => { void toggleImportSettings(); });
   document.getElementById('importSettingsAddDomainBtn')!.addEventListener('click', () => { void addCustomShopifyDomain(); });
   document.getElementById('importSettingsDomainInput')!.addEventListener('keydown', e => { if (e.key === 'Enter') void addCustomShopifyDomain(); });

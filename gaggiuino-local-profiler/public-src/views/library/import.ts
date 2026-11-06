@@ -5,9 +5,9 @@ import { S } from '../../state/index.js';
 import type { AppState, BarcodeDetectorLike } from '../../state/index.js';
 import * as timerRegistry from '../../state/timers.js';
 import { t } from '../../i18n.js';
-import { importFromUrl as apiImportFromUrl, getImportSettings, saveImportSettings } from '../../api/system.js';
+import { importFromUrl as apiImportFromUrl, importFromPaste as apiImportFromPaste, getImportSettings, saveImportSettings } from '../../api/system.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml, toIsoDateInput } from '../../utils.js';
+import { esc, html, joinHtml, safeHttpUrl, toIsoDateInput } from '../../utils.js';
 import { WARNING_ICON_SVG } from '../../icons.js';
 import { parseGlpQrParams } from '../../glp-qr.js';
 import type { BarcodeFormat } from 'barcode-detector/ponyfill';
@@ -70,6 +70,7 @@ interface UrlImportData {
   duplicateWarning?: { name: string } | null;
   extraBrewRecipes?: ExtraRecipe[] | null;
   variants?: ImportVariant[];
+  productDataUrl?: string | null;
 }
 
 interface ImportProvider {
@@ -104,11 +105,90 @@ function _field(id: string): HTMLInputElement {
 }
 
 // ── URL import ────────────────────────────────────────────────────────────
+// The URL of the request a shop blocked. Set only from that request, so
+// editing the input afterwards cannot change which parser the paste runs.
+let _pasteSourceUrl: string | null = null;
+
 export function toggleUrlImport(): void {
   const row = _field('urlImportRow');
   const visible = row.style.display !== 'none';
   row.style.display = visible ? 'none' : 'flex';
-  if (!visible) _field('urlImportInput').focus();
+  if (visible) _hidePastePanel();
+  else _field('urlImportInput').focus();
+}
+
+function _hidePastePanel(): void {
+  _pasteSourceUrl = null;
+  const text = document.getElementById('urlImportPasteText') as HTMLTextAreaElement | null;
+  if (text) text.value = '';
+  const row = document.getElementById('urlImportPasteRow');
+  if (row) row.style.display = 'none';
+  for (const id of ['urlImportPasteInvalid', 'urlImportPasteTooLarge', 'urlImportPastePartial']) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  }
+  const msg = row?.querySelector<HTMLElement>('.lib-url-paste-msg');
+  if (msg) msg.style.display = '';
+}
+
+// Shows the paste path for a shop that refused automatic requests. `partial`
+// means the product page still filled the form and only the product data was
+// blocked, so the paste steps are an add-on and the panel is skipped when the
+// shop gave no product-data URL. Never built with innerHTML: the URL is
+// untrusted and goes through safeHttpUrl.
+function _showShopBlocked(sourceUrl: string, productDataUrl: string | null | undefined, partial = false): boolean {
+  const href = safeHttpUrl(productDataUrl);
+  if (partial && !href) return false;
+  const row = document.getElementById('urlImportPasteRow');
+  const steps = document.getElementById('urlImportPasteSteps');
+  const manual = document.getElementById('urlImportPasteManual');
+  const link = document.getElementById('urlImportPasteLink') as HTMLAnchorElement | null;
+  if (!row || !steps || !manual || !link) return false;
+  if (href) {
+    _pasteSourceUrl = sourceUrl;
+    link.href = href;
+    steps.style.display = 'flex';
+    manual.style.display = 'none';
+  } else {
+    _pasteSourceUrl = null;
+    steps.style.display = 'none';
+    manual.style.display = '';
+  }
+  const msg = row.querySelector<HTMLElement>('.lib-url-paste-msg');
+  const partialEl = document.getElementById('urlImportPastePartial');
+  if (msg) msg.style.display = partial ? 'none' : '';
+  if (partialEl) partialEl.style.display = partial ? '' : 'none';
+  row.style.display = 'flex';
+  return true;
+}
+
+// One hint line under the import notice; shown even when the method label is
+// empty, because the partial import is exactly what the user must read.
+function _appendPartialImportHint(): void {
+  const el = document.getElementById('beanFormImportNotice');
+  if (!el) return;
+  el.insertAdjacentHTML('beforeend', html`<div class="lib-import-notice-hint">${esc(t('lib_url_shop_blocked_partial'))}</div>`);
+  el.style.display = '';
+}
+
+// The fetch and paste paths share this: both end in the same form filling and
+// variant picker. `sourceUrl` is the URL the shop blocked, or null for a paste.
+function _fillFromImport(data: UrlImportData, sourceUrl: string | null): void {
+  const input = _field('urlImportInput');
+  const finish = (variant: ImportVariant | null): void => {
+    _hidePastePanel();
+    _applyUrlImport(data, variant);
+    input.value = '';
+    _field('urlImportRow').style.display = 'none';
+    // A generic shop can block only the product JSON: the page still filled the
+    // form (Max, 05.11.), and the product data holds more than the page, so the
+    // paste path stays offered next to the filled form.
+    if (data.productDataUrl && sourceUrl && _showShopBlocked(sourceUrl, data.productDataUrl, true)) {
+      _appendPartialImportHint();
+    }
+  };
+  if (Array.isArray(data.variants) && data.variants.length > 1) openVariantPicker(data.variants, finish);
+  else finish(null);
 }
 
 export async function importFromUrl(): Promise<void> {
@@ -116,6 +196,7 @@ export async function importFromUrl(): Promise<void> {
   const btn   = document.querySelector<HTMLButtonElement>('#urlImportRow .lib-url-btn')!;
   const url   = input.value.trim();
   if (!url) return;
+  _hidePastePanel();
   btn.textContent = t('lib_url_importing');
   btn.disabled = true;
   try {
@@ -124,20 +205,62 @@ export async function importFromUrl(): Promise<void> {
       alert(t('lib_url_unsupported'));
       return;
     }
+    // A proxy can answer 502 itself with any body, so only the code counts; an
+    // unreadable body falls through to the generic error below.
+    if (r.status === 502) {
+      const body = await r.json().catch(() => null) as { code?: string; productDataUrl?: string } | null;
+      if (body?.code === 'shop_rate_limited') {
+        _showShopBlocked(url, body.productDataUrl ?? null);
+        return;
+      }
+    }
     if (!r.ok) throw new Error();
     const data = await r.json() as UrlImportData;
-    const finish = (variant: ImportVariant | null): void => {
-      _applyUrlImport(data, variant);
-      input.value = '';
-      _field('urlImportRow').style.display = 'none';
-    };
-    if (Array.isArray(data.variants) && data.variants.length > 1) openVariantPicker(data.variants, finish);
-    else finish(null);
+    _fillFromImport(data, url);
   } catch {
     alert(t('lib_url_error'));
   } finally {
     btn.textContent = t('lib_url_btn');
     btn.disabled = false;
+  }
+}
+
+// Parses product data the user copied out of a browser for a shop that blocks
+// automatic requests. Runs the same parser and form filling as a fetch; the
+// pasted text stays in the field when it is rejected, and nothing is stored.
+export async function importFromPaste(): Promise<void> {
+  const sourceUrl = _pasteSourceUrl;
+  if (!sourceUrl) return;
+  const text = (document.getElementById('urlImportPasteText') as HTMLTextAreaElement | null)?.value ?? '';
+  const btn = document.getElementById('urlImportPasteBtn') as HTMLButtonElement | null;
+  const invalid = document.getElementById('urlImportPasteInvalid');
+  const tooLarge = document.getElementById('urlImportPasteTooLarge');
+  if (invalid) invalid.style.display = 'none';
+  if (tooLarge) tooLarge.style.display = 'none';
+  if (btn) {
+    btn.textContent = t('lib_url_importing');
+    btn.disabled = true;
+  }
+  try {
+    const r = await apiImportFromPaste(sourceUrl, text);
+    if (r.status === 413) {
+      if (tooLarge) tooLarge.style.display = '';
+      return;
+    }
+    if (r.status === 400) {
+      if (invalid) invalid.style.display = '';
+      return;
+    }
+    if (!r.ok) throw new Error();
+    const data = await r.json() as UrlImportData;
+    _fillFromImport(data, null);
+  } catch {
+    alert(t('lib_url_error'));
+  } finally {
+    if (btn) {
+      btn.textContent = t('lib_url_paste_btn');
+      btn.disabled = false;
+    }
   }
 }
 

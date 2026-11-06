@@ -176,6 +176,7 @@ func buildDataIgnored() map[string]string {
 	// Not part of live sync: writes data a client never refetches, or pushes
 	// elsewhere; achievements are not synced live.
 	add("POST /api/backup", "writes only achievement unlocks; achievements are not part of live sync")
+	add("POST /api/import/paste", "parses pasted product data for the bean form; nothing is stored")
 	add("POST /api/sync", "a manual shot pull: new shots arrive through the status poll's revision")
 	add("POST /api/preheat/ready-by", "preheat-update already carries the resulting status")
 	add("POST /api/events/ticket", "issues a short-lived stream ticket; no stored data changes")
