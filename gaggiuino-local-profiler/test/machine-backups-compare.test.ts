@@ -266,7 +266,7 @@ describe('machine backup compare (#1878)', () => {
     const gate = new Promise<void>(resolve => { release = resolve; });
     api.get.mockImplementation(async (id: number) => {
       await gate;
-      return okDetail(detail({ id, createdAt: id === 7 ? older.createdAt : newer.createdAt }));
+      return failure({ status: 404 }); // would toast if it reached the old sheet
     });
     await openMachineBackups(1, null);
     await flush();
@@ -280,6 +280,7 @@ describe('machine backup compare (#1878)', () => {
     release?.();
     await flush();
     expect(el.innerHTML).not.toContain('mbk-cmp');
+    expect(toast.show).not.toHaveBeenCalled();
   });
 
   it("compares a deleted machine's backup with an own one", async () => {
