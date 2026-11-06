@@ -264,7 +264,7 @@ describe('machine backup compare (#1878)', () => {
     api.list.mockResolvedValue({ ok: true, value: [newer, older] });
     let release: (() => void) | null = null;
     const gate = new Promise<void>(resolve => { release = resolve; });
-    api.get.mockImplementation(async (id: number) => {
+    api.get.mockImplementation(async (_id: number) => {
       await gate;
       return failure({ status: 404 }); // would toast if it reached the old sheet
     });
