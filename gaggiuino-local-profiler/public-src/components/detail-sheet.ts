@@ -27,6 +27,8 @@ export interface DetailSheetOptions {
 }
 
 let _dialogKeyboard: DialogKeyboardHandle | null = null;
+// #1912: watches the open popover's size, see openDetailSheet.
+let _popResize: ResizeObserver | null = null;
 
 function _host(): HTMLElement | null {
   return typeof document !== 'undefined' ? document.getElementById('detailSheet') : null;
@@ -42,6 +44,13 @@ function _isPointAnchor(anchor: HTMLElement | DetailAnchorPoint): anchor is Deta
   const a = anchor as DetailAnchorPoint;
   return typeof a.x === 'number' && typeof a.y === 'number'
     && typeof (anchor as HTMLElement).getBoundingClientRect !== 'function';
+}
+
+// Keeps a popover of height h inside a viewport of height vh with the 12px
+// margin: shifted up when its bottom would cross the edge, never above the
+// top margin (#1912).
+export function clampPopTop(top: number, h: number, vh: number): number {
+  return Math.max(12, Math.min(top, vh - 12 - h));
 }
 
 // Place the popover next to its anchor: right of it when it fits, else left,
@@ -61,9 +70,7 @@ function _positionPop(sheet: HTMLElement, anchor: HTMLElement | DetailAnchorPoin
   if (left + w > vw - 12) left = r.left - w - 12;
   if (left < 12) left = 12;
   if (left + w > vw - 12) left = Math.max(12, vw - 12 - w);
-  let top = r.top + r.height / 2 - h / 2;
-  if (top < 12) top = 12;
-  if (top + h > vh - 12) top = Math.max(12, vh - 12 - h);
+  const top = clampPopTop(r.top + r.height / 2 - h / 2, h, vh);
   sheet.style.left = `${Math.round(left)}px`;
   sheet.style.top = `${Math.round(top)}px`;
 }
@@ -100,7 +107,21 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
   // #1488: one sheet-level drag covers the grab pill, the head and the content.
   if (sheet && typeof sheet.addEventListener === 'function') attachSheetSwipe(sheet, backdrop, requestCloseDetailSheet);
   attachSheetScrollState(sheet);
-  if (desktop && sheet && anchor) _positionPop(sheet, anchor);
+  _popResize?.disconnect();
+  _popResize = null;
+  if (desktop && sheet && anchor) {
+    _positionPop(sheet, anchor);
+    // #1912: content that arrives after opening (a list that finished loading,
+    // an opened fold) makes the popover taller than when it was placed. Shift it
+    // up so it stays inside the window and its content scrolls inside it.
+    if (typeof ResizeObserver !== 'undefined') {
+      _popResize = new ResizeObserver(() => {
+        const top = clampPopTop(parseFloat(sheet.style.top) || 0, sheet.offsetHeight, window.innerHeight || 0);
+        sheet.style.top = `${Math.round(top)}px`;
+      });
+      _popResize.observe(sheet);
+    }
+  }
   startSheetEnter(sheet, backdrop);
 
   const closeBtn = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-close') : null;
@@ -124,6 +145,8 @@ export function requestCloseDetailSheet(): void {
 }
 
 export function closeDetailSheet(): void {
+  _popResize?.disconnect();
+  _popResize = null;
   _dialogKeyboard?.release();
   _dialogKeyboard = null;
   const host = _host();

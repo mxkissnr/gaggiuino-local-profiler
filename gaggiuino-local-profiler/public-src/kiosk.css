@@ -185,7 +185,7 @@ html[data-theme="light"]:not(.eink) { --accent-ink: #905c06; }
 /* ── E-ink mode (?eink=1) ──────────────────────────────────────────────────
    Overrides both themes: maximum contrast, no shadows, no motion. */
 html.eink,
-html.eink body { background: #fff; color: #000; }
+html.eink body { background: #fff; color: #000; color-scheme: light; }
 
 html.eink .closed-banner,
 html.eink .name-input,
