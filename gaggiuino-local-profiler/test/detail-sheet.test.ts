@@ -7,7 +7,7 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 
-const { openDetailSheet, closeDetailSheet } = await import('../public-src/components/detail-sheet.js');
+const { openDetailSheet, closeDetailSheet, clampPopTop } = await import('../public-src/components/detail-sheet.js');
 const { html } = await import('../public-src/utils.js');
 
 type KeyHandler = (e: KeyboardEvent) => void;
@@ -138,5 +138,58 @@ describe('detail sheet (#1467)', () => {
     expect(host.innerHTML).toContain('detail-pop');
     expect(sheet.style.left).toBe('312px'); // right edge (300) + 12
     expect(sheet.style.top).toBe('150px');  // 200 - height/2
+  });
+
+  it('shifts the popover up when its content grows after opening (#1912)', () => {
+    const ro = { cb: (): void => {}, observed: [] as unknown[], disconnects: 0 };
+    g.ResizeObserver = class {
+      constructor(cb: () => void) { ro.cb = cb; }
+      observe(target: unknown): void { ro.observed.push(target); }
+      disconnect(): void { ro.disconnects += 1; }
+    };
+    try {
+      const sheet = {
+        offsetWidth: 200,
+        offsetHeight: 100,
+        style: {} as Record<string, string>,
+        querySelector: () => null,
+      };
+      host.querySelector = (sel?: string) => (sel === '.lib-sheet' ? sheet : null);
+      installDom(host, null, true);
+      openDetailSheet({ title: 'Grows', body: html``, anchor: { x: 300, y: 600 } });
+      expect(sheet.style.top).toBe('550px'); // centred on 600 with h=100
+      expect(ro.observed).toEqual([sheet]);
+
+      sheet.offsetHeight = 200;
+      ro.cb();
+      expect(sheet.style.top).toBe('550px'); // still fits, so it does not move
+
+      sheet.offsetHeight = 500;
+      ro.cb();
+      expect(sheet.style.top).toBe('288px'); // 800 - 12 - 500
+
+      closeDetailSheet();
+      expect(ro.disconnects >= 1).toBe(true);
+    } finally {
+      delete g.ResizeObserver;
+    }
+  });
+});
+
+describe('clampPopTop (#1912)', () => {
+  it('leaves a popover that fits where it is', () => {
+    expect(clampPopTop(300, 200, 800)).toBe(300);
+  });
+
+  it('shifts a popover up so its bottom stays 12px inside the window', () => {
+    expect(clampPopTop(600, 400, 800)).toBe(388);
+  });
+
+  it('keeps a popover above the window below the top margin', () => {
+    expect(clampPopTop(-40, 200, 800)).toBe(12);
+  });
+
+  it('pins a popover taller than the window to the top margin', () => {
+    expect(clampPopTop(300, 900, 800)).toBe(12);
   });
 });
