@@ -29,6 +29,20 @@ const (
 
 var errTooManyRedirects = errors.New("too many redirects")
 
+// httpStatusError keeps the status code of a failed hop inspectable, so a
+// caller can tell a shop's 429 from any other refusal. Error() stays exactly
+// the message doOnce always produced — the debug output shows it.
+type httpStatusError struct{ status int }
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("request failed with status %d", e.status)
+}
+
+func isRateLimited(err error) bool {
+	var s *httpStatusError
+	return errors.As(err, &s) && s.status == http.StatusTooManyRequests
+}
+
 // fetchResult carries one hop's final response.
 type fetchResult struct {
 	status int
@@ -144,7 +158,7 @@ func (f *fetcher) doOnce(ctx context.Context, rawURL string, base *url.URL) (fet
 		return fetchResult{}, next.String(), nil
 	}
 	if resp.StatusCode >= 400 {
-		return fetchResult{}, "", fmt.Errorf("request failed with status %d", resp.StatusCode)
+		return fetchResult{}, "", &httpStatusError{status: resp.StatusCode}
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, importFetchMaxBytes+1))
