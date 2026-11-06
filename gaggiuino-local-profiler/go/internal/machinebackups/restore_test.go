@@ -265,7 +265,9 @@ func TestRestore_RefusesAndSendsNothing(t *testing.T) {
 		{name: "firmware in progress", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"IN_PROGRESS"}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
 		{name: "firmware in progress lower case", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"in_progress"}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
 		{name: "migration active", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"IDLE","migration":{"active":true}}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
-		{name: "migration working", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"SUCCESS","migration":{"active":false,"state":"Working"}}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
+		{name: "migration working", mutate: func(_ *restoreEnv, r *fakeRestorer) {
+			r.progress = `{"status":"SUCCESS","migration":{"active":false,"state":"Working"}}`
+		}, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
 
 		// unreadable
 		{name: "status error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.statusErr = errTestOffline }, status: 502, code: codeMachineUnreachable},
@@ -278,8 +280,12 @@ func TestRestore_RefusesAndSendsNothing(t *testing.T) {
 		{name: "firmware without the endpoint", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.backupErr = machines.ErrSettingsBackupUnsupported }, status: 501, code: codeUnsupportedFirmware},
 		{name: "fresh backup too large", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.backupErr = machines.ErrSettingsBackupTooLarge }, status: 502, code: codeInvalidBackup},
 		{name: "unreadable fresh backup", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{`{`} }, status: 502, code: codeInvalidBackup},
-		{name: "fresh backup without wifi", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{`{"format":"gaggiuino-settings","version":1,"settings":{"system":{"mqttPassword":"SECRET-x"}}}`} }, status: 502, code: codeInvalidBackup},
-		{name: "fresh backup unknown version", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":2`, 1)} }, status: 502, code: codeInvalidBackup},
+		{name: "fresh backup without wifi", mutate: func(_ *restoreEnv, r *fakeRestorer) {
+			r.docs = []string{`{"format":"gaggiuino-settings","version":1,"settings":{"system":{"mqttPassword":"SECRET-x"}}}`}
+		}, status: 502, code: codeInvalidBackup},
+		{name: "fresh backup unknown version", mutate: func(_ *restoreEnv, r *fakeRestorer) {
+			r.docs = []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":2`, 1)}
+		}, status: 502, code: codeInvalidBackup},
 
 		// unsent profile changes
 		{name: "dirty profile", mutate: func(re *restoreEnv, _ *fakeRestorer) { re.mustUpsertDirty(1, nil, strPtr("9"), "edited") }, status: 409, code: codePendingProfileChanges, noContact: true},
@@ -287,7 +293,9 @@ func TestRestore_RefusesAndSendsNothing(t *testing.T) {
 		{name: "pending delete", mutate: pendingDelete, status: 409, code: codePendingProfileChanges, noContact: true},
 
 		// the machine answers
-		{name: "machine refuses", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.restoreErr = &machines.SettingsRestoreError{Status: 400, Message: "Invalid\u0007 backup"} }, status: 502, code: codeRestoreRejected, machineErr: "Invalid backup", posts: 1},
+		{name: "machine refuses", mutate: func(_ *restoreEnv, r *fakeRestorer) {
+			r.restoreErr = &machines.SettingsRestoreError{Status: 400, Message: "Invalid\u0007 backup"}
+		}, status: 502, code: codeRestoreRejected, machineErr: "Invalid backup", posts: 1},
 		{name: "merged document too large", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.restoreErr = machines.ErrSettingsBackupTooLarge }, status: 409, code: codeInvalidBackup, posts: 1},
 
 		// the request itself
