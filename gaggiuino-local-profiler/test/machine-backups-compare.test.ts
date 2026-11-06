@@ -262,8 +262,8 @@ describe('machine backup compare (#1878)', () => {
 
   it('drops a compare answer for a sheet that is no longer open', async () => {
     api.list.mockResolvedValue({ ok: true, value: [newer, older] });
-    let release: () => void = () => { return; };
-    const gate = new Promise<void>(resolve => { release = () => { resolve(); }; });
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>(resolve => { release = resolve; });
     api.get.mockImplementation(async (id: number) => {
       await gate;
       return okDetail(detail({ id, createdAt: id === 7 ? older.createdAt : newer.createdAt }));
@@ -277,7 +277,7 @@ describe('machine backup compare (#1878)', () => {
     el.dataset.machineId = '2'; // the fresh #mbkSheet names machine 2
     el.innerHTML = '';
     await flush();
-    release();
+    release?.();
     await flush();
     expect(el.innerHTML).not.toContain('mbk-cmp');
   });
