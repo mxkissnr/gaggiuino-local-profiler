@@ -124,7 +124,7 @@ const ownEntry = <T>(map: Readonly<Record<string, T>>, key: string): T | undefin
   Object.hasOwn(map, key) ? map[key] : undefined;
 
 /** At most `max` code points; a longer string keeps `max - 1` and an ellipsis. */
-export function clip(s: string, max: number): string {
+function clip(s: string, max: number): string {
   const chars = Array.from(s);
   return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : s;
 }
