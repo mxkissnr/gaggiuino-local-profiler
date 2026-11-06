@@ -236,6 +236,15 @@ func TestRestore_PostsTheStoredDocumentWithTheMachinesCurrentSecrets(t *testing.
 }
 
 func TestRestore_RefusesAndSendsNothing(t *testing.T) {
+	// pendingDelete seeds one synced profile and marks it pending_delete, the
+	// third shape of an unsent change.
+	pendingDelete := func(re *restoreEnv, _ *fakeRestorer) {
+		re.seedSynced(1, "5")
+		if err := re.profiles.MarkPendingDelete(1, "5"); err != nil {
+			re.t.Fatalf("marking pending delete: %v", err)
+		}
+	}
+
 	cases := []struct {
 		name       string
 		mutate     func(*restoreEnv, *fakeRestorer)
@@ -250,82 +259,40 @@ func TestRestore_RefusesAndSendsNothing(t *testing.T) {
 		noContact  bool
 	}{
 		// busy
-		{name: "brewing", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.status = machines.Status{Brewing: true} },
-			status: 409, code: codeMachineBusy, reason: reasonBrew},
-		{name: "steaming", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.status = machines.Status{SteamOn: boolPtr(true)} },
-			status: 409, code: codeMachineBusy, reason: reasonSteam},
-		{name: "descaling", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.sysState.OperationMode = proto.ModeDescale },
-			status: 409, code: codeMachineBusy, reason: reasonDescale},
-		{name: "firmware in progress", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"IN_PROGRESS"}` },
-			status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
-		{name: "firmware in progress lower case", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"in_progress"}` },
-			status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
-		{name: "migration active", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.progress = `{"status":"IDLE","migration":{"active":true}}`
-		}, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
-		{name: "migration working", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.progress = `{"status":"SUCCESS","migration":{"active":false,"state":"Working"}}`
-		}, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
+		{name: "brewing", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.status = machines.Status{Brewing: true} }, status: 409, code: codeMachineBusy, reason: reasonBrew},
+		{name: "steaming", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.status = machines.Status{SteamOn: boolPtr(true)} }, status: 409, code: codeMachineBusy, reason: reasonSteam},
+		{name: "descaling", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.sysState.OperationMode = proto.ModeDescale }, status: 409, code: codeMachineBusy, reason: reasonDescale},
+		{name: "firmware in progress", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"IN_PROGRESS"}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
+		{name: "firmware in progress lower case", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"in_progress"}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
+		{name: "migration active", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"IDLE","migration":{"active":true}}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
+		{name: "migration working", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"SUCCESS","migration":{"active":false,"state":"Working"}}` }, status: 409, code: codeMachineBusy, reason: reasonFirmwareUpdate},
 
 		// unreadable
-		{name: "status error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.statusErr = errTestOffline },
-			status: 502, code: codeMachineUnreachable},
-		{name: "live state error", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.sysErr = errors.New("blocked host 192.168.1.50")
-		}, status: 502, code: codeMachineUnreachable},
-		{name: "no live state", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.sysState = nil },
-			status: 502, code: codeMachineUnreachable},
-		{name: "firmware progress error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progressErr = errTestTransport },
-			status: 502, code: codeMachineUnreachable},
-		{name: "firmware progress not json", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `not json` },
-			status: 502, code: codeMachineUnreachable},
-		{name: "firmware progress wrong type", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.progress = `{"status":"IDLE","migration":{"active":"yes"}}`
-		}, status: 502, code: codeMachineUnreachable},
-		{name: "backup transport error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.backupErr = errTestTransport },
-			status: 502, code: codeMachineUnreachable},
-		{name: "firmware without the endpoint", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.backupErr = machines.ErrSettingsBackupUnsupported
-		}, status: 501, code: codeUnsupportedFirmware},
-		{name: "fresh backup too large", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.backupErr = machines.ErrSettingsBackupTooLarge
-		}, status: 502, code: codeInvalidBackup},
-		{name: "unreadable fresh backup", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{`{`} },
-			status: 502, code: codeInvalidBackup},
-		{name: "fresh backup without wifi", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.docs = []string{`{"format":"gaggiuino-settings","version":1,"settings":{"system":{"mqttPassword":"SECRET-x"}}}`}
-		}, status: 502, code: codeInvalidBackup},
-		{name: "fresh backup unknown version", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.docs = []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":2`, 1)}
-		}, status: 502, code: codeInvalidBackup},
+		{name: "status error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.statusErr = errTestOffline }, status: 502, code: codeMachineUnreachable},
+		{name: "live state error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.sysErr = errors.New("blocked host 192.168.1.50") }, status: 502, code: codeMachineUnreachable},
+		{name: "no live state", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.sysState = nil }, status: 502, code: codeMachineUnreachable},
+		{name: "firmware progress error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progressErr = errTestTransport }, status: 502, code: codeMachineUnreachable},
+		{name: "firmware progress not json", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `not json` }, status: 502, code: codeMachineUnreachable},
+		{name: "firmware progress wrong type", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.progress = `{"status":"IDLE","migration":{"active":"yes"}}` }, status: 502, code: codeMachineUnreachable},
+		{name: "backup transport error", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.backupErr = errTestTransport }, status: 502, code: codeMachineUnreachable},
+		{name: "firmware without the endpoint", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.backupErr = machines.ErrSettingsBackupUnsupported }, status: 501, code: codeUnsupportedFirmware},
+		{name: "fresh backup too large", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.backupErr = machines.ErrSettingsBackupTooLarge }, status: 502, code: codeInvalidBackup},
+		{name: "unreadable fresh backup", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{`{`} }, status: 502, code: codeInvalidBackup},
+		{name: "fresh backup without wifi", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{`{"format":"gaggiuino-settings","version":1,"settings":{"system":{"mqttPassword":"SECRET-x"}}}`} }, status: 502, code: codeInvalidBackup},
+		{name: "fresh backup unknown version", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.docs = []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":2`, 1)} }, status: 502, code: codeInvalidBackup},
 
 		// unsent profile changes
-		{name: "dirty profile", mutate: func(re *restoreEnv, _ *fakeRestorer) {
-			re.mustUpsertDirty(1, nil, strPtr("9"), "edited")
-		}, status: 409, code: codePendingProfileChanges, noContact: true},
-		{name: "pending create", mutate: func(re *restoreEnv, _ *fakeRestorer) {
-			re.mustUpsertDirty(1, nil, nil, "new")
-		}, status: 409, code: codePendingProfileChanges, noContact: true},
-		{name: "pending delete", mutate: func(re *restoreEnv, _ *fakeRestorer) {
-			re.seedSynced(1, "5")
-			if err := re.profiles.MarkPendingDelete(1, "5"); err != nil {
-				re.t.Fatalf("marking pending delete: %v", err)
-			}
-		}, status: 409, code: codePendingProfileChanges, noContact: true},
+		{name: "dirty profile", mutate: func(re *restoreEnv, _ *fakeRestorer) { re.mustUpsertDirty(1, nil, strPtr("9"), "edited") }, status: 409, code: codePendingProfileChanges, noContact: true},
+		{name: "pending create", mutate: func(re *restoreEnv, _ *fakeRestorer) { re.mustUpsertDirty(1, nil, nil, "new") }, status: 409, code: codePendingProfileChanges, noContact: true},
+		{name: "pending delete", mutate: pendingDelete, status: 409, code: codePendingProfileChanges, noContact: true},
 
 		// the machine answers
-		{name: "machine refuses", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.restoreErr = &machines.SettingsRestoreError{Status: 400, Message: "Invalid\u0007 backup"}
-		}, status: 502, code: codeRestoreRejected, machineErr: "Invalid backup", posts: 1},
-		{name: "merged document too large", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.restoreErr = machines.ErrSettingsBackupTooLarge
-		}, status: 409, code: codeInvalidBackup, posts: 1},
+		{name: "machine refuses", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.restoreErr = &machines.SettingsRestoreError{Status: 400, Message: "Invalid\u0007 backup"} }, status: 502, code: codeRestoreRejected, machineErr: "Invalid backup", posts: 1},
+		{name: "merged document too large", mutate: func(_ *restoreEnv, r *fakeRestorer) { r.restoreErr = machines.ErrSettingsBackupTooLarge }, status: 409, code: codeInvalidBackup, posts: 1},
 
 		// the request itself
-		{name: "bad id in the path", path: `/api/machine/backups/abc/restore`,
-			status: 404, noContact: true},
-		{name: "unknown backup", body: `{"machineId":1}`, path: backupURL(99, "/restore"),
-			status: 404, noContact: true},
+		{name: "bad id in the path", path: `/api/machine/backups/abc/restore`, status: 404, noContact: true},
+		{name: "unknown backup", body: `{"machineId":1}`, path: backupURL(99, "/restore"), status: 404, noContact: true},
 		{name: "invalid json", body: `{`, status: 400, noContact: true},
 		{name: "missing machineId", body: `{}`, status: 400, noContact: true},
 		{name: "machineId zero", body: `{"machineId":0}`, status: 400, noContact: true},
