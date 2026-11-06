@@ -199,7 +199,8 @@ describe('machine backup compare (#1878)', () => {
 
   it('says when two backups are identical or differ only in order', async () => {
     api.list.mockResolvedValue({ ok: true, value: [newer, older] });
-    const doc = () => ({ format: 'gaggiuino-settings', version: 1, profiles: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }] });
+    const doc = (): Record<string, unknown> =>
+      ({ format: 'gaggiuino-settings', version: 1, profiles: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }] });
     api.get.mockImplementation((id: number) => Promise.resolve(okDetail(detail({
       id, createdAt: id === 7 ? older.createdAt : newer.createdAt, contentHash: 'same',
     }, doc()))));
@@ -244,9 +245,10 @@ describe('machine backup compare (#1878)', () => {
 
   it('stays on the list when a backup cannot be read', async () => {
     api.list.mockResolvedValue({ ok: true, value: [newer, older] });
+    const f = failure({ status: 404 });
     api.get.mockImplementation((id: number) => Promise.resolve(id === 7
       ? okDetail(detail({ id: 7, createdAt: older.createdAt }))
-      : failure({ status: 404 })));
+      : f));
     await openMachineBackups(1, null);
     await flush();
     setPick('5', true);
