@@ -559,6 +559,20 @@ Eine eigene **Erfolge**-Ansicht zeigt eine Pappkarte im Stempelkarten-Look: 64 A
 
 **Ältere Backups** (`.json`-Dateien von vor dem ZIP-Format, und noch ältere von vor Einführung der wählbaren Bereiche — siehe `CHANGELOG.md`) lassen sich weiterhin ganz normal wiederherstellen; ein bereits gespeichertes Backup muss nicht neu exportiert werden. Die allerältesten `.json`-Backups (von bevor Bereiche/Fotos/Wartung/Bestellungen/Maschinen/Einstellungen überhaupt Teil des Exports waren) enthalten nur Shots, Anmerkungen, die Kaffee-Bibliothek und die Blockliste — diese älteren Daten wurden damals nie erfasst und lassen sich aus genau diesen Dateien nicht nachträglich gewinnen. Erstelle nach dem Update ein frisches Backup, falls du auf die neueren Bereiche angewiesen bist.
 
+### Maschinen-Backups (Gaggiuino)
+
+Einstellungen → Maschinen → **Backups** an einer Gaggiuino-Maschine öffnet ihren Backup-Verlauf: ihre Einstellungen und Profile im eigenen Backup-Format der Maschine.
+
+- **Automatisch.** GLP sichert jede Gaggiuino-Maschine täglich (oder wöchentlich oder nie; pro Maschine unter „Automatische Backups“ einstellbar), sobald sie zum ersten Mal erreichbar und bereit ist, und speichert nur dann ein neues Backup, wenn sich etwas geändert hat. Standardmäßig behält GLP die letzten 10 automatischen Backups (1–100). Wenn du die Zahl senkst, werden ältere automatische Backups erst mit dem nächsten automatischen Backup entfernt.
+- **Vor jedem Firmware-Update** speichert GLP ein Backup. Schlägt das fehl, startet das Update nicht; du kannst aber bewusst bestätigen, ohne Backup zu aktualisieren.
+- **Jetzt sichern, herunterladen und hochladen.** Eine heruntergeladene Datei enthält das WLAN-Passwort und den MQTT-Login der Maschine im Klartext, deshalb fragt GLP vor dem Speichern nach; ist die Maschine nicht erreichbar, enthält die Datei keine Passwörter. Hochgeladene Dateien werden geprüft, ihre Passwörter werden nicht gespeichert.
+- **Vergleichen** zeigt für zwei Backups in einfachen Worten, was sich geändert hat: Einstellungen, Profile und ihre Phasen, das Standardprofil und die Firmware.
+- **Wiederherstellen** schickt ein Backup zurück an seine Maschine, die danach neu startet. GLP sichert vorher den aktuellen Stand der Maschine als neues Backup und behält ihre aktuellen WLAN- und MQTT-Einstellungen. Solange die Maschine brüht, dampft, entkalkt oder ihre Firmware aktualisiert oder GLP noch nicht gesendete Profiländerungen für sie hat, lehnt GLP ab.
+- **Passwörter werden nie gespeichert.** WLAN-, MQTT- und Visualizer-/Profiler-Zugangsdaten werden vor dem Speichern entfernt und nur für einen Download oder eine Wiederherstellung frisch von der Maschine geholt.
+- **Manuelle, hochgeladene und Backups vor Updates bleiben, bis du sie löschst.** Löschst du eine Maschine, bleiben ihre Backups erhalten: Sie erscheinen unter „Backups gelöschter Maschinen“ im Backups-Fenster jeder Gaggiuino-Maschine, wo du sie herunterladen, löschen oder auf eine Gaggiuino-Maschine deiner Wahl wiederherstellen kannst.
+
+Maschinen-Backups sind Teil des GLP-Backups (Bereich Maschinen). GaggiMate-Maschinen haben keine Backup-Schnittstelle für Einstellungen und bekommen diese Funktion deshalb nicht. Vorausgesetzt wird Gaggiuino-Firmware main-8aaf6f0 oder neuer.
+
 ### HA-Theme
 
 Eine passende Home-Assistant-Theme-Datei (`glp-ha-theme.yaml`) liegt im Repository-Root. Sie enthält **GLP Dark** und **GLP Light** für die gesamte HA-Oberfläche (Sidebar, Karten, Inputs, Switches, Statusfarben).
