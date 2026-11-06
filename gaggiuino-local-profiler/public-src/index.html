@@ -707,6 +707,19 @@
                         <input class="lib-url-input" id="urlImportInput" aria-label="Import from URL" data-i18n-aria-label="lib_url_placeholder" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
                         <button class="lib-url-btn" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
                     </div>
+                    <div class="lib-url-paste" id="urlImportPasteRow" style="display:none">
+                        <div class="lib-url-paste-msg" role="status" data-i18n="lib_url_shop_blocked">Dieser Shop lässt automatische Abfragen gerade nicht zu.</div>
+                        <div class="lib-url-paste-manual" id="urlImportPasteManual" style="display:none" data-i18n="lib_url_shop_blocked_manual">Trage die Angaben von Hand ein oder versuche es später noch einmal.</div>
+                        <div class="lib-url-paste-manual" id="urlImportPastePartial" style="display:none" data-i18n="lib_url_shop_blocked_partial">Dieser Shop hat seine Produktdaten gesperrt, deshalb sind nur die Angaben der Produktseite eingetragen. Für alle Angaben schließe das Formular und füge die Produktdaten unter dem Adressfeld ein.</div>
+                        <div class="lib-url-paste-steps" id="urlImportPasteSteps" style="display:none">
+                            <div class="lib-url-paste-manual" data-i18n="lib_url_paste_hint">Öffne die Produktdaten in deinem Browser, kopiere den gesamten Text und füge ihn hier ein.</div>
+                            <a class="lib-url-paste-link" id="urlImportPasteLink" href="#" target="_blank" rel="noopener noreferrer" data-i18n="lib_url_paste_link">Produktdaten öffnen</a>
+                            <textarea class="lib-url-input lib-url-paste-text" id="urlImportPasteText" rows="4" spellcheck="false" autocomplete="off" aria-label="Paste the product data here" data-i18n-aria-label="lib_url_paste_placeholder" data-i18n-placeholder="lib_url_paste_placeholder" placeholder="Produktdaten hier einfügen"></textarea>
+                            <div class="lib-url-paste-error" id="urlImportPasteInvalid" role="alert" style="display:none" data-i18n="lib_url_paste_invalid">Das sind keine gültigen Produktdaten. Kopiere den gesamten Text der geöffneten Seite.</div>
+                            <div class="lib-url-paste-error" id="urlImportPasteTooLarge" role="alert" style="display:none" data-i18n="lib_url_paste_too_large">Der eingefügte Text ist zu lang.</div>
+                            <button class="lib-url-btn" id="urlImportPasteBtn" data-i18n="lib_url_paste_btn">Formular ausfüllen</button>
+                        </div>
+                    </div>
                     <div class="lib-import-settings" id="importSettingsRow" style="display:none">
                         <div class="lib-import-settings-title" data-i18n="lib_import_settings_title">Import-Quellen</div>
                         <div id="importSettingsProviders"></div>

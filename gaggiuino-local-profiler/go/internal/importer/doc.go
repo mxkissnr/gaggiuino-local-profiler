@@ -1,7 +1,16 @@
 // Package importer implements the import API: GET /api/import/url (fetch a
-// shop/roaster product URL and extract bean metadata) plus GET/POST
+// shop/roaster product URL and extract bean metadata), POST /api/import/paste
+// (run the same parsers over product data the user pasted), plus GET/POST
 // /api/import/settings (built-in provider toggles + custom Shopify domains,
 // stored under kv.key = 'import_settings').
+//
+// A shop that answers HTTP 429 is reported, never retried: GLP always presents
+// itself as GLP/1.0 (Gaggiuino Local Profiler; private use), adds no
+// browser-like headers and reads no Retry-After, so a refusal is final for
+// this request. The upstream body is never echoed back. Pasted product data
+// goes through exactly the parsers a fetch uses; the host of the original URL
+// selects them, so nothing in the pasted text can pick a parser. The paste
+// route stores nothing — it only fills the import form.
 //
 // The bean value every parser produces is a map[string]any, deliberately —
 // the embedded frontend's import dialog consumes exactly that loose

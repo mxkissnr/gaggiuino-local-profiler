@@ -1610,6 +1610,14 @@
         .lib-url-input:focus { border-color:var(--gray-500); }
         .lib-url-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
         .lib-url-btn:hover { border-color:var(--gray-500); color:var(--gray-200); }
+        .lib-url-paste { flex-direction:column; gap: var(--sp-2); margin-top: var(--sp-2); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-3); }
+        .lib-url-paste-steps { flex-direction:column; gap: var(--sp-2); }
+        .lib-url-paste-msg { font-size: var(--fs-1); color:var(--gray-200); font-weight:600; }
+        .lib-url-paste-manual { font-size: var(--fs-1); color:var(--gray-400); }
+        .lib-url-paste-link { display:inline-flex; align-items:center; min-height:44px; font-size: var(--fs-1); color: var(--accent-ink); }
+        .lib-url-paste-text { flex:none; min-height:6rem; resize:vertical; }
+        .lib-url-paste-error { font-size: var(--fs-1); color: var(--err); }
+        .lib-url-paste .lib-url-btn { align-self:flex-start; min-height:44px; }
         .lib-item-source { font-size: var(--fs-1); color:var(--gray-600); margin-top: var(--sp-1); overflow-wrap: break-word; word-break: break-word; }
         /* #1543: the shop link inherited the browser's default link blue. */
         .lib-item-source a { color: var(--accent-ink); }

@@ -4353,8 +4353,90 @@ paths:
                           name:    { type: string }
                           roaster: { type: string }
                       _debug: { type: object, description: "Only present with ?debug=1" }
+                      productDataUrl:
+                        type: string
+                        format: uri
+                        description: >
+                          Present only when the shop's product JSON answered HTTP
+                          429 while its page still gave JSON-LD or OpenGraph data.
+                          The form is filled from the page; this is the URL whose
+                          data can be pasted to POST /api/import/paste for the
+                          fuller product JSON.
         "400": { description: "Missing/invalid url, unsupported protocol (non-https), or blocked address (SSRF guard)" }
         "404": { description: Product not found on page }
+        "500": { description: Fetch failed }
+        "502":
+          description: >
+            The shop does not allow automatic requests right now (its own HTTP
+            429). GLP never retries and never disguises itself, so this is final
+            for the request. 502 rather than 429, which would read as GLP's own
+            rate limiter.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  code:  { type: string, enum: [shop_rate_limited] }
+                  productDataUrl:
+                    type: string
+                    format: uri
+                    description: Present only when the product JSON itself answered 429.
+
+  /api/import/paste:
+    post:
+      tags: [Import]
+      summary: Parse pasted product data for the bean form
+      description: >
+        Runs the same parsers GET /api/import/url uses over product data the
+        user pasted (the body of a shop's product JSON). The host of `url`
+        selects the parser — built-in provider, custom Shopify domain, or the
+        generic path — so nothing in `text` can choose one. `text` is treated
+        as untrusted input: it is bounded, parsed as exactly one JSON object,
+        never logged and never echoed in an error. Nothing is stored; the
+        answer fills the import form exactly like GET /api/import/url, and
+        saving stays a separate action. A page fetch for HTML enrichment may
+        still happen on the generic and custom paths.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, text]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: The product page URL whose host selects the parser. Must be an absolute https URL with a /products/<handle> path.
+                text:
+                  type: string
+                  maxLength: 1048576
+                  description: The pasted product data — one JSON object. Over 1 MiB (bytes) answers 413.
+      responses:
+        "200":
+          description: Extracted bean metadata, the same body GET /api/import/url gives for that product
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Bean'
+                  - type: object
+                    properties:
+                      importMethod: { type: string, description: "e.g. builtin:<id>, custom-shopify, generic-shopify" }
+                      extraBrewRecipes:
+                        type: array
+                        items: { type: object }
+                        description: Candidate recipes parsed from the page's brew-guide accordion, if any (#451).
+                      duplicateWarning:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:      { type: integer }
+                          name:    { type: string }
+                          roaster: { type: string }
+        "400": { description: "Missing/invalid url or text, unsupported protocol, a path without /products/<handle>, an HTML-only shop, or blocked address (SSRF guard)" }
+        "413": { description: Request entity too large (body or text cap) }
         "500": { description: Fetch failed }
 
   /api/import/settings:
