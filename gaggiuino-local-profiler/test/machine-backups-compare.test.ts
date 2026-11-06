@@ -58,12 +58,14 @@ const detail = (over: Partial<MachineBackup> = {}, document: Record<string, unkn
   ({ ...entry(over), document });
 const okDetail = (d: MachineBackupDetail): { ok: true; value: MachineBackupDetail } => ({ ok: true, value: d });
 const flush = (): Promise<void> => new Promise(resolve => { setTimeout(() => { setTimeout(resolve, 0); }, 0); });
-/** A promise plus its resolver, for a call the test releases by hand. */
-const deferred = (): { promise: Promise<void>; resolve: () => void } => {
-  const gate = { release: (): void => {} };
-  const promise = new Promise<void>(resolve => { gate.release = () => { resolve(); }; });
-  return { promise, resolve: () => { gate.release(); } };
-};
+/** A promise plus its resolver, for a call the test releases by hand. The resolver
+ *  lives on an object: a `let` would stay narrowed to its initial value, because
+ *  control-flow analysis cannot see the promise executor run. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  const box: { settle?: () => void } = {};
+  const promise = new Promise<void>(resolve => { box.settle = () => { resolve(); }; });
+  return { promise, resolve: () => { box.settle?.(); } };
+}
 const click = (action: string): void => {
   handlers.click?.({ target: { closest: () => ({ dataset: { mbkAction: action } }) } });
 };
