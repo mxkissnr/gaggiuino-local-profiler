@@ -112,10 +112,12 @@ beforeEach(() => {
 
 afterEach(async () => {
   // Drain any restart wait a test left behind, so its 3 s loop cannot leak on.
-  await vi.advanceTimersByTimeAsync(RESTORE_WAIT_MAX_MS + 6000);
-  vi.clearAllTimers();
-  vi.useRealTimers();
-  vi.resetAllMocks();
+  // test/setup.ts hands the real clock back in its own afterEach, so check first.
+  if (vi.isFakeTimers()) {
+    await vi.advanceTimersByTimeAsync(RESTORE_WAIT_MAX_MS + 6000);
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  }
 });
 
 describe('machine backup restore (#1878 U2)', () => {
