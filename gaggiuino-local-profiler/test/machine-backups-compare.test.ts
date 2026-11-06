@@ -84,6 +84,8 @@ beforeEach(() => {
 
 const older = entry({ id: 7, createdAt: Date.parse('2026-11-05T09:00:00Z'), contentHash: 'h7' });
 const newer = entry({ id: 5, createdAt: Date.parse('2026-11-06T09:00:00Z') });
+const setting = (path: KeyPath, c: ValueChange): BackupChange => ({ kind: 'setting', path, ...c });
+const firmware = (path: KeyPath, c: ValueChange): BackupChange => ({ kind: 'firmware', path, ...c });
 
 describe('machine backup compare (#1878)', () => {
   it('humanizes raw keys', () => {
@@ -100,7 +102,6 @@ describe('machine backup compare (#1878)', () => {
 
   it('describes every change kind in plain words', () => {
     const prof = { id: 3, name: 'Adaptive' };
-    const setting = (path: KeyPath, c: ValueChange): BackupChange => ({ kind: 'setting', path, ...c });
     const phase = (n: number, change: LeafChange): BackupChange =>
       ({ kind: 'profilePhase', profile: prof, phase: n, change });
     const field = (path: KeyPath, c: ValueChange): BackupChange =>
@@ -119,8 +120,8 @@ describe('machine backup compare (#1878)', () => {
       [setting(['webUi', 'idleWatts'], { change: 'removed', from: 4 }), 'Web interface · Idle power removed (was 4 W)'],
       [setting(['webUi', 'foo'], { change: 'added', to: { a: 1 } }), 'Web interface · Foo added'],
       [setting(['constructor', 'toString'], { change: 'changed', from: 1, to: 2 }), 'Constructor · To string: 1 → 2'],
-      [{ kind: 'firmware', path: ['core'], change: 'changed', from: 'a1', to: 'b2' }, 'Controller firmware: a1 → b2'],
-      [{ kind: 'firmware', path: ['frontend'], change: 'changed', from: 'a1', to: 'b2' }, 'Frontend firmware: a1 → b2'],
+      [firmware(['core'], { change: 'changed', from: 'a1', to: 'b2' }), 'Controller firmware: a1 → b2'],
+      [firmware(['frontend'], { change: 'changed', from: 'a1', to: 'b2' }), 'Frontend firmware: a1 → b2'],
       [{ kind: 'defaultProfile', from: { id: 4, name: 'Adaptive' }, to: { id: 5, name: null } }, 'Default profile: Adaptive → #5'],
       [{ kind: 'profileAdded', profile: { id: 7, name: 'Turbo' } }, 'Profile “Turbo” added'],
       [{ kind: 'profileRemoved', profile: { id: 7, name: 'Turbo' } }, 'Profile “Turbo” removed'],
@@ -142,10 +143,10 @@ describe('machine backup compare (#1878)', () => {
 
   it('speaks German too', () => {
     S.currentLang = 'de';
-    expect(describeChange({ kind: 'setting', path: ['boiler', 'steamSetPoint'], change: 'changed', from: 155, to: 156 }))
+    expect(describeChange(setting(['boiler', 'steamSetPoint'], { change: 'changed', from: 155, to: 156 })))
       .toBe('Boiler · Dampftemperatur: 155 °C → 156 °C');
     expect(describeChange({ kind: 'profileAdded', profile: { id: 7, name: 'Turbo' } })).toBe('Profil „Turbo“ hinzugefügt');
-    expect(describeChange({ kind: 'setting', path: ['boiler', 'dreamSteamState'], change: 'changed', from: true, to: false }))
+    expect(describeChange(setting(['boiler', 'dreamSteamState'], { change: 'changed', from: true, to: false })))
       .toBe('Boiler · Dream steam state: ja → nein');
     S.currentLang = 'en';
   });
