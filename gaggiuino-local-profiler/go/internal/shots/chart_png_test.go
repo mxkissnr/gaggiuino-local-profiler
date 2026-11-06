@@ -17,7 +17,7 @@ func gaggimateShotData() map[string]any {
 	const n = 150
 	return map[string]any{
 		"datapoints": map[string]any{
-			"timeInShot":   floatSeq(n, func(i int) float64 { return float64(i) * 18 }),
+			"timeInShot":  floatSeq(n, func(i int) float64 { return float64(i) * 18 }),
 			"pressure":    floatSeq(n, func(i int) float64 { return math.Min(float64(i)*3, 90) }),
 			"temperature": floatSeq(n, func(int) float64 { return 930 }),
 			"shotWeight":  floatSeq(n, func(i int) float64 { return float64(i) * 380 / float64(n-1) }),
@@ -229,4 +229,3 @@ func bigSeq(n int, v float64) []any {
 	}
 	return out
 }
-
