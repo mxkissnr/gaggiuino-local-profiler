@@ -92,6 +92,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/shots/defaults", h.postDefaults)
 	mux.HandleFunc("GET /api/shots/{id}", h.getShot)
 	mux.HandleFunc("GET /api/shots/{id}/card", h.getCard)
+	mux.HandleFunc("GET /api/shots/{id}/chart.png", h.getChartPNG)
 	mux.HandleFunc("POST /api/shots/{id}/annotate", h.annotate)
 	mux.HandleFunc("POST /api/shots/{id}/trash", h.trash)
 	mux.HandleFunc("POST /api/shots/{id}/restore", h.restore)
@@ -431,6 +432,45 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="glp-shot-%d-%s.png"`, id, format))
+	w.WriteHeader(http.StatusOK)
+	w.Write(png)
+}
+
+// getChartPNG serves GET /api/shots/{id}/chart.png (#1851): a shot's curves
+// as a fixed 960x480 PNG on a light background, for Home Assistant. The only
+// parameter is `lang` (the legend language); the chart is rendered on every
+// request, see chart_png.go for why there is no cache.
+//
+// It mirrors getCard's order and messages, but uses its own limiter bucket
+// ("chart:<ip>") so a dashboard refreshing charts never starves share cards.
+func (h *Handlers) getChartPNG(w http.ResponseWriter, r *http.Request) {
+	if !h.rl.Allow("chart:"+auth.RemoteIP(r), cardRateLimitPerMin) {
+		writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
+	id, ok := parseID(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Invalid shot ID")
+		return
+	}
+	shot, err := h.service.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if shot == nil {
+		writeError(w, http.StatusNotFound, "Shot not found")
+		return
+	}
+
+	png, err := renderShotChart(shot, r.URL.Query().Get("lang"))
+	if err != nil {
+		log.Printf("shots: chart render for shot %d failed: %v", id, err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="glp-shot-%d-chart.png"`, id))
 	w.WriteHeader(http.StatusOK)
 	w.Write(png)
 }
