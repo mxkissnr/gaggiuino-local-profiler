@@ -338,6 +338,22 @@ describe('machine backup restore (#1878 U2)', () => {
     expect(api.saveSettings.mock.calls.at(-1)).toEqual([{ machineId: 2, schedule: 'off', keepAutomatic: 4 }]);
   });
 
+  it('treats a throwing firmware read as no answer and as unreachable', async () => {
+    // dev's getFirmwareVersion resolves null on a non-ok answer; a transport throw is the
+    // other "no answer" shape. Neither may show a mismatch warning nor end the wait early.
+    api.list.mockResolvedValue({ ok: true, value: [entry()] });
+    fw.get.mockRejectedValue(new Error('network down'));
+    await open();
+    await restorePanel();
+    expect(el.innerHTML).not.toContain('mbk-warn');
+    click('restore-confirm');
+    await settle();
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(toast.show).not.toHaveBeenCalledWith('Gaggia is back with the restored settings.', 8000);
+    await vi.advanceTimersByTimeAsync(RESTORE_WAIT_MAX_MS);
+    expect(toast.show).toHaveBeenCalledWith('Gaggia is still restarting. Check it again in a minute.', 8000);
+  });
+
   it('hides the settings when the machine has none', async () => {
     api.getSettings.mockResolvedValue(fail(501, 'unsupported_machine'));
     await open(1);

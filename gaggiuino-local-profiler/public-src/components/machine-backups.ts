@@ -19,6 +19,8 @@ import {
   restoreMachineBackup, saveMachineBackupSettings, uploadMachineBackup,
 } from '../api/machine-backups.js';
 import type { MachineBackupFailure } from '../api/machine-backups.js';
+// dev's existing client (#1044): it already answers `installed: null` for an offline machine or a
+// failed versions read, which is what the restart wait reads as "not back yet". No API change.
 import { getFirmwareVersion } from '../api/machines.js';
 import type {
   MachineBackup, MachineBackupDocument, MachineBackupErrorCode, MachineBackupKind, MachineBackupSchedule,
@@ -403,6 +405,11 @@ export function restoreWaitStep(w: RestoreWait, reachable: boolean, now: number)
   return elapsed >= RESTORE_WAIT_MAX_MS ? 'timeout' : 'wait';
 }
 
+/** The #1876 restart pattern over getFirmwareVersion: poll every RESTORE_POLL_MS, keyed by
+ *  target machineId so one machine's wait never touches another. dev's client already answers
+ *  `installed: null` while the machine is unreachable, so no API change is needed; a throw is
+ *  treated the same way. The wait outlives the sheet (a restore keeps going when the user
+ *  closes it), so each tick re-reads the map and returns once a newer wait replaced it. */
 function startRestoreWait(machineId: number): void {
   const w: RestoreWait = { startedAt: Date.now(), seenDown: false };
   _restoreWaits.set(machineId, w);
