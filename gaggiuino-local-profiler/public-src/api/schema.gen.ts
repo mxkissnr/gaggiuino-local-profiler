@@ -8079,6 +8079,11 @@ export interface paths {
                             } | null;
                             /** @description Only present with ?debug=1 */
                             _debug?: Record<string, never>;
+                            /**
+                             * Format: uri
+                             * @description Present only when the shop's product JSON answered HTTP 429 while its page still gave JSON-LD or OpenGraph data. The form is filled from the page; this is the URL whose data can be pasted to POST /api/import/paste for the fuller product JSON.
+                             */
+                            productDataUrl?: string;
                         };
                     };
                 };
@@ -8103,10 +8108,110 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description The shop does not allow automatic requests right now (its own HTTP 429). GLP never retries and never disguises itself, so this is final for the request. 502 rather than 429, which would read as GLP's own rate limiter. */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error?: string;
+                            /** @enum {string} */
+                            code?: "shop_rate_limited";
+                            /**
+                             * Format: uri
+                             * @description Present only when the product JSON itself answered 429.
+                             */
+                            productDataUrl?: string;
+                        };
+                    };
+                };
             };
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/import/paste": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse pasted product data for the bean form
+         * @description Runs the same parsers GET /api/import/url uses over product data the user pasted (the body of a shop's product JSON). The host of `url` selects the parser — built-in provider, custom Shopify domain, or the generic path — so nothing in `text` can choose one. `text` is treated as untrusted input: it is bounded, parsed as exactly one JSON object, never logged and never echoed in an error. Nothing is stored; the answer fills the import form exactly like GET /api/import/url, and saving stays a separate action. A page fetch for HTML enrichment may still happen on the generic and custom paths.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: uri
+                         * @description The product page URL whose host selects the parser. Must be an absolute https URL with a /products/<handle> path.
+                         */
+                        url: string;
+                        /** @description The pasted product data — one JSON object. Over 1 MiB (bytes) answers 413. */
+                        text: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Extracted bean metadata, the same body GET /api/import/url gives for that product */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bean"] & {
+                            /** @description e.g. builtin:<id>, custom-shopify, generic-shopify */
+                            importMethod?: string;
+                            /** @description Candidate recipes parsed from the page's brew-guide accordion, if any (#451). */
+                            extraBrewRecipes?: Record<string, never>[];
+                            duplicateWarning?: {
+                                id?: number;
+                                name?: string;
+                                roaster?: string;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Missing/invalid url or text, unsupported protocol, a path without /products/<handle>, an HTML-only shop, or blocked address (SSRF guard) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Request entity too large (body or text cap) */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Fetch failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
