@@ -14,6 +14,7 @@ g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} 
 
 const api = await import('../public-src/api/machine-backups.js');
 const { diffMachineBackups } = await import('../public-src/shared/machine-backup-diff.js');
+const { S } = await import('../public-src/state/index.js');
 
 const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
 
@@ -81,6 +82,7 @@ function call(i = 0): Sent {
 beforeEach(() => {
   fetchMock.mockReset();
   g.fetch = fetchMock;
+  S.glpToken = '';
 });
 
 afterEach(() => {
@@ -158,6 +160,18 @@ describe('routes', () => {
         expect(typeof sent.headers['x-glp-client']).toBe('string');
       }
     }
+  });
+
+  it('goes through the apiFetch facade, so transport adds the session token', async () => {
+    S.glpToken = 'tok-1';
+    fetchMock.mockImplementationOnce(() => Promise.resolve(json(200, [])));
+    await api.listMachineBackups(3);
+    fetchMock.mockImplementationOnce(() => Promise.resolve(json(201, entry)));
+    await api.backUpMachineNow(3);
+    expect(call(0).headers['x-glp-token']).toBe('tok-1');
+    expect(call(1).headers['x-glp-token']).toBe('tok-1');
+    // The module sets only its own headers; transport owns every auth header.
+    expect(call(1).headers['content-type']).toBe('application/json');
   });
 
   it('returns the parsed value on success', async () => {
@@ -366,6 +380,47 @@ describe('compare view input', () => {
     expect(diffMachineBackups(before.value.document, after.value.document)).toStrictEqual([
       { kind: 'setting', path: ['boiler', 'steamSetPoint'], change: 'changed', from: 155, to: 156 },
     ]);
+  });
+});
+
+// The shared pieces the client reads from (fetch.ts, transport.ts, the engine's types, setup.ts).
+describe('shared infrastructure contracts', () => {
+  it('builds request bodies through fetch.ts jsonBody and pathSeg', async () => {
+    fetchMock.mockImplementationOnce(() => Promise.resolve(json(201, entry)));
+    await api.backUpMachineNow(3, 'a note');
+    expect(call(0).headers['content-type']).toBe('application/json');
+    expect(call(0).body).toStrictEqual({ machineId: 3, note: 'a note' });
+
+    const settings: MachineBackupSettings = { machineId: 3, schedule: 'off', keepAutomatic: 1 };
+    fetchMock.mockImplementationOnce(() => Promise.resolve(json(200, settings)));
+    await api.saveMachineBackupSettings(settings);
+    expect(call(1).method).toBe('PUT');
+
+    fetchMock.mockImplementationOnce(() => Promise.resolve(json(200, [])));
+    await api.listMachineBackups(0);
+    expect(call(2).url).toBe('api/machine/backups?machineId=0');
+  });
+
+  it('only ever interpolates pathSeg inside an api/ template literal', () => {
+    const source = readFileSync(fileURLToPath(new URL('../public-src/api/machine-backups.ts', import.meta.url)), 'utf8');
+    const offenders: string[] = [];
+    for (const literal of source.matchAll(/`([^`]*)`/g)) {
+      const text = literal[1] ?? '';
+      if (!text.trimStart().startsWith('api/')) continue;
+      for (const expression of text.matchAll(/\$\{([^}]*)\}/g)) {
+        const code = (expression[1] ?? '').trim();
+        if (code === 'params' || code === 'qs') continue;
+        if (/^(pathSeg|encodeURIComponent)\(.*\)$/s.test(code)) continue;
+        offenders.push(`${text} interpolates ${code}`);
+      }
+    }
+    expect(offenders).toStrictEqual([]);
+  });
+
+  it('works with the real Response, Blob and Headers the test setup provides', () => {
+    expect(typeof Response).toBe('function');
+    expect(typeof Blob).toBe('function');
+    expect(typeof Headers).toBe('function');
   });
 });
 
