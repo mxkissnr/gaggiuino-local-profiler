@@ -76,7 +76,11 @@ const formatter = (v: TranslationValue | undefined): ((...args: unknown[]) => st
   if (typeof v !== 'function') throw new TypeError('expected an i18n formatter');
   return v;
 };
-const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(0);
+// Flushes pending microtasks (the mocked calls resolve immediately, but the
+// sheet chains several awaits) without moving the clock forward.
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(0);
+};
 const click = (action: string, id?: number): void => {
   handlers.click?.({ target: { closest: () => ({ dataset: id === undefined ? { mbkAction: action } : { mbkAction: action, id: String(id) } }) } });
 };
@@ -280,6 +284,9 @@ describe('machine backup restore (#1878 U2)', () => {
     expect(confirms()).toBe(1);
     expect(el.innerHTML).toContain('data-mbk-action="restore" data-id="5" disabled');
     expect(el.innerHTML).toContain('data-mbk-action="backup" disabled');
+    // Reopening the confirmation on the waiting machine shows a blocked Confirm.
+    await restorePanel();
+    expect(el.innerHTML).toContain('data-mbk-action="restore-confirm" disabled');
     click('restore-confirm');
     await settle();
     expect(confirms()).toBe(1);

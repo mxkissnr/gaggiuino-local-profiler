@@ -213,7 +213,7 @@ function renderRestore(
   sheet: SheetState, draft: RestoreDraft, entry: MachineBackup, locale: string,
 ): Html {
   const orphan = sheet.orphans.some(b => b.id === entry.id);
-  const blocked = draft.targetId === null || (draft.targetId !== null && (_busy.has(draft.targetId) || _restoreWaits.has(draft.targetId)));
+  const blocked = draft.targetId === null || _busy.has(draft.targetId) || _restoreWaits.has(draft.targetId);
   const noConfirm = blocked ? html` disabled` : esc('');
   const parts: Html[] = [html`<section class="mbk-restore">
     <h3 class="mbk-restore-title">${esc(t('mbk_restore_title', formatBackupDate(entry.createdAt, locale)))}</h3>
