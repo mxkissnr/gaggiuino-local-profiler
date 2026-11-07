@@ -274,8 +274,11 @@ const cardFontFamily = "Go"
 var (
 	fontOnce          sync.Once
 	regularSF, boldSF *opentype.Font
-	faceMu            sync.Mutex
-	faceCache         = map[string]font.Face{}
+
+	// faceMu guards the face cache and every use of a cached face: an
+	// opentype face is not safe for concurrent use (#1915).
+	faceMu    sync.Mutex
+	faceCache = map[string]font.Face{}
 )
 
 func initFonts() {
@@ -285,11 +288,11 @@ func initFonts() {
 	})
 }
 
-func faceFor(size float64, bold bool) font.Face {
+// faceForLocked returns the cached face for size/bold. The caller must hold
+// faceMu, and must keep holding it while using the returned face (#1915).
+func faceForLocked(size float64, bold bool) font.Face {
 	initFonts()
 	key := fmt.Sprintf("%v-%.2f", bold, size)
-	faceMu.Lock()
-	defer faceMu.Unlock()
 	if fc, ok := faceCache[key]; ok {
 		return fc
 	}
@@ -308,7 +311,9 @@ func faceFor(size float64, bold bool) font.Face {
 // textWidth measures s in the Go font at the given px size, for truncation
 // and centring.
 func textWidth(s string, size float64, bold bool) float64 {
-	fc := faceFor(size, bold)
+	faceMu.Lock()
+	defer faceMu.Unlock()
+	fc := faceForLocked(size, bold)
 	if fc == nil {
 		return float64(len([]rune(s))) * size * 0.55
 	}
