@@ -197,7 +197,7 @@ describe('maintenance card markup (#1923)', () => {
   });
 
   function renderOne(name: string, overrides: MaintTaskOverrides = {}): string {
-    const data = { [name]: task(overrides.status ?? 'ok', overrides) };
+    const data = { [name]: task('ok', overrides) };
     renderMaintenanceDashboard(data, 1);
     const grid = els.get('maintGrid')!;
     expect(grid.children).toHaveLength(1);
