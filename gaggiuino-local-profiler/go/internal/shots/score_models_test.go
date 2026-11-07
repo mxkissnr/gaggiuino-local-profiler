@@ -35,10 +35,9 @@ func TestActiveScoreModel_FallsBackToClassic(t *testing.T) {
 		t.Errorf("no source: ActiveScoreModelID() = %q, want %q", got, ClassicScoreModel)
 	}
 	for _, id := range []string{"", "classic", "nope", "CLASSIC"} {
-		got := id
-		SetScoreModelSource(func() string { return got })
-		if ActiveScoreModelID() != ClassicScoreModel {
-			t.Errorf("source %q: ActiveScoreModelID() = %q, want %q", id, ActiveScoreModelID(), ClassicScoreModel)
+		SetScoreModelSource(func() string { return id })
+		if got := ActiveScoreModelID(); got != ClassicScoreModel {
+			t.Errorf("source %q: ActiveScoreModelID() = %q, want %q", id, got, ClassicScoreModel)
 		}
 	}
 }
@@ -107,11 +106,11 @@ func TestScoreCache_ClassicFingerprintUnchanged(t *testing.T) {
 	if _, err := repo.db.Exec(`UPDATE shot_score_cache SET score = ? WHERE shot_id = 3`, sentinel); err != nil {
 		t.Fatalf("writing sentinel score: %v", err)
 	}
-	repage, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0)
+	page, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0)
 	if err != nil {
 		t.Fatalf("FindPageExcludingTrash: %v", err)
 	}
-	for _, row := range repage.Rows {
+	for _, row := range page.Rows {
 		if row.Shot["id"] != int64(3) {
 			continue
 		}
