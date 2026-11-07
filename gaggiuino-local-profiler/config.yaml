@@ -85,6 +85,10 @@ schema:
   expose_api_port: bool?
   allowed_hosts: str?
 
+# Home Assistant stops the app while it backs it up: the database runs in
+# WAL mode, and a copy taken during a checkpoint may not restore cleanly (#1849).
+backup: cold
+
 # Home Assistant backups skip the downloaded cut-out models: they are ~60 MB of
 # regenerable data the app re-downloads on first use, so a backup should not
 # carry them.
