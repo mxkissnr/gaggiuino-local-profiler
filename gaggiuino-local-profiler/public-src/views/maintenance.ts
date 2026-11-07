@@ -279,7 +279,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
     </section>
   `;
 
-  const seg = document.getElementById('maintScopeSeg') as HTMLElement | null;
+  const seg = document.getElementById('maintScopeSeg');
   if (seg) {
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     seg.innerHTML = joinHtml([

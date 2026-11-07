@@ -263,7 +263,7 @@ describe('isAutoSynced (#1639)', () => {
 
 type MaintTileArg = Parameters<MaintView['_maintVerdictState']>[0][number];
 const tile = (name: string, status: string, overrides: MaintTaskOverrides = {}): MaintTileArg =>
-  ({ task: name, d: task(status, overrides), machineId: 1, machineName: null, isGlobal: false, showMachineTag: false }) as unknown as MaintTileArg;
+  ({ task: name, d: task(status, overrides), machineId: 1, machineName: null, isGlobal: false, showMachineTag: false });
 
 describe('_maintVerdictState (#1923)', () => {
   it('picks the due tile over a sooner one', () => {
