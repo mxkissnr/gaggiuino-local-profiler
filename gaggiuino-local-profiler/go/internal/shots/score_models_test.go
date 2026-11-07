@@ -13,31 +13,6 @@ import (
 	"testing"
 )
 
-// scoreModelIDs is the registry's ids in registry order.
-func scoreModelIDs() []string {
-	models := loadScoreModels()
-	ids := make([]string, len(models))
-	for i, m := range models {
-		ids[i] = m.ID
-	}
-	return ids
-}
-
-// registerScoreModelForTest appends m to the registry and restores the
-// previous registry on cleanup. Not safe with t.Parallel().
-func registerScoreModelForTest(t testing.TB, m ScoreModel) {
-	t.Helper()
-	prev := loadScoreModels()
-	next := make([]ScoreModel, 0, len(prev)+1)
-	next = append(next, prev...)
-	next = append(next, m)
-	scoreModels.Store(&next)
-	t.Cleanup(func() {
-		restored := prev
-		scoreModels.Store(&restored)
-	})
-}
-
 // testConstantModel scores every shot 7 — distinct from any real score, so a
 // path that did not follow the active model is obvious.
 func testConstantModel() ScoreModel {
@@ -48,7 +23,7 @@ func testConstantModel() ScoreModel {
 }
 
 func TestScoreModels_OnlyClassicRegistered(t *testing.T) {
-	if got, want := scoreModelIDs(), []string{"classic"}; !reflect.DeepEqual(got, want) {
+	if got, want := ScoreModelIDs(), []string{"classic"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("registry ids = %v, want %v", got, want)
 	}
 }
@@ -173,7 +148,7 @@ func TestScoreModelSwitch_EveryReadPathFollows(t *testing.T) {
 		}
 	}
 
-	registerScoreModelForTest(t, testConstantModel())
+	RegisterScoreModelForTest(t, testConstantModel())
 	SetScoreModelSource(func() string { return "test_const" })
 
 	assertAllScoresAre(t, repo, svc, shot, 7)

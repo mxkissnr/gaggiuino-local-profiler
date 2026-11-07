@@ -345,6 +345,26 @@ func TestGetStatus_PublicFieldsAndNoSensitiveLeak(t *testing.T) {
 	}
 }
 
+// TestGetStatus_ScoreModelsOnlyOnDevBuild pins the #1922 dev-channel contract:
+// the registered score model ids ride only on a dev build, alongside devBuild.
+// A stable build must not advertise a score model to pick.
+func TestGetStatus_ScoreModelsOnlyOnDevBuild(t *testing.T) {
+	t.Setenv("GLP_DEV_BUILD", "")
+	_, mux, _ := newFullTestHandlers(t)
+	body := decodeMap(t, doGet(mux, "/api/status").Body.Bytes())
+	if _, present := body["scoreModels"]; present {
+		t.Errorf("scoreModels = %v on a stable build, want it absent", body["scoreModels"])
+	}
+
+	t.Setenv("GLP_DEV_BUILD", "test")
+	_, mux, _ = newFullTestHandlers(t)
+	body = decodeMap(t, doGet(mux, "/api/status").Body.Bytes())
+	got, ok := body["scoreModels"].([]any)
+	if !ok || len(got) != 1 || got[0] != shots.ClassicScoreModel {
+		t.Errorf("scoreModels = %v, want [%q]", body["scoreModels"], shots.ClassicScoreModel)
+	}
+}
+
 // TestGetStatus_DataRevisionsEmptyByDefault pins the #1539 slice-2 contract's
 // default half: GET /api/status always carries dataEpoch and dataRevs — an
 // empty string and an empty object, never null or absent — before cmd/server

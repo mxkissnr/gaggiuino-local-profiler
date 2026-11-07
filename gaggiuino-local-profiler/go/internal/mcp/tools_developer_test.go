@@ -1239,3 +1239,153 @@ func TestGetPerfStatsUnavailable(t *testing.T) {
 		t.Fatalf("nil-recorder error = %q, want it to say stats are unavailable", msg)
 	}
 }
+
+// scoreableDatapoints is the fully scoreable series TestExplainScoreComponents
+// seeds, reused by the score-model tests so classic actually scores the shot.
+func scoreableDatapoints() map[string]any {
+	return map[string]any{"datapoints": map[string]any{
+		"pressure":    []any{80.0, 81.0, 82.0, 80.0, 81.0},
+		"temperature": []any{900.0, 901.0, 899.0, 900.0, 901.0, 900.0},
+		"timeInShot":  []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0},
+		"weight":      []any{0.0, 100.0, 200.0, 300.0, 400.0, 450.0},
+	}}
+}
+
+// registerTestConstantModel adds a second score model that scores every shot 7,
+// so a listing that includes it cannot be confused with classic's score.
+func registerTestConstantModel(t *testing.T) {
+	t.Helper()
+	shots.RegisterScoreModelForTest(t, shots.ScoreModel{ID: "test_const", Score: func(shots.Shot, *shots.Bean) shots.ScoreDetail {
+		v := 7
+		return shots.ScoreDetail{Score: &v}
+	}})
+}
+
+// modelScoresOf reads a model_scores array as (id, score) pairs in order,
+// with a nil score for an entry that omits it.
+func modelScoresOf(t *testing.T, m map[string]any) []struct {
+	Model string
+	Score *int
+} {
+	t.Helper()
+	raw, ok := m["model_scores"].([]any)
+	if !ok {
+		t.Fatalf("model_scores = %#v, want an array", m["model_scores"])
+	}
+	out := make([]struct {
+		Model string
+		Score *int
+	}, 0, len(raw))
+	for _, entry := range raw {
+		e, _ := entry.(map[string]any)
+		model, _ := e["model"].(string)
+		if model == "" {
+			t.Fatalf("model_scores entry has no model: %#v", e)
+		}
+		var score *int
+		if v, ok := e["score"].(float64); ok {
+			n := int(v)
+			score = &n
+		}
+		out = append(out, struct {
+			Model string
+			Score *int
+		}{model, score})
+	}
+	return out
+}
+
+// TestExplainScoreListsEveryScoreModel covers #1922: explain_score names the
+// active model and lists every registered model's score side by side, and
+// registering a second model neither hides classic nor changes the shown score.
+func TestExplainScoreListsEveryScoreModel(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 41, 1000, scoreableDatapoints(), map[string]any{"dose": 18.0, "tds": 9.0})
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 41}))
+	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
+		t.Fatalf("score_model = %q, want %q", got, shots.ClassicScoreModel)
+	}
+	classicScore := numberField(t, out, "score")
+	scores := modelScoresOf(t, out)
+	if len(scores) != 1 || scores[0].Model != shots.ClassicScoreModel {
+		t.Fatalf("model_scores = %+v, want only classic", scores)
+	}
+	if scores[0].Score == nil || *scores[0].Score != int(classicScore) {
+		t.Fatalf("classic model score = %v, want the shown score %v", scores[0].Score, classicScore)
+	}
+
+	registerTestConstantModel(t)
+	out = structured(t, call(t, session, "explain_score", map[string]any{"id": 41}))
+	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
+		t.Fatalf("score_model after registering a model = %q, want classic (the active model does not switch)", got)
+	}
+	if got := numberField(t, out, "score"); got != classicScore {
+		t.Fatalf("score after registering a model = %v, want the unchanged %v", got, classicScore)
+	}
+	scores = modelScoresOf(t, out)
+	if len(scores) != 2 {
+		t.Fatalf("model_scores = %+v, want classic and test_const", scores)
+	}
+	if scores[0].Model != shots.ClassicScoreModel || scores[0].Score == nil || *scores[0].Score != int(classicScore) {
+		t.Fatalf("model_scores[0] = %+v, want classic with %v", scores[0], classicScore)
+	}
+	if scores[1].Model != "test_const" || scores[1].Score == nil || *scores[1].Score != 7 {
+		t.Fatalf("model_scores[1] = %+v, want test_const with 7", scores[1])
+	}
+}
+
+// TestExportShotsDatasetListsEveryScoreModel covers #1922's dataset half: the
+// response names the active model and every row carries every registered
+// model's score, again without changing the row's own score.
+func TestExportShotsDatasetListsEveryScoreModel(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 1, 1000, scoreableDatapoints(), map[string]any{"dose": 18.0, "tds": 9.0})
+	insertShot(t, sqlDB, 2, 1001, scoreableDatapoints(), map[string]any{"dose": 18.0, "tds": 9.0})
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "export_shots_dataset", map[string]any{}))
+	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
+		t.Fatalf("score_model = %q, want %q", got, shots.ClassicScoreModel)
+	}
+	classicScores := map[float64]float64{}
+	for _, raw := range objects(out, "shots") {
+		row, _ := raw.(map[string]any)
+		id := numberField(t, row, "id")
+		classicScores[id] = numberField(t, row, "score")
+		scores := modelScoresOf(t, row)
+		if len(scores) != 1 || scores[0].Model != shots.ClassicScoreModel {
+			t.Fatalf("row %v model_scores = %+v, want only classic", id, scores)
+		}
+		if scores[0].Score == nil || *scores[0].Score != int(classicScores[id]) {
+			t.Fatalf("row %v classic model score = %v, want %v", id, scores[0].Score, classicScores[id])
+		}
+	}
+	if len(classicScores) != 2 {
+		t.Fatalf("got %d rows, want 2", len(classicScores))
+	}
+
+	registerTestConstantModel(t)
+	out = structured(t, call(t, session, "export_shots_dataset", map[string]any{}))
+	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
+		t.Fatalf("score_model after registering a model = %q, want classic", got)
+	}
+	for _, raw := range objects(out, "shots") {
+		row, _ := raw.(map[string]any)
+		id := numberField(t, row, "id")
+		if got := numberField(t, row, "score"); got != classicScores[id] {
+			t.Fatalf("row %v score = %v, want the unchanged %v", id, got, classicScores[id])
+		}
+		scores := modelScoresOf(t, row)
+		if len(scores) != 2 {
+			t.Fatalf("row %v model_scores = %+v, want classic and test_const", id, scores)
+		}
+		if scores[0].Model != shots.ClassicScoreModel || scores[0].Score == nil || *scores[0].Score != int(classicScores[id]) {
+			t.Fatalf("row %v model_scores[0] = %+v, want classic %v", id, scores[0], classicScores[id])
+		}
+		if scores[1].Model != "test_const" || scores[1].Score == nil || *scores[1].Score != 7 {
+			t.Fatalf("row %v model_scores[1] = %+v, want test_const 7", id, scores[1])
+		}
+	}
+}
