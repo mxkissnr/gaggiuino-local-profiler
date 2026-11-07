@@ -13,6 +13,31 @@ import (
 	"testing"
 )
 
+// scoreModelIDs is the registry's ids in registry order.
+func scoreModelIDs() []string {
+	models := loadScoreModels()
+	ids := make([]string, len(models))
+	for i, m := range models {
+		ids[i] = m.ID
+	}
+	return ids
+}
+
+// registerScoreModelForTest appends m to the registry and restores the
+// previous registry on cleanup. Not safe with t.Parallel().
+func registerScoreModelForTest(t testing.TB, m ScoreModel) {
+	t.Helper()
+	prev := loadScoreModels()
+	next := make([]ScoreModel, 0, len(prev)+1)
+	next = append(next, prev...)
+	next = append(next, m)
+	scoreModels.Store(&next)
+	t.Cleanup(func() {
+		restored := prev
+		scoreModels.Store(&restored)
+	})
+}
+
 // testConstantModel scores every shot 7 — distinct from any real score, so a
 // path that did not follow the active model is obvious.
 func testConstantModel() ScoreModel {
@@ -23,21 +48,21 @@ func testConstantModel() ScoreModel {
 }
 
 func TestScoreModels_OnlyClassicRegistered(t *testing.T) {
-	if got, want := ScoreModelIDs(), []string{"classic"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("ScoreModelIDs() = %v, want %v", got, want)
+	if got, want := scoreModelIDs(), []string{"classic"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("registry ids = %v, want %v", got, want)
 	}
 }
 
 func TestActiveScoreModel_FallsBackToClassic(t *testing.T) {
 	t.Cleanup(func() { SetScoreModelSource(nil) })
 
-	if got := ActiveScoreModelID(); got != ClassicScoreModel {
-		t.Errorf("no source: ActiveScoreModelID() = %q, want %q", got, ClassicScoreModel)
+	if got := activeScoreModel().ID; got != ClassicScoreModel {
+		t.Errorf("no source: active model = %q, want %q", got, ClassicScoreModel)
 	}
 	for _, id := range []string{"", "classic", "nope", "CLASSIC"} {
 		SetScoreModelSource(func() string { return id })
-		if got := ActiveScoreModelID(); got != ClassicScoreModel {
-			t.Errorf("source %q: ActiveScoreModelID() = %q, want %q", id, got, ClassicScoreModel)
+		if got := activeScoreModel().ID; got != ClassicScoreModel {
+			t.Errorf("source %q: active model = %q, want %q", id, got, ClassicScoreModel)
 		}
 	}
 }
@@ -148,7 +173,7 @@ func TestScoreModelSwitch_EveryReadPathFollows(t *testing.T) {
 		}
 	}
 
-	RegisterScoreModelForTest(t, testConstantModel())
+	registerScoreModelForTest(t, testConstantModel())
 	SetScoreModelSource(func() string { return "test_const" })
 
 	assertAllScoresAre(t, repo, svc, shot, 7)
@@ -246,40 +271,5 @@ func sameScore(a, b *int) bool {
 		return false
 	default:
 		return *a == *b
-	}
-}
-
-func TestAllModelsScorer_ListsEveryModelInRegistryOrder(t *testing.T) {
-	t.Cleanup(func() {
-		SetScoreModelSource(nil)
-		SetBeanSource(nil)
-	})
-	_, repo, _ := newTestHandlers(t)
-	seedShots(t, repo, 1)
-	SetBeanSource(nil)
-	svc := NewService(repo)
-
-	page, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0)
-	if err != nil || len(page.Rows) == 0 {
-		t.Fatalf("reading the seeded shot: %v", err)
-	}
-	shot := page.Rows[0].Shot
-
-	RegisterScoreModelForTest(t, testConstantModel())
-	SetScoreModelSource(func() string { return ClassicScoreModel })
-
-	got := svc.AllModelsScorer()(shot)
-	wantClassic := CalcShotScoreDetail(shot, nil).Score
-	want := []ModelScore{
-		{Model: ClassicScoreModel, Score: wantClassic},
-		{Model: "test_const", Score: intPtr(7)},
-	}
-	if len(got) != len(want) {
-		t.Fatalf("AllModelsScorer returned %d models, want %d: %+v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i].Model != want[i].Model || !sameScore(got[i].Score, want[i].Score) {
-			t.Errorf("model %d = {%s, %v}, want {%s, %v}", i, got[i].Model, got[i].Score, want[i].Model, want[i].Score)
-		}
 	}
 }

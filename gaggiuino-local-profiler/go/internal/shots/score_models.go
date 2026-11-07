@@ -1,9 +1,6 @@
 package shots
 
-import (
-	"sync/atomic"
-	"testing"
-)
+import "sync/atomic"
 
 // Score models (#1922): the scorer behind a shot's score is a registry entry
 // instead of a bare function call, so a dev build can switch models without
@@ -29,6 +26,9 @@ type ScoreModel struct {
 
 // scoreModels holds the registry. It is an atomic pointer so a test can swap
 // the whole slice without a lock on the read path, which runs per shot.
+// Only classic is registered: a further model is added here, and the
+// multi-model comparison API arrives with the slice that calls it, so no
+// unreachable exported function sits on this package's public surface.
 var scoreModels atomic.Pointer[[]ScoreModel]
 
 func init() {
@@ -48,17 +48,6 @@ func loadScoreModels() []ScoreModel {
 		return *p
 	}
 	return []ScoreModel{classicModel()}
-}
-
-// ScoreModelIDs returns the registered model ids in registry order, as a
-// fresh slice.
-func ScoreModelIDs() []string {
-	models := loadScoreModels()
-	ids := make([]string, len(models))
-	for i, m := range models {
-		ids[i] = m.ID
-	}
-	return ids
 }
 
 // scoreModelByID resolves an id against the registry. Anything that is not an
@@ -100,8 +89,8 @@ func activeScoreModel() ScoreModel {
 	return scoreModelByID((*src)())
 }
 
-// ActiveScoreModelID is the id of the model scoring this process, after the
-// fallback rules above (slice b reports it over MCP).
+// ActiveScoreModelID is the id of the model this process scores with, after
+// the fallback rules above. cmd/server logs it on a dev build at startup.
 func ActiveScoreModelID() string { return activeScoreModel().ID }
 
 // fingerprintSuffix is appended to the score-cache fingerprint so switching
@@ -114,44 +103,4 @@ func (m ScoreModel) fingerprintSuffix() string {
 		return ""
 	}
 	return "|m=" + m.ID
-}
-
-// ModelScore is one model's score for a shot, as AllModelsScorer reports it.
-type ModelScore struct {
-	Model string
-	Score *int
-}
-
-// AllModelsScorer returns a per-shot function yielding every registered
-// model's score in registry order, from one bean-source load (used by the
-// dev-channel comparison slice b adds).
-func (s *Service) AllModelsScorer() func(Shot) []ModelScore {
-	lookup := loadBeanLookup()
-	models := loadScoreModels()
-	return func(shot Shot) []ModelScore {
-		bean := lookup(shot)
-		out := make([]ModelScore, len(models))
-		for i, m := range models {
-			out[i] = ModelScore{Model: m.ID, Score: m.Score(shot, bean).Score}
-		}
-		return out
-	}
-}
-
-// RegisterScoreModelForTest appends m to the registry for the duration of the
-// test, restoring the previous registry on cleanup. Tests only: it is not
-// safe to use with t.Parallel(), and it must not be called from production
-// code. (Importing testing here has precedent: internal/system/version.go
-// uses testing.Testing().)
-func RegisterScoreModelForTest(t testing.TB, m ScoreModel) {
-	t.Helper()
-	prev := loadScoreModels()
-	next := make([]ScoreModel, 0, len(prev)+1)
-	next = append(next, prev...)
-	next = append(next, m)
-	scoreModels.Store(&next)
-	t.Cleanup(func() {
-		restored := prev
-		scoreModels.Store(&restored)
-	})
 }
