@@ -2855,14 +2855,6 @@
         /* Detail toggle */
         .maint-detail-toggle { align-self:flex-start; background:transparent; border:none; color:var(--gray-600); font-size:var(--fs-1); cursor:pointer; padding:0; transition:color .15s; }
         .maint-detail-toggle:hover { color:var(--accent-ink); }
-        /* Detail panel */
-        .maint-card .detail { display:none; flex-direction:column; gap:10px; border-top:1px solid var(--gray-800); padding-top:10px; }
-        .maint-card.expanded .detail { display:flex; }
-        /* 3-way mode selector */
-        .maint-mode-seg { display:flex; gap:4px; flex-wrap:wrap; }
-        .maint-mode-seg button { padding:4px 12px; border-radius:999px; border:1px solid var(--gray-700); background:transparent; color:var(--gray-500); font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; }
-        .maint-mode-seg button.active { background:var(--accent-glow); color:var(--accent-ink); border-color:transparent; }
-        .maint-mode-seg button:hover:not(.active) { border-color:var(--gray-500); color:var(--gray-300); }
         /* Threshold inputs */
         .maint-threshold-inputs { display:flex; gap:12px; flex-wrap:wrap; }
         .maint-threshold-field { display:flex; align-items:center; gap:6px; font-size:var(--fs-1); color:var(--gray-500); }
@@ -2870,7 +2862,6 @@
         .maint-threshold-field input { width:72px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding:4px 8px; text-align:center; outline:none; }
         .maint-threshold-field input:focus { border-color:var(--gray-500); }
         /* Action buttons */
-        .maint-card-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .maint-done-btn { background:var(--accent-glow); border:none; border-radius:var(--radius); color:var(--accent-ink); font-size:var(--fs-1); font-weight:600; padding:6px 16px; cursor:pointer; transition:opacity .15s; }
         .maint-done-btn:hover { opacity:.85; }
         .maint-done-btn:disabled { opacity:.4; cursor:not-allowed; }
@@ -3187,6 +3178,21 @@
             margin-left: var(--sp-2);
         }
         .maint-log-del-btn:hover { color:var(--err); border-color:var(--err); }
+
+        /* #1923: task details sheet — interval, own history and the footer
+           action, in the shared popover / bottom sheet. No boxes: the sheet
+           surface carries the group, separators are hairlines. */
+        .maint-sheet { display:flex; flex-direction:column; gap: var(--sp-4); }
+        .maint-sheet-interval { display:flex; flex-direction:column; gap: var(--sp-3); }
+        .maint-sheet .analytics-filter-btn { min-height:44px; }
+        .maint-sheet .maint-threshold-field input { min-height:44px; }
+        .maint-hist-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:2px var(--sp-2); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
+        .maint-hist-row:last-child { border-bottom:none; }
+        .maint-hist-date, .maint-hist-count { font-variant-numeric: tabular-nums; }
+        .maint-hist-date { color: var(--gray-300); font-size: var(--fs-2); }
+        .maint-hist-side { display:inline-flex; align-items:center; gap: var(--sp-1); color: var(--gray-500); font-size: var(--fs-1); }
+        .maint-hist-note { flex-basis:100%; color: var(--gray-500); font-size: var(--fs-1); }
+        .maint-sheet-footer { display:flex; justify-content:flex-end; }
 
         .maint-badge {
             display:inline-block; width:7px; height:7px; background:var(--err);

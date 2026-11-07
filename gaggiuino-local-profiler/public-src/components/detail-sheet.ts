@@ -3,6 +3,7 @@
 // popover, the origin-map country click-through, the bean shelf and the
 // "Did you know?" fact cards. On phones it is a bottom sheet; from 900px up,
 // when an anchor is given, it becomes a popover floating next to that anchor.
+// #1923: an optional `actions` slot renders the sheet bar's icon buttons.
 
 import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';
@@ -23,6 +24,8 @@ export interface DetailSheetOptions {
   title: string;
   sub?: string;
   body: Html;
+  // Main actions for the sheet bar, right of the title (44px icons, #1923).
+  actions?: Html;
   anchor?: HTMLElement | DetailAnchorPoint | null;
 }
 
@@ -96,6 +99,7 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
       <div class="lib-sheet-bar">
         <button type="button" class="lib-sheet-close" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
         <h2 id="detailSheetTitle" class="lib-sheet-bar-title">${esc(opts.title)}</h2>
+        ${opts.actions ? html`<div class="lib-sheet-bar-actions">${opts.actions}</div>` : esc('')}
       </div>
       <div class="detail-sheet-body">${opts.sub ? html`<p class="detail-sheet-sub">${esc(opts.sub)}</p>` : esc('')}${opts.body}</div>
     </section>`;

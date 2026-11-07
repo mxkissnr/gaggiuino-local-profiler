@@ -47,13 +47,15 @@ function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void
 // #1539: a maintenance refetch must not tear down an editor the user has open.
 // Outside the maintenance view the run is a no-op (the view reloads on entry),
 // so the guard only applies inside it, and then only to an open inline edit
-// (not the "disabled tasks" details). An expanded card is no longer a guard:
-// the run restores it itself through refreshMaintenanceView().
+// (not the "disabled tasks" details). #1923: an open task details sheet is a
+// guard too — it holds inputs the user is editing and would be repainted
+// under them; the scheduler retries the run once the sheet is closed.
 function _maintenanceCanRefetch(): boolean {
   if (S.currentMode !== 'maintenance') return true;
   const view = document.getElementById('maintenance-view');
   if (!view) return true;
   if (view.querySelector('[contenteditable="true"]')) return false;
+  if (document.querySelector('#detailSheet .maint-sheet')) return false;
   const logForm = document.getElementById('maintLogForm');
   return !logForm || logForm.style.display === 'none';
 }

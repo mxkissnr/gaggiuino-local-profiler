@@ -92,6 +92,25 @@ describe('detail sheet (#1467)', () => {
     expect(host.classList.contains('open')).toBe(true);
   });
 
+  it('renders bar actions after the title when given (#1923)', () => {
+    installDom(host, null, false);
+    openDetailSheet({
+      title: 'Backflush',
+      body: html`<p>body</p>`,
+      actions: html`<button type="button" class="act-marker">done</button>`,
+    });
+
+    expect(host.innerHTML).toContain('lib-sheet-bar-actions');
+    expect(host.innerHTML.indexOf('Backflush')).toBeLessThan(host.innerHTML.indexOf('lib-sheet-bar-actions'));
+    expect(host.innerHTML).toContain('act-marker');
+  });
+
+  it('renders no bar actions container without actions (#1923)', () => {
+    installDom(host, null, false);
+    openDetailSheet({ title: 'Backflush', body: html`<p>body</p>` });
+    expect(host.innerHTML).not.toContain('lib-sheet-bar-actions');
+  });
+
   it('closes on Escape and restores focus to the previously focused element', () => {
     const back = { focus: vi.fn() };
     const { listeners, bodyClasses } = installDom(host, back, false);
