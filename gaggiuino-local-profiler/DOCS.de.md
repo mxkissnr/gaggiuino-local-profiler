@@ -561,7 +561,7 @@ Eine eigene **Erfolge**-Ansicht zeigt eine Pappkarte im Stempelkarten-Look: 64 A
 
 **Ältere Backups** (`.json`-Dateien von vor dem ZIP-Format, und noch ältere von vor Einführung der wählbaren Bereiche — siehe `CHANGELOG.md`) lassen sich weiterhin ganz normal wiederherstellen; ein bereits gespeichertes Backup muss nicht neu exportiert werden. Die allerältesten `.json`-Backups (von bevor Bereiche/Fotos/Wartung/Bestellungen/Maschinen/Einstellungen überhaupt Teil des Exports waren) enthalten nur Shots, Anmerkungen, die Kaffee-Bibliothek und die Blockliste — diese älteren Daten wurden damals nie erfasst und lassen sich aus genau diesen Dateien nicht nachträglich gewinnen. Erstelle nach dem Update ein frisches Backup, falls du auf die neueren Bereiche angewiesen bist.
 
-**Home-Assistant-Backups enthalten die Daten der App.** Wenn Home Assistant das Add-on sichert, stoppt er die App für die wenigen Sekunden, die das Backup dauert, und startet sie danach wieder — die Datenbank im Backup ist damit immer konsistent. Shots, die die Maschine in diesen Sekunden zieht, werden beim nächsten Sync importiert.
+**Home-Assistant-Backups enthalten die Daten der App.** Wenn Home Assistant die App sichert, stoppt er die App für die wenigen Sekunden, die das Backup dauert, und startet sie danach wieder — die Datenbank im Backup ist damit immer konsistent. Shots, die die Maschine in diesen Sekunden zieht, werden beim nächsten Sync importiert.
 
 ### Maschinen-Backups (Gaggiuino)
 

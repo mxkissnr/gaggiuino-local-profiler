@@ -558,7 +558,7 @@ A dedicated **Achievements** view shows a printed-cardboard "stamp card": 64 bad
 
 **Older backups** (`.json` files downloaded before the ZIP format, and even older ones from before selective sections existed — see `CHANGELOG.md`) still restore normally; you don't need to re-export anything already saved. The very oldest `.json` backups (from before sections/photos/maintenance/orders/machines/settings were part of the export at all) contain shots, annotations, the coffee library and blocklist only — that older data was never captured and can't be recovered from those specific files. Take a fresh backup after upgrading if you rely on the newer sections.
 
-**Home Assistant backups include the app's data.** When Home Assistant backs the add-on up, it stops the app for the few seconds the backup takes and starts it again afterwards, so the database inside the backup is always consistent. Shots the machine makes during those seconds are imported by the next sync.
+**Home Assistant backups include the app's data.** When Home Assistant backs the app up, it stops the app for the few seconds the backup takes and starts it again afterwards, so the database inside the backup is always consistent. Shots the machine makes during those seconds are imported by the next sync.
 
 ### Machine settings backups (Gaggiuino)
 
