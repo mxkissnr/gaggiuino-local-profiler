@@ -2769,11 +2769,20 @@
             .star              { padding: var(--sp-2) var(--sp-2); font-size: var(--fs-5); }
             .drink-pill        { min-height: 44px; padding: var(--sp-2) var(--sp-4); font-size: var(--fs-2); display: flex; align-items: center; }
         }
+        /* ── Maintenance view: Dashboard redesign (#393) ── */
+        #maintenance-view {
+            display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto;
+            /* #1923: same scroll-container padding trick as the analytics view,
+               so the sticky toolbar can cover that strip while scrolling. */
+            --analytics-pad: var(--sp-5);
+            padding: var(--analytics-pad);
+            gap: var(--sp-5);
+        }
         @media (max-width: 480px) {
             .live-stats { grid-template-columns: repeat(2, 1fr); }
             .sprofiler-header h1 { font-size: var(--fs-3); }
-            #analytics-view { --analytics-pad: var(--sp-3); }
-            #analytics-view, #library-view,
+            #analytics-view, #maintenance-view { --analytics-pad: var(--sp-3); }
+            #analytics-view, #library-view, #maintenance-view,
             #dialin-view, #settings-view, #orders-view, #achievements-view { padding: var(--sp-3); }
 
             /* #459: was a fixed 240px (half of desktop) — clamp() keeps the
@@ -2784,18 +2793,6 @@
             .export-btn        { padding: var(--sp-1) var(--sp-2); font-size: var(--fs-1); }
         }
 
-        /* ── Maintenance view: Dashboard redesign (#393) ── */
-        #maintenance-view {
-            display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto;
-            /* #1923: same scroll-container padding trick as the analytics view,
-               so the sticky toolbar can cover that strip while scrolling. */
-            --analytics-pad: var(--sp-5);
-            padding: var(--analytics-pad);
-            gap: var(--sp-5);
-        }
-        /* The max-width:480px block earlier in this file predates the rule
-           above, so the phone padding is restated here where it wins. */
-        @media (max-width: 480px) { #maintenance-view { --analytics-pad: var(--sp-3); } }
         /* The rendered sections are the grid items, not the wrapper. */
         #maint-cards { display: contents; }
         .maint-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); width: 100%; }

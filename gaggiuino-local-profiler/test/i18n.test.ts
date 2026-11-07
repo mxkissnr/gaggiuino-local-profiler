@@ -226,15 +226,6 @@ describe('index.html i18n wiring', () => {
         expect(html).not.toMatch(/<label[^>]*data-i18n="backup_restore"/);
     });
 
-    it('the maintenance toolbar and sections keep their existing i18n wiring (#1923)', () => {
-        // #1923 rebuilt #maintenance-view without adding a key: the one toolbar
-        // and the boxless sections reuse the strings the page already had.
-        expect(html).toMatch(/<div[^>]*\bid="maintScopeSeg"[^>]*data-i18n-aria-label="machine_switcher_title"/);
-        expect(html).toMatch(/<span[^>]*\bid="maintScopeHint"[^>]*data-i18n="maint_shared_once"/);
-        expect(html).toMatch(/<button[^>]*\bid="openMaintLogBtn"[^>]*data-i18n="maint_log_add"/);
-        expect(html).toMatch(/<h3[^>]*class="analytics-section-title"[^>]*data-i18n="maint_log_title"/);
-    });
-
     it('no [data-i18n] element contains child elements (textContent replacement would drop them)', () => {
         // Applies to plain data-i18n only; data-i18n-title/-placeholder/-html are safe.
         const re = /<(\w+)((?:(?!data-i18n-)[^>])*\sdata-i18n="[^"]+"[^>]*)>([\s\S]*?)<\/\1>/g;

@@ -11,8 +11,6 @@ import { renderDialin } from '../views/dialin.js';
 import { safeLocalStorage } from '../storage.js';
 
 export function wireViews(): void {
-  // #1923: the maintenance toolbar is static markup, so the Add entry button
-  // keeps its id and moves into .maint-toolbar without touching this wiring.
   document.getElementById('openMaintLogBtn')!.addEventListener('click', openMaintLogForm);
   document.getElementById('submitMaintLogBtn')!.addEventListener('click', () => { void submitMaintLogEntry(); });
   document.getElementById('cancelMaintLogBtn')!.addEventListener('click', closeMaintLogForm);
