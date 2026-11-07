@@ -30,7 +30,7 @@ describe('maintenance log auto-synced note — #1763', () => {
   beforeEach(() => {
     log = { innerHTML: '' };
     g.document = {
-      // Only the log container is read; the year counter lookup returns null.
+      // Only the log container is read; the log counter lookup returns null.
       getElementById: (id: string): FakeElement | null => (id === 'maintLog' ? log : null),
     };
     S.currentLang = 'de';
