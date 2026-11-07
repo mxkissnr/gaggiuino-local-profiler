@@ -201,7 +201,8 @@ func TestScoreModelSwitch_EveryReadPathFollows(t *testing.T) {
 
 // assertAllScoresAre checks every read path yields score want for these
 // seeded shots: the page read, /shots.json, the achievements stream, the
-// comparative-advice candidates and Service.ComputeScore.
+// comparative-advice candidates, Service.ComputeScore and the trash list.
+// It moves shot 1 to the trash for the last check, so call it once per test.
 func assertAllScoresAre(t *testing.T, repo *Repository, svc *Service, shot Shot, want int) {
 	t.Helper()
 
@@ -260,6 +261,28 @@ func assertAllScoresAre(t *testing.T, repo *Repository, svc *Service, shot Shot,
 
 	if got := svc.ComputeScore(shot); got == nil || *got != want {
 		t.Errorf("ComputeScore = %v, want %d", got, want)
+	}
+
+	// The trash list is the one read that scores each shot through
+	// Service.DetailScorer instead of the score cache, so it needs its own check.
+	if err := repo.MoveToTrash(1); err != nil {
+		t.Fatalf("MoveToTrash: %v", err)
+	}
+	trashed, err := svc.GetTrash()
+	if err != nil {
+		t.Fatalf("GetTrash: %v", err)
+	}
+	if len(trashed) == 0 {
+		t.Fatal("trash list returned no shots")
+	}
+	detail := svc.DetailScorer()
+	for _, s := range trashed {
+		if got := detail(s).Score; got == nil || *got != want {
+			t.Errorf("trash list: shot %v score = %v, want %d", s["id"], got, want)
+		}
+	}
+	if err := repo.RestoreFromTrash(1); err != nil {
+		t.Fatalf("RestoreFromTrash: %v", err)
 	}
 }
 
