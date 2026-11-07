@@ -392,6 +392,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	ordersRepo := orders.NewRepository(sqlDB)
 	// #1835: shared by the ui-prefs routes and the low-stock threshold read.
 	uiprefsRepo := uiprefs.NewRepository(sqlDB)
+	// #1922: which score model this process scores with. internal/shots cannot
+	// read ui-prefs (or the dev-build flag) itself, so the source is injected
+	// here for the same import-cycle reason as SetBeanSource; scoreModelPref
+	// applies the dev-build gate and the classic fallback. Read per call, so a
+	// changed value applies without a restart.
+	shots.SetScoreModelSource(func() string { return scoreModelPref(uiprefsRepo) })
 	// #1411: annotating a shot books milk stock and frozen-portion counts on
 	// the server inside the same locked save; injected here because
 	// internal/shots cannot import internal/library or internal/orders, like
@@ -819,6 +825,33 @@ func getEnvNumber(name string, def float64, min float64) float64 {
 		return def
 	}
 	return n
+}
+
+// devScoreModelPrefKey is the ui-pref naming the active score model (#1922).
+// Its TypeScript twin is public-src/components/dev-score-settings.ts, which
+// writes the same literal.
+const devScoreModelPrefKey = "dev.score_model"
+
+// scoreModelPref returns the id of the score model this process should score
+// with, read from the ui-prefs store so it rides along in backup/restore
+// (#1922). A stable build always answers classic — it neither shows nor
+// honours the setting — as does a read error, a missing key, or a non-string
+// value. Read per call, so a changed value applies without a restart. The
+// registry resolves the returned id, so an unknown id also scores as classic.
+func scoreModelPref(repo *uiprefs.Repository) string {
+	if !mcp.DevBuild() {
+		return shots.ClassicScoreModel
+	}
+	prefs, err := repo.Get()
+	if err != nil {
+		log.Printf("main: score model: reading ui prefs: %v", err)
+		return shots.ClassicScoreModel
+	}
+	id, ok := prefs[devScoreModelPrefKey].(string)
+	if !ok || id == "" {
+		return shots.ClassicScoreModel
+	}
+	return id
 }
 
 // lowStockThresholdG reads the remaining-grams threshold for the "bean
