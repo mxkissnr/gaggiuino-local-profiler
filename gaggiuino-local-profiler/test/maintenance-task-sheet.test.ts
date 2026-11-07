@@ -46,23 +46,39 @@ interface TaskOverrides {
   label?: string | null;
 }
 
-function tile(task: string, overrides: TaskOverrides = {}, tileOverrides: Partial<Tile> = {}): Tile {
-  const status = overrides.status ?? 'ok';
+interface TileOverrides {
+  machineId?: number;
+  machineName?: string | null;
+  isGlobal?: boolean;
+  showMachineTag?: boolean;
+}
+
+function taskData(overrides: TaskOverrides = {}): Tile['d'] {
+  const d: Tile['d'] = {
+    status: 'ok', pct: 0.2, daysSince: null, shotsSince: 0,
+    threshold_shots: null, threshold_days: null,
+  };
+  return Object.assign(d, overrides);
+}
+
+function tile(task: string, overrides: TaskOverrides = {}, tileOverrides: TileOverrides = {}): Tile {
   return {
     task,
-    d: {
-      status, pct: overrides.pct ?? 0.2, daysSince: null, shotsSince: 0,
-      threshold_shots: null, threshold_days: null, ...overrides,
-    },
-    machineId: 1,
-    machineName: null,
-    isGlobal: task === 'waterfilter' || task.startsWith('grinder_'),
-    showMachineTag: false,
-    ...tileOverrides,
+    d: taskData(overrides),
+    machineId: tileOverrides.machineId ?? 1,
+    machineName: tileOverrides.machineName ?? null,
+    isGlobal: tileOverrides.isGlobal ?? (task === 'waterfilter' || task.startsWith('grinder_')),
+    showMachineTag: tileOverrides.showMachineTag ?? false,
   };
 }
 
-function entry(id: number, task: string, overrides: Partial<Entry> = {}): Entry {
+interface EntryOverrides {
+  machineId?: number | null;
+  shotCountAtTime?: number | null;
+  notes?: string | null;
+}
+
+function entry(id: number, task: string, overrides: EntryOverrides = {}): Entry {
   return { id, task, ts: Date.UTC(2026, 4, 3) / 1000, ...overrides };
 }
 

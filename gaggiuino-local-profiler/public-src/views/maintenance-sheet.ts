@@ -84,13 +84,11 @@ function _historyRow(e: MaintLogEntry, locale: string): Html {
     ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
     : e.notes ? esc(e.notes) : html``;
   return html`<div class="maint-hist-row">
-    <div class="maint-hist-line">
-      <span class="maint-hist-date">${esc(dateStr)}</span>
-      <span class="maint-hist-side">
-        <span class="maint-hist-count">${esc(e.shotCountAtTime ?? '–')}</span>
-        ${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}
-      </span>
-    </div>
+    <span class="maint-hist-date">${esc(dateStr)}</span>
+    <span class="maint-hist-side">
+      <span class="maint-hist-count">${esc(e.shotCountAtTime ?? '–')}</span>
+      ${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}
+    </span>
     ${note ? html`<div class="maint-hist-note">${note}</div>` : html``}
   </div>`;
 }
@@ -138,12 +136,12 @@ export function openMaintTaskSheet(tile: MaintTile, history: MaintLogEntry[], an
   const status = maintStatusLabel(tile.d.status);
   const count = _maintCountText(tile.task, tile.d);
   const machineTag = tile.isGlobal ? t('maint_shared_tag') : (tile.showMachineTag ? tile.machineName : null);
-  const parts = [status, count].filter(Boolean);
+  const parts: string[] = [status, count];
   if (machineTag) parts.push(machineTag);
   if (isAutoSynced(tile.d)) parts.push(t('maint_auto_synced'));
   openDetailSheet({
     title: taskTitle(tile.task, tile.d),
-    sub: parts.join(' · '),
+    sub: parts.filter(Boolean).join(' · '),
     body: maintTaskSheetBody(tile, history),
     actions: maintTaskSheetActions(tile),
     anchor,

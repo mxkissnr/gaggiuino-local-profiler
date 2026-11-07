@@ -3186,13 +3186,12 @@
         .maint-sheet-interval { display:flex; flex-direction:column; gap: var(--sp-3); }
         .maint-sheet .analytics-filter-btn { min-height:44px; }
         .maint-sheet .maint-threshold-field input { min-height:44px; }
-        .maint-hist-row { display:flex; flex-direction:column; gap:2px; padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
+        .maint-hist-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:2px var(--sp-2); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .maint-hist-row:last-child { border-bottom:none; }
-        .maint-hist-line { display:flex; align-items:center; justify-content:space-between; gap: var(--sp-2); }
         .maint-hist-date, .maint-hist-count { font-variant-numeric: tabular-nums; }
         .maint-hist-date { color: var(--gray-300); font-size: var(--fs-2); }
         .maint-hist-side { display:inline-flex; align-items:center; gap: var(--sp-1); color: var(--gray-500); font-size: var(--fs-1); }
-        .maint-hist-note { color: var(--gray-500); font-size: var(--fs-1); }
+        .maint-hist-note { flex-basis:100%; color: var(--gray-500); font-size: var(--fs-1); }
         .maint-sheet-footer { display:flex; justify-content:flex-end; }
 
         .maint-badge {
