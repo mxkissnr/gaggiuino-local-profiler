@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
 // maintenance.ts pulls in state/index.ts (localStorage/navigator at module load)
 // and i18n.ts — neither is available in the plain Node test environment, so
@@ -10,6 +10,7 @@ let _pickNextDueTile: MaintView['_pickNextDueTile'];
 let _partitionTiles: MaintView['_partitionTiles'];
 let _maintLogTaskOptions: MaintView['_maintLogTaskOptions'];
 let isAutoSynced: MaintView['isAutoSynced'];
+let renderMaintenanceDashboard: MaintView['renderMaintenanceDashboard'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -20,7 +21,8 @@ beforeAll(async () => {
     value: { language: 'en' },
     configurable: true, writable: true,
   });
-  ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions, isAutoSynced } = await import('../public-src/views/maintenance.js'));
+  ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions, isAutoSynced,
+     renderMaintenanceDashboard } = await import('../public-src/views/maintenance.js'));
 });
 
 interface MaintTaskFixture {
@@ -157,6 +159,76 @@ describe('_maintLogTaskOptions', () => {
     ] as unknown as MaintTileFixture[];
     const options = _maintLogTaskOptions(tiles);
     expect(options).toHaveLength(1);
+  });
+});
+
+// #1923: the card no longer expands its own detail panel — the single Details
+// button opens the shared popover / bottom sheet (views/maintenance-sheet.ts).
+// A card that kept the old .detail markup would show the interval twice, so
+// pin the new shape: one toggle carrying the tile's task and machine, and no
+// inline mode segment, threshold input or done/disable/delete buttons.
+interface FakeEl {
+  innerHTML: string;
+  className: string;
+  style: { display: string };
+  children: FakeEl[];
+  appendChild: (child: FakeEl) => void;
+}
+
+function fakeEl(): FakeEl {
+  const el: FakeEl = {
+    innerHTML: '', className: '', style: { display: '' }, children: [],
+    appendChild: (child) => { el.children.push(child); },
+  };
+  return el;
+}
+
+describe('maintenance card markup (#1923)', () => {
+  const ids = ['maint-cards', 'maintSummary', 'maintNextBanner', 'maintScopeRow', 'maintScopeSeg',
+               'maintScopeHint', 'maintGrid', 'maintCustomSection', 'maintDisabledSection'];
+  let els: Map<string, FakeEl>;
+
+  beforeEach(() => {
+    els = new Map(ids.map(id => [id, fakeEl()]));
+    (globalThis as unknown as Record<string, unknown>).document = {
+      getElementById: (id: string) => els.get(id) ?? null,
+      createElement: () => fakeEl(),
+    };
+  });
+
+  function renderOne(name: string, overrides: MaintTaskOverrides = {}): string {
+    const data = { [name]: task(overrides.status ?? 'ok', overrides) };
+    renderMaintenanceDashboard(data, 1);
+    const grid = els.get('maintGrid')!;
+    expect(grid.children).toHaveLength(1);
+    return grid.children[0]!.innerHTML;
+  }
+
+  it('renders one Details button that opens the task sheet for that tile', () => {
+    const html = renderOne('backflush', { threshold_shots: 40, shotsSince: 12 });
+
+    expect(html).toContain('data-action="open-maint-task"');
+    expect(html).toContain('data-task="backflush"');
+    expect(html).toContain('data-machine-id="1"');
+    expect((html.match(/data-action="open-maint-task"/g) || []).length).toBe(1);
+  });
+
+  it('leaves no inline interval, threshold, done or disable markup on the card', () => {
+    const html = renderOne('backflush', { threshold_shots: 40, shotsSince: 12 });
+
+    expect(html).not.toContain('toggle-maint-detail');
+    expect(html).not.toContain('class="detail"');
+    expect(html).not.toContain('maint-mode-seg');
+    expect(html).not.toContain('set-maint-mode');
+    expect(html).not.toContain('save-maint-threshold');
+    expect(html).not.toContain('rename-maint-label');
+    expect(html).not.toContain('mark-maint-done');
+    expect(html).not.toContain('toggle-maint-disabled');
+  });
+
+  it('still shows the count text on the card', () => {
+    const html = renderOne('backflush', { threshold_shots: 40, shotsSince: 12 });
+    expect(html).toContain('12 / 40 Shots');
   });
 });
 
