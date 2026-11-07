@@ -12,6 +12,16 @@ import "sync/atomic"
 // with. Any other model is dev-channel only: production registers nothing
 // else, and cmd/server only honours the ui-pref that selects one when
 // GLP_DEV_BUILD is set (see scoreModelPref).
+//
+// Deliberate deviation from the #1922 plan, forced by CI: the blocking
+// deadcode gate (`.github/workflows/test.yaml`, reachability from ./cmd/...)
+// rejects any exported function no production path reaches, so the plan's
+// ScoreModelIDs, ModelScore, (*Service).AllModelsScorer and
+// RegisterScoreModelForTest cannot land in this slice — nothing that ships
+// here calls them yet. The id/registration helpers the tests need live
+// unexported in score_models_test.go instead. The consuming slice restores the
+// planned names together with the MCP tool that calls AllModelsScorer, which
+// is what makes them reachable.
 
 // ClassicScoreModel is the id of the production scorer, CalcShotScoreDetail.
 const ClassicScoreModel = "classic"
@@ -88,10 +98,6 @@ func activeScoreModel() ScoreModel {
 	}
 	return scoreModelByID((*src)())
 }
-
-// ActiveScoreModelID is the id of the model this process scores with, after
-// the fallback rules above. cmd/server logs it on a dev build at startup.
-func ActiveScoreModelID() string { return activeScoreModel().ID }
 
 // fingerprintSuffix is appended to the score-cache fingerprint so switching
 // models misses the cache and rescores on the next read. Classic returns the

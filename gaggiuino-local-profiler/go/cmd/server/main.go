@@ -395,13 +395,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// #1922: which score model this process scores with. internal/shots cannot
 	// read ui-prefs (or the dev-build flag) itself, so the source is injected
 	// here for the same import-cycle reason as SetBeanSource; scoreModelPref
-	// applies the dev-build gate and the classic fallback. The dev-only log
-	// names the model in effect at startup — the source is re-read per call, so
-	// later changes still apply without a restart.
+	// applies the dev-build gate and the classic fallback. Read per call, so a
+	// changed value applies without a restart.
 	shots.SetScoreModelSource(func() string { return scoreModelPref(uiprefsRepo) })
-	if mcp.DevBuild() {
-		log.Printf("main: dev score model %q", shots.ActiveScoreModelID())
-	}
 	// #1411: annotating a shot books milk stock and frozen-portion counts on
 	// the server inside the same locked save; injected here because
 	// internal/shots cannot import internal/library or internal/orders, like
