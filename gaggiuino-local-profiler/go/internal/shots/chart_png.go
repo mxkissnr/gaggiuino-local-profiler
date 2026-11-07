@@ -234,7 +234,7 @@ func strokeSegment(r *vector.Rasterizer, ax, ay, bx, by, half float64) {
 }
 
 // chartFace returns a fresh Go regular face. Deliberately not card.go's shared
-// font face cache: an opentype face is not safe for concurrent use, and chart
+// faceFor cache: an opentype face is not safe for concurrent use, and chart
 // requests run in parallel.
 func chartFace() (font.Face, bool) {
 	initFonts()
