@@ -170,7 +170,7 @@ describe('maintTaskSheetBody (#1923)', () => {
       entry(1, 'backflush', { shotCountAtTime: null }),
     ]);
     expect(out).toContain('maint-log-manual-badge');
-    expect(out).toContain('–');
+    expect(out).toContain('<span class="maint-hist-count">–</span>');
   });
 
   it('shows the empty note when no entry matches', () => {
