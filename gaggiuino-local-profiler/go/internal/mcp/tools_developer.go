@@ -468,19 +468,19 @@ type exportShotsDatasetInput struct {
 // derives for get_shot (embedded, so those fields sit at the top level rather
 // than in a nested object). No curve data.
 type datasetRow struct {
-	ID             int64               `json:"id" jsonschema:"the shot's stable id"`
-	Timestamp      string              `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
-	MachineID      int64               `json:"machine_id" jsonschema:"machine that pulled the shot"`
-	ProfileName    string              `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
-	Bean           string              `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
-	Score          *int                `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
-	ModelScores    []modelScoreOutput  `json:"model_scores" jsonschema:"every registered score model's score for this shot, side by side"`
-	UsedBeanTarget bool                `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
-	BeanComponents []beanComponent     `json:"bean_components,omitempty" jsonschema:"a mixed shot's beans in dose order; omitted for a single-bean shot"`
-	Rating         *int                `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating"`
-	GrindSetting   string              `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
-	TDSPct         *float64            `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
-	Notes          string              `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
+	ID             int64              `json:"id" jsonschema:"the shot's stable id"`
+	Timestamp      string             `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
+	MachineID      int64              `json:"machine_id" jsonschema:"machine that pulled the shot"`
+	ProfileName    string             `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
+	Bean           string             `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
+	Score          *int               `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
+	ModelScores    []modelScoreOutput `json:"model_scores" jsonschema:"every registered score model's score for this shot, side by side"`
+	UsedBeanTarget bool               `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
+	BeanComponents []beanComponent    `json:"bean_components,omitempty" jsonschema:"a mixed shot's beans in dose order; omitted for a single-bean shot"`
+	Rating         *int               `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating"`
+	GrindSetting   string             `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
+	TDSPct         *float64           `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
+	Notes          string             `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
 	shotMetrics
 }
 
