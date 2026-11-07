@@ -9,10 +9,15 @@ import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
+import { closeDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
+// Circular with maintenance-sheet.ts (it reads this module's helpers): only
+// ever touched at call time, never at module load — same as
+// library/bean-form-sheet.ts.
+import { openMaintTaskSheet } from './maintenance-sheet.js';
 
 // One task's status block as GET /api/maintenance serves it (flat for a
 // single machine, nested under machines[]/global for the fleet view).
-interface MaintTaskData {
+export interface MaintTaskData {
   status: string;
   pct: number;
   daysSince?: number | null;
@@ -41,7 +46,7 @@ interface MaintResponse {
   [task: string]: unknown;
 }
 
-interface MaintTile {
+export interface MaintTile {
   task: string;
   d: MaintTaskData;
   machineId: string | number;
@@ -57,7 +62,7 @@ interface MaintTaskNames {
   label?: string | null;
 }
 
-interface MaintLogEntry {
+export interface MaintLogEntry {
   id: number;
   task: string;
   ts: number;
@@ -100,7 +105,7 @@ function isGlobalTask(task: string): boolean {
   return task === 'waterfilter' || task.startsWith('grinder_');
 }
 
-function taskTitle(task: string, d: MaintTaskNames): string {
+export function taskTitle(task: string, d: MaintTaskNames): string {
   if (task.startsWith('grinder_')) return d.grinderName || task;
   if (task.startsWith('custom_')) return d.label || task.replace(/^custom_/, '').replace(/_/g, ' ');
   return t(MAINT_META[task]?.key || task);
@@ -129,6 +134,9 @@ let _maintScope: MaintScope = 'all';
 // MAINT_META's 5 static keys only, silently dropping every custom_/
 // grinder_ task and never respecting a task's disabled state).
 let _lastActiveTiles: MaintTile[] = [];
+
+// Last log entries the log render received — openMaintTask's history source.
+let _lastLogEntries: MaintLogEntry[] = [];
 
 function _effectiveScope(): MaintScope {
   if ((S.machines || []).length <= 1) return S.activeMachineId === 'all' ? 1 : (S.activeMachineId ?? 1);
@@ -360,56 +368,43 @@ export function isAutoSynced(d: MaintTaskData): boolean {
   return Number.isFinite(syncedMs) && Number.isFinite(lastMs) && syncedMs === lastMs;
 }
 
+// The card's meta count and the sheet's subtitle share this text, so both
+// always describe the interval the same way (including the 'never' case).
+export function _maintCountText(task: string, d: MaintTaskData): string {
+  const hasShots = d.threshold_shots != null;
+  const hasDays  = d.threshold_days != null;
+  const hasG     = task.startsWith('grinder_') && d.threshold_g != null;
+  if (d.status === 'never') return t('maint_never_done');
+  if (hasShots && hasDays) {
+    return `${d.shotsSince}/${d.threshold_shots} ${t('maint_by_shots')} · ${d.daysSince ?? '?'}/${d.threshold_days} ${t('maint_by_days')}`;
+  }
+  if (hasShots) return `${d.shotsSince} / ${d.threshold_shots} ${t('maint_by_shots')}`;
+  if (hasDays) return `${d.daysSince ?? '?'} / ${d.threshold_days} ${t('maint_by_days')}`;
+  if (hasG) return `${d.gramsSince ?? 0}g / ${d.threshold_g}g`;
+  return t('maint_never_done');
+}
+
+// Opens one task's details in the shared popover / bottom sheet (#1923).
+// Matched by task and machine so the all-machines scope opens the tile the
+// user clicked, not the first tile with that task.
+export function openMaintTask(task: string, machineId: string, anchor: HTMLElement | null): void {
+  const tile = _lastActiveTiles.find(t => t.task === task && String(t.machineId) === machineId);
+  if (!tile) return;
+  openMaintTaskSheet(tile, _lastLogEntries, anchor);
+}
+
+// After a write the dashboard re-renders; an open task sheet would keep
+// showing the state from before the write, so it is closed first.
+function _closeOpenTaskSheet(): void {
+  if (document.querySelector('#detailSheet .maint-sheet[data-task]')) requestCloseDetailSheet();
+}
+
 function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
   const { task, d, machineName, machineId, isGlobal, showMachineTag } = tile;
   const title = taskTitle(task, d);
-  const isCustom = task.startsWith('custom_');
-  const isGrinder = task.startsWith('grinder_');
 
   const machineTagText = isGlobal ? t('maint_shared_tag') : (showMachineTag ? machineName : null);
-
-  // Determine current threshold mode.
-  const hasShots = d.threshold_shots != null;
-  const hasDays  = d.threshold_days  != null;
-  const hasG     = isGrinder && d.threshold_g != null;
-  const mode = hasG ? 'g' : hasShots && hasDays ? 'both' : hasShots ? 'shots' : hasDays ? 'days' : 'shots';
-
-  // Count text for the meta row.
-  let countText;
-  if (d.status === 'never') {
-    countText = t('maint_never_done');
-  } else if (hasShots && hasDays) {
-    countText = `${d.shotsSince}/${d.threshold_shots} ${t('maint_by_shots')} · ${d.daysSince ?? '?'}/${d.threshold_days} ${t('maint_by_days')}`;
-  } else if (hasShots) {
-    countText = `${d.shotsSince} / ${d.threshold_shots} ${t('maint_by_shots')}`;
-  } else if (hasDays) {
-    countText = `${d.daysSince ?? '?'} / ${d.threshold_days} ${t('maint_by_days')}`;
-  } else if (hasG) {
-    countText = `${d.gramsSince ?? 0}g / ${d.threshold_g}g`;
-  } else {
-    countText = t('maint_never_done');
-  }
-
-  // Threshold inputs — shown based on mode.
-  const shotsVal = d.threshold_shots ?? '';
-  const daysVal  = d.threshold_days  ?? '';
-  const gVal     = d.threshold_g ?? '';
-  const shotsInput = html`<label class="maint-threshold-field">
-    <span>${tHtml('maint_unit_shots')}</span>
-    <input type="number" min="1" max="10000" value="${esc(shotsVal)}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_shots" data-machine-id="${esc(machineId)}">
-  </label>`;
-  const daysInput = html`<label class="maint-threshold-field">
-    <span>${tHtml('maint_by_days')}</span>
-    <input type="number" min="1" max="3650" value="${esc(daysVal)}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_days" data-machine-id="${esc(machineId)}">
-  </label>`;
-  const gInput = html`<label class="maint-threshold-field">
-    <span>${tHtml('maint_unit_grams')}</span>
-    <input type="number" min="1" max="100000" value="${esc(gVal)}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_g" data-machine-id="${esc(machineId)}">
-  </label>`;
-  const thresholdFields: Html = mode === 'g' ? gInput : mode === 'shots' ? shotsInput : mode === 'days' ? daysInput : joinHtml([shotsInput, daysInput]);
+  const countText = _maintCountText(task, d);
 
   const pct = Math.round(d.pct * 100);
   const el = document.createElement('div');
@@ -429,28 +424,7 @@ function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
         <span class="maint-card-count">${esc(countText)}</span>
         ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
       </div>
-      <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${esc(task)}">${tHtml('maint_tile_details')}</button>
-      <div class="detail">
-        <div class="maint-mode-seg">
-          <button class="${esc(mode === 'shots' ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="shots" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_unit_shots')}</button>
-          <button class="${esc(mode === 'days'  ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="days"  data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_by_days')}</button>
-          <button class="${esc(mode === 'both'  ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="both"  data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_mode_both')}</button>
-          ${isGrinder ? html`<button class="${esc(mode === 'g' ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="g" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_unit_grams')}</button>` : html``}
-        </div>
-        <div class="maint-threshold-inputs">${thresholdFields}</div>
-        ${isCustom ? html`<label class="maint-threshold-field maint-rename-field">
-          <span>${tHtml('maint_rename_label')}</span>
-          <input type="text" maxlength="100" value="${esc(d.label || '')}"
-              data-action="rename-maint-label" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">
-        </label>` : html``}
-        <div class="maint-card-actions">
-          <button class="maint-done-btn" data-action="mark-maint-done" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_done_btn')}</button>
-          ${isCustom
-            ? html`<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_log_delete')}</button>`
-            : html`<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" data-disabled="true">${tHtml('maint_disable_btn')}</button>`
-          }
-        </div>
-      </div>
+      <button class="maint-detail-toggle" type="button" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_tile_details')}</button>
     </div>
   `;
   return el;
@@ -509,6 +483,7 @@ export async function markMaintDone(task: string, machineId?: string | number | 
   try {
     const r = await markMaintenanceDone(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    _closeOpenTaskSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -522,17 +497,23 @@ export async function saveMaintThreshold(task: string, field: string, value: str
   } catch { /* ignore */ }
 }
 
-// Reload the maintenance view while keeping the card the user has expanded
-// open. Capturing the task key before the reload and re-adding .expanded
-// afterwards survives the re-render; every write action and the live refetch
-// go through here so none of them collapses the open detail.
+// Reload the maintenance view while keeping an open task sheet open. Every
+// local write goes through here (the live refetch is held back by
+// _maintenanceCanRefetch instead): the tile and its card re-render with the
+// new state, and the sheet is repainted from them in place, anchored to the
+// card's button again. The task is keyed by task+machine because the
+// all-machines scope renders one tile per machine.
 export async function refreshMaintenanceView(): Promise<void> {
-  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
+  const open = document.querySelector<HTMLElement>('#detailSheet .maint-sheet[data-task]')?.dataset;
+  const task = open?.task;
+  const machineId = open?.machineId;
   await loadMaintenanceView();
-  if (expandedTask) {
-    document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
-      ?.closest('.maint-card')?.classList.add('expanded');
-  }
+  if (task == null || machineId == null) return;
+  const tile = _lastActiveTiles.find(t => t.task === task && String(t.machineId) === machineId);
+  if (!tile) { closeDetailSheet(); return; }
+  const anchor = document.querySelector<HTMLElement>(
+    `[data-action="open-maint-task"][data-task="${CSS.escape(task)}"][data-machine-id="${CSS.escape(machineId)}"]`);
+  openMaintTaskSheet(tile, _lastLogEntries, anchor);
 }
 
 export async function setMaintMode(
@@ -561,6 +542,7 @@ export async function toggleMaintDisabled(task: string, machineId?: string | num
   try {
     const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { disabled });
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    _closeOpenTaskSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -587,6 +569,7 @@ export async function deleteCustomMaintTask(task: string, machineId?: string | n
   try {
     const r = await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    _closeOpenTaskSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -614,6 +597,7 @@ export async function loadMaintLog(): Promise<void> {
 }
 
 export function renderMaintLog(entries: MaintLogEntry[]): void {
+  _lastLogEntries = entries;
   const el = document.getElementById('maintLog');
   if (!el) return;
 
