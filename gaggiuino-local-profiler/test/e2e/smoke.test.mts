@@ -113,9 +113,8 @@ const VIEWS: View[] = [
         name: 'Maintenance',
         nav: '#btnMaintenance',
         // renderMaintenanceDashboard() (views/maintenance.ts) fills
-        // #maintSummary with .maint-tile counters once the async
-        // maintenance data loads.
-        ready: () => document.querySelectorAll('#maintSummary .maint-tile').length > 0,
+        // #maintVerdict once the async maintenance data loads.
+        ready: () => !!document.querySelector('#maintVerdict .analytics-verdict-title'),
     },
     {
         name: 'Dialin',

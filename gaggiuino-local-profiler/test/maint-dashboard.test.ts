@@ -9,6 +9,8 @@ let _normalizeMaintTiles: MaintView['_normalizeMaintTiles'];
 let _pickNextDueTile: MaintView['_pickNextDueTile'];
 let _partitionTiles: MaintView['_partitionTiles'];
 let _maintLogTaskOptions: MaintView['_maintLogTaskOptions'];
+let _maintVerdictState: MaintView['_maintVerdictState'];
+let _maintVerdictHtml: MaintView['_maintVerdictHtml'];
 let isAutoSynced: MaintView['isAutoSynced'];
 let renderMaintenanceDashboard: MaintView['renderMaintenanceDashboard'];
 
@@ -21,7 +23,8 @@ beforeAll(async () => {
     value: { language: 'en' },
     configurable: true, writable: true,
   });
-  ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions, isAutoSynced,
+  ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions, _maintVerdictState,
+     _maintVerdictHtml, isAutoSynced,
      renderMaintenanceDashboard } = await import('../public-src/views/maintenance.js'));
 });
 
@@ -184,8 +187,8 @@ function fakeEl(): FakeEl {
 }
 
 describe('maintenance card markup (#1923)', () => {
-  const ids = ['maint-cards', 'maintSummary', 'maintNextBanner', 'maintScopeRow', 'maintScopeSeg',
-               'maintScopeHint', 'maintGrid', 'maintCustomSection', 'maintDisabledSection'];
+  const ids = ['maint-cards', 'maintScopeSeg', 'maintScopeHint', 'maintGrid',
+               'maintCustomSection', 'maintDisabledSection'];
   let els: Map<string, FakeEl>;
 
   beforeEach(() => {
@@ -255,5 +258,92 @@ describe('isAutoSynced (#1639)', () => {
   it('is false when the task has no machine sync at all', () => {
     const d = task('ok', { lastDate: '2026-10-01T08:30:00.000Z' }) as unknown as MaintTaskArg;
     expect(isAutoSynced(d)).toBe(false);
+  });
+});
+
+type MaintTileArg = Parameters<MaintView['_maintVerdictState']>[0][number];
+const tile = (name: string, status: string, overrides: MaintTaskOverrides = {}): MaintTileArg =>
+  ({ task: name, d: task(status, overrides), machineId: 1, machineName: null, isGlobal: false, showMachineTag: false }) as unknown as MaintTileArg;
+
+describe('_maintVerdictState (#1923)', () => {
+  it('picks the due tile over a sooner one', () => {
+    const tiles = [tile('soon-task', 'soon'), tile('due-task', 'due', { threshold_shots: 10, shotsSince: 20 })];
+    const state = _maintVerdictState(tiles);
+    expect(state.kind).toBe('due');
+    expect(state.tile?.task).toBe('due-task');
+  });
+
+  it('counts a never-done task as due', () => {
+    const state = _maintVerdictState([tile('backflush', 'never'), tile('descaling', 'ok')]);
+    expect(state.kind).toBe('due');
+    expect(state.dueCount).toBe(1);
+  });
+
+  it('counts due and never together', () => {
+    const state = _maintVerdictState([
+      tile('a', 'due'), tile('b', 'never'), tile('c', 'soon'), tile('d', 'ok'),
+    ]);
+    expect(state.dueCount).toBe(2);
+  });
+
+  it('falls back to the highest-pct soon tile when nothing is due', () => {
+    const low = tile('low', 'soon', {});
+    low.d.pct = 0.7;
+    const high = tile('high', 'soon', {});
+    high.d.pct = 0.95;
+    const state = _maintVerdictState([low, high, tile('ok', 'ok')]);
+    expect(state.kind).toBe('soon');
+    expect(state.tile?.task).toBe('high');
+    expect(state.dueCount).toBe(0);
+  });
+
+  it('reports ok with the highest-pct tile when everything is fine', () => {
+    const low = tile('low', 'ok', {});
+    low.d.pct = 0.1;
+    const high = tile('high', 'ok', {});
+    high.d.pct = 0.6;
+    const state = _maintVerdictState([low, high]);
+    expect(state.kind).toBe('ok');
+    expect(state.tile?.task).toBe('high');
+  });
+
+  it('reports empty for no tiles', () => {
+    const state = _maintVerdictState([]);
+    expect(state.kind).toBe('empty');
+    expect(state.tile).toBeNull();
+    expect(state.dueCount).toBe(0);
+  });
+});
+
+describe('_maintVerdictHtml (#1923)', () => {
+  it('offers the done action for the due tile with its task, machine and text', () => {
+    const dueTile = tile('descaling', 'due', { threshold_shots: 20, shotsSince: 40 });
+    const html = _maintVerdictHtml(_maintVerdictState([dueTile]));
+    expect(html).toContain('mark-maint-done');
+    expect(html).toContain('data-task="descaling"');
+    expect(html).toContain('data-machine-id="1"');
+    expect(html).toContain('Descaling');
+    expect(html).toContain('20 shots overdue');
+  });
+
+  it('offers no done action when nothing is due', () => {
+    const ok = _maintVerdictHtml(_maintVerdictState([tile('backflush', 'ok')]));
+    const soon = _maintVerdictHtml(_maintVerdictState([tile('backflush', 'soon')]));
+    expect(ok).not.toContain('mark-maint-done');
+    expect(soon).not.toContain('mark-maint-done');
+  });
+
+  it('puts the due count in the big number, due when > 0 and ok when 0', () => {
+    const due = _maintVerdictHtml(_maintVerdictState([tile('a', 'due'), tile('b', 'never')]));
+    expect(due).toMatch(/maint-verdict-num due">2</);
+    const ok = _maintVerdictHtml(_maintVerdictState([tile('a', 'ok')]));
+    expect(ok).toMatch(/maint-verdict-num ok">0</);
+  });
+
+  it('escapes a task name containing markup', () => {
+    const custom = tile('custom_1', 'due', { label: 'A < B' });
+    const html = _maintVerdictHtml(_maintVerdictState([custom]));
+    expect(html).toContain('A &lt; B');
+    expect(html).not.toContain('A < B');
   });
 });
