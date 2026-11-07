@@ -199,18 +199,8 @@ export function _partitionTiles(tiles: MaintTile[]): { active: MaintTile[]; disa
   return { active, disabled };
 }
 
-function _summaryCounts(tiles: MaintTile[]): { due: number; soon: number; ok: number } {
-  let due = 0, soon = 0, ok = 0;
-  for (const { d } of tiles) {
-    if (d.status === 'due' || d.status === 'never') due++;
-    else if (d.status === 'soon') soon++;
-    else ok++;
-  }
-  return { due, soon, ok };
-}
-
 // How overdue a tile is, in whichever unit its threshold uses — used only to
-// rank tiles for the "next up" banner, never shown to the user directly.
+// rank tiles for the verdict, never shown to the user directly.
 function _urgency(d: MaintTaskData): number {
   if (d.status !== 'due' && d.status !== 'never') return -Infinity;
   let overage = 0;
@@ -227,6 +217,29 @@ export function _pickNextDueTile(tiles: MaintTile[]): MaintTile | null {
     if (score > bestScore) { bestScore = score; best = tile; }
   }
   return bestScore > -Infinity ? best : null;
+}
+
+// The page's verdict (#1923): what needs attention, in one line plus the
+// count of tasks that are due. 'never' counts as due, matching the badge.
+export interface MaintVerdictState {
+  kind: 'due' | 'soon' | 'ok' | 'empty';
+  tile: MaintTile | null;
+  dueCount: number;
+}
+
+export function _maintVerdictState(active: MaintTile[]): MaintVerdictState {
+  let dueCount = 0;
+  let soon: MaintTile | null = null;
+  let highest: MaintTile | null = null;
+  for (const tile of active) {
+    if (tile.d.status === 'due' || tile.d.status === 'never') dueCount++;
+    else if (tile.d.status === 'soon' && (!soon || tile.d.pct > soon.d.pct)) soon = tile;
+    if (!highest || tile.d.pct > highest.d.pct) highest = tile;
+  }
+  if (dueCount > 0) return { kind: 'due', tile: _pickNextDueTile(active), dueCount };
+  if (soon) return { kind: 'soon', tile: soon, dueCount };
+  if (active.length > 0) return { kind: 'ok', tile: highest, dueCount };
+  return { kind: 'empty', tile: null, dueCount };
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
@@ -250,41 +263,36 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   const allTiles   = _normalizeMaintTiles(data, scope);
   const { active, disabled } = _partitionTiles(allTiles);
   _lastActiveTiles = active;
-  const counts     = _summaryCounts(active);
-  const nextTile   = _pickNextDueTile(active);
+  const verdict     = _maintVerdictState(active);
   const hasMachines = (S.machines || []).length > 1;
 
   container.innerHTML = html`
-    <div class="maint-summary" id="maintSummary"></div>
-    <div class="maint-next-banner" id="maintNextBanner" style="display:none"></div>
-    <div class="maint-scope-row" id="maintScopeRow" style="display:${esc(hasMachines ? '' : 'none')}">
-      <div class="maint-seg" id="maintScopeSeg" role="group" aria-label="${esc(t('machine_switcher_title') || '')}"></div>
-      <span class="maint-scope-hint" id="maintScopeHint">${tHtml('maint_shared_once')}</span>
-    </div>
-    <div class="maint-grid-compact" id="maintGrid"></div>
-    <div class="maint-custom-section" id="maintCustomSection"></div>
-    <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
+    ${_maintVerdictHtml(verdict)}
+    <section class="analytics-sec maint-tasks-sec">
+      <div class="analytics-card-head">
+        <h3 class="analytics-section-title">${esc(t('maint_log_col_task'))}</h3>
+        <span class="analytics-shelf-count">${esc(active.length)}</span>
+      </div>
+      <div class="maint-grid-compact" id="maintGrid"></div>
+      <div class="maint-custom-section" id="maintCustomSection"></div>
+      <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
+    </section>
   `;
 
-  (document.getElementById('maintSummary') as HTMLElement).innerHTML = html`
-    <div class="maint-tile due"><div class="k num">${esc(counts.due)}</div><div class="l">${tHtml('maint_due')}</div></div>
-    <div class="maint-tile soon"><div class="k num">${esc(counts.soon)}</div><div class="l">${tHtml('maint_soon')}</div></div>
-    <div class="maint-tile ok"><div class="k num">${esc(counts.ok)}</div><div class="l">${tHtml('maint_ok')}</div></div>
-    <div class="maint-tile"><div class="k num" id="maintLogYearCount">–</div><div class="l">${tHtml('maint_summary_log_entries', new Date().getFullYear())}</div></div>
-  `;
-
-  _renderNextBanner(document.getElementById('maintNextBanner'), nextTile);
-
-  if (hasMachines) {
-    const seg = document.getElementById('maintScopeSeg') as HTMLElement;
+  const seg = document.getElementById('maintScopeSeg') as HTMLElement | null;
+  if (seg) {
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     seg.innerHTML = joinHtml([
-      html`<button class="${esc(scope === 'all' ? 'on' : '')}" data-action="set-maint-scope" data-scope="all">${tHtml('machine_switcher_all')}</button>`,
-      ...S.machines.map(m => html`<button class="${esc(scope === m.id ? 'on' : '')}" data-action="set-maint-scope" data-scope="${esc(m.id)}">${esc(m.name as string)}</button>`),
+      html`<button type="button" class="${esc(scope === 'all' ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="all" aria-pressed="${esc(scope === 'all' ? 'true' : 'false')}">${tHtml('machine_switcher_all')}</button>`,
+      ...S.machines.map(m => {
+        const on = scope === m.id;
+        return html`<button type="button" class="${esc(on ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="${esc(m.id)}" aria-pressed="${esc(on ? 'true' : 'false')}">${esc(m.name as string)}</button>`;
+      }),
     ]);
-    const hint = document.getElementById('maintScopeHint');
-    if (hint) hint.style.display = active.some(x => x.isGlobal) ? '' : 'none';
+    seg.hidden = !hasMachines;
   }
+  const hint = document.getElementById('maintScopeHint');
+  if (hint) hint.hidden = !(hasMachines && active.some(x => x.isGlobal));
 
   const grid = document.getElementById('maintGrid') as HTMLElement;
   grid.innerHTML = html``;
@@ -299,7 +307,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   }
 
   const badge = document.getElementById('maintBadge');
-  if (badge) badge.style.display = counts.due > 0 ? 'inline-block' : 'none';
+  if (badge) badge.style.display = verdict.dueCount > 0 ? 'inline-block' : 'none';
 }
 
 function _renderCustomSection(container: HTMLElement | null, scope: MaintScope): void {
@@ -334,24 +342,51 @@ function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): voi
   container.innerHTML = html`<details class="maint-disabled-details"><summary>${tHtml('maint_disabled_section', tiles.length)}</summary>${rows}</details>`;
 }
 
-function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null): void {
-  if (!container) return;
-  if (!tile) { container.style.display = 'none'; container.innerHTML = html``; return; }
-  container.style.display = '';
-  const title       = taskTitle(tile.task, tile.d);
-  const machinePart = !tile.isGlobal && tile.machineName ? html` · ${esc(tile.machineName)}` : html``;
+function _maintDueDetail(d: MaintTaskData): string {
+  if (d.status === 'never') return t('maint_never_done');
+  if (d.threshold_shots && d.shotsSince > d.threshold_shots) return t('maint_next_shots_over', d.shotsSince - d.threshold_shots);
+  if (d.threshold_days && (d.daysSince as number) > d.threshold_days) return t('maint_next_days_over', (d.daysSince as number) - d.threshold_days);
+  return t('maint_next_due');
+}
 
-  let detail;
-  if (tile.d.status === 'never') detail = t('maint_never_done');
-  else if (tile.d.threshold_shots && tile.d.shotsSince > tile.d.threshold_shots) detail = t('maint_next_shots_over', tile.d.shotsSince - tile.d.threshold_shots);
-  else if (tile.d.threshold_days && (tile.d.daysSince as number) > tile.d.threshold_days) detail = t('maint_next_days_over', (tile.d.daysSince as number) - tile.d.threshold_days);
-  else detail = t('maint_next_due');
+// #1923: the page's one emphasised block — one sentence plus the number of
+// tasks that are due. The title for 'ok' and the section heading on the tasks
+// section are deliberate interims that plan-1923e replaces with new keys.
+export function _maintVerdictHtml(state: MaintVerdictState): Html {
+  const tile = state.tile;
+  const machinePart = tile && !tile.isGlobal && tile.machineName ? ` · ${tile.machineName}` : '';
+  const taskName = tile ? taskTitle(tile.task, tile.d) : '';
+
+  let title: string;
+  let sub = '';
+  if (state.kind === 'due' || state.kind === 'soon') {
+    title = `${t('maint_next_label')} ${taskName}`;
+    sub = (state.kind === 'due' && tile ? _maintDueDetail(tile.d) : t('maint_soon')) + machinePart;
+  } else {
+    title = t('maint_ok');
+    if (state.kind === 'ok') sub = `${t('maint_next_label')} ${taskName}`;
+  }
+
+  const doneBtn = state.kind === 'due' && tile
+    ? html`<button type="button" class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
+    : html``;
+  const numClass = state.dueCount > 0 ? 'due' : 'ok';
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  container.innerHTML = html`
-    <b>${tHtml('maint_next_label')}</b> ${esc(title)}${machinePart} — ${esc(detail)}
-    <span class="spacer"></span>
-    <button class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>
+  return html`
+    <section class="analytics-sec analytics-verdict-card maint-verdict" id="maintVerdict">
+      <div class="analytics-verdict-head">
+        <div class="analytics-verdict-text">
+          <h2 class="analytics-verdict-title serif-display">${esc(title)}</h2>
+          ${sub ? html`<p class="analytics-verdict-sub">${esc(sub)}</p>` : html``}
+        </div>
+        <div class="analytics-verdict-score">
+          <span class="analytics-verdict-score-num maint-verdict-num ${esc(numClass)}">${esc(state.dueCount)}</span>
+          <span class="analytics-verdict-score-lbl">${esc(t('maint_due'))}</span>
+        </div>
+      </div>
+      ${doneBtn}
+    </section>
   `;
 }
 
@@ -601,10 +636,11 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
   const el = document.getElementById('maintLog');
   if (!el) return;
 
-  const yearEl = document.getElementById('maintLogYearCount');
-  if (yearEl) {
+  const countEl = document.getElementById('maintLogCount');
+  if (countEl) {
     const thisYear = new Date().getFullYear();
-    yearEl.textContent = String(entries.filter(e => new Date(e.ts * 1000).getFullYear() === thisYear).length);
+    const n = entries.filter(e => new Date(e.ts * 1000).getFullYear() === thisYear).length;
+    countEl.textContent = `${t('maint_summary_log_entries', thisYear)}: ${n}`;
   }
 
   if (!entries.length) {

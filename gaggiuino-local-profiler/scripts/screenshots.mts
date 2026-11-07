@@ -415,7 +415,7 @@ async function main(): Promise<void> {
     // ── Maintenance ────────────────────────────────────────────────────
     await page.click('#btnMaintenance');
     await page.waitForFunction(
-        () => document.querySelectorAll('#maintSummary .maint-tile').length > 0,
+        () => !!document.querySelector('#maintVerdict .analytics-verdict-title'),
         undefined, { timeout: 15000 },
     );
     await shootWindow(page, '#maintenance-view', path.join(outDir, 'maintenance.png'));
