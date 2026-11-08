@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from 'vitest';
+import type { ShotLike } from '../public-src/views/shots/utils.js';
 
 // ui-prefs.ts (and the state module its import chain reaches) touch
 // localStorage/navigator at module load, so the fakes go in before any import
@@ -86,8 +87,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  delete g.document;
-  delete g.fetch;
+  g.document = undefined;
+  g.fetch = undefined;
 });
 
 describe('blindRatingActive (#1922)', () => {
@@ -177,8 +178,9 @@ describe('applyDevScoreSettings on a stable build (#1922)', () => {
   });
 });
 
+interface ParityCase { shot: unknown; expected: number | null }
+
 describe('score shown verbatim (#1922)', () => {
-  interface ParityCase { shot: unknown; expected: number | null }
 
   it('renders the server score unchanged for every parity fixture', () => {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -188,7 +190,7 @@ describe('score shown verbatim (#1922)', () => {
     expect(cases.length).toBeGreaterThan(0);
     for (const c of cases) {
       if (c.expected === null) continue;
-      const shot = { ...(c.shot as Record<string, unknown>), score: c.expected };
+      const shot = { ...(c.shot as Record<string, unknown>), score: c.expected } as unknown as ShotLike;
       expect(shots.calcShotScore(shot)).toBe(c.expected);
     }
   });
