@@ -328,7 +328,7 @@ export function suggestGrindDoseForBean(
   // #1954: with a default grinder only its own shots may supply a grind
   // setting — another grinder's numbers are on a different scale.
   const lastGrindShot = defaultGrinder
-    ? beanShots.find(s => onDefault(s.annotation?.grinder) && s.annotation?.grindSetting)
+    ? beanShots.find(s => onDefault(s.annotation?.grinder) && !!s.annotation?.grindSetting)
     : lastForBean;
   const comboShots = defaultGrinder ? allShots?.filter(s => onDefault(s.annotation?.grinder)) : allShots;
 
