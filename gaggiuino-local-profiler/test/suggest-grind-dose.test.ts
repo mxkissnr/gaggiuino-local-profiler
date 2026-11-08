@@ -184,7 +184,7 @@ describe('default grinder (#1954)', () => {
     expect(result).toEqual({ grinder: 'New Grinder', grindSetting: '', dose: '18' });
   });
 
-  it('takes the known grind setting from the default grinder's entry, not the first one', () => {
+  it('takes the known grind setting from the default grinder\'s entry, not the first one', () => {
     const lib = {
       beans: [{
         name: 'Bean A',
