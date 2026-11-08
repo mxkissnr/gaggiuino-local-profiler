@@ -54,11 +54,10 @@ describe('maintLogFormBody (#1923)', () => {
     expect(out).toContain('id="maintLogNotes"');
   });
 
-  it('keeps the interim Cancel button in the body', () => {
+  it('carries no Cancel button, the sheet bar closes the form', () => {
     const out = maintLogFormBody([], '2026-05-03');
-    expect(out).toContain('id="maintLogCancelBtn"');
-    expect(out).toContain('class="maint-log-cancel-btn"');
-    expect(out).toContain('Cancel');
+    expect(out).not.toContain('maintLogCancelBtn');
+    expect(out).not.toContain('maint-log-cancel-btn');
   });
 });
 
