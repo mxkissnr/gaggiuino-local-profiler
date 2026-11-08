@@ -307,6 +307,7 @@ const fr: Partial<Translations> = {
     analytics_map_count:(n)=>`${n} pays`,
     dialin_ratio_high:(r)=>`Ratio 1:${r} — au-dessus de la fenêtre espresso classique (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — en dessous de la fenêtre espresso classique (1:1.8–2.2)`,
+    guided_open:'Guide',
     guided_backflush_1:'Insérer le filtre aveugle dans le porte-filtre (pour un backflush chimique : ajouter le détergent)',
     guided_backflush_2:'Verrouiller fermement le porte-filtre',
     guided_backflush_3:'Lancer l\'extraction 5×, laisser monter la pression ~10 s à chaque fois, puis arrêter',

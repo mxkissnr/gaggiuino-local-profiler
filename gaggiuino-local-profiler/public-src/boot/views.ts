@@ -5,15 +5,11 @@
 import { t } from '../i18n.js';
 import { onRefShotChange, clearReferenceShot } from '../views/live.js';
 import { getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold } from '../views/analytics.js';
-import { openMaintLogForm, closeMaintLogForm, submitMaintLogEntry } from '../views/maintenance.js';
 import { setOrdersEnabled, toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify, toggleOrdersKiosk } from '../views/orders.js';
 import { renderDialin } from '../views/dialin.js';
 import { safeLocalStorage } from '../storage.js';
 
 export function wireViews(): void {
-  document.getElementById('openMaintLogBtn')!.addEventListener('click', openMaintLogForm);
-  document.getElementById('submitMaintLogBtn')!.addEventListener('click', () => { void submitMaintLogEntry(); });
-  document.getElementById('cancelMaintLogBtn')!.addEventListener('click', closeMaintLogForm);
   document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => { void setOrdersEnabled((e.target as HTMLInputElement).checked); });
   document.getElementById('ordersMenuTitle')!.addEventListener('click', toggleOrdersMenu);
   document.getElementById('ordersStatsTitle')!.addEventListener('click', toggleOrdersStats);

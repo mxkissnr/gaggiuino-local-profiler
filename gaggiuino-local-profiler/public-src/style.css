@@ -1598,10 +1598,8 @@
         @media (prefers-reduced-motion: no-preference) {
             .lib-save-btn { transition: filter .15s, transform 80ms; }
             .lib-save-btn:active { transform: scale(.97); }
-            .maint-banner-btn,
-            .maint-custom-form button[data-action="add-custom-maint-task"] { transition: transform 80ms; }
-            .maint-banner-btn:active,
-            .maint-custom-form button[data-action="add-custom-maint-task"]:active { transform: scale(.97); }
+            .maint-banner-btn { transition: transform 80ms; }
+            .maint-banner-btn:active { transform: scale(.97); }
         }
         .lib-add-trigger { background: none; border: 1px dashed var(--gray-700); border-radius:var(--radius); color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2); width: 100%; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-add-trigger:hover { border-color: var(--gray-500); color: var(--gray-200); }
@@ -2888,24 +2886,8 @@
         .maint-delete-btn:hover { opacity:.7; }
         .maint-reenable-btn { background:transparent; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--ok); font-size:var(--fs-1); padding:3px 10px; cursor:pointer; transition:all .15s; }
         .maint-reenable-btn:hover { background:var(--ok); color:var(--on-fill); border-color:var(--ok); }
-        /* Custom task section */
-        .maint-custom-section, .maint-disabled-section { margin-top: var(--sp-4); }
-        .maint-custom-add { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); padding: var(--sp-3) var(--sp-4); }
-        .maint-custom-add summary { cursor:pointer; color:var(--gray-400); font-size: var(--fs-1); font-weight:600; user-select:none; }
-        .maint-custom-add summary:hover { color:var(--gray-200); }
-        .maint-custom-form { display:flex; flex-direction:column; gap: var(--sp-2); margin-top: var(--sp-3); }
-        .maint-custom-form input[type="text"] {
-            background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius);
-            color:var(--gray-200); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-3); outline:none; }
-        .maint-custom-form input[type="text"]:focus { border-color:var(--gray-500); }
-        .maint-custom-thresholds { display:flex; gap: var(--sp-4); align-items:center; }
-        .maint-custom-thresholds label { display:flex; align-items:center; gap: var(--sp-1); font-size: var(--fs-1); color:var(--gray-400); }
-        .maint-custom-thresholds input[type="number"] {
-            width:70px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius);
-            color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); text-align:center; outline:none; }
-        .maint-custom-form button[data-action="add-custom-maint-task"] {
-            align-self:flex-start; background:var(--accent); border:none; border-radius:var(--radius);
-            color:var(--on-fill); font-size: var(--fs-1); font-weight:600; padding: var(--sp-2) var(--sp-4); cursor:pointer; }
+        /* Disabled tasks section */
+        .maint-disabled-section { margin-top: var(--sp-4); }
         .maint-disabled-row { display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-2); color:var(--gray-400); }
         .maint-disabled-row:last-child { border-bottom:none; }
         .maint-disabled-row .maint-row-icon { display:inline-flex; width:14px; height:14px; color:var(--gray-600); flex-shrink:0; }
@@ -3162,15 +3144,21 @@
         .maint-section-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: var(--sp-2) 0 var(--sp-1); grid-column:1/-1; }
         /* Maintenance Log */
         .maint-log-sec { display:flex; flex-direction:column; gap: var(--sp-3); }
-        .maint-log-form { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-3); }
-        .maint-log-form-row { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
-        .maint-log-select, .maint-log-date, .maint-log-notes-input {
+        /* #1923: the log-entry and custom-task forms are sheet bodies */
+        /* Double class: .maint-sheet sets a wider gap further down the file. */
+        .maint-form.maint-sheet { display:flex; flex-direction:column; gap: var(--sp-3); }
+        .maint-form input[type="text"], .maint-form input[type="date"], .maint-form input[type="number"], .maint-form select {
+            width:100%; min-height:44px; box-sizing:border-box;
             background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius);
-            color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3);
+            color:var(--gray-200); font-size: var(--fs-2); padding: 0 var(--sp-3); outline:none;
         }
-        .maint-log-select { flex:0 0 auto; }
-        .maint-log-date   { flex:0 0 auto; }
-        .maint-log-notes-input { flex:1; min-width:120px; }
+        .maint-form input[type="text"]:focus, .maint-form input[type="date"]:focus,
+        .maint-form input[type="number"]:focus, .maint-form select:focus { border-color:var(--gray-500); }
+        .maint-form-intervals { display:flex; flex-direction:column; gap: var(--sp-2); }
+        .maint-form-intervals label { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-400); }
+        @media (min-width: 900px) {
+            .maint-form-intervals { flex-direction:row; gap: var(--sp-4); align-items:center; }
+        }
         .maint-log-form-actions { display:flex; gap: var(--sp-2); }
         .maint-log-cancel-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-500); border-radius:var(--radius); padding: var(--sp-2) var(--sp-4); cursor:pointer; font-size: var(--fs-1); }
         .maint-log-cancel-btn:hover { color:var(--gray-300); }
@@ -3184,8 +3172,7 @@
             border-bottom: 1px solid var(--gray-800);
         }
         .maint-log-row:last-child { border-bottom: none; }
-        /* Scoped to the row: the manual-entry form's date input shares the
-           .maint-log-date class name. */
+        /* The log row's own date cell and shot count. */
         .maint-log-row .maint-log-date, .maint-log-shots { font-variant-numeric: tabular-nums; color: var(--gray-500); font-size: var(--fs-1); white-space: nowrap; }
         .maint-log-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
         .maint-log-task { color: var(--gray-200); font-weight: 600; font-size: var(--fs-2); }

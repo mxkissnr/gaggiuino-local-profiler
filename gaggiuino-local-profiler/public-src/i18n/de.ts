@@ -307,6 +307,7 @@ const de: Partial<Translations> = {
     analytics_map_count:(n)=>`${n} Länder`,
     dialin_ratio_high:(r)=>`Ratio 1:${r} — über dem klassischen Espresso-Fenster (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — unter dem klassischen Espresso-Fenster (1:1.8–2.2)`,
+    guided_open:'Anleitung',
     guided_backflush_1:'Blindsieb in den Siebträger einsetzen (für Chemie-Backflush: Reiniger dazugeben)',
     guided_backflush_2:'Siebträger fest einspannen',
     guided_backflush_3:'5× Bezug starten, je ca. 10 s Druck aufbauen lassen, dann stoppen',

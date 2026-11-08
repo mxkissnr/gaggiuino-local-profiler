@@ -307,6 +307,7 @@ const it: Partial<Translations> = {
     analytics_map_count:(n)=>`${n} paesi`,
     dialin_ratio_high:(r)=>`Ratio 1:${r} — sopra la finestra classica dell'espresso (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — sotto la finestra classica dell'espresso (1:1.8–2.2)`,
+    guided_open:'Guida',
     guided_backflush_1:'Inserire il filtro cieco nel portafiltro (per il lavaggio chimico: aggiungere il detergente)',
     guided_backflush_2:'Agganciare saldamente il portafiltro',
     guided_backflush_3:'Avviare l\'erogazione 5×, lasciando salire la pressione per ~10 s, poi fermare',

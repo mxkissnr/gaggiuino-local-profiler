@@ -181,6 +181,28 @@ describe('maintTaskSheetBody (#1923)', () => {
   });
 });
 
+describe('maintTaskSheetBody guide button (#1928)', () => {
+  it('offers the guide for backflush and descaling, bound to that tile', () => {
+    for (const task of ['backflush', 'descaling']) {
+      const out = maintTaskSheetBody(tile(task, { threshold_shots: 40 }, { machineId: 7 }), []);
+
+      expect(out).toContain('class="analytics-filter-btn maint-guide-btn"');
+      expect(out).toContain('data-action="open-guided-maint"');
+      expect(out).toContain(`data-task="${task}"`);
+      expect(out).toContain('data-machine-id="7"');
+    }
+  });
+
+  it('offers no guide for tasks without a step list', () => {
+    for (const task of ['grouphead', 'grinder_7', 'custom_clean']) {
+      const out = maintTaskSheetBody(tile(task, { threshold_shots: 40 }, { machineId: 7 }), []);
+
+      expect(out).not.toContain('maint-guide-btn');
+      expect(out).not.toContain('data-action="open-guided-maint"');
+    }
+  });
+});
+
 describe('maintTaskSheetActions (#1923)', () => {
   it('is one 44px icon button that marks the task done', () => {
     const out = maintTaskSheetActions(tile('backflush', { threshold_shots: 40 }, { machineId: 2 }));
