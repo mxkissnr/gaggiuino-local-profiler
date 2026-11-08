@@ -299,4 +299,28 @@ describe('blind-rating CSS and markup contract (#1922)', () => {
     expect(annotation).toContain("'#starRating .star'");
     expect(annotation).toContain("'active'");
   });
+
+  // applyDevScoreSettings() finds the controls by id, so the markup slice's
+  // ids are the contract between it and index.html. Without this guard a
+  // rename on either side just leaves two dead controls on the dev card.
+  it('index.html carries the two controls the wiring looks up, inside the dev card', () => {
+    const html = read('public-src/index.html');
+    // Sliced on markers rather than a nested-tag regex: the card contains
+    // further <div> rows, so the first </div> is not the card's own close.
+    const start = html.indexOf('<div class="settings-card" id="devToolsCard"');
+    const end = html.indexOf('id="devExportDbBtn"', start);
+    expect(start, 'devToolsCard not found').toBeGreaterThan(-1);
+    expect(end, 'devExportDbBtn not found after the card start').toBeGreaterThan(start);
+    const card = html.slice(start, end);
+    expect(card).toContain('<select id="devScoreModel" class="machine-form-input"></select>');
+    expect(card).toContain('<input type="checkbox" id="devBlindRating">');
+    // The card ships hidden and only the status payload's devBuild reveals it.
+    expect(card).toContain('style="display:none"');
+
+    const wiring = read('public-src/components/dev-score-settings.ts');
+    for (const id of ['devScoreModel', 'devBlindRating']) {
+      expect(wiring).toContain(`getElementById('${id}')`);
+      expect(card).toContain(`id="${id}"`);
+    }
+  });
 });
