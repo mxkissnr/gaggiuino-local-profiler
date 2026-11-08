@@ -10,7 +10,7 @@ import { openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelf
          setDialinProgressionBean, openFactDetail, shuffleFacts } from '../views/analytics.js';
 import { markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
-         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
+         toggleMaintDisabled, toggleMaintPaused, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
          openMaintTask, openMaintLogForm, submitMaintLogEntry,
          openMaintCustomForm } from '../views/maintenance.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from '../components/flavor-wheel.js';
@@ -141,6 +141,7 @@ export function wireDelegation(): void {
       case 'mark-maint-done':    void markMaintDone(el.dataset.task!, el.dataset.machineId); break;
       case 'open-guided-maint':  openGuidedMaint(el.dataset.task!, el.dataset.machineId!); break;
       case 'toggle-maint-disabled': void toggleMaintDisabled(el.dataset.task!, el.dataset.machineId, el.dataset.disabled === 'true'); break;
+      case 'toggle-maint-paused':   void toggleMaintPaused(el.dataset.task!, el.dataset.machineId, el.dataset.paused === 'true'); break;
       case 'add-custom-maint-task':  void addCustomMaintTask(el.dataset.machineId); break;
       case 'delete-custom-maint-task': void deleteCustomMaintTask(el.dataset.task!, el.dataset.machineId); break;
       case 'guided-maint-done':  void submitGuidedMaint(); break;

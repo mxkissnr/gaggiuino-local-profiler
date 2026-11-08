@@ -237,13 +237,14 @@ export function _maintVerdictState(active: MaintTile[]): MaintVerdictState {
   let soon: MaintTile | null = null;
   let highest: MaintTile | null = null;
   for (const tile of active) {
+    if (tile.d.status === 'paused') continue;
     if (tile.d.status === 'due' || tile.d.status === 'never') dueCount++;
     else if (tile.d.status === 'soon' && (!soon || tile.d.pct > soon.d.pct)) soon = tile;
     if (!highest || tile.d.pct > highest.d.pct) highest = tile;
   }
   if (dueCount > 0) return { kind: 'due', tile: _pickNextDueTile(active), dueCount };
   if (soon) return { kind: 'soon', tile: soon, dueCount };
-  if (active.length > 0) return { kind: 'ok', tile: highest, dueCount };
+  if (highest) return { kind: 'ok', tile: highest, dueCount };
   return { kind: 'empty', tile: null, dueCount };
 }
 
@@ -398,7 +399,7 @@ export function _maintCountText(task: string, d: MaintTaskData): string {
   const hasShots = d.threshold_shots != null;
   const hasDays  = d.threshold_days != null;
   const hasG     = task.startsWith('grinder_') && d.threshold_g != null;
-  if (d.status === 'never') return t('maint_never_done');
+  if (d.status === 'never' || (d.status === 'paused' && !d.lastDate)) return t('maint_never_done');
   if (hasShots && hasDays) {
     return `${d.shotsSince}/${d.threshold_shots} ${t('maint_by_shots')} · ${d.daysSince ?? '?'}/${d.threshold_days} ${t('maint_by_days')}`;
   }
@@ -566,6 +567,15 @@ export async function toggleMaintDisabled(task: string, machineId?: string | num
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     _closeOpenTaskSheet();
     await loadMaintenanceView();
+  } catch { /* ignore */ }
+}
+
+// Pausing keeps the task sheet open so its own button can flip in place.
+export async function toggleMaintPaused(task: string, machineId?: string | number | null, paused?: boolean): Promise<void> {
+  try {
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { paused });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    await refreshMaintenanceView();
   } catch { /* ignore */ }
 }
 

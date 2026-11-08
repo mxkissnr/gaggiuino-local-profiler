@@ -11,6 +11,7 @@ let _partitionTiles: MaintView['_partitionTiles'];
 let _maintLogTaskOptions: MaintView['_maintLogTaskOptions'];
 let _maintVerdictState: MaintView['_maintVerdictState'];
 let _maintVerdictHtml: MaintView['_maintVerdictHtml'];
+let _maintCountText: MaintView['_maintCountText'];
 let isAutoSynced: MaintView['isAutoSynced'];
 let renderMaintenanceDashboard: MaintView['renderMaintenanceDashboard'];
 let _maintRowHtml: MaintView['_maintRowHtml'];
@@ -27,7 +28,7 @@ beforeAll(async () => {
     configurable: true, writable: true,
   });
   ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions, _maintVerdictState,
-     _maintVerdictHtml, isAutoSynced, _maintRowHtml, renderMaintLog,
+     _maintVerdictHtml, _maintCountText, isAutoSynced, _maintRowHtml, renderMaintLog,
      renderMaintenanceDashboard } = await import('../public-src/views/maintenance.js'));
   ({ S } = await import('../public-src/state/index.js'));
 });
@@ -120,6 +121,14 @@ describe('_pickNextDueTile (#393 — "Als Nächstes" banner target)', () => {
     ] as unknown as MaintTileFixture[];
     const picked = _pickNextDueTile(tiles);
     expect(picked!.task).toBe('grouphead');
+  });
+
+  it('skips a paused tile even when it carries the highest progress', () => {
+    const tiles = [
+      { task: 'paused-task', d: task('paused', { threshold_shots: 20, shotsSince: 40 }) },
+      { task: 'backflush', d: task('due', { threshold_shots: 20, shotsSince: 23 }) },
+    ] as unknown as MaintTileFixture[];
+    expect(_pickNextDueTile(tiles)!.task).toBe('backflush');
   });
 
   it('treats a never-done task\'s total shot count as its overage, so an established machine\'s never-cleaned task outranks a barely-overdue one', () => {
@@ -298,6 +307,13 @@ describe('_maintRowHtml (#1923)', () => {
     expect(html).not.toContain('A < B');
   });
 
+  it('marks a paused row with status-paused and its own chip', () => {
+    const paused = rowTile({ d: task('paused', { threshold_shots: 20, shotsSince: 5, lastDate: '2026-01-01T00:00:00.000Z' }) });
+    const html = _maintRowHtml(paused);
+    expect(html).toContain('class="maint-row status-paused"');
+    expect(html).toContain('maint-chip paused');
+  });
+
   it('marks the just-finished row as fresh, and only when asked', () => {
     expect(_maintRowHtml(rowTile(), true)).toContain('maint-row--fresh');
     expect(_maintRowHtml(rowTile())).not.toContain('maint-row--fresh');
@@ -424,11 +440,46 @@ describe('_maintVerdictState (#1923)', () => {
     expect(state.tile?.task).toBe('high');
   });
 
+  it('ignores a paused tile when ranking, even at pct 1', () => {
+    const paused = tile('paused-task', 'paused', {});
+    paused.d.pct = 1;
+    const ok = tile('ok-task', 'ok', {});
+    ok.d.pct = 0.3;
+    const state = _maintVerdictState([paused, ok]);
+    expect(state.dueCount).toBe(0);
+    expect(state.kind).toBe('ok');
+    expect(state.tile?.task).toBe('ok-task');
+  });
+
+  it('reports empty when every tile is paused', () => {
+    const state = _maintVerdictState([tile('a', 'paused'), tile('b', 'paused')]);
+    expect(state.kind).toBe('empty');
+    expect(state.tile).toBeNull();
+    expect(state.dueCount).toBe(0);
+  });
+
   it('reports empty for no tiles', () => {
     const state = _maintVerdictState([]);
     expect(state.kind).toBe('empty');
     expect(state.tile).toBeNull();
     expect(state.dueCount).toBe(0);
+  });
+});
+
+describe('_maintCountText (#1923)', () => {
+  it('still shows the numbers for a paused task that has been done before', () => {
+    const text = _maintCountText('backflush', task('paused', {
+      threshold_shots: 20, shotsSince: 25, lastDate: '2026-01-01T00:00:00.000Z',
+    }) as unknown as Parameters<MaintView['_maintCountText']>[1]);
+    expect(text).toContain('25');
+    expect(text).toContain('20');
+  });
+
+  it('falls back to the never-done text for a paused task with no last date', () => {
+    const text = _maintCountText('backflush', task('paused', {
+      threshold_shots: 20, shotsSince: 25, lastDate: null,
+    }) as unknown as Parameters<MaintView['_maintCountText']>[1]);
+    expect(text).toBe('Never done');
   });
 });
 
