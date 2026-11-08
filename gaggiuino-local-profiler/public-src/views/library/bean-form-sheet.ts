@@ -122,8 +122,8 @@ function _beanFormSheetHost(): HTMLElement | null {
   const headActions = document.createElement('div');
   headActions.className = 'lib-sheet-bar-actions';
   // #1489: the bar's Save follows the form's mode — editing saves the bean,
-  // creating saves without a bag (the "save and add a bag" choice stays in the
-  // still-visible create action row).
+  // creating saves it and opens its new-bag form right away (#1933). The
+  // create action row keeps "save without bag" available.
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'lib-sheet-save';
@@ -131,7 +131,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   save.textContent = t('lib_save');
   save.setAttribute('data-i18n-aria-label', 'lib_save');
   save.setAttribute('data-i18n', 'lib_save');
-  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanNoBag()); });
+  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanAddBag()); });
   headActions.appendChild(save);
   _formSheetSaveBtn = save;
   head.appendChild(headActions);
@@ -542,7 +542,9 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     // detail sheet (renderBeanCard), so with a plain
     // openNewBagForm the element was missing and the call threw. Open the
     // fresh sheet first and reveal the form once its content has painted.
-    if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id));
+    // #1933: the form's roast date carries over into the bag form, which then
+    // only needs the weight and the batch number.
+    if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id, roastDate));
   } finally {
     _beanSaveInFlight = false;
     _setBeanSaveButtonsDisabled(false);

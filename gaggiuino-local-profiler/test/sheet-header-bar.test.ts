@@ -152,6 +152,13 @@ class Doc {
     // The sheet hosts must genuinely be created, never auto-vivified, so a
     // missing host stays observable. Every field is a permissive stub.
     if (id === 'beanSheet' || id === 'beanFormSheet') return null;
+    // The card's inline bag form lives in the sheet's painted markup, which
+    // this fake DOM keeps as a plain string: expose its inputs only once that
+    // markup carries them, so a genuinely missing form stays observable.
+    if (id.startsWith('newBag')) {
+      const sheet = this.nodes.get('beanSheet');
+      if (!sheet || !sheet.innerHTML.includes(`id="${id}"`)) return null;
+    }
     const el = new El(this);
     el.id = id;
     this.nodes.set(id, el);
@@ -378,5 +385,35 @@ describe('bean form sheet header bar save (#1489)', () => {
     expect(section!.classList.contains('is-editing')).toBe(false);
     expect(doc.getElementById('saveBeanNoBagBtn')!.style.display).not.toBe('none');
     expect(doc.getElementById('saveBeanAddBagBtn')!.style.display).not.toBe('none');
+  });
+
+  it('bar Save asks for the new bag with the roast date filled in (#1933)', async () => {
+    setupHome();
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(
+      JSON.stringify({ id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [] }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+    g.fetch = fetchMock;
+
+    library.openBeanForm();
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+    doc.getElementById('beanFormRoastDate')!.value = '2026-03-04';
+
+    const save = doc.body.querySelector('#beanFormSheet')?.querySelector('.lib-sheet-save') ?? null;
+    expect(save).not.toBeNull();
+    save!.dispatch('click');
+
+    // The save resolves only through the stubbed fetch, so waiting for the
+    // painted bag form also proves the bar Save ran the create submit path.
+    await vi.waitFor(() =>
+      expect(doc.body.querySelector('#beanSheet')?.innerHTML).toContain('id="newBagForm7"'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Creating through the bar keeps the "add a bag" path: the fresh bean's
+    // sheet opens with its inline bag form, now holding the roast date.
+    expect(doc.body.querySelector('#beanSheet')!.innerHTML).toContain('id="newBagForm7"');
+    expect(doc.getElementById('newBagRoastDate7')!.value).toBe('2026-03-04');
+    expect(doc.getElementById('newBagStock7')!.value).toBe('');
+    expect(doc.activeElement).toBe(doc.getElementById('newBagStock7'));
   });
 });

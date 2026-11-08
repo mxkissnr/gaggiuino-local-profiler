@@ -353,9 +353,18 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   </div>`;
 }
 
-export function openNewBagForm(id: number): void {
+// `roastDate` is only passed right after creating a bean (#1933), so the bag
+// form inherits the date the user just typed. Adding a later bag passes no
+// date, so it never inherits an old one.
+export function openNewBagForm(id: number, roastDate = ''): void {
   const form = document.getElementById(`newBagForm${id}`);
-  if (form) form.style.display = '';
+  if (!form) return;
+  form.style.display = '';
+  if (!roastDate) return;
+  const dateInput = document.getElementById(`newBagRoastDate${id}`) as HTMLInputElement | null;
+  if (dateInput) dateInput.value = roastDate;
+  const stockInput = document.getElementById(`newBagStock${id}`) as HTMLInputElement | null;
+  stockInput?.focus();
 }
 
 export function closeNewBagForm(id: number): void {
