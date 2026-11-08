@@ -346,6 +346,7 @@ components:
         notes:         { type: string, maxLength: 1000 }
         burrType:      { type: string, maxLength: 200 }
         purchaseDate:  { type: string, maxLength: 10 }
+        isDefault:     { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
         burrsResetAt:  { type: string, description: "ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any" }
         imageCrop:     { $ref: '#/components/schemas/ImageCrop' }
@@ -1922,6 +1923,7 @@ paths:
                 notes:        { type: string, maxLength: 1000 }
                 burrType:     { type: string, maxLength: 200 }
                 purchaseDate: { type: string, format: date }
+                isDefault:    { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
                 burrsResetAt: { type: string, format: date, description: "Defaults to purchaseDate if omitted" }
       responses:
         "200": { description: Created grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
@@ -1948,6 +1950,7 @@ paths:
                 notes:        { type: string, maxLength: 1000 }
                 burrType:     { type: string, maxLength: 200 }
                 purchaseDate: { type: string, format: date }
+                isDefault:    { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
                 burrsResetAt: { type: string, format: date }
       responses:
         "200": { description: Updated grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
