@@ -159,6 +159,10 @@ Die Werkzeuge zum Lesen kommen mit dem Hauptschalter. Die Schreibwerkzeuge haben
 
 Der Server bietet außerdem zwei Prompts, die dem Assistenten einen fertigen Plan an die Hand geben: `dial_in_bean` und `analyse_shot`.
 
+### Score-Experimente im Dev-Channel
+
+Dev-Channel-Builds zeigen zwei zusätzliche Steuerelemente unter **Einstellungen → Dev Tools**. **Score-Modell** wählt, welches registrierte Bewertungsmodell die App anzeigt — heute nur `classic`, also die normale Bewertung; ein Wechsel lädt die App neu, und die Scores werden beim nächsten Lesen neu berechnet. Ein stabiler Build nutzt immer `classic`, egal was gespeichert ist. **Blinde Bewertung** blendet Score und Urteil eines Shots in der Shot-Liste und in der Shot-Ansicht aus, bis der Shot eine Sternebewertung hat; die Statistiken bleiben unverändert. In den Entwicklerwerkzeugen liefern `explain_score` und `export_shots_dataset` die Scores aller registrierten Modelle nebeneinander (`model_scores`) zusammen mit dem aktiven `score_model`.
+
 ### Einrichtung: Claude Code
 
 ```bash
