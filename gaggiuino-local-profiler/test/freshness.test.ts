@@ -339,7 +339,7 @@ describe('annotation panel and badges with a frozen portion (#1953)', () => {
             stock_g: 250,
             remainingG: 240,
             bags: [{ id: 1, roastDate: ROAST, stock_g: 250, consumedG: 10, remainingG: 240, current: true, frozenPortions: [PORTION] }],
-        } as unknown as Parameters<typeof beanFreshBadge>[0]);
+        });
         expect(badge).toContain('>117d<');
     });
 });
