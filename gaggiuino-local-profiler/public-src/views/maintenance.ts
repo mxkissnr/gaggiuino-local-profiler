@@ -474,6 +474,9 @@ export function openGuidedMaint(task: string, machineId: string | number): void 
   const steps = GUIDED_MAINT_STEPS[task];
   const modal = document.getElementById('guidedMaintModal');
   if (!steps || !modal) return;
+  // The detail sheet traps keyboard focus, so an open task sheet would keep
+  // the checklist unreachable underneath it.
+  _closeOpenTaskSheet();
   _guidedTask = task;
   _guidedMachineId = machineId;
   (document.getElementById('guidedMaintTitle') as HTMLElement).textContent = t(MAINT_META[task]?.key || task);

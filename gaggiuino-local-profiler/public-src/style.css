@@ -3199,6 +3199,7 @@
         .maint-hist-side { display:inline-flex; align-items:center; gap: var(--sp-1); color: var(--gray-500); font-size: var(--fs-1); }
         .maint-hist-note { flex-basis:100%; color: var(--gray-500); font-size: var(--fs-1); }
         .maint-sheet-footer { display:flex; justify-content:flex-end; }
+        .maint-guide-btn { min-height: 44px; align-self: flex-start; }
 
         .maint-badge {
             display:inline-block; width:7px; height:7px; background:var(--err);
