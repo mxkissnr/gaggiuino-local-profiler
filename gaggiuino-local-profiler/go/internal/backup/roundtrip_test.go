@@ -153,6 +153,52 @@ func TestStreamRoundTrip_FullFidelity(t *testing.T) {
 	}
 }
 
+// TestStreamRoundTrip_DefaultGrinderFlag: the single default grinder keeps
+// its flag across backup and restore, and the other grinder stays unflagged.
+func TestStreamRoundTrip_DefaultGrinderFlag(t *testing.T) {
+	useImageDir(t)
+
+	h1, deps1, _ := newTestHandlers(t)
+	mux1 := newMux(h1)
+	if err := deps1.LibRepo.SaveLibrary(library.Library{Grinders: []library.Entity{
+		{"id": int64(1), "name": "A"},
+		{"id": int64(2), "name": "B", "isDefault": true},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, mux1, http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
+
+	useImageDirAt(t, t.TempDir())
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+
+	lib, err := deps2.LibRepo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	if len(lib.Grinders) != 2 {
+		t.Fatalf("grinders = %+v, want 2", lib.Grinders)
+	}
+	for _, g := range lib.Grinders {
+		flag, has := g["isDefault"]
+		if name, _ := g["name"].(string); name == "B" {
+			if flag != true || !has {
+				t.Errorf("default grinder B lost its flag: %+v", g)
+			}
+		} else if has {
+			t.Errorf("non-default grinder %q gained isDefault: %+v", name, g)
+		}
+	}
+}
+
 // oversizedJPEGWithEXIF returns a w×h gradient JPEG with a bare APP1 "Exif"
 // segment spliced in after the SOI — enough for the restore pipeline to
 // both downscale and drop metadata.
