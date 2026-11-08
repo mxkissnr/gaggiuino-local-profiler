@@ -9,6 +9,7 @@ import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
+import { ICON_TRASH } from '../icons.js';
 import { closeDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
 // Circular with maintenance-sheet.ts (it reads this module's helpers): only
 // ever touched at call time, never at module load — same as
@@ -273,7 +274,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
         <h3 class="analytics-section-title">${esc(t('maint_log_col_task'))}</h3>
         <span class="analytics-shelf-count">${esc(active.length)}</span>
       </div>
-      <div class="maint-grid-compact" id="maintGrid"></div>
+      <div class="maint-rows" id="maintGrid"></div>
       <div class="maint-custom-section" id="maintCustomSection"></div>
       <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
     </section>
@@ -295,8 +296,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   if (hint) hint.hidden = !(hasMachines && active.some(x => x.isGlobal));
 
   const grid = document.getElementById('maintGrid') as HTMLElement;
-  grid.innerHTML = html``;
-  for (const tile of active) grid.appendChild(_buildMaintMiniTile(tile));
+  grid.innerHTML = joinHtml(active.map(_maintRowHtml));
 
   _renderCustomSection(document.getElementById('maintCustomSection'), scope);
 
@@ -333,13 +333,13 @@ function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): voi
   const rows = joinHtml(tiles.map(tile => {
     const title = taskTitle(tile.task, tile.d);
     return html`<div class="maint-disabled-row">
-      <span class="icon">${taskIconSvg(tile.task)}</span>
-      <span>${esc(title)}</span>
+      <span class="maint-row-icon">${taskIconSvg(tile.task)}</span>
+      <span class="maint-disabled-title">${esc(title)}</span>
       <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-disabled="false">${tHtml('maint_enable_btn')}</button>
     </div>`;
   }));
   // codeql[js/xss-through-dom] false positive: esc() applied
-  container.innerHTML = html`<details class="maint-disabled-details"><summary>${tHtml('maint_disabled_section', tiles.length)}</summary>${rows}</details>`;
+  container.innerHTML = html`<details class="analytics-more maint-disabled"><summary class="analytics-more-summary">${tHtml('maint_disabled_section', tiles.length)}</summary><div class="maint-rows">${rows}</div></details>`;
 }
 
 function _maintDueDetail(d: MaintTaskData): string {
@@ -434,35 +434,28 @@ function _closeOpenTaskSheet(): void {
   if (document.querySelector('#detailSheet .maint-sheet[data-task]')) requestCloseDetailSheet();
 }
 
-function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
+// #1923: one task as a full-width row — the row itself is the button that
+// opens the task sheet, so there is no separate "Details" affordance.
+export function _maintRowHtml(tile: MaintTile): Html {
   const { task, d, machineName, machineId, isGlobal, showMachineTag } = tile;
   const title = taskTitle(task, d);
 
   const machineTagText = isGlobal ? t('maint_shared_tag') : (showMachineTag ? machineName : null);
   const countText = _maintCountText(task, d);
-
   const pct = Math.round(d.pct * 100);
-  const el = document.createElement('div');
-  el.className = `maint-card status-${d.status}`;
+
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = html`
-    <div class="maint-card-indicator"></div>
-    <div class="maint-card-body">
-      <div class="maint-card-header">
-        <span class="maint-card-icon">${taskIconSvg(task)}</span>
-        <span class="maint-card-title">${esc(title)}</span>
-        <span class="maint-card-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
-      </div>
-      <div class="maint-card-progress"><div class="maint-card-progress-fill ${esc(d.status)}" style="width:${esc(pct)}%"></div></div>
-      <div class="maint-card-meta">
-        ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
-        <span class="maint-card-count">${esc(countText)}</span>
-        ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
-      </div>
-      <button class="maint-detail-toggle" type="button" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_tile_details')}</button>
-    </div>
-  `;
-  return el;
+  return html`<button type="button" class="maint-row status-${esc(d.status)}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
+    <span class="maint-row-icon">${taskIconSvg(task)}</span>
+    <span class="maint-row-title">${esc(title)}</span>
+    <span class="maint-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
+    <span class="maint-row-meta">
+      ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
+      <span class="num">${esc(countText)}</span>
+      ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
+    </span>
+    <span class="maint-row-bar" aria-hidden="true"><span class="maint-row-fill ${esc(d.status)}" style="width:${esc(pct)}%"></span></span>
+  </button>`;
 }
 
 // ── Guided walkthrough ────────────────────────────────────────────────────
@@ -474,6 +467,9 @@ export function openGuidedMaint(task: string, machineId: string | number): void 
   const steps = GUIDED_MAINT_STEPS[task];
   const modal = document.getElementById('guidedMaintModal');
   if (!steps || !modal) return;
+  // The detail sheet traps keyboard focus, so an open task sheet would keep
+  // the checklist unreachable underneath it.
+  _closeOpenTaskSheet();
   _guidedTask = task;
   _guidedMachineId = machineId;
   (document.getElementById('guidedMaintTitle') as HTMLElement).textContent = t(MAINT_META[task]?.key || task);
@@ -649,32 +645,41 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
   }
 
   const locale = localeFor(S.currentLang);
-  const rows = joinHtml(entries.map(e => {
+  const rowHtml = (e: MaintLogEntry): Html => {
     const dateStr   = new Date(e.ts * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
     const isManual  = e.shotCountAtTime === null;
     const machineTag = isGlobalTask(e.task)
       ? t('maint_shared_tag')
       : ((S.machines || []).find(m => m.id === e.machineId)?.name || e.machine || '');
-    return html`<tr>
-      <td>${esc(dateStr)}</td>
-      <td>${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</td>
-      <td>${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}</td>
-      <td class="num">${esc(e.shotCountAtTime ?? '–')}</td>
-      <td>${e.notes === AUTO_SYNCED_NOTE
-        ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
-        : e.notes ? esc(e.notes) : html``}
-        <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" title="${tHtml('maint_log_confirm_delete')}">${tHtml('maint_log_delete')}</button>
-      </td>
-    </tr>`;
-  }));
+    const shotsText = e.shotCountAtTime == null
+      ? esc('–')
+      : html`${esc(e.shotCountAtTime)} ${esc(t('maint_unit_shots'))}`;
+    return html`<div class="maint-log-row">
+      <span class="maint-log-date num">${esc(dateStr)}</span>
+      <span class="maint-log-main">
+        <span class="maint-log-task">${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</span>
+        ${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}
+        ${e.notes === AUTO_SYNCED_NOTE
+          ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
+          : e.notes ? html`<span class="maint-log-note">${esc(e.notes)}</span>` : html``}
+      </span>
+      <span class="maint-log-shots num">${shotsText}</span>
+      <button type="button" class="lib-sheet-iconbtn maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" aria-label="${esc(t('maint_log_delete'))}" title="${esc(t('maint_log_confirm_delete'))}">${ICON_TRASH}</button>
+    </div>`;
+  };
 
-  el.innerHTML = html`<div class="maint-log-tablewrap"><table class="maint-log-table">
-    <thead><tr>
-      <th>${tHtml('maint_log_col_date')}</th><th>${tHtml('maint_log_col_task')}</th>
-      <th>${tHtml('maint_log_machine')}</th><th>${tHtml('maint_by_shots')}</th><th>${tHtml('maint_log_col_notes')}</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
+  // #1923: eight rows stay visible; the rest fold behind "Show all".
+  const visible = 8;
+  const head = entries.slice(0, visible);
+  const rest = entries.slice(visible);
+  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+  el.innerHTML = html`
+    <div class="maint-log-rows">${joinHtml(head.map(rowHtml))}</div>
+    ${rest.length ? html`<details class="analytics-more maint-log-more">
+      <summary class="analytics-more-summary">${tHtml('analytics_shelf_show_all', entries.length)}</summary>
+      <div class="maint-log-rows">${joinHtml(rest.map(rowHtml))}</div>
+    </details>` : html``}
+  `;
 }
 
 // Builds the manual-log-entry task dropdown's options from the dashboard's

@@ -16,6 +16,7 @@ let maintTaskSheetActions: SheetModule['maintTaskSheetActions'];
 let openMaintTaskSheet: SheetModule['openMaintTaskSheet'];
 let _maintCountText: MaintView['_maintCountText'];
 let AUTO_SYNCED_NOTE: MaintView['AUTO_SYNCED_NOTE'];
+let openGuidedMaint: MaintView['openGuidedMaint'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -27,7 +28,7 @@ beforeAll(async () => {
     configurable: true, writable: true,
   });
   ({ maintTaskSheetBody, maintTaskSheetActions, openMaintTaskSheet } = await import('../public-src/views/maintenance-sheet.js'));
-  ({ _maintCountText, AUTO_SYNCED_NOTE } = await import('../public-src/views/maintenance.js'));
+  ({ _maintCountText, AUTO_SYNCED_NOTE, openGuidedMaint } = await import('../public-src/views/maintenance.js'));
 });
 
 interface TaskOverrides {
@@ -285,5 +286,86 @@ describe('_maintCountText (#1923)', () => {
       .toBe('120g / 500g');
     expect(_maintCountText('descaling', tile('descaling', { status: 'never', shotsSince: 500 }).d))
       .toBe('Never done');
+  });
+});
+
+interface FakeElement {
+  textContent: string;
+  innerHTML: string;
+  disabled?: boolean;
+  style: Record<string, string>;
+}
+
+interface GuidedNodes {
+  modal: FakeElement;
+  title: FakeElement;
+  steps: FakeElement;
+  done: FakeElement;
+}
+
+const GUIDED_IDS: Record<string, keyof GuidedNodes> = {
+  guidedMaintModal: 'modal',
+  guidedMaintTitle: 'title',
+  guidedMaintSteps: 'steps',
+  guidedMaintDoneBtn: 'done',
+};
+
+function fakeElement(): FakeElement {
+  return { textContent: '', innerHTML: '', style: {} };
+}
+
+// The guided checklist needs its own modal nodes, and the open task sheet is
+// detected through a document-wide selector, so this widens installDom.
+function installGuidedDom(host: FakeHost, openTaskSheet: boolean): GuidedNodes {
+  const nodes: GuidedNodes = {
+    modal: fakeElement(), title: fakeElement(), steps: fakeElement(), done: fakeElement(),
+  };
+  g.window = {
+    matchMedia: (query: string) => ({ matches: query.includes('max-width') ? false : true }),
+    innerWidth: 1200,
+    innerHeight: 800,
+  };
+  g.document = {
+    getElementById: (id: string) => {
+      if (id === 'detailSheet') return host;
+      const key = GUIDED_IDS[id];
+      return key ? nodes[key] : undefined;
+    },
+    querySelector: (sel: string) =>
+      (openTaskSheet && sel === '#detailSheet .maint-sheet[data-task]' ? { task: 'backflush' } : null),
+    body: { classList: { add: () => {}, remove: () => {}, contains: () => false } },
+    activeElement: null,
+    contains: () => true,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  return nodes;
+}
+
+describe('openGuidedMaint closes the task sheet (#1928)', () => {
+  let host: FakeHost;
+  beforeEach(() => { host = makeHost(); });
+
+  it('closes an open task sheet before showing the checklist', () => {
+    host.innerHTML = 'open sheet';
+    host.classList.add('open');
+    const nodes = installGuidedDom(host, true);
+
+    openGuidedMaint('backflush', 1);
+
+    expect(host.innerHTML).toBe('');
+    expect(host.classList.contains('open')).toBe(false);
+    expect(nodes.modal.style.display).toBe('flex');
+    expect(nodes.steps.innerHTML).toContain('guided-maint-step');
+  });
+
+  it('leaves the sheet alone and shows nothing for a task without a checklist', () => {
+    host.innerHTML = 'open sheet';
+    const nodes = installGuidedDom(host, true);
+
+    openGuidedMaint('nope', 1);
+
+    expect(host.innerHTML).toBe('open sheet');
+    expect(nodes.modal.style.display).toBeUndefined();
   });
 });
