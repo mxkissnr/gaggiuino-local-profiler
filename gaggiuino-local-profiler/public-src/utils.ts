@@ -234,21 +234,24 @@ export function freshnessState(days: number | null | undefined): 'degassing' | '
 // badge must always use plain roastAgeDays(), never an offset one.
 //
 // A frozen portion's OWN effective age is tracked separately here instead:
-// it accrues normally up to frozenAt, then holds flat while (any of) it is
-// still frozen (remainingCount > 0, no thawedAt), then resumes counting
-// from thawedAt once closed out — i.e. its clock only runs while not frozen.
+// full calendar age up to frozenAt, frozen time at FROZEN_AGE_FACTOR (so 20
+// frozen days count as one), then normal ageing after a thaw (#1953). Rounding
+// happens once, at the end, and only by flooring.
+export const FROZEN_AGE_FACTOR = 0.05;
+
 export function frozenPortionAgeDays(
   roastDateStr: string | null | undefined,
   portion: { frozenAt: number; thawedAt?: number } | null | undefined,
   nowMs: number = Date.now(),
 ): number | null {
   if (!portion || !(portion.frozenAt > 0)) return null;
+  if (nowMs < portion.frozenAt) return roastAgeDays(roastDateStr, nowMs);
   const ageAtFreeze = roastAgeDays(roastDateStr, portion.frozenAt);
   if (ageAtFreeze == null) return null;
   const thawedAt = portion.thawedAt ?? 0;
-  if (!(thawedAt > portion.frozenAt)) return ageAtFreeze;
-  const daysSinceThaw = Math.floor((nowMs - thawedAt) / 86400000);
-  return ageAtFreeze + Math.max(0, daysSinceThaw);
+  const frozenEnd = thawedAt > portion.frozenAt ? Math.min(thawedAt, nowMs) : nowMs;
+  const elapsedMs = (frozenEnd - portion.frozenAt) * FROZEN_AGE_FACTOR + (nowMs - frozenEnd);
+  return ageAtFreeze + Math.floor(elapsedMs / 86400000);
 }
 
 // A stock-tracked bean with nothing left shouldn't nag about freshness — the

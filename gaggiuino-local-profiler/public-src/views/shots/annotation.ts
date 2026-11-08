@@ -7,12 +7,13 @@ import { annotateShot, getShotDefaults, deleteShotImage, shotImageUrl } from '..
 import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js';
 import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
-import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
+import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
 import { suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
+import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput, BeanMixPartPayload } from '../../shared/bean-mix.js';
 import { initBeanMix, loadBeanMix, mixFields, mixParts, resetBeanMix } from './annotation-mix.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
@@ -44,6 +45,7 @@ interface AnnotationData {
   milkType?: number | string | null;
   recipeId?: number | null;
   frozenPortionId?: number | null;
+  beanAgeDays?: number | null;
   // #1837: 2-4 per-bean shares of the dose; absent on a single-bean shot.
   beanMix?: readonly BeanMixPartInput[] | null;
   orderedBy?: OrderedBy | null;
@@ -161,6 +163,7 @@ function _buildAnnotationPayload(shot: AnnotationShot | undefined): AnnotationPa
   const mix         = mixFields(mixParts());
   const shotCoffee  = mix ? mix.coffee : coffee;
   const shotBeanId  = mix ? mix.beanId : beanId;
+  const frozenPortionId = parseInt((document.getElementById('annFrozenPortionId') as HTMLSelectElement | null)?.value as string, 10) || null;
   return {
     rating:       S.currentRating || null,
     coffee:       shotCoffee,
@@ -176,8 +179,8 @@ function _buildAnnotationPayload(shot: AnnotationShot | undefined): AnnotationPa
     drinkType:    (document.getElementById('annDrinkType') as HTMLSelectElement | null)?.value || null,
     milkType:     (document.getElementById('annMilkType') as HTMLSelectElement | null)?.value ? parseInt((document.getElementById('annMilkType') as HTMLSelectElement).value) : null,
     recipeId:     parseInt((document.getElementById('annRecipe') as HTMLSelectElement | null)?.value as string) || null,
-    beanAgeDays:  calcBeanAgeAtShot(shotCoffee, shot?.timestamp, shotBeanId) ?? null,
-    frozenPortionId: parseInt((document.getElementById('annFrozenPortionId') as HTMLSelectElement | null)?.value as string, 10) || null,
+    beanAgeDays:  beanAgeForSave(shotCoffee, shot?.timestamp, shotBeanId, mix ? null : frozenPortionId, shot?.annotation?.beanAgeDays),
+    frozenPortionId,
     beanMix:      mix ? mix.beanMix : null,
   };
 }
@@ -382,10 +385,13 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
   // one, so a renamed bean still offers the same frozen batches.
   const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary?.beans);
   const portions = _activeFrozenPortionsForBean(bean, shotMs ?? Date.now());
-  if (!portions.length) { field.style.display = 'none'; container.innerHTML = html``; hidden.value = ''; return; }
+  // A shot that used the last portion of a batch still holds that choice:
+  // clearing the field here would auto-save `frozenPortionId: null` on the
+  // next edit and book the portion back into stock.
+  const selected = selectedId != null ? String(selectedId) : '';
+  if (!portions.length) { field.style.display = 'none'; container.innerHTML = html``; hidden.value = selected; return; }
   field.style.display = '';
   const locale = localeFor(S.currentLang);
-  const selected = selectedId != null ? String(selectedId) : '';
   const options = [{ id: '', label: t('ann_frozen_portion_none') }, ...portions.map(p => {
     const dateStr    = new Date(p.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
     const remaining  = Number.isFinite(p.remainingCount) ? p.remainingCount as number : p.portionCount;
@@ -410,8 +416,13 @@ export function selectFrozenPortion(id: string | null | undefined): void {
   // so a renamed bean still resolves to the same frozen batches.
   const beanIdAttr = coffeeSelect ? coffeeSelect.selectedOptions[0]?.dataset.beanId : undefined;
   const beanId = beanIdAttr ? parseInt(beanIdAttr, 10) : null;
-  const shot     = S.primaryShotId ? S.shots.find(s => s.id === S.primaryShotId) : null;
+  const shot     = S.primaryShotId ? _shots().find(s => s.id === S.primaryShotId) : null;
   _renderFrozenPortionPills(beanName, shot ? shot.timestamp * 1000 : Date.now(), id || null, beanId);
+  // The tracker follows the newly picked portion's own effective age, so it
+  // matches the badge the shot will show once saved.
+  const mix = mixFields(mixParts());
+  const ann = { ...(shot?.annotation ?? {}), coffee: beanName, beanId, frozenPortionId: id ? parseInt(id, 10) : null, beanMix: mix ? mix.beanMix : null };
+  updateDegassing(_roastDateFromLibrary(beanName, shot?.timestamp, beanId) || '', _frozenShotAge(ann, shot?.timestamp));
   scheduleAutoSave();
 }
 
@@ -610,13 +621,22 @@ export function renderStars(rating: number): void {
   });
 }
 
-export function updateDegassing(val: string | null | undefined): void {
+// #1953: the degassing tracker's effective age for a shot brewed from a frozen
+// portion — undefined for plain and mixed shots, which keep the roast-date read.
+export function _frozenShotAge(ann: AnnotationData, shotTimestampSec: number | undefined): number | undefined {
+  if (!ann.frozenPortionId || isBeanMix(ann)) return undefined;
+  return shotBeanAge(ann, shotTimestampSec, { relativeToNow: false })?.days;
+}
+
+export function updateDegassing(val: string | null | undefined, effectiveDays?: number | null): void {
   const tracker = document.getElementById('degassingTracker') as HTMLElement;
   const fill    = document.getElementById('degassingFill') as HTMLElement;
   const label   = document.getElementById('degassingLabel') as HTMLElement;
   const date = parseRoastDate(val);
   if (!date) { tracker.style.display = 'none'; return; }
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  // #1953: a frozen shot's tracker shows the same effective age as its badge;
+  // every other shot keeps reading from the roast date relative to now.
+  const days = effectiveDays ?? Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
   tracker.style.display = 'block';
   // #1835: the bands come from the shared freshness windows; the bar keeps its
@@ -744,7 +764,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   // #1837: after the bean select and the dose it renders row 1 from — a saved
   // mix restores its rows and takes the dose over as their sum.
   loadBeanMix(ann);
-  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '');
+  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '', _frozenShotAge(ann, shot?.timestamp));
   (document.getElementById('annTds') as HTMLInputElement).value          = String(ann.tds         || '');
   (document.getElementById('annNotes') as HTMLInputElement).value        = ann.notes        || '';
   _renderDrinkPills(ann.drinkType || '');

@@ -214,16 +214,16 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
           <button class="lib-save-btn" data-action="save-edit-frozen-form" data-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}">${tHtml('bag_freeze_save')}</button>
         </div>
       </div>`;
-    // #477: each portion's own effective age (its clock only runs while
-    // not frozen) — separate from the bag's badge above, which is never
-    // discounted by this.
+    // #477: each portion's own effective age (frozen time counts at a
+    // twentieth of the normal rate) — separate from the bag's badge above,
+    // which is never discounted by this.
     const fpAge = frozenPortionAgeDays(activeBag?.roastDate || b.roastDate, fp);
     const fpTitle = fpAge != null
       ? `${t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g)} — ${t('bag_frozen_portion_age', fpAge)}`
       : t('bag_frozen_portion_title', fp.portionCount, fp.portionWeight_g);
-    // #856: the portion's paused age is now also a visible badge (reusing
-    // the bag-level fresh-badge color tiers), not just a tooltip — without
-    // it, a frozen portion looked like it kept aging same as the bag.
+    // #856: the portion's own effective age is now also a visible badge
+    // (reusing the bag-level fresh-badge color tiers), not just a tooltip —
+    // without it, a frozen portion looked like it kept ageing at the bag's rate.
     const fpAgeBadge: Html = fpAge != null
       ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(fpAge))}" title="${esc(t('bag_frozen_portion_age', fpAge))}">${esc(fpAge)}d</span>`
       : esc('');
@@ -408,9 +408,9 @@ export function closeFreezeForm(id: number): void {
 
 // Freezes a portion of the active bag: grams move into a dated frozen pool
 // (see bag.frozenPortions in the schema) but stay counted in stock_g — the
-// freeze doesn't consume anything, it just pauses that portion's own
-// freshness clock (frozenPortionAgeDays(), utils.ts, #477 — the bag's own
-// badge is never affected by this) until it's thawed.
+// freeze doesn't consume anything, it just slows that portion's own ageing to
+// a twentieth of the normal rate (frozenPortionAgeDays(), utils.ts, #477/#1953
+// — the bag's own badge is never affected by this) until it's thawed.
 // frozenAt (#472) comes from the form's date picker (defaults to today, but
 // editable for logging a portion frozen in the past) rather than always
 // being "now".
