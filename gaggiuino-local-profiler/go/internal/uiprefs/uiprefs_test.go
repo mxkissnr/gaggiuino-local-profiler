@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -325,5 +326,79 @@ func TestPUT_ConcurrentDifferentKeysAllPersist(t *testing.T) {
 		if _, ok := got[key]; !ok {
 			t.Errorf("concurrent PUTs lost key %q: %+v", key, got)
 		}
+	}
+}
+
+// ── seen markers (#1956) ───────────────────────────────────────────────
+
+func TestPUT_SeenMarkerNeverMovesBack(t *testing.T) {
+	for _, key := range []string{"popups.whats_new_seen", "popups.achievements_seen"} {
+		mux, _ := newTestMux(t)
+		rec := do(t, mux, http.MethodPut, "/api/ui-prefs", `{"`+key+`":3007000}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT %s = %d %q; want 200", key, rec.Code, rec.Body.String())
+		}
+		rec = do(t, mux, http.MethodPut, "/api/ui-prefs", `{"`+key+`":3006000}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("lower PUT %s = %d %q; want 200", key, rec.Code, rec.Body.String())
+		}
+		if got := decode(t, rec)[key]; got != float64(3007000) {
+			t.Errorf("%s after lower PUT = %v; want 3007000", key, got)
+		}
+		rec = do(t, mux, http.MethodPut, "/api/ui-prefs", `{"`+key+`":3008000}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("higher PUT %s = %d %q; want 200", key, rec.Code, rec.Body.String())
+		}
+		if got := decode(t, rec)[key]; got != float64(3008000) {
+			t.Errorf("%s after higher PUT = %v; want 3008000", key, got)
+		}
+	}
+}
+
+func TestPUT_SeenMarkerLowerValueKeepsOtherKeysInBody(t *testing.T) {
+	mux, _ := newTestMux(t)
+	do(t, mux, http.MethodPut, "/api/ui-prefs", `{"popups.whats_new_seen":3007000}`)
+	rec := do(t, mux, http.MethodPut, "/api/ui-prefs", `{"popups.whats_new_seen":3006000,"view":"grid"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT = %d %q; want 200", rec.Code, rec.Body.String())
+	}
+	got := decode(t, rec)
+	if got["popups.whats_new_seen"] != float64(3007000) {
+		t.Errorf("marker = %v; want 3007000", got["popups.whats_new_seen"])
+	}
+	if got["view"] != "grid" {
+		t.Errorf("view = %v; want grid", got["view"])
+	}
+}
+
+func TestPUT_OtherNumbersMayGoDown(t *testing.T) {
+	mux, _ := newTestMux(t)
+	do(t, mux, http.MethodPut, "/api/ui-prefs", `{"bean_low_stock_g":200}`)
+	rec := do(t, mux, http.MethodPut, "/api/ui-prefs", `{"bean_low_stock_g":100}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT = %d %q; want 200", rec.Code, rec.Body.String())
+	}
+	if got := decode(t, rec)["bean_low_stock_g"]; got != float64(100) {
+		t.Errorf("bean_low_stock_g = %v; want 100", got)
+	}
+}
+
+func TestPUT_SeenMarkerConcurrentKeepsHighest(t *testing.T) {
+	mux, _ := newTestMux(t)
+	var wg sync.WaitGroup
+	for i := 1; i <= 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			body := `{"popups.whats_new_seen":` + strconv.Itoa(i) + `}`
+			if rec := do(t, mux, http.MethodPut, "/api/ui-prefs", body); rec.Code != http.StatusOK {
+				t.Errorf("PUT %s = %d %q; want 200", body, rec.Code, rec.Body.String())
+			}
+		}(i)
+	}
+	wg.Wait()
+	got := decode(t, do(t, mux, http.MethodGet, "/api/ui-prefs", ""))
+	if got["popups.whats_new_seen"] != float64(50) {
+		t.Errorf("marker after concurrent PUTs = %v; want 50", got["popups.whats_new_seen"])
 	}
 }
