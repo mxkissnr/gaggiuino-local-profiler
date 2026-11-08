@@ -12,7 +12,7 @@ import { t, tHtml } from '../i18n.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
-import { localeFor } from '../constants.js';
+import { GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { openDetailSheet } from '../components/detail-sheet.js';
 import { AUTO_SYNCED_NOTE, _maintCountText, isAutoSynced, maintStatusLabel, taskTitle } from './maintenance.js';
 import type { MaintLogEntry, MaintTile } from './maintenance.js';
@@ -102,6 +102,12 @@ function _history(tile: MaintTile, history: MaintLogEntry[]): Html {
   </div>`;
 }
 
+// Only the tasks with a step list in GUIDED_MAINT_STEPS get a guide button.
+function _guideButton(tile: MaintTile): Html {
+  if (!GUIDED_MAINT_STEPS[tile.task]) return html``;
+  return html`<button type="button" class="analytics-filter-btn maint-guide-btn" data-action="open-guided-maint" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('guided_open')}</button>`;
+}
+
 function _footer(tile: MaintTile): Html {
   const { task, machineId } = tile;
   return html`<div class="maint-sheet-footer">
@@ -122,6 +128,7 @@ export function maintTaskSheetBody(tile: MaintTile, history: MaintLogEntry[]): H
       ${_thresholdFields(tile, mode)}
       ${tile.task.startsWith('custom_') ? _renameField(tile) : esc('')}
     </div>
+    ${_guideButton(tile)}
     ${_history(tile, history)}
     ${_footer(tile)}
   </div>`;
