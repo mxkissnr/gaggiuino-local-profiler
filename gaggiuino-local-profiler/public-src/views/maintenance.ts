@@ -10,11 +10,11 @@ import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 import { ICON_TRASH } from '../icons.js';
-import { closeDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
+import { closeDetailSheet, openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
 // Circular with maintenance-sheet.ts (it reads this module's helpers): only
 // ever touched at call time, never at module load — same as
 // library/bean-form-sheet.ts.
-import { openMaintTaskSheet } from './maintenance-sheet.js';
+import { maintCustomFormBody, maintLogFormBody, openMaintTaskSheet } from './maintenance-sheet.js';
 
 // One task's status block as GET /api/maintenance serves it (flat for a
 // single machine, nested under machines[]/global for the fleet view).
@@ -275,7 +275,6 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
         <span class="analytics-shelf-count">${esc(active.length)}</span>
       </div>
       <div class="maint-rows" id="maintGrid"></div>
-      <div class="maint-custom-section" id="maintCustomSection"></div>
       <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
     </section>
   `;
@@ -298,8 +297,6 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   const grid = document.getElementById('maintGrid') as HTMLElement;
   grid.innerHTML = joinHtml(active.map(_maintRowHtml));
 
-  _renderCustomSection(document.getElementById('maintCustomSection'), scope);
-
   const disabledSec = document.getElementById('maintDisabledSection');
   if (disabledSec && disabled.length > 0) {
     disabledSec.style.display = '';
@@ -308,25 +305,6 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
 
   const badge = document.getElementById('maintBadge');
   if (badge) badge.style.display = verdict.dueCount > 0 ? 'inline-block' : 'none';
-}
-
-function _renderCustomSection(container: HTMLElement | null, scope: MaintScope): void {
-  if (!container) return;
-  const writeMid = _writeMachineId(scope === 'all' ? undefined : scope);
-  // codeql[js/xss-through-dom] false positive: esc() applied
-  container.innerHTML = html`
-    <details class="maint-custom-add">
-      <summary>${esc(t('maint_custom_add_summary'))}</summary>
-      <div class="maint-custom-form">
-        <input type="text" aria-label="${esc(t('maint_custom_label_ph'))}" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
-        <div class="maint-custom-thresholds">
-          <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> ${esc(t('maint_unit_shots'))}</label>
-          <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> ${esc(t('maint_by_days'))}</label>
-        </div>
-        <button data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${esc(t('maint_custom_add'))}</button>
-      </div>
-    </details>
-  `;
 }
 
 function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): void {
@@ -588,6 +566,7 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
   try {
     const r = await addCustomMaintenanceTask(_writeMachineId(machineId), body);
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    if (document.getElementById('customTaskLabel')) requestCloseDetailSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -697,27 +676,34 @@ export function _maintLogTaskOptions(tiles: MaintTile[]): { task: string; label:
   return options;
 }
 
-export function openMaintLogForm(): void {
-  const form = document.getElementById('maintLogForm');
-  if (!form) return;
-  const sel = document.getElementById('maintLogTask') as HTMLSelectElement;
-  sel.innerHTML = html``;
-  for (const { task, label } of _maintLogTaskOptions(_lastActiveTiles)) {
-    const opt = document.createElement('option');
-    opt.value = task; opt.textContent = label;
-    sel.appendChild(opt);
-  }
-  // Set date to today (local, not UTC — see todayIsoDate)
-  const today = todayIsoDate();
-  (document.getElementById('maintLogDate') as HTMLInputElement).value = today;
-  (document.getElementById('maintLogDate') as HTMLInputElement).max   = today;
-  (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value = '';
-  form.style.display = 'flex';
+// The manual log entry form lives in the shared sheet (#1923): opened from the
+// toolbar (or the maintenance shortcut), Save is the bar's action.
+export function openMaintLogForm(anchor: HTMLElement | null = null): void {
+  openDetailSheet({
+    title: t('maint_log_add'),
+    body: maintLogFormBody(_maintLogTaskOptions(_lastActiveTiles), todayIsoDate()),
+    actions: html`<button type="button" class="lib-sheet-save" data-action="submit-maint-log">${tHtml('maint_log_save')}</button>`,
+    anchor,
+  });
+  // Interim (#1923): the body's Cancel button goes away in plan-1923e.
+  document.getElementById('maintLogCancelBtn')?.addEventListener('click', closeMaintLogForm);
 }
 
+// No-op when the form sheet is not open — submitMaintLogEntry's success path
+// also runs in contexts without a sheet (and in the write-machine-id test).
 export function closeMaintLogForm(): void {
-  const form = document.getElementById('maintLogForm');
-  if (form) form.style.display = 'none';
+  if (document.getElementById('maintLogForm')) requestCloseDetailSheet();
+}
+
+// The "add custom task" form, also in the shared sheet (#1923).
+export function openMaintCustomForm(anchor: HTMLElement | null = null): void {
+  const writeMid = _writeMachineId(_maintScope === 'all' ? undefined : _maintScope);
+  openDetailSheet({
+    title: t('maint_custom_add_summary'),
+    body: maintCustomFormBody(),
+    actions: html`<button type="button" class="lib-sheet-save" data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${tHtml('maint_custom_add')}</button>`,
+    anchor,
+  });
 }
 
 export async function submitMaintLogEntry(): Promise<void> {
