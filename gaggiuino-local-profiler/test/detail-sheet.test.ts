@@ -195,6 +195,47 @@ describe('detail sheet (#1467)', () => {
   });
 });
 
+describe('detail sheet onClose (#1956)', () => {
+  let host: FakeHost;
+  beforeEach(() => { host = makeHost(); });
+  afterEach(() => { closeDetailSheet(); });
+
+  it('fires once when the sheet is closed, not again on a second close', () => {
+    const onClose = vi.fn();
+    installDom(host, null, false);
+    openDetailSheet({ title: 'First', body: html``, onClose });
+
+    closeDetailSheet();
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    closeDetailSheet();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires when a later open replaces the content', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    installDom(host, null, false);
+    openDetailSheet({ title: 'First', body: html``, onClose: first });
+    openDetailSheet({ title: 'Second', body: html``, onClose: second });
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+
+    closeDetailSheet();
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
+  });
+
+  it('opening without onClose behaves as before', () => {
+    installDom(host, null, false);
+    openDetailSheet({ title: 'Plain', body: html`` });
+    expect(host.innerHTML).toContain('Plain');
+    expect(() => { closeDetailSheet(); }).not.toThrow();
+    expect(host.innerHTML).toBe('');
+  });
+});
+
 describe('clampPopTop (#1912)', () => {
   it('leaves a popover that fits where it is', () => {
     expect(clampPopTop(300, 200, 800)).toBe(300);

@@ -27,11 +27,20 @@ export interface DetailSheetOptions {
   // Main actions for the sheet bar, right of the title (44px icons, #1923).
   actions?: Html;
   anchor?: HTMLElement | DetailAnchorPoint | null;
+  // Runs once when this sheet is gone: closed, or replaced by a later open.
+  onClose?: () => void;
 }
 
 let _dialogKeyboard: DialogKeyboardHandle | null = null;
 // #1912: watches the open popover's size, see openDetailSheet.
 let _popResize: ResizeObserver | null = null;
+let _onClose: (() => void) | null = null;
+
+function _fireOnClose(): void {
+  const fn = _onClose;
+  _onClose = null;
+  fn?.();
+}
 
 function _host(): HTMLElement | null {
   return typeof document !== 'undefined' ? document.getElementById('detailSheet') : null;
@@ -87,7 +96,9 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
   // sheet so its timer cannot empty the host we are about to fill.
   settleSheetOut();
   const host = _host();
-  if (!host) return;
+  if (!host) { opts.onClose?.(); return; }
+  _fireOnClose();
+  _onClose = opts.onClose ?? null;
 
   const anchor = opts.anchor ?? null;
   const desktop = _isDesktop() && anchor !== null;
@@ -159,4 +170,5 @@ export function closeDetailSheet(): void {
     host.classList?.remove('open');
   }
   if (typeof document !== 'undefined') document.body?.classList?.remove('lib-sheet-open');
+  _fireOnClose();
 }
