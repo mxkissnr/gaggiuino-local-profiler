@@ -105,8 +105,14 @@ function installDom(host: FakeHost): void {
     innerWidth: 1200,
     innerHeight: 800,
   };
+  // The form lives inside the sheet host, so its ids only resolve while the
+  // host markup holds them — exactly like the real document.
+  const inSheet = { addEventListener: () => {} } as unknown as HTMLElement;
   g.document = {
-    getElementById: (id: string) => (id === 'detailSheet' ? host : undefined),
+    getElementById: (id: string) => {
+      if (id === 'detailSheet') return host;
+      return host.innerHTML.includes(`id="${id}"`) ? inSheet : undefined;
+    },
     body: {
       classList: {
         add: (t: string) => { bodyClasses.add(t); },

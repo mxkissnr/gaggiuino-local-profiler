@@ -131,11 +131,11 @@ export function maintTaskSheetBody(tile: MaintTile, history: MaintLogEntry[]): H
 // (#1923) until plan-1923e removes it together with its key.
 export function maintLogFormBody(options: { task: string; label: string }[], today: string): Html {
   return html`<div id="maintLogForm" class="maint-sheet maint-form">
-    <select id="maintLogTask" aria-label="${tHtml('maint_log_col_task')}">
+    <select id="maintLogTask" aria-label="${esc(t('maint_log_col_task'))}">
       ${joinHtml(options.map(o => html`<option value="${esc(o.task)}">${esc(o.label)}</option>`))}
     </select>
-    <input type="date" id="maintLogDate" value="${esc(today)}" max="${esc(today)}" aria-label="${tHtml('maint_log_col_date')}">
-    <input type="text" id="maintLogNotes" placeholder="${tHtml('maint_log_notes_ph')}" aria-label="${tHtml('maint_log_col_notes')}">
+    <input type="date" id="maintLogDate" value="${esc(today)}" max="${esc(today)}" aria-label="${esc(t('maint_log_col_date'))}">
+    <input type="text" id="maintLogNotes" placeholder="${esc(t('maint_log_notes_ph'))}" aria-label="${esc(t('maint_log_col_notes'))}">
     <button type="button" class="maint-log-cancel-btn" id="maintLogCancelBtn">${tHtml('maint_log_cancel')}</button>
   </div>`;
 }
@@ -143,7 +143,7 @@ export function maintLogFormBody(options: { task: string; label: string }[], tod
 // Pure: the "add custom task" form as a sheet body.
 export function maintCustomFormBody(): Html {
   return html`<div class="maint-sheet maint-form">
-    <input type="text" aria-label="${tHtml('maint_custom_label_ph')}" id="customTaskLabel" placeholder="${tHtml('maint_custom_label_ph')}" maxlength="100">
+    <input type="text" aria-label="${esc(t('maint_custom_label_ph'))}" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
     <div class="maint-form-intervals">
       <label>${tHtml('maint_custom_every')} <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> ${tHtml('maint_unit_shots')}</label>
       <label>${tHtml('maint_custom_every')} <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> ${tHtml('maint_by_days')}</label>
