@@ -468,6 +468,26 @@ describe('save and add bag (#1398)', () => {
   it('openNewBagForm tolerates a bag form that is not in the DOM', () => {
     expect(() => library.openNewBagForm(999)).not.toThrow();
   });
+
+  it('adding a later bag passes no roast date and moves no focus', () => {
+    setupHome();
+    const form = doc.createElement();
+    form.id = 'newBagForm7';
+    form.style.display = 'none';
+    doc.register(form);
+    const date = doc.createElement();
+    date.id = 'newBagRoastDate7';
+    doc.register(date);
+
+    // boot/delegation.ts's "open-new-bag" action calls openNewBagForm(id) with
+    // no date: the form opens, but nothing is prefilled or focused (#1933).
+    doc.activeElement = null;
+    library.openNewBagForm(7);
+
+    expect(form.style.display).toBe('');
+    expect(date.value).toBe('');
+    expect(doc.activeElement).toBeNull();
+  });
 });
 
 describe('bean roast date follows the current bag (#1606)', () => {
