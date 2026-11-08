@@ -1,9 +1,6 @@
 package shots
 
-import (
-	"sync/atomic"
-	"testing"
-)
+import "sync/atomic"
 
 // Score models (#1922): the scorer behind a shot's score is a registry entry
 // instead of a bare function call, so a dev build can switch models without
@@ -145,27 +142,4 @@ func (s *Service) AllModelsScorer() func(Shot) []ModelScore {
 		}
 		return out
 	}
-}
-
-// RegisterScoreModelForTest appends m to the registry and restores the
-// previous registry when t finishes. It is the cross-package hook other
-// packages' tests use to exercise a second model (#1922); production never
-// registers anything beyond classic.
-//
-// A var rather than a func on purpose: the blocking deadcode gate
-// (`.github/workflows/test.yaml`, reachability from ./cmd/...) reports
-// unreachable *functions*, and no production path may call a test hook. The
-// var's initializer still runs at package init, so the closure itself is
-// reachable. Not safe with t.Parallel().
-var RegisterScoreModelForTest = func(t testing.TB, m ScoreModel) {
-	t.Helper()
-	prev := loadScoreModels()
-	next := make([]ScoreModel, 0, len(prev)+1)
-	next = append(next, prev...)
-	next = append(next, m)
-	scoreModels.Store(&next)
-	t.Cleanup(func() {
-		restored := prev
-		scoreModels.Store(&restored)
-	})
 }
