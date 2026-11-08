@@ -1775,6 +1775,14 @@
         <div class="settings-card" id="devToolsCard" style="display:none">
             <h3 class="settings-card-title" data-i18n="settings_devtools_title">Dev Tools</h3>
             <p class="settings-card-desc" data-i18n="settings_devtools_desc">GLP DEV channel only — never available on a real install.</p>
+            <!-- #1922: dev-channel only; wired by components/dev-score-settings.ts -->
+            <label for="devScoreModel" class="machine-form-label" data-i18n="settings_devtools_score_model">Score-Modell</label>
+            <select id="devScoreModel" class="machine-form-input"></select>
+            <p class="settings-card-desc" data-i18n="settings_devtools_score_model_desc">Welches Modell deine Shots bewertet. Ein Wechsel lädt die App neu; Stable-Builds nutzen immer classic.</p>
+            <div class="orders-broadcast-row">
+                <input type="checkbox" id="devBlindRating">
+                <label for="devBlindRating" data-i18n="settings_devtools_blind_rating">Blind bewerten — Score und Urteil eines Shots erst nach der Sternebewertung zeigen</label>
+            </div>
             <button id="devExportDbBtn" type="button" class="backup-btn" data-i18n="settings_devtools_export_db">Download raw database</button>
             <!-- #755: counterpart to the export button above. Translation
                  text must live in its own span, same reasoning as the
