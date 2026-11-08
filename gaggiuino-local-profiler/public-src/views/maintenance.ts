@@ -697,7 +697,8 @@ export function closeMaintLogForm(): void {
 
 // The "add custom task" form, also in the shared sheet (#1923).
 export function openMaintCustomForm(anchor: HTMLElement | null = null): void {
-  const writeMid = _writeMachineId(_maintScope === 'all' ? undefined : _maintScope);
+  const scope = _effectiveScope();
+  const writeMid = _writeMachineId(scope === 'all' ? undefined : scope);
   openDetailSheet({
     title: t('maint_custom_add_summary'),
     body: maintCustomFormBody(),
