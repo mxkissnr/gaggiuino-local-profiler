@@ -13,6 +13,7 @@ import { updateMachineBanner, updateOnboardingPanel, updateDemoBadge } from './o
 import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
 import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
+import { applyDevScoreSettings } from './dev-score-settings.js';
 
 // /api/status and /api/switch responses are plain fetch Responses, so their
 // parsed bodies are named here rather than left as `any`.
@@ -44,6 +45,9 @@ interface StatusPayload {
   machines?: StatusMachineEntry[];
   glpVersion?: string | null;
   devBuild?: string | null;
+  // #1922: the registered score-model ids, dev-channel builds only — absent on
+  // stable like devBuild itself.
+  scoreModels?: string[];
   ordersFeature?: boolean;
   isDemo?: boolean;
   // #1539 slice 2/3: the SSE data-change tracker's epoch and per-kind
@@ -222,6 +226,10 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // this, so this toggle is UI hygiene, not the safety mechanism.
     const devToolsCard = document.getElementById('devToolsCard');
     if (devToolsCard) devToolsCard.style.display = s.devBuild ? '' : 'none';
+    // #1922: same dev-channel gate as the card above. Wires the score-model
+    // and blind-rating controls (ids from the slice that adds their markup),
+    // and applies the blind-rating class on every build.
+    applyDevScoreSettings(!!s.devBuild, s.scoreModels);
     const ordersBtn = document.getElementById('btnOrders');
     if (ordersBtn) ordersBtn.style.display = s.ordersFeature ? '' : 'none';
     // Bottom nav "Mehr" sheet (#403, mobile) mirrors the same feature gate.

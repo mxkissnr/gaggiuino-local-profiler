@@ -1010,6 +1010,11 @@
         .verdict-line {
             display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2);
         }
+        /* #1922 blind rating (dev builds): hide a shot's verdict until it has a
+           star rating. `visibility` instead of `display` keeps the header from
+           jumping when the score appears; renderStars() sets `.active` on the
+           first click, so the reveal is immediate. */
+        body.glp-blind-rating:not(:has(#starRating .star.active)) #verdictHeader .verdict-line { visibility: hidden; }
         /* #813: the score ring became type — the number itself, at display
            size and in the score colour (--ring-color, set inline per shot,
            unified score scale #397), carries the same information with none
@@ -2178,6 +2183,12 @@
         }
         .bean-filter-clear:hover { background: color-mix(in srgb, var(--amber) 15%, transparent); }
 
+        /* #1922 blind rating (dev builds): the list row hides its score pill
+           while the shot has no rating. The row's `.stars` only exists for a
+           rated shot, so :has() is the whole condition; the annotation save
+           re-renders the row and the score reappears. */
+        body.glp-blind-rating .shot:not(:has(.stars)) .sidebar-score { visibility: hidden; }
+
         /* ── Sidebar score pill ── */
         .sidebar-score {
             font-size: var(--fs-1);
@@ -3183,6 +3194,7 @@
         .maint-hist-side { display:inline-flex; align-items:center; gap: var(--sp-1); color: var(--gray-500); font-size: var(--fs-1); }
         .maint-hist-note { flex-basis:100%; color: var(--gray-500); font-size: var(--fs-1); }
         .maint-sheet-footer { display:flex; justify-content:flex-end; }
+        .maint-guide-btn { min-height: 44px; align-self: flex-start; }
 
         .maint-badge {
             display:inline-block; width:7px; height:7px; background:var(--err);

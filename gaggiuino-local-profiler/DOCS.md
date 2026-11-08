@@ -159,6 +159,10 @@ The read-only tools come with the main switch. The write tools have their own ch
 
 The server also offers two prompts that hand the assistant a ready-made plan: `dial_in_bean` and `analyse_shot`.
 
+### Dev-channel score experiments
+
+Dev-channel builds show two extra controls in **Settings → Dev Tools**. **Score model** picks which registered scoring model the app shows — today only `classic`, which is the normal score; switching reloads the app, and scores are recomputed when they are next read. A stable build always uses `classic`, whatever is stored. **Blind rating** hides a shot's score and verdict in the shot list and the shot detail until the shot has a star rating; statistics are unchanged. In the developer tools, `explain_score` and `export_shots_dataset` return every registered model's score side by side (`model_scores`) together with the active `score_model`.
+
 ### Setup: Claude Code
 
 ```bash
