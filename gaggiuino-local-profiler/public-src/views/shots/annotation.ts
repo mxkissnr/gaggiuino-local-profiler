@@ -293,6 +293,8 @@ export async function loadShotDefaults(): Promise<void> {
 // completely untouched: a configured default must never overwrite something
 // the user already recorded. Applied fields stay fully editable afterward —
 // this only changes what the form starts out showing.
+// #1954: with a default grinder a new shot opens with that grinder, the same
+// one bean selection prefills from.
 export function _applyShotDefaults(ann: AnnotationData | null | undefined): AnnotationData | null | undefined {
   if (ann && Object.keys(ann).length > 0) return ann;
   const d = S.shotDefaults as Partial<ShotDefaults> | null;
@@ -303,7 +305,7 @@ export function _applyShotDefaults(ann: AnnotationData | null | undefined): Anno
     beanId:       d.beanId       ?? null,
     basketId:     d.basketId     ?? null,
     puckScreenId: d.puckScreenId ?? null,
-    grinder:      d.grinder      || '',
+    grinder:      defaultGrinderName(S.coffeeLibrary) || d.grinder || '',
     dose:         d.dose         ?? null,
   };
 }
