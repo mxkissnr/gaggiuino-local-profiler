@@ -66,6 +66,24 @@ interface ShelfModule {
 const { classifyBeanShelf, shelfStock, renderShelfTile, renderShelfRow, matchesShelfQuery, matchesShelfFilter, sortShelf } =
   (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
 
+interface BagEntryLike {
+  bg: { id: number };
+  remaining: number | null;
+}
+interface ClassifiedBagsLike {
+  current: BagEntryLike | null;
+  upcoming: BagEntryLike[];
+  past: BagEntryLike[];
+}
+interface BagsModule {
+  classifyBeanBags: (b: unknown) => ClassifiedBagsLike;
+}
+const { classifyBeanBags } = (await import('../public-src/views/library/bags.js')) as unknown as BagsModule;
+
+function bagIds(entries: readonly BagEntryLike[]): number[] {
+  return entries.map(e => e.bg.id);
+}
+
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
   saveBeanNoBag: () => Promise<void>;
@@ -183,6 +201,8 @@ describe('shelfStock (#1330 one shelf)', () => {
     expect(s.opened).toBe(true);
   });
 
+  // #1933: the bean's only untracked bag is "upcoming" (not weighed yet), so
+  // it still has no open grams and no sealed bag behind it.
   it('leaves grams null for an untracked bean', () => {
     const b = bean({ id: 4, bags: [bag({ id: 1, stock_g: 250 })] });
     expect(shelfStock(b)).toEqual({ openG: null, pct: null, opened: false, sealedBags: 0, frozenG: 0 });
@@ -197,6 +217,37 @@ describe('shelfStock (#1330 one shelf)', () => {
       ],
     })] });
     expect(shelfStock(b).frozenG).toBe(36);
+  });
+});
+
+describe('classifyBeanBags (#1933 untracked placeholder)', () => {
+  it("keeps a bean's only untracked bag in upcoming, not past", () => {
+    const b = bean({ id: 1, bags: [bag({ id: 1, stock_g: 250, roastDate: '2026-10-01' })] });
+    const { current, upcoming, past } = classifyBeanBags(b);
+    expect(current).toBeNull();
+    expect(bagIds(upcoming)).toEqual([1]);
+    expect(past).toEqual([]);
+    expect(upcoming[0]?.remaining).toBeNull();
+  });
+
+  it('still files an untracked bag under past when the bean has another bag', () => {
+    const b = bean({ id: 2, bags: [
+      bag({ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true }),
+      bag({ id: 2, stock_g: 250 }),
+    ] });
+    const { upcoming, past } = classifyBeanBags(b);
+    expect(upcoming).toEqual([]);
+    expect(bagIds(past)).toEqual([2]);
+  });
+
+  it('keeps an emptied tracked bag in past', () => {
+    // SimulateBagQueue advances past an exhausted bag, so the bean's only
+    // tracked bag at 0 g is never "current".
+    const b = bean({ id: 3, bags: [bag({ id: 1, stock_g: 250, consumedG: 250, remainingG: 0 })] });
+    const { current, upcoming, past } = classifyBeanBags(b);
+    expect(current).toBeNull();
+    expect(upcoming).toEqual([]);
+    expect(bagIds(past)).toEqual([1]);
   });
 });
 
