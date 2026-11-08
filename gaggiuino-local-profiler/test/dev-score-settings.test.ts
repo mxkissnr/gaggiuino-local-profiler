@@ -40,31 +40,34 @@ beforeAll(async () => {
 });
 
 interface FakeClassList {
-  names: Set<string>;
+  has(name: string): boolean;
   toggle(name: string, force?: boolean): boolean;
-  contains(name: string): boolean;
 }
 
-function fakeClassList(names: string[] = []): FakeClassList {
-  const set = new Set(names);
+// The real DOMTokenList shape applyBlindRating() uses, reduced to what the
+// assertions read back.
+function fakeClassList(): FakeClassList {
+  const set = new Set<string>();
   return {
-    names: set,
+    has: (name: string) => set.has(name),
     toggle(name: string, force?: boolean): boolean {
       const on = force === undefined ? !set.has(name) : force;
       if (on) set.add(name); else set.delete(name);
       return on;
     },
-    contains(name: string): boolean { return set.has(name); },
   };
 }
 
-function installDocument(options: { elements?: Record<string, unknown>; bodyClasses?: string[] } = {}): FakeClassList {
-  const classList = fakeClassList(options.bodyClasses);
-  const elements = options.elements ?? {};
+function installDocument(
+  elements: Record<string, unknown> = {},
+  extra: Record<string, unknown> = {},
+): FakeClassList {
+  const classList = fakeClassList();
   g.document = {
     body: { classList },
     activeElement: null,
     getElementById: (id: string) => elements[id] ?? null,
+    ...extra,
   };
   return classList;
 }
@@ -89,6 +92,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   g.document = undefined;
   g.fetch = undefined;
+  g.Option = undefined;
 });
 
 describe('blindRatingActive (#1922)', () => {
@@ -108,28 +112,28 @@ describe('applyBlindRating (#1922)', () => {
   it('leaves the body class off with default prefs', () => {
     const classList = installDocument();
     D.applyBlindRating();
-    expect(classList.names.has(D.BLIND_RATING_CLASS)).toBe(false);
+    expect(classList.has(D.BLIND_RATING_CLASS)).toBe(false);
   });
 
   it('sets the class for the pref on a dev build and clears it again on stable', () => {
     prefs.setUiPref(D.BLIND_RATING_PREF, true);
     const classList = installDocument();
     D.applyDevScoreSettings(true, ['classic']);
-    expect(classList.names.has(D.BLIND_RATING_CLASS)).toBe(true);
+    expect(classList.has(D.BLIND_RATING_CLASS)).toBe(true);
     D.applyDevScoreSettings(false, undefined);
-    expect(classList.names.has(D.BLIND_RATING_CLASS)).toBe(false);
+    expect(classList.has(D.BLIND_RATING_CLASS)).toBe(false);
   });
 
   it('flips the class when the pref changes', () => {
     const classList = installDocument();
     D.applyDevScoreSettings(true, ['classic']);
-    expect(classList.names.has(D.BLIND_RATING_CLASS)).toBe(false);
+    expect(classList.has(D.BLIND_RATING_CLASS)).toBe(false);
     prefs.setUiPref(D.BLIND_RATING_PREF, true);
     D.applyBlindRating();
-    expect(classList.names.has(D.BLIND_RATING_CLASS)).toBe(true);
+    expect(classList.has(D.BLIND_RATING_CLASS)).toBe(true);
     prefs.setUiPref(D.BLIND_RATING_PREF, false);
     D.applyBlindRating();
-    expect(classList.names.has(D.BLIND_RATING_CLASS)).toBe(false);
+    expect(classList.has(D.BLIND_RATING_CLASS)).toBe(false);
   });
 
   it('does nothing without a document', () => {
@@ -169,7 +173,7 @@ describe('applyDevScoreSettings on a stable build (#1922)', () => {
       onchange: null as unknown,
     };
     const box = { checked: false, onchange: null as unknown };
-    installDocument({ elements: { devScoreModel: select, devBlindRating: box } });
+    installDocument({ devScoreModel: select, devBlindRating: box });
     D.applyDevScoreSettings(false, ['classic']);
     expect(select.replaceChildren).not.toHaveBeenCalled();
     expect(select.value).toBe('');
@@ -178,10 +182,81 @@ describe('applyDevScoreSettings on a stable build (#1922)', () => {
   });
 });
 
+interface FakeSelect {
+  dataset: Record<string, string>;
+  value: string;
+  children: string[];
+  replaceChildren(frag: { children: string[] }): void;
+  onchange: (() => void) | null;
+}
+
+function fakeSelect(): FakeSelect {
+  const select: FakeSelect = {
+    dataset: {},
+    value: '',
+    children: [],
+    replaceChildren(frag) { select.children = frag.children; },
+    onchange: null,
+  };
+  return select;
+}
+
+class FakeOption {
+  text: string;
+  value: string;
+  constructor(text: string, value: string) {
+    this.text = text;
+    this.value = value;
+  }
+}
+
+function fakeFragment(): { children: string[]; append(...items: string[]): void } {
+  return {
+    children: [],
+    append(...items: string[]) { this.children.push(...items); },
+  };
+}
+
+describe('applyDevScoreSettings on a dev build (#1922)', () => {
+  it('builds the option list once, selects the stored model and wires the handlers', () => {
+    const select = fakeSelect();
+    const box = { checked: false, onchange: null as (() => void) | null };
+    // new Option + createDocumentFragment are DOM classes the node env lacks.
+    installDocument(
+      { devScoreModel: select, devBlindRating: box },
+      { createDocumentFragment: fakeFragment },
+    );
+    g.Option = FakeOption;
+
+    prefs.setUiPref(D.SCORE_MODEL_PREF, 'test_x');
+    D.applyDevScoreSettings(true, ['classic', 'test_x']);
+
+    expect(select.children).toHaveLength(2);
+    expect(select.value).toBe('test_x');
+    expect(typeof select.onchange).toBe('function');
+    expect(box.onchange).toBeInstanceOf(Function);
+
+    // A repeated poll with the same list must not rebuild the options.
+    const built = select.children;
+    D.applyDevScoreSettings(true, ['classic', 'test_x']);
+    expect(select.children).toBe(built);
+  });
+
+  it('the checkbox handler stores the pref and applies the class', () => {
+    const box = { checked: false, onchange: null as (() => void) | null };
+    const classList = installDocument({ devBlindRating: box });
+    D.applyDevScoreSettings(true, ['classic']);
+    expect(box.checked).toBe(false);
+    box.checked = true;
+    box.onchange?.();
+    expect(prefs.getUiPref(D.BLIND_RATING_PREF)).toBe(true);
+    expect(classList.has(D.BLIND_RATING_CLASS)).toBe(true);
+  });
+});
+
 interface ParityCase { shot: unknown; expected: number | null }
 
 describe('score shown verbatim (#1922)', () => {
-
   it('renders the server score unchanged for every parity fixture', () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const cases = JSON.parse(
