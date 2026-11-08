@@ -134,8 +134,7 @@ export function maintTaskSheetBody(tile: MaintTile, history: MaintLogEntry[]): H
   </div>`;
 }
 
-// Pure: the manual log entry form as a sheet body. Interim "Cancel" button
-// (#1923) until plan-1923e removes it together with its key.
+// Pure: the manual log entry form as a sheet body.
 export function maintLogFormBody(options: { task: string; label: string }[], today: string): Html {
   return html`<div id="maintLogForm" class="maint-sheet maint-form">
     <select id="maintLogTask" aria-label="${esc(t('maint_log_col_task'))}">
@@ -143,7 +142,6 @@ export function maintLogFormBody(options: { task: string; label: string }[], tod
     </select>
     <input type="date" id="maintLogDate" value="${esc(today)}" max="${esc(today)}" aria-label="${esc(t('maint_log_col_date'))}">
     <input type="text" id="maintLogNotes" placeholder="${esc(t('maint_log_notes_ph'))}" aria-label="${esc(t('maint_log_col_notes'))}">
-    <button type="button" class="maint-log-cancel-btn" id="maintLogCancelBtn">${tHtml('maint_log_cancel')}</button>
   </div>`;
 }
 
