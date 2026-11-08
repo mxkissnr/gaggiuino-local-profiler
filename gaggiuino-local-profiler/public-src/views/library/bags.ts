@@ -65,9 +65,16 @@ function _field(id: string): HTMLInputElement | null {
 //   - "current": the one bag actually being drawn from right now — lowest
 //     sortOrder among tracked bags with remaining > 0 (queue order, not
 //     "most recently added").
-//   - "upcoming" ("Volle"): tracked, remaining > 0, queued behind current.
-//   - "past" ("Vergangene"): remaining <= 0, or never tracked at all.
-//     Hidden by default in the UI.
+//   - "upcoming" ("Volle"): tracked, remaining > 0, queued behind current —
+//     plus a bean's only bag while it is still untracked (#1933).
+//   - "past" ("Vergangene"): remaining <= 0, or never tracked at all while
+//     the bean has more than one bag. Hidden by default in the UI.
+// #1933: the bean form's placeholder bag (#1540 — a roast date and no stock,
+// filled in place by the first real bag) is a bean's only bag, and its absent
+// remainingG means "not weighed yet", not "used up". Classifying it as past
+// hid a brand-new coffee's bag behind the Past toggle and locked its pencil
+// form, so the only untracked bag stays upcoming (remaining null) and can be
+// weighed, dated and batched like any full bag.
 // #1351: the topbar coffee-history panel mirrors the "past + tracked" part of
 // this rule (isEmptiedBag() in components/coffee-history.ts) instead of
 // importing this module — the listener registered at the bottom of this file
@@ -85,6 +92,8 @@ export function classifyBeanBags(b: BeanRow): ClassifiedBags {
     const entry: BagEntry = { bg, consumed: bg.consumedG ?? 0, stockG: tracked ? parseFloat(String(bg.stock_g)) : null, remaining: tracked ? (bg.remainingG ?? null) : null };
     if (bg.current) current = entry;
     else if (entry.remaining != null && entry.remaining > 0) upcoming.push(entry);
+    // Untracked, but the bean's only bag: not past yet (#1933).
+    else if (!tracked && bags.length === 1) upcoming.push(entry);
     else past.push(entry);
   }
   // Queue order must stay visible/editable in "Volle" — the drag-reorder
