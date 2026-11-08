@@ -175,6 +175,20 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 	return bean, true, nil
 }
 
+// setDefaultGrinder makes grinders[idx] the library's one default, or clears
+// its flag. Only the default carries the key, so a library without a default
+// stores exactly what it always stored.
+func setDefaultGrinder(grinders []Entity, idx int, isDefault bool) {
+	if !isDefault {
+		delete(grinders[idx], "isDefault")
+		return
+	}
+	for _, g := range grinders {
+		delete(g, "isDefault")
+	}
+	grinders[idx]["isDefault"] = true
+}
+
 // UpdateGrinder applies a partial update to grinder id, mirroring
 // PUT /api/library/grinder/:id.
 func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error) {
@@ -201,6 +215,10 @@ func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error
 		}
 		if v, present := trimMaxOrUndefined(body, "burrsResetAt", 10); present {
 			grinder["burrsResetAt"] = v
+		}
+		if v, present := body["isDefault"]; present {
+			isDefault, _ := v.(bool)
+			setDefaultGrinder(lib.Grinders, idx, isDefault)
 		}
 		lib.Grinders[idx] = grinder
 		return nil

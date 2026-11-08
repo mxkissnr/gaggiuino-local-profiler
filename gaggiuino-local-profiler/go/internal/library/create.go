@@ -152,6 +152,9 @@ func CreateGrinder(repo *Repository, body Entity) (Entity, error) {
 	}
 	if err := repo.Update(func(lib *Library) error {
 		lib.Grinders = append(lib.Grinders, grinder)
+		if isDefault, _ := body["isDefault"].(bool); isDefault {
+			setDefaultGrinder(lib.Grinders, len(lib.Grinders)-1, true)
+		}
 		return nil
 	}); err != nil {
 		return nil, err
