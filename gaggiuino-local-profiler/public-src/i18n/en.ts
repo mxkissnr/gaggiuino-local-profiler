@@ -307,6 +307,7 @@ const en: Translations = {
     analytics_map_count:(n)=>`${n} countries`,
     dialin_ratio_high:(r)=>`Ratio 1:${r} — above the classic espresso window (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — below the classic espresso window (1:1.8–2.2)`,
+    guided_open:'Guide',
     guided_backflush_1:'Insert the blind basket into the portafilter (for a chemical backflush: add detergent)',
     guided_backflush_2:'Lock the portafilter in tightly',
     guided_backflush_3:'Run the brew switch 5×, letting pressure build for ~10 s each time, then stop',

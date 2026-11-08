@@ -307,6 +307,7 @@ const nl: Partial<Translations> = {
     analytics_map_count:(n)=>`${n} landen`,
     dialin_ratio_high:(r)=>`Ratio 1:${r} — boven het klassieke espressovenster (1:1.8–2.2)`,
     dialin_ratio_low:(r)=>`Ratio 1:${r} — onder het klassieke espressovenster (1:1.8–2.2)`,
+    guided_open:'Handleiding',
     guided_backflush_1:'Plaats het blindfilter in de portafilter (voor chemische backflush: reiniger toevoegen)',
     guided_backflush_2:'Portafilter stevig vastzetten',
     guided_backflush_3:'Start de extractie 5×, laat de druk telkens ~10 s opbouwen en stop dan',
