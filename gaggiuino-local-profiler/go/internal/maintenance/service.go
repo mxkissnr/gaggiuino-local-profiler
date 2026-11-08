@@ -115,7 +115,8 @@ type Stat = map[string]any
 // percent-to-threshold, and a due/soon/ok/never status.
 // descaling/backflush/grouphead/gaskets scope shot counts to the active
 // machine; waterfilter/grinder_* (shared equipment, #338) count shots
-// across every machine.
+// across every machine. A grinder_* task counts only its own grinder's
+// shots and grams once the library holds two or more grinders.
 func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task, machineID int64) (map[string]Stat, error) {
 	// Only each shot's timestamp is read below, so load just those instead
 	// of every shot with its curve blob (#1616).
@@ -129,26 +130,23 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 	}
 	now := time.Now().UnixMilli()
 
-	// Fetch annotated doses once if any grinder task tracks threshold_g.
-	var annotatedDoses []shots.AnnotatedDose
-	for key, task := range maint {
+	// grinder_* tasks fold the per-shot grinder rows; only load them when a
+	// grinder task exists.
+	var grinderUses []shots.GrinderUse
+	grinderCount := 0
+	for key := range maint {
 		if strings.HasPrefix(key, "grinder_") {
-			if _, ok := jsPositiveInt(task["threshold_g"]); ok {
-				annotatedDoses, err = shotsRepo.GetAnnotatedDoses()
-				if err != nil {
-					return nil, err
-				}
-				break
-			}
+			grinderCount++
+		}
+	}
+	if grinderCount > 0 {
+		if grinderUses, err = shotsRepo.GrinderUses(); err != nil {
+			return nil, err
 		}
 	}
 
 	result := make(map[string]Stat, len(maint))
 	for key, task := range maint {
-		shotList := scopedShots
-		if isGlobalMaintenanceTask(key) {
-			shotList = globalShots
-		}
 		var lastTs int64
 		if lastDate, _ := task["lastDate"].(string); lastDate != "" {
 			if t, err := parseJSDate(lastDate); err == nil {
@@ -160,23 +158,24 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 			daysSince = jsFloorDivDays(now - lastTs)
 		}
 		var shotsSince int
-		for _, ts := range shotList {
-			if ts*1000 > lastTs {
-				shotsSince++
+		var gramsSince float64
+		if strings.HasPrefix(key, "grinder_") {
+			shotsSince, gramsSince = library.GrinderUsesSince(grinderUses, lastTs, grinderMatcher(task, grinderCount))
+		} else {
+			shotList := scopedShots
+			if isGlobalMaintenanceTask(key) {
+				shotList = globalShots
+			}
+			for _, ts := range shotList {
+				if ts*1000 > lastTs {
+					shotsSince++
+				}
 			}
 		}
 
 		thresholdShots, hasShots := jsPositiveInt(task["threshold_shots"])
 		thresholdDays, hasDays := jsPositiveInt(task["threshold_days"])
 		thresholdG, hasG := jsPositiveInt(task["threshold_g"])
-		var gramsSince float64
-		if strings.HasPrefix(key, "grinder_") && annotatedDoses != nil {
-			for _, d := range annotatedDoses {
-				if d.Dose != nil && d.Timestamp*1000 > lastTs {
-					gramsSince += *d.Dose
-				}
-			}
-		}
 		var pct float64
 		switch {
 		case hasShots && hasDays:
@@ -229,6 +228,21 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 		result[key] = stat
 	}
 	return result, nil
+}
+
+// grinderMatcher decides which annotated grinder names count for a grinder_*
+// task. With one grinder in the library every shot is that grinder's, which
+// also covers the shots that name no grinder at all. With several, only a shot
+// naming this grinder counts.
+func grinderMatcher(task Task, grinderCount int) func(string) bool {
+	if grinderCount == 1 {
+		return func(string) bool { return true }
+	}
+	name, _ := task["grinderName"].(string)
+	if name == "" {
+		return func(string) bool { return false }
+	}
+	return library.GrinderNamed(name)
 }
 
 // parseJSDate parses lastDate's two string shapes: a full ISO timestamp
