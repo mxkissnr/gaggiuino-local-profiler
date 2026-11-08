@@ -8874,6 +8874,8 @@ export interface components {
             glpVersion?: string;
             /** @description Only present on the dev-channel image build (GLP_DEV_BUILD build-arg) */
             devBuild?: string;
+            /** @description Only present on the dev-channel build: the registered shot score model ids, classic first (#1922) */
+            scoreModels?: string[];
             ordersFeature?: boolean;
             /** @description the app's expose_api_port option (#803) — whether GET /api/token answers direct-port callers */
             exposeApiPort?: boolean;

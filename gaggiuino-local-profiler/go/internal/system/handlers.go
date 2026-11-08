@@ -14,6 +14,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
 const jsonBodyLimit = 16 * 1024 // 16kb global JSON body limit.
@@ -377,6 +378,9 @@ func (h *Handlers) getStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if devBuild := os.Getenv("GLP_DEV_BUILD"); devBuild != "" {
 		resp["devBuild"] = devBuild
+		// #1922: the dev-only score-model setting lists these; absent on stable
+		// like devBuild, so a stable-build client never sees a score model to pick.
+		resp["scoreModels"] = shots.ScoreModelIDs()
 	}
 
 	// Sensitive fields only exposed to authenticated callers (H1).

@@ -1,6 +1,9 @@
 package shots
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+	"testing"
+)
 
 // Score models (#1922): the scorer behind a shot's score is a registry entry
 // instead of a bare function call, so a dev build can switch models without
@@ -12,16 +15,6 @@ import "sync/atomic"
 // with. Any other model is dev-channel only: production registers nothing
 // else, and cmd/server only honours the ui-pref that selects one when
 // GLP_DEV_BUILD is set (see scoreModelPref).
-//
-// Deliberate deviation from the #1922 plan, forced by CI: the blocking
-// deadcode gate (`.github/workflows/test.yaml`, reachability from ./cmd/...)
-// rejects any exported function no production path reaches, so the plan's
-// ScoreModelIDs, ModelScore, (*Service).AllModelsScorer and
-// RegisterScoreModelForTest cannot land in this slice — nothing that ships
-// here calls them yet. The id/registration helpers the tests need live
-// unexported in score_models_test.go instead. The consuming slice restores the
-// planned names together with the MCP tool that calls AllModelsScorer, which
-// is what makes them reachable.
 
 // ClassicScoreModel is the id of the production scorer, CalcShotScoreDetail.
 const ClassicScoreModel = "classic"
@@ -109,4 +102,70 @@ func (m ScoreModel) fingerprintSuffix() string {
 		return ""
 	}
 	return "|m=" + m.ID
+}
+
+// ScoreModelIDs returns the registered model ids in registry order: classic
+// first, then any dev-channel model (#1922). GET /api/status reports these on
+// a dev build, which is what the dev-only score-model setting offers.
+func ScoreModelIDs() []string {
+	models := loadScoreModels()
+	ids := make([]string, len(models))
+	for i, m := range models {
+		ids[i] = m.ID
+	}
+	return ids
+}
+
+// ActiveScoreModelID returns the id of the model the app scores with right
+// now — the one whose score and components a shot's detail shows (#1922).
+func ActiveScoreModelID() string {
+	return activeScoreModel().ID
+}
+
+// ModelScore is one registered model's score for one shot, for the
+// side-by-side listing the developer tools return (#1922). Score is nil when
+// that model cannot score the shot (too little data).
+type ModelScore struct {
+	Model string
+	Score *int
+}
+
+// AllModelsScorer returns a per-shot function that scores the shot with every
+// registered model, in registry order. Like DetailScorer it resolves the bean
+// lookup and the model list once, so scoring a batch loads the beans and reads
+// the registry once instead of per shot (#1922).
+func (s *Service) AllModelsScorer() func(Shot) []ModelScore {
+	lookup := loadBeanLookup()
+	models := loadScoreModels()
+	return func(shot Shot) []ModelScore {
+		bean := lookup(shot)
+		out := make([]ModelScore, 0, len(models))
+		for _, m := range models {
+			out = append(out, ModelScore{Model: m.ID, Score: m.Score(shot, bean).Score})
+		}
+		return out
+	}
+}
+
+// RegisterScoreModelForTest appends m to the registry and restores the
+// previous registry when t finishes. It is the cross-package hook other
+// packages' tests use to exercise a second model (#1922); production never
+// registers anything beyond classic.
+//
+// A var rather than a func on purpose: the blocking deadcode gate
+// (`.github/workflows/test.yaml`, reachability from ./cmd/...) reports
+// unreachable *functions*, and no production path may call a test hook. The
+// var's initializer still runs at package init, so the closure itself is
+// reachable. Not safe with t.Parallel().
+var RegisterScoreModelForTest = func(t testing.TB, m ScoreModel) {
+	t.Helper()
+	prev := loadScoreModels()
+	next := make([]ScoreModel, 0, len(prev)+1)
+	next = append(next, prev...)
+	next = append(next, m)
+	scoreModels.Store(&next)
+	t.Cleanup(func() {
+		restored := prev
+		scoreModels.Store(&restored)
+	})
 }
