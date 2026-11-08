@@ -648,6 +648,9 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
     const machineTag = isGlobalTask(e.task)
       ? t('maint_shared_tag')
       : ((S.machines || []).find(m => m.id === e.machineId)?.name || e.machine || '');
+    const shotsText = e.shotCountAtTime == null
+      ? esc('–')
+      : html`${esc(e.shotCountAtTime)} ${esc(t('maint_unit_shots'))}`;
     return html`<div class="maint-log-row">
       <span class="maint-log-date num">${esc(dateStr)}</span>
       <span class="maint-log-main">
@@ -657,9 +660,7 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
           ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
           : e.notes ? html`<span class="maint-log-note">${esc(e.notes)}</span>` : html``}
       </span>
-      <span class="maint-log-shots num">${e.shotCountAtTime == null
-        ? esc('–')
-        : html`${esc(e.shotCountAtTime)} ${esc(t('maint_unit_shots'))}`}</span>
+      <span class="maint-log-shots num">${shotsText}</span>
       <button type="button" class="lib-sheet-iconbtn maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" aria-label="${esc(t('maint_log_delete'))}" title="${esc(t('maint_log_confirm_delete'))}">${ICON_TRASH}</button>
     </div>`;
   };
