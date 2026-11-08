@@ -1,3 +1,24 @@
+## [Unreleased]
+### Added
+- **Saved photos can now be re-cropped: grinder, basket, puck screen, bean and shot photos keep their uncropped original, and Crop photo reopens the crop where you left it.** Sticker cut-outs are cut out again from the new crop, and backups include the originals. Part of #1845
+- **On Home Assistant OS, Home Assistant now finds the app by itself and offers to set up the GLP integration, so you no longer type in its address.** Part of #1848
+- **A shot's pressure, flow, weight and temperature curves are now also available as a picture, so Home Assistant can show the last shot in notifications.** Part of #1851
+- **Gaggiuino machines now keep a history of their settings and profiles.** GLP backs them up daily, before firmware updates and on demand, without storing Wi-Fi or MQTT passwords, and can download, upload, compare and restore any version. Part of #1878
+### Changed
+- **Home Assistant now stops the app for a few seconds while backing it up, so a backup always restores cleanly.**
+- **The maintenance page reads like the coffee library now: a one-line verdict, one toolbar, task rows whose details open in a popover or bottom sheet, and two columns on wide screens.** Part of #1923
+### Fixed
+- **Firmware updates stay in progress until the machine has finished its post-update migration.** On Gaggiuino main-8aaf6f0 and later the machine migrates its partition layout after an update and cannot be reached for a few minutes; Settings > Machines now keeps showing the update's progress and current step through that time, asks to keep the machine powered on, and reports the update as complete only once the migration is done. The progress bar fills again, and Start update is hidden while an update runs. Part of #1876
+- **Bean photos imported from a shop are no longer shown as sticker cut-outs and can be cropped like any other photo.** Part of #1884
+- **Cropping a photo with a transparent background now gives a white background instead of a black one.** Part of #1889
+- **The shop import now says when a shop blocks automatic requests, and you can paste the product data from your browser instead.** Closes #1897
+- **In the dark theme the compare checkboxes of the machine backups no longer show as bright white boxes, and on desktop a detail popover that grows after opening, like the machine backups, now stays fully inside the window.** Part of #1912
+- **Share cards rendered at the same moment no longer risk clipped or misplaced labels.** Part of #1915
+- **Dev builds now keep the backup settings of the app instead of dropping them.** Part of #1920
+- **The step-by-step backflush and descaling checklists are back, in the details of those two maintenance tasks.** Closes #1928
+- **Cut-out bag photos no longer get a grey frame when the coffee has spare bags.** Part of #1932
+- **A new coffee no longer lists its only bag as finished, and saving one now asks for the bag's weight, roast date and batch number straight away.** Closes #1933
+
 ## [3.6.0] - 2026-11-01
 
 ### Added
