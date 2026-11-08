@@ -14,10 +14,10 @@ const pauseTestNow int64 = 1_800_000_000_000
 // task, two log entries at now-130d and now-90d, and a 60-day threshold.
 func streakContext(task maintenance.Task) *Context {
 	return &Context{
-		Now:                        pauseTestNow,
-		Machines:                   []machines.Machine{{ID: 1}},
-		StaticMaintenanceTasks:     map[string]bool{"descaling": true},
-		MaintenanceLogs:            []maintenance.LogEntry{
+		Now:                    pauseTestNow,
+		Machines:               []machines.Machine{{ID: 1}},
+		StaticMaintenanceTasks: map[string]bool{"descaling": true},
+		MaintenanceLogs: []maintenance.LogEntry{
 			{Task: "descaling", MachineID: 1, TS: (pauseTestNow - 130*pauseTestDayMS) / 1000},
 			{Task: "descaling", MachineID: 1, TS: (pauseTestNow - 90*pauseTestDayMS) / 1000},
 		},
