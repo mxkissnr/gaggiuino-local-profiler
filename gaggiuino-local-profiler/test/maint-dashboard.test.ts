@@ -13,6 +13,9 @@ let _maintVerdictState: MaintView['_maintVerdictState'];
 let _maintVerdictHtml: MaintView['_maintVerdictHtml'];
 let isAutoSynced: MaintView['isAutoSynced'];
 let renderMaintenanceDashboard: MaintView['renderMaintenanceDashboard'];
+let _maintRowHtml: MaintView['_maintRowHtml'];
+let renderMaintLog: MaintView['renderMaintLog'];
+let S: typeof import('../public-src/state/index.js').S;
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -24,9 +27,12 @@ beforeAll(async () => {
     configurable: true, writable: true,
   });
   ({ _normalizeMaintTiles, _pickNextDueTile, _partitionTiles, _maintLogTaskOptions, _maintVerdictState,
-     _maintVerdictHtml, isAutoSynced,
+     _maintVerdictHtml, isAutoSynced, _maintRowHtml, renderMaintLog,
      renderMaintenanceDashboard } = await import('../public-src/views/maintenance.js'));
+  ({ S } = await import('../public-src/state/index.js'));
 });
+
+beforeEach(() => { S.currentLang = 'en'; });
 
 interface MaintTaskFixture {
   status: string;
@@ -165,11 +171,12 @@ describe('_maintLogTaskOptions', () => {
   });
 });
 
-// #1923: the card no longer expands its own detail panel — the single Details
-// button opens the shared popover / bottom sheet (views/maintenance-sheet.ts).
-// A card that kept the old .detail markup would show the interval twice, so
-// pin the new shape: one toggle carrying the tile's task and machine, and no
-// inline mode segment, threshold input or done/disable/delete buttons.
+// #1923: the task no longer expands its own detail panel — the whole row is
+// one button that opens the shared popover / bottom sheet
+// (views/maintenance-sheet.ts). A row that kept the old .detail markup would
+// show the interval twice, so pin the new shape: one button carrying the
+// tile's task and machine, and no inline mode segment, threshold input or
+// done/disable/delete buttons.
 interface FakeEl {
   innerHTML: string;
   className: string;
@@ -186,7 +193,7 @@ function fakeEl(): FakeEl {
   return el;
 }
 
-describe('maintenance card markup (#1923)', () => {
+describe('maintenance task rows (#1923)', () => {
   const ids = ['maint-cards', 'maintScopeSeg', 'maintScopeHint', 'maintGrid',
                'maintCustomSection', 'maintDisabledSection'];
   let els: Map<string, FakeEl>;
@@ -202,21 +209,20 @@ describe('maintenance card markup (#1923)', () => {
   function renderOne(name: string, overrides: MaintTaskOverrides = {}): string {
     const data = { [name]: task('ok', overrides) };
     renderMaintenanceDashboard(data, 1);
-    const grid = els.get('maintGrid')!;
-    expect(grid.children).toHaveLength(1);
-    return grid.children[0]!.innerHTML;
+    return els.get('maintGrid')!.innerHTML;
   }
 
-  it('renders one Details button that opens the task sheet for that tile', () => {
+  it('renders one row button that opens the task sheet for that tile', () => {
     const html = renderOne('backflush', { threshold_shots: 40, shotsSince: 12 });
 
+    expect(html).toContain('class="maint-row status-ok"');
     expect(html).toContain('data-action="open-maint-task"');
     expect(html).toContain('data-task="backflush"');
     expect(html).toContain('data-machine-id="1"');
     expect((html.match(/data-action="open-maint-task"/g) || []).length).toBe(1);
   });
 
-  it('leaves no inline interval, threshold, done or disable markup on the card', () => {
+  it('leaves no inline interval, threshold, done or disable markup on the row', () => {
     const html = renderOne('backflush', { threshold_shots: 40, shotsSince: 12 });
 
     expect(html).not.toContain('toggle-maint-detail');
@@ -229,9 +235,117 @@ describe('maintenance card markup (#1923)', () => {
     expect(html).not.toContain('toggle-maint-disabled');
   });
 
-  it('still shows the count text on the card', () => {
+  it('still shows the count text on the row', () => {
     const html = renderOne('backflush', { threshold_shots: 40, shotsSince: 12 });
     expect(html).toContain('12 / 40 Shots');
+  });
+});
+
+// #1923: the task row is the button; icon, title, chip, meta and the slim bar
+// all live inside it, and every value is escaped.
+type MaintRowTile = Parameters<MaintView['_maintRowHtml']>[0];
+describe('_maintRowHtml (#1923)', () => {
+  function rowTile(overrides: Partial<MaintRowTile> = {}): MaintRowTile {
+    const t: MaintRowTile = {
+      task: 'backflush', d: task('ok', { threshold_shots: 20, shotsSince: 5 }) as unknown as MaintRowTile['d'],
+      machineId: 1, machineName: null, isGlobal: false, showMachineTag: false,
+    };
+    Object.assign(t, overrides);
+    return t;
+  }
+
+  it('carries the tile task and machine on the open action', () => {
+    const html = _maintRowHtml(rowTile({ task: 'descaling', machineId: 7 }));
+    expect(html).toContain('data-action="open-maint-task"');
+    expect(html).toContain('data-task="descaling"');
+    expect(html).toContain('data-machine-id="7"');
+    expect(html).toContain('aria-haspopup="dialog"');
+  });
+
+  it('marks a due row with status-due', () => {
+    const due = rowTile({ d: task('due', { threshold_shots: 20, shotsSince: 40 }) as unknown as MaintRowTile['d'] });
+    expect(_maintRowHtml(due)).toContain('class="maint-row status-due"');
+  });
+
+  it('shows the machine badge only when showMachineTag is set', () => {
+    const hidden = rowTile({ machineName: 'Linea', showMachineTag: false });
+    expect(_maintRowHtml(hidden)).not.toContain('shot-machine-badge');
+    const shown = rowTile({ machineName: 'Linea', showMachineTag: true });
+    const html = _maintRowHtml(shown);
+    expect(html).toContain('shot-machine-badge');
+    expect(html).toContain('Linea');
+  });
+
+  it('shows the shared tag for a global tile', () => {
+    const html = _maintRowHtml(rowTile({ task: 'waterfilter', isGlobal: true }));
+    expect(html).toContain('shot-machine-badge');
+    expect(html).toContain('shared');
+  });
+
+  it('shows the Auto badge only for a machine-synced last done', () => {
+    const at = '2026-10-01T08:30:00.000Z';
+    const synced = rowTile({
+      d: task('ok', { machineSyncedAt: Date.parse(at), lastDate: at }) as unknown as MaintRowTile['d'],
+    });
+    expect(_maintRowHtml(synced)).toContain('maint-auto-synced');
+    expect(_maintRowHtml(rowTile())).not.toContain('maint-auto-synced');
+  });
+
+  it('escapes a custom label containing markup', () => {
+    const custom = rowTile({
+      task: 'custom_1', d: task('due', { label: 'A < B' }) as unknown as MaintRowTile['d'],
+    });
+    const html = _maintRowHtml(custom);
+    expect(html).toContain('A &lt; B');
+    expect(html).not.toContain('A < B');
+  });
+});
+
+// #1923: the log is rows, eight visible with the rest behind "Show all".
+describe('renderMaintLog rows (#1923)', () => {
+  let log: FakeEl;
+  let count: { textContent: string };
+
+  beforeEach(() => {
+    log = fakeEl();
+    count = { textContent: '' };
+    (globalThis as unknown as Record<string, unknown>).document = {
+      getElementById: (id: string) => (id === 'maintLog' ? log : id === 'maintLogCount' ? count : null),
+    };
+  });
+
+  function entries(n: number): Parameters<typeof renderMaintLog>[0] {
+    return Array.from({ length: n }, (_, i) => ({
+      id: 100 + i, task: 'backflush', ts: 1767225600, machineId: 1,
+      shotCountAtTime: 120 + i, notes: null,
+    }));
+  }
+
+  it('keeps the first eight rows outside the fold', () => {
+    renderMaintLog(entries(10));
+    const fold = log.innerHTML.indexOf('<details');
+    expect(fold).toBeGreaterThan(-1);
+    const beforeFold = log.innerHTML.slice(0, fold);
+    expect((beforeFold.match(/class="maint-log-row"/g) || []).length).toBe(8);
+    expect((log.innerHTML.match(/class="maint-log-row"/g) || []).length).toBe(10);
+  });
+
+  it('folds the rest behind a Show all summary with the total', () => {
+    renderMaintLog(entries(10));
+    expect(log.innerHTML).toContain('class="analytics-more maint-log-more"');
+    expect(log.innerHTML).toContain('Show all 10');
+  });
+
+  it('gives every row a delete action with its own id', () => {
+    renderMaintLog(entries(10));
+    for (const e of entries(10)) {
+      expect(log.innerHTML).toContain(`data-action="delete-maint-log" data-id="${e.id}"`);
+    }
+  });
+
+  it('offers no fold for eight entries or fewer', () => {
+    renderMaintLog(entries(8));
+    expect(log.innerHTML).not.toContain('<details');
   });
 });
 
