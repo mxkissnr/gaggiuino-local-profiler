@@ -64,7 +64,7 @@ export async function onScoreModelChange(id: string, reload: () => void = () => 
 export function applyDevScoreSettings(devBuild: boolean, models: readonly string[] | undefined): void {
   _devBuild = devBuild;
   applyBlindRating();
-  if (!devBuild) return;
+  if (!devBuild || typeof document === 'undefined') return;
 
   const select = document.getElementById('devScoreModel') as HTMLSelectElement | null;
   if (select) {
