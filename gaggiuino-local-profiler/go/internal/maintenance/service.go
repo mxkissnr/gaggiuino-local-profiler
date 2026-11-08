@@ -51,7 +51,7 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, time.Now()); err != nil {
 		return nil, err
 	}
-	return ComputeMaintenanceStats(shotsRepo, maint, machineID)
+	return ComputeMaintenanceStats(shotsRepo, libRepo, maint, machineID)
 }
 
 // ApplyMachineServiceLog applies one machine-recorded service event (#1639) to
@@ -117,7 +117,7 @@ type Stat = map[string]any
 // machine; waterfilter/grinder_* (shared equipment, #338) count shots
 // across every machine. A grinder_* task counts only its own grinder's
 // shots and grams once the library holds two or more grinders.
-func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task, machineID int64) (map[string]Stat, error) {
+func ComputeMaintenanceStats(shotsRepo *shots.Repository, libRepo *library.Repository, maint map[string]Task, machineID int64) (map[string]Stat, error) {
 	// Only each shot's timestamp is read below, so load just those instead
 	// of every shot with its curve blob (#1616).
 	globalShots, err := shotsRepo.TimestampsExcludingTrash()
@@ -130,16 +130,19 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 	}
 	now := time.Now().UnixMilli()
 
-	// grinder_* tasks fold the per-shot grinder rows; only load them when a
-	// grinder task exists.
+	// grinder_* tasks fold the per-shot grinder rows; only load them and count
+	// the library's grinders when a grinder task exists. The count decides
+	// whether every shot belongs to the one grinder or only the shots naming
+	// it, so it must come from the library, not from how many grinder tasks
+	// happen to be in maint.
 	var grinderUses []shots.GrinderUse
 	grinderCount := 0
-	for key := range maint {
-		if strings.HasPrefix(key, "grinder_") {
-			grinderCount++
+	if hasGrinderTask(maint) {
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
 		}
-	}
-	if grinderCount > 0 {
+		grinderCount = libraryGrinderCount(lib)
 		if grinderUses, err = shotsRepo.GrinderUses(); err != nil {
 			return nil, err
 		}
@@ -228,6 +231,29 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 		result[key] = stat
 	}
 	return result, nil
+}
+
+// hasGrinderTask reports whether maint holds at least one grinder_* task.
+func hasGrinderTask(maint map[string]Task) bool {
+	for key := range maint {
+		if strings.HasPrefix(key, "grinder_") {
+			return true
+		}
+	}
+	return false
+}
+
+// libraryGrinderCount counts the library grinders that can own a maintenance
+// task. Entries without a usable id never get one (see GetMaintenance), so they
+// must not switch a single-grinder install to per-name attribution.
+func libraryGrinderCount(lib library.Library) int {
+	count := 0
+	for _, g := range lib.Grinders {
+		if _, ok := grinderIDOf(g); ok {
+			count++
+		}
+	}
+	return count
 }
 
 // grinderMatcher decides which annotated grinder names count for a grinder_*
@@ -319,7 +345,7 @@ func ComputeAllMachinesMaintenance(repo *Repository, shotsRepo *shots.Repository
 		if err != nil {
 			return AllMachinesResult{}, err
 		}
-		stats, err := ComputeMaintenanceStats(shotsRepo, maint, m.ID)
+		stats, err := ComputeMaintenanceStats(shotsRepo, repo.libRepo, maint, m.ID)
 		if err != nil {
 			return AllMachinesResult{}, err
 		}
@@ -340,7 +366,7 @@ func ComputeAllMachinesMaintenance(repo *Repository, shotsRepo *shots.Repository
 	if err != nil {
 		return AllMachinesResult{}, err
 	}
-	referenceStats, err := ComputeMaintenanceStats(shotsRepo, referenceMaint, referenceMachineID)
+	referenceStats, err := ComputeMaintenanceStats(shotsRepo, repo.libRepo, referenceMaint, referenceMachineID)
 	if err != nil {
 		return AllMachinesResult{}, err
 	}

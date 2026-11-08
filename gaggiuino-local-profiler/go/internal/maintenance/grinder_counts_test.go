@@ -46,7 +46,7 @@ func taskStat(t *testing.T, repo *Repository, shotsRepo *shots.Repository, key s
 	if err != nil {
 		t.Fatalf("GetMaintenance: %v", err)
 	}
-	stats, err := ComputeMaintenanceStats(shotsRepo, maint, 1)
+	stats, err := ComputeMaintenanceStats(shotsRepo, repo.libRepo, maint, 1)
 	if err != nil {
 		t.Fatalf("ComputeMaintenanceStats: %v", err)
 	}
@@ -277,4 +277,40 @@ func TestNonGrinderTask_StillCountsAllShots(t *testing.T) {
 
 	stat := taskStat(t, repo, shotsRepo, "waterfilter")
 	wantShotsSince(t, stat, "waterfilter", 4)
+}
+
+// TestGrinderTasks_OneTaskWithSeveralGrinders: the attribution rule is the
+// library's grinder count, not how many grinder_* tasks are in the map.
+// GetMaintenance synthesizes a task per library grinder, so the map is built by
+// hand here to pin a library of two grinders with one grinder_1 task: another
+// grinder's shots and the unannotated shot must stay out of grinder_1.
+func TestGrinderTasks_OneTaskWithSeveralGrinders(t *testing.T) {
+	_, _, libRepo, sqlDB := newTestHandlers(t)
+	shotsRepo := shots.NewRepository(sqlDB)
+
+	if err := libRepo.SaveLibrary(library.Library{
+		Grinders: []library.Entity{
+			{"id": int64(1), "name": "Niche Zero"},
+			{"id": int64(2), "name": "DF64"},
+		},
+	}); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+
+	insertGrinderShot(t, sqlDB, shotsRepo, 1, time.Date(2026, 1, 2, 8, 0, 0, 0, time.UTC), 1,
+		map[string]any{"grinder": "Niche Zero", "dose": 18.0})
+	insertGrinderShot(t, sqlDB, shotsRepo, 2, time.Date(2026, 1, 3, 8, 0, 0, 0, time.UTC), 1,
+		map[string]any{"grinder": "DF64", "dose": 20.0})
+	insertGrinderShot(t, sqlDB, shotsRepo, 3, time.Date(2026, 1, 4, 8, 0, 0, 0, time.UTC), 1, nil)
+
+	maint := map[string]Task{
+		"grinder_1": {"lastDate": "2026-01-01", "grinderName": "Niche Zero", "threshold_shots": float64(200)},
+	}
+	stats, err := ComputeMaintenanceStats(shotsRepo, libRepo, maint, 1)
+	if err != nil {
+		t.Fatalf("ComputeMaintenanceStats: %v", err)
+	}
+	stat := stats["grinder_1"]
+	wantShotsSince(t, stat, "grinder_1", 1)
+	wantGramsSince(t, stat, "grinder_1", 18)
 }

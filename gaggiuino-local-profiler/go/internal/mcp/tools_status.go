@@ -105,7 +105,7 @@ func registerStatusTools(srv *mcpsdk.Server, deps Deps) {
 }
 
 func getMaintenanceStatus(deps Deps, in maintenanceStatusInput) (maintenanceStatusOutput, error) {
-	if deps.Maintenance == nil || deps.ShotsRepo == nil || deps.Registry == nil {
+	if deps.Maintenance == nil || deps.ShotsRepo == nil || deps.Library == nil || deps.Registry == nil {
 		return maintenanceStatusOutput{}, fmt.Errorf("maintenance data is not available")
 	}
 	out := maintenanceStatusOutput{Machines: []machineMaintenanceStatus{}, Global: []maintenanceTaskStatus{}}
@@ -139,7 +139,7 @@ func getMaintenanceStatus(deps Deps, in maintenanceStatusInput) (maintenanceStat
 		log.Printf("mcp: get_maintenance_status: reading tasks for machine %d: %v", in.MachineID, err)
 		return maintenanceStatusOutput{}, fmt.Errorf("could not read maintenance data; try again")
 	}
-	stats, err := maintenance.ComputeMaintenanceStats(deps.ShotsRepo, maint, in.MachineID)
+	stats, err := maintenance.ComputeMaintenanceStats(deps.ShotsRepo, deps.Library, maint, in.MachineID)
 	if err != nil {
 		log.Printf("mcp: get_maintenance_status: computing stats for machine %d: %v", in.MachineID, err)
 		return maintenanceStatusOutput{}, fmt.Errorf("could not read maintenance data; try again")

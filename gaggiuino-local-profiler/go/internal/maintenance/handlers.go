@@ -194,7 +194,7 @@ func (h *Handlers) getMaintenance(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -350,7 +350,7 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -500,7 +500,7 @@ func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	maint[key] = task
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -528,7 +528,7 @@ func (h *Handlers) customDelete(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return
