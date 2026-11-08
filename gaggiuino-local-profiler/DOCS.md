@@ -71,6 +71,8 @@ Install via the Marketplace (HA 2026.11+) or HACS: [github.com/mxkissnr/glp-inte
 
 **The integration bundles the GLP Shot Card and GLP Order Card** — no separate card download. Installing/updating the integration (Marketplace or HACS) registers both automatically as dashboard resources; add a `type: custom:glp-card` or `type: custom:glp-order-card` card to your dashboard.
 
+**Shot chart as a picture.** `GET /api/shots/<id>/chart.png` returns a shot's pressure, flow, weight and temperature curves as a 960x480 PNG (optional `?lang=` sets the language of the axis labels and legend), for example for a dashboard picture or a phone notification image.
+
 #### Shot Card (bundled)
 
 A custom Lovelace card that displays machine status, last shot summary, preheat progress, a power button and a **profile selector**. It talks to port 8099 directly and reads the `switch_entity` from the `machine_status` sensor attribute (set automatically by the integration) — no manual card configuration needed.
