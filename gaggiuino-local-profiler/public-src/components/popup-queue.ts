@@ -45,7 +45,7 @@ async function _pump(): Promise<void> {
   if (!deps || _busy || !_queue.length) return;
   if (!deps.canShow()) { _schedule(RETRY_MS); return; }
   _busy = true;
-  let inSync = false;
+  let inSync: boolean;
   try { inSync = await deps.refresh(); } catch { inSync = false; }
   // Unconfirmed state must not decide. Nothing was marked seen, so the next
   // start or shot asks again; no retry loop against an unreachable server.
