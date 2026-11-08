@@ -21,6 +21,7 @@ import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
 import { safeLocalStorage } from '../storage.js';
 import { beanLabel } from '../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../shared/bean-mix.js';
+import { defaultGrinderName, suggestGrindDoseForBean } from './shots/grind.js';
 
 // GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
 // view reads off the poll payload. Named locally rather than reusing
@@ -191,10 +192,23 @@ export function renderLiveShotSetupPanel(): void {
     // record (dial-in-wizard's own prefill source, see library.ts) — only
     // when the user hasn't already typed something into those fields, so
     // this never clobbers a manual override.
+    //
+    // #1954: with a default grinder in the library the first known entry is
+    // not a safe source — it is whichever grinder the bean was dialled in on
+    // first, and the draft is written onto the next shot, so copying another
+    // grinder's number here would pollute that grinder's history. The
+    // grind module's bean-aware suggestion already restricts itself to the
+    // default grinder's own history.
     if (!d.grinder && !d.grindSetting && d.beanId != null) {
-      const bean = (S.coffeeLibrary?.beans || []).find((b): b is Bean => b.id === d.beanId);
-      const known = bean?.knownGrindSettings?.[0];
-      if (known) { d.grinder = known.grinder || ''; d.grindSetting = known.grindSetting || ''; }
+      if (defaultGrinderName(S.coffeeLibrary)) {
+        const s = suggestGrindDoseForBean(d.coffee, S.coffeeLibrary, S.shots, { beanId: d.beanId });
+        d.grinder = s.grinder;
+        d.grindSetting = String(s.grindSetting);
+      } else {
+        const bean = (S.coffeeLibrary?.beans || []).find((b): b is Bean => b.id === d.beanId);
+        const known = bean?.knownGrindSettings?.[0];
+        if (known) { d.grinder = known.grinder || ''; d.grindSetting = known.grindSetting || ''; }
+      }
     }
     _saveLiveSetupDraft(d);
     renderLiveShotSetupPanel();

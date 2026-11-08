@@ -21,7 +21,8 @@ import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { mapShotDatapoints } from '../utils.js';
-import { calcBestGrindCombosForBean, _miniShotChart, _parseGrindNum } from './shots/grind.js';
+import { calcBestGrindCombosForBean, defaultGrinderName, suggestGrindDoseForBean,
+         _miniShotChart, _parseGrindNum } from './shots/grind.js';
 import { normalizeGrindToNow } from '../grind-zero.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
 import type { DialinSuggestion } from '../dialin-convergence.js';
@@ -101,13 +102,17 @@ export function openDialinWizard(prefill: DialinPrefill = {}): void {
     // #456: beanId (#310's session field) carries the stable link forward to
     // the final annotate payload in dialinConfirmShot below.
     const beanId = prefill.beanId ?? (bean?.id as number | undefined) ?? null;
-    const startGrind = prefill.startGrind ?? _suggestStartGrind(prefill.beanName, prefill.grinderName, beanId);
+    // #1954: once the library names a default grinder, it overrides whatever
+    // grinder the caller suggested — a bean's first known setting or its last
+    // shot may belong to a grinder the user no longer pulls on.
+    const grinderName = defaultGrinderName(S.coffeeLibrary) || prefill.grinderName;
+    const startGrind = prefill.startGrind ?? _suggestStartGrind(prefill.beanName, grinderName, beanId);
     S.dialinSession = {
       id: Date.now(),
       startedAt: Date.now(),
       bean: prefill.beanName || '',
       beanId,
-      grinder: prefill.grinderName || (bean?.knownGrindSettings as { grinder?: string }[] | undefined)?.[0]?.grinder || '',
+      grinder: grinderName || (bean?.knownGrindSettings as { grinder?: string }[] | undefined)?.[0]?.grinder || '',
       dose: prefill.dose ?? '',
       // `|| 2` (not `?? 2`): the shared parser yields 0 for "1:0", which is
       // not a usable target — keep the old fallback to 2 for non-positive ratios.
@@ -153,7 +158,17 @@ export function closeDialinWizard(): void {
 // Starting-grind heuristic (plan §1): best historical (grinder, grind)
 // combo for the bean, else the bean's known-good grind for this grinder,
 // else the most recent shot on this grinder, else empty.
+//
+// #1954: with a default grinder in the library, none of those sources is
+// trustworthy — the combo may be another grinder's scale and the "most recent
+// shot on this grinder" may be another bean's — so the grind module's
+// bean-aware suggestion (which already filters to the default grinder) is the
+// only source. It returns null for a bean-less session.
 function _suggestStartGrind(beanName: string | undefined, grinderName: string | undefined, beanId: number | null): number | null {
+  if (defaultGrinderName(S.coffeeLibrary)) {
+    if (!beanName) return null;
+    return _parseGrindNum(suggestGrindDoseForBean(beanName, S.coffeeLibrary, wizard.shots(), { beanId }).grindSetting);
+  }
   if (beanName) {
     const combos = calcBestGrindCombosForBean(beanName, wizard.shots(), beanId);
     if (combos?.length) {

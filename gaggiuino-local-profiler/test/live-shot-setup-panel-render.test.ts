@@ -161,4 +161,85 @@ describe('renderLiveShotSetupPanel()', () => {
 
     expect(doc.getElementById('lsDose').value).toBe(16);
   });
+
+  // #1954 — the bean change handler's grinder/grind-setting prefill. The
+  // draft is written onto the next shot, so a value taken from a grinder the
+  // user isn't pulling on would pollute that grinder's history.
+  describe('bean change prefill', () => {
+    function setLibrary(grinders: { name: string; isDefault?: boolean }[], beans: unknown[]): void {
+      S.coffeeLibrary = { grinders, beans } as unknown as typeof S.coffeeLibrary;
+    }
+
+    function pickBean(beanId: string, coffee: string): void {
+      renderLiveShotSetupPanel();
+      const beanSelect = doc.getElementById('lsBean');
+      beanSelect.value = coffee;
+      beanSelect.selectedOptions = [{ dataset: { beanId } }];
+      beanSelect._fire('change');
+    }
+
+    function savedDraft(): { grinder?: string; grindSetting?: string } {
+      const raw = draftStore['glp_live_shot_setup_1'];
+      if (raw === undefined) throw new Error('draft not persisted');
+      return JSON.parse(raw) as { grinder?: string; grindSetting?: string };
+    }
+
+    it('without a default copies the bean\'s first known entry, as before', () => {
+      setLibrary([{ name: 'Old Grinder' }], [{
+        id: 42,
+        name: 'Bean A',
+        knownGrindSettings: [{ grinder: 'Old Grinder', grindSetting: '12' }],
+      }]);
+
+      pickBean('42', 'Bean A');
+
+      expect(savedDraft()).toMatchObject({ grinder: 'Old Grinder', grindSetting: '12' });
+    });
+
+    it('with a default and no history takes the default grinder and an empty setting', () => {
+      setLibrary(
+        [{ name: 'Old Grinder' }, { name: 'New Grinder', isDefault: true }],
+        [{
+          id: 42,
+          name: 'Bean A',
+          knownGrindSettings: [{ grinder: 'Old Grinder', grindSetting: '12' }],
+        }],
+      );
+
+      pickBean('42', 'Bean A');
+
+      expect(savedDraft().grinder).toBe('New Grinder');
+      expect(savedDraft().grindSetting).toBe('');
+    });
+
+    it('with a default and its own known entry takes that value', () => {
+      setLibrary(
+        [{ name: 'Old Grinder' }, { name: 'New Grinder', isDefault: true }],
+        [{
+          id: 42,
+          name: 'Bean A',
+          knownGrindSettings: [
+            { grinder: 'Old Grinder', grindSetting: '12' },
+            { grinder: 'New Grinder', grindSetting: '24' },
+          ],
+        }],
+      );
+
+      pickBean('42', 'Bean A');
+
+      expect(savedDraft()).toMatchObject({ grinder: 'New Grinder', grindSetting: '24' });
+    });
+
+    it('never overwrites a draft that already has a grinder', () => {
+      setLibrary(
+        [{ name: 'New Grinder', isDefault: true }],
+        [{ id: 42, name: 'Bean A', knownGrindSettings: [{ grinder: 'New Grinder', grindSetting: '24' }] }],
+      );
+      draftStore['glp_live_shot_setup_1'] = JSON.stringify({ grinder: 'Manual Grinder' });
+
+      pickBean('42', 'Bean A');
+
+      expect(savedDraft()).toMatchObject({ grinder: 'Manual Grinder' });
+    });
+  });
 });
