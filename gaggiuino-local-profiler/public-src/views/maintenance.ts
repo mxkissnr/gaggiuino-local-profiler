@@ -135,6 +135,10 @@ let _maintScope: MaintScope = 'all';
 // MAINT_META's 5 static keys only, silently dropping every custom_/
 // grinder_ task and never respecting a task's disabled state).
 let _lastActiveTiles: MaintTile[] = [];
+// The row a just-finished task lands on: it plays one soft sheen on the next
+// render only. An empty machineId matches whatever machine the caller did not
+// name explicitly.
+let _freshDone: { task: string; machineId: string } | null = null;
 
 // Last log entries the log render received — openMaintTask's history source.
 let _lastLogEntries: MaintLogEntry[] = [];
@@ -352,6 +356,9 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
     ? html`<button type="button" class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
     : html``;
   const numClass = state.dueCount > 0 ? 'due' : 'ok';
+  const cup = state.kind === 'ok'
+    ? html`<span class="maint-cup" aria-hidden="true">${COFFEE_ICON_SVG}<span class="maint-steam"></span><span class="maint-steam"></span></span>`
+    : html``;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   return html`
@@ -362,7 +369,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
           ${sub ? html`<p class="analytics-verdict-sub">${esc(sub)}</p>` : html``}
         </div>
         <div class="analytics-verdict-score">
-          ${state.kind === 'ok' ? html`<span class="maint-cup" aria-hidden="true">${COFFEE_ICON_SVG}<span class="maint-steam"></span><span class="maint-steam"></span></span>` : html``}
+          ${cup}
           <span class="analytics-verdict-score-num maint-verdict-num ${esc(numClass)}">${esc(state.dueCount)}</span>
           <span class="analytics-verdict-score-lbl">${esc(t('maint_due'))}</span>
         </div>
@@ -415,11 +422,6 @@ export function openMaintTask(task: string, machineId: string, anchor: HTMLEleme
 function _closeOpenTaskSheet(): void {
   if (document.querySelector('#detailSheet .maint-sheet[data-task]')) requestCloseDetailSheet();
 }
-
-// The row a just-finished task lands on: it plays one soft sheen on the next
-// render only. An empty machineId matches whatever machine the caller did not
-// name explicitly.
-let _freshDone: { task: string; machineId: string } | null = null;
 
 // #1923: one task as a full-width row — the row itself is the button that
 // opens the task sheet, so there is no separate "Details" affordance.

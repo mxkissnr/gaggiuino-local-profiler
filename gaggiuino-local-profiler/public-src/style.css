@@ -2862,7 +2862,7 @@
         .maint-chip.ok     { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
         .maint-chip.never  { background: var(--gray-800); color: var(--gray-500); }
         .maint-row-meta { grid-area: meta; font-size: var(--fs-1); color: var(--gray-500); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
-        .maint-row-bar { grid-area: bar; display: block; height: 4px; margin-top: var(--sp-1); background: var(--gray-800); border-radius: 2px; overflow: hidden; }
+        .maint-row-bar { grid-area: bar; display: block; position: relative; height: 4px; margin-top: var(--sp-1); background: var(--gray-800); border-radius: 2px; overflow: hidden; }
         .maint-row-fill { display: block; height: 100%; border-radius: 2px; background: var(--ok); }
         .maint-row-fill.due   { background: var(--err); }
         .maint-row-fill.soon  { background: var(--accent); }
@@ -2875,14 +2875,13 @@
             position: relative; display: inline-flex; width: 28px; height: 28px;
             margin-bottom: var(--sp-2); color: var(--accent-ink);
         }
-        .maint-cup svg { width: 28px; height: 28px; }
+        .maint-cup .rail-icon { width: 28px; height: 28px; stroke-width: 1.5; }
         .maint-steam {
             position: absolute; top: -10px; width: 2px; height: 10px;
             border-radius: 2px; background: currentColor; opacity: 0;
         }
         .maint-steam:nth-of-type(1) { left: 9px; }
         .maint-steam:nth-of-type(2) { left: 17px; }
-        .maint-row-bar { position: relative; }
         @media (prefers-reduced-motion: no-preference) {
             .maint-steam { animation: maint-steam-rise 3.2s ease-in-out infinite; }
             .maint-steam:nth-of-type(2) { animation-delay: 1.6s; }
