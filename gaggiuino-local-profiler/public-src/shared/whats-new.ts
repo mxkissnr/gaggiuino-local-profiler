@@ -77,9 +77,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Fixed: the Statistics world map tooltip no longer renders bean or region names as HTML.',
         'Fixed: the MQTT broker password can now be explicitly cleared, and is never returned in cleartext.',
     ] },
-    { version: '3.0.2', date: '2026-09-11', highlights: [
-        'Fixed: the machine firmware check no longer stops reporting the installed version when GitHub is temporarily unreachable.',
-    ] },
 ];
 
 const MAX_ENTRIES = 8;

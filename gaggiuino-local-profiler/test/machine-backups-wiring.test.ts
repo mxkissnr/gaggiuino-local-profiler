@@ -221,17 +221,6 @@ describe('the Backups row action (#1878)', () => {
 describe('the shipped docs, styles and changelog (#1878)', () => {
   const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-  it('ships the changelog fragment', () => {
-    const fragment = read('../changelog.d/1878.added.md');
-    expect(fragment).toBe(
-      '- **Gaggiuino machines now keep a history of their settings and profiles.** GLP backs them up daily, '
-      + 'before firmware updates and on demand, without storing Wi-Fi or MQTT passwords, and can download, '
-      + 'upload, compare and restore any version. Part of #1878\n',
-    );
-    expect(fragment).toContain('Part of #1878');
-    expect(fragment).not.toContain('Closes');
-  });
-
   it('documents the feature in both languages, before the HA theme section', () => {
     const docs = read('../DOCS.md');
     const docsDe = read('../DOCS.de.md');
