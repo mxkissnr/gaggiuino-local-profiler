@@ -587,3 +587,58 @@ describe('bean mix rows (#1837)', () => {
     flushAutoSave();
   });
 });
+
+// #1954 — with a default grinder set, a bean change or a clone may only show
+// that grinder and its own setting for the bean. Another grinder's numbers are
+// on a different scale, so a stale or copied value must not survive.
+describe('default grinder prefill (#1954)', () => {
+  it('sets the default grinder and clears the grind field on a bean change', () => {
+    S.coffeeLibrary.grinders = [{ id: 1, name: 'Grinder X', isDefault: true }];
+    el('annGrindSetting').value = '18';
+    el('annCoffee').value = 'Bean A';
+
+    wireAnnotationPanel();
+    fire(el('annCoffee'), 'change');
+
+    expect(el('annGrinder').value).toBe('Grinder X');
+    expect(el('annGrindSetting').value).toBe('');
+  });
+
+  it('keeps the grind field value on a bean change without a default', () => {
+    el('annGrindSetting').value = '18';
+    el('annCoffee').value = 'Bean A';
+
+    wireAnnotationPanel();
+    fire(el('annCoffee'), 'change');
+
+    expect(el('annGrindSetting').value).toBe('18');
+  });
+
+  it('leaves the grind setting empty on a clone when the previous shot used another grinder', () => {
+    S.coffeeLibrary.grinders = [{ id: 1, name: 'Grinder X', isDefault: true }];
+    S.shots = [
+      { id: 1, timestamp: 1700000000, annotation: { coffee: 'Bean A', beanId: 11, grinder: 'Old Grinder', grindSetting: '22', dose: 18 } },
+      { id: 2, timestamp: 1700000100, annotation: {} },
+    ];
+    S.primaryShotId = 2;
+
+    quickClone();
+
+    expect(el('annGrinder').value).toBe('Grinder X');
+    expect(el('annGrindSetting').value).toBe('');
+    expect(el('annDose').value).toBe('18');
+  });
+
+  it('still copies the previous shot\'s grind setting on a clone without a default', () => {
+    S.shots = [
+      { id: 1, timestamp: 1700000000, annotation: { coffee: 'Bean A', beanId: 11, grinder: 'Old Grinder', grindSetting: '22', dose: 18 } },
+      { id: 2, timestamp: 1700000100, annotation: {} },
+    ];
+    S.primaryShotId = 2;
+
+    quickClone();
+
+    expect(el('annGrinder').value).toBe('Old Grinder');
+    expect(el('annGrindSetting').value).toBe('22');
+  });
+});
