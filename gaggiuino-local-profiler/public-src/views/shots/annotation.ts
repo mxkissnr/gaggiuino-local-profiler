@@ -8,7 +8,7 @@ import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js
 import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
-import { suggestGrindDoseForBean } from './grind.js';
+import { defaultGrinderName, suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
@@ -795,8 +795,12 @@ export function quickClone(): void {
   const suggested = beanName
     ? suggestGrindDoseForBean(beanName, S.coffeeLibrary, S.shots, { preferMostRecent: true, beanId })
     : { grinder: '', grindSetting: '', dose: '' };
-  (document.getElementById('annGrinder') as HTMLInputElement).value      = suggested.grinder      || ann.grinder      || '';
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(suggested.grindSetting || ann.grindSetting || '');
+  // #1954: with a default grinder, a clone always uses that grinder and only
+  // its own setting — the previous shot's value is on another scale, so an
+  // empty suggestion stays empty instead of copying ann.
+  const defaultGrinder = defaultGrinderName(S.coffeeLibrary);
+  (document.getElementById('annGrinder') as HTMLInputElement).value      = defaultGrinder || suggested.grinder || ann.grinder || '';
+  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(defaultGrinder ? suggested.grindSetting : (suggested.grindSetting || ann.grindSetting || ''));
   (document.getElementById('annDose') as HTMLInputElement).value         = String(suggested.dose         || ann.dose         || '');
   updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '');
   // Basket/puck screen are equipment, not per-shot state — carried over from

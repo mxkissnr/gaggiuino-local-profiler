@@ -7,7 +7,7 @@ import type { Bean } from '../api/types.js';
 import { tHtml } from '../i18n.js';
 import { html } from '../utils.js';
 import { renderStars, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
-         suggestGrindDoseForBean, _renderFrozenPortionPills } from '../views/shots.js';
+         suggestGrindDoseForBean, defaultGrinderName, _renderFrozenPortionPills } from '../views/shots.js';
 import { attachAutocomplete } from '../components/autocomplete.js';
 import { BEAN_ICON_SVG } from '../icons.js';
 import { addMixRow, isMixActive } from '../views/shots/annotation-mix.js';
@@ -55,7 +55,9 @@ export function wireAnnotationPanel(): void {
       const grindEl   = document.getElementById('annGrindSetting') as HTMLInputElement | null;
       const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
       if (suggested.grinder      && grinderEl) grinderEl.value = suggested.grinder;
-      if (suggested.grindSetting && grindEl)   grindEl.value   = String(suggested.grindSetting);
+      // #1954: with a default grinder the field must never keep the previous
+      // bean's value — an empty suggestion clears it.
+      if ((suggested.grindSetting || defaultGrinderName(S.coffeeLibrary)) && grindEl) grindEl.value = String(suggested.grindSetting);
       // #1837: in a mix the dose is the rows' sum, so a bean change must not
       // overwrite it with this bean's own suggestion.
       if (suggested.dose && doseEl && !isMixActive()) doseEl.value = String(suggested.dose);

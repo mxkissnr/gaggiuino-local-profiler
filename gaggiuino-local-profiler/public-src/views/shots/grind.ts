@@ -59,6 +59,13 @@ interface GrindBean {
 
 interface GrindLibrary {
   beans?: GrindBean[];
+  grinders?: { name?: unknown; isDefault?: unknown }[];
+}
+
+// The library's default grinder (#1954), or '' when none is set.
+export function defaultGrinderName(library: GrindLibrary | null | undefined): string {
+  const name = library?.grinders?.find(g => g.isDefault === true)?.name;
+  return typeof name === 'string' ? name.trim() : '';
 }
 
 export interface GrindSuggestion {
@@ -302,7 +309,7 @@ export function suggestGrindDoseForBean(
   let grinder = '', grindSetting: string | number = '';
 
   // #456: beanId-first, name fallback — see calcComparativeGrindAdvice.
-  const lastForBean = [...(allShots || [])]
+  const beanShots = [...(allShots || [])]
     .filter(s => {
       const a = s.annotation || {};
       // #1837: never prefill from a mixed shot — the dose/grind it recorded are
@@ -312,21 +319,34 @@ export function suggestGrindDoseForBean(
         ? a.beanId === beanId
         : (a.coffee || '').trim().toLowerCase() === name.toLowerCase();
     })
-    .sort((a, b) => (b.timestamp as number) - (a.timestamp as number))[0];
+    .sort((a, b) => (b.timestamp as number) - (a.timestamp as number));
+  const lastForBean = beanShots[0];
 
-  if (preferMostRecent && lastForBean?.annotation?.grindSetting) {
-    grinder      = lastForBean.annotation.grinder      || '';
-    grindSetting = lastForBean.annotation.grindSetting;
+  const defaultGrinder = defaultGrinderName(coffeeLibrary);
+  const onDefault = (g: string | null | undefined) =>
+    (g || '').trim().toLowerCase() === defaultGrinder.toLowerCase();
+  // #1954: with a default grinder only its own shots may supply a grind
+  // setting — another grinder's numbers are on a different scale.
+  const lastGrindShot = defaultGrinder
+    ? beanShots.find(s => onDefault(s.annotation?.grinder) && s.annotation?.grindSetting)
+    : lastForBean;
+  const comboShots = defaultGrinder ? allShots?.filter(s => onDefault(s.annotation?.grinder)) : allShots;
+
+  if (preferMostRecent && lastGrindShot?.annotation?.grindSetting) {
+    grinder      = lastGrindShot.annotation.grinder      || '';
+    grindSetting = lastGrindShot.annotation.grindSetting;
   }
 
   if (!grindSetting) {
-    const combos = calcBestGrindCombosForBean(name, allShots, beanId);
+    const combos = calcBestGrindCombosForBean(name, comboShots, beanId);
     const bestCombo = combos?.[0];
     if (bestCombo) {
       grinder = bestCombo.grinder;
       grindSetting = String(bestCombo.grindSetting);
     } else {
-      const known = bean?.knownGrindSettings?.[0];
+      const known = defaultGrinder
+        ? bean?.knownGrindSettings?.find(k => onDefault(k.grinder))
+        : bean?.knownGrindSettings?.[0];
       if (known) {
         grinder = known.grinder;
         grindSetting = known.grindSetting;
@@ -334,9 +354,9 @@ export function suggestGrindDoseForBean(
     }
   }
 
-  if (!grinder)      grinder      = lastForBean?.annotation?.grinder      || '';
-  if (!grindSetting) grindSetting = lastForBean?.annotation?.grindSetting || '';
+  if (!grinder)      grinder      = lastGrindShot?.annotation?.grinder      || '';
+  if (!grindSetting) grindSetting = lastGrindShot?.annotation?.grindSetting || '';
   const dose = lastForBean?.annotation?.dose || '';
 
-  return { grinder, grindSetting, dose };
+  return { grinder: defaultGrinder || grinder, grindSetting, dose };
 }
