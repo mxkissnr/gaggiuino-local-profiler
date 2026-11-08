@@ -61,6 +61,8 @@ export function wireDelegation(): void {
     // instead of listing all 18 action names as switch cases.
     if (action.startsWith('gm-')) { handleGmEditorAction(action, el); return; }
     switch (action) {
+      // No roast date here on purpose: opening a later bag must not inherit
+      // one (#1933 — only the create flow passes the form's date through).
       case 'open-new-bag':       openNewBagForm(numId()); break;
       case 'close-new-bag':      closeNewBagForm(numId()); break;
       case 'save-new-bag':       void saveNewBag(numId()); break;
