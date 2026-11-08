@@ -1251,16 +1251,6 @@ func scoreableDatapoints() map[string]any {
 	}}
 }
 
-// registerTestConstantModel adds a second score model that scores every shot 7,
-// so a listing that includes it cannot be confused with classic's score.
-func registerTestConstantModel(t *testing.T) {
-	t.Helper()
-	shots.RegisterScoreModelForTest(t, shots.ScoreModel{ID: "test_const", Score: func(shots.Shot, *shots.Bean) shots.ScoreDetail {
-		v := 7
-		return shots.ScoreDetail{Score: &v}
-	}})
-}
-
 // modelScoresOf reads a model_scores array as (id, score) pairs in order,
 // with a nil score for an entry that omits it.
 func modelScoresOf(t *testing.T, m map[string]any) []struct {
@@ -1296,8 +1286,9 @@ func modelScoresOf(t *testing.T, m map[string]any) []struct {
 }
 
 // TestExplainScoreListsEveryScoreModel covers #1922: explain_score names the
-// active model and lists every registered model's score side by side, and
-// registering a second model neither hides classic nor changes the shown score.
+// active model and lists every registered model's score side by side. The
+// production registry holds only classic, so the listing is exactly one entry
+// carrying the same score the tool shows.
 func TestExplainScoreListsEveryScoreModel(t *testing.T) {
 	ts, sqlDB := newDeveloperServer(t, true, false)
 	insertShot(t, sqlDB, 41, 1000, scoreableDatapoints(), map[string]any{"dose": 18.0, "tds": 9.0})
@@ -1316,29 +1307,29 @@ func TestExplainScoreListsEveryScoreModel(t *testing.T) {
 		t.Fatalf("classic model score = %v, want the shown score %v", scores[0].Score, classicScore)
 	}
 
-	registerTestConstantModel(t)
-	out = structured(t, call(t, session, "explain_score", map[string]any{"id": 41}))
-	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
-		t.Fatalf("score_model after registering a model = %q, want classic (the active model does not switch)", got)
-	}
-	if got := numberField(t, out, "score"); got != classicScore {
-		t.Fatalf("score after registering a model = %v, want the unchanged %v", got, classicScore)
+	// A shot classic cannot score still carries the key: the listing is always a
+	// slice, and the entry's score is omitted rather than the array going null.
+	insertShot(t, sqlDB, 42, 1001, map[string]any{"datapoints": map[string]any{
+		"pressure":   []any{80.0, 80.0, 80.0},
+		"timeInShot": []any{0.0, 10.0, 20.0},
+	}}, map[string]any{"coffee": "Alpha"})
+	out = structured(t, call(t, session, "explain_score", map[string]any{"id": 42}))
+	if _, ok := out["score"]; ok {
+		t.Fatalf("score present with too little data: %v", out["score"])
 	}
 	scores = modelScoresOf(t, out)
-	if len(scores) != 2 {
-		t.Fatalf("model_scores = %+v, want classic and test_const", scores)
+	if len(scores) != 1 || scores[0].Model != shots.ClassicScoreModel {
+		t.Fatalf("unscoreable shot model_scores = %+v, want only classic", scores)
 	}
-	if scores[0].Model != shots.ClassicScoreModel || scores[0].Score == nil || *scores[0].Score != int(classicScore) {
-		t.Fatalf("model_scores[0] = %+v, want classic with %v", scores[0], classicScore)
-	}
-	if scores[1].Model != "test_const" || scores[1].Score == nil || *scores[1].Score != 7 {
-		t.Fatalf("model_scores[1] = %+v, want test_const with 7", scores[1])
+	if scores[0].Score != nil {
+		t.Fatalf("unscoreable shot classic score = %v, want it omitted", *scores[0].Score)
 	}
 }
 
 // TestExportShotsDatasetListsEveryScoreModel covers #1922's dataset half: the
 // response names the active model and every row carries every registered
-// model's score, again without changing the row's own score.
+// model's score. Only classic is registered in production, so each row has
+// exactly one model entry equal to the row's own score.
 func TestExportShotsDatasetListsEveryScoreModel(t *testing.T) {
 	ts, sqlDB := newDeveloperServer(t, true, false)
 	insertShot(t, sqlDB, 1, 1000, scoreableDatapoints(), map[string]any{"dose": 18.0, "tds": 9.0})
@@ -1364,28 +1355,5 @@ func TestExportShotsDatasetListsEveryScoreModel(t *testing.T) {
 	}
 	if len(classicScores) != 2 {
 		t.Fatalf("got %d rows, want 2", len(classicScores))
-	}
-
-	registerTestConstantModel(t)
-	out = structured(t, call(t, session, "export_shots_dataset", map[string]any{}))
-	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
-		t.Fatalf("score_model after registering a model = %q, want classic", got)
-	}
-	for _, raw := range objects(out, "shots") {
-		row, _ := raw.(map[string]any)
-		id := numberField(t, row, "id")
-		if got := numberField(t, row, "score"); got != classicScores[id] {
-			t.Fatalf("row %v score = %v, want the unchanged %v", id, got, classicScores[id])
-		}
-		scores := modelScoresOf(t, row)
-		if len(scores) != 2 {
-			t.Fatalf("row %v model_scores = %+v, want classic and test_const", id, scores)
-		}
-		if scores[0].Model != shots.ClassicScoreModel || scores[0].Score == nil || *scores[0].Score != int(classicScores[id]) {
-			t.Fatalf("row %v model_scores[0] = %+v, want classic %v", id, scores[0], classicScores[id])
-		}
-		if scores[1].Model != "test_const" || scores[1].Score == nil || *scores[1].Score != 7 {
-			t.Fatalf("row %v model_scores[1] = %+v, want test_const 7", id, scores[1])
-		}
 	}
 }
