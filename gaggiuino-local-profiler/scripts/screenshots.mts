@@ -266,6 +266,10 @@ async function main(): Promise<void> {
     });
     await context.addInitScript(() => {
         try { localStorage.setItem('glp_lang', 'en'); } catch { /* ignore */ }
+        // The demo backup's shots are a fixed snapshot, so the default 30-day
+        // Analytics period runs empty once the snapshot is older than that and
+        // the page hides its sections. Show the whole history instead.
+        try { localStorage.setItem('glp.analyticsFilter', JSON.stringify({ days: 0, query: '' })); } catch { /* ignore */ }
     });
     const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
