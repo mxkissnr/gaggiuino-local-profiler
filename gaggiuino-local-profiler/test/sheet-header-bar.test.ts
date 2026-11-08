@@ -389,10 +389,10 @@ describe('bean form sheet header bar save (#1489)', () => {
 
   it('bar Save asks for the new bag with the roast date filled in (#1933)', async () => {
     setupHome();
-    const fetchMock = vi.fn(async () => new Response(
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(
       JSON.stringify({ id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [] }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
-    ));
+    )));
     g.fetch = fetchMock;
 
     library.openBeanForm();
