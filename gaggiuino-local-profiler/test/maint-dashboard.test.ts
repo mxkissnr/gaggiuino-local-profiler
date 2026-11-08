@@ -470,7 +470,7 @@ describe('_maintCountText (#1923)', () => {
   it('still shows the numbers for a paused task that has been done before', () => {
     const text = _maintCountText('backflush', task('paused', {
       threshold_shots: 20, shotsSince: 25, lastDate: '2026-01-01T00:00:00.000Z',
-    }) as unknown as Parameters<MaintView['_maintCountText']>[1]);
+    }));
     expect(text).toContain('25');
     expect(text).toContain('20');
   });
@@ -478,7 +478,7 @@ describe('_maintCountText (#1923)', () => {
   it('falls back to the never-done text for a paused task with no last date', () => {
     const text = _maintCountText('backflush', task('paused', {
       threshold_shots: 20, shotsSince: 25, lastDate: null,
-    }) as unknown as Parameters<MaintView['_maintCountText']>[1]);
+    }));
     expect(text).toBe('Never done');
   });
 });
