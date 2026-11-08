@@ -105,7 +105,8 @@ beforeEach(() => {
   showToast.mockReset();
   mocks.saveShotDefaults.mockReset();
   mocks.saveGrinder.mockReset();
-  mocks.saveShotDefaults.mockImplementation((body: unknown) => Promise.resolve({ ...(body as object) }));
+  // Echo the body, as the server does for a successful POST.
+  mocks.saveShotDefaults.mockImplementation((body: unknown) => Promise.resolve(body));
   mocks.saveGrinder.mockImplementation((id: number, payload: { isDefault?: boolean }) =>
     Promise.resolve({ id, name: `grinder ${id}`, isDefault: payload.isDefault }));
 
@@ -257,7 +258,7 @@ describe('default grinder in shot defaults (#1954)', () => {
     S.shotDefaults = savedDefaults('Old');
     renderShotDefaultsSettingsCard();
     await flush();
-    expect(S.coffeeLibrary.grinders.find(r => r.id === 1)?.isDefault).toBe(true);
+    expect(grinderRows().find(r => r.id === 1)?.isDefault).toBe(true);
 
     grinderSelect().value = '';
     await saveShotDefaultsSettings();
