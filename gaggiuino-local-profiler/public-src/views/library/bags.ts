@@ -190,7 +190,10 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
          </div>
        </div>`
     : esc('');
-  const dragHandle: Html = state === 'upcoming'
+  // Only tracked upcoming bags are reorderable: an untracked one (#1933) is
+  // not part of the queue reorderBags accepts, and the server rejects a
+  // one-item reorder of it.
+  const dragHandle: Html = state === 'upcoming' && remaining != null
     ? html`<span class="lib-bag-drag-handle" data-bag-drag-handle data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_reorder_handle')}">⠿</span>`
     : esc('');
   return html`<div class="lib-bag-card${esc(state === 'current' ? ' active' : '')}${esc(expanded ? ' expanded' : '')}" data-bag-card data-bag-id="${esc(bg.id)}">
