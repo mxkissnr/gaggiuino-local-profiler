@@ -66,9 +66,16 @@ function library(grinders: { id: number; name: string; isDefault?: boolean }[]):
   return { beans: [{ id: 1, name: 'Bean A' }], grinders } as unknown as CoffeeLibrary;
 }
 
+// One shot on Old only: with no default grinder the suggestion follows it, and
+// with New flagged it must not borrow Old's grind setting.
 const beanShots: GrindShot[] = [
   { timestamp: 100, score: 90, annotation: { coffee: 'Bean A', grinder: 'Old', grindSetting: '12', dose: '18' } },
 ];
+
+// Called exactly as the app calls it, off S.coffeeLibrary.
+function suggestion(): string {
+  return suggestGrindDoseForBean('Bean A', S.coffeeLibrary, beanShots).grinder;
+}
 
 function savedDefaults(grinder = ''): Record<string, unknown> {
   return { drinkType: 'espresso', coffee: 'Bean A', beanId: 1, basketId: 3, puckScreenId: 5, grinder, dose: 18.5 };
@@ -78,6 +85,13 @@ function grinderSelect(): FakeEl {
   const el = docEls.get('sdGrinder');
   if (!el) throw new Error('missing #sdGrinder');
   return el;
+}
+
+// S.coffeeLibrary.grinders is typed as loose rows; the assertions below read
+// the same three fields this component writes.
+type GrinderRow = { id: number; name: string; isDefault?: boolean };
+function grinderRows(): GrinderRow[] {
+  return S.coffeeLibrary.grinders as unknown as GrinderRow[];
 }
 
 beforeEach(() => {
@@ -96,7 +110,6 @@ beforeEach(() => {
     Promise.resolve({ id, name: `grinder ${id}`, isDefault: payload.isDefault }));
 
   S.coffeeLibrary = library([{ id: 1, name: 'Old' }, { id: 2, name: 'New' }]);
-  S.shots = [] as unknown as typeof S.shots;
   S.shotDefaults = savedDefaults();
 });
 
@@ -104,10 +117,8 @@ afterEach(() => { vi.useRealTimers(); });
 
 describe('default grinder in shot defaults (#1954)', () => {
   it('changing the setting changes the new shot and the bean suggestion', async () => {
-    S.shots = beanShots as unknown as typeof S.shots;
-
     expect(_applyShotDefaults({})?.grinder).toBe('');
-    expect(suggestGrindDoseForBean('Bean A', S.coffeeLibrary, beanShots).grinder).toBe('Old');
+    expect(suggestion()).toBe('Old');
 
     grinderSelect().value = '2';
     await saveShotDefaultsSettings();
@@ -116,7 +127,7 @@ describe('default grinder in shot defaults (#1954)', () => {
     expect(mocks.saveGrinder).toHaveBeenCalledWith(2, { isDefault: true });
     expect(mocks.saveShotDefaults).toHaveBeenCalledWith(expect.objectContaining({ grinder: '' }));
     expect(_applyShotDefaults({})?.grinder).toBe('New');
-    expect(suggestGrindDoseForBean('Bean A', S.coffeeLibrary, beanShots).grinder).toBe('New');
+    expect(suggestion()).toBe('New');
 
     mocks.saveGrinder.mockClear();
     grinderSelect().value = '';
@@ -125,7 +136,7 @@ describe('default grinder in shot defaults (#1954)', () => {
 
     expect(mocks.saveGrinder).toHaveBeenCalledWith(2, { isDefault: false });
     expect(_applyShotDefaults({})?.grinder).toBe('');
-    expect(suggestGrindDoseForBean('Bean A', S.coffeeLibrary, beanShots).grinder).toBe('Old');
+    expect(suggestion()).toBe('Old');
   });
 
   it('switching from one default to another leaves only the new row flagged', async () => {
@@ -134,8 +145,8 @@ describe('default grinder in shot defaults (#1954)', () => {
 
     await saveShotDefaultsSettings();
 
-    expect(S.coffeeLibrary.grinders.find(r => r.id === 1)?.isDefault).toBeUndefined();
-    expect(S.coffeeLibrary.grinders.find(r => r.id === 2)?.isDefault).toBe(true);
+    expect(grinderRows().find(r => r.id === 1)?.isDefault).toBeUndefined();
+    expect(grinderRows().find(r => r.id === 2)?.isDefault).toBe(true);
   });
 
   it('saving with the current default still selected sends no grinder write', async () => {
@@ -156,7 +167,7 @@ describe('default grinder in shot defaults (#1954)', () => {
 
     expect(showToast).toHaveBeenCalledWith('Error: ');
     expect(mocks.saveShotDefaults).not.toHaveBeenCalled();
-    expect(S.coffeeLibrary.grinders.find(r => r.id === 2)?.isDefault).toBeUndefined();
+    expect(grinderRows().find(r => r.id === 2)?.isDefault).toBeUndefined();
     expect(docEls.get('shotDefaultsSaveBtn')?.innerHTML).not.toContain('Saved');
   });
 
@@ -167,7 +178,7 @@ describe('default grinder in shot defaults (#1954)', () => {
     renderShotDefaultsSettingsCard();
 
     const markup = grinderSelect().innerHTML;
-    expect(markup.indexOf('value=""')).toBe(0);
+    expect(markup.startsWith('<option value="">')).toBe(true);
     expect(markup).toContain('<option value="1" selected>Old</option>');
     expect(markup).toContain('<option value="2">New</option>');
   });
@@ -201,7 +212,7 @@ describe('default grinder in shot defaults (#1954)', () => {
       drinkType: 'espresso', coffee: 'Bean A', beanId: 1, basketId: 3, puckScreenId: 5, grinder: '', dose: 18.5,
     });
     expect(S.shotDefaults?.grinder).toBe('');
-    expect(S.coffeeLibrary.grinders.find(r => r.id === 1)?.isDefault).toBe(true);
+    expect(grinderRows().find(r => r.id === 1)?.isDefault).toBe(true);
 
     mocks.saveGrinder.mockClear();
     mocks.saveShotDefaults.mockClear();
@@ -258,7 +269,7 @@ describe('default grinder in shot defaults (#1954)', () => {
     await flush();
 
     expect(mocks.saveGrinder.mock.calls.length).toBe(writes);
-    expect(S.coffeeLibrary.grinders.find(r => r.id === 1)?.isDefault).toBeUndefined();
+    expect(grinderRows().find(r => r.id === 1)?.isDefault).toBeUndefined();
   });
 
   it('a failed migration write leaves the saved name and the flags alone', async () => {
@@ -269,7 +280,7 @@ describe('default grinder in shot defaults (#1954)', () => {
     await flush();
 
     expect(S.shotDefaults?.grinder).toBe('Old');
-    expect(S.coffeeLibrary.grinders.find(r => r.id === 1)?.isDefault).toBeUndefined();
+    expect(grinderRows().find(r => r.id === 1)?.isDefault).toBeUndefined();
     expect(mocks.saveShotDefaults).not.toHaveBeenCalled();
   });
 });
