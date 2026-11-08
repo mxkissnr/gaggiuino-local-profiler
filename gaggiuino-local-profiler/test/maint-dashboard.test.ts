@@ -297,6 +297,11 @@ describe('_maintRowHtml (#1923)', () => {
     expect(html).toContain('A &lt; B');
     expect(html).not.toContain('A < B');
   });
+
+  it('marks the just-finished row as fresh, and only when asked', () => {
+    expect(_maintRowHtml(rowTile(), true)).toContain('maint-row--fresh');
+    expect(_maintRowHtml(rowTile())).not.toContain('maint-row--fresh');
+  });
 });
 
 // #1923: the log is rows, eight visible with the rest behind "Show all".
@@ -457,5 +462,15 @@ describe('_maintVerdictHtml (#1923)', () => {
     const html = _maintVerdictHtml(_maintVerdictState([custom]));
     expect(html).toContain('A &lt; B');
     expect(html).not.toContain('A < B');
+  });
+
+  it('shows the decorative cup only in the all-good state', () => {
+    const ok = _maintVerdictHtml(_maintVerdictState([tile('backflush', 'ok')]));
+    expect(ok).toContain('class="maint-cup"');
+    expect(ok).toContain('aria-hidden="true"');
+    const due = _maintVerdictHtml(_maintVerdictState([tile('a', 'due')]));
+    const soon = _maintVerdictHtml(_maintVerdictState([tile('a', 'soon')]));
+    expect(due).not.toContain('maint-cup');
+    expect(soon).not.toContain('maint-cup');
   });
 });
