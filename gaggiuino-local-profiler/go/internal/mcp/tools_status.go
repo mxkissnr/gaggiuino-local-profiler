@@ -34,9 +34,9 @@ type maintenanceTaskStatus struct {
 	Task           string  `json:"task" jsonschema:"task key, e.g. descaling, backflush, grinder_<id> or custom_..."`
 	Label          string  `json:"label,omitempty" jsonschema:"human label for a custom task"`
 	GrinderName    string  `json:"grinder_name,omitempty" jsonschema:"grinder a grinder_* task belongs to"`
-	Status         string  `json:"status" jsonschema:"due, soon or ok; never when the task has never been marked done"`
+	Status         string  `json:"status" jsonschema:"due, soon, ok or paused; never when the task has never been marked done and is not paused"`
 	Pct            float64 `json:"pct" jsonschema:"progress toward the threshold, 0..1"`
-	DaysSince      *int64  `json:"days_since,omitempty" jsonschema:"days since the task was last marked done"`
+	DaysSince      *int64  `json:"days_since,omitempty" jsonschema:"days since the task was last marked done, excluding paused time"`
 	ShotsSince     int     `json:"shots_since" jsonschema:"shots pulled since the task was last marked done"`
 	ThresholdShots *int64  `json:"threshold_shots,omitempty" jsonschema:"shot threshold, when the task tracks one"`
 	ThresholdDays  *int64  `json:"threshold_days,omitempty" jsonschema:"day threshold, when the task tracks one"`
@@ -84,7 +84,7 @@ func registerStatusTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "get_maintenance_status",
 		Title:       "Get maintenance status",
-		Description: "Report the user's espresso-machine maintenance state: every task with its due state (due/soon/ok/never), progress toward its threshold, and shots/days/grams since it was last marked done. Omit machine_id for every machine plus the shared global tasks (water filter, grinders); pass machine_id for just one machine. Read-only.",
+		Description: "Report the user's espresso-machine maintenance state: every task with its due state (due/soon/ok/never/paused), progress toward its threshold, and shots/days/grams since it was last marked done. Omit machine_id for every machine plus the shared global tasks (water filter, grinders); pass machine_id for just one machine. Read-only.",
 		Annotations: readOnlyAnnotations("Get maintenance status"),
 		InputSchema: mustSchema[maintenanceStatusInput](),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in maintenanceStatusInput) (*mcpsdk.CallToolResult, maintenanceStatusOutput, error) {

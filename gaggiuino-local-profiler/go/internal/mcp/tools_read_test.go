@@ -374,6 +374,61 @@ func TestGetMaintenanceStatus(t *testing.T) {
 	}
 }
 
+// TestGetMaintenanceStatus_ReportsPaused: a paused task reports "paused" and
+// a pause-free day count, while the same last-done date without a pause is due.
+func TestGetMaintenanceStatus_ReportsPaused(t *testing.T) {
+	ts, _, maintRepo, registry := newReadServer(t, fakePoller{})
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	last := time.Now().Add(-100 * 24 * time.Hour)
+	iso := last.UTC().Format("2006-01-02T15:04:05.000Z")
+	pausedAt := time.Now().Add(-60 * 24 * time.Hour).UnixMilli()
+	if err := maintRepo.SaveTask(1, "descaling", maintenance.Task{
+		"lastDate": iso, "threshold_days": int64(60), "pausedAt": pausedAt,
+	}); err != nil {
+		t.Fatalf("SaveTask descaling: %v", err)
+	}
+	if err := maintRepo.SaveTask(1, "grouphead", maintenance.Task{
+		"lastDate": iso, "threshold_days": int64(60),
+	}); err != nil {
+		t.Fatalf("SaveTask grouphead: %v", err)
+	}
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "get_maintenance_status", map[string]any{"machine_id": 1}))
+	machines := objects(out, "machines")
+	if len(machines) != 1 {
+		t.Fatalf("machines = %d, want 1", len(machines))
+	}
+	list, _ := machines[0].(map[string]any)["tasks"].([]any)
+
+	paused := taskByName(t, list, "descaling")
+	if got, _ := paused["status"].(string); got != "paused" {
+		t.Fatalf("descaling status = %q, want paused", got)
+	}
+	if got := numberField(t, paused, "days_since"); got != 40 {
+		t.Fatalf("descaling days_since = %v, want 40", got)
+	}
+
+	unpaused := taskByName(t, list, "grouphead")
+	if got, _ := unpaused["status"].(string); got != "due" {
+		t.Fatalf("grouphead status = %q, want due", got)
+	}
+}
+
+func taskByName(t *testing.T, tasks []any, name string) map[string]any {
+	t.Helper()
+	for _, raw := range tasks {
+		m, _ := raw.(map[string]any)
+		if key, _ := m["task"].(string); key == name {
+			return m
+		}
+	}
+	t.Fatalf("task %q not found in %v", name, tasks)
+	return nil
+}
+
 func hasTask(tasks []any, name string) bool {
 	for _, raw := range tasks {
 		m, _ := raw.(map[string]any)
