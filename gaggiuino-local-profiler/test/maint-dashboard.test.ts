@@ -245,14 +245,12 @@ describe('maintenance task rows (#1923)', () => {
 // all live inside it, and every value is escaped.
 type MaintRowTile = Parameters<MaintView['_maintRowHtml']>[0];
 describe('_maintRowHtml (#1923)', () => {
-  function rowTile(overrides: Partial<MaintRowTile> = {}): MaintRowTile {
-    const t: MaintRowTile = {
-      task: 'backflush', d: task('ok', { threshold_shots: 20, shotsSince: 5 }) as unknown as MaintRowTile['d'],
-      machineId: 1, machineName: null, isGlobal: false, showMachineTag: false,
-    };
-    Object.assign(t, overrides);
-    return t;
-  }
+  const rowTile = (overrides: Partial<MaintRowTile> = {}): MaintRowTile => ({
+    task: 'backflush',
+    d: task('ok', { threshold_shots: 20, shotsSince: 5 }) as unknown as MaintRowTile['d'],
+    machineId: 1, machineName: null, isGlobal: false, showMachineTag: false,
+    ...overrides,
+  });
 
   it('carries the tile task and machine on the open action', () => {
     const html = _maintRowHtml(rowTile({ task: 'descaling', machineId: 7 }));
