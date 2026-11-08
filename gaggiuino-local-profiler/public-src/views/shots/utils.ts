@@ -1,5 +1,5 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints, parseRoastDate, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
+import { mapShotDatapoints, parseRoastDate, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 import type { PressureNote } from '../../shared/score.js';
@@ -32,6 +32,7 @@ export interface ShotLike {
 interface BeanBag {
   openedAt?: number | null;
   roastDate?: string | null;
+  frozenPortions?: { id: number; frozenAt: number; thawedAt?: number }[];
 }
 
 type BeanRecord = {
@@ -79,12 +80,25 @@ export function calcBeanAgeAtShot(
   beanName: string | null | undefined,
   shotTimestampSec: number | null | undefined,
   beanId?: number | null,
+  frozenPortionId?: number | null,
 ): number | null {
   if (!shotTimestampSec || !S.coffeeLibrary) return null;
   const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans);
   if (!bean) return null;
   const shotMs = shotTimestampSec * 1000;
   const bags   = Array.isArray(bean.bags) ? bean.bags : [];
+  // #1953: a shot brewed from a frozen portion carries that portion's own
+  // effective age; the portion is looked up across every bag of the bean (like
+  // the Go side's findFrozenPortion), and a shot before the freeze date simply
+  // gets its plain calendar age at that time.
+  if (frozenPortionId) {
+    for (const bag of bags) {
+      const portions = Array.isArray(bag.frozenPortions) ? bag.frozenPortions : [];
+      const portion = portions.find(p => Number(p.id) === Number(frozenPortionId));
+      if (portion) return frozenPortionAgeDays(bag.roastDate || bean.roastDate, portion, shotMs);
+    }
+    return null;
+  }
   let roastDateStr = bean.roastDate;
   if (bags.length) {
     const activeBag = bags
@@ -103,6 +117,19 @@ export interface ShotBeanAge {
   atShot: boolean;
 }
 
+// What a save writes to beanAgeDays. A portion that left the library gives no
+// live age, and writing null would destroy the fallback shotBeanAge relies on.
+export function beanAgeForSave(
+  beanName: string | null | undefined,
+  shotTimestampSec: number | null | undefined,
+  beanId: number | null | undefined,
+  frozenPortionId: number | null,
+  storedBeanAgeDays: number | null | undefined,
+): number | null {
+  const age = calcBeanAgeAtShot(beanName, shotTimestampSec, beanId, frozenPortionId);
+  return age ?? (frozenPortionId ? storedBeanAgeDays ?? null : null);
+}
+
 export interface ShotBeanAgeOptions {
   nowMs?: number;
   /** Allow the "days since roast until now" read (single-shot view only). */
@@ -115,12 +142,21 @@ export interface ShotBeanAgeOptions {
 // the fallback for a bean that has left the library; relative-to-now is the
 // last resort when neither is available.
 export function shotBeanAge(
-  annotation: { beanId?: number | null; coffee?: string | null; beanAgeDays?: number | null; roastDate?: string | null } | null | undefined,
+  annotation: {
+    beanId?: number | null;
+    coffee?: string | null;
+    beanAgeDays?: number | null;
+    roastDate?: string | null;
+    frozenPortionId?: number | null;
+    beanMix?: readonly BeanMixPartInput[] | null;
+  } | null | undefined,
   shotTimestampSec: number | null | undefined,
   opts: ShotBeanAgeOptions = {},
 ): ShotBeanAge | null {
   const ann = annotation || {};
-  const live = calcBeanAgeAtShot(ann.coffee, shotTimestampSec, ann.beanId);
+  // #1953: one age cannot describe several beans, and the portion need not
+  // belong to the mix's top-level bean — a mixed shot keeps calendar age.
+  const live = calcBeanAgeAtShot(ann.coffee, shotTimestampSec, ann.beanId, isBeanMix(ann) ? null : ann.frozenPortionId);
   if (live != null) return { days: live, atShot: true };
   if (ann.beanAgeDays != null) return { days: ann.beanAgeDays, atShot: true };
   if (!(opts.relativeToNow ?? true) || !ann.roastDate) return null;
