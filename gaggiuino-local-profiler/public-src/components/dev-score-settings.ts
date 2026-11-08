@@ -5,7 +5,9 @@
 // live in the shared ui-prefs store (ui-prefs.ts), so they follow the
 // developer to another device. `dev.score_model` is the same key the Go side
 // reads (devScoreModelPrefKey in go/cmd/server/main.go); blind rating is
-// CSS-driven through a body class, so toggling it needs no re-render.
+// CSS-driven through a body class, so toggling it needs no re-render — which
+// is why no render path changes here: calcShotScore() already prefers the
+// server's `score`, and renderStars() already reveals the verdict.
 import { flushUiPrefsOnLeave, getUiPref, setUiPref } from '../ui-prefs.js';
 
 export const SCORE_MODEL_PREF = 'dev.score_model';
