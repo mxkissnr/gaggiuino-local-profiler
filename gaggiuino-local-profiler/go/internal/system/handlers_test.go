@@ -348,6 +348,10 @@ func TestGetStatus_PublicFieldsAndNoSensitiveLeak(t *testing.T) {
 // TestGetStatus_ScoreModelsOnlyOnDevBuild pins the #1922 dev-channel contract:
 // the registered score model ids ride only on a dev build, alongside devBuild.
 // A stable build must not advertise a score model to pick.
+//
+// It asserts against the production registry, which holds only classic, so it
+// needs no second model registered and no test hook: `[classic]` is exactly
+// what a dev build reports.
 func TestGetStatus_ScoreModelsOnlyOnDevBuild(t *testing.T) {
 	t.Setenv("GLP_DEV_BUILD", "")
 	_, mux, _ := newFullTestHandlers(t)
