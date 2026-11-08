@@ -22,9 +22,81 @@ func testConstantModel() ScoreModel {
 	}}
 }
 
+// registerScoreModelForTest appends m to the registry and restores the previous
+// registry when t finishes. It lives here because the registry is unexported:
+// only this package's tests register a second model. Not safe with
+// t.Parallel().
+func registerScoreModelForTest(t testing.TB, m ScoreModel) {
+	t.Helper()
+	prev := loadScoreModels()
+	next := make([]ScoreModel, 0, len(prev)+1)
+	next = append(next, prev...)
+	next = append(next, m)
+	scoreModels.Store(&next)
+	t.Cleanup(func() {
+		restored := prev
+		scoreModels.Store(&restored)
+	})
+}
+
 func TestScoreModels_OnlyClassicRegistered(t *testing.T) {
 	if got, want := ScoreModelIDs(), []string{"classic"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("registry ids = %v, want %v", got, want)
+	}
+}
+
+// TestScoreModels_SecondModelListedAfterClassic covers the multi-model registry
+// contract: a second registered model comes after classic in ScoreModelIDs and
+// AllModelsScorer scores the same shot with both, in registry order. It is here
+// rather than in another package's tests because the registry is unexported.
+func TestScoreModels_SecondModelListedAfterClassic(t *testing.T) {
+	t.Cleanup(func() {
+		SetScoreModelSource(nil)
+		SetBeanSource(nil)
+	})
+	registerScoreModelForTest(t, testConstantModel())
+
+	if got, want := ScoreModelIDs(), []string{ClassicScoreModel, "test_const"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("registry ids = %v, want %v", got, want)
+	}
+
+	_, repo, _ := newTestHandlers(t)
+	seedShots(t, repo, 3)
+	SetBeanSource(nil)
+	svc := NewService(repo)
+
+	page, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0)
+	if err != nil {
+		t.Fatalf("FindPageExcludingTrash: %v", err)
+	}
+	if len(page.Rows) == 0 {
+		t.Fatal("page read returned no rows")
+	}
+	shot := page.Rows[0].Shot
+
+	scores := svc.AllModelsScorer()(shot)
+	if len(scores) != 2 {
+		t.Fatalf("AllModelsScorer returned %d scores, want 2: %+v", len(scores), scores)
+	}
+	if scores[0].Model != ClassicScoreModel {
+		t.Fatalf("scores[0].Model = %q, want %q", scores[0].Model, ClassicScoreModel)
+	}
+	if scores[1].Model != "test_const" {
+		t.Fatalf("scores[1].Model = %q, want test_const", scores[1].Model)
+	}
+	if scores[1].Score == nil || *scores[1].Score != 7 {
+		t.Fatalf("scores[1].Score = %v, want 7", scores[1].Score)
+	}
+	if want := CalcShotScoreDetail(shot, nil).Score; !sameScore(scores[0].Score, want) {
+		t.Fatalf("classic model score = %v, want %v", scores[0].Score, want)
+	}
+
+	if got := ActiveScoreModelID(); got != ClassicScoreModel {
+		t.Fatalf("ActiveScoreModelID = %q, want %q before the switch", got, ClassicScoreModel)
+	}
+	SetScoreModelSource(func() string { return "test_const" })
+	if got := ActiveScoreModelID(); got != "test_const" {
+		t.Fatalf("ActiveScoreModelID = %q, want test_const after the switch", got)
 	}
 }
 
@@ -148,7 +220,7 @@ func TestScoreModelSwitch_EveryReadPathFollows(t *testing.T) {
 		}
 	}
 
-	RegisterScoreModelForTest(t, testConstantModel())
+	registerScoreModelForTest(t, testConstantModel())
 	SetScoreModelSource(func() string { return "test_const" })
 
 	assertAllScoresAre(t, repo, svc, shot, 7)
