@@ -170,15 +170,15 @@ describe('applyDevScoreSettings on a stable build (#1922)', () => {
       dataset: {} as Record<string, string>,
       value: '',
       replaceChildren: vi.fn(),
-      onchange: null as unknown,
+      onchange: undefined as (() => void) | undefined,
     };
-    const box = { checked: false, onchange: null as unknown };
+    const box = { checked: false, onchange: undefined as (() => void) | undefined };
     installDocument({ devScoreModel: select, devBlindRating: box });
     D.applyDevScoreSettings(false, ['classic']);
     expect(select.replaceChildren).not.toHaveBeenCalled();
     expect(select.value).toBe('');
     expect(box.checked).toBe(false);
-    expect(box.onchange).toBeNull();
+    expect(box.onchange).toBeUndefined();
   });
 });
 
