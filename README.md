@@ -88,7 +88,7 @@ All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-l
   </tr>
   <tr>
     <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison and dial-in progression in the More insights fold" width="100%"/></td>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance page with a one-line verdict, task rows with progress bars and the maintenance log" width="100%"/></td>
   </tr>
 </table>
 

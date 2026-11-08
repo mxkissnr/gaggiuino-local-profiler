@@ -9,7 +9,7 @@ import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
-import { ICON_TRASH } from '../icons.js';
+import { COFFEE_ICON_SVG, ICON_TRASH } from '../icons.js';
 import { closeDetailSheet, openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
 // Circular with maintenance-sheet.ts (it reads this module's helpers): only
 // ever touched at call time, never at module load — same as
@@ -135,6 +135,10 @@ let _maintScope: MaintScope = 'all';
 // MAINT_META's 5 static keys only, silently dropping every custom_/
 // grinder_ task and never respecting a task's disabled state).
 let _lastActiveTiles: MaintTile[] = [];
+// The row a just-finished task lands on: it plays one soft sheen on the next
+// render only. An empty machineId matches whatever machine the caller did not
+// name explicitly.
+let _freshDone: { task: string; machineId: string } | null = null;
 
 // Last log entries the log render received — openMaintTask's history source.
 let _lastLogEntries: MaintLogEntry[] = [];
@@ -295,7 +299,11 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   if (hint) hint.hidden = !(hasMachines && active.some(x => x.isGlobal));
 
   const grid = document.getElementById('maintGrid') as HTMLElement;
-  grid.innerHTML = joinHtml(active.map(_maintRowHtml));
+  const fresh = _freshDone;
+  _freshDone = null;
+  grid.innerHTML = joinHtml(active.map(tile => _maintRowHtml(tile,
+    fresh !== null && tile.task === fresh.task
+      && (fresh.machineId === '' || String(tile.machineId) === fresh.machineId))));
 
   const disabledSec = document.getElementById('maintDisabledSection');
   if (disabledSec && disabled.length > 0) {
@@ -348,6 +356,9 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
     ? html`<button type="button" class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
     : html``;
   const numClass = state.dueCount > 0 ? 'due' : 'ok';
+  const cup = state.kind === 'ok'
+    ? html`<span class="maint-cup" aria-hidden="true">${COFFEE_ICON_SVG}<span class="maint-steam"></span><span class="maint-steam"></span></span>`
+    : html``;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   return html`
@@ -358,6 +369,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
           ${sub ? html`<p class="analytics-verdict-sub">${esc(sub)}</p>` : html``}
         </div>
         <div class="analytics-verdict-score">
+          ${cup}
           <span class="analytics-verdict-score-num maint-verdict-num ${esc(numClass)}">${esc(state.dueCount)}</span>
           <span class="analytics-verdict-score-lbl">${esc(t('maint_due'))}</span>
         </div>
@@ -413,16 +425,17 @@ function _closeOpenTaskSheet(): void {
 
 // #1923: one task as a full-width row — the row itself is the button that
 // opens the task sheet, so there is no separate "Details" affordance.
-export function _maintRowHtml(tile: MaintTile): Html {
+export function _maintRowHtml(tile: MaintTile, fresh = false): Html {
   const { task, d, machineName, machineId, isGlobal, showMachineTag } = tile;
   const title = taskTitle(task, d);
 
   const machineTagText = isGlobal ? t('maint_shared_tag') : (showMachineTag ? machineName : null);
   const countText = _maintCountText(task, d);
   const pct = Math.round(d.pct * 100);
+  const rowClass = `maint-row status-${d.status}${fresh ? ' maint-row--fresh' : ''}`;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  return html`<button type="button" class="maint-row status-${esc(d.status)}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
+  return html`<button type="button" class="${esc(rowClass)}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
     <span class="maint-row-icon">${taskIconSvg(task)}</span>
     <span class="maint-row-title">${esc(title)}</span>
     <span class="maint-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
@@ -491,6 +504,7 @@ export async function markMaintDone(task: string, machineId?: string | number | 
   try {
     const r = await markMaintenanceDone(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    _freshDone = { task, machineId: String(machineId ?? '') };
     _closeOpenTaskSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
