@@ -8,11 +8,10 @@ import { esc, todayIsoDate, html, joinHtml } from '../../utils.js';
 import { ICON_TRASH } from '../../icons.js';
 import type { Html } from '../../utils.js';
 import type { Bean } from '../../api/types.js';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
-// Circular with library.ts (it re-exports this module): only ever touched at
-// call time, never read at module load.
-const library = libraryView;
+// Circular with library.ts (it re-exports this module): the namespace is read
+// only at call time, never copied at module load.
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
 

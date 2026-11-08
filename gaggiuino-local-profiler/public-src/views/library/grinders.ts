@@ -13,11 +13,10 @@ import { openLightbox } from '../../components/lightbox.js';
 import { loadGrinderImageBlobUrl, invalidateGrinderImage } from '../../bean-image.js';
 import { currentGrinderZeroPoint } from '../../grind-zero.js';
 import type { Grinder } from '../../api/types.js';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
-// Circular with library.ts (it re-exports this module): only ever touched at
-// call time, never read at module load.
-const library = libraryView;
+// Circular with library.ts (it re-exports this module): the namespace is read
+// only at call time, never copied at module load.
 
 // Same 1:1 crop the grinder photo always had.
 const GRINDER_PHOTO: PhotoCropShape = { shape: 'square' };

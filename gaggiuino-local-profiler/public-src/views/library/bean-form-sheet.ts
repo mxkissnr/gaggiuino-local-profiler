@@ -19,11 +19,10 @@ import type { Bean } from '../../api/types.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { renderRecipeList } from './recipes.js';
 import { openNewBagForm } from './bean-card.js';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
-// Circular with library.ts (it re-exports this module): only ever touched at
-// call time, never read at module load.
-const library = libraryView;
+// Circular with library.ts (it re-exports this module): the namespace is read
+// only at call time, never copied at module load.
 
 // ── Bean form sheet (#1349) ───────────────────────────────────────────────
 // The bean form is static markup in index.html. Rather than re-template it,

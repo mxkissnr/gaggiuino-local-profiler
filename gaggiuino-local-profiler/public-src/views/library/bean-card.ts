@@ -14,11 +14,10 @@ import { COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, STAR_ICON_SVG, EDIT_ICON_SVG } fro
 import { classifyBeanBags, renderBagCard, _expandedPastSections } from './bags.js';
 import { _beanList, _field, _el } from './bean-shared.js';
 import type { BeanListRow, OriginBean } from './bean-shared.js';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
-// Circular with library.ts (it re-exports this module): only ever touched at
-// call time, never read at module load.
-const library = libraryView;
+// Circular with library.ts (it re-exports this module): the namespace is read
+// only at call time, never copied at module load.
 
 // qrcode ships no type declarations; name the one call this view makes.
 interface QrCodeModule {

@@ -8,11 +8,10 @@ import { cropAndUploadPhoto, adjustPhoto, saveNewPhoto, savedPhotoRow } from '..
 import type { NewPhoto, PhotoCropShape } from '../../photo-upload.js';
 import { _beanList } from './bean-shared.js';
 import type { BeanListRow } from './bean-shared.js';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
-// Circular with library.ts (it re-exports this module): only ever touched at
-// call time, never read at module load.
-const library = libraryView;
+// Circular with library.ts (it re-exports this module): the namespace is read
+// only at call time, never copied at module load.
 
 // Same 3:4 crop the bean photo always had.
 const BEAN_PHOTO: PhotoCropShape = { shape: 'square', aspect: 'portrait' };
