@@ -64,7 +64,9 @@ func TestStreamRoundTrip_MaintenancePauseFields(t *testing.T) {
 }
 
 // TestRestore_LegacyBackup_HasNoPausedTasks: an old bundle carries neither
-// pause key, so nothing restores as paused.
+// pause key, so nothing restores as paused. The fixture itself stays as-is:
+// it predates the pause keys and carries an empty maintenance array, so there
+// is nothing in it to update.
 func TestRestore_LegacyBackup_HasNoPausedTasks(t *testing.T) {
 	useImageDir(t)
 	zipBytes, err := os.ReadFile(filepath.Join("testdata", "legacy-backup.zip"))

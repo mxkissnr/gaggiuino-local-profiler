@@ -172,6 +172,8 @@ const schemaSQL = `
 		data        TEXT NOT NULL DEFAULT '{}'
 	);
 
+	-- data is a JSON blob, so per-task state (thresholds, lastDate, disabled and
+	-- the numeric pause keys pausedAt/pausedMs) needs no schema change here.
 	CREATE TABLE IF NOT EXISTS maintenance (
 		machine_id  INTEGER NOT NULL DEFAULT 1,
 		key         TEXT NOT NULL,

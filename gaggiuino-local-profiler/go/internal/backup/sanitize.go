@@ -50,7 +50,9 @@ func sanitizeMaintenanceRow(r map[string]any) (map[string]any, bool) {
 			data[k] = truncateRunes(t, 500)
 		}
 		// booleans/objects/arrays aren't part of any known maintenance
-		// task's shape — dropped.
+		// task's shape — dropped. That is why the pause state is numeric
+		// (pausedAt/pausedMs): numbers survive this pass untouched, where a
+		// boolean `paused` key would not.
 	}
 	return map[string]any{"machineId": machineID, "key": truncateRunes(key, 100), "data": data}, true
 }
