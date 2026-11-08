@@ -45,6 +45,9 @@ const NEW_KEYS = [
     'machine_warn_water', 'machine_warn_flush', 'machine_warn_switch',
     'machine_warn_scaleConnected', 'machine_warn_scaleBattery', 'machine_warn_temperature',
     'machine_update_available',
+    // #1923: the maintenance page's own wording — the all-good verdict
+    // sentence and the tasks section heading.
+    'maint_verdict_ok', 'maint_tasks_title',
 ];
 
 describe('i18n language files', () => {
