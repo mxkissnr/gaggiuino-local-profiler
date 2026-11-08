@@ -337,7 +337,7 @@ const VIEWS: readonly View[] = [
     {
         name: 'maintenance',
         nav: '#btnMaintenance',
-        ready: () => document.querySelectorAll('#maintSummary .maint-tile').length > 0,
+        ready: () => !!document.querySelector('#maintVerdict .analytics-verdict-title'),
     },
     {
         name: 'dialin',

@@ -2769,10 +2769,19 @@
             .star              { padding: var(--sp-2) var(--sp-2); font-size: var(--fs-5); }
             .drink-pill        { min-height: 44px; padding: var(--sp-2) var(--sp-4); font-size: var(--fs-2); display: flex; align-items: center; }
         }
+        /* ── Maintenance view: Dashboard redesign (#393) ── */
+        #maintenance-view {
+            display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto;
+            /* #1923: same scroll-container padding trick as the analytics view,
+               so the sticky toolbar can cover that strip while scrolling. */
+            --analytics-pad: var(--sp-5);
+            padding: var(--analytics-pad);
+            gap: var(--sp-5);
+        }
         @media (max-width: 480px) {
             .live-stats { grid-template-columns: repeat(2, 1fr); }
             .sprofiler-header h1 { font-size: var(--fs-3); }
-            #analytics-view { --analytics-pad: var(--sp-3); }
+            #analytics-view, #maintenance-view { --analytics-pad: var(--sp-3); }
             #analytics-view, #library-view, #maintenance-view,
             #dialin-view, #settings-view, #orders-view, #achievements-view { padding: var(--sp-3); }
 
@@ -2784,43 +2793,43 @@
             .export-btn        { padding: var(--sp-1) var(--sp-2); font-size: var(--fs-1); }
         }
 
-        /* ── Maintenance view: Dashboard redesign (#393) ── */
-        #maintenance-view { display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding: var(--sp-5); }
-        #maint-cards { display:flex; flex-direction:column; gap: var(--sp-2); }
-
-
-        /* Summary tiles */
-        .maint-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap: var(--sp-3); margin-bottom: var(--sp-1); }
-        .maint-tile { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4) var(--sp-4); }
-        .maint-tile .k { font-size: var(--fs-5); font-weight:700; line-height:1.1; color:var(--gray-200); }
-        .maint-tile .l { font-size: var(--fs-1); color:var(--gray-500); margin-top: var(--sp-1); }
-        .maint-tile.due .k  { color:var(--err); }
-        .maint-tile.soon .k { color:var(--accent-ink); }
-        .maint-tile.ok .k   { color:var(--ok); }
-
-        /* "Next up" banner */
-        .maint-next-banner {
-            display:flex; align-items:center; gap: var(--sp-4); flex-wrap:wrap;
-            background:color-mix(in srgb, var(--err) 10%, transparent); border:1px solid color-mix(in srgb, var(--err) 35%, transparent); border-radius:var(--radius);
-            padding: var(--sp-3) var(--sp-4); font-size: var(--fs-2); color:var(--gray-200);
+        /* The rendered sections are the grid items, not the wrapper. */
+        #maint-cards { display: contents; }
+        .maint-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); width: 100%; }
+        .maint-verdict, .maint-tasks-sec, .maint-log-sec { min-width: 0; }
+        /* Desktop gets its own balanced layout under the full-width verdict. */
+        @media (min-width: 900px) {
+            .maint-container {
+                grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+                grid-template-areas:
+                    "verdict verdict"
+                    "tasks log";
+                column-gap: var(--sp-6);
+                align-items: start;
+            }
+            .maint-verdict { grid-area: verdict; }
+            .maint-tasks-sec { grid-area: tasks; }
+            .maint-log-sec { grid-area: log; }
         }
-        .maint-next-banner b { color:var(--err); }
-        .maint-next-banner .spacer { flex:1; }
+
+        .maint-toolbar .analytics-filter-btn { min-height: 44px; }
+        .maint-toolbar-spacer { flex: 1 1 auto; }
+        /* .analytics-filter-row sets display:flex, which would beat the UA
+           rule for [hidden] — the scope chips need the explicit one. */
+        .maint-toolbar [hidden] { display: none; }
+        .maint-scope-hint { color:var(--gray-600); font-size: var(--fs-1); }
+
         .maint-banner-btn {
             background:var(--accent); border:1px solid var(--accent); color:var(--accent-text);
             border-radius:var(--radius); font-size: var(--fs-1); font-weight:700; padding: var(--sp-2) var(--sp-4); cursor:pointer;
             }
         .maint-banner-btn:hover { filter:brightness(1.08); }
+        .maint-verdict .maint-banner-btn { margin-top: var(--sp-4); min-height: 44px; }
 
-        /* Machine scope segment control */
-        .maint-scope-row { display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3); flex-wrap:wrap; }
-        .maint-seg { display:inline-flex; border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; }
-        .maint-seg button {
-            font:inherit; font-size: var(--fs-1); padding: var(--sp-1) var(--sp-3);
-            background:var(--gray-900); color:var(--gray-500); border:none; cursor:pointer; transition:all .15s;
-        }
-        .maint-seg button.on { background:var(--accent-glow); color:var(--accent-ink); font-weight:700; }
-        .maint-scope-hint { color:var(--gray-600); font-size: var(--fs-1); }
+        /* The verdict's big number: due count in the error colour, zero in ok. */
+        .maint-verdict-num { font-variant-numeric: tabular-nums; }
+        .maint-verdict-num.due { color: var(--err); }
+        .maint-verdict-num.ok { color: var(--ok); }
 
         /* ── Material Design maintenance cards ── */
         .maint-grid-compact { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(260px,100%),1fr)); gap: var(--sp-3); }
@@ -3144,10 +3153,7 @@
         .fw-credit { font-size: var(--fs-1); color:var(--gray-600); text-align:center; flex-shrink:0; }
         .maint-section-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: var(--sp-2) 0 var(--sp-1); grid-column:1/-1; }
         /* Maintenance Log */
-        .maint-log-section { margin-top: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-3); }
-        .maint-log-header  { display:flex; justify-content:space-between; align-items:center; }
-        .maint-log-add-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-400); border-radius:var(--radius); padding: var(--sp-1) var(--sp-3); cursor:pointer; font-size: var(--fs-1); transition:all .15s; }
-        .maint-log-add-btn:hover { color:var(--gray-200); border-color:var(--gray-500); }
+        .maint-log-sec { display:flex; flex-direction:column; gap: var(--sp-3); }
         .maint-log-form { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-3); }
         .maint-log-form-row { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
         .maint-log-select, .maint-log-date, .maint-log-notes-input {

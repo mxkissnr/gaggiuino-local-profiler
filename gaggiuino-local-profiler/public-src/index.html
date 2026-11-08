@@ -433,26 +433,35 @@
 
     <!-- Maintenance view -->
     <div id="maintenance-view">
-        <div id="maint-cards"></div>
+        <!-- One toolbar for the whole page (#1923) -->
+        <div class="analytics-toolbar maint-toolbar" id="maintToolbar">
+            <div class="analytics-filter-row" id="maintScopeSeg" role="group" aria-label="Maschine" data-i18n-aria-label="machine_switcher_title" hidden></div>
+            <span class="maint-scope-hint" id="maintScopeHint" data-i18n="maint_shared_once" hidden>Geteilte Tasks erscheinen einmal</span>
+            <span class="maint-toolbar-spacer"></span>
+            <button type="button" class="analytics-filter-btn" id="openMaintLogBtn" data-i18n="maint_log_add">Manuell eintragen</button>
+        </div>
+        <div class="maint-container">
+            <div id="maint-cards"></div>
 
-        <!-- Maintenance Log -->
-        <div class="maint-log-section">
-            <div class="maint-log-header">
-                <h3 class="maint-section-title" data-i18n="maint_log_title">Wartungsprotokoll</h3>
-                <button class="maint-log-add-btn" id="openMaintLogBtn" data-i18n="maint_log_add">Manuell eintragen</button>
-            </div>
-            <div id="maintLogForm" class="maint-log-form" style="display:none">
-                <div class="maint-log-form-row">
-                    <select id="maintLogTask" class="maint-log-select" aria-label="Maintenance" data-i18n-aria-label="maint_log_col_task"></select>
-                    <input type="date" id="maintLogDate" class="maint-log-date" aria-label="Date" data-i18n-aria-label="maint_log_col_date">
-                    <input type="text" id="maintLogNotes" class="maint-log-notes-input" aria-label="Notes" data-i18n-aria-label="maint_log_col_notes" data-i18n-placeholder="maint_log_notes_ph" placeholder="z.B. Cafiza 1h">
+            <!-- Maintenance Log -->
+            <section class="analytics-sec maint-log-sec">
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="maint_log_title">Wartungsprotokoll</h3>
+                    <span id="maintLogCount" class="analytics-shelf-count"></span>
                 </div>
-                <div class="maint-log-form-actions">
-                    <button class="maint-done-btn" id="submitMaintLogBtn" data-i18n="maint_log_save">Speichern</button>
-                    <button class="maint-log-cancel-btn" id="cancelMaintLogBtn" data-i18n="maint_log_cancel">Abbrechen</button>
+                <div id="maintLogForm" class="maint-log-form" style="display:none">
+                    <div class="maint-log-form-row">
+                        <select id="maintLogTask" class="maint-log-select" aria-label="Maintenance" data-i18n-aria-label="maint_log_col_task"></select>
+                        <input type="date" id="maintLogDate" class="maint-log-date" aria-label="Date" data-i18n-aria-label="maint_log_col_date">
+                        <input type="text" id="maintLogNotes" class="maint-log-notes-input" aria-label="Notes" data-i18n-aria-label="maint_log_col_notes" data-i18n-placeholder="maint_log_notes_ph" placeholder="z.B. Cafiza 1h">
+                    </div>
+                    <div class="maint-log-form-actions">
+                        <button class="maint-done-btn" id="submitMaintLogBtn" data-i18n="maint_log_save">Speichern</button>
+                        <button class="maint-log-cancel-btn" id="cancelMaintLogBtn" data-i18n="maint_log_cancel">Abbrechen</button>
+                    </div>
                 </div>
-            </div>
-            <div id="maintLog"></div>
+                <div id="maintLog"></div>
+            </section>
         </div>
 
         <!-- Guided maintenance walkthrough -->
