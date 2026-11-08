@@ -8,21 +8,21 @@ import type { BeanRow } from './bags.js';
 import { _beanList, _state, _field, _el } from './bean-shared.js';
 import type { BeanListRow } from './bean-shared.js';
 import { populateOriginSelect, bindOriginInput, setFormOrigins, populateSuggestionDatalists, bindFlavorInput, setFormFlavors, commitFlavorInput, formFlavors, formOrigins } from './bean-form-chips.js';
-import { updateStickerButton, clearStagedBeanImage, stagedBeanImage } from './bean-sticker.js';
+import { updateStickerButton, clearStagedBeanImage, stagedBeanImage, adjustBeanImage } from './bean-sticker.js';
 import {
   sheetBeanId, forgetSheetReturnFocus, openBeanSheet, closeBeanSheet,
   _overlayShieldsSheets, _trapTab, _dropNewShelfTile,
 } from './bean-sheet.js';
 import * as libraryApi from '../../api/library.js';
+import { saveNewPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { Bean } from '../../api/types.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { renderRecipeList } from './recipes.js';
 import { openNewBagForm } from './bean-card.js';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
-// Circular with library.ts (it re-exports this module): only ever touched at
-// call time, never read at module load.
-const library = libraryView;
+// Circular with library.ts (it re-exports this module): the namespace is read
+// only at call time, never copied at module load.
 
 // ── Bean form sheet (#1349) ───────────────────────────────────────────────
 // The bean form is static markup in index.html. Rather than re-template it,
@@ -121,8 +121,8 @@ function _beanFormSheetHost(): HTMLElement | null {
   const headActions = document.createElement('div');
   headActions.className = 'lib-sheet-bar-actions';
   // #1489: the bar's Save follows the form's mode — editing saves the bean,
-  // creating saves without a bag (the "save and add a bag" choice stays in the
-  // still-visible create action row).
+  // creating saves it and opens its new-bag form right away (#1933). The
+  // create action row keeps "save without bag" available.
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'lib-sheet-save';
@@ -130,7 +130,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   save.textContent = t('lib_save');
   save.setAttribute('data-i18n-aria-label', 'lib_save');
   save.setAttribute('data-i18n', 'lib_save');
-  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanNoBag()); });
+  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanAddBag()); });
   headActions.appendChild(save);
   _formSheetSaveBtn = save;
   head.appendChild(headActions);
@@ -328,6 +328,10 @@ export function openBeanForm(bean?: BeanRow | null): void {
   const stagedHint = document.getElementById('beanFormImageStaged');
   if (stagedHint) stagedHint.style.display = 'none';
   void updateStickerButton();
+  // `onclick`, not `addEventListener`, so reopening the form never stacks
+  // handlers (same as the grinder form).
+  const adjustBtn = document.getElementById('beanFormImageAdjustBtn');
+  if (adjustBtn) adjustBtn.onclick = () => { void adjustBeanImage(); };
   // Edit mode keeps a single Speichern; creating a new bean instead offers
   // "Speichern und Packung hinzufügen" / "Speichern ohne Packung" — there's
   // nothing to combine-with-a-bag-dialog once the bean already exists.
@@ -358,6 +362,8 @@ export function closeBeanForm(): void {
   if (stagedHint) stagedHint.style.display = 'none';
   const stickerBtn = document.getElementById('beanFormStickerBtn');
   if (stickerBtn) stickerBtn.style.display = 'none';
+  const adjustBtn = document.getElementById('beanFormImageAdjustBtn');
+  if (adjustBtn) adjustBtn.style.display = 'none';
   const extraEl = document.getElementById('beanFormExtraRecipes');
   if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = html``; }
   _hideFormConfirm();
@@ -496,15 +502,12 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     const staged = stagedBeanImage();
     if (wasCreate && staged) {
       clearStagedBeanImage();
-      const uploaded = await libraryApi.uploadBeanImage(saved.id, staged);
-      if (uploaded.ok) {
-        const withImage = (await uploaded.json()) as BeanListRow;
+      const r = await saveNewPhoto(libraryApi.libraryImageUrl('bean', saved.id), staged);
+      const withImage = await savedPhotoRow<BeanListRow>(r);
+      if (withImage) {
         const imgIdx = _beanList().findIndex(b => b.id === saved.id);
         if (imgIdx !== -1) _beanList()[imgIdx] = withImage;
         invalidateBeanImage(saved.id);
-      } else {
-        const err = (await uploaded.json().catch(() => ({}))) as { error?: string };
-        alert(t('error_generic', err.error || uploaded.statusText));
       }
     }
     for (const recipe of extraRecipesToImport) {
@@ -538,7 +541,9 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
     // detail sheet (renderBeanCard), so with a plain
     // openNewBagForm the element was missing and the call threw. Open the
     // fresh sheet first and reveal the form once its content has painted.
-    if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id));
+    // #1933: the form's roast date carries over into the bag form, which then
+    // only needs the weight and the batch number.
+    if (wasCreate && openBagDialogAfter) openBeanSheet(saved.id, () => openNewBagForm(saved.id, roastDate));
   } finally {
     _beanSaveInFlight = false;
     _setBeanSaveButtonsDisabled(false);

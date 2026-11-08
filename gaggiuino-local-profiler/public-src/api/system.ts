@@ -78,6 +78,11 @@ export function importFromUrl(url: string): Promise<Response> {
   return apiFetch(`api/import/url?url=${encodeURIComponent(url)}`);
 }
 
+/** POST /api/import/paste — parse product data the user pasted; stores nothing. */
+export function importFromPaste(url: string, text: string): Promise<Response> {
+  return apiFetch('api/import/paste', jsonBody({ url, text }));
+}
+
 /** GET /api/import/settings — enabled providers and custom Shopify domains. */
 export function getImportSettings(): Promise<Response> {
   return apiFetch('api/import/settings');

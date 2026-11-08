@@ -38,6 +38,10 @@ const { THEME_PRESETS } = await import('../public-src/shared/theme-presets.js');
 
 const CSS = fs.readFileSync(
   path.join(import.meta.dirname, '..', 'public-src', 'tokens.css'), 'utf8');
+// #1912: the kiosk's e-ink mode forces a white page in both themes, so it has
+// to ask for the light control style explicitly.
+const KIOSK_CSS = fs.readFileSync(
+  path.join(import.meta.dirname, '..', 'public-src', 'kiosk.css'), 'utf8');
 
 // Pulls one selector block's custom properties out of the stylesheet. Later
 // declarations win, matching the cascade for identical specificity.
@@ -205,5 +209,21 @@ describe('design token contrast (#811)', () => {
       expect(resolveAccentInk('not-a-real-preset', '#123456', true)).toBe('#123456');
       expect(resolveAccentInk(null, '#123456', true)).toBe('#123456');
     });
+  });
+});
+
+describe('color-scheme (#1912)', () => {
+  const block = (sel: RegExp): string => { const i = CSS.search(sel); return i === -1 ? '' : CSS.slice(i, CSS.indexOf('}', i)); };
+  const kioskBlock = (sel: RegExp): string => { const i = KIOSK_CSS.search(sel); return i === -1 ? '' : KIOSK_CSS.slice(i, KIOSK_CSS.indexOf('}', i)); };
+
+  it('lets native controls follow the dark and the light theme', () => {
+    expect(block(/:root\s*\{/)).toMatch(/color-scheme:\s*dark\s*;/);
+    expect(block(/\[data-theme="light"\]\s*\{/)).toMatch(/color-scheme:\s*light\s*;/);
+  });
+
+  it('keeps the kiosk e-ink page on the light control style', () => {
+    const eink = kioskBlock(/html\.eink\s*,\s*html\.eink body\s*\{/);
+    expect(eink, 'html.eink rule not found in kiosk.css').not.toBe('');
+    expect(eink).toMatch(/color-scheme:\s*light\s*;/);
   });
 });

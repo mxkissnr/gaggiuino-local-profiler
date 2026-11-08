@@ -1,6 +1,6 @@
 {
   "name": "gaggiuino-local-profiler-frontend",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "scripts": {
     "build": "vite build",
     "build:demo": "vite build --mode demo",
@@ -22,9 +22,9 @@
   },
   "dependencies": {
     "barcode-detector": "3.2.3",
-    "chart.js": "4.5.1",
+    "chart.js": "4.6.1",
     "echarts": "6.1.0",
-    "onnxruntime-web": "1.30.0",
+    "onnxruntime-web": "1.31.1",
     "qrcode": "1.5.4",
     "topojson-client": "3.1.0"
   },
@@ -36,9 +36,9 @@
     "openapi-typescript": "7.13.0",
     "playwright": "^1.62.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.71.2",
-    "vite": "8.3.4",
-    "vitest": "5.0.5"
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
   },
   "overrides": {
     "openapi-typescript": {

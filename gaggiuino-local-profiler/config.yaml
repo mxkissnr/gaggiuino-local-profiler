@@ -1,5 +1,5 @@
 name: "GLP — Gaggiuino Local Profiler"
-version: "3.6.0"
+version: "3.7.0"
 slug: "gaggiuino_local_profiler"
 description: "Local shot profiler for the Gaggiuino espresso machine — shot archive, coffee library with flavor wheel, analytics and optional order management, all local, no cloud."
 url: "https://github.com/mxkissnr/gaggiuino-local-profiler"
@@ -34,6 +34,13 @@ ingress_port: 8099
 # the Mosquitto broker add-on) *is* present.
 services:
   - mqtt:want
+# #1848: announce the app to Home Assistant through Supervisor discovery so
+# HA offers the GLP integration as "discovered" without typing a URL. The
+# entry must equal the integration's domain (ha.DiscoveryService in the Go
+# code). POST/DELETE /discovery are open to every app's own token, so this
+# needs no new permission.
+discovery:
+  - gaggiuino_profiler
 ports:
   8099/tcp: 8099
 ports_description:
@@ -77,6 +84,10 @@ schema:
   debug_logging: bool?
   expose_api_port: bool?
   allowed_hosts: str?
+
+# Home Assistant stops the app while it backs it up: the database runs in
+# WAL mode, and a copy taken during a checkpoint may not restore cleanly (#1849).
+backup: cold
 
 # Home Assistant backups skip the downloaded cut-out models: they are ~60 MB of
 # regenerable data the app re-downloads on first use, so a backup should not

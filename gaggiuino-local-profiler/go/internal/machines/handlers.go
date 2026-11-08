@@ -1,6 +1,7 @@
 package machines
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -50,6 +51,14 @@ type Handlers struct {
 	// internal/maintenance already imports internal/machines, so the wiring
 	// has to run this direction.
 	onFirmwareUpdate func(m *Machine, from, to string) error
+
+	// beforeFirmwareUpdate runs before a firmware update is triggered (#1878).
+	// cmd/server uses it to store a settings backup first. A non-nil error or a
+	// panic stops the update (see writePreUpdateError). skipBackup carries the
+	// user's explicit "update without a backup" confirmation. It is a callback
+	// for the same import-cycle reason as onFirmwareUpdate
+	// (internal/machinebackups imports internal/machines).
+	beforeFirmwareUpdate func(ctx context.Context, m *Machine, skipBackup bool) error
 
 	// onProfileSaved runs after a machine profile create or update has fully
 	// succeeded (see createMachineProfile/updateMachineProfile in
@@ -111,6 +120,21 @@ func NewHandlers(registry *Registry, hub *sse.Hub, profilesRepo *ProfilesReposit
 // the update itself already succeeded.
 func (h *Handlers) SetOnFirmwareUpdate(fn func(m *Machine, from, to string) error) {
 	h.onFirmwareUpdate = fn
+}
+
+// Errors the before-firmware-update hook returns to choose the answer
+// (#1878). Any other error means the pre-update backup failed. Every error
+// stops the update.
+var (
+	ErrPreUpdateBusy        = errors.New("another settings backup or restore of this machine is running")
+	ErrPreUpdateUnreachable = errors.New("the machine did not answer the settings backup request")
+)
+
+// SetBeforeFirmwareUpdate wires the settings backup that runs before a
+// firmware update started from GLP (#1878). A nil hook (never wired, e.g. in
+// this package's own unit tests) lets every update start as before.
+func (h *Handlers) SetBeforeFirmwareUpdate(fn func(ctx context.Context, m *Machine, skipBackup bool) error) {
+	h.beforeFirmwareUpdate = fn
 }
 
 // SetOnProfileSaved wires the side effect to run after a machine profile

@@ -449,6 +449,31 @@ func MigrateMachineColumns(sqlDB *sql.DB, dbPath string) error {
 		return fmt.Errorf("db: creating idx_machine_profiles_remote: %w", err)
 	}
 
+	// machine_backups (#1878): the versioned list of machine settings backups,
+	// Go-only and additive like machine_profiles above. created_at is unix
+	// seconds; data is the canonical JSON document with the machine's secrets
+	// already removed — never write a secret here. Deliberately no foreign key
+	// to machines: RestoreMachines deletes and re-inserts every machine row, and
+	// a cascade would wipe all machine backups on each GLP restore.
+	if _, err := sqlDB.Exec(`CREATE TABLE IF NOT EXISTS machine_backups (
+		id                INTEGER PRIMARY KEY,
+		machine_id        INTEGER NOT NULL,
+		created_at        INTEGER NOT NULL,
+		kind              TEXT NOT NULL CHECK (kind IN ('manual','scheduled','pre_update','uploaded')),
+		firmware_core     TEXT NOT NULL DEFAULT '',
+		firmware_frontend TEXT NOT NULL DEFAULT '',
+		profile_count     INTEGER NOT NULL DEFAULT 0,
+		size_bytes        INTEGER NOT NULL DEFAULT 0,
+		content_hash      TEXT NOT NULL,
+		note              TEXT NOT NULL DEFAULT '',
+		data              TEXT NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("db: creating machine_backups: %w", err)
+	}
+	if _, err := sqlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_machine_backups_machine ON machine_backups(machine_id, created_at)`); err != nil {
+		return fmt.Errorf("db: creating idx_machine_backups_machine: %w", err)
+	}
+
 	ok, err := hasColumn(sqlDB, "maintenance", "machine_id")
 	if err != nil {
 		return err

@@ -112,9 +112,10 @@ func TestStartTrashPurge_PurgesOnStartup(t *testing.T) {
 	}
 }
 
-// TestPurgeExpiredTrash_RemovesPhotoAndThumbnail (#1525): a purged trashed
-// shot's photo and thumbnail are deleted from the image dir.
-func TestPurgeExpiredTrash_RemovesPhotoAndThumbnail(t *testing.T) {
+// TestPurgeExpiredTrash_RemovesPhotoThumbnailAndOriginal (#1525, #1845): a
+// purged trashed shot's photo, thumbnail and uncropped original are all
+// deleted from the image dir — img.Delete takes the original with it.
+func TestPurgeExpiredTrash_RemovesPhotoThumbnailAndOriginal(t *testing.T) {
 	h, _, sqlDB := newTestHandlers(t)
 	dir := t.TempDir()
 	h.service.imageDir = dir
@@ -122,7 +123,7 @@ func TestPurgeExpiredTrash_RemovesPhotoAndThumbnail(t *testing.T) {
 	if _, err := sqlDB.Exec(`INSERT INTO trash (shot_id, deleted_at) VALUES (?, ?)`, 1, time.Now().Add(-31*24*time.Hour).UnixMilli()); err != nil {
 		t.Fatalf("trashing shot 1: %v", err)
 	}
-	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg", "shot-1.orig.jpg"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte{0x01}, 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -131,7 +132,7 @@ func TestPurgeExpiredTrash_RemovesPhotoAndThumbnail(t *testing.T) {
 	if err := h.service.PurgeExpiredTrash(); err != nil {
 		t.Fatalf("PurgeExpiredTrash: %v", err)
 	}
-	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg"} {
+	for _, name := range []string{"shot-1.jpg", "shot-1.thumb.jpg", "shot-1.orig.jpg"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Errorf("%s should have been removed (err=%v)", name, err)
 		}

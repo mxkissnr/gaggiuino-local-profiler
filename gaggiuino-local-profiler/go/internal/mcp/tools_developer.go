@@ -78,7 +78,7 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:         "explain_score",
 		Title:        "Explain shot score",
-		Description:  "Break one shot's GLP score (0-100) into its weighted parts with the measured inputs and the targets used, and list the parts that were skipped and why. Use it to understand or debug a score.",
+		Description:  "Break one shot's GLP score (0-100) into its weighted parts with the measured inputs and the targets used, list the parts that were skipped and why, and list every registered score model's score side by side. Use it to understand or debug a score.",
 		Annotations:  readOnlyAnnotations("Explain shot score"),
 		InputSchema:  explainScoreInputSchema(),
 		OutputSchema: mustSchema[explainScoreOutput](),
@@ -90,7 +90,7 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:         "export_shots_dataset",
 		Title:        "Export shots dataset",
-		Description:  "Export a filtered batch of shots as one flat dataset: per shot its derived metrics, GLP score, used-bean-target flag and the user's own annotation (bean, rating, grind setting, TDS, notes), with no brew curves. Use it to compare a scoring idea against the user's ratings. Page with cursor/limit.",
+		Description:  "Export a filtered batch of shots as one flat dataset: per shot its derived metrics, GLP score, every registered score model's score per shot, used-bean-target flag and the user's own annotation (bean, rating, grind setting, TDS, notes), with no brew curves. Use it to compare a scoring idea against the user's ratings. Page with cursor/limit.",
 		Annotations:  readOnlyAnnotations("Export shots dataset"),
 		InputSchema:  exportShotsDatasetSchema(),
 		OutputSchema: mustSchema[exportShotsDatasetOutput](),
@@ -252,10 +252,31 @@ type skippedScoreComponent struct {
 type explainScoreOutput struct {
 	ShotID         int64                   `json:"shot_id" jsonschema:"the shot's stable id"`
 	Score          *int                    `json:"score,omitempty" jsonschema:"the overall 0-100 score; omitted when there is too little data to score"`
+	ScoreModel     string                  `json:"score_model" jsonschema:"the score model the app shows; score and components belong to it"`
+	ModelScores    []modelScoreOutput      `json:"model_scores" jsonschema:"every registered score model's score for this shot, side by side"`
 	UsedBeanTarget bool                    `json:"used_bean_target" jsonschema:"true when the score used a bean-specific target"`
 	PressureNote   string                  `json:"pressure_note,omitempty" jsonschema:"why the pressure part was scored against the profile target or left out; empty for a normal >=5-bar shot"`
 	Components     []scoreComponentOutput  `json:"components" jsonschema:"the weighted parts, in scoring order"`
 	Skipped        []skippedScoreComponent `json:"skipped" jsonschema:"parts that could not be scored, with the reason"`
+}
+
+// modelScoreOutput is one registered score model's score for a shot, for the
+// side-by-side listing (#1922). score is omitted when that model cannot score
+// the shot, independently of the active model's own score.
+type modelScoreOutput struct {
+	Model string `json:"model" jsonschema:"a registered score model id; classic is today's score"`
+	Score *int   `json:"score,omitempty" jsonschema:"that model's 0-100 score; omitted when it cannot score the shot"`
+}
+
+// modelScoresOutput converts the registry's per-shot scores to the tool
+// payload. It always returns a slice (never nil), so the key is present even
+// when the registry is empty.
+func modelScoresOutput(scores []shots.ModelScore) []modelScoreOutput {
+	out := make([]modelScoreOutput, 0, len(scores))
+	for _, s := range scores {
+		out = append(out, modelScoreOutput{Model: s.Model, Score: s.Score})
+	}
+	return out
 }
 
 // skippedScoreParts are the optional parts, in scoring order, with the fixed
@@ -297,6 +318,7 @@ func explainScoreInputSchema() *jsonschema.Schema {
 func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput, error) {
 	out := explainScoreOutput{
 		ShotID:     in.ID,
+		ScoreModel: shots.ActiveScoreModelID(),
 		Components: []scoreComponentOutput{},
 		Skipped:    []skippedScoreComponent{},
 	}
@@ -314,6 +336,9 @@ func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput,
 
 	detail := svc.ComputeScoreDetail(shot)
 	out.Score = detail.Score
+	// Filled before the nil-score early return, so a shot classic cannot score
+	// still lists every registered model — another model may score it.
+	out.ModelScores = modelScoresOutput(svc.AllModelsScorer()(shot))
 	out.UsedBeanTarget = detail.UsedBeanTarget
 	out.PressureNote = pressureNoteReason(detail.PressureNote)
 	if detail.Score == nil {
@@ -443,22 +468,24 @@ type exportShotsDatasetInput struct {
 // derives for get_shot (embedded, so those fields sit at the top level rather
 // than in a nested object). No curve data.
 type datasetRow struct {
-	ID             int64           `json:"id" jsonschema:"the shot's stable id"`
-	Timestamp      string          `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
-	MachineID      int64           `json:"machine_id" jsonschema:"machine that pulled the shot"`
-	ProfileName    string          `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
-	Bean           string          `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
-	Score          *int            `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
-	UsedBeanTarget bool            `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
-	BeanComponents []beanComponent `json:"bean_components,omitempty" jsonschema:"a mixed shot's beans in dose order; omitted for a single-bean shot"`
-	Rating         *int            `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating"`
-	GrindSetting   string          `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
-	TDSPct         *float64        `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
-	Notes          string          `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
+	ID             int64              `json:"id" jsonschema:"the shot's stable id"`
+	Timestamp      string             `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
+	MachineID      int64              `json:"machine_id" jsonschema:"machine that pulled the shot"`
+	ProfileName    string             `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
+	Bean           string             `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
+	Score          *int               `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
+	ModelScores    []modelScoreOutput `json:"model_scores" jsonschema:"every registered score model's score for this shot, side by side"`
+	UsedBeanTarget bool               `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
+	BeanComponents []beanComponent    `json:"bean_components,omitempty" jsonschema:"a mixed shot's beans in dose order; omitted for a single-bean shot"`
+	Rating         *int               `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating"`
+	GrindSetting   string             `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
+	TDSPct         *float64           `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
+	Notes          string             `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
 	shotMetrics
 }
 
 type exportShotsDatasetOutput struct {
+	ScoreModel string       `json:"score_model" jsonschema:"the score model the app shows; each row's score belongs to it"`
 	Shots      []datasetRow `json:"shots" jsonschema:"one batch of shots as flat rows, newest first"`
 	NextCursor string       `json:"next_cursor,omitempty" jsonschema:"pass back as cursor to fetch the next page; empty when there are no more"`
 	Count      int          `json:"count" jsonschema:"number of rows in shots"`
@@ -490,9 +517,12 @@ func exportShotsDataset(svc *shots.Service, in exportShotsDatasetInput) (exportS
 	if err != nil {
 		return exportShotsDatasetOutput{}, err
 	}
-	out := exportShotsDatasetOutput{Shots: []datasetRow{}}
+	out := exportShotsDatasetOutput{ScoreModel: shots.ActiveScoreModelID(), Shots: []datasetRow{}}
+	// One scorer for the whole call: the bean lookup and the registry are read
+	// once, not per row.
+	all := svc.AllModelsScorer()
 	nextCur, err := scanShots(svc, filters, limit, func(row shots.PageRow) {
-		out.Shots = append(out.Shots, toDatasetRow(row))
+		out.Shots = append(out.Shots, toDatasetRow(row, all))
 	})
 	if err != nil {
 		return exportShotsDatasetOutput{}, err
@@ -506,9 +536,11 @@ func exportShotsDataset(svc *shots.Service, in exportShotsDatasetInput) (exportS
 
 // toDatasetRow flattens one page row into a dataset row. The score and the
 // bean-target flag come straight from the row — the paginated score already
-// resolved the bean target once per page, so there is no per-shot re-scoring —
-// and the metrics reuse buildMetrics so the numbers match get_shot's.
-func toDatasetRow(row shots.PageRow) datasetRow {
+// resolved the bean target once per page, so there is no per-shot re-scoring of
+// the active model — and the metrics reuse buildMetrics so the numbers match
+// get_shot's. all is the caller's AllModelsScorer, so the side-by-side model
+// scores (#1922) load the beans and the registry once per export, not per row.
+func toDatasetRow(row shots.PageRow, all func(shots.Shot) []shots.ModelScore) datasetRow {
 	shot := row.Shot
 	out := datasetRow{
 		ID:             intField(shot, "id"),
@@ -517,6 +549,7 @@ func toDatasetRow(row shots.PageRow) datasetRow {
 		ProfileName:    profileNameOf(shot),
 		Bean:           shotBeanLabel(shot),
 		UsedBeanTarget: row.UsedBeanTarget,
+		ModelScores:    modelScoresOutput(all(shot)),
 		BeanComponents: beanComponents(shot),
 		GrindSetting:   annotationString(shot, "grindSetting"),
 		Notes:          truncate(annotationString(shot, "notes"), maxDatasetNotes),

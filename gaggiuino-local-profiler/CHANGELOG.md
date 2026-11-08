@@ -1,3 +1,29 @@
+## [Unreleased]
+
+## [3.7.0] - 2026-11-08
+
+### New
+- Crop saved photos again at any time. GLP keeps the original, and cropping picks up where you left off.
+- Gaggiuino machines now keep a history of their settings and profiles. GLP saves one every day, before firmware updates and whenever you ask. You can compare, download and restore any version. Wi-Fi and MQTT passwords are not saved.
+- On Home Assistant OS, Home Assistant now finds the app and offers to set up the integration, so you no longer type an address.
+- The last shot's curves are available as a picture for dashboards and phone notifications.
+
+### Changed
+- The maintenance page is easier to read: what is due next comes first, tasks and the log are simple lists, and tapping a task opens its details.
+- Saving a new coffee now asks for its bag straight away, with the roast date filled in.
+- Home Assistant stops the app for a few seconds during a backup, so backups always restore cleanly.
+
+### Fixed
+- The step-by-step backflush and descaling guides are back, in the details of those two tasks.
+- A new coffee no longer shows its only bag as finished.
+- A firmware update on a Gaggiuino now shows its progress until the machine has really finished. Keep the machine switched on until then.
+- The shop import tells you when a shop blocks it and lets you paste the product data instead.
+- Photos: shop photos can be cropped normally, transparent photos get a white background, and cut-out photos no longer get a grey frame.
+- Smaller display fixes in the machine backups and on share cards.
+
+### Security
+- Updated the system libraries inside the app.
+
 ## [3.6.0] - 2026-11-01
 
 ### Added

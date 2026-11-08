@@ -239,6 +239,18 @@ func (s *Service) SetImage(id int64, ext string) (Shot, error) {
 	return s.repo.SetImage(id, ext)
 }
 
+// SetImageCrop records a re-cropped photo (extension + crop rectangle) and
+// returns the updated shot.
+func (s *Service) SetImageCrop(id int64, ext string, c img.Crop) (Shot, error) {
+	return s.repo.SetImageCrop(id, ext, c)
+}
+
+// SetCrop records only the crop rectangle of the shot's existing photo and
+// returns the updated shot.
+func (s *Service) SetCrop(id int64, c img.Crop) (Shot, error) {
+	return s.repo.SetCrop(id, c)
+}
+
 // ClearImage removes the shot's image and returns the updated shot.
 func (s *Service) ClearImage(id int64) (Shot, error) {
 	return s.repo.ClearImage(id)

@@ -202,6 +202,14 @@ components:
             GET /api/shots/{id} and /shots.json; stripped from the
             GET /api/shots metadata list.
         image:       { type: string, nullable: true, description: "Stored photo extension (see GET /api/shots/{id}/image), if any" }
+        imageCrop:
+          description: >
+            The rectangle the current photo was cropped to. Present exactly
+            when the shot also has its uncropped original stored, i.e. when
+            `GET /api/shots/{id}/image?original=1` and a re-crop are
+            available. (#1845)
+          allOf:
+            - $ref: '#/components/schemas/ImageCrop'
         gaggimateBleScale: { type: boolean, nullable: true, description: "GaggiMate BLE-scale flag, merged from the machine payload" }
         annotation:
           $ref: '#/components/schemas/Annotation'
@@ -224,6 +232,21 @@ components:
                 - $ref: '#/components/schemas/HydratedShot'
 
     # ── Library ────────────────────────────────────────────────────────────
+
+    ImageCrop:
+      type: object
+      description: >
+        The rectangle a library photo was cropped to, as fractions of the
+        uncropped original's width and height — so it survives any later
+        downscale. (#1845) An entity carries `imageCrop` exactly when its
+        uncropped original is stored, i.e. when `GET .../image?original=1`
+        and a re-crop are available.
+      required: [x, y, w, h]
+      properties:
+        x: { type: number, minimum: 0, maximum: 1, description: Left edge, 0..1 }
+        y: { type: number, minimum: 0, maximum: 1, description: Top edge, 0..1 }
+        w: { type: number, minimum: 0, maximum: 1, description: Width, 0..1 }
+        h: { type: number, minimum: 0, maximum: 1, description: Height, 0..1 }
 
     Bean:
       type: object
@@ -271,6 +294,8 @@ components:
         batchNumber:   { type: string, maxLength: 50, description: "Write-only convenience field on create/new-bag — mirrored into the active bag, not stored top-level" }
         location:      { type: object, nullable: true, description: "Geocoded {lat,lng} from `region`, best-effort, cleared when region changes" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any — see GET .../image" }
+        imageCrop:     { $ref: '#/components/schemas/ImageCrop' }
+        imageSticker:  { type: boolean, description: "Whether the stored photo is a sticker cut-out (a transparent PNG from the sticker editor). Present whenever the bean has a photo. Set by a new-photo upload with `sticker=1`, cleared by any other new photo, by a re-crop and by a shop import; photos stored before this flag existed count as stickers when they are PNG. (#1884)" }
         source:        { type: string, maxLength: 200, description: Import source URL domain }
         sourceUrl:     { type: string, nullable: true }
         importedAt:    { type: string, format: date, maxLength: 10 }
@@ -323,6 +348,7 @@ components:
         purchaseDate:  { type: string, maxLength: 10 }
         burrsResetAt:  { type: string, description: "ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any" }
+        imageCrop:     { $ref: '#/components/schemas/ImageCrop' }
         zeroPointHistory:
           type: array
           description: "Chronological log of every zero-point activation (PUT .../zero-point) — the last entry is the current value. Absent/empty for a grinder that has never had one set, in which case grind settings display and compare as raw recorded values unchanged."
@@ -351,6 +377,7 @@ components:
         holeCount:    { type: string, maxLength: 50 }
         notes:        { type: string, maxLength: 1000 }
         image:        { type: string, nullable: true }
+        imageCrop:    { $ref: '#/components/schemas/ImageCrop' }
         updatedAt:    { type: integer, description: Unix ms }
 
     PuckScreen:
@@ -364,6 +391,7 @@ components:
         material:  { type: string, maxLength: 200 }
         notes:     { type: string, maxLength: 1000 }
         image:     { type: string, nullable: true }
+        imageCrop: { $ref: '#/components/schemas/ImageCrop' }
         updatedAt: { type: integer, description: Unix ms }
 
     Recipe:
@@ -576,6 +604,10 @@ components:
         haConnected:         { type: boolean }
         glpVersion:          { type: string }
         devBuild:            { type: string, description: "Only present on the dev-channel image build (GLP_DEV_BUILD build-arg)" }
+        scoreModels:
+          type: array
+          items: { type: string }
+          description: "Only present on the dev-channel build: the registered shot score model ids, classic first (#1922)"
         ordersFeature:       { type: boolean }
         exposeApiPort:       { type: boolean, description: "the app's expose_api_port option (#803) — whether GET /api/token answers direct-port callers" }
         machineReachable:    { type: boolean, nullable: true }
@@ -641,6 +673,58 @@ components:
         isDefault:    { type: boolean }
         enabled:      { type: boolean }
         createdAt:    { type: integer, description: Unix ms }
+
+    MachineBackup:
+      type: object
+      description: "A stored Gaggiuino settings backup (#1878), metadata only; GLP never stores the machine's Wi-Fi block or its MQTT/visualizer credentials"
+      required: [id, machineId, createdAt, kind, firmwareCore, firmwareFrontend, profileCount, sizeBytes, contentHash, note]
+      properties:
+        id:               { type: integer }
+        machineId:        { type: integer, description: "may name a deleted machine; its backups are kept" }
+        createdAt:        { type: integer, description: Unix ms }
+        kind:             { type: string, enum: [manual, scheduled, pre_update, uploaded] }
+        firmwareCore:     { type: string }
+        firmwareFrontend: { type: string }
+        profileCount:     { type: integer }
+        sizeBytes:        { type: integer }
+        contentHash:      { type: string }
+        note:             { type: string, maxLength: 200 }
+
+    MachineBackupDetail:
+      description: "One stored backup with its document (#1878). The document never holds the machine's Wi-Fi block or its MQTT/visualizer credentials"
+      allOf:
+        - $ref: '#/components/schemas/MachineBackup'
+        - type: object
+          required: [document]
+          properties:
+            document:
+              type: object
+              additionalProperties: true
+              description: "The stored gaggiuino-settings document, without secrets"
+
+    MachineBackupError:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string }
+        code:  { type: string, enum: [unsupported_machine, unsupported_firmware, machine_unreachable, invalid_backup, machine_busy, operation_running, pre_update_backup_failed, pre_restore_backup_failed, pending_profile_changes, restore_rejected, no_confirmation] }
+        reason:
+          type: string
+          enum: [brew, steam, descale, firmware_update]
+          description: "Only with code machine_busy from the restore route: what the machine is doing"
+        machineError:
+          type: string
+          maxLength: 200
+          description: "Only with code restore_rejected: the machine's own error text, untranslated; render escaped"
+
+    MachineBackupSettings:
+      type: object
+      description: "Automatic backup schedule and retention of one Gaggiuino machine (#1878); defaults daily and 10. keepAutomatic limits only scheduled backups: manual, pre-update and uploaded backups are never removed automatically"
+      required: [machineId, schedule, keepAutomatic]
+      properties:
+        machineId:     { type: integer, minimum: 1 }
+        schedule:      { type: string, enum: ["off", daily, weekly] }
+        keepAutomatic: { type: integer, minimum: 1, maximum: 100 }
 
     MachineInput:
       type: object
@@ -762,6 +846,20 @@ components:
         maintenance_log: { type: array, items: { type: object } }
         orders:          { type: array, items: { type: object } }
         machines:        { type: array, items: { type: object } }
+        machine_backups:
+          description: "Stored machine settings backups (#1878), oldest first; never hold a secret"
+          type: array
+          items:
+            type: object
+            required: [machineId, createdAt, kind, note, document]
+            properties:
+              machineId: { type: integer }
+              createdAt: { type: integer, description: Unix ms }
+              kind:      { type: string, enum: [manual, scheduled, pre_update, uploaded] }
+              note:      { type: string }
+              document:
+                type: object
+                additionalProperties: true
         kv:
           type: object
           properties:
@@ -769,6 +867,9 @@ components:
             orders_settings: { type: object }
             notify_mapping:  { type: object }
             import_settings: { type: object }
+            machine_backup_settings:
+              type: object
+              description: "Automatic backup schedule and retention per machine id (#1878)"
             mqtt_settings:
               description: Never includes username/password — see the `secrets` field for those, encrypted.
               type: object
@@ -1063,9 +1164,29 @@ components:
       type: object
       description: >
         GET /api/machine/firmware/progress — the machine's own OTA progress
-        payload, passed through verbatim (progress/status/type today).
+        payload, passed through verbatim. Firmware main-8aaf6f0 and later add
+        an optional migration object for the partition migration that runs
+        after an update; older firmware omits it.
       properties:
-        status: { type: string }
+        status: { type: string, description: "IDLE | IN_PROGRESS | SUCCESS | ERROR" }
+        progress: { type: number }
+        type: { type: string, description: "C_FW | F_FW | F_FS" }
+        migration: { $ref: '#/components/schemas/FirmwareMigration' }
+      additionalProperties: true
+
+    FirmwareMigration:
+      type: object
+      description: >
+        Post-update partition migration state as reported by the machine
+        (Gaggiuino main-8aaf6f0 and later). Only the fields GLP reads are
+        listed; the machine sends more.
+      properties:
+        active: { type: boolean }
+        state: { type: string, description: "idle | working | complete (observed values)" }
+        phase: { type: integer }
+        operation: { type: string, description: "Human-readable current step, e.g. Downloading update" }
+        percent: { type: number }
+        error: { type: string, description: "Empty while no error" }
       additionalProperties: true
 
     MachineSaveInput:
@@ -1342,30 +1463,77 @@ paths:
         "503": { description: Card rendering module not available }
         "429": { description: "Rate limit exceeded — dedicated per-IP card limit, 30/min (#999)" }
 
+  /api/shots/{id}/chart.png:
+    get:
+      tags: [Shots]
+      summary: Render a shot's curves as a PNG chart
+      description: >
+        Pressure, pump flow, weight and temperature of one shot (Gaggiuino or
+        GaggiMate) as a fixed 960x480 PNG on a light background, in the app
+        chart's colours, rendered server-side on every request. Meant for Home
+        Assistant notifications and dashboards. Only the legend language can be
+        chosen. (#1851)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string }, description: "Legend language (de/en/es/fr/it/nl, unknown falls back to en)" }
+      responses:
+        "200": { description: PNG image, content: { image/png: { schema: { type: string, format: binary } } } }
+        "400": { description: Invalid shot ID }
+        "404": { description: Shot not found }
+        "429": { description: "Rate limit exceeded — dedicated per-IP chart limit, 30/min" }
+        "500": { description: Rendering failed }
+
   /api/shots/{id}/image:
     get:
       tags: [Shots]
       summary: Serve a shot's uploaded photo
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            shot has both a stored `imageCrop` and its original file. Wins
+            over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this shot }
     post:
       tags: [Shots]
-      summary: Upload a shot photo (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a shot photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: "Updated shot (with score recomputed)", content: { application/json: { schema: { $ref: '#/components/schemas/Shot' } } } }
-        "400": { description: Invalid shot ID, no image data, or unsupported image type }
+        "400": { description: Invalid shot ID, no image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Shot not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a shot without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
     delete:
       tags: [Shots]
@@ -1683,24 +1851,59 @@ paths:
       summary: Serve a bean's photo (auto-imported or uploaded)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            bean has both a stored `imageCrop` and its original file. Wins
+            over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this bean }
     post:
       tags: [Library]
-      summary: Upload a bean photo manually (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a bean photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `sticker=1` alone does the same
+        and marks the photo as a sticker cut-out (#1884); a re-crop always
+        clears that mark. `crop` alone re-crops from the stored original and
+        ignores the body. `original=1` together with `crop` stores the uploaded
+        JPEG as the uncropped original of the current photo, leaving the main
+        image untouched. Any other combination is a 400. (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
+        - name: sticker
+          in: query
+          description: >
+            Set to "1" on a new-photo upload (no other parameter) to mark the
+            photo as a sticker cut-out. Only a photo stored as PNG becomes a
+            sticker; an opaque image is stored as JPEG and is not one. (#1884)
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated bean, content: { application/json: { schema: { $ref: '#/components/schemas/Bean' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a bean without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/grinder:
@@ -1810,24 +2013,51 @@ paths:
       summary: Serve a grinder's photo
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            grinder has both a stored `imageCrop` and its original file. Wins
+            over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this grinder }
     post:
       tags: [Library]
-      summary: Upload a grinder photo (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a grinder photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a grinder without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/baskets:
@@ -1897,24 +2127,51 @@ paths:
       summary: Serve a basket's photo
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            basket has both a stored `imageCrop` and its original file. Wins
+            over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this basket }
     post:
       tags: [Library]
-      summary: Upload a basket photo (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a basket photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated basket, content: { application/json: { schema: { $ref: '#/components/schemas/Basket' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a basket without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/puckscreens:
@@ -1980,24 +2237,51 @@ paths:
       summary: Serve a puck screen's photo
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: thumb
+          in: query
+          description: Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated
+          schema: { type: string, enum: ["1"] }
+        - name: original
+          in: query
+          description: >
+            Set to "1" to serve the uncropped original the current photo was
+            cropped from, instead of the cropped main image. 404s unless the
+            puck screen has both a stored `imageCrop` and its original file.
+            Wins over `thumb`. (#1845)
+          schema: { type: string, enum: ["1"] }
       responses:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { description: No image for this puck screen }
     post:
       tags: [Library]
-      summary: Upload a puck screen photo (raw bytes, Content-Type selects the extension)
+      summary: Upload, re-crop or store the original of a puck screen photo
+      description: >
+        Three variants, selected by the query. No parameters uploads a new photo
+        and drops any stored original and crop. `crop` alone re-crops from the
+        stored original and ignores the body. `original=1` together with `crop`
+        stores the uploaded JPEG as the uncropped original of the current photo,
+        leaving the main image untouched. Any other combination is a 400.
+        (#1845)
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+        - name: crop
+          in: query
+          description: Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1
+          schema: { type: string, example: "0.1,0.1,0.8,0.8" }
+        - name: original
+          in: query
+          description: Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original
+          schema: { type: string, enum: ["1"] }
       requestBody:
-        required: true
         content:
           image/jpeg: { schema: { type: string, format: binary } }
           image/png:  { schema: { type: string, format: binary } }
           image/webp: { schema: { type: string, format: binary } }
       responses:
         "200": { description: Updated puck screen, content: { application/json: { schema: { $ref: '#/components/schemas/PuckScreen' } } } }
-        "400": { description: No image data, or unsupported image type }
+        "400": { description: No image data, unsupported image type, invalid crop, or an unsupported query combination }
         "404": { description: Not found }
+        "409": { description: "`no original` for a re-crop, or `no image` when storing an original for a puck screen without a photo" }
         "429": { description: "Rate limit exceeded — per-IP image upload limit, 30/min" }
 
   /api/library/milks:
@@ -3040,7 +3324,7 @@ paths:
         - { name: machineId, in: query, schema: { type: integer } }
       responses:
         "200":
-          description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS }"
+          description: "{ progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS, optional migration object (firmware main-8aaf6f0 and later) }"
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FirmwareProgress' }
@@ -3051,14 +3335,33 @@ paths:
     post:
       tags: [MachineControl]
       summary: Trigger a firmware OTA update from GitHub releases (ESP32 + STM32) — only starts the process, poll firmware/progress for status
+      description: >
+        On a Gaggiuino machine GLP first stores a settings backup (#1878,
+        kind pre_update). If that backup fails the update is not started;
+        the client may resend with skipBackup after the user confirmed
+        updating without a backup. Firmware without the settings backup
+        endpoint updates without a backup.
       requestBody:
         content:
           application/json:
-            schema: { type: object, properties: { machineId: { type: integer } } }
+            schema:
+              type: object
+              properties:
+                machineId: { type: integer }
+                skipBackup:
+                  type: boolean
+                  default: false
+                  description: "Start the update without the settings backup; send only after the user confirmed it"
       responses:
         "200": { description: "{ message, success }" }
+        "409":
+          description: "operation_running: another settings backup or restore of this machine is running; the update was not started"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
         "501": { description: machine type does not support the settings proxy }
-        "502": { description: Machine unreachable or returned an error }
+        "502":
+          description: "The update was not started or failed. code pre_update_backup_failed: the settings backup before the update failed (resend with skipBackup to update anyway); code machine_unreachable: the machine did not answer; no code: the machine returned an error"
 
   /api/machine/firmware/version:
     get:
@@ -3235,6 +3538,268 @@ paths:
         "400": { description: No MQTT broker configured yet }
         "501": { description: machine type does not support the settings proxy }
         "502": { description: Machine unreachable or returned an error }
+
+  /api/machine/backups:
+    get:
+      tags: [MachineBackups]
+      summary: List stored machine settings backups, newest first (deleted machines included)
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer, minimum: 1 }, description: "Only this machine's backups; omitted means every machine" }
+      responses:
+        "200":
+          description: Array of backups, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MachineBackup' } }
+        "400": { description: Invalid machineId, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      tags: [MachineBackups]
+      summary: Back up now — fetch the machine's settings and store a new manual entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [machineId]
+              properties:
+                machineId: { type: integer, minimum: 1 }
+                note:      { type: string }
+      responses:
+        "201":
+          description: The stored backup
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackup' }
+        "400": { description: "Invalid JSON body, or machineId missing or below 1", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "409":
+          description: "operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "413": { description: Request body over 4 KiB }
+        "429": { description: "Rate limit exceeded — per-IP back-up-now limit, 10/min" }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "502":
+          description: "machine_unreachable when the status or settings fetch failed; invalid_backup when the machine's document cannot be stored"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+
+  /api/machine/backups/settings:
+    get:
+      tags: [MachineBackups]
+      summary: Read one machine's automatic backup schedule and retention
+      parameters:
+        - { name: machineId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: That machine's settings; defaults daily and 10 when never saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupSettings' }
+        "400": { description: Invalid machineId, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+    put:
+      tags: [MachineBackups]
+      summary: Replace one machine's automatic backup schedule and retention
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineBackupSettings' }
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupSettings' }
+        "400": { description: "Invalid JSON body, or machineId, schedule or keepAutomatic missing or out of range", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "413": { description: Request body over 4 KiB }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+
+  /api/machine/backups/upload:
+    post:
+      tags: [MachineBackups]
+      summary: Store an uploaded settings backup file as a new entry; its secrets are removed before anything is written
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [machineId, document]
+              properties:
+                machineId: { type: integer, minimum: 1 }
+                note:      { type: string }
+                document:
+                  type: object
+                  additionalProperties: true
+                  description: "The file's JSON object (format gaggiuino-settings, a known version, at most 256 KiB), not a string"
+      responses:
+        "201":
+          description: The stored backup
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackup' }
+        "400":
+          description: "Invalid JSON body or machineId missing or below 1 (no code); code invalid_backup when the document cannot be stored"
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/MachineBackupError'
+                  - $ref: '#/components/schemas/Error'
+        "404": { description: Unknown machine, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "413": { description: Request body over 260 KiB }
+        "429": { description: "Rate limit exceeded — per-IP upload limit, 10/min" }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+
+  /api/machine/backups/{id}:
+    get:
+      tags: [MachineBackups]
+      summary: Read one stored backup with its secret-free document (never contacts the machine)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: The stored backup with its document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupDetail' }
+        "404": { description: Backup not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      tags: [MachineBackups]
+      summary: Delete one stored backup, of any kind (also one of a deleted machine)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: "{ ok: true }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        "404": { description: Backup not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/machine/backups/{id}/download:
+    get:
+      tags: [MachineBackups]
+      summary: Download a stored backup in the machine's native format, with the machine's current secrets merged in
+      description: >
+        GLP reads the secrets from the backup's own machine right before answering and
+        never stores them. If that machine cannot be read the stored document without
+        secrets is returned instead. A client must warn the user according to
+        X-GLP-Secrets: merged means the file holds the Wi-Fi password, MQTT credentials
+        and tokens in plain text; missing means it holds none and a restore from it does
+        not carry them.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: The settings backup file
+          headers:
+            X-GLP-Secrets:
+              description: "merged or missing, see above"
+              schema: { type: string, enum: [merged, missing] }
+            Content-Disposition:
+              description: "attachment; filename=gaggiuino-backup-m<machineId>-<YYYY-MM-DD_HHMM>.json"
+              schema: { type: string }
+            Cache-Control:
+              description: "no-store"
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { description: Backup not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "409":
+          description: "operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "429": { description: "Rate limit exceeded — per-IP download limit, 10/min" }
+
+  /api/machine/backups/{id}/restore:
+    post:
+      tags: [MachineBackups]
+      summary: Restore a stored backup onto its machine; the machine applies it and restarts
+      description: >
+        Right before posting, GLP reads the machine's current backup and copies its
+        Wi-Fi block, MQTT credentials and tokens into the stored document, so a
+        restore never changes the machine's network or broker access. Right before
+        posting, GLP stores the machine's current state as a manual backup (note
+        'Before restoring backup <id>'); if that fails, nothing is restored. Manual
+        backups are never removed automatically. A backup of a deleted machine can
+        be restored onto another registered Gaggiuino machine the user chose; the
+        secrets then come from that machine. A backup of a machine that still exists
+        only goes to that machine. Refused while the machine brews, steams, descales
+        or updates its firmware, while GLP has profile changes for it that were not
+        sent, and while another backup or restore of it runs. GLP waits up to 3 s for
+        the machine's first live system state, because the first read opens its live
+        session. After the machine accepted the document (and after no_confirmation)
+        GLP drops its cached copy of the machine's profiles; the next profile list
+        rebuilds it. The machine restarts, so a client should expect it to be
+        unreachable for a while.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [machineId]
+              properties:
+                machineId: { type: integer, minimum: 1, description: "The backup's own machine; for a backup of a deleted machine, a registered Gaggiuino machine the user chose" }
+      responses:
+        "200":
+          description: The machine accepted the backup and restarts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, restarting]
+                properties:
+                  ok:         { type: boolean }
+                  restarting: { type: boolean }
+        "400": { description: "Invalid JSON body, or machineId missing or below 1", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "404": { description: "Backup not found (also when it belongs to another registered machine), or unknown machine", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "409":
+          description: "Nothing was sent to the machine. operation_running: another backup or restore of this machine, or a profile push to it, is running; machine_busy (with reason): brewing, steaming, descaling or a firmware update; pending_profile_changes: GLP has profile changes for this machine that were not sent yet; invalid_backup: this backup with the machine's current secrets is larger than the machine accepts"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "413": { description: Request body over 4 KiB }
+        "429": { description: "Rate limit exceeded — per-IP restore limit, 3/min" }
+        "500": { description: "pre_restore_backup_failed: the machine's current state could not be stored first; nothing was sent", content: { application/json: { schema: { $ref: '#/components/schemas/MachineBackupError' } } } }
+        "501":
+          description: "unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
+        "502":
+          description: "machine_unreachable: the machine's state or current backup could not be read, nothing was sent; invalid_backup: the machine's current backup cannot be read, so its secrets cannot be kept, nothing was sent, also when the machine's current backup cannot be stored as the pre-restore backup; restore_rejected: the machine refused the backup (machineError holds its text), nothing changed; no_confirmation: the machine did not answer after the backup was sent, it may already be restarting"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineBackupError' }
 
   /api/machines:
     get:
@@ -3792,8 +4357,90 @@ paths:
                           name:    { type: string }
                           roaster: { type: string }
                       _debug: { type: object, description: "Only present with ?debug=1" }
+                      productDataUrl:
+                        type: string
+                        format: uri
+                        description: >
+                          Present only when the shop's product JSON answered HTTP
+                          429 while its page still gave JSON-LD or OpenGraph data.
+                          The form is filled from the page; this is the URL whose
+                          data can be pasted to POST /api/import/paste for the
+                          fuller product JSON.
         "400": { description: "Missing/invalid url, unsupported protocol (non-https), or blocked address (SSRF guard)" }
         "404": { description: Product not found on page }
+        "500": { description: Fetch failed }
+        "502":
+          description: >
+            The shop does not allow automatic requests right now (its own HTTP
+            429). GLP never retries and never disguises itself, so this is final
+            for the request. 502 rather than 429, which would read as GLP's own
+            rate limiter.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  code:  { type: string, enum: [shop_rate_limited] }
+                  productDataUrl:
+                    type: string
+                    format: uri
+                    description: Present only when the product JSON itself answered 429.
+
+  /api/import/paste:
+    post:
+      tags: [Import]
+      summary: Parse pasted product data for the bean form
+      description: >
+        Runs the same parsers GET /api/import/url uses over product data the
+        user pasted (the body of a shop's product JSON). The host of `url`
+        selects the parser — built-in provider, custom Shopify domain, or the
+        generic path — so nothing in `text` can choose one. `text` is treated
+        as untrusted input: it is bounded, parsed as exactly one JSON object,
+        never logged and never echoed in an error. Nothing is stored; the
+        answer fills the import form exactly like GET /api/import/url, and
+        saving stays a separate action. A page fetch for HTML enrichment may
+        still happen on the generic and custom paths.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, text]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: The product page URL whose host selects the parser. Must be an absolute https URL with a /products/<handle> path.
+                text:
+                  type: string
+                  maxLength: 1048576
+                  description: The pasted product data — one JSON object. Over 1 MiB (bytes) answers 413.
+      responses:
+        "200":
+          description: Extracted bean metadata, the same body GET /api/import/url gives for that product
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Bean'
+                  - type: object
+                    properties:
+                      importMethod: { type: string, description: "e.g. builtin:<id>, custom-shopify, generic-shopify" }
+                      extraBrewRecipes:
+                        type: array
+                        items: { type: object }
+                        description: Candidate recipes parsed from the page's brew-guide accordion, if any (#451).
+                      duplicateWarning:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:      { type: integer }
+                          name:    { type: string }
+                          roaster: { type: string }
+        "400": { description: "Missing/invalid url or text, unsupported protocol, a path without /products/<handle>, an HTML-only shop, or blocked address (SSRF guard)" }
+        "413": { description: Request entity too large (body or text cap) }
         "500": { description: Fetch failed }
 
   /api/import/settings:
@@ -3861,6 +4508,8 @@ tags:
     description: App status, manual sync, machine switch, live data, preheat
   - name: Machines
     description: "Multi-machine registry (#317) — add/remove/test additional Gaggiuino or GaggiMate machines"
+  - name: MachineBackups
+    description: "Gaggiuino machine settings backups (#1878) — stored without Wi-Fi/MQTT secrets; Gaggiuino machines only"
   - name: Backup
     description: Full backup and restore
   - name: Import

@@ -6,11 +6,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ratelimit"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
 )
 
 func TestGetEnvNumber(t *testing.T) {
@@ -194,5 +198,45 @@ func TestServeUntilStoppedWaitsForInFlightRequest(t *testing.T) {
 		t.Fatalf("in-flight request failed: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("no response for the in-flight request")
+	}
+}
+
+// TestScoreModelPref_StableIgnoresStoredModel pins the dev-build gate on the
+// score-model preference (#1922): a stable build neither shows nor honours it,
+// and a missing or non-string value always resolves to classic.
+func TestScoreModelPref_StableIgnoresStoredModel(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "glp.db"))
+	if err != nil {
+		t.Fatalf("db.Open: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	repo := uiprefs.NewRepository(sqlDB)
+
+	save := func(prefs map[string]any) {
+		t.Helper()
+		if err := repo.Save(prefs); err != nil {
+			t.Fatalf("uiprefs.Save: %v", err)
+		}
+	}
+
+	save(map[string]any{devScoreModelPrefKey: "test_x"})
+	t.Setenv("GLP_DEV_BUILD", "")
+	if got := scoreModelPref(repo); got != shots.ClassicScoreModel {
+		t.Errorf("stable build: scoreModelPref() = %q, want %q", got, shots.ClassicScoreModel)
+	}
+
+	t.Setenv("GLP_DEV_BUILD", "dev")
+	if got := scoreModelPref(repo); got != "test_x" {
+		t.Errorf("dev build: scoreModelPref() = %q, want %q", got, "test_x")
+	}
+
+	save(map[string]any{devScoreModelPrefKey: true})
+	if got := scoreModelPref(repo); got != shots.ClassicScoreModel {
+		t.Errorf("non-string value: scoreModelPref() = %q, want %q", got, shots.ClassicScoreModel)
+	}
+
+	save(map[string]any{"bean_low_stock_g": float64(18)})
+	if got := scoreModelPref(repo); got != shots.ClassicScoreModel {
+		t.Errorf("missing key: scoreModelPref() = %q, want %q", got, shots.ClassicScoreModel)
 	}
 }

@@ -48,7 +48,10 @@ interface OptionEntry {
 
 // Returns { startLine, endLine } (endLine exclusive) for the block whose
 // header is an exact `${key}:` line at column 0 -- i.e. from that header
-// through the line before the next top-level key, or EOF.
+// through the line before the next top-level key, or EOF. The block ends at
+// its last indented line: trailing blank lines and column-0 comments belong
+// to whatever follows, not to the block, so they are left alone when the
+// block is copied or replaced.
 function findBlock(lines: string[], key: string): Block {
     const start = lines.findIndex((line) => line === `${key}:`);
     if (start === -1) {
@@ -62,6 +65,11 @@ function findBlock(lines: string[], key: string): Block {
             end = i;
             break;
         }
+    }
+    while (end > start + 1) {
+        const previous = lines[end - 1] ?? '';
+        if (previous.trim() !== '' && !/^#/.test(previous)) break;
+        end--;
     }
     return { start, end };
 }

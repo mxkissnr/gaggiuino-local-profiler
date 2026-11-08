@@ -1,14 +1,17 @@
 package backup
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machinebackups"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/orders"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/uiprefs"
@@ -62,6 +65,14 @@ func (h *Handlers) applyRestore(p restorePlan, shotIter func(yield func(shots.Sh
 	if p.wantsMachines {
 		if _, err := d.Registry.RestoreMachines(p.restoredMachines); err != nil {
 			return err
+		}
+		// #1878: machine settings backups travel with the machines section. Ids
+		// may name other machines after the registry restore, so they are
+		// replaced, not merged; a bundle without the key leaves them alone.
+		if raw, ok := p.b["machine_backups"].(json.RawMessage); ok {
+			if _, _, err := machinebackups.RestoreBundle(d.DB, raw, time.Now()); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -165,6 +176,15 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 			return err
 		}
 	}
+	// #1878: per-machine backup schedule; machines are applied before kv, so
+	// only entries of Gaggiuino machines in the restored registry are kept.
+	keep := func(id int64) bool {
+		m, err := d.Registry.GetMachine(id)
+		return err == nil && m != nil && m.Type == "gaggiuino"
+	}
+	if err := machinebackups.RestoreSettings(d.DB, kv["machine_backup_settings"], keep); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -235,27 +255,54 @@ func (h *Handlers) applyRestoredToken(token string) bool {
 // rather than held in the plan since a heavily-illustrated library would
 // otherwise sum every image body in memory (#959).
 //
-// Each image is run through img.WriteOptimized (ModePreserve): a JPEG/PNG
+// A main image is run through img.WriteOptimized (ModePreserve): a JPEG/PNG
 // is downscaled + metadata-stripped, a WebP/GIF is written byte-identical,
 // and a ".thumb" sibling is generated. The stored extension is never
 // changed, so the DB row written in the restore transaction stays
 // consistent (#961 decision 6).
 //
-// It returns how many images were written and how many could not be: an
+// An uncropped original (original == true, #1845) goes through
+// img.WriteOriginal instead: no downscale pass (it is the source a re-crop
+// reads) and never a thumbnail.
+//
+// A restore does not wipe the image directory, so every main image first
+// deletes any original left at that id by a pre-restore entity — otherwise
+// the restored photo would be paired with a foreign original, and a later
+// `?crop=` would read it. The entity's own original, if the bundle carried
+// one, is queued directly after its main entry, so it is written after that
+// delete.
+//
+// It returns how many photos were written and how many could not be: an
 // unreadable/oversized source, a mkdir failure, or a WriteOptimized error
 // (full disk, permissions) each count as failed, so a restore can report
-// the photos it dropped instead of silently claiming success (#1602).
+// the photos it dropped instead of silently claiming success (#1602). Both
+// counters cover main images only: a failed original leaves the photo
+// restored and only costs the re-crop, which falls back to the "older
+// photo" path, so it is logged and skipped rather than counted.
 func (h *Handlers) writePendingImages(imgs restoreImages, pending []pendingImageWrite) (written, failed int) {
 	for _, w := range pending {
+		if !w.original {
+			img.DeleteOriginal(imageDir, w.id, w.prefix)
+		}
 		buf, ok := imgs.getForWrite(w.srcName)
 		if !ok || len(buf) == 0 || len(buf) > imageMaxBytes {
 			log.Printf("backup: restore failed to write image %s (source %q unreadable/empty/oversized)", w.path, w.srcName)
-			failed++
+			if !w.original {
+				failed++
+			}
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
 			log.Printf("backup: restore failed to write image %s (mkdir: %v)", w.path, err)
-			failed++
+			if !w.original {
+				failed++
+			}
+			continue
+		}
+		if w.original {
+			if err := img.WriteOriginal(imageDir, w.prefix, w.id, buf); err != nil {
+				log.Printf("backup: restore failed to write original %s: %v", w.path, err)
+			}
 			continue
 		}
 		srcExt := strings.TrimPrefix(filepath.Ext(w.path), ".")

@@ -1,4 +1,9 @@
         :root {
+            /* #1912: native controls (checkbox boxes, select popups, date
+               pickers, scrollbars) follow the theme; the light block below
+               switches it back. */
+            color-scheme: dark;
+
             /* ── Radius ── #811: a short scale, not eight values.
                --radius-sm is for controls (inputs, chips, small
                buttons), --radius for containers. #1618 adds the third
@@ -201,6 +206,7 @@
 
         /* ── Light theme ── */
         [data-theme="light"] {
+            color-scheme: light;
             /* #811: the same role scale, inverted — 100/200 are the darkest
                here because they are TEXT, 900/950 the lightest because they
                are SURFACES. Note the light theme's own convention, which is

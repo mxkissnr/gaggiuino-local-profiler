@@ -143,6 +143,12 @@ node scripts/screenshots.mts [path/to/wiki-repo]
 It needs `npx playwright install chromium` once beforehand. With the optional wiki-repo argument
 it also copies the PNGs into that repo's `images/`.
 
+After writing the PNGs the script records the `public-src/` git tree it rendered from in
+`docs/screenshots/.source-tree` (`dirty` instead when `public-src/` has uncommitted changes).
+Commit that file together with the screenshots: `npm run release:check` accepts it as proof that
+the images match the current UI when it still equals `HEAD:public-src`, which is what lets a
+byte-identical regeneration pass check 3 without needing a new PNG commit (#1867).
+
 By default the views are rendered from the sanitized demo backup committed at
 `gaggiuino-local-profiler/demo/glp-demo-backup.zip`, so a plain run and a release run both produce
 screenshots of realistic data. To use a different backup (created via Settings → Backup in the

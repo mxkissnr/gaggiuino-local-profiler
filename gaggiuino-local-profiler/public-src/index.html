@@ -356,6 +356,7 @@
                     <input type="file" id="annPhotoInput" aria-label="Add a photo to this shot" data-i18n-aria-label="ann_photo_upload" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                     <button type="button" class="lib-open-btn" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
                     <button type="button" class="lib-open-btn" id="annPhotoCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                    <button type="button" class="lib-open-btn" id="annPhotoAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                     <button type="button" class="lib-btn-sm del" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
                 </div>
                 <div class="annotation-fields">
@@ -432,26 +433,25 @@
 
     <!-- Maintenance view -->
     <div id="maintenance-view">
-        <div id="maint-cards"></div>
+        <!-- One toolbar for the whole page (#1923) -->
+        <div class="analytics-toolbar maint-toolbar" id="maintToolbar">
+            <div class="analytics-filter-row" id="maintScopeSeg" role="group" aria-label="Maschine" data-i18n-aria-label="machine_switcher_title" hidden></div>
+            <span class="maint-scope-hint" id="maintScopeHint" data-i18n="maint_shared_once" hidden>Geteilte Tasks erscheinen einmal</span>
+            <span class="maint-toolbar-spacer"></span>
+            <button type="button" class="analytics-filter-btn" data-action="open-maint-log-form" data-i18n="maint_log_add">Manuell eintragen</button>
+            <button type="button" class="analytics-filter-btn" data-action="open-maint-custom-form" data-i18n="maint_custom_add_summary">Eigene Wartung hinzufügen</button>
+        </div>
+        <div class="maint-container">
+            <div id="maint-cards"></div>
 
-        <!-- Maintenance Log -->
-        <div class="maint-log-section">
-            <div class="maint-log-header">
-                <h3 class="maint-section-title" data-i18n="maint_log_title">Wartungsprotokoll</h3>
-                <button class="maint-log-add-btn" id="openMaintLogBtn" data-i18n="maint_log_add">Manuell eintragen</button>
-            </div>
-            <div id="maintLogForm" class="maint-log-form" style="display:none">
-                <div class="maint-log-form-row">
-                    <select id="maintLogTask" class="maint-log-select" aria-label="Maintenance" data-i18n-aria-label="maint_log_col_task"></select>
-                    <input type="date" id="maintLogDate" class="maint-log-date" aria-label="Date" data-i18n-aria-label="maint_log_col_date">
-                    <input type="text" id="maintLogNotes" class="maint-log-notes-input" aria-label="Notes" data-i18n-aria-label="maint_log_col_notes" data-i18n-placeholder="maint_log_notes_ph" placeholder="z.B. Cafiza 1h">
+            <!-- Maintenance Log -->
+            <section class="analytics-sec maint-log-sec">
+                <div class="analytics-card-head">
+                    <h3 class="analytics-section-title" data-i18n="maint_log_title">Wartungsprotokoll</h3>
+                    <span id="maintLogCount" class="analytics-shelf-count"></span>
                 </div>
-                <div class="maint-log-form-actions">
-                    <button class="maint-done-btn" id="submitMaintLogBtn" data-i18n="maint_log_save">Speichern</button>
-                    <button class="maint-log-cancel-btn" id="cancelMaintLogBtn" data-i18n="maint_log_cancel">Abbrechen</button>
-                </div>
-            </div>
-            <div id="maintLog"></div>
+                <div id="maintLog"></div>
+            </section>
         </div>
 
         <!-- Guided maintenance walkthrough -->
@@ -672,6 +672,7 @@
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
                                     <button type="button" class="lib-open-btn" id="beanFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="lib-open-btn" id="beanFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                     <button type="button" class="lib-open-btn" id="beanFormStickerBtn" data-i18n="sticker_title" style="display:none">Als Sticker freistellen</button>
                                     <span class="lib-form-hint lib-form-hint-staged" id="beanFormImageStaged" data-i18n="bean_image_staged" style="display:none">Foto wird beim Speichern hinzugefügt</span>
                                 </div>
@@ -704,6 +705,19 @@
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
                         <input class="lib-url-input" id="urlImportInput" aria-label="Import from URL" data-i18n-aria-label="lib_url_placeholder" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
                         <button class="lib-url-btn" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
+                    </div>
+                    <div class="lib-url-paste" id="urlImportPasteRow" style="display:none">
+                        <div class="lib-url-paste-msg" role="status" data-i18n="lib_url_shop_blocked">Dieser Shop lässt automatische Abfragen gerade nicht zu.</div>
+                        <div class="lib-url-paste-manual" id="urlImportPasteManual" style="display:none" data-i18n="lib_url_shop_blocked_manual">Trage die Angaben von Hand ein oder versuche es später noch einmal.</div>
+                        <div class="lib-url-paste-manual" id="urlImportPastePartial" style="display:none" data-i18n="lib_url_shop_blocked_partial">Dieser Shop hat seine Produktdaten gesperrt, deshalb sind nur die Angaben der Produktseite eingetragen. Für alle Angaben schließe das Formular und füge die Produktdaten unter dem Adressfeld ein.</div>
+                        <div class="lib-url-paste-steps" id="urlImportPasteSteps" style="display:none">
+                            <div class="lib-url-paste-manual" data-i18n="lib_url_paste_hint">Öffne die Produktdaten in deinem Browser, kopiere den gesamten Text und füge ihn hier ein.</div>
+                            <a class="lib-url-paste-link" id="urlImportPasteLink" href="#" target="_blank" rel="noopener noreferrer" data-i18n="lib_url_paste_link">Produktdaten öffnen</a>
+                            <textarea class="lib-url-input lib-url-paste-text" id="urlImportPasteText" rows="4" spellcheck="false" autocomplete="off" aria-label="Paste the product data here" data-i18n-aria-label="lib_url_paste_placeholder" data-i18n-placeholder="lib_url_paste_placeholder" placeholder="Produktdaten hier einfügen"></textarea>
+                            <div class="lib-url-paste-error" id="urlImportPasteInvalid" role="alert" style="display:none" data-i18n="lib_url_paste_invalid">Das sind keine gültigen Produktdaten. Kopiere den gesamten Text der geöffneten Seite.</div>
+                            <div class="lib-url-paste-error" id="urlImportPasteTooLarge" role="alert" style="display:none" data-i18n="lib_url_paste_too_large">Der eingefügte Text ist zu lang.</div>
+                            <button class="lib-url-btn" id="urlImportPasteBtn" data-i18n="lib_url_paste_btn">Formular ausfüllen</button>
+                        </div>
                     </div>
                     <div class="lib-import-settings" id="importSettingsRow" style="display:none">
                         <div class="lib-import-settings-title" data-i18n="lib_import_settings_title">Import-Quellen</div>
@@ -750,6 +764,7 @@
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
                                     <button type="button" class="lib-open-btn" id="grinderFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="lib-open-btn" id="grinderFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                             <div class="lib-form-field" id="grinderFormZeroPointField" style="display:none">
@@ -922,6 +937,7 @@
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="basketFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
                                     <button type="button" class="lib-open-btn" id="basketFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="lib-open-btn" id="basketFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                         </div>
@@ -965,6 +981,7 @@
                                 <div class="photo-picker-row">
                                     <button type="button" class="lib-open-btn" id="puckScreenFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
                                     <button type="button" class="lib-open-btn" id="puckScreenFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="lib-open-btn" id="puckScreenFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                         </div>
@@ -1748,6 +1765,14 @@
         <div class="settings-card" id="devToolsCard" style="display:none">
             <h3 class="settings-card-title" data-i18n="settings_devtools_title">Dev Tools</h3>
             <p class="settings-card-desc" data-i18n="settings_devtools_desc">GLP DEV channel only — never available on a real install.</p>
+            <!-- #1922: dev-channel only; wired by components/dev-score-settings.ts -->
+            <label for="devScoreModel" class="machine-form-label" data-i18n="settings_devtools_score_model">Score-Modell</label>
+            <select id="devScoreModel" class="machine-form-input"></select>
+            <p class="settings-card-desc" data-i18n="settings_devtools_score_model_desc">Welches Modell deine Shots bewertet. Ein Wechsel lädt die App neu; Stable-Builds nutzen immer classic.</p>
+            <div class="orders-broadcast-row">
+                <input type="checkbox" id="devBlindRating">
+                <label for="devBlindRating" data-i18n="settings_devtools_blind_rating">Blind bewerten — Score und Urteil eines Shots erst nach der Sternebewertung zeigen</label>
+            </div>
             <button id="devExportDbBtn" type="button" class="backup-btn" data-i18n="settings_devtools_export_db">Download raw database</button>
             <!-- #755: counterpart to the export button above. Translation
                  text must live in its own span, same reasoning as the

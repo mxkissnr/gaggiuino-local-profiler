@@ -4,7 +4,9 @@
 // devices currently home" filter and the notify-mapping customer list) —
 // plus GetSwitchState, CallHaService, and GetHaLanguage, used by the
 // background polling loop's machine-power/ready-by-preheat checks and the
-// preheat notification, and SupervisorGet (MQTT broker discovery).
+// preheat notification, and SupervisorGet (MQTT broker discovery) plus the
+// Supervisor discovery announce/withdraw pair that offers the companion
+// integration to Home Assistant on startup.
 //
 // Every function here degrades to a no-op/empty-result (or, for
 // CallHaService, an error) when no token is configured — never a panic, since
@@ -16,7 +18,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -37,14 +41,27 @@ var (
 	entityIDRe          = regexp.MustCompile(`^[a-z_]+\.[a-z0-9_]+$`)
 )
 
+// supervisorURL is the Supervisor's own API root, a different root than the
+// Core API proxy c.apiBase points at on a Supervisor install.
+const supervisorURL = "http://supervisor"
+
+// errNoSupervisor reports that this Client has no Supervisor connection, so a
+// Supervisor-only call cannot be made.
+var errNoSupervisor = errors.New("no Supervisor connection")
+
 // Client carries the HA API base and token as instance fields instead of
 // process-wide globals, so tests can construct one pointed at an
 // httptest.Server. NewClientFromEnv() below derives the values cmd/server
 // actually wires in.
+//
+// supervisorBase is a separate root from apiBase and stays empty on a
+// standalone install, so that install's GLP_HA_TOKEN is never sent to a host
+// named "supervisor".
 type Client struct {
-	apiBase string // "" when no HA connection is configured (Ingress-only / no Supervisor, no GLP_HA_URL)
-	token   string
-	http    *http.Client
+	apiBase        string // "" when no HA connection is configured (Ingress-only / no Supervisor, no GLP_HA_URL)
+	supervisorBase string
+	token          string
+	http           *http.Client
 
 	langOnce sync.Once
 	lang     string
@@ -62,16 +79,17 @@ func NewClientFromEnv() *Client {
 	supervisorToken := os.Getenv("SUPERVISOR_TOKEN")
 	glpHAURL := strings.TrimSuffix(os.Getenv("GLP_HA_URL"), "/")
 
-	var apiBase, token string
+	var apiBase, token, supervisorBase string
 	switch {
 	case supervisorToken != "":
 		apiBase = "http://supervisor/core/api"
+		supervisorBase = supervisorURL
 		token = supervisorToken
 	case glpHAURL != "":
 		apiBase = glpHAURL + "/api"
 		token = os.Getenv("GLP_HA_TOKEN")
 	}
-	return &Client{apiBase: apiBase, token: token, http: &http.Client{Timeout: 5 * time.Second}}
+	return &Client{apiBase: apiBase, supervisorBase: supervisorBase, token: token, http: &http.Client{Timeout: 5 * time.Second}}
 }
 
 func (c *Client) enabled() bool { return c.token != "" }
@@ -275,14 +293,49 @@ func (c *Client) GetPersons(ctx context.Context) []Person {
 
 // SupervisorGet performs an authenticated GET against the Supervisor's own
 // API root (http://supervisor), NOT the Core proxy c.apiBase points at. Used
-// by internal/mqtt's broker auto-discovery. Returns an error (never a panic)
-// when no token is configured or the call fails — callers treat that as
-// "not available".
+// by internal/mqtt's broker auto-discovery; the discovery announce/withdraw
+// pair calls supervisorDo directly. Supervisor installs only. Returns an error
+// (never a panic) when no Supervisor token is configured or the call fails —
+// callers treat that as "not available".
 func (c *Client) SupervisorGet(ctx context.Context, path string, out any) error {
-	if !c.enabled() {
-		return fmt.Errorf("no Supervisor token")
+	return c.supervisorDo(ctx, http.MethodGet, path, nil, out)
+}
+
+// supervisorDo performs one request against the Supervisor API root. Gated on
+// both supervisorBase and the token being set, so a standalone install's
+// GLP_HA_TOKEN is never sent to a host named "supervisor".
+func (c *Client) supervisorDo(ctx context.Context, method, path string, body, out any) error {
+	if c.supervisorBase == "" || c.token == "" {
+		return errNoSupervisor
 	}
-	return c.getFrom(ctx, "http://supervisor", path, out)
+	var payload io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		payload = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.supervisorBase+path, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return errStatus(resp.StatusCode)
+	}
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(out)
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {

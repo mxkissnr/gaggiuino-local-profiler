@@ -339,7 +339,8 @@ func (h *Handlers) firmwareProgress(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		MachineID *int64 `json:"machineId"`
+		MachineID  *int64 `json:"machineId"`
+		SkipBackup bool   `json:"skipBackup"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
@@ -350,6 +351,22 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	}
 	if !requireSettingsProxySupport(w, adapter, machine) {
 		return
+	}
+	// #1878: settings backup before the update. Fail closed: an error or a
+	// panic in the hook means there is no backup, so the update does not
+	// start. skipBackup is the user's explicit override; the hook still
+	// refuses while another backup or restore of this machine runs.
+	if h.beforeFirmwareUpdate != nil {
+		var hookErr error
+		if httputil.SafeCall("machines: pre-update settings backup", func() {
+			hookErr = h.beforeFirmwareUpdate(r.Context(), machine, body.SkipBackup)
+		}) {
+			hookErr = errors.New("pre-update settings backup panicked")
+		}
+		if hookErr != nil {
+			writePreUpdateError(w, hookErr)
+			return
+		}
 	}
 	// #1136 follow-up: resolve the installed/target version BEFORE triggering
 	// the update -- a successful trigger reboots the machine, so after that
@@ -384,6 +401,29 @@ func (h *Handlers) triggerFirmwareUpdate(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
+}
+
+// writePreUpdateError answers a firmware update that the pre-update settings
+// backup stopped (#1878). The hook's error is never echoed, because it can
+// carry the machine host; the texts are fixed.
+func writePreUpdateError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrPreUpdateBusy):
+		writeJSON(w, http.StatusConflict, map[string]string{
+			"error": "Another settings backup or restore of this machine is running",
+			"code":  "operation_running",
+		})
+	case errors.Is(err, ErrPreUpdateUnreachable):
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "The machine did not answer",
+			"code":  "machine_unreachable",
+		})
+	default:
+		writeJSON(w, http.StatusBadGateway, map[string]string{
+			"error": "The settings backup before the update failed, so the update was not started",
+			"code":  "pre_update_backup_failed",
+		})
+	}
 }
 
 // firmwareFromTo best-effort resolves the version being replaced (from: the

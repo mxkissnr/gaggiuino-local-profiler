@@ -132,15 +132,6 @@ export function getShotCard(id: number, { format, accent, theme, lang }: ShotCar
   return apiFetch(`api/shots/${pathSeg(id)}/card?${params}`);
 }
 
-/** POST /api/shots/{id}/image — upload a (cropped) shot photo. */
-export function postShotImage(id: number, blob: Blob): Promise<Response> {
-  return apiFetch(shotImageUrl(id), {
-    method: 'POST',
-    headers: { 'Content-Type': blob.type },
-    body: blob,
-  });
-}
-
 /** DELETE /api/shots/{id}/image — remove the shot's photo. */
 export function deleteShotImage(id: number): Promise<Response> {
   return apiFetch(shotImageUrl(id), { method: 'DELETE' });

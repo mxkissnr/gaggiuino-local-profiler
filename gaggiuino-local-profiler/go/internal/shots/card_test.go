@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -376,5 +378,34 @@ func TestCard_LongHeadlineTruncatedAtMinSize(t *testing.T) {
 	}
 	if len(headline) >= len(name) {
 		t.Errorf("overlong headline %q is not shorter than the name", headline)
+	}
+}
+
+// TestTextWidth_ConcurrentUse exercises the shared face cache from many
+// goroutines. The real check is the race detector in CI (#1915).
+func TestTextWidth_ConcurrentUse(t *testing.T) {
+	want := textWidth("Espresso 18.5 g → 38.1 g", 22, false)
+	wantB := textWidth("Adaptive", 30, true)
+
+	var mismatches atomic.Int32
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 200 {
+				if got := textWidth("Espresso 18.5 g → 38.1 g", 22, false); got != want {
+					mismatches.Add(1)
+				}
+				if got := textWidth("Adaptive", 30, true); got != wantB {
+					mismatches.Add(1)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	if n := mismatches.Load(); n != 0 {
+		t.Errorf("%d concurrent textWidth calls returned a different width", n)
 	}
 }

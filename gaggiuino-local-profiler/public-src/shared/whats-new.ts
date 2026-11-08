@@ -21,6 +21,13 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.7.0', date: '2026-11-08', highlights: [
+        'The maintenance page now shows what is due next, with simple lists for tasks and the log.',
+        'Gaggiuino machines keep a history of their settings and profiles that you can compare and restore.',
+        'Saved photos can be cropped again at any time.',
+        'Saving a new coffee asks for its bag straight away.',
+        'Fixed: the backflush and descaling guides are back, and firmware updates show their progress until the machine has finished.',
+    ] },
     { version: '3.6.0', date: '2026-11-01', highlights: [
         'Mix beans in one shot: split a dose over up to four beans, each bag deducted by its own grams.',
         'Take photos with a camera inside the app, on every photo field.',
@@ -69,9 +76,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Fixed: the machine firmware update entity now actually detects available updates instead of always reporting up to date.',
         'Fixed: the Statistics world map tooltip no longer renders bean or region names as HTML.',
         'Fixed: the MQTT broker password can now be explicitly cleared, and is never returned in cleartext.',
-    ] },
-    { version: '3.0.2', date: '2026-09-11', highlights: [
-        'Fixed: the machine firmware check no longer stops reporting the installed version when GitHub is temporarily unreachable.',
     ] },
 ];
 

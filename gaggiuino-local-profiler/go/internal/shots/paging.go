@@ -197,8 +197,9 @@ func (r *Repository) runPageQuery(query string, args []any, limit int, lookup be
 		page     Page
 		backfill []scoreCacheRow
 	)
+	model := activeScoreModel()
 	for rows.Next() {
-		row, bf, err := r.scanPageRow(rows, lookup, true)
+		row, bf, err := r.scanPageRow(rows, lookup, model, true)
 		if err != nil {
 			return Page{}, err
 		}
@@ -253,8 +254,9 @@ func (r *Repository) scoredShots(query string, args []any, lookup beanLookup) ([
 		out      []PageRow
 		backfill []scoreCacheRow
 	)
+	model := activeScoreModel()
 	for rows.Next() {
-		row, bf, err := r.scanPageRow(rows, lookup, false)
+		row, bf, err := r.scanPageRow(rows, lookup, model, false)
 		if err != nil {
 			return nil, err
 		}
@@ -303,10 +305,11 @@ func (r *Repository) EachScoredExcludingTrash(lookup func(Shot) *Bean, fn func(s
 		return fmt.Errorf("shots: streaming scored shots: %w", err)
 	}
 	var backfill []scoreCacheRow
+	model := activeScoreModel()
 	err = func() error {
 		defer rows.Close()
 		for rows.Next() {
-			row, bf, err := r.scanPageRow(rows, lookup, false)
+			row, bf, err := r.scanPageRow(rows, lookup, model, false)
 			if err != nil {
 				return err
 			}
@@ -452,14 +455,16 @@ type scoreCacheRow struct {
 
 // scanPageRow scans one joined shots+annotations+shot_score_cache row,
 // hydrates the shot, and resolves its score: a fingerprint hit uses the
-// cached score, a miss (or an absent cache row) computes it via
-// CalcShotScoreDetail and returns a *scoreCacheRow for the caller to
-// backfill. lookup (nil = generic bands) resolves each shot's bean target;
-// that target is folded into the fingerprint, so editing a bean's
-// brewTempC/brewRatio misses the cache and recomputes instead of serving the
-// old score forever. withChart fills HasChartData/TempStabilityDev; callers
-// that only need the score (comparative advice, /shots.json) skip them.
-func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, withChart bool) (PageRow, *scoreCacheRow, error) {
+// cached score, a miss (or an absent cache row) computes it with the active
+// score model and returns a *scoreCacheRow for the caller to backfill.
+// lookup (nil = generic bands) resolves each shot's bean target; that target
+// is folded into the fingerprint, so editing a bean's brewTempC/brewRatio
+// misses the cache and recomputes instead of serving the old score forever.
+// The model's id is part of the fingerprint too (#1922), so switching models
+// misses the cache and rescores on the next read; switching back rescores
+// again. withChart fills HasChartData/TempStabilityDev; callers that only need
+// the score (comparative advice, /shots.json) skip them.
+func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, model ScoreModel, withChart bool) (PageRow, *scoreCacheRow, error) {
 	var (
 		id, timestamp, machineID int64
 		duration                 sql.NullInt64
@@ -485,7 +490,7 @@ func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, withChart boo
 	if lookup != nil {
 		bean = lookup(shot)
 	}
-	fp := fingerprint + "|" + beanTargetSignature(bean)
+	fp := fingerprint + "|" + beanTargetSignature(bean) + model.fingerprintSuffix()
 
 	row := PageRow{id: id, Shot: shot}
 	// hasChartData / tempStabilityDev are derived from the raw datapoints
@@ -504,7 +509,7 @@ func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, withChart boo
 		return row, nil, nil
 	}
 
-	detail := CalcShotScoreDetail(shot, bean)
+	detail := model.Score(shot, bean)
 	row.Score = detail.Score
 	row.UsedBeanTarget = detail.UsedBeanTarget
 	return row, &scoreCacheRow{

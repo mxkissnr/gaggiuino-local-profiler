@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -804,4 +805,392 @@ func TestRestore_ReportsImagesThatCouldNotBeWritten(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dstDir, "1.jpg")); err != nil {
 		t.Errorf("image that could be written is missing from the target dir: %v", err)
 	}
+}
+
+// ── #1845: uncropped originals round-trip with their crop ────────────────
+
+// testCrop is a valid imageCrop rectangle (the top-left 0.5 x 0.6 of the frame).
+var testCrop = map[string]any{"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.6}
+
+// writeImageFile writes name into dir, creating dir first.
+func writeImageFile(t *testing.T, dir, name string, b []byte) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// assertCropMatches fails unless entity still carries testCrop's values.
+func assertCropMatches(t *testing.T, what string, entity map[string]any) {
+	t.Helper()
+	crop, ok := entity["imageCrop"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s: imageCrop missing after restore (%v)", what, entity["imageCrop"])
+	}
+	for _, key := range []string{"x", "y", "w", "h"} {
+		got, _ := crop[key].(float64)
+		want, _ := testCrop[key].(float64)
+		if got != want {
+			t.Errorf("%s: imageCrop[%q] = %v, want %v", what, key, got, want)
+		}
+	}
+}
+
+// assertNoOriginal fails unless name is absent from dir.
+func assertNoOriginal(t *testing.T, dir, name string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+		t.Errorf("original %q must not be written (stat err=%v)", name, err)
+	}
+}
+
+// assertOriginalJPEG fails unless dir/name exists, decodes as a JPEG and has
+// no thumbnail sibling.
+func assertOriginalJPEG(t *testing.T, dir, name string) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatalf("original %q missing after restore: %v", name, err)
+	}
+	if _, err := jpeg.Decode(bytes.NewReader(b)); err != nil {
+		t.Errorf("original %q does not decode as JPEG: %v", name, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".orig.thumb.") {
+			t.Errorf("original %q got a thumbnail sibling %q", name, entry.Name())
+		}
+	}
+}
+
+// handBuiltBackupZip renders a restore zip from a bundle object plus raw
+// image entries (name -> bytes), the shape a crafted bundle has.
+func handBuiltBackupZip(t *testing.T, bundle map[string]any, images map[string][]byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	bw, err := zw.CreateHeader(&zip.FileHeader{Name: "backup.json", Method: zip.Deflate})
+	if err != nil {
+		t.Fatalf("creating backup.json: %v", err)
+	}
+	if _, err := bw.Write(mustMarshal(t, bundle)); err != nil {
+		t.Fatalf("writing backup.json: %v", err)
+	}
+	for name, b := range images {
+		entry, err := zw.CreateHeader(&zip.FileHeader{Name: "images/" + name, Method: zip.Deflate})
+		if err != nil {
+			t.Fatalf("creating image entry %s: %v", name, err)
+		}
+		if _, err := entry.Write(b); err != nil {
+			t.Fatalf("writing image entry %s: %v", name, err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("closing zip: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// oneBeanBundle builds a minimal zip bundle whose coffee library holds one
+// bean with the given id, crop (nil = no crop) and photo, plus orig as the
+// bean's uncropped original (nil = none).
+func oneBeanBundle(t *testing.T, id int64, crop any, hasImage bool, orig []byte) []byte {
+	t.Helper()
+	bean := map[string]any{"id": id, "name": "Bundle Bean"}
+	images := map[string][]byte{}
+	if hasImage {
+		bean["image"] = "jpg"
+		images[fmt.Sprintf("%d.jpg", id)] = tinyJPEG(t, 48, 36)
+	}
+	if crop != nil {
+		bean["imageCrop"] = crop
+	}
+	if orig != nil {
+		images[fmt.Sprintf("%d.orig.jpg", id)] = orig
+	}
+	bundle := map[string]any{
+		"glp_backup":     true,
+		"shots":          []any{},
+		"coffee_library": map[string]any{"beans": []any{bean}},
+	}
+	return handBuiltBackupZip(t, bundle, images)
+}
+
+// TestRestore_RoundTripRestoresOriginals (#1845) round-trips a bean, a
+// grinder and a shot, each with a JPEG photo, a valid imageCrop and its
+// .orig.jpg, into a SEPARATE image directory. Every crop survives, every
+// original lands as a real JPEG without a thumbnail, and the photo counts
+// stay photo-only on the dry run and in the response.
+func TestRestore_RoundTripRestoresOriginals(t *testing.T) {
+	srcDir := useImageDir(t)
+	const (
+		beanID    int64 = 11
+		grinderID int64 = 22
+		shotID    int64 = 33
+	)
+	jpg := tinyJPEG(t, 64, 48)
+	for _, name := range []string{
+		fmt.Sprintf("%d.jpg", beanID), fmt.Sprintf("%d.orig.jpg", beanID),
+		fmt.Sprintf("grinder-%d.jpg", grinderID), fmt.Sprintf("grinder-%d.orig.jpg", grinderID),
+		fmt.Sprintf("shot-%d.jpg", shotID), fmt.Sprintf("shot-%d.orig.jpg", shotID),
+	} {
+		writeImageFile(t, srcDir, name, jpg)
+	}
+
+	h1, deps1, _ := newTestHandlers(t)
+	if err := deps1.LibRepo.SaveLibrary(library.Library{
+		Beans:    []library.Entity{{"id": beanID, "name": "Orig Bean", "image": "jpg", "imageCrop": testCrop}},
+		Grinders: []library.Entity{{"id": grinderID, "name": "Orig Grinder", "image": "jpg", "imageCrop": testCrop}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := deps1.ShotsRepo.Upsert(shots.Shot{
+		"id": shotID, "timestamp": int64(1700000000), "duration": int64(30000),
+		"profileName": "Orig Shot", "machineId": int64(1), "image": "jpg", "imageCrop": testCrop,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
+
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
+	h2, deps2, _ := newTestHandlersInDir(t)
+	mux2 := newMux(h2)
+
+	dry := doZip(t, mux2, "/api/restore", zipBytes, map[string]string{"X-GLP-Dry-Run": "true"})
+	if dry.Code != http.StatusOK {
+		t.Fatalf("dry-run status = %d; body=%s", dry.Code, dry.Body.String())
+	}
+	preview, _ := decodeBody(t, dry.Body.Bytes())["preview"].(map[string]any)
+	if got, _ := preview["images"].(float64); got != 3 {
+		t.Errorf("dry-run preview.images = %v, want 3 (photos, not files)", preview["images"])
+	}
+
+	rr := doZip(t, mux2, "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	resp := decodeBody(t, rr.Body.Bytes())
+	if got, _ := resp["images"].(float64); got != 3 {
+		t.Errorf("restore images = %v, want 3", resp["images"])
+	}
+	if got, _ := resp["imagesFailed"].(float64); got != 0 {
+		t.Errorf("restore imagesFailed = %v, want 0", resp["imagesFailed"])
+	}
+
+	lib, err := deps2.LibRepo.GetLibrary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lib.Beans) != 1 || len(lib.Grinders) != 1 {
+		t.Fatalf("restored library = %+v", lib)
+	}
+	assertCropMatches(t, "bean", lib.Beans[0])
+	assertCropMatches(t, "grinder", lib.Grinders[0])
+	shot, err := deps2.ShotsRepo.FindByID(shotID)
+	if err != nil || shot == nil {
+		t.Fatalf("restored shot missing: err=%v", err)
+	}
+	assertCropMatches(t, "shot", shot)
+
+	for _, name := range []string{
+		fmt.Sprintf("%d.orig.jpg", beanID),
+		fmt.Sprintf("grinder-%d.orig.jpg", grinderID),
+		fmt.Sprintf("shot-%d.orig.jpg", shotID),
+	} {
+		assertOriginalJPEG(t, dstDir, name)
+	}
+}
+
+// TestRestore_MissingOriginalDropsCrop (#1845): when the bundle carries no
+// .orig.jpg, the photo still restores but its imageCrop is dropped — the
+// invariant "crop <=> original on disk" must hold after a restore.
+func TestRestore_MissingOriginalDropsCrop(t *testing.T) {
+	srcDir := useImageDir(t)
+	jpg := tinyJPEG(t, 64, 48)
+	writeImageFile(t, srcDir, "11.jpg", jpg)
+	writeImageFile(t, srcDir, "shot-33.jpg", jpg)
+
+	h1, deps1, _ := newTestHandlers(t)
+	if err := deps1.LibRepo.SaveLibrary(library.Library{
+		Beans: []library.Entity{{"id": int64(11), "name": "No Orig Bean", "image": "jpg", "imageCrop": testCrop}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := deps1.ShotsRepo.Upsert(shots.Shot{
+		"id": int64(33), "timestamp": int64(1700000000), "duration": int64(30000),
+		"profileName": "No Orig Shot", "machineId": int64(1), "image": "jpg", "imageCrop": testCrop,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
+
+	dstDir := t.TempDir()
+	useImageDirAt(t, dstDir)
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	if got, _ := decodeBody(t, rr.Body.Bytes())["images"].(float64); got != 2 {
+		t.Errorf("images = %v, want 2 (both photos, neither original)", got)
+	}
+
+	lib, err := deps2.LibRepo.GetLibrary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lib.Beans) != 1 {
+		t.Fatalf("restored library = %+v", lib)
+	}
+	if ext, _ := lib.Beans[0]["image"].(string); ext != "jpg" {
+		t.Errorf("bean photo dropped: image = %v", lib.Beans[0]["image"])
+	}
+	if _, ok := lib.Beans[0]["imageCrop"]; ok {
+		t.Errorf("bean kept imageCrop without an original: %v", lib.Beans[0]["imageCrop"])
+	}
+	shot, err := deps2.ShotsRepo.FindByID(33)
+	if err != nil || shot == nil {
+		t.Fatalf("restored shot missing: err=%v", err)
+	}
+	if ext, _ := shot["image"].(string); ext != "jpg" {
+		t.Errorf("shot photo dropped: image = %v", shot["image"])
+	}
+	if _, ok := shot["imageCrop"]; ok {
+		t.Errorf("shot kept imageCrop without an original: %v", shot["imageCrop"])
+	}
+	for _, name := range []string{"11.orig.jpg", "shot-33.orig.jpg"} {
+		assertNoOriginal(t, dstDir, name)
+	}
+}
+
+// TestRestore_CraftedBundleDropsBadCrops (#1845): a non-JPEG original,
+// malformed crops and a crop on an entity without a photo all end in "no
+// crop" with no original written; only a genuine crop + JPEG pair survives.
+func TestRestore_CraftedBundleDropsBadCrops(t *testing.T) {
+	jpg := tinyJPEG(t, 48, 36)
+	cases := []struct {
+		name      string
+		crop      any
+		hasImage  bool
+		orig      []byte
+		wantCrop  bool
+		wantOrig  bool
+		wantPhoto bool
+	}{
+		{"non-jpeg original", testCrop, true, fakePNG(), false, false, true},
+		{"w zero", map[string]any{"x": 0.0, "y": 0.0, "w": 0.0, "h": 0.5}, true, jpg, false, false, true},
+		{"x plus w past one", map[string]any{"x": 0.6, "y": 0.0, "w": 0.9, "h": 0.5}, true, jpg, false, false, true},
+		{"string values", map[string]any{"x": "0", "y": "0", "w": "0.5", "h": "0.5"}, true, jpg, false, false, true},
+		{"no image", testCrop, false, jpg, false, false, false},
+		{"valid pair", testCrop, true, jpg, true, true, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := useImageDir(t)
+			h, deps, _ := newTestHandlersInDir(t)
+			rec := doZip(t, newMux(h), "/api/restore", oneBeanBundle(t, 5, tc.crop, tc.hasImage, tc.orig), nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+			}
+
+			lib, err := deps.LibRepo.GetLibrary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(lib.Beans) != 1 {
+				t.Fatalf("restored beans = %+v", lib.Beans)
+			}
+			got := lib.Beans[0]
+			_, hasCrop := got["imageCrop"]
+			if hasCrop != tc.wantCrop {
+				t.Errorf("imageCrop present = %v, want %v (value %v)", hasCrop, tc.wantCrop, got["imageCrop"])
+			}
+			_, hasPhoto := got["image"]
+			if hasPhoto != tc.wantPhoto {
+				t.Errorf("image present = %v, want %v", hasPhoto, tc.wantPhoto)
+			}
+			if tc.wantOrig {
+				assertOriginalJPEG(t, dir, "5.orig.jpg")
+			} else {
+				assertNoOriginal(t, dir, "5.orig.jpg")
+			}
+		})
+	}
+}
+
+// TestRestore_StaleOriginalIsRemoved (#1845): a restore does not wipe the
+// image directory, so an original left by a pre-restore entity would
+// otherwise be paired with the restored photo. A restored photo without a
+// bundle original must leave no original behind, while one with a crop and
+// an original must end up holding the bundle's bytes.
+func TestRestore_StaleOriginalIsRemoved(t *testing.T) {
+	jpg := tinyJPEG(t, 48, 36)
+	stale := []byte{0xFF, 0xD8, 0xFF, 0xE0}
+
+	t.Run("photo without crop", func(t *testing.T) {
+		dir := useImageDir(t)
+		writeImageFile(t, dir, "1.orig.jpg", stale)
+
+		h, deps, _ := newTestHandlersInDir(t)
+		rec := doZip(t, newMux(h), "/api/restore", oneBeanBundle(t, 1, nil, true, nil), nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+		}
+		lib, err := deps.LibRepo.GetLibrary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(lib.Beans) != 1 {
+			t.Fatalf("restored beans = %+v", lib.Beans)
+		}
+		if _, ok := lib.Beans[0]["imageCrop"]; ok {
+			t.Errorf("crop invented without an original: %v", lib.Beans[0]["imageCrop"])
+		}
+		assertNoOriginal(t, dir, "1.orig.jpg")
+	})
+
+	t.Run("crop with original", func(t *testing.T) {
+		dir := useImageDir(t)
+		writeImageFile(t, dir, "1.orig.jpg", stale)
+
+		h, deps, _ := newTestHandlersInDir(t)
+		rec := doZip(t, newMux(h), "/api/restore", oneBeanBundle(t, 1, testCrop, true, jpg), nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+		}
+		lib, err := deps.LibRepo.GetLibrary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(lib.Beans) != 1 {
+			t.Fatalf("restored beans = %+v", lib.Beans)
+		}
+		assertCropMatches(t, "bean", lib.Beans[0])
+		assertOriginalJPEG(t, dir, "1.orig.jpg")
+		got, err := os.ReadFile(filepath.Join(dir, "1.orig.jpg"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Equal(got, stale) {
+			t.Errorf("restored original still holds the pre-restore bytes")
+		}
+	})
 }

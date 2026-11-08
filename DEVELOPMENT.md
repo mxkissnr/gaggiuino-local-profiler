@@ -1,6 +1,6 @@
 # Development Stats
 
-Generated 2026-11-01 by `scripts/dev-stats.mts`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.
+Generated 2026-11-08 by `scripts/dev-stats.mts`. Re-run it any time to refresh these numbers — they are computed live from git history, not hand-maintained.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/section-divider-dark.svg">
@@ -9,22 +9,22 @@ Generated 2026-11-01 by `scripts/dev-stats.mts`. Re-run it any time to refresh t
 
 ## Timeline
 
-The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **166 days** as of the last commit (2026-11-01).
+The GLP ecosystem (this app + 3 companion repos) has been in development since **2026-05-20** — **173 days** as of the last commit (2026-11-08).
 
 | Repo | First commit | Last commit | Commits | AI co-authored |
 |---|---|---|---|---|
-| gaggiuino-local-profiler | 2026-05-20 | 2026-11-01 | 2189 | 1756 (80%) |
-| glp-integration | 2026-05-22 | 2026-11-01 | 280 | 203 (73%) |
+| gaggiuino-local-profiler | 2026-05-20 | 2026-11-08 | 2160 | 1723 (80%) |
+| glp-integration | 2026-05-22 | 2026-11-07 | 294 | 210 (71%) |
 | glp-lovelace-card | 2026-05-24 | 2026-10-20 | 184 | 132 (72%) |
 | glp-order-card | 2026-05-25 | 2026-10-20 | 170 | 120 (71%) |
-| **Combined** | **2026-05-20** | **2026-11-01** | **2823** | **2211 (78%)** |
+| **Combined** | **2026-05-20** | **2026-11-08** | **2808** | **2185 (78%)** |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/dev-stats/commits-per-repo-dark.svg">
   <img src="docs/dev-stats/commits-per-repo-light.svg" alt="Commits per repo" width="100%">
 </picture>
 
-Combined line changes (insertions + deletions across all commits): **796.559**, of which **724.960** landed in AI-co-authored commits.
+Combined line changes (insertions + deletions across all commits): **818.773**, of which **746.552** landed in AI-co-authored commits.
 
 Commits without an AI co-author line are presumed human-only (manual fixes, merges, config tweaks) — not independently verified.
 
@@ -35,15 +35,15 @@ Commits without an AI co-author line are presumed human-only (manual fixes, merg
 
 ## Hours of development (lower-bound estimate)
 
-Clustering each repo's commit timestamps into working sessions — commits within 2h of each other join the same session, and each session gets a 30-minute lead-in credited ahead of its first commit — gives a combined **747.7 hours** across all four repos.
+Clustering each repo's commit timestamps into working sessions — commits within 2h of each other join the same session, and each session gets a 30-minute lead-in credited ahead of its first commit — gives a combined **786.7 hours** across all four repos.
 
 | Repo | Hours (session-clustered) |
 |---|---|
-| gaggiuino-local-profiler | 502.9 |
-| glp-integration | 106.3 |
+| gaggiuino-local-profiler | 534.0 |
+| glp-integration | 114.1 |
 | glp-lovelace-card | 72.0 |
 | glp-order-card | 66.6 |
-| **Combined** | **747.7** |
+| **Combined** | **786.7** |
 
 This is a **lower-bound estimate derived from git commit timestamps only**, not measured time — it undercounts real work because a long AI-agentic session (orchestration, agent dispatch, review between infrequent commits) can run for hours between commits.
 
@@ -57,16 +57,16 @@ This is a **lower-bound estimate derived from git commit timestamps only**, not 
 | Model | Commits |
 |---|---|
 | Claude Sonnet 5 | 829 |
-| DeepSeek V4.1 Flash | 727 |
+| DeepSeek V4.1 Flash | 703 |
 | Claude Sonnet 4.6 | 355 |
 | Claude Opus 5.5 | 98 |
 | Claude Opus 5 | 55 |
 | Claude Opus 4.8 | 47 |
 | Claude Fable 5 | 41 |
-| Claude Sonnet 5.5 | 30 |
+| Claude Sonnet 5.5 | 29 |
 | Claude (version not recorded) | 12 |
 | DeepSeek V4 Flash | 9 |
-| Claude Haiku 4.5 | 5 |
+| Claude Haiku 4.5 | 4 |
 | Claude Haiku 5.5 | 2 |
 | Big Pickle | 1 |
 
@@ -95,7 +95,7 @@ This assumes a continuous subscription for the whole span — it does not accoun
 
 | Model | Commits | Cost |
 |---|---|---|
-| DeepSeek V4.1 Flash | 727 | not tracked |
+| DeepSeek V4.1 Flash | 703 | not tracked |
 | DeepSeek V4 Flash | 9 | not tracked |
 | Big Pickle | 1 | not tracked |
 

@@ -48,6 +48,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/importer"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/logbuf"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machinebackups"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/mcp"
@@ -133,6 +134,13 @@ func main() {
 		log.Fatalf("listening on %s: %v", addr, err)
 	}
 
+	// #1848: on Supervisor installs, announce the app to Home Assistant so the
+	// GLP integration is offered without typing a URL; the announcement is
+	// withdrawn when baseCtx is cancelled at shutdown. A no-op elsewhere.
+	port, _ := strconv.Atoi(cfg.port)
+	hostname, _ := os.Hostname()
+	discoveryDone := ha.NewClientFromEnv().StartSupervisorDiscovery(baseCtx, hostname, port)
+
 	// ReadHeaderTimeout stops a slowloris client that dribbles headers forever;
 	// IdleTimeout reaps idle keep-alive connections. ReadTimeout/WriteTimeout are
 	// deliberately unset so large backup uploads and the SSE streams can run long.
@@ -162,6 +170,9 @@ func main() {
 	if err := serveUntilStopped(srv, tcpNoDelayListener{ln}, sigCh, cancelBase); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
+	// The withdraw DELETE is bounded by ha's withdrawTimeout and must finish
+	// before the process exits, or the announcement outlives the app.
+	<-discoveryDone
 }
 
 // serveUntilStopped serves srv on ln and, when a signal arrives on stop,
@@ -381,6 +392,12 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	ordersRepo := orders.NewRepository(sqlDB)
 	// #1835: shared by the ui-prefs routes and the low-stock threshold read.
 	uiprefsRepo := uiprefs.NewRepository(sqlDB)
+	// #1922: which score model this process scores with. internal/shots cannot
+	// read ui-prefs (or the dev-build flag) itself, so the source is injected
+	// here for the same import-cycle reason as SetBeanSource; scoreModelPref
+	// applies the dev-build gate and the classic fallback. Read per call, so a
+	// changed value applies without a restart.
+	shots.SetScoreModelSource(func() string { return scoreModelPref(uiprefsRepo) })
 	// #1411: annotating a shot books milk stock and frozen-portion counts on
 	// the server inside the same locked save; injected here because
 	// internal/shots cannot import internal/library or internal/orders, like
@@ -509,6 +526,44 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	mqtt.NewHandlers(mqttRepo, mqttTransport, registry, machinesHandlers, haClient).RegisterRoutes(mux)
 
 	poller.Start(ctx)
+
+	// #1878: daily machine settings backups (secrets stripped before storing),
+	// taken the first time each Gaggiuino machine is reachable that day.
+	machineBackupsRepo := machinebackups.NewRepository(sqlDB)
+	machinebackups.NewScheduler(machinebackups.SchedulerDeps{
+		Repo:         machineBackupsRepo,
+		Machines:     registry,
+		Client:       machinebackups.ClientFor(machinesHandlers),
+		KnownOffline: poller.MachineKnownOffline,
+	}).Start(ctx)
+
+	// #1878: list / back up now / delete routes. They share machineBackupsRepo,
+	// and with it the per-machine lock, with the scheduler above.
+	machinebackups.NewHandlers(machinebackups.HandlerDeps{
+		Repo:     machineBackupsRepo,
+		Machines: registry,
+		Client:   machinebackups.ClientFor(machinesHandlers),
+	}).RegisterRoutes(mux)
+
+	// #1878: a settings backup before every firmware update started from GLP;
+	// a failed backup stops the update unless the user skips it. Shares
+	// machineBackupsRepo, and with it the per-machine lock, with the scheduler
+	// and the routes above.
+	machinesHandlers.SetBeforeFirmwareUpdate(machinebackups.PreUpdate{
+		Repo:   machineBackupsRepo,
+		Client: machinebackups.ClientFor(machinesHandlers),
+	}.Backup)
+
+	// #1878: restore a stored backup onto its machine. Shares machineBackupsRepo
+	// (the per-machine backup lock) with the scheduler and the routes above, and
+	// profilesRepo (the per-machine profile lock and cache) with the profile
+	// editor and the sync sweep.
+	machinebackups.NewRestore(machinebackups.RestoreDeps{
+		Repo:     machineBackupsRepo,
+		Machines: registry,
+		Client:   machinebackups.ClientFor(machinesHandlers),
+		Profiles: profilesRepo,
+	}).RegisterRoutes(mux)
 
 	// #1152: purge expired trash once at startup and then every 24h —
 	// StartTrashPurge does the immediate purge plus a 24h ticker bound to ctx.
@@ -770,6 +825,33 @@ func getEnvNumber(name string, def float64, min float64) float64 {
 		return def
 	}
 	return n
+}
+
+// devScoreModelPrefKey is the ui-pref naming the active score model (#1922).
+// Its TypeScript twin is public-src/components/dev-score-settings.ts, which
+// writes the same literal.
+const devScoreModelPrefKey = "dev.score_model"
+
+// scoreModelPref returns the id of the score model this process should score
+// with, read from the ui-prefs store so it rides along in backup/restore
+// (#1922). A stable build always answers classic — it neither shows nor
+// honours the setting — as does a read error, a missing key, or a non-string
+// value. Read per call, so a changed value applies without a restart. The
+// registry resolves the returned id, so an unknown id also scores as classic.
+func scoreModelPref(repo *uiprefs.Repository) string {
+	if !mcp.DevBuild() {
+		return shots.ClassicScoreModel
+	}
+	prefs, err := repo.Get()
+	if err != nil {
+		log.Printf("main: score model: reading ui prefs: %v", err)
+		return shots.ClassicScoreModel
+	}
+	id, ok := prefs[devScoreModelPrefKey].(string)
+	if !ok || id == "" {
+		return shots.ClassicScoreModel
+	}
+	return id
 }
 
 // lowStockThresholdG reads the remaining-grams threshold for the "bean

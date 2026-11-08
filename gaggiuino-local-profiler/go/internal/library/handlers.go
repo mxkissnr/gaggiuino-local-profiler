@@ -193,22 +193,27 @@ func writeUpdateError(w http.ResponseWriter, err error) {
 	internalError(w, err)
 }
 
-// entityExists reports whether id names an existing entity of one library
-// kind. The *...Image handlers run this read-only check BEFORE reading or
-// writing the uploaded file, so an unknown id still 404s — and no file is
-// written — before any image validation, matching dev's original ordering.
-// GetLibrary is always called first (even for an unparseable id), so a
-// broken DB outranks the not-found response exactly as before; k selects the
-// collection to search.
-func (h *Handlers) entityExists(id int64, noMatch bool, k entityKind) (bool, error) {
+// entityFor returns the stored entity id names, reporting false when no
+// entity of that kind matches. The *...Image handlers run this read-only check
+// BEFORE reading or writing any file, so an unknown id still 404s — and no file
+// is written — before any image validation, matching dev's original ordering.
+// GetLibrary is always called first (even for an unparseable id), so a broken
+// DB outranks the not-found response exactly as before; k selects the
+// collection to search. The returned entity is a snapshot: callers use it to
+// pick a branch, and the write path re-reads under Update's lock.
+func (h *Handlers) entityFor(id int64, noMatch bool, k entityKind) (Entity, bool, error) {
 	lib, err := h.repo.GetLibrary()
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	if noMatch {
-		return false, nil
+		return nil, false, nil
 	}
-	return findEntityIndex(*k.list(&lib), id) != -1, nil
+	idx := findEntityIndex(*k.list(&lib), id)
+	if idx == -1 {
+		return nil, false, nil
+	}
+	return (*k.list(&lib))[idx], true, nil
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request) (Entity, bool) {
@@ -344,15 +349,25 @@ func (h *Handlers) getBeansInfo(w http.ResponseWriter, r *http.Request) {
 // file with a revalidation-only cache header: the URL stays the same when a
 // photo is replaced, so clients must revalidate. http.ServeFile already sets
 // Last-Modified and answers If-Modified-Since with 304.
-func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefix string, id int64) {
+//
+// `?original=1` serves the uncropped original instead of the cropped main
+// image — but only when the entity records a valid imageCrop, the invariant
+// that ties an original file to an entity. It wins over `?thumb=1`; a
+// thumbnail of an original is never generated.
+func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefix string, id int64, hasCrop bool) {
 	contentType, known := img.ExtContentType[ext]
 	if ext == "" || !known {
 		writeError(w, http.StatusNotFound, "no image")
 		return
 	}
+	query := r.URL.Query()
+	if query.Get("original") == "1" {
+		h.serveOriginal(w, r, prefix, id, hasCrop)
+		return
+	}
 	// `?thumb=1` serves the downscaled variant when present and otherwise
 	// falls back to the full image — a missing thumbnail never 404s.
-	thumb := r.URL.Query().Get("thumb") == "1"
+	thumb := query.Get("thumb") == "1"
 	path := img.ServePath(h.imageDir, id, ext, prefix, thumb)
 	if _, err := os.Stat(path); err != nil {
 		writeError(w, http.StatusNotFound, "no image")
@@ -360,6 +375,24 @@ func (h *Handlers) serveImage(w http.ResponseWriter, r *http.Request, ext, prefi
 	}
 	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("Content-Type", contentType)
+	http.ServeFile(w, r, path)
+}
+
+// serveOriginal serves the uncropped original behind a cropped main image.
+// The crop is what the client re-crops against, so an entity without a valid
+// imageCrop has no original to serve even if a stray file exists.
+func (h *Handlers) serveOriginal(w http.ResponseWriter, r *http.Request, prefix string, id int64, hasCrop bool) {
+	path := img.OriginalPath(h.imageDir, id, prefix)
+	if !hasCrop {
+		writeError(w, http.StatusNotFound, "no image")
+		return
+	}
+	if _, err := os.Stat(path); err != nil {
+		writeError(w, http.StatusNotFound, "no image")
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeFile(w, r, path)
 }
 

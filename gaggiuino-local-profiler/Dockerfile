@@ -34,7 +34,7 @@
 # output is architecture-independent, so that has no bearing here.
 # Digest-pinned (multi-arch manifest) like the alpine runtime stage below;
 # Renovate's dockerfile manager keeps it current.
-FROM --platform=$BUILDPLATFORM node:24-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS frontend-deps
+FROM --platform=$BUILDPLATFORM node:26-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS frontend-deps
 
 WORKDIR /app
 
@@ -58,7 +58,7 @@ RUN npm ci --ignore-scripts
 # downloading the newer toolchain itself — ubuntu-latest GitHub-hosted
 # runners have network access, so that degrades to a slower build rather
 # than failing.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -101,7 +101,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
 # Digest-pinned like the node:24-slim stage above — this is the image that
 # actually ships, so a moved upstream tag must not change it silently.
 # Renovate's dockerfile manager keeps the digest current.
-FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
 # Empty by default -- only .github/workflows/build-dev.yaml passes this
 # build-arg (as dev-<run_number>); the release build (build.yaml) never sets
@@ -148,6 +148,10 @@ EXPOSE 8099
 # GET / serves internal/webapp's SPA shell — always 200 without a token
 # (auth.RequireToken's GET/HEAD static bypass), so this only proves the
 # HTTP server itself answers, not DB/auth state.
+# Home Assistant Supervisor acts on this check (#1850): with the app's
+# Watchdog switch on, an "unhealthy" container is restarted. That is why
+# config.yaml has no `watchdog:` URL -- it would only poll the same page a
+# second time.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD wget -q --spider http://localhost:8099/ || exit 1
 

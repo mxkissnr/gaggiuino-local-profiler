@@ -8,11 +8,10 @@ import { esc, todayIsoDate, html, joinHtml } from '../../utils.js';
 import { ICON_TRASH } from '../../icons.js';
 import type { Html } from '../../utils.js';
 import type { Bean } from '../../api/types.js';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
-// Circular with library.ts (it re-exports this module): only ever touched at
-// call time, never read at module load.
-const library = libraryView;
+// Circular with library.ts (it re-exports this module): the namespace is read
+// only at call time, never copied at module load.
 
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>` as Html;
 
@@ -65,9 +64,16 @@ function _field(id: string): HTMLInputElement | null {
 //   - "current": the one bag actually being drawn from right now — lowest
 //     sortOrder among tracked bags with remaining > 0 (queue order, not
 //     "most recently added").
-//   - "upcoming" ("Volle"): tracked, remaining > 0, queued behind current.
-//   - "past" ("Vergangene"): remaining <= 0, or never tracked at all.
-//     Hidden by default in the UI.
+//   - "upcoming" ("Volle"): tracked, remaining > 0, queued behind current —
+//     plus a bean's only bag while it is still untracked (#1933).
+//   - "past" ("Vergangene"): remaining <= 0, or never tracked at all while
+//     the bean has more than one bag. Hidden by default in the UI.
+// #1933: the bean form's placeholder bag (#1540 — a roast date and no stock,
+// filled in place by the first real bag) is a bean's only bag, and its absent
+// remainingG means "not weighed yet", not "used up". Classifying it as past
+// hid a brand-new coffee's bag behind the Past toggle and locked its pencil
+// form, so the only untracked bag stays upcoming (remaining null) and can be
+// weighed, dated and batched like any full bag.
 // #1351: the topbar coffee-history panel mirrors the "past + tracked" part of
 // this rule (isEmptiedBag() in components/coffee-history.ts) instead of
 // importing this module — the listener registered at the bottom of this file
@@ -85,6 +91,8 @@ export function classifyBeanBags(b: BeanRow): ClassifiedBags {
     const entry: BagEntry = { bg, consumed: bg.consumedG ?? 0, stockG: tracked ? parseFloat(String(bg.stock_g)) : null, remaining: tracked ? (bg.remainingG ?? null) : null };
     if (bg.current) current = entry;
     else if (entry.remaining != null && entry.remaining > 0) upcoming.push(entry);
+    // Untracked, but the bean's only bag: not past yet (#1933).
+    else if (!tracked && bags.length === 1) upcoming.push(entry);
     else past.push(entry);
   }
   // Queue order must stay visible/editable in "Volle" — the drag-reorder
@@ -181,7 +189,10 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
          </div>
        </div>`
     : esc('');
-  const dragHandle: Html = state === 'upcoming'
+  // Only tracked upcoming bags are reorderable: an untracked one (#1933) is
+  // not part of the queue reorderBags accepts, and the server rejects a
+  // one-item reorder of it.
+  const dragHandle: Html = state === 'upcoming' && remaining != null
     ? html`<span class="lib-bag-drag-handle" data-bag-drag-handle data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_reorder_handle')}">⠿</span>`
     : esc('');
   return html`<div class="lib-bag-card${esc(state === 'current' ? ' active' : '')}${esc(expanded ? ' expanded' : '')}" data-bag-card data-bag-id="${esc(bg.id)}">

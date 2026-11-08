@@ -13,16 +13,22 @@ g.navigator ??= { language: 'en-US' };
 // (vi.hoisted keeps the spies out of the module factory's temporal dead zone).
 const mocks = vi.hoisted(() => ({
   saveBean: vi.fn(),
-  uploadBeanImage: vi.fn(),
-  crop: vi.fn(),
+  apiFetch: vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(),
+  crop: vi.fn<(file: Blob, opts?: Record<string, unknown>) => Promise<unknown>>(),
 }));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
-  return { ...actual, saveBean: mocks.saveBean, uploadBeanImage: mocks.uploadBeanImage };
+  return { ...actual, saveBean: mocks.saveBean };
+});
+// photo-upload.ts reads transport.ts's apiFetch at call time, so this stub
+// intercepts the bean photo POSTs.
+vi.mock('../public-src/api/transport.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../public-src/api/transport.js')>();
+  return { ...actual, apiFetch: mocks.apiFetch };
 });
 vi.mock('../public-src/components/image-crop.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/components/image-crop.js')>();
-  return { ...actual, openImageCropEditor: mocks.crop };
+  return { ...actual, openCropEditor: mocks.crop };
 });
 
 interface ShelfBuckets {
@@ -59,6 +65,24 @@ interface ShelfModule {
 }
 const { classifyBeanShelf, shelfStock, renderShelfTile, renderShelfRow, matchesShelfQuery, matchesShelfFilter, sortShelf } =
   (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
+
+interface BagEntryLike {
+  bg: { id: number };
+  remaining: number | null;
+}
+interface ClassifiedBagsLike {
+  current: BagEntryLike | null;
+  upcoming: BagEntryLike[];
+  past: BagEntryLike[];
+}
+interface BagsModule {
+  classifyBeanBags: (b: unknown) => ClassifiedBagsLike;
+}
+const { classifyBeanBags } = (await import('../public-src/views/library/bags.js')) as unknown as BagsModule;
+
+function bagIds(entries: readonly BagEntryLike[]): number[] {
+  return entries.map(e => e.bg.id);
+}
 
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
@@ -177,6 +201,8 @@ describe('shelfStock (#1330 one shelf)', () => {
     expect(s.opened).toBe(true);
   });
 
+  // #1933: the bean's only untracked bag is "upcoming" (not weighed yet), so
+  // it still has no open grams and no sealed bag behind it.
   it('leaves grams null for an untracked bean', () => {
     const b = bean({ id: 4, bags: [bag({ id: 1, stock_g: 250 })] });
     expect(shelfStock(b)).toEqual({ openG: null, pct: null, opened: false, sealedBags: 0, frozenG: 0 });
@@ -191,6 +217,37 @@ describe('shelfStock (#1330 one shelf)', () => {
       ],
     })] });
     expect(shelfStock(b).frozenG).toBe(36);
+  });
+});
+
+describe('classifyBeanBags (#1933 untracked placeholder)', () => {
+  it("keeps a bean's only untracked bag in upcoming, not past", () => {
+    const b = bean({ id: 1, bags: [bag({ id: 1, stock_g: 250, roastDate: '2026-10-01' })] });
+    const { current, upcoming, past } = classifyBeanBags(b);
+    expect(current).toBeNull();
+    expect(bagIds(upcoming)).toEqual([1]);
+    expect(past).toEqual([]);
+    expect(upcoming[0]?.remaining).toBeNull();
+  });
+
+  it('still files an untracked bag under past when the bean has another bag', () => {
+    const b = bean({ id: 2, bags: [
+      bag({ id: 1, stock_g: 250, consumedG: 100, remainingG: 150, current: true }),
+      bag({ id: 2, stock_g: 250 }),
+    ] });
+    const { upcoming, past } = classifyBeanBags(b);
+    expect(upcoming).toEqual([]);
+    expect(bagIds(past)).toEqual([2]);
+  });
+
+  it('keeps an emptied tracked bag in past', () => {
+    // SimulateBagQueue advances past an exhausted bag, so the bean's only
+    // tracked bag at 0 g is never "current".
+    const b = bean({ id: 3, bags: [bag({ id: 1, stock_g: 250, consumedG: 250, remainingG: 0 })] });
+    const { current, upcoming, past } = classifyBeanBags(b);
+    expect(current).toBeNull();
+    expect(upcoming).toEqual([]);
+    expect(bagIds(past)).toEqual([1]);
   });
 });
 
@@ -237,6 +294,27 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     expect(out).toContain('class="lib-shelf-open-label"');
     expect(out).toContain('>open</span>');
     expect(out).toContain('36 g');
+  });
+
+  // #1932: the stack layers are filled and bordered, so behind a transparent
+  // sticker cut-out they framed it grey. The badge still carries the count.
+  it('drops the stack behind a sticker cut-out but keeps the count', () => {
+    const bags = [
+      bag({ id: 1, stock_g: 250, consumedG: 100, remainingG: 120, current: true }),
+      bag({ id: 2, stock_g: 250, remainingG: 250, sortOrder: 2 }),
+    ];
+    const sticker = renderShelfTile(bean({ id: 22, name: 'Sticker', image: 'png', imageSticker: true, bags }), { muted: false });
+    expect(sticker).toContain('is-sticker');
+    expect(sticker).not.toContain('lib-shelf-stack');
+    expect(sticker).toContain('lib-shelf-sealed-badge');
+    expect(sticker).toContain('+1 full');
+
+    const photo = renderShelfTile(bean({ id: 23, name: 'Photo', image: 'jpg', imageSticker: false, bags }), { muted: false });
+    expect(photo).not.toContain('is-sticker');
+    expect(photo).toContain('lib-shelf-stack');
+
+    const noPhoto = renderShelfTile(bean({ id: 24, name: 'No photo', bags }), { muted: false });
+    expect(noPhoto).toContain('lib-shelf-stack');
   });
 });
 
@@ -437,35 +515,54 @@ function fakeLibraryDom(beanNameArg: string) {
 describe('staged new-bean photo (#1329 part 2)', () => {
   beforeEach(() => {
     mocks.saveBean.mockReset();
-    mocks.uploadBeanImage.mockReset();
+    mocks.apiFetch.mockReset();
     mocks.crop.mockReset();
+    g.alert = vi.fn();
     S.beanEditId = null;
     S.coffeeLibrary = { beans: [], recipes: [], grinders: [] };
     S._urlImportSource = null;
   });
 
-  it('uploads a staged photo after the bean is created', async () => {
+  it('uploads a staged photo plus its original after the bean is created', async () => {
     const { doc } = fakeLibraryDom('New Bean');
     g.document = doc;
-    mocks.crop.mockResolvedValue({});
+    const CROP = { x: 0, y: 0, w: 1, h: 0.75 };
+    const cropped = new Blob(['cropped'], { type: 'image/jpeg' });
+    const original = new Blob(['original'], { type: 'image/jpeg' });
+    mocks.crop.mockResolvedValue({ blob: cropped, crop: CROP, original });
     mocks.saveBean.mockResolvedValue({ id: 42, name: 'New Bean', bags: [] });
-    mocks.uploadBeanImage.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ id: 42, name: 'New Bean', image: 'jpg', bags: [] }),
-    });
+    mocks.apiFetch
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ id: 42, name: 'New Bean', image: 'jpg', bags: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ id: 42, name: 'New Bean', image: 'jpg', imageCrop: CROP, bags: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ));
 
     const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
     await library.stageNewBeanImage(input);
     await library.saveBeanNoBag();
 
-    expect(mocks.uploadBeanImage).toHaveBeenCalledTimes(1);
-    expect(mocks.uploadBeanImage.mock.calls[0]?.[0]).toBe(42);
+    const calls = mocks.apiFetch.mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.[0]).toBe('api/library/bean/42/image');
+    expect(calls[0]?.[1]?.method).toBe('POST');
+    expect(await (calls[0]?.[1]?.body as Blob).text()).toBe('cropped');
+    expect(calls[1]?.[0]).toBe('api/library/bean/42/image?original=1&crop=0,0,1,0.75');
+    expect(await (calls[1]?.[1]?.body as Blob).text()).toBe('original');
+    expect(S.coffeeLibrary.beans[0]?.imageCrop).toEqual(CROP);
   });
 
   it('does not upload after closeBeanForm() cleared the staged photo', async () => {
     const { doc } = fakeLibraryDom('Another Bean');
     g.document = doc;
-    mocks.crop.mockResolvedValue({});
+    mocks.crop.mockResolvedValue({
+      blob: new Blob(['cropped'], { type: 'image/jpeg' }),
+      crop: { x: 0, y: 0, w: 1, h: 0.75 },
+      original: new Blob(['original'], { type: 'image/jpeg' }),
+    });
     mocks.saveBean.mockResolvedValue({ id: 43, name: 'Another Bean', bags: [] });
 
     const input = { files: [{}], value: 'x' } as unknown as HTMLInputElement;
@@ -473,7 +570,8 @@ describe('staged new-bean photo (#1329 part 2)', () => {
     library.closeBeanForm();
     await library.saveBeanNoBag();
 
-    expect(mocks.uploadBeanImage).not.toHaveBeenCalled();
+    const urls = mocks.apiFetch.mock.calls.map(([url]) => url);
+    expect(urls.some(url => url.includes('/image'))).toBe(false);
   });
 });
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -143,5 +144,80 @@ func TestUpsertKnownGrindSetting_UnicodeGrinderNameDedups(t *testing.T) {
 	entry, _ := settings[0].(Entity)
 	if entry["grindSetting"] != "14" {
 		t.Fatalf("expected newest grind setting to win, got %+v", entry)
+	}
+}
+
+// TestDownloadBeanImage_SendsGLPUserAgent pins the image download's identity:
+// the same literal the importer sends, never a browser disguise.
+func TestDownloadBeanImage_SendsGLPUserAgent(t *testing.T) {
+	withFakeLookup(t, map[string][]net.IP{"cdn.shopify.com": {net.ParseIP("93.184.216.34")}})
+
+	var agents []string
+	orig := fetchImageClient
+	fetchImageClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		agents = append(agents, r.Header.Get("User-Agent"))
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"image/jpeg"}},
+			Body:       io.NopCloser(bytes.NewReader(makeJPEG(t, 16, 16))),
+		}, nil
+	})}
+	t.Cleanup(func() { fetchImageClient = orig })
+
+	data, contentType := downloadBeanImage("https://cdn.shopify.com/x.jpg")
+	if data == nil || contentType != "image/jpeg" {
+		t.Fatalf("download failed: %d bytes, contentType %q", len(data), contentType)
+	}
+	const want = "GLP/1.0 (Gaggiuino Local Profiler; private use)"
+	if len(agents) != 1 || agents[0] != want {
+		t.Fatalf("User-Agent = %v, want exactly [%q]", agents, want)
+	}
+	for _, ua := range agents {
+		if strings.Contains(ua, "Mozilla") {
+			t.Errorf("User-Agent %q looks like a browser", ua)
+		}
+	}
+}
+
+// TestSetBeanImage_ShopAnswers429StoresNoImage: a shop refusing the photo with
+// 429 leaves the bean without an image, fires no hook and panics nowhere.
+func TestSetBeanImage_ShopAnswers429StoresNoImage(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	withFakeLookup(t, map[string][]net.IP{"cdn.shopify.com": {net.ParseIP("93.184.216.34")}})
+
+	orig := fetchImageClient
+	fetchImageClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{"Content-Type": []string{"image/jpeg"}},
+			Body:       io.NopCloser(strings.NewReader("local_rate_limited")),
+		}, nil
+	})}
+	t.Cleanup(func() { fetchImageClient = orig })
+
+	id := newID()
+	if err := repo.Update(func(l *Library) error {
+		l.Beans = append(l.Beans, Entity{"id": id, "name": "Test Bean"})
+		return nil
+	}); err != nil {
+		t.Fatalf("seeding bean: %v", err)
+	}
+
+	calls := 0
+	origHook := BeanImageHook
+	BeanImageHook = func(int64) { calls++ }
+	t.Cleanup(func() { BeanImageHook = origHook })
+
+	SetBeanImage(repo, t.TempDir(), id, "https://cdn.shopify.com/x.jpg")
+
+	if calls != 0 {
+		t.Errorf("BeanImageHook fired %d times, want 0", calls)
+	}
+	fresh, err := repo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	if ext, _ := fresh.Beans[0]["image"].(string); ext != "" {
+		t.Errorf("bean image = %q, want none", ext)
 	}
 }

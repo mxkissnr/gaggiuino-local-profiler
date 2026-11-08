@@ -9,10 +9,16 @@ import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
 import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
+import { COFFEE_ICON_SVG, ICON_TRASH } from '../icons.js';
+import { closeDetailSheet, openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
+// Circular with maintenance-sheet.ts (it reads this module's helpers): only
+// ever touched at call time, never at module load — same as
+// library/bean-form-sheet.ts.
+import { maintCustomFormBody, maintLogFormBody, openMaintTaskSheet } from './maintenance-sheet.js';
 
 // One task's status block as GET /api/maintenance serves it (flat for a
 // single machine, nested under machines[]/global for the fleet view).
-interface MaintTaskData {
+export interface MaintTaskData {
   status: string;
   pct: number;
   daysSince?: number | null;
@@ -41,7 +47,7 @@ interface MaintResponse {
   [task: string]: unknown;
 }
 
-interface MaintTile {
+export interface MaintTile {
   task: string;
   d: MaintTaskData;
   machineId: string | number;
@@ -57,7 +63,7 @@ interface MaintTaskNames {
   label?: string | null;
 }
 
-interface MaintLogEntry {
+export interface MaintLogEntry {
   id: number;
   task: string;
   ts: number;
@@ -100,7 +106,7 @@ function isGlobalTask(task: string): boolean {
   return task === 'waterfilter' || task.startsWith('grinder_');
 }
 
-function taskTitle(task: string, d: MaintTaskNames): string {
+export function taskTitle(task: string, d: MaintTaskNames): string {
   if (task.startsWith('grinder_')) return d.grinderName || task;
   if (task.startsWith('custom_')) return d.label || task.replace(/^custom_/, '').replace(/_/g, ' ');
   return t(MAINT_META[task]?.key || task);
@@ -129,6 +135,13 @@ let _maintScope: MaintScope = 'all';
 // MAINT_META's 5 static keys only, silently dropping every custom_/
 // grinder_ task and never respecting a task's disabled state).
 let _lastActiveTiles: MaintTile[] = [];
+// The row a just-finished task lands on: it plays one soft sheen on the next
+// render only. An empty machineId matches whatever machine the caller did not
+// name explicitly.
+let _freshDone: { task: string; machineId: string } | null = null;
+
+// Last log entries the log render received — openMaintTask's history source.
+let _lastLogEntries: MaintLogEntry[] = [];
 
 function _effectiveScope(): MaintScope {
   if ((S.machines || []).length <= 1) return S.activeMachineId === 'all' ? 1 : (S.activeMachineId ?? 1);
@@ -191,18 +204,8 @@ export function _partitionTiles(tiles: MaintTile[]): { active: MaintTile[]; disa
   return { active, disabled };
 }
 
-function _summaryCounts(tiles: MaintTile[]): { due: number; soon: number; ok: number } {
-  let due = 0, soon = 0, ok = 0;
-  for (const { d } of tiles) {
-    if (d.status === 'due' || d.status === 'never') due++;
-    else if (d.status === 'soon') soon++;
-    else ok++;
-  }
-  return { due, soon, ok };
-}
-
 // How overdue a tile is, in whichever unit its threshold uses — used only to
-// rank tiles for the "next up" banner, never shown to the user directly.
+// rank tiles for the verdict, never shown to the user directly.
 function _urgency(d: MaintTaskData): number {
   if (d.status !== 'due' && d.status !== 'never') return -Infinity;
   let overage = 0;
@@ -219,6 +222,29 @@ export function _pickNextDueTile(tiles: MaintTile[]): MaintTile | null {
     if (score > bestScore) { bestScore = score; best = tile; }
   }
   return bestScore > -Infinity ? best : null;
+}
+
+// The page's verdict (#1923): what needs attention, in one line plus the
+// count of tasks that are due. 'never' counts as due, matching the badge.
+export interface MaintVerdictState {
+  kind: 'due' | 'soon' | 'ok' | 'empty';
+  tile: MaintTile | null;
+  dueCount: number;
+}
+
+export function _maintVerdictState(active: MaintTile[]): MaintVerdictState {
+  let dueCount = 0;
+  let soon: MaintTile | null = null;
+  let highest: MaintTile | null = null;
+  for (const tile of active) {
+    if (tile.d.status === 'due' || tile.d.status === 'never') dueCount++;
+    else if (tile.d.status === 'soon' && (!soon || tile.d.pct > soon.d.pct)) soon = tile;
+    if (!highest || tile.d.pct > highest.d.pct) highest = tile;
+  }
+  if (dueCount > 0) return { kind: 'due', tile: _pickNextDueTile(active), dueCount };
+  if (soon) return { kind: 'soon', tile: soon, dueCount };
+  if (active.length > 0) return { kind: 'ok', tile: highest, dueCount };
+  return { kind: 'empty', tile: null, dueCount };
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
@@ -242,47 +268,42 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   const allTiles   = _normalizeMaintTiles(data, scope);
   const { active, disabled } = _partitionTiles(allTiles);
   _lastActiveTiles = active;
-  const counts     = _summaryCounts(active);
-  const nextTile   = _pickNextDueTile(active);
+  const verdict     = _maintVerdictState(active);
   const hasMachines = (S.machines || []).length > 1;
 
   container.innerHTML = html`
-    <div class="maint-summary" id="maintSummary"></div>
-    <div class="maint-next-banner" id="maintNextBanner" style="display:none"></div>
-    <div class="maint-scope-row" id="maintScopeRow" style="display:${esc(hasMachines ? '' : 'none')}">
-      <div class="maint-seg" id="maintScopeSeg" role="group" aria-label="${esc(t('machine_switcher_title') || '')}"></div>
-      <span class="maint-scope-hint" id="maintScopeHint">${tHtml('maint_shared_once')}</span>
-    </div>
-    <div class="maint-grid-compact" id="maintGrid"></div>
-    <div class="maint-custom-section" id="maintCustomSection"></div>
-    <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
+    ${_maintVerdictHtml(verdict)}
+    <section class="analytics-sec maint-tasks-sec">
+      <div class="analytics-card-head">
+        <h3 class="analytics-section-title">${esc(t('maint_tasks_title'))}</h3>
+        <span class="analytics-shelf-count">${esc(active.length)}</span>
+      </div>
+      <div class="maint-rows" id="maintGrid"></div>
+      <div class="maint-disabled-section" id="maintDisabledSection" style="display:none"></div>
+    </section>
   `;
 
-  (document.getElementById('maintSummary') as HTMLElement).innerHTML = html`
-    <div class="maint-tile due"><div class="k num">${esc(counts.due)}</div><div class="l">${tHtml('maint_due')}</div></div>
-    <div class="maint-tile soon"><div class="k num">${esc(counts.soon)}</div><div class="l">${tHtml('maint_soon')}</div></div>
-    <div class="maint-tile ok"><div class="k num">${esc(counts.ok)}</div><div class="l">${tHtml('maint_ok')}</div></div>
-    <div class="maint-tile"><div class="k num" id="maintLogYearCount">–</div><div class="l">${tHtml('maint_summary_log_entries', new Date().getFullYear())}</div></div>
-  `;
-
-  _renderNextBanner(document.getElementById('maintNextBanner'), nextTile);
-
-  if (hasMachines) {
-    const seg = document.getElementById('maintScopeSeg') as HTMLElement;
+  const seg = document.getElementById('maintScopeSeg');
+  if (seg) {
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     seg.innerHTML = joinHtml([
-      html`<button class="${esc(scope === 'all' ? 'on' : '')}" data-action="set-maint-scope" data-scope="all">${tHtml('machine_switcher_all')}</button>`,
-      ...S.machines.map(m => html`<button class="${esc(scope === m.id ? 'on' : '')}" data-action="set-maint-scope" data-scope="${esc(m.id)}">${esc(m.name as string)}</button>`),
+      html`<button type="button" class="${esc(scope === 'all' ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="all" aria-pressed="${esc(scope === 'all' ? 'true' : 'false')}">${tHtml('machine_switcher_all')}</button>`,
+      ...S.machines.map(m => {
+        const on = scope === m.id;
+        return html`<button type="button" class="${esc(on ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="${esc(m.id)}" aria-pressed="${esc(on ? 'true' : 'false')}">${esc(m.name as string)}</button>`;
+      }),
     ]);
-    const hint = document.getElementById('maintScopeHint');
-    if (hint) hint.style.display = active.some(x => x.isGlobal) ? '' : 'none';
+    seg.hidden = !hasMachines;
   }
+  const hint = document.getElementById('maintScopeHint');
+  if (hint) hint.hidden = !(hasMachines && active.some(x => x.isGlobal));
 
   const grid = document.getElementById('maintGrid') as HTMLElement;
-  grid.innerHTML = html``;
-  for (const tile of active) grid.appendChild(_buildMaintMiniTile(tile));
-
-  _renderCustomSection(document.getElementById('maintCustomSection'), scope);
+  const fresh = _freshDone;
+  _freshDone = null;
+  grid.innerHTML = joinHtml(active.map(tile => _maintRowHtml(tile,
+    fresh !== null && tile.task === fresh.task
+      && (fresh.machineId === '' || String(tile.machineId) === fresh.machineId))));
 
   const disabledSec = document.getElementById('maintDisabledSection');
   if (disabledSec && disabled.length > 0) {
@@ -291,59 +312,70 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   }
 
   const badge = document.getElementById('maintBadge');
-  if (badge) badge.style.display = counts.due > 0 ? 'inline-block' : 'none';
-}
-
-function _renderCustomSection(container: HTMLElement | null, scope: MaintScope): void {
-  if (!container) return;
-  const writeMid = _writeMachineId(scope === 'all' ? undefined : scope);
-  // codeql[js/xss-through-dom] false positive: esc() applied
-  container.innerHTML = html`
-    <details class="maint-custom-add">
-      <summary>${esc(t('maint_custom_add_summary'))}</summary>
-      <div class="maint-custom-form">
-        <input type="text" aria-label="${esc(t('maint_custom_label_ph'))}" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
-        <div class="maint-custom-thresholds">
-          <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> ${esc(t('maint_unit_shots'))}</label>
-          <label>${esc(t('maint_custom_every'))} <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> ${esc(t('maint_by_days'))}</label>
-        </div>
-        <button data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${esc(t('maint_custom_add'))}</button>
-      </div>
-    </details>
-  `;
+  if (badge) badge.style.display = verdict.dueCount > 0 ? 'inline-block' : 'none';
 }
 
 function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): void {
   const rows = joinHtml(tiles.map(tile => {
     const title = taskTitle(tile.task, tile.d);
     return html`<div class="maint-disabled-row">
-      <span class="icon">${taskIconSvg(tile.task)}</span>
-      <span>${esc(title)}</span>
+      <span class="maint-row-icon">${taskIconSvg(tile.task)}</span>
+      <span class="maint-disabled-title">${esc(title)}</span>
       <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-disabled="false">${tHtml('maint_enable_btn')}</button>
     </div>`;
   }));
   // codeql[js/xss-through-dom] false positive: esc() applied
-  container.innerHTML = html`<details class="maint-disabled-details"><summary>${tHtml('maint_disabled_section', tiles.length)}</summary>${rows}</details>`;
+  container.innerHTML = html`<details class="analytics-more maint-disabled"><summary class="analytics-more-summary">${tHtml('maint_disabled_section', tiles.length)}</summary><div class="maint-rows">${rows}</div></details>`;
 }
 
-function _renderNextBanner(container: HTMLElement | null, tile: MaintTile | null): void {
-  if (!container) return;
-  if (!tile) { container.style.display = 'none'; container.innerHTML = html``; return; }
-  container.style.display = '';
-  const title       = taskTitle(tile.task, tile.d);
-  const machinePart = !tile.isGlobal && tile.machineName ? html` · ${esc(tile.machineName)}` : html``;
+function _maintDueDetail(d: MaintTaskData): string {
+  if (d.status === 'never') return t('maint_never_done');
+  if (d.threshold_shots && d.shotsSince > d.threshold_shots) return t('maint_next_shots_over', d.shotsSince - d.threshold_shots);
+  if (d.threshold_days && (d.daysSince as number) > d.threshold_days) return t('maint_next_days_over', (d.daysSince as number) - d.threshold_days);
+  return t('maint_next_due');
+}
 
-  let detail;
-  if (tile.d.status === 'never') detail = t('maint_never_done');
-  else if (tile.d.threshold_shots && tile.d.shotsSince > tile.d.threshold_shots) detail = t('maint_next_shots_over', tile.d.shotsSince - tile.d.threshold_shots);
-  else if (tile.d.threshold_days && (tile.d.daysSince as number) > tile.d.threshold_days) detail = t('maint_next_days_over', (tile.d.daysSince as number) - tile.d.threshold_days);
-  else detail = t('maint_next_due');
+// #1923: the page's one emphasised block — one sentence plus the number of
+// tasks that are due.
+export function _maintVerdictHtml(state: MaintVerdictState): Html {
+  const tile = state.tile;
+  const machinePart = tile && !tile.isGlobal && tile.machineName ? ` · ${tile.machineName}` : '';
+  const taskName = tile ? taskTitle(tile.task, tile.d) : '';
+
+  let title: string;
+  let sub = '';
+  if (state.kind === 'due' || state.kind === 'soon') {
+    title = `${t('maint_next_label')} ${taskName}`;
+    sub = (state.kind === 'due' && tile ? _maintDueDetail(tile.d) : t('maint_soon')) + machinePart;
+  } else {
+    title = t('maint_verdict_ok');
+    if (state.kind === 'ok') sub = `${t('maint_next_label')} ${taskName}`;
+  }
+
+  const doneBtn = state.kind === 'due' && tile
+    ? html`<button type="button" class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
+    : html``;
+  const numClass = state.dueCount > 0 ? 'due' : 'ok';
+  const cup = state.kind === 'ok'
+    ? html`<span class="maint-cup" aria-hidden="true">${COFFEE_ICON_SVG}<span class="maint-steam"></span><span class="maint-steam"></span></span>`
+    : html``;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  container.innerHTML = html`
-    <b>${tHtml('maint_next_label')}</b> ${esc(title)}${machinePart} — ${esc(detail)}
-    <span class="spacer"></span>
-    <button class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>
+  return html`
+    <section class="analytics-sec analytics-verdict-card maint-verdict" id="maintVerdict">
+      <div class="analytics-verdict-head">
+        <div class="analytics-verdict-text">
+          <h2 class="analytics-verdict-title serif-display">${esc(title)}</h2>
+          ${sub ? html`<p class="analytics-verdict-sub">${esc(sub)}</p>` : html``}
+        </div>
+        <div class="analytics-verdict-score">
+          ${cup}
+          <span class="analytics-verdict-score-num maint-verdict-num ${esc(numClass)}">${esc(state.dueCount)}</span>
+          <span class="analytics-verdict-score-lbl">${esc(t('maint_due'))}</span>
+        </div>
+      </div>
+      ${doneBtn}
+    </section>
   `;
 }
 
@@ -360,100 +392,60 @@ export function isAutoSynced(d: MaintTaskData): boolean {
   return Number.isFinite(syncedMs) && Number.isFinite(lastMs) && syncedMs === lastMs;
 }
 
-function _buildMaintMiniTile(tile: MaintTile): HTMLElement {
+// The card's meta count and the sheet's subtitle share this text, so both
+// always describe the interval the same way (including the 'never' case).
+export function _maintCountText(task: string, d: MaintTaskData): string {
+  const hasShots = d.threshold_shots != null;
+  const hasDays  = d.threshold_days != null;
+  const hasG     = task.startsWith('grinder_') && d.threshold_g != null;
+  if (d.status === 'never') return t('maint_never_done');
+  if (hasShots && hasDays) {
+    return `${d.shotsSince}/${d.threshold_shots} ${t('maint_by_shots')} · ${d.daysSince ?? '?'}/${d.threshold_days} ${t('maint_by_days')}`;
+  }
+  if (hasShots) return `${d.shotsSince} / ${d.threshold_shots} ${t('maint_by_shots')}`;
+  if (hasDays) return `${d.daysSince ?? '?'} / ${d.threshold_days} ${t('maint_by_days')}`;
+  if (hasG) return `${d.gramsSince ?? 0}g / ${d.threshold_g}g`;
+  return t('maint_never_done');
+}
+
+// Opens one task's details in the shared popover / bottom sheet (#1923).
+// Matched by task and machine so the all-machines scope opens the tile the
+// user clicked, not the first tile with that task.
+export function openMaintTask(task: string, machineId: string, anchor: HTMLElement | null): void {
+  const tile = _lastActiveTiles.find(t => t.task === task && String(t.machineId) === machineId);
+  if (!tile) return;
+  openMaintTaskSheet(tile, _lastLogEntries, anchor);
+}
+
+// After a write the dashboard re-renders; an open task sheet would keep
+// showing the state from before the write, so it is closed first.
+function _closeOpenTaskSheet(): void {
+  if (document.querySelector('#detailSheet .maint-sheet[data-task]')) requestCloseDetailSheet();
+}
+
+// #1923: one task as a full-width row — the row itself is the button that
+// opens the task sheet, so there is no separate "Details" affordance.
+export function _maintRowHtml(tile: MaintTile, fresh = false): Html {
   const { task, d, machineName, machineId, isGlobal, showMachineTag } = tile;
   const title = taskTitle(task, d);
-  const isCustom = task.startsWith('custom_');
-  const isGrinder = task.startsWith('grinder_');
 
   const machineTagText = isGlobal ? t('maint_shared_tag') : (showMachineTag ? machineName : null);
-
-  // Determine current threshold mode.
-  const hasShots = d.threshold_shots != null;
-  const hasDays  = d.threshold_days  != null;
-  const hasG     = isGrinder && d.threshold_g != null;
-  const mode = hasG ? 'g' : hasShots && hasDays ? 'both' : hasShots ? 'shots' : hasDays ? 'days' : 'shots';
-
-  // Count text for the meta row.
-  let countText;
-  if (d.status === 'never') {
-    countText = t('maint_never_done');
-  } else if (hasShots && hasDays) {
-    countText = `${d.shotsSince}/${d.threshold_shots} ${t('maint_by_shots')} · ${d.daysSince ?? '?'}/${d.threshold_days} ${t('maint_by_days')}`;
-  } else if (hasShots) {
-    countText = `${d.shotsSince} / ${d.threshold_shots} ${t('maint_by_shots')}`;
-  } else if (hasDays) {
-    countText = `${d.daysSince ?? '?'} / ${d.threshold_days} ${t('maint_by_days')}`;
-  } else if (hasG) {
-    countText = `${d.gramsSince ?? 0}g / ${d.threshold_g}g`;
-  } else {
-    countText = t('maint_never_done');
-  }
-
-  // Threshold inputs — shown based on mode.
-  const shotsVal = d.threshold_shots ?? '';
-  const daysVal  = d.threshold_days  ?? '';
-  const gVal     = d.threshold_g ?? '';
-  const shotsInput = html`<label class="maint-threshold-field">
-    <span>${tHtml('maint_unit_shots')}</span>
-    <input type="number" min="1" max="10000" value="${esc(shotsVal)}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_shots" data-machine-id="${esc(machineId)}">
-  </label>`;
-  const daysInput = html`<label class="maint-threshold-field">
-    <span>${tHtml('maint_by_days')}</span>
-    <input type="number" min="1" max="3650" value="${esc(daysVal)}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_days" data-machine-id="${esc(machineId)}">
-  </label>`;
-  const gInput = html`<label class="maint-threshold-field">
-    <span>${tHtml('maint_unit_grams')}</span>
-    <input type="number" min="1" max="100000" value="${esc(gVal)}" placeholder="–"
-        data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_g" data-machine-id="${esc(machineId)}">
-  </label>`;
-  const thresholdFields: Html = mode === 'g' ? gInput : mode === 'shots' ? shotsInput : mode === 'days' ? daysInput : joinHtml([shotsInput, daysInput]);
-
+  const countText = _maintCountText(task, d);
   const pct = Math.round(d.pct * 100);
-  const el = document.createElement('div');
-  el.className = `maint-card status-${d.status}`;
+  const rowClass = `maint-row status-${d.status}${fresh ? ' maint-row--fresh' : ''}`;
+
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  el.innerHTML = html`
-    <div class="maint-card-indicator"></div>
-    <div class="maint-card-body">
-      <div class="maint-card-header">
-        <span class="maint-card-icon">${taskIconSvg(task)}</span>
-        <span class="maint-card-title">${esc(title)}</span>
-        <span class="maint-card-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
-      </div>
-      <div class="maint-card-progress"><div class="maint-card-progress-fill ${esc(d.status)}" style="width:${esc(pct)}%"></div></div>
-      <div class="maint-card-meta">
-        ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
-        <span class="maint-card-count">${esc(countText)}</span>
-        ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
-      </div>
-      <button class="maint-detail-toggle" type="button" data-action="toggle-maint-detail" data-task="${esc(task)}">${tHtml('maint_tile_details')}</button>
-      <div class="detail">
-        <div class="maint-mode-seg">
-          <button class="${esc(mode === 'shots' ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="shots" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_unit_shots')}</button>
-          <button class="${esc(mode === 'days'  ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="days"  data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_by_days')}</button>
-          <button class="${esc(mode === 'both'  ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="both"  data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_mode_both')}</button>
-          ${isGrinder ? html`<button class="${esc(mode === 'g' ? 'active' : '')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="g" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}">${tHtml('maint_unit_grams')}</button>` : html``}
-        </div>
-        <div class="maint-threshold-inputs">${thresholdFields}</div>
-        ${isCustom ? html`<label class="maint-threshold-field maint-rename-field">
-          <span>${tHtml('maint_rename_label')}</span>
-          <input type="text" maxlength="100" value="${esc(d.label || '')}"
-              data-action="rename-maint-label" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">
-        </label>` : html``}
-        <div class="maint-card-actions">
-          <button class="maint-done-btn" data-action="mark-maint-done" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_done_btn')}</button>
-          ${isCustom
-            ? html`<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_log_delete')}</button>`
-            : html`<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" data-disabled="true">${tHtml('maint_disable_btn')}</button>`
-          }
-        </div>
-      </div>
-    </div>
-  `;
-  return el;
+  return html`<button type="button" class="${esc(rowClass)}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
+    <span class="maint-row-icon">${taskIconSvg(task)}</span>
+    <span class="maint-row-title">${esc(title)}</span>
+    <span class="maint-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
+    <span class="maint-row-meta">
+      ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
+      <span class="num">${esc(countText)}</span>
+      ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
+    </span>
+    <span class="maint-row-bar" aria-hidden="true"><span class="maint-row-fill ${esc(d.status)}" style="width:${esc(pct)}%"></span></span>
+  </button>`;
 }
 
 // ── Guided walkthrough ────────────────────────────────────────────────────
@@ -465,6 +457,9 @@ export function openGuidedMaint(task: string, machineId: string | number): void 
   const steps = GUIDED_MAINT_STEPS[task];
   const modal = document.getElementById('guidedMaintModal');
   if (!steps || !modal) return;
+  // The detail sheet traps keyboard focus, so an open task sheet would keep
+  // the checklist unreachable underneath it.
+  _closeOpenTaskSheet();
   _guidedTask = task;
   _guidedMachineId = machineId;
   (document.getElementById('guidedMaintTitle') as HTMLElement).textContent = t(MAINT_META[task]?.key || task);
@@ -509,6 +504,8 @@ export async function markMaintDone(task: string, machineId?: string | number | 
   try {
     const r = await markMaintenanceDone(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    _freshDone = { task, machineId: String(machineId ?? '') };
+    _closeOpenTaskSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -522,17 +519,23 @@ export async function saveMaintThreshold(task: string, field: string, value: str
   } catch { /* ignore */ }
 }
 
-// Reload the maintenance view while keeping the card the user has expanded
-// open. Capturing the task key before the reload and re-adding .expanded
-// afterwards survives the re-render; every write action and the live refetch
-// go through here so none of them collapses the open detail.
+// Reload the maintenance view while keeping an open task sheet open. Every
+// local write goes through here (the live refetch is held back by
+// _maintenanceCanRefetch instead): the tile and its card re-render with the
+// new state, and the sheet is repainted from them in place, anchored to the
+// card's button again. The task is keyed by task+machine because the
+// all-machines scope renders one tile per machine.
 export async function refreshMaintenanceView(): Promise<void> {
-  const expandedTask = document.querySelector<HTMLElement>('.maint-card.expanded .maint-detail-toggle')?.dataset?.task;
+  const open = document.querySelector<HTMLElement>('#detailSheet .maint-sheet[data-task]')?.dataset;
+  const task = open?.task;
+  const machineId = open?.machineId;
   await loadMaintenanceView();
-  if (expandedTask) {
-    document.querySelector(`.maint-detail-toggle[data-task="${CSS.escape(expandedTask)}"]`)
-      ?.closest('.maint-card')?.classList.add('expanded');
-  }
+  if (task == null || machineId == null) return;
+  const tile = _lastActiveTiles.find(t => t.task === task && String(t.machineId) === machineId);
+  if (!tile) { closeDetailSheet(); return; }
+  const anchor = document.querySelector<HTMLElement>(
+    `[data-action="open-maint-task"][data-task="${CSS.escape(task)}"][data-machine-id="${CSS.escape(machineId)}"]`);
+  openMaintTaskSheet(tile, _lastLogEntries, anchor);
 }
 
 export async function setMaintMode(
@@ -561,6 +564,7 @@ export async function toggleMaintDisabled(task: string, machineId?: string | num
   try {
     const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { disabled });
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    _closeOpenTaskSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -578,6 +582,7 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
   try {
     const r = await addCustomMaintenanceTask(_writeMachineId(machineId), body);
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    if (document.getElementById('customTaskLabel')) requestCloseDetailSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -587,6 +592,7 @@ export async function deleteCustomMaintTask(task: string, machineId?: string | n
   try {
     const r = await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    _closeOpenTaskSheet();
     await loadMaintenanceView();
   } catch { /* ignore */ }
 }
@@ -614,14 +620,12 @@ export async function loadMaintLog(): Promise<void> {
 }
 
 export function renderMaintLog(entries: MaintLogEntry[]): void {
+  _lastLogEntries = entries;
   const el = document.getElementById('maintLog');
   if (!el) return;
 
-  const yearEl = document.getElementById('maintLogYearCount');
-  if (yearEl) {
-    const thisYear = new Date().getFullYear();
-    yearEl.textContent = String(entries.filter(e => new Date(e.ts * 1000).getFullYear() === thisYear).length);
-  }
+  const countEl = document.getElementById('maintLogCount');
+  if (countEl) countEl.textContent = entries.length ? String(entries.length) : '';
 
   if (!entries.length) {
     el.innerHTML = html`<p class="empty-note pad-top">${tHtml('maint_log_empty')}</p>`;
@@ -629,32 +633,41 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
   }
 
   const locale = localeFor(S.currentLang);
-  const rows = joinHtml(entries.map(e => {
+  const rowHtml = (e: MaintLogEntry): Html => {
     const dateStr   = new Date(e.ts * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
     const isManual  = e.shotCountAtTime === null;
     const machineTag = isGlobalTask(e.task)
       ? t('maint_shared_tag')
       : ((S.machines || []).find(m => m.id === e.machineId)?.name || e.machine || '');
-    return html`<tr>
-      <td>${esc(dateStr)}</td>
-      <td>${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</td>
-      <td>${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}</td>
-      <td class="num">${esc(e.shotCountAtTime ?? '–')}</td>
-      <td>${e.notes === AUTO_SYNCED_NOTE
-        ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
-        : e.notes ? esc(e.notes) : html``}
-        <button class="maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" title="${tHtml('maint_log_confirm_delete')}">${tHtml('maint_log_delete')}</button>
-      </td>
-    </tr>`;
-  }));
+    const shotsText = e.shotCountAtTime == null
+      ? esc('–')
+      : html`${esc(e.shotCountAtTime)} ${esc(t('maint_unit_shots'))}`;
+    return html`<div class="maint-log-row">
+      <span class="maint-log-date num">${esc(dateStr)}</span>
+      <span class="maint-log-main">
+        <span class="maint-log-task">${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</span>
+        ${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}
+        ${e.notes === AUTO_SYNCED_NOTE
+          ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
+          : e.notes ? html`<span class="maint-log-note">${esc(e.notes)}</span>` : html``}
+      </span>
+      <span class="maint-log-shots num">${shotsText}</span>
+      <button type="button" class="lib-sheet-iconbtn maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" aria-label="${esc(t('maint_log_delete'))}" title="${esc(t('maint_log_confirm_delete'))}">${ICON_TRASH}</button>
+    </div>`;
+  };
 
-  el.innerHTML = html`<div class="maint-log-tablewrap"><table class="maint-log-table">
-    <thead><tr>
-      <th>${tHtml('maint_log_col_date')}</th><th>${tHtml('maint_log_col_task')}</th>
-      <th>${tHtml('maint_log_machine')}</th><th>${tHtml('maint_by_shots')}</th><th>${tHtml('maint_log_col_notes')}</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
+  // #1923: eight rows stay visible; the rest fold behind "Show all".
+  const visible = 8;
+  const head = entries.slice(0, visible);
+  const rest = entries.slice(visible);
+  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+  el.innerHTML = html`
+    <div class="maint-log-rows">${joinHtml(head.map(rowHtml))}</div>
+    ${rest.length ? html`<details class="analytics-more maint-log-more">
+      <summary class="analytics-more-summary">${tHtml('analytics_shelf_show_all', entries.length)}</summary>
+      <div class="maint-log-rows">${joinHtml(rest.map(rowHtml))}</div>
+    </details>` : html``}
+  `;
 }
 
 // Builds the manual-log-entry task dropdown's options from the dashboard's
@@ -675,27 +688,33 @@ export function _maintLogTaskOptions(tiles: MaintTile[]): { task: string; label:
   return options;
 }
 
-export function openMaintLogForm(): void {
-  const form = document.getElementById('maintLogForm');
-  if (!form) return;
-  const sel = document.getElementById('maintLogTask') as HTMLSelectElement;
-  sel.innerHTML = html``;
-  for (const { task, label } of _maintLogTaskOptions(_lastActiveTiles)) {
-    const opt = document.createElement('option');
-    opt.value = task; opt.textContent = label;
-    sel.appendChild(opt);
-  }
-  // Set date to today (local, not UTC — see todayIsoDate)
-  const today = todayIsoDate();
-  (document.getElementById('maintLogDate') as HTMLInputElement).value = today;
-  (document.getElementById('maintLogDate') as HTMLInputElement).max   = today;
-  (document.getElementById('maintLogNotes') as HTMLTextAreaElement).value = '';
-  form.style.display = 'flex';
+// The manual log entry form lives in the shared sheet (#1923): opened from the
+// toolbar (or the maintenance shortcut), Save is the bar's action.
+export function openMaintLogForm(anchor: HTMLElement | null = null): void {
+  openDetailSheet({
+    title: t('maint_log_add'),
+    body: maintLogFormBody(_maintLogTaskOptions(_lastActiveTiles), todayIsoDate()),
+    actions: html`<button type="button" class="lib-sheet-save" data-action="submit-maint-log">${tHtml('maint_log_save')}</button>`,
+    anchor,
+  });
 }
 
+// No-op when the form sheet is not open — submitMaintLogEntry's success path
+// also runs in contexts without a sheet (and in the write-machine-id test).
 export function closeMaintLogForm(): void {
-  const form = document.getElementById('maintLogForm');
-  if (form) form.style.display = 'none';
+  if (document.getElementById('maintLogForm')) requestCloseDetailSheet();
+}
+
+// The "add custom task" form, also in the shared sheet (#1923).
+export function openMaintCustomForm(anchor: HTMLElement | null = null): void {
+  const scope = _effectiveScope();
+  const writeMid = _writeMachineId(scope === 'all' ? undefined : scope);
+  openDetailSheet({
+    title: t('maint_custom_add_summary'),
+    body: maintCustomFormBody(),
+    actions: html`<button type="button" class="lib-sheet-save" data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${tHtml('maint_custom_add')}</button>`,
+    anchor,
+  });
 }
 
 export async function submitMaintLogEntry(): Promise<void> {

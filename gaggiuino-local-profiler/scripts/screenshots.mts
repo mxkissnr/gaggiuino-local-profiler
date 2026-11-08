@@ -38,13 +38,41 @@
 // modes too; the Orders view gets three demo orders created by this script
 // through the instance's HTTP API, so the queue is never empty.
 
-import { mkdirSync, cpSync, existsSync } from 'fs';
+import { mkdirSync, cpSync, existsSync, writeFileSync } from 'fs';
+import { execFileSync } from 'child_process';
 import path from 'path';
 import { chromium } from 'playwright';
 import type { Page } from 'playwright';
 import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harness.mts';
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
+const repoRoot = path.join(appRoot, '..');
+
+// #1867: the git tree hash of public-src/ the PNGs were rendered from, so
+// release-check's freshness check can accept a regeneration that came out
+// byte-identical — git then has no new commit to date the images with.
+const sourceTreeStampName = '.source-tree';
+const publicSrcRel = path.relative(repoRoot, path.join(appRoot, 'public-src'));
+
+function writeSourceTreeStamp(): void {
+    try {
+        const dirty = execFileSync(
+            'git', ['status', '--porcelain', '--', publicSrcRel],
+            { cwd: repoRoot, encoding: 'utf8' }
+        ).trim();
+        // A render from uncommitted UI code must never count as fresh.
+        const value = dirty
+            ? 'dirty'
+            : execFileSync(
+                'git', ['rev-parse', `HEAD:${publicSrcRel}`],
+                { cwd: repoRoot, encoding: 'utf8' }
+            ).trim();
+        writeFileSync(path.join(outDir, sourceTreeStampName), `${value}\n`);
+    } catch (err) {
+        // Missing git or a detached checkout must not lose the screenshots.
+        console.warn(`could not write ${sourceTreeStampName}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
 
 // #1181: real-backup mode. The committed sanitized demo backup is the default;
 // GLP_SCREENSHOT_BACKUP overrides it; the demo seed is the fallback.
@@ -238,6 +266,10 @@ async function main(): Promise<void> {
     });
     await context.addInitScript(() => {
         try { localStorage.setItem('glp_lang', 'en'); } catch { /* ignore */ }
+        // The demo backup's shots are a fixed snapshot, so the default 30-day
+        // Analytics period runs empty once the snapshot is older than that and
+        // the page hides its sections. Show the whole history instead.
+        try { localStorage.setItem('glp.analyticsFilter', JSON.stringify({ days: 0, query: '' })); } catch { /* ignore */ }
     });
     const page = await context.newPage();
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
@@ -387,7 +419,7 @@ async function main(): Promise<void> {
     // ── Maintenance ────────────────────────────────────────────────────
     await page.click('#btnMaintenance');
     await page.waitForFunction(
-        () => document.querySelectorAll('#maintSummary .maint-tile').length > 0,
+        () => !!document.querySelector('#maintVerdict .analytics-verdict-title'),
         undefined, { timeout: 15000 },
     );
     await shootWindow(page, '#maintenance-view', path.join(outDir, 'maintenance.png'));
@@ -449,12 +481,18 @@ async function main(): Promise<void> {
     await context.close();
     await browser.close();
     console.log(`Screenshots written to ${outDir}`);
+    writeSourceTreeStamp();
 
     const wikiDir = process.argv[2];
     if (wikiDir && existsSync(wikiDir)) {
         const wikiImages = path.join(wikiDir, 'images');
         mkdirSync(wikiImages, { recursive: true });
-        cpSync(outDir, wikiImages, { recursive: true });
+        // The stamp describes this repo's docs/screenshots only: copying it
+        // into the wiki would go stale there and mean nothing.
+        cpSync(outDir, wikiImages, {
+            recursive: true,
+            filter: (src) => path.basename(src) !== sourceTreeStampName,
+        });
         console.log(`Copied screenshots into wiki repo at ${wikiImages}`);
     }
 

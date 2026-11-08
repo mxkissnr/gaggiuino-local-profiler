@@ -59,13 +59,15 @@ func loadBeanLookup() beanLookup {
 }
 
 // DetailScorer returns a per-shot ScoreDetail function that resolves each
-// shot's bean through one load of the bean source. Callers scoring many shots
-// in one request should call this once and reuse the result, instead of
+// shot's bean through one load of the bean source, scoring with the active
+// score model resolved once here (#1922). Callers scoring many shots in one
+// request should call this once and reuse the result, instead of
 // ComputeScoreDetail per shot (which reloads the bean list each time).
 func (s *Service) DetailScorer() func(Shot) ScoreDetail {
 	lookup := loadBeanLookup()
+	model := activeScoreModel()
 	return func(shot Shot) ScoreDetail {
-		return CalcShotScoreDetail(shot, lookup(shot))
+		return model.Score(shot, lookup(shot))
 	}
 }
 

@@ -254,7 +254,7 @@ interface LibraryModule {
   saveBeanAddBag: () => Promise<void>;
   saveBeanNoBag: () => Promise<void>;
   saveBean: () => Promise<void>;
-  openNewBagForm: (id: number) => void;
+  openNewBagForm: (id: number, roastDate?: string) => void;
 }
 
 interface Bean {
@@ -358,7 +358,7 @@ describe('bean form sheet (#1349)', () => {
     expect(sheet?.innerHTML).toContain('Yirgacheffe Chelelektu');
   });
 
-  it('creates through the form save action, then closes without a detail sheet', async () => {
+  it('creates through the bar Save and opens the new-bag form with the roast date', async () => {
     const { home, form } = setupHome();
     mocks.saveBean.mockResolvedValue({
       id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [],
@@ -367,9 +367,10 @@ describe('bean form sheet (#1349)', () => {
     library.openBeanForm();
     expect(form.parentNode).not.toBe(home);
     doc.getElementById('beanFormName')!.value = 'New Bean';
+    doc.getElementById('beanFormRoastDate')!.value = '2026-03-04';
 
-    // The form sheet header's Save is the real create submit path (#1489): with
-    // S.beanEditId null it routes to the "save without a bag" create action.
+    // The form sheet header's Save is the create submit path: it saves the
+    // bean and asks for its bag straight away (#1933).
     const saveBtn = find('lib-sheet-save');
     expect(saveBtn).not.toBeNull();
     saveBtn!.dispatch('click');
@@ -378,8 +379,34 @@ describe('bean form sheet (#1349)', () => {
     await vi.waitFor(() => expect(form.parentNode).toBe(home));
 
     expect(mocks.saveBean.mock.calls[0]?.[0]).toBeNull();
-    expect(mocks.saveBean.mock.calls[0]?.[1]).toMatchObject({ name: 'New Bean' });
+    expect(mocks.saveBean.mock.calls[0]?.[1]).toMatchObject({ name: 'New Bean', roastDate: '2026-03-04' });
     expect(S.coffeeLibrary.beans.some(b => b.id === 7)).toBe(true);
+
+    const sheet = doc.body.querySelector('#beanSheet');
+    expect(sheet).not.toBeNull();
+    expect(sheet?.innerHTML).toContain('id="newBagForm7"');
+    expect(doc.getElementById('newBagForm7')?.style.display).toBe('');
+    expect(doc.getElementById('newBagRoastDate7')?.value).toBe('2026-03-04');
+    // Only the weight and the batch number are left to type.
+    expect(doc.getElementById('newBagStock7')?.value).toBe('');
+    expect(doc.getElementById('newBagBatchNumber7')?.value).toBe('');
+    expect(doc.activeElement).toBe(doc.getElementById('newBagStock7'));
+  });
+
+  it('"save without bag" does not open the new-bag form', async () => {
+    const { home, form } = setupHome();
+    mocks.saveBean.mockResolvedValue({
+      id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [],
+    });
+
+    library.openBeanForm();
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+    doc.getElementById('beanFormRoastDate')!.value = '2026-03-04';
+
+    await library.saveBeanNoBag();
+
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+    expect(form.parentNode).toBe(home);
     expect(doc.body.querySelector('#beanSheet')).toBeNull();
   });
 
@@ -440,6 +467,26 @@ describe('save and add bag (#1398)', () => {
 
   it('openNewBagForm tolerates a bag form that is not in the DOM', () => {
     expect(() => library.openNewBagForm(999)).not.toThrow();
+  });
+
+  it('adding a later bag passes no roast date and moves no focus', () => {
+    setupHome();
+    const form = doc.createElement();
+    form.id = 'newBagForm7';
+    form.style.display = 'none';
+    doc.register(form);
+    const date = doc.createElement();
+    date.id = 'newBagRoastDate7';
+    doc.register(date);
+
+    // boot/delegation.ts's "open-new-bag" action calls openNewBagForm(id) with
+    // no date: the form opens, but nothing is prefilled or focused (#1933).
+    doc.activeElement = null;
+    library.openNewBagForm(7);
+
+    expect(form.style.display).toBe('');
+    expect(date.value).toBe('');
+    expect(doc.activeElement).toBeNull();
   });
 });
 

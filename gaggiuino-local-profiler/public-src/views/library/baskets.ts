@@ -6,10 +6,14 @@ import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import { ICON_TRASH } from '../../icons.js';
 import type { Html } from '../../utils.js';
-import { openImageCropEditor } from '../../components/image-crop.js';
+import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
+import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { loadBasketImageBlobUrl, invalidateBasketImage } from '../../bean-image.js';
 import type { Basket } from '../../api/types.js';
+
+// Same 1:1 crop the basket photo always had.
+const BASKET_PHOTO: PhotoCropShape = { shape: 'square' };
 
 const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 
@@ -79,6 +83,10 @@ export function openBasketForm(basket?: Basket | null): void {
   (document.getElementById('basketFormHoleCount') as HTMLInputElement).value    = basket?.holeCount    || '';
   (document.getElementById('basketFormNotes') as HTMLInputElement).value        = basket?.notes        || '';
   (document.getElementById('basketFormImageField') as HTMLElement).style.display = basket ? '' : 'none';
+  const adjustBtn = document.getElementById('basketFormImageAdjustBtn') as HTMLElement;
+  adjustBtn.style.display = basket?.image ? '' : 'none';
+  // onclick, not addEventListener: reopening the form must not stack handlers.
+  adjustBtn.onclick = () => { if (S.basketEditId) void _adjustBasketImage(S.basketEditId); };
   (document.getElementById('basketAddForm') as HTMLElement).classList.add('open');
   (document.getElementById('basketAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('basketFormName') as HTMLInputElement).focus();
@@ -121,18 +129,30 @@ export async function saveBasket(): Promise<void> {
 export async function uploadBasketImage(id: number, input: HTMLInputElement): Promise<void> {
   const file = input.files![0];
   if (!file) return;
-  const blob = await openImageCropEditor(file, { shape: 'square' });
+  const r = await cropAndUploadPhoto(libraryApi.libraryImageUrl('basket', id), file, BASKET_PHOTO);
   // eslint-disable-next-line require-atomic-updates -- `input` is a per-call function parameter (the DOM element passed in), not shared state
   input.value = '';
-  if (!blob) return;
-  const r = await libraryApi.uploadBasketImage(id, blob);
-  if (!r.ok) { alert(t('error_generic', ((await r.json().catch(() => ({}))) as { error?: string }).error || r.statusText)); return; }
-  const saved = await r.json() as Basket;
+  if (!r) return;
+  await _storeBasketPhoto(id, r);
+}
+
+async function _adjustBasketImage(id: number): Promise<void> {
+  const basket = _state().coffeeLibrary.baskets?.find(b => b.id === id);
+  if (!basket?.image) return;
+  const r = await adjustPhoto(libraryApi.libraryImageUrl('basket', id), basket.imageCrop, BASKET_PHOTO);
+  if (!r) return;
+  await _storeBasketPhoto(id, r);
+}
+
+async function _storeBasketPhoto(id: number, r: Response): Promise<void> {
+  const saved = await savedPhotoRow<Basket>(r);
+  if (!saved) return;
   const baskets = _state().coffeeLibrary.baskets || [];
   const idx = baskets.findIndex(b => b.id === id);
   if (idx !== -1) baskets[idx] = saved;
   invalidateBasketImage(id);
   renderBasketList();
+  if (S.basketEditId === id) (document.getElementById('basketFormImageAdjustBtn') as HTMLElement).style.display = '';
 }
 
 export async function deleteBasket(id: number): Promise<void> {

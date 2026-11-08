@@ -56,10 +56,11 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
 - **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
 - **Multiple beans in one shot** - log a shot with up to four beans and the grams of each; every bag is deducted by its own share, and the largest share is the shot's bean.
-- **Bean freshness and in-app camera** - set your own freshness windows and low-stock threshold, and take photos with a camera inside the app.
+- **Bean freshness and in-app camera** - set your own freshness windows and low-stock threshold, take photos with a camera inside the app, and re-crop a saved photo later from its uncropped original.
 - **Sticker cut-out** - cut a bean photo out as a sticker right in the app, on your own device (the models download once on first use).
 - **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
 - **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.
+- **Machine settings backups** - Gaggiuino machines keep a history of their settings and profiles, backed up daily, before firmware updates and on demand; download, upload, compare in plain words and restore any version, without GLP ever storing the Wi-Fi or MQTT passwords.
 - **Maintenance tracking** - descaling, backflush, group-head and gasket tasks tracked per machine, with grinder cleaning and burr-wear tracking alongside.
 - **Orders & kiosk mode** - take drink orders from a tablet kiosk page with variants and notes, and watch the barista queue update on its own.
 - **Live updates across devices** - an open page picks up a change made on another device within seconds, without a reload.
@@ -87,7 +88,7 @@ All features in detail: [wiki: Features](https://github.com/mxkissnr/gaggiuino-l
   </tr>
   <tr>
     <td><img src="gaggiuino-local-profiler/docs/screenshots/analytics-machines.png" alt="Analytics machine comparison and dial-in progression in the More insights fold" width="100%"/></td>
-    <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance dashboard with summary tiles, next-due banner and per-machine task tiles" width="100%"/></td>
+    <td><img src="gaggiuino-local-profiler/docs/screenshots/maintenance.png" alt="Maintenance page with a one-line verdict, task rows with progress bars and the maintenance log" width="100%"/></td>
   </tr>
 </table>
 

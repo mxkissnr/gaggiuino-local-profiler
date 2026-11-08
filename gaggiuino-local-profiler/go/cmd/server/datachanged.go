@@ -139,9 +139,13 @@ func buildDataRoutes() map[string]sse.Route {
 	add("DELETE /api/machine/profile/{id}", routeProfiles)
 	add("POST /api/machine/profile/set", routeProfiles)
 	add("POST /api/machine/profile/save", routeProfiles)
+	// #1878: a restore replaces the machine's profiles and drops GLP's cached
+	// copy of them for that machine.
+	add("POST /api/machine/backups/{id}/restore", routeProfiles)
 
-	// settings — the shot defaults, the machine registry, and the broker/MCP/
-	// import/machine-control options, all stored in GLP's own database.
+	// settings — the shot defaults, the machine registry, the broker/MCP/
+	// import/machine-control options, and the machine backup schedule, all
+	// stored in GLP's own database.
 	add("POST /api/shots/defaults", routeSettings)
 	add("POST /api/machines", routeSettings)
 	add("PUT /api/machines/{id}", routeSettings)
@@ -151,6 +155,7 @@ func buildDataRoutes() map[string]sse.Route {
 	add("POST /api/mcp/settings", routeSettings)
 	add("POST /api/import/settings", routeSettings)
 	add("POST /api/machine/control/settings", routeSettings)
+	add("PUT /api/machine/backups/settings", routeSettings)
 
 	// all — a whole-database change: every kind is bumped and one all event
 	// tells the client to refetch everything.
@@ -171,11 +176,19 @@ func buildDataIgnored() map[string]string {
 	// Not part of live sync: writes data a client never refetches, or pushes
 	// elsewhere; achievements are not synced live.
 	add("POST /api/backup", "writes only achievement unlocks; achievements are not part of live sync")
+	add("POST /api/import/paste", "parses pasted product data for the bean form; nothing is stored")
 	add("POST /api/sync", "a manual shot pull: new shots arrive through the status poll's revision")
 	add("POST /api/preheat/ready-by", "preheat-update already carries the resulting status")
 	add("POST /api/events/ticket", "issues a short-lived stream ticket; no stored data changes")
 	add("POST /api/orders/kiosk-key/rotate", "rotates the kiosk's own credential file; no database row or client-visible data changes")
 	add("/api/mcp", "MCP write tools publish their own data-changed events (slice 2)")
+
+	// #1878 machine settings backups: not part of live sync (like achievements);
+	// the backups sheet reloads its own list, and the daily scheduler stores rows
+	// without any route at all.
+	add("POST /api/machine/backups", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
+	add("DELETE /api/machine/backups/{id}", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
+	add("POST /api/machine/backups/upload", "machine settings backups are not part of live sync; the backups sheet reloads its own list")
 
 	// Machine-side control: the controller acts, GLP's database does not change.
 	add("POST /api/machine/flush/start", "machine-side only: starts a flush on the controller")

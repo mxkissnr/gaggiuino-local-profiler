@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -197,6 +198,60 @@ func TestFirmwareProgress_HappyPath(t *testing.T) {
 	}
 	if !jsonContains(rec.Body.String(), `"status":"IDLE"`) {
 		t.Fatalf("unexpected firmware progress: %s", rec.Body.String())
+	}
+}
+
+// #1876: the machine's progress body must reach the client byte-for-byte.
+// Firmware main-8aaf6f0 and later append a migration object that GLP has no
+// model for, so any re-marshal would silently drop it.
+func TestFirmwareProgress_PassesMigrationThrough(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	const payload = `{"progress":95,"status":"IN_PROGRESS","type":"F_FW","migration":{"layoutVersion":2,"layout":"s3-v2","phase":7,"attempts":1,"retryAllowed":false,"error":"","productionVersion":"8aaf6f0","target":"s3-lcd","headless":false,"runningVersion":"8aaf6f0","available":true,"active":true,"state":"working","message":"","operation":"Downloading update","operationDone":0,"operationTotal":0,"activityAgeMs":0,"percent":95,"page":"/migration"}}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/firmware/progress" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(payload))
+	}))
+	defer srv.Close()
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Migrating"), Type: strPtr("gaggiuino"), Host: strPtr(srv.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/firmware/progress?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET firmware/progress status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", ct)
+	}
+	if got := rec.Body.String(); got != payload {
+		t.Fatalf("progress body was re-marshalled:\n got %s\nwant %s", got, payload)
+	}
+
+	body := decodeBody(t, rec.Body.Bytes())
+	migration, ok := body["migration"].(map[string]any)
+	if !ok {
+		t.Fatalf("migration missing from decoded body: %v", body)
+	}
+	if migration["active"] != true {
+		t.Fatalf("migration.active = %v, want true", migration["active"])
+	}
+	if migration["operation"] != "Downloading update" {
+		t.Fatalf("migration.operation = %v, want Downloading update", migration["operation"])
+	}
+	if migration["percent"] != float64(95) {
+		t.Fatalf("migration.percent = %v, want 95", migration["percent"])
 	}
 }
 
@@ -606,5 +661,160 @@ func TestGetSettings_AdapterErrorHidesMachineHost(t *testing.T) {
 	}
 	if strings.Contains(body, "192.0.2.1") || strings.Contains(body, "http") {
 		t.Errorf("body = %s, must not contain the machine host/URL", body)
+	}
+}
+
+// countingFirmwareAdapter reports SettingsProxy, fails GetSettings (so the
+// best-effort version lookup stays local) and counts how often the update was
+// actually triggered — the fixture for the #1878 pre-update hook tests.
+type countingFirmwareAdapter struct {
+	firmwareFromToErrorAdapter
+	updates atomic.Int32
+}
+
+func (a *countingFirmwareAdapter) TriggerFirmwareUpdate(context.Context, *Machine) (json.RawMessage, error) {
+	a.updates.Add(1)
+	return json.RawMessage(`{"success":true}`), nil
+}
+
+func (a *countingFirmwareAdapter) updatesCount() int { return int(a.updates.Load()) }
+
+// newBeforeHookEnv builds a Handlers around one gaggiuino machine whose adapter
+// never touches the network. onFirmwareUpdate stays nil, so no release lookup
+// happens either.
+func newBeforeHookEnv(t *testing.T) (*Handlers, *http.ServeMux, *countingFirmwareAdapter, int64) {
+	t.Helper()
+	registry, _ := newTestRegistry(t)
+	adapter := &countingFirmwareAdapter{}
+	h := &Handlers{registry: registry, gaggiuino: adapter, firmware: NewFirmwareChecker()}
+	mux := newMux(h)
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	return h, mux, adapter, machine.ID
+}
+
+func postFirmwareUpdate(mux *http.ServeMux, body string) *httptest.ResponseRecorder {
+	return doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
+}
+
+// #1878: the hook runs before the update is triggered, receives the machine and
+// the user's skipBackup flag, and a nil hook keeps the old behavior.
+func TestTriggerFirmwareUpdate_BeforeHookRunsFirstWithSkipFlag(t *testing.T) {
+	h, mux, adapter, id := newBeforeHookEnv(t)
+	idJSON := strconv.FormatInt(id, 10)
+
+	rec := postFirmwareUpdate(mux, `{"machineId":`+idJSON+`,"skipBackup":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("nil hook: status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if got := adapter.updatesCount(); got != 1 {
+		t.Fatalf("updates = %d, want 1", got)
+	}
+
+	type call struct {
+		machineID  int64
+		skipBackup bool
+		updates    int
+	}
+	var calls []call
+	h.SetBeforeFirmwareUpdate(func(_ context.Context, m *Machine, skipBackup bool) error {
+		calls = append(calls, call{machineID: m.ID, skipBackup: skipBackup, updates: adapter.updatesCount()})
+		return nil
+	})
+
+	rec = postFirmwareUpdate(mux, `{"machineId":`+idJSON+`}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hook ok: status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if got := adapter.updatesCount(); got != 2 {
+		t.Fatalf("updates = %d, want 2", got)
+	}
+	if want := (call{machineID: id, skipBackup: false, updates: 1}); len(calls) != 1 || calls[0] != want {
+		t.Fatalf("hook calls = %v, want %v (the hook must run before the trigger)", calls, want)
+	}
+
+	rec = postFirmwareUpdate(mux, `{"machineId":`+idJSON+`,"skipBackup":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hook skip: status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if got := adapter.updatesCount(); got != 3 {
+		t.Fatalf("updates = %d, want 3", got)
+	}
+	if want := (call{machineID: id, skipBackup: true, updates: 2}); len(calls) != 2 || calls[1] != want {
+		t.Fatalf("hook calls = %v, want the second call %v", calls, want)
+	}
+}
+
+// #1878: any hook error or panic stops the update, and the answer carries only
+// the fixed text -- never the hook's error, which can hold the machine host.
+func TestTriggerFirmwareUpdate_BeforeHookErrorStopsTheUpdate(t *testing.T) {
+	cases := []struct {
+		name   string
+		hook   func() error
+		status int
+		code   string
+	}{
+		{"fails", func() error { return errors.New("boom 192.168.1.50") }, http.StatusBadGateway, "pre_update_backup_failed"},
+		{"busy", func() error { return fmt.Errorf("x: %w", ErrPreUpdateBusy) }, http.StatusConflict, "operation_running"},
+		{"unreachable", func() error { return fmt.Errorf("x: %w", ErrPreUpdateUnreachable) }, http.StatusBadGateway, "machine_unreachable"},
+		{"panics", func() error { panic("boom 192.168.1.50") }, http.StatusBadGateway, "pre_update_backup_failed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, mux, adapter, id := newBeforeHookEnv(t)
+			stubReleasesAPINoMatch(t)
+			logged := 0
+			h.SetOnFirmwareUpdate(func(*Machine, string, string) error {
+				logged++
+				return nil
+			})
+			h.SetBeforeFirmwareUpdate(func(context.Context, *Machine, bool) error { return tc.hook() })
+
+			rec := postFirmwareUpdate(mux, `{"machineId":`+strconv.FormatInt(id, 10)+`}`)
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d, want %d, body = %s", rec.Code, tc.status, rec.Body)
+			}
+			if !jsonContains(rec.Body.String(), `"code":"`+tc.code+`"`) {
+				t.Fatalf("body = %s, want code %q", rec.Body.String(), tc.code)
+			}
+			if strings.Contains(rec.Body.String(), "boom") || strings.Contains(rec.Body.String(), "192.168.1.50") {
+				t.Fatalf("body = %s, must not echo the hook error", rec.Body.String())
+			}
+			if got := adapter.updatesCount(); got != 0 {
+				t.Fatalf("updates = %d, want 0 (the update must not start)", got)
+			}
+			if logged != 0 {
+				t.Fatalf("maintenance-log hook ran %d times, want 0", logged)
+			}
+		})
+	}
+}
+
+// #1878: a request the route rejects before the hook never reaches it.
+func TestTriggerFirmwareUpdate_BeforeHookNotCalledForInvalidRequests(t *testing.T) {
+	h, mux, adapter, id := newBeforeHookEnv(t)
+	calls := 0
+	h.SetBeforeFirmwareUpdate(func(context.Context, *Machine, bool) error {
+		calls++
+		return nil
+	})
+
+	rec := postFirmwareUpdate(mux, `{"machineId":`+strconv.FormatInt(id, 10)+`,"skipBackup":"yes"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("non-boolean skipBackup: status = %d, want 400, body = %s", rec.Code, rec.Body)
+	}
+	rec = postFirmwareUpdate(mux, `{"machineId":999999}`)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown machine: status = %d, want 404, body = %s", rec.Code, rec.Body)
+	}
+	if calls != 0 {
+		t.Fatalf("hook calls = %d, want 0", calls)
+	}
+	if got := adapter.updatesCount(); got != 0 {
+		t.Fatalf("updates = %d, want 0", got)
 	}
 }

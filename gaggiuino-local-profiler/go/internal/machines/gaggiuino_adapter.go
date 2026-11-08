@@ -262,6 +262,109 @@ func epochSecondsToTime(v any) time.Time {
 	return time.Unix(sec, 0).UTC()
 }
 
+// ── #1878 machine settings backup ───────────────────────────────────────
+
+// MaxSettingsBackupBytes is the machine's own restore limit (256 KiB), so a
+// larger document could never be restored and is not worth storing.
+const MaxSettingsBackupBytes = 256 << 10
+
+// ErrSettingsBackupUnsupported reports that the machine's firmware has no
+// /api/settings/backup endpoint (HTTP 404 — firmware older than main-8aaf6f0).
+var ErrSettingsBackupUnsupported = errors.New("machine firmware has no settings backup")
+
+// ErrSettingsBackupTooLarge reports that the machine's settings backup exceeds
+// the size the machine itself accepts on restore.
+var ErrSettingsBackupTooLarge = errors.New("machine settings backup is larger than 256 KiB")
+
+// GetSettingsBackup fetches the machine's full settings backup document
+// (#1878). Gaggiuino-only and deliberately not on the Adapter interface, same
+// as GetServiceLog: only the Gaggiuino firmware serves this endpoint. The body
+// holds the machine's Wi-Fi and MQTT secrets, so callers must strip them
+// before storing it and must never log it. A 404 maps to
+// ErrSettingsBackupUnsupported.
+func (a *GaggiuinoAdapter) GetSettingsBackup(ctx context.Context, m *Machine) ([]byte, error) {
+	baseURL, err := BaseURLFor(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	body, err := httpGetBytesCapped(ctx, baseURL+"/api/settings/backup", 10*time.Second, MaxSettingsBackupBytes+1)
+	if err != nil {
+		var httpErr *machineHTTPError
+		if errors.As(err, &httpErr) {
+			if httpErr.Status == http.StatusNotFound {
+				return nil, ErrSettingsBackupUnsupported
+			}
+			// The response body is dropped on purpose: it could carry part of
+			// the backup, which contains the machine's secrets.
+			return nil, fmt.Errorf("machine settings backup: machine responded %d", httpErr.Status)
+		}
+		return nil, err
+	}
+	if len(body) > MaxSettingsBackupBytes {
+		return nil, ErrSettingsBackupTooLarge
+	}
+	return body, nil
+}
+
+// SettingsRestoreError reports that the machine answered a settings restore
+// with a non-2xx status (#1878). Message is the machine's own "error" text
+// when its answer was a short JSON object carrying one, else "". Error()
+// leaves Message out, so logging the error never repeats machine text; the
+// rest of the answer is dropped because it could echo the posted document,
+// which holds the machine's secrets.
+type SettingsRestoreError struct {
+	Status  int
+	Message string
+}
+
+func (e *SettingsRestoreError) Error() string {
+	return fmt.Sprintf("machine refused the settings restore (status %d)", e.Status)
+}
+
+// RestoreSettingsBackup posts a complete settings backup document to the
+// machine, which applies it, Wi-Fi block included, and restarts (#1878).
+// The request shape is the one the machine's own web UI uses on
+// main-8aaf6f0 (POST /api/settings/backup, application/json, 1 byte to
+// 256 KiB); the success answer is undocumented, so any 2xx counts as
+// accepted and its body is ignored. body carries the machine's secrets:
+// callers must never log or store it. A transport error can also mean the
+// machine took the document and restarted before answering, so callers must
+// not retry automatically. Gaggiuino-only and not on the Adapter interface,
+// same as GetSettingsBackup.
+func (a *GaggiuinoAdapter) RestoreSettingsBackup(ctx context.Context, m *Machine, body []byte) error {
+	if len(body) == 0 {
+		return errors.New("machine settings restore: empty document")
+	}
+	if len(body) > MaxSettingsBackupBytes {
+		return ErrSettingsBackupTooLarge
+	}
+	baseURL, err := BaseURLFor(ctx, m)
+	if err != nil {
+		return err
+	}
+	_, err = httpPostBytes(ctx, baseURL+"/api/settings/backup", body, 30*time.Second)
+	if err != nil {
+		var httpErr *machineHTTPError
+		if errors.As(err, &httpErr) {
+			return &SettingsRestoreError{Status: httpErr.Status, Message: restoreErrorMessage(httpErr.Body)}
+		}
+	}
+	return err
+}
+
+// restoreErrorMessage reads the "error" string of the machine's JSON error
+// answer. snippet is errorSnippet's first 200 bytes, so a longer answer no
+// longer parses and gives "".
+func restoreErrorMessage(snippet string) string {
+	var answer struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(snippet), &answer); err != nil {
+		return ""
+	}
+	return answer.Error
+}
+
 // ── #597 settings/control proxy ─────────────────────────────────────────
 
 // GetSettings: category "" (the caller's `category == nil` case) reads the

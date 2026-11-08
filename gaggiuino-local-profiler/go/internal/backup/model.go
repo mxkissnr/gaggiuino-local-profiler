@@ -11,12 +11,13 @@ var backupSections = map[string]bool{
 }
 
 // sectionBundleKeys lists which top-level bundle keys a section pulls in on
-// export.
+// export. #1878: machine_backups travels with the machines section, keyed by
+// machine id.
 var sectionBundleKeys = map[string][]string{
 	"shots":       {"shots", "annotations", "coffee_library", "blocklist", "trash", "achievements", "images"},
 	"maintenance": {"maintenance", "maintenance_log"},
 	"orders":      {"orders"},
-	"machines":    {"machines"},
+	"machines":    {"machines", "machine_backups"},
 	"settings":    {"kv"},
 	"secrets":     {"secrets"},
 }

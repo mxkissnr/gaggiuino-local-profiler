@@ -131,7 +131,7 @@ func (d Dependencies) writeBundleJSON(w io.Writer, small map[string]any, sec sec
 
 	for _, key := range []string{
 		"coffee_library", "blocklist", "trash", "maintenance",
-		"maintenance_log", "orders", "machines", "achievements", "kv", "secrets",
+		"maintenance_log", "orders", "machines", "machine_backups", "achievements", "kv", "secrets",
 	} {
 		if !inScope(key) {
 			continue

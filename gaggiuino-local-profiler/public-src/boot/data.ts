@@ -25,6 +25,7 @@ import { loadMcpSettingsCard } from '../components/mcp-settings.js';
 import { loadMachineControlSetting } from '../components/machine-control.js';
 import { loadShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
 import { renderBeanFreshnessSettings } from '../components/bean-freshness-settings.js';
+import { applyBlindRating } from '../components/dev-score-settings.js';
 import { renderApiTokenCard } from './settings.js';
 import { runBootTasks } from './run-step.js';
 import type { BootOutcome } from './run-step.js';
@@ -36,6 +37,7 @@ import type { BootOutcome } from './run-step.js';
 // (decided by the maintainer). `keepShelfQuery` is true on the live path too:
 // the shelf search is session-only, so a remote change must not wipe it.
 function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void {
+  applyBlindRating();
   resetShelfPrefs(keepShelfQuery);
   if (!includeMachine) return;
   const activeId = getUiPref<number | 'all'>('machine.active');
@@ -47,13 +49,15 @@ function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void
 // #1539: a maintenance refetch must not tear down an editor the user has open.
 // Outside the maintenance view the run is a no-op (the view reloads on entry),
 // so the guard only applies inside it, and then only to an open inline edit
-// (not the "disabled tasks" details). An expanded card is no longer a guard:
-// the run restores it itself through refreshMaintenanceView().
+// (not the "disabled tasks" details). #1923: an open task details sheet is a
+// guard too — it holds inputs the user is editing and would be repainted
+// under them; the scheduler retries the run once the sheet is closed.
 function _maintenanceCanRefetch(): boolean {
   if (S.currentMode !== 'maintenance') return true;
   const view = document.getElementById('maintenance-view');
   if (!view) return true;
   if (view.querySelector('[contenteditable="true"]')) return false;
+  if (document.querySelector('#detailSheet .maint-sheet')) return false;
   const logForm = document.getElementById('maintLogForm');
   return !logForm || logForm.style.display === 'none';
 }
@@ -139,7 +143,11 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
     {
       name: 'ui prefs', requires: ['token'],
       run: async () => {
+        // #1922: the cached blind-rating choice has to be on the body before
+        // the shot list below renders; applyServerUiPrefs() also covers the
+        // case where the server copy differs from that cache.
         if (await loadUiPrefsFromServer()) applyServerUiPrefs();
+        else applyBlindRating();
       },
     },
     // The Settings-page loaders (#1539 slice 5) are shared with the live-sync

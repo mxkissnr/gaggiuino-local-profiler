@@ -81,6 +81,15 @@ func (r *Repository) GetLibrary() (Library, error) {
 	if lib.PuckScreens == nil {
 		lib.PuckScreens = []Entity{}
 	}
+	// #1884: every read hands out an explicit bean sticker flag; Update persists
+	// it, so this is also the one-time default for older libraries and restored
+	// older backups. A JSON `null` entry decodes to a nil map, which must not be
+	// written to.
+	for _, bean := range lib.Beans {
+		if bean != nil {
+			normalizeBeanSticker(bean)
+		}
+	}
 	return lib, nil
 }
 

@@ -2,7 +2,9 @@
 // implementation (go/internal/shots), which is served as `score` on each
 // shot; kept here so the UI can rescore live/unsaved shots without a
 // round-trip. Pure function — no DOM deps. Inputs are the raw shot object
-// (×10 integer curves).
+// (×10 integer curves). It mirrors the `classic` model only: the other models
+// registered for dev builds (#1922) are server-only, so a real shot always
+// shows the score the server computed.
 
 import { detectChanneling } from '../utils.js';
 import type { ShotDatapoints } from '../utils.js';

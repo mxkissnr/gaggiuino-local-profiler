@@ -260,6 +260,9 @@ func SetBeanImage(repo *Repository, imageDir string, beanID int64, imageURL stri
 			return ErrSkipSave
 		}
 		bean["image"] = ext
+		// A shop's product photo is never a sticker cut-out, even a
+		// transparent PNG (#1884).
+		bean["imageSticker"] = false
 		lib.Beans[idx] = bean
 		storedExt = ext
 		return nil

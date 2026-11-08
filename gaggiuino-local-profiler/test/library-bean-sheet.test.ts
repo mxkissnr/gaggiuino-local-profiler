@@ -134,6 +134,18 @@ describe('bean detail sheet (#1330 part 2)', () => {
     expect(card).toContain('data-action="toggle-past-bags"');
   });
 
+  it('draws the sticker look only for a flagged sticker (#1884)', () => {
+    const sticker = setup({ image: 'png', imageSticker: true });
+    openBeanSheet(1);
+    expect(sheetHtml(sticker.elements)).toContain('lib-bean-thumb is-sticker');
+
+    const imported = setup({ image: 'png', imageSticker: false });
+    openBeanSheet(1);
+    const html = sheetHtml(imported.elements);
+    expect(html).toContain('lib-bean-thumb');
+    expect(html).not.toContain('is-sticker');
+  });
+
   it('closes and clears the sheet', () => {
     const { elements } = setup();
     openBeanSheet(1);

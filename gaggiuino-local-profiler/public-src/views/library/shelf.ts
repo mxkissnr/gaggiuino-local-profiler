@@ -121,13 +121,16 @@ export interface ShelfBagImageBean {
   name?: string | null | undefined;
   roaster?: string | null | undefined;
   image?: string | null | undefined;
+  imageSticker?: boolean | null | undefined;
 }
 
 // Shared photo block: the bean's image or its initials placeholder. The
 // lib-shelf-img class + data-bean-id let loadBeanThumbnails fill the blob URL.
+// The sticker look follows the bean's flag, not the file type (#1884): a PNG
+// product photo from a shop import is a normal photo.
 export function shelfBagImage(b: ShelfBagImageBean): Html {
   return b.image
-    ? html`<img class="lib-shelf-img${esc(b.image === 'png' ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">`
+    ? html`<img class="lib-shelf-img${esc(b.imageSticker === true ? ' is-sticker' : '')}" data-bean-id="${esc(b.id)}" alt="">`
     : html`<span class="lib-shelf-ph" aria-hidden="true">${esc(beanInitials(b.roaster || b.name || ''))}</span>`;
 }
 
@@ -208,8 +211,11 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
   const archived = b.enabled === false;
 
   // Up to two decorative copies peek out behind the photo to hint at the
-  // unopened bags waiting in the cupboard; the badge carries the count.
-  const stack: Html = sealedBags > 0
+  // unopened bags waiting in the cupboard; the badge carries the count. A
+  // sticker cut-out is transparent, so filled layers would frame it grey, and
+  // the badge alone tells the count there (#1932).
+  const sticker = b.imageSticker === true;
+  const stack: Html = sealedBags > 0 && !sticker
     ? html`<span class="lib-shelf-stack" aria-hidden="true">${sealedBags > 1 ? html`<span class="lib-shelf-stack-layer"></span>` : esc('')}<span class="lib-shelf-stack-layer"></span></span>`
     : esc('');
 

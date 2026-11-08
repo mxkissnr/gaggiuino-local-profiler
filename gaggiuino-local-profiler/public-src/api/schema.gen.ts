@@ -324,6 +324,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shots/{id}/chart.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Render a shot's curves as a PNG chart
+         * @description Pressure, pump flow, weight and temperature of one shot (Gaggiuino or GaggiMate) as a fixed 960x480 PNG on a light background, in the app chart's colours, rendered server-side on every request. Meant for Home Assistant notifications and dashboards. Only the legend language can be chosen. (#1851)
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Legend language (de/en/es/fr/it/nl, unknown falls back to en) */
+                    lang?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description PNG image */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/png": string;
+                    };
+                };
+                /** @description Invalid shot ID */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Shot not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — dedicated per-IP chart limit, 30/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rendering failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shots/{id}/image": {
         parameters: {
             query?: never;
@@ -334,7 +406,12 @@ export interface paths {
         /** Serve a shot's uploaded photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the shot has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: string;
@@ -362,17 +439,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a shot photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a shot photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: string;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -398,6 +483,13 @@ export interface paths {
                 };
                 /** @description Shot not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a shot without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1383,7 +1475,12 @@ export interface paths {
         /** Serve a bean's photo (auto-imported or uploaded) */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the bean has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -1411,17 +1508,27 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a bean photo manually (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a bean photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `sticker=1` alone does the same and marks the photo as a sticker cut-out (#1884); a re-crop always clears that mark. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                    /** @description Set to "1" on a new-photo upload (no other parameter) to mark the photo as a sticker cut-out. Only a photo stored as PNG becomes a sticker; an opaque image is stored as JPEG and is not one. (#1884) */
+                    sticker?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -1447,6 +1554,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a bean without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1798,7 +1912,12 @@ export interface paths {
         /** Serve a grinder's photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the grinder has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -1826,17 +1945,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a grinder photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a grinder photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -1862,6 +1989,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a grinder without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2078,7 +2212,12 @@ export interface paths {
         /** Serve a basket's photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the basket has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -2106,17 +2245,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a basket photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a basket photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -2142,6 +2289,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a basket without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2352,7 +2506,12 @@ export interface paths {
         /** Serve a puck screen's photo */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Set to "1" to serve the downscaled thumbnail, falling back to the full image when no thumbnail was generated */
+                    thumb?: "1";
+                    /** @description Set to "1" to serve the uncropped original the current photo was cropped from, instead of the cropped main image. 404s unless the puck screen has both a stored `imageCrop` and its original file. Wins over `thumb`. (#1845) */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -2380,17 +2539,25 @@ export interface paths {
             };
         };
         put?: never;
-        /** Upload a puck screen photo (raw bytes, Content-Type selects the extension) */
+        /**
+         * Upload, re-crop or store the original of a puck screen photo
+         * @description Three variants, selected by the query. No parameters uploads a new photo and drops any stored original and crop. `crop` alone re-crops from the stored original and ignores the body. `original=1` together with `crop` stores the uploaded JPEG as the uncropped original of the current photo, leaving the main image untouched. Any other combination is a 400. (#1845)
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Crop rectangle as normalized fractions `x,y,w,h` — `x`/`y` are the top-left corner, `w`/`h` the size, all in 0..1 */
+                    crop?: string;
+                    /** @description Set to "1" together with `crop` to store the uploaded JPEG as the uncropped original */
+                    original?: "1";
+                };
                 header?: never;
                 path: {
                     id: number;
                 };
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "image/jpeg": string;
                     "image/png": string;
@@ -2416,6 +2583,13 @@ export interface paths {
                 };
                 /** @description Not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `no original` for a re-crop, or `no image` when storing an original for a puck screen without a photo */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -5471,7 +5645,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description { progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS } */
+                /** @description { progress, status: IDLE|IN_PROGRESS|SUCCESS|ERROR, type: C_FW|F_FW|F_FS, optional migration object (firmware main-8aaf6f0 and later) } */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -5513,7 +5687,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Trigger a firmware OTA update from GitHub releases (ESP32 + STM32) — only starts the process, poll firmware/progress for status */
+        /**
+         * Trigger a firmware OTA update from GitHub releases (ESP32 + STM32) — only starts the process, poll firmware/progress for status
+         * @description On a Gaggiuino machine GLP first stores a settings backup (#1878, kind pre_update). If that backup fails the update is not started; the client may resend with skipBackup after the user confirmed updating without a backup. Firmware without the settings backup endpoint updates without a backup.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -5525,6 +5702,11 @@ export interface paths {
                 content: {
                     "application/json": {
                         machineId?: number;
+                        /**
+                         * @description Start the update without the settings backup; send only after the user confirmed it
+                         * @default false
+                         */
+                        skipBackup?: boolean;
                     };
                 };
             };
@@ -5536,6 +5718,15 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description operation_running: another settings backup or restore of this machine is running; the update was not started */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
                 /** @description machine type does not support the settings proxy */
                 501: {
                     headers: {
@@ -5543,7 +5734,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Machine unreachable or returned an error */
+                /** @description The update was not started or failed. code pre_update_backup_failed: the settings backup before the update failed (resend with skipBackup to update anyway); code machine_unreachable: the machine did not answer; no code: the machine returned an error */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -6221,6 +6412,622 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stored machine settings backups, newest first (deleted machines included) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Only this machine's backups; omitted means every machine */
+                    machineId?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Array of backups, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackup"][];
+                    };
+                };
+                /** @description Invalid machineId */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Back up now — fetch the machine's settings and store a new manual entry */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        machineId: number;
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The stored backup */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackup"];
+                    };
+                };
+                /** @description Invalid JSON body, or machineId missing or below 1 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description Request body over 4 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP back-up-now limit, 10/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description machine_unreachable when the status or settings fetch failed; invalid_backup when the machine's document cannot be stored */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one machine's automatic backup schedule and retention */
+        get: {
+            parameters: {
+                query: {
+                    machineId: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description That machine's settings; defaults daily and 10 when never saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupSettings"];
+                    };
+                };
+                /** @description Invalid machineId */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        /** Replace one machine's automatic backup schedule and retention */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MachineBackupSettings"];
+                };
+            };
+            responses: {
+                /** @description The saved settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupSettings"];
+                    };
+                };
+                /** @description Invalid JSON body, or machineId, schedule or keepAutomatic missing or out of range */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Request body over 4 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Store an uploaded settings backup file as a new entry; its secrets are removed before anything is written */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        machineId: number;
+                        note?: string;
+                        /** @description The file's JSON object (format gaggiuino-settings, a known version, at most 256 KiB), not a string */
+                        document: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description The stored backup */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackup"];
+                    };
+                };
+                /** @description Invalid JSON body or machineId missing or below 1 (no code); code invalid_backup when the document cannot be stored */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"] | components["schemas"]["Error"];
+                    };
+                };
+                /** @description Unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Request body over 260 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP upload limit, 10/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one stored backup with its secret-free document (never contacts the machine) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The stored backup with its document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupDetail"];
+                    };
+                };
+                /** @description Backup not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete one stored backup, of any kind (also one of a deleted machine) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { ok: true } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Ok"];
+                    };
+                };
+                /** @description Backup not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a stored backup in the machine's native format, with the machine's current secrets merged in
+         * @description GLP reads the secrets from the backup's own machine right before answering and never stores them. If that machine cannot be read the stored document without secrets is returned instead. A client must warn the user according to X-GLP-Secrets: merged means the file holds the Wi-Fi password, MQTT credentials and tokens in plain text; missing means it holds none and a restore from it does not carry them.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The settings backup file */
+                200: {
+                    headers: {
+                        /** @description merged or missing, see above */
+                        "X-GLP-Secrets"?: "merged" | "missing";
+                        /** @description attachment; filename=gaggiuino-backup-m<machineId>-<YYYY-MM-DD_HHMM>.json */
+                        "Content-Disposition"?: string;
+                        /** @description no-store */
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Backup not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description operation_running while another backup or restore of this machine is running; machine_busy while it is brewing or steaming */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description Rate limit exceeded — per-IP download limit, 10/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/machine/backups/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a stored backup onto its machine; the machine applies it and restarts
+         * @description Right before posting, GLP reads the machine's current backup and copies its Wi-Fi block, MQTT credentials and tokens into the stored document, so a restore never changes the machine's network or broker access. Right before posting, GLP stores the machine's current state as a manual backup (note 'Before restoring backup <id>'); if that fails, nothing is restored. Manual backups are never removed automatically. A backup of a deleted machine can be restored onto another registered Gaggiuino machine the user chose; the secrets then come from that machine. A backup of a machine that still exists only goes to that machine. Refused while the machine brews, steams, descales or updates its firmware, while GLP has profile changes for it that were not sent, and while another backup or restore of it runs. GLP waits up to 3 s for the machine's first live system state, because the first read opens its live session. After the machine accepted the document (and after no_confirmation) GLP drops its cached copy of the machine's profiles; the next profile list rebuilds it. The machine restarts, so a client should expect it to be unreachable for a while.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description The backup's own machine; for a backup of a deleted machine, a registered Gaggiuino machine the user chose */
+                        machineId: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description The machine accepted the backup and restarts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            restarting: boolean;
+                        };
+                    };
+                };
+                /** @description Invalid JSON body, or machineId missing or below 1 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Backup not found (also when it belongs to another registered machine), or unknown machine */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Nothing was sent to the machine. operation_running: another backup or restore of this machine, or a profile push to it, is running; machine_busy (with reason): brewing, steaming, descaling or a firmware update; pending_profile_changes: GLP has profile changes for this machine that were not sent yet; invalid_backup: this backup with the machine's current secrets is larger than the machine accepts */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description Request body over 4 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP restore limit, 3/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description pre_restore_backup_failed: the machine's current state could not be stored first; nothing was sent */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description unsupported_machine when it is not a Gaggiuino machine; unsupported_firmware when its firmware has no settings backup */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
+                };
+                /** @description machine_unreachable: the machine's state or current backup could not be read, nothing was sent; invalid_backup: the machine's current backup cannot be read, so its secrets cannot be kept, nothing was sent, also when the machine's current backup cannot be stored as the pre-restore backup; restore_rejected: the machine refused the backup (machineError holds its text), nothing changed; no_confirmation: the machine did not answer after the backup was sent, it may already be restarting */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MachineBackupError"];
+                    };
                 };
             };
         };
@@ -7344,6 +8151,11 @@ export interface paths {
                             } | null;
                             /** @description Only present with ?debug=1 */
                             _debug?: Record<string, never>;
+                            /**
+                             * Format: uri
+                             * @description Present only when the shop's product JSON answered HTTP 429 while its page still gave JSON-LD or OpenGraph data. The form is filled from the page; this is the URL whose data can be pasted to POST /api/import/paste for the fuller product JSON.
+                             */
+                            productDataUrl?: string;
                         };
                     };
                 };
@@ -7368,10 +8180,110 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description The shop does not allow automatic requests right now (its own HTTP 429). GLP never retries and never disguises itself, so this is final for the request. 502 rather than 429, which would read as GLP's own rate limiter. */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error?: string;
+                            /** @enum {string} */
+                            code?: "shop_rate_limited";
+                            /**
+                             * Format: uri
+                             * @description Present only when the product JSON itself answered 429.
+                             */
+                            productDataUrl?: string;
+                        };
+                    };
+                };
             };
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/import/paste": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse pasted product data for the bean form
+         * @description Runs the same parsers GET /api/import/url uses over product data the user pasted (the body of a shop's product JSON). The host of `url` selects the parser — built-in provider, custom Shopify domain, or the generic path — so nothing in `text` can choose one. `text` is treated as untrusted input: it is bounded, parsed as exactly one JSON object, never logged and never echoed in an error. Nothing is stored; the answer fills the import form exactly like GET /api/import/url, and saving stays a separate action. A page fetch for HTML enrichment may still happen on the generic and custom paths.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: uri
+                         * @description The product page URL whose host selects the parser. Must be an absolute https URL with a /products/<handle> path.
+                         */
+                        url: string;
+                        /** @description The pasted product data — one JSON object. Over 1 MiB (bytes) answers 413. */
+                        text: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Extracted bean metadata, the same body GET /api/import/url gives for that product */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Bean"] & {
+                            /** @description e.g. builtin:<id>, custom-shopify, generic-shopify */
+                            importMethod?: string;
+                            /** @description Candidate recipes parsed from the page's brew-guide accordion, if any (#451). */
+                            extraBrewRecipes?: Record<string, never>[];
+                            duplicateWarning?: {
+                                id?: number;
+                                name?: string;
+                                roaster?: string;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Missing/invalid url or text, unsupported protocol, a path without /products/<handle>, an HTML-only shop, or blocked address (SSRF guard) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Request entity too large (body or text cap) */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Fetch failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7589,6 +8501,8 @@ export interface components {
             };
             /** @description Stored photo extension (see GET /api/shots/{id}/image), if any */
             image?: string | null;
+            /** @description The rectangle the current photo was cropped to. Present exactly when the shot also has its uncropped original stored, i.e. when `GET /api/shots/{id}/image?original=1` and a re-crop are available. (#1845) */
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description GaggiMate BLE-scale flag, merged from the machine payload */
             gaggimateBleScale?: boolean | null;
             annotation: components["schemas"]["Annotation"];
@@ -7607,6 +8521,17 @@ export interface components {
             /** @description GET /api/shots/{id} only: id of the previous same-profile shot (null if none) */
             previousShotId?: number | null;
             previousShot?: components["schemas"]["HydratedShot"] | null;
+        };
+        /** @description The rectangle a library photo was cropped to, as fractions of the uncropped original's width and height — so it survives any later downscale. (#1845) An entity carries `imageCrop` exactly when its uncropped original is stored, i.e. when `GET .../image?original=1` and a re-crop are available. */
+        ImageCrop: {
+            /** @description Left edge */
+            x: number;
+            /** @description Top edge */
+            y: number;
+            /** @description Width */
+            w: number;
+            /** @description Height */
+            h: number;
         };
         /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/flavors/origins are allowlist-validated, not just trimmed). */
         Bean: {
@@ -7659,6 +8584,9 @@ export interface components {
             location?: Record<string, never> | null;
             /** @description File extension of the stored photo, if any — see GET .../image */
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
+            /** @description Whether the stored photo is a sticker cut-out (a transparent PNG from the sticker editor). Present whenever the bean has a photo. Set by a new-photo upload with `sticker=1`, cleared by any other new photo, by a re-crop and by a shop import; photos stored before this flag existed count as stickers when they are PNG. (#1884) */
+            imageSticker?: boolean;
             /** @description Import source URL domain */
             source?: string;
             sourceUrl?: string | null;
@@ -7713,6 +8641,7 @@ export interface components {
             burrsResetAt?: string;
             /** @description File extension of the stored photo, if any */
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description Chronological log of every zero-point activation (PUT .../zero-point) — the last entry is the current value. Absent/empty for a grinder that has never had one set, in which case grind settings display and compare as raw recorded values unchanged. */
             zeroPointHistory?: {
                 zeroPoint?: number;
@@ -7737,6 +8666,7 @@ export interface components {
             holeCount?: string;
             notes?: string;
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description Unix ms */
             updatedAt?: number;
         };
@@ -7749,6 +8679,7 @@ export interface components {
             material?: string;
             notes?: string;
             image?: string | null;
+            imageCrop?: components["schemas"]["ImageCrop"];
             /** @description Unix ms */
             updatedAt?: number;
         };
@@ -7943,6 +8874,8 @@ export interface components {
             glpVersion?: string;
             /** @description Only present on the dev-channel image build (GLP_DEV_BUILD build-arg) */
             devBuild?: string;
+            /** @description Only present on the dev-channel build: the registered shot score model ids, classic first (#1922) */
+            scoreModels?: string[];
             ordersFeature?: boolean;
             /** @description the app's expose_api_port option (#803) — whether GET /api/token answers direct-port callers */
             exposeApiPort?: boolean;
@@ -8012,6 +8945,48 @@ export interface components {
             enabled: boolean;
             /** @description Unix ms */
             createdAt: number;
+        };
+        /** @description A stored Gaggiuino settings backup (#1878), metadata only; GLP never stores the machine's Wi-Fi block or its MQTT/visualizer credentials */
+        MachineBackup: {
+            id: number;
+            /** @description may name a deleted machine; its backups are kept */
+            machineId: number;
+            /** @description Unix ms */
+            createdAt: number;
+            /** @enum {string} */
+            kind: "manual" | "scheduled" | "pre_update" | "uploaded";
+            firmwareCore: string;
+            firmwareFrontend: string;
+            profileCount: number;
+            sizeBytes: number;
+            contentHash: string;
+            note: string;
+        };
+        /** @description One stored backup with its document (#1878). The document never holds the machine's Wi-Fi block or its MQTT/visualizer credentials */
+        MachineBackupDetail: components["schemas"]["MachineBackup"] & {
+            /** @description The stored gaggiuino-settings document, without secrets */
+            document: {
+                [key: string]: unknown;
+            };
+        };
+        MachineBackupError: {
+            error: string;
+            /** @enum {string} */
+            code: "unsupported_machine" | "unsupported_firmware" | "machine_unreachable" | "invalid_backup" | "machine_busy" | "operation_running" | "pre_update_backup_failed" | "pre_restore_backup_failed" | "pending_profile_changes" | "restore_rejected" | "no_confirmation";
+            /**
+             * @description Only with code machine_busy from the restore route: what the machine is doing
+             * @enum {string}
+             */
+            reason?: "brew" | "steam" | "descale" | "firmware_update";
+            /** @description Only with code restore_rejected: the machine's own error text, untranslated; render escaped */
+            machineError?: string;
+        };
+        /** @description Automatic backup schedule and retention of one Gaggiuino machine (#1878); defaults daily and 10. keepAutomatic limits only scheduled backups: manual, pre-update and uploaded backups are never removed automatically */
+        MachineBackupSettings: {
+            machineId: number;
+            /** @enum {string} */
+            schedule: "off" | "daily" | "weekly";
+            keepAutomatic: number;
         };
         MachineInput: {
             name: string;
@@ -8126,11 +9101,25 @@ export interface components {
             maintenance_log?: Record<string, never>[];
             orders?: Record<string, never>[];
             machines?: Record<string, never>[];
+            /** @description Stored machine settings backups (#1878), oldest first; never hold a secret */
+            machine_backups?: {
+                machineId: number;
+                /** @description Unix ms */
+                createdAt: number;
+                /** @enum {string} */
+                kind: "manual" | "scheduled" | "pre_update" | "uploaded";
+                note: string;
+                document: {
+                    [key: string]: unknown;
+                };
+            }[];
             kv?: {
                 menu?: unknown[];
                 orders_settings?: Record<string, never>;
                 notify_mapping?: Record<string, never>;
                 import_settings?: Record<string, never>;
+                /** @description Automatic backup schedule and retention per machine id (#1878) */
+                machine_backup_settings?: Record<string, never>;
                 /** @description Never includes username/password — see the `secrets` field for those, encrypted. */
                 mqtt_settings?: Record<string, never>;
             };
@@ -8324,9 +9313,28 @@ export interface components {
             updateAvailable: boolean;
             releaseUrl: string | null;
         };
-        /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim (progress/status/type today). */
+        /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim. Firmware main-8aaf6f0 and later add an optional migration object for the partition migration that runs after an update; older firmware omits it. */
         FirmwareProgress: {
+            /** @description IDLE | IN_PROGRESS | SUCCESS | ERROR */
             status?: string;
+            progress?: number;
+            /** @description C_FW | F_FW | F_FS */
+            type?: string;
+            migration?: components["schemas"]["FirmwareMigration"];
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Post-update partition migration state as reported by the machine (Gaggiuino main-8aaf6f0 and later). Only the fields GLP reads are listed; the machine sends more. */
+        FirmwareMigration: {
+            active?: boolean;
+            /** @description idle | working | complete (observed values) */
+            state?: string;
+            phase?: number;
+            /** @description Human-readable current step, e.g. Downloading update */
+            operation?: string;
+            percent?: number;
+            /** @description Empty while no error */
+            error?: string;
         } & {
             [key: string]: unknown;
         };
