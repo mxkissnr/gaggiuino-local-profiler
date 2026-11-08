@@ -172,6 +172,22 @@ describe('default grinder in shot defaults (#1954)', () => {
     expect(docEls.get('shotDefaultsSaveBtn')?.innerHTML).not.toContain('Saved');
   });
 
+  // #1614 (the invariant test/write-failures-surface.test.ts pins): a rejected
+  // shot-defaults POST must still surface the toast and show no saved label,
+  // now that a flag write runs first in the same save.
+  it('a rejected shot-defaults POST still shows the toast and keeps the old set', async () => {
+    mocks.saveShotDefaults.mockResolvedValue(null);
+    S.shotDefaults = { ...savedDefaults(), dose: 17 };
+
+    await saveShotDefaultsSettings();
+
+    expect(showToast).toHaveBeenCalledWith('Error: ');
+    expect(docEls.get('shotDefaultsSaveBtn')?.innerHTML).not.toContain('Saved');
+    // The previous defaults survive a rejected POST unchanged.
+    expect(S.shotDefaults?.dose).toBe(17);
+    expect(S.shotDefaults?.drinkType).toBe('espresso');
+  });
+
   it('renders none first, ids as values and the flagged grinder selected', () => {
     S.coffeeLibrary = library([{ id: 1, name: 'Old', isDefault: true }, { id: 2, name: 'New' }]);
     S.shotDefaults = savedDefaults('New');
