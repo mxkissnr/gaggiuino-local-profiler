@@ -241,14 +241,15 @@ describe('classifyBeanBags (#1933 untracked placeholder)', () => {
   });
 
   it('keeps an emptied tracked bag in past', () => {
-    const b = bean({ id: 3, bags: [bag({ id: 1, stock_g: 250, consumedG: 250, remainingG: 0, current: true })] });
+    // SimulateBagQueue advances past an exhausted bag, so the bean's only
+    // tracked bag at 0 g is never "current".
+    const b = bean({ id: 3, bags: [bag({ id: 1, stock_g: 250, consumedG: 250, remainingG: 0 })] });
     const { current, upcoming, past } = classifyBeanBags(b);
-    expect(current?.bg.id).toBe(1);
+    expect(current).toBeNull();
     expect(upcoming).toEqual([]);
     expect(bagIds(past)).toEqual([1]);
   });
 });
-
 
 describe('renderShelfTile (#1330 one shelf)', () => {
   beforeEach(() => { S.currentLang = 'en'; });
