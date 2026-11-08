@@ -295,6 +295,27 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     expect(out).toContain('>open</span>');
     expect(out).toContain('36 g');
   });
+
+  // #1932: the stack layers are filled and bordered, so behind a transparent
+  // sticker cut-out they framed it grey. The badge still carries the count.
+  it('drops the stack behind a sticker cut-out but keeps the count', () => {
+    const bags = [
+      bag({ id: 1, stock_g: 250, consumedG: 100, remainingG: 120, current: true }),
+      bag({ id: 2, stock_g: 250, remainingG: 250, sortOrder: 2 }),
+    ];
+    const sticker = renderShelfTile(bean({ id: 22, name: 'Sticker', image: 'png', imageSticker: true, bags }), { muted: false });
+    expect(sticker).toContain('is-sticker');
+    expect(sticker).not.toContain('lib-shelf-stack');
+    expect(sticker).toContain('lib-shelf-sealed-badge');
+    expect(sticker).toContain('+1 full');
+
+    const photo = renderShelfTile(bean({ id: 23, name: 'Photo', image: 'jpg', imageSticker: false, bags }), { muted: false });
+    expect(photo).not.toContain('is-sticker');
+    expect(photo).toContain('lib-shelf-stack');
+
+    const noPhoto = renderShelfTile(bean({ id: 24, name: 'No photo', bags }), { muted: false });
+    expect(noPhoto).toContain('lib-shelf-stack');
+  });
 });
 
 describe('renderShelfRow (#1330 list view)', () => {

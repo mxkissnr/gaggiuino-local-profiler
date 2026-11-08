@@ -211,8 +211,11 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
   const archived = b.enabled === false;
 
   // Up to two decorative copies peek out behind the photo to hint at the
-  // unopened bags waiting in the cupboard; the badge carries the count.
-  const stack: Html = sealedBags > 0
+  // unopened bags waiting in the cupboard; the badge carries the count. A
+  // sticker cut-out is transparent, so filled layers would frame it grey, and
+  // the badge alone tells the count there (#1932).
+  const sticker = b.imageSticker === true;
+  const stack: Html = sealedBags > 0 && !sticker
     ? html`<span class="lib-shelf-stack" aria-hidden="true">${sealedBags > 1 ? html`<span class="lib-shelf-stack-layer"></span>` : esc('')}<span class="lib-shelf-stack-layer"></span></span>`
     : esc('');
 
