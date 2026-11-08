@@ -130,11 +130,10 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, libRepo *library.Repos
 	}
 	now := time.Now().UnixMilli()
 
-	// grinder_* tasks fold the per-shot grinder rows; only load them and count
-	// the library's grinders when a grinder task exists. The count decides
-	// whether every shot belongs to the one grinder or only the shots naming
-	// it, so it must come from the library, not from how many grinder tasks
-	// happen to be in maint.
+	// grinder_* tasks fold the per-shot grinder rows; only load them when a
+	// grinder task exists. How many grinders the library holds decides whether
+	// every shot belongs to the one grinder or only the shots naming it, so the
+	// count comes from the library rather than the number of grinder tasks.
 	var grinderUses []shots.GrinderUse
 	grinderCount := 0
 	if hasGrinderTask(maint) {
@@ -142,7 +141,7 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, libRepo *library.Repos
 		if err != nil {
 			return nil, err
 		}
-		grinderCount = libraryGrinderCount(lib)
+		grinderCount = len(lib.Grinders)
 		if grinderUses, err = shotsRepo.GrinderUses(); err != nil {
 			return nil, err
 		}
@@ -241,19 +240,6 @@ func hasGrinderTask(maint map[string]Task) bool {
 		}
 	}
 	return false
-}
-
-// libraryGrinderCount counts the library grinders that can own a maintenance
-// task. Entries without a usable id never get one (see GetMaintenance), so they
-// must not switch a single-grinder install to per-name attribution.
-func libraryGrinderCount(lib library.Library) int {
-	count := 0
-	for _, g := range lib.Grinders {
-		if _, ok := grinderIDOf(g); ok {
-			count++
-		}
-	}
-	return count
 }
 
 // grinderMatcher decides which annotated grinder names count for a grinder_*
