@@ -271,7 +271,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
     ${_maintVerdictHtml(verdict)}
     <section class="analytics-sec maint-tasks-sec">
       <div class="analytics-card-head">
-        <h3 class="analytics-section-title">${esc(t('maint_log_col_task'))}</h3>
+        <h3 class="analytics-section-title">${esc(t('maint_tasks_title'))}</h3>
         <span class="analytics-shelf-count">${esc(active.length)}</span>
       </div>
       <div class="maint-rows" id="maintGrid"></div>
@@ -328,8 +328,7 @@ function _maintDueDetail(d: MaintTaskData): string {
 }
 
 // #1923: the page's one emphasised block — one sentence plus the number of
-// tasks that are due. The title for 'ok' and the section heading on the tasks
-// section are deliberate interims that plan-1923e replaces with new keys.
+// tasks that are due.
 export function _maintVerdictHtml(state: MaintVerdictState): Html {
   const tile = state.tile;
   const machinePart = tile && !tile.isGlobal && tile.machineName ? ` · ${tile.machineName}` : '';
@@ -341,7 +340,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
     title = `${t('maint_next_label')} ${taskName}`;
     sub = (state.kind === 'due' && tile ? _maintDueDetail(tile.d) : t('maint_soon')) + machinePart;
   } else {
-    title = t('maint_ok');
+    title = t('maint_verdict_ok');
     if (state.kind === 'ok') sub = `${t('maint_next_label')} ${taskName}`;
   }
 
@@ -612,11 +611,7 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
   if (!el) return;
 
   const countEl = document.getElementById('maintLogCount');
-  if (countEl) {
-    const thisYear = new Date().getFullYear();
-    const n = entries.filter(e => new Date(e.ts * 1000).getFullYear() === thisYear).length;
-    countEl.textContent = `${t('maint_summary_log_entries', thisYear)}: ${n}`;
-  }
+  if (countEl) countEl.textContent = entries.length ? String(entries.length) : '';
 
   if (!entries.length) {
     el.innerHTML = html`<p class="empty-note pad-top">${tHtml('maint_log_empty')}</p>`;
@@ -688,8 +683,6 @@ export function openMaintLogForm(anchor: HTMLElement | null = null): void {
     actions: html`<button type="button" class="lib-sheet-save" data-action="submit-maint-log">${tHtml('maint_log_save')}</button>`,
     anchor,
   });
-  // Interim (#1923): the body's Cancel button goes away in plan-1923e.
-  document.getElementById('maintLogCancelBtn')?.addEventListener('click', closeMaintLogForm);
 }
 
 // No-op when the form sheet is not open — submitMaintLogEntry's success path
