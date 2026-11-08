@@ -63,7 +63,7 @@ async function flush(): Promise<void> {
 }
 
 function library(grinders: { id: number; name: string; isDefault?: boolean }[]): CoffeeLibrary {
-  return { beans: [{ id: 1, name: 'Bean A' }], grinders } as unknown as CoffeeLibrary;
+  return { beans: [{ id: 1, name: 'Bean A' }], grinders };
 }
 
 // One shot on Old only: with no default grinder the suggestion follows it, and
