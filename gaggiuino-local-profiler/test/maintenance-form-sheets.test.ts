@@ -130,6 +130,71 @@ function installDom(host: FakeHost): void {
   };
 }
 
+// The plan's Context pointers, pinned here instead of editing those files:
+// the sheet's action slot and bar ordering come from detail-sheet.ts (whose own
+// test asserts them), the labels must resolve through the i18n dictionaries
+// (i18n.test.ts fails on a key left unreferenced, so every key the builders
+// took over from the deleted markup stays used), and Save borrows the library
+// form sheet's .lib-sheet-save convention rather than inventing a button.
+describe('form sheets follow the shared sheet and i18n conventions (#1923)', () => {
+  let host: FakeHost;
+  beforeEach(() => {
+    host = makeHost();
+    installDom(host);
+    S.machines = [{ id: 4, name: 'Gaggiuino' }];
+    S.activeMachineId = 4;
+  });
+  afterEach(async () => {
+    const { closeDetailSheet } = await import('../public-src/components/detail-sheet.js');
+    closeDetailSheet();
+  });
+
+  it('puts the Save in the bar actions, after the title, for both forms', () => {
+    openMaintLogForm();
+    const logSheet = host.innerHTML;
+    expect(logSheet).toContain('lib-sheet-bar-actions');
+    expect(logSheet.indexOf('id="detailSheetTitle"')).toBeLessThan(logSheet.indexOf('lib-sheet-bar-actions'));
+
+    openMaintCustomForm();
+    const customSheet = host.innerHTML;
+    expect(customSheet).toContain('lib-sheet-bar-actions');
+    expect(customSheet.indexOf('id="detailSheetTitle"')).toBeLessThan(customSheet.indexOf('lib-sheet-bar-actions'));
+  });
+
+  it("uses the library form sheet's .lib-sheet-save for the bar action only", () => {
+    openMaintLogForm();
+    expect(host.innerHTML).toContain('class="lib-sheet-save"');
+    expect((host.innerHTML.match(/lib-sheet-save/g) || []).length).toBe(1);
+
+    openMaintCustomForm();
+    expect((host.innerHTML.match(/lib-sheet-save/g) || []).length).toBe(1);
+  });
+
+  // A key missing from the dictionaries falls back to its own name, so seeing
+  // the rendered English text (and not the key) proves the key still resolves.
+  it('renders translated labels rather than raw i18n keys', () => {
+    openMaintLogForm();
+    expect(host.innerHTML).toContain('>Add entry<');
+    expect(host.innerHTML).toContain('>Save<');
+    expect(host.innerHTML).not.toContain('>maint_log_add<');
+    expect(host.innerHTML).not.toContain('>maint_log_save<');
+
+    openMaintCustomForm();
+    expect(host.innerHTML).toContain('>Add custom task<');
+    expect(host.innerHTML).not.toContain('>maint_custom_add_summary<');
+
+    // The body carries the interval labels; the add action itself is in the bar.
+    const body = maintCustomFormBody();
+    expect(body).toContain('Every');
+    expect(body).toContain('shots');
+    expect(body).toContain('Days');
+    expect(body).not.toContain('maint_custom_every');
+    expect(body).not.toContain('maint_unit_shots');
+    expect(body).not.toContain('maint_by_days');
+    expect(body).not.toContain('maint_custom_label_ph');
+  });
+});
+
 describe('openMaintLogForm in the shared sheet (#1923)', () => {
   let host: FakeHost;
   beforeEach(() => { host = makeHost(); installDom(host); });
