@@ -432,9 +432,10 @@ export function _maintRowHtml(tile: MaintTile, fresh = false): Html {
   const machineTagText = isGlobal ? t('maint_shared_tag') : (showMachineTag ? machineName : null);
   const countText = _maintCountText(task, d);
   const pct = Math.round(d.pct * 100);
+  const rowClass = `maint-row status-${d.status}${fresh ? ' maint-row--fresh' : ''}`;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  return html`<button type="button" class="maint-row status-${esc(d.status)}${fresh ? ' maint-row--fresh' : ''}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
+  return html`<button type="button" class="${esc(rowClass)}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
     <span class="maint-row-icon">${taskIconSvg(task)}</span>
     <span class="maint-row-title">${esc(title)}</span>
     <span class="maint-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
