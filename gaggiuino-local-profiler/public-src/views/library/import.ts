@@ -11,11 +11,10 @@ import { esc, html, joinHtml, safeHttpUrl, toIsoDateInput } from '../../utils.js
 import { WARNING_ICON_SVG } from '../../icons.js';
 import { parseGlpQrParams } from '../../glp-qr.js';
 import type { BarcodeFormat } from 'barcode-detector/ponyfill';
-import * as libraryView from '../library.js';
+import * as library from '../library.js';
 
 // Circular with library.ts (it re-exports this module): the bean-form helpers
-// are only ever called at run time, never read at module load.
-const library = libraryView;
+// are only read at run time, never copied at module load.
 
 // BarcodeDetector is not in TypeScript's DOM lib yet (see BarcodeDetectorLike
 // in state/index.ts); this only types the constructor GLP calls.
