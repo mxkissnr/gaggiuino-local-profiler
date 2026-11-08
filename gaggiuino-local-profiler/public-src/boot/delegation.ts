@@ -11,7 +11,8 @@ import { openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelf
 import { markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
          toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
-         openMaintTask } from '../views/maintenance.js';
+         openMaintTask, openMaintLogForm, submitMaintLogEntry,
+         openMaintCustomForm } from '../views/maintenance.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from '../components/flavor-wheel.js';
 import { highlightSheetFlavor } from '../components/flavor-mini-wheel.js';
 import { closeDetailSheet } from '../components/detail-sheet.js';
@@ -144,6 +145,9 @@ export function wireDelegation(): void {
       case 'guided-maint-cancel': closeGuidedMaint(); break;
       case 'set-maint-scope':    setMaintScope(el.dataset.scope!); break;
       case 'open-maint-task':    openMaintTask(el.dataset.task!, el.dataset.machineId!, el); break;
+      case 'open-maint-log-form': openMaintLogForm(el); break;
+      case 'submit-maint-log':   void submitMaintLogEntry(); break;
+      case 'open-maint-custom-form': openMaintCustomForm(el); break;
       case 'set-bean-shelf-sort': setBeanShelfSort(el.dataset.sort === 'shots' ? 'shots' : 'score'); break;
       case 'expand-bean-shelf':   expandBeanShelf(); break;
       case 'analytics-bean':      openBeanShelfDetail(el.dataset.name!, el); break;
