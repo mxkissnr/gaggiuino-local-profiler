@@ -627,6 +627,7 @@ describe('default grinder prefill (#1954)', () => {
     expect(el('annGrinder').value).toBe('Grinder X');
     expect(el('annGrindSetting').value).toBe('');
     expect(el('annDose').value).toBe('18');
+    flushAutoSave();
   });
 
   it('still copies the previous shot\'s grind setting on a clone without a default', () => {
@@ -640,5 +641,6 @@ describe('default grinder prefill (#1954)', () => {
 
     expect(el('annGrinder').value).toBe('Old Grinder');
     expect(el('annGrindSetting').value).toBe('22');
+    flushAutoSave();
   });
 });
