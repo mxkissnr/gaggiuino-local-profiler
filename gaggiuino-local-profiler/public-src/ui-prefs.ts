@@ -11,6 +11,16 @@ const STORAGE_KEY = 'glp_ui_prefs';
 const PENDING_STORAGE_KEY = 'glp_ui_prefs_pending';
 const FLUSH_DELAY_MS = 600;
 
+// #1956: the popup switches and the two seen markers. The markers are their own
+// top-level keys: the server merges per key, so writing a switch can never touch
+// a marker or the other way round. They are numbers that only move forward.
+export const POPUPS_PREF = 'popups';
+export const SEEN_WHATS_NEW_PREF = 'popups.whats_new_seen';
+export const SEEN_ACHIEVEMENTS_PREF = 'popups.achievements_seen';
+const SEEN_MARKER_PREFS = [SEEN_WHATS_NEW_PREF, SEEN_ACHIEVEMENTS_PREF];
+
+let _inSync = false;
+
 let _prefs: UiPrefs = {};
 try {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -82,6 +92,18 @@ export function setUiPref(key: string, value: unknown): void {
   if (_timer == null) {
     _timer = setTimeout(() => { _timer = null; void _flush(); }, FLUSH_DELAY_MS);
   }
+}
+
+/** Moves a seen marker forward; an equal or lower value is ignored. */
+export function advanceSeenMarker(key: string, value: number): void {
+  const current = getUiPref<unknown>(key);
+  if (typeof current === 'number' && value <= current) return;
+  setUiPref(key, value);
+}
+
+/** Whether the last server read succeeded, so the cache can be trusted. */
+export function uiPrefsInSync(): boolean {
+  return _inSync;
 }
 
 /** Extracts the key names a 400 response's `issues` point at. */
@@ -201,11 +223,13 @@ _subscribe(typeof document !== 'undefined' ? document : undefined, 'visibilitych
 
 /**
  * Server wins for every key it already holds, except keys with a local write
- * still queued (`pending`), which are newer than the server's value. When the
- * server is empty the local cache is migrated up once; once the server has any
- * preferences it is authoritative, and local-only keys that are not pending are
- * dropped rather than pushed, so two apps sharing one origin cannot leak their
- * local-only keys into each other. Pure so it can be unit-tested.
+ * still queued (`pending`), which are newer than the server's value. The two
+ * seen markers are the exception: their queued value only wins when it is
+ * higher, because a marker that moves backwards would show a popup again. When
+ * the server is empty the local cache is migrated up once; once the server has
+ * any preferences it is authoritative, and local-only keys that are not pending
+ * are dropped rather than pushed, so two apps sharing one origin cannot leak
+ * their local-only keys into each other. Pure so it can be unit-tested.
  */
 export function mergeUiPrefs(
   local: UiPrefs,
@@ -218,6 +242,12 @@ export function mergeUiPrefs(
   }
   for (const key of pending) {
     if (key in local) merged[key] = local[key];
+  }
+  // A queued marker may be older than what another device already wrote.
+  for (const key of SEEN_MARKER_PREFS) {
+    const l = local[key];
+    const s = server[key];
+    if (pending.has(key) && typeof l === 'number' && typeof s === 'number') merged[key] = Math.max(l, s);
   }
   const pushUp: string[] = [];
   if (Object.keys(server).length === 0) {
@@ -239,7 +269,10 @@ export function mergeUiPrefs(
 export async function loadUiPrefsFromServer(): Promise<boolean> {
   try {
     const r = await getUiPrefs();
-    if (!r.ok) return false;
+    if (!r.ok) {
+      _inSync = false;
+      return false;
+    }
     const body = (await r.json()) as unknown;
     const server = body && typeof body === 'object' && !Array.isArray(body)
       ? (body as UiPrefs)
@@ -247,6 +280,7 @@ export async function loadUiPrefsFromServer(): Promise<boolean> {
     const { merged, pushUp } = mergeUiPrefs(_prefs, server, _queue);
     const changed = JSON.stringify(merged) !== JSON.stringify(_prefs);
     _prefs = merged;
+    _inSync = true;
     _persist();
     if (pushUp.length) {
       for (const key of pushUp) _queue.add(key);
@@ -257,6 +291,7 @@ export async function loadUiPrefsFromServer(): Promise<boolean> {
     if (_queue.size) await _flush();
     return changed;
   } catch {
+    _inSync = false;
     return false;
   }
 }
