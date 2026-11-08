@@ -237,6 +237,18 @@ describe('index.html i18n wiring', () => {
         }
         expect(offenders, `child elements inside [data-i18n] nodes:\n${offenders.join('\n')}`).toEqual([]);
     });
+
+    // #1922: the Dev Tools card gains a score-model select and a blind-rating
+    // checkbox. Both labels are plain data-i18n nodes, so they localise with
+    // the rest of the card — but only if the label/control pairing survives
+    // edits: a <label for=...> with no matching id leaves the text clickable
+    // but silently untethered from its control.
+    it('wires the Dev Tools score-model and blind-rating labels to their controls (#1922)', () => {
+        expect(html).toMatch(/<label for="devScoreModel"[^>]*data-i18n="settings_devtools_score_model"/);
+        expect(html).toMatch(/<select id="devScoreModel"/);
+        expect(html).toMatch(/<p[^>]*data-i18n="settings_devtools_score_model_desc"/);
+        expect(html).toMatch(/<label for="devBlindRating"[^>]*data-i18n="settings_devtools_blind_rating"/);
+    });
 });
 
 // The shot detail view wires its phase tags, compare title and profile fallback

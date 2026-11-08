@@ -562,7 +562,7 @@ const en: Translations = {
     api_port_closed_settings_btn:'Go to Settings',
     api_port_closed_badge:'Direct port off',
     settings_devtools_title:'Dev Tools', settings_devtools_desc:'GLP DEV channel only — never available on a real install.', settings_devtools_export_db:'Download raw database',
-    settings_devtools_import_db:'Upload raw database …', settings_devtools_import_db_confirm:'This replaces the entire database with the uploaded file. A backup of the current database is kept, but a restart is required for the import to take effect. Continue?', settings_devtools_import_db_done:'Import successful — restart the app to load it.', settings_devtools_import_db_failed:'Import failed.', settings_devtools_export_db_failed:'Download failed.',
+    settings_devtools_import_db:'Upload raw database …', settings_devtools_import_db_confirm:'This replaces the entire database with the uploaded file. A backup of the current database is kept, but a restart is required for the import to take effect. Continue?', settings_devtools_import_db_done:'Import successful — restart the app to load it.', settings_devtools_import_db_failed:'Import failed.', settings_devtools_export_db_failed:'Download failed.', settings_devtools_score_model:'Score model', settings_devtools_score_model_desc:'Which model scores your shots. Changing it reloads the app; stable builds always use classic.', settings_devtools_blind_rating:'Blind rating — hide a shot\'s score and verdict until it has a star rating',
     preheat_warming:'Warming up …', preheat_ready:'Ready to brew',
     preheat_remain:(m,s)=>`${m}:${String(s).padStart(2,'0')} remaining`,
     machine_on_duration:(m)=>`on ${m} min`, machine_on_duration_hours:(h,m)=>`on ${h}h ${m}m`,
