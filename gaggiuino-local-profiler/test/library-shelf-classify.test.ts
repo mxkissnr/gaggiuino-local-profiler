@@ -66,10 +66,23 @@ interface ShelfModule {
 const { classifyBeanShelf, shelfStock, renderShelfTile, renderShelfRow, matchesShelfQuery, matchesShelfFilter, sortShelf } =
   (await import('../public-src/views/library/shelf.js')) as unknown as ShelfModule;
 
+interface BagEntryLike {
+  bg: { id: number };
+  remaining: number | null;
+}
+interface ClassifiedBagsLike {
+  current: BagEntryLike | null;
+  upcoming: BagEntryLike[];
+  past: BagEntryLike[];
+}
 interface BagsModule {
-  classifyBeanBags: (b: unknown) => { current: { bg: { id: number } } | null; upcoming: { bg: { id: number } }[]; past: { bg: { id: number } }[] };
+  classifyBeanBags: (b: unknown) => ClassifiedBagsLike;
 }
 const { classifyBeanBags } = (await import('../public-src/views/library/bags.js')) as unknown as BagsModule;
+
+function bagIds(entries: readonly BagEntryLike[]): number[] {
+  return entries.map(e => e.bg.id);
+}
 
 const { S } = await import('../public-src/state/index.js');
 interface LibraryModule {
@@ -208,11 +221,11 @@ describe('shelfStock (#1330 one shelf)', () => {
 });
 
 describe('classifyBeanBags (#1933 untracked placeholder)', () => {
-  it('keeps a bean\'s only untracked bag in upcoming, not past', () => {
+  it("keeps a bean's only untracked bag in upcoming, not past", () => {
     const b = bean({ id: 1, bags: [bag({ id: 1, stock_g: 250, roastDate: '2026-10-01' })] });
     const { current, upcoming, past } = classifyBeanBags(b);
     expect(current).toBeNull();
-    expect(ids(upcoming)).toEqual([1]);
+    expect(bagIds(upcoming)).toEqual([1]);
     expect(past).toEqual([]);
     expect(upcoming[0]?.remaining).toBeNull();
   });
@@ -224,7 +237,7 @@ describe('classifyBeanBags (#1933 untracked placeholder)', () => {
     ] });
     const { upcoming, past } = classifyBeanBags(b);
     expect(upcoming).toEqual([]);
-    expect(ids(past)).toEqual([2]);
+    expect(bagIds(past)).toEqual([2]);
   });
 
   it('keeps an emptied tracked bag in past', () => {
@@ -232,7 +245,7 @@ describe('classifyBeanBags (#1933 untracked placeholder)', () => {
     const { current, upcoming, past } = classifyBeanBags(b);
     expect(current?.bg.id).toBe(1);
     expect(upcoming).toEqual([]);
-    expect(ids(past)).toEqual([1]);
+    expect(bagIds(past)).toEqual([1]);
   });
 });
 
