@@ -302,7 +302,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   const fresh = _freshDone;
   _freshDone = null;
   grid.innerHTML = joinHtml(active.map(tile => _maintRowHtml(tile,
-    !!fresh && tile.task === fresh.task
+    fresh !== null && tile.task === fresh.task
       && (fresh.machineId === '' || String(tile.machineId) === fresh.machineId))));
 
   const disabledSec = document.getElementById('maintDisabledSection');
