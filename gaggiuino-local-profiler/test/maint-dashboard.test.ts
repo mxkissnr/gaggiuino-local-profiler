@@ -247,7 +247,7 @@ type MaintRowTile = Parameters<MaintView['_maintRowHtml']>[0];
 describe('_maintRowHtml (#1923)', () => {
   const rowTile = (overrides: Partial<MaintRowTile> = {}): MaintRowTile => ({
     task: 'backflush',
-    d: task('ok', { threshold_shots: 20, shotsSince: 5 }) as unknown as MaintRowTile['d'],
+    d: task('ok', { threshold_shots: 20, shotsSince: 5 }),
     machineId: 1, machineName: null, isGlobal: false, showMachineTag: false,
     ...overrides,
   });
@@ -261,7 +261,7 @@ describe('_maintRowHtml (#1923)', () => {
   });
 
   it('marks a due row with status-due', () => {
-    const due = rowTile({ d: task('due', { threshold_shots: 20, shotsSince: 40 }) as unknown as MaintRowTile['d'] });
+    const due = rowTile({ d: task('due', { threshold_shots: 20, shotsSince: 40 }) });
     expect(_maintRowHtml(due)).toContain('class="maint-row status-due"');
   });
 
@@ -283,7 +283,7 @@ describe('_maintRowHtml (#1923)', () => {
   it('shows the Auto badge only for a machine-synced last done', () => {
     const at = '2026-10-01T08:30:00.000Z';
     const synced = rowTile({
-      d: task('ok', { machineSyncedAt: Date.parse(at), lastDate: at }) as unknown as MaintRowTile['d'],
+      d: task('ok', { machineSyncedAt: Date.parse(at), lastDate: at }),
     });
     expect(_maintRowHtml(synced)).toContain('maint-auto-synced');
     expect(_maintRowHtml(rowTile())).not.toContain('maint-auto-synced');
@@ -291,7 +291,7 @@ describe('_maintRowHtml (#1923)', () => {
 
   it('escapes a custom label containing markup', () => {
     const custom = rowTile({
-      task: 'custom_1', d: task('due', { label: 'A < B' }) as unknown as MaintRowTile['d'],
+      task: 'custom_1', d: task('due', { label: 'A < B' }),
     });
     const html = _maintRowHtml(custom);
     expect(html).toContain('A &lt; B');
