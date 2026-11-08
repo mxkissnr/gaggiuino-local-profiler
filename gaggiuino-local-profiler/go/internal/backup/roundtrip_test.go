@@ -160,10 +160,12 @@ func TestStreamRoundTrip_DefaultGrinderFlag(t *testing.T) {
 
 	h1, deps1, _ := newTestHandlers(t)
 	mux1 := newMux(h1)
-	if err := deps1.LibRepo.SaveLibrary(library.Library{Grinders: []library.Entity{
+	seedLib := library.Library{}
+	seedLib.Grinders = []library.Entity{
 		{"id": int64(1), "name": "A"},
 		{"id": int64(2), "name": "B", "isDefault": true},
-	}}); err != nil {
+	}
+	if err := deps1.LibRepo.SaveLibrary(seedLib); err != nil {
 		t.Fatal(err)
 	}
 

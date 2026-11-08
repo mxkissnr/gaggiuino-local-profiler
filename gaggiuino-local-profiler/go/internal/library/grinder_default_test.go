@@ -156,12 +156,13 @@ func TestGrinderDefault_CreateWithoutKeyStoresNothing(t *testing.T) {
 }
 
 func TestSanitizeLibraryForRestore_DefaultGrinder(t *testing.T) {
-	lib := Library{Grinders: []Entity{
+	lib := Library{}
+	lib.Grinders = []Entity{
 		{"id": int64(1), "name": "A", "isDefault": true},
 		{"id": int64(2), "name": "B", "isDefault": true},
 		{"id": int64(3), "name": "C", "isDefault": "yes"},
 		{"id": int64(4), "name": "D"},
-	}}
+	}
 	out := SanitizeLibraryForRestore(lib)
 
 	if _, ok := out.Grinders[0]["isDefault"]; !ok {
