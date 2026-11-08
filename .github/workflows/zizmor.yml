@@ -1,0 +1,34 @@
+name: zizmor
+
+on:
+  pull_request:
+    paths:
+      - '.github/**'
+  push:
+    branches: [dev]
+    paths:
+      - '.github/**'
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: Workflow lint (zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # Report-only (not a required check): findings show as annotations and
+      # in the log, they do not fail the run.
+      - name: Run zizmor
+        continue-on-error: true
+        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+        with:
+          version: 1.31.1
+          advanced-security: false
+          annotations: true

@@ -79,9 +79,6 @@ jobs:
           push: false
           load: true
           tags: glp-root:amd64
-          cache-from: |
-            type=gha,scope=root-shared
-            type=gha,scope=root-amd64
 
       # exit-code 0 + JSON so a finding does not look like a crash; the
       # findings are counted and rendered below.

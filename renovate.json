@@ -5,12 +5,12 @@
     "dev"
   ],
   "schedule": ["before 6am on monday"],
-  "minimumReleaseAge": "3 days",
+  "minimumReleaseAge": "7 days",
   "semanticCommits": "enabled",
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 6am on monday"],
-    "automerge": true
+    "automerge": false
   },
   "vulnerabilityAlerts": {
     "enabled": true,

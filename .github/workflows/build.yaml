@@ -89,8 +89,6 @@ jobs:
           # OCI manifests; the attestation below signs the image digest.
           provenance: mode=max
           sbom: true
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
           tags: |
             ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:${{ steps.version.outputs.version }}
             ghcr.io/mxkissnr/gaggiuino-local-profiler/${{ matrix.arch }}:latest
