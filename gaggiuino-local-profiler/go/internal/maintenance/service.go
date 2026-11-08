@@ -42,10 +42,13 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 	lastDate := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	t["lastDate"] = lastDate
 	maint[task] = t
-	// Save only this task's lastDate; the in-memory map above already carries
-	// it for the stats computed below, and writing the one row (rather than
-	// the whole snapshot) keeps a concurrent edit to another task intact.
-	if err := repo.SaveTask(machineID, task, Task{"lastDate": lastDate}); err != nil {
+	// Save only this task's lastDate (plus the paused-time reset); the in-memory
+	// map above already carries it for the stats computed below, and writing the
+	// one row rather than the whole snapshot keeps a concurrent edit to another
+	// task intact.
+	save := Task{"lastDate": lastDate}
+	resetPausedTime(t, save)
+	if err := repo.SaveTask(machineID, task, save); err != nil {
 		return nil, err
 	}
 	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, time.Now()); err != nil {
@@ -94,6 +97,7 @@ func ApplyMachineServiceLog(repo *Repository, shotsRepo *shots.Repository, regis
 	}
 	if marked {
 		save["lastDate"] = at.Format("2006-01-02T15:04:05.000Z")
+		resetPausedTime(t, save)
 	}
 	if err := repo.SaveTask(machineID, task, save); err != nil {
 		return false, err
@@ -112,7 +116,10 @@ func ApplyMachineServiceLog(repo *Repository, shotsRepo *shots.Repository, regis
 type Stat = map[string]any
 
 // ComputeMaintenanceStats returns per-task days/shots since last done,
-// percent-to-threshold, and a due/soon/ok/never status.
+// percent-to-threshold, and a due/soon/ok/never/paused status. A paused task
+// is always "paused", never due, and its day count excludes the paused time
+// (PausedMsSince). Shot and gram counts keep counting: a shot pulled during a
+// pause still happened.
 // descaling/backflush/grouphead/gaskets scope shot counts to the active
 // machine; waterfilter/grinder_* (shared equipment, #338) count shots
 // across every machine. A grinder_* task counts only its own grinder's
@@ -157,7 +164,11 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, libRepo *library.Repos
 		}
 		var daysSince any
 		if lastTs != 0 {
-			daysSince = jsFloorDivDays(now - lastTs)
+			elapsed := now - lastTs
+			if elapsed > 0 {
+				elapsed -= min(elapsed, PausedMsSince(task, lastTs, now))
+			}
+			daysSince = jsFloorDivDays(elapsed)
 		}
 		var shotsSince int
 		var gramsSince float64
@@ -211,6 +222,9 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, libRepo *library.Repos
 			default:
 				status = "ok"
 			}
+		}
+		if _, paused := pausedAt(task); paused {
+			status = "paused"
 		}
 		if pct > 1 {
 			pct = 1
@@ -282,6 +296,63 @@ func jsFloorDivDays(deltaMs int64) int64 {
 		q--
 	}
 	return q
+}
+
+// PausedMsSince returns how much of the time since lastMs was paused: the
+// closed pauses plus a pause still running at nowMs. A running pause only
+// counts from lastMs on, so a task finished during a pause restarts at zero.
+func PausedMsSince(t Task, lastMs, nowMs int64) int64 {
+	paused, _ := jsPositiveInt(t["pausedMs"])
+	if paused < 0 {
+		paused = 0
+	}
+	if at, ok := pausedAt(t); ok {
+		if at < lastMs {
+			at = lastMs
+		}
+		if nowMs > at {
+			paused += nowMs - at
+		}
+	}
+	return paused
+}
+
+func pausedAt(t Task) (int64, bool) {
+	at, ok := jsPositiveInt(t["pausedAt"])
+	return at, ok && at > 0
+}
+
+// resetPausedTime clears the closed pauses when lastDate moves: they counted
+// against the old date. A running pause keeps going.
+func resetPausedTime(t, save Task) {
+	if _, ok := jsPositiveInt(t["pausedMs"]); ok {
+		delete(t, "pausedMs")
+		save["pausedMs"] = nil
+	}
+}
+
+// applyPause starts or ends a task's pause and returns the stored-row delta.
+// Asking for the state it is already in changes nothing, so a double click
+// cannot restart the clock or count the same time twice.
+func applyPause(t Task, paused bool, nowMs int64) Task {
+	_, isPaused := pausedAt(t)
+	if paused == isPaused {
+		return Task{}
+	}
+	if paused {
+		t["pausedAt"] = nowMs
+		return Task{"pausedAt": nowMs}
+	}
+	var lastMs int64
+	if lastDate, _ := t["lastDate"].(string); lastDate != "" {
+		if ms, err := parseJSDate(lastDate); err == nil {
+			lastMs = ms
+		}
+	}
+	total := PausedMsSince(t, lastMs, nowMs)
+	delete(t, "pausedAt")
+	t["pausedMs"] = total
+	return Task{"pausedAt": nil, "pausedMs": total}
 }
 
 // jsPositiveInt ports the `task.threshold_shots`/`task.threshold_days`

@@ -327,6 +327,13 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 			delta["disabled"] = b
 		}
 	}
+	if v, present := body["paused"]; present {
+		if b, ok := v.(bool); ok {
+			for k, val := range applyPause(t, b, time.Now().UnixMilli()) {
+				delta[k] = val
+			}
+		}
+	}
 	if isCustomTask(task) {
 		if v, present := body["label"]; present {
 			if s, ok := v.(string); ok {

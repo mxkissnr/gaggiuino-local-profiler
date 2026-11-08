@@ -462,11 +462,13 @@ components:
         label:           { type: string, description: "custom_* only: the user-defined label" }
         machineSyncedAt: { type: string, nullable: true, description: "descaling/backflush only: when the task was last auto-synced from the machine" }
         disabled:        { type: boolean, description: "grinder_* only: task hidden from the maintenance view when true" }
-        daysSince:       { type: integer, nullable: true, description: "Days since last maintenance, null when never done" }
+        pausedAt:        { type: integer, format: int64, nullable: true, description: "Unix ms the running pause started, absent when not paused" }
+        pausedMs:        { type: integer, format: int64, nullable: true, description: "Paused time since lastDate from pauses that already ended" }
+        daysSince:       { type: integer, nullable: true, description: "Days since last maintenance with paused time excluded, null when never done" }
         shotsSince:      { type: integer, description: Shots since last maintenance }
         gramsSince:      { type: integer, description: "grinder_* only: grams dosed since last maintenance" }
         pct:             { type: number, minimum: 0, maximum: 1, description: "Progress toward threshold (0–1, capped at 1)" }
-        status:          { type: string, enum: [never, ok, soon, due] }
+        status:          { type: string, enum: [never, ok, soon, due, paused] }
 
     MaintenanceStats:
       type: object
@@ -2507,6 +2509,7 @@ paths:
                 threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
                 threshold_days:  { type: integer, minimum: 1, maximum: 3650, nullable: true, description: "Static/grinder_* tasks are additionally capped at 365 server-side; custom_* tasks accept the full range." }
                 label: { type: string, maxLength: 100, description: "custom_* tasks only — renames the task's display label." }
+                paused: { type: boolean, description: "true starts a pause, false ends it; repeating the current state changes nothing." }
       responses:
         "200": { description: Updated stats, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceStats' } } } }
         "404": { description: Unknown task, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }

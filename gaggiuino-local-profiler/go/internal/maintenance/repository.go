@@ -109,8 +109,10 @@ func (r *Repository) GetMaintenance(machineID int64) (map[string]Task, error) {
 			"threshold_g":     valueOrDefault(s, "threshold_g", nil),
 			"grinderName":     g["name"],
 		}
-		if d, ok := s["disabled"]; ok {
-			task["disabled"] = d
+		for _, key := range []string{"disabled", "pausedAt", "pausedMs"} {
+			if v, ok := s[key]; ok {
+				task[key] = v
+			}
 		}
 		result[key] = task
 	}
