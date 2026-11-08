@@ -320,7 +320,11 @@ function installGuidedDom(host: FakeHost, openTaskSheet: boolean): GuidedNodes {
   const nodes: GuidedNodes = {
     modal: fakeElement(), title: fakeElement(), steps: fakeElement(), done: fakeElement(),
   };
-  g.window = { innerWidth: 1200, innerHeight: 800 };
+  g.window = {
+    matchMedia: (query: string) => ({ matches: query.includes('max-width') ? false : true }),
+    innerWidth: 1200,
+    innerHeight: 800,
+  };
   g.document = {
     getElementById: (id: string) => {
       if (id === 'detailSheet') return host;
