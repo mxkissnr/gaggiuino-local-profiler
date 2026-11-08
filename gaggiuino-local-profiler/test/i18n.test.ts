@@ -45,6 +45,8 @@ const NEW_KEYS = [
     'machine_warn_water', 'machine_warn_flush', 'machine_warn_switch',
     'machine_warn_scaleConnected', 'machine_warn_scaleBattery', 'machine_warn_temperature',
     'machine_update_available',
+    // The maintenance task sheet's guide button (#1928).
+    'guided_open',
 ];
 
 describe('i18n language files', () => {
