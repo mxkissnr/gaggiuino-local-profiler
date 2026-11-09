@@ -177,6 +177,9 @@ describe('taste tag refresh (#1957)', () => {
     scheduleAutoSave();
     await drain();
     expect(updateView).not.toHaveBeenCalled();
+    // Let that debounce fire so its timer does not outlive the test.
+    vi.advanceTimersByTime(1000);
+    await drain();
   });
 });
 
