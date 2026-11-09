@@ -40,6 +40,8 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
+          # merge-dev-features.sh fetches from the public repository anonymously.
+          persist-credentials: false
 
       - name: Merge dev-channel features
         env:

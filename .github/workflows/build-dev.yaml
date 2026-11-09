@@ -151,6 +151,8 @@ jobs:
           ref: dev
           path: main-repo
           fetch-depth: 0
+          # merge-dev-features.sh fetches from the public repository anonymously.
+          persist-credentials: false
 
       - name: Merge dev-channel features
         working-directory: main-repo
@@ -165,7 +167,7 @@ jobs:
           path: dev-app
           # GITHUB_TOKEN is scoped to this repository only, so writing to the
           # manifest repository needs a PAT with `contents: write` on it.
-          token: ${{ secrets.DEV_ADDON_REPO_TOKEN }}
+          token: ${{ secrets.DEV_ADDON_REPO_TOKEN }} # zizmor: ignore[artipacked] the credential is kept on purpose, a later step pushes to this repository
 
       # #1270: sync-dev-config is TypeScript run on Node's built-in type
       # stripping; pin Node 24 like the other workflows instead of relying

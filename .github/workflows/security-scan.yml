@@ -4,8 +4,10 @@ name: Security scan
 # CVEs are published without any commit (#1828). This daily scan covers dev and
 # main: govulncheck (Go modules), osv-scanner (package-lock.json + go.mod,
 # including dependencies that were already present) and Trivy on the amd64
-# image (Alpine base + runtime-stage apk packages). Findings are reported as one
-# `security` issue per branch; reruns comment on the open issue.
+# image (Alpine base + runtime-stage apk packages). It also verifies the build
+# attestation of the published release images. Findings are reported as one
+# `security` issue per branch (or per release check); reruns comment on the
+# open issue.
 
 on:
   schedule:
@@ -109,9 +111,48 @@ jobs:
           path: findings/
           if-no-files-found: ignore
 
+  release-attestation:
+    name: Release image attestation
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      # The latest published release, not config.yaml: during a release the
+      # version on main can be ahead of the published image. A script exit of 1
+      # means a verification failed (text goes to findings/attestation.txt);
+      # any other non-zero exit is a crash and fails the job.
+      - name: Verify attestation of the published images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag=$(gh release view --json tagName --jq .tagName)
+          mkdir -p findings
+          rc=0
+          .github/scripts/verify-release-images.sh "$tag" > findings/attestation.txt 2>&1 || rc=$?
+          cat findings/attestation.txt
+          [ "$rc" -eq 0 ] && rm findings/attestation.txt
+          [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || exit "$rc"
+
+      - name: Upload findings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: findings-release
+          path: findings/
+          if-no-files-found: ignore
+
   report:
     name: Report findings
-    needs: scan
+    needs: [scan, release-attestation]
     if: ${{ !cancelled() && github.server_url == 'https://github.com' }}
     runs-on: ubuntu-latest
     permissions:
@@ -144,8 +185,11 @@ jobs:
               }
               if (sections.length === 0) continue;
 
-              const title = `Security scan: vulnerabilities found on ${branch}`;
-              const body = [`Branch: \`${branch}\``, `Run: ${runUrl}`, '', ...sections].join('\n');
+              const isRelease = branch === 'release';
+              const title = isRelease
+                ? 'Security scan: published images failed attestation check'
+                : `Security scan: vulnerabilities found on ${branch}`;
+              const body = [...(isRelease ? [] : [`Branch: \`${branch}\``]), `Run: ${runUrl}`, '', ...sections].join('\n');
 
               try {
                 await github.rest.issues.createLabel({ owner, repo, name: 'security', color: 'b60205' });

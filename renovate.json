@@ -54,8 +54,8 @@
       "matchManagers": ["github-actions"],
       "groupName": "github-actions",
       "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true,
-      "description": "github/codeql-action ships init/analyze/upload-sarif as one versioned unit; a single-action bump leaves the others behind and breaks the Analyze job (#778). Grouping all github-actions updates together avoids that and cuts PR noise. CI-only, safe to automerge on green."
+      "automerge": false,
+      "description": "github/codeql-action ships init/analyze/upload-sarif as one versioned unit; a single-action bump leaves the others behind and breaks the Analyze job (#778). Grouping all github-actions updates together avoids that and cuts PR noise. Never automerged (#1981): these actions run in the workflows that build and publish the images, so every update is human-reviewed."
     },
     {
       "matchManagers": ["github-actions"],

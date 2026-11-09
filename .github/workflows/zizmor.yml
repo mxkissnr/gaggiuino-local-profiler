@@ -2,12 +2,8 @@ name: zizmor
 
 on:
   pull_request:
-    paths:
-      - '.github/**'
   push:
     branches: [dev]
-    paths:
-      - '.github/**'
 
 permissions:
   contents: read
@@ -23,10 +19,10 @@ jobs:
         with:
           persist-credentials: false
 
-      # Report-only (not a required check): findings show as annotations and
-      # in the log, they do not fail the run.
+      # Findings fail the run. Runs on every pull request so it can be a
+      # required check. Accepted findings are annotated inline or configured
+      # in .github/zizmor.yml, each with a reason.
       - name: Run zizmor
-        continue-on-error: true
         uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
         with:
           version: 1.31.1
