@@ -53,7 +53,7 @@ func TestSanitizeMaintenanceRow(t *testing.T) {
 				"machineId": float64(1), "key": "descaling", "data": tc.data,
 			})
 			if !ok {
-				t.Fatalf("sanitizeMaintenanceRow rejected a valid row")
+				t.Fatal("sanitizeMaintenanceRow rejected a valid row")
 			}
 			data, ok := got["data"].(map[string]any)
 			if !ok {
