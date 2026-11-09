@@ -28,7 +28,7 @@ interface FakeEl {
   focus: () => void;
   addEventListener: (name: string, cb: Handler) => void;
   replaceChildren: (frag?: { children: unknown[] }) => void;
-  options: unknown[];
+  options: FakeOption[];
   onchange?: (() => void) | null;
 }
 
@@ -139,16 +139,14 @@ function installDom(): Dom {
 // can read back what renderGrindField produced.
 function makeSelect(): FakeEl {
   const node = makeEl({ tagName: 'SELECT', hidden: true });
-  node.replaceChildren = (frag?: { children: unknown[] }) => { node.options = frag?.children ?? []; };
+  node.replaceChildren = (frag?: { children: unknown[] }) => { node.options = (frag?.children ?? []) as FakeOption[]; };
   return node;
 }
 
-function optionsOf(select: FakeEl): FakeOption[] {
-  return (select.options ?? []) as FakeOption[];
-}
+function optionsOf(select: FakeEl): FakeOption[] { return select.options; }
 
 function setLibrary(): void {
-  S.coffeeLibrary = { grinders: [{ name: 'K6', scale: STEPPED_0_60 }], beans: [{ id: 1, name: 'Bean A' }] } as unknown as typeof S.coffeeLibrary;
+  S.coffeeLibrary = { grinders: [{ name: 'K6', scale: STEPPED_0_60 }], beans: [{ id: 1, name: 'Bean A' }] };
 }
 
 function reviewSession(grinder: string): void {

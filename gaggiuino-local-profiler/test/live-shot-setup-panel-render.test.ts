@@ -33,14 +33,14 @@ interface FakeElement {
   style: Record<string, string>;
   value: string;
   hidden: boolean;
-  options: unknown[];
+  options: FakeOption[];
   onchange: (() => void) | null;
   classList: { add: () => void; remove: () => void; contains: () => boolean; toggle: () => void };
   querySelector: () => null;
   selectedOptions: { dataset: Record<string, string> }[];
   addEventListener: (type: string, cb: () => void) => void;
   removeEventListener: () => void;
-  replaceChildren: (frag: { children: unknown[] }) => void;
+  replaceChildren: (frag: { children: FakeOption[] }) => void;
   setAttribute: (name: string, value: string) => void;
   removeAttribute: (name: string) => void;
   _fire: (type: string) => void;
@@ -75,7 +75,7 @@ function makeFakeDocument() {
       return registry.get(id)!;
     },
     createDocumentFragment: () => {
-      const frag = { children: [] as unknown[], append: (v: unknown) => { frag.children.push(v); } };
+      const frag = { children: [] as FakeOption[], append: (v: FakeOption) => { frag.children.push(v); } };
       return frag;
     },
   };
@@ -186,11 +186,11 @@ describe('renderLiveShotSetupPanel()', () => {
     const STEPLESS: GrindScale = { type: 'stepless', min: 0, max: 9, step: 0.1 };
 
     function setGrinders(grinders: Array<{ name: string; scale?: GrindScale }>): void {
-      S.coffeeLibrary = { grinders, beans: [] } as unknown as typeof S.coffeeLibrary;
+      S.coffeeLibrary = { grinders, beans: [] };
     }
 
     afterEach(() => {
-      S.coffeeLibrary = { grinders: [], beans: [] } as unknown as typeof S.coffeeLibrary;
+      S.coffeeLibrary = { grinders: [], beans: [] };
     });
 
     function savedGrind(): string | undefined {
@@ -208,7 +208,7 @@ describe('renderLiveShotSetupPanel()', () => {
       const select = doc.getElementById('grindSelect-lsGrindSetting');
       expect(select.hidden).toBe(false);
       expect(doc.getElementById('lsGrindSetting').hidden).toBe(true);
-      expect((select.options as FakeOption[]).map(o => o.value)).toContain('3');
+      expect(select.options.map(o => o.value)).toContain('3');
       expect(select.value).toBe('3');
 
       select.value = '6';
@@ -242,7 +242,7 @@ describe('renderLiveShotSetupPanel()', () => {
       renderLiveShotSetupPanel();
 
       const select = doc.getElementById('grindSelect-lsGrindSetting');
-      const extra = (select.options as FakeOption[])[1];
+      const extra = select.options[1];
       expect(extra?.value).toBe('33.5');
       expect(select.value).toBe('33.5');
 
