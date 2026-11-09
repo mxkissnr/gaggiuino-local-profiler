@@ -42,6 +42,7 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/config"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/debug"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/img"
@@ -284,6 +285,15 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		return func(s shots.Shot) *shots.Bean {
 			return library.ScoreBean(s, beans)
 		}, nil
+	})
+	// #1961: same injection as the bean source above. A library read error
+	// leaves the advice on its no-scale behaviour.
+	shots.SetGrinderScaleSource(func(grinder string) *grindscale.Scale {
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil
+		}
+		return grindscale.ForGrinder(lib.Grinders, grinder)
 	})
 	libraryHandlers := library.NewHandlers(libRepo, shotsRepo)
 	libraryHandlers.RegisterRoutes(mux)

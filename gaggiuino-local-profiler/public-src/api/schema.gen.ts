@@ -1608,6 +1608,7 @@ export interface paths {
                         purchaseDate?: string;
                         /** @description Only the single default grinder carries it; setting it clears the previous default. */
                         isDefault?: boolean;
+                        scale?: components["schemas"]["GrinderScale"];
                         /**
                          * Format: date
                          * @description Defaults to purchaseDate if omitted
@@ -1678,6 +1679,8 @@ export interface paths {
                         purchaseDate?: string;
                         /** @description Only the single default grinder carries it; setting it clears the previous default. */
                         isDefault?: boolean;
+                        /** @description Null removes the scale; omit it to leave the scale unchanged. */
+                        scale?: components["schemas"]["GrinderScale"] | null;
                         /** Format: date */
                         burrsResetAt?: string;
                     };
@@ -8647,6 +8650,14 @@ export interface components {
             /** @description Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
             consumedG?: number;
         };
+        /** @description A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text. */
+        GrinderScale: {
+            /** @enum {string} */
+            type: "stepped" | "stepless";
+            min: number;
+            max: number;
+            step: number;
+        };
         Grinder: {
             id: number;
             name: string;
@@ -8655,6 +8666,7 @@ export interface components {
             purchaseDate?: string;
             /** @description Only the single default grinder carries it; setting it clears the previous default. */
             isDefault?: boolean;
+            scale?: components["schemas"]["GrinderScale"];
             /** @description ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs */
             burrsResetAt?: string;
             /** @description File extension of the stored photo, if any */

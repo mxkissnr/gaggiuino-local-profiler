@@ -11,6 +11,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -191,6 +192,29 @@ func publishDataChanged(deps Deps, kind, id string) {
 	}
 }
 
+// fitGrindSetting applies a grinder's scale to a setting an MCP client wants to
+// save (#1961): canonical form when it fits, an error naming the valid range
+// when not. Without a scale the setting is returned as given.
+func fitGrindSetting(deps Deps, grinder, setting string) (string, error) {
+	if deps.Library == nil {
+		return setting, nil
+	}
+	lib, err := deps.Library.GetLibrary()
+	if err != nil {
+		log.Printf("mcp: reading the grinder scale: %v", err)
+		return setting, nil
+	}
+	scale := grindscale.ForGrinder(lib.Grinders, grinder)
+	if scale == nil {
+		return setting, nil
+	}
+	normalized, err := scale.Normalize(setting)
+	if err != nil {
+		return "", fmt.Errorf("grind_setting %q does not fit grinder %q: it %w", setting, grinder, err)
+	}
+	return normalized, nil
+}
+
 func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if deps.Shots == nil {
 		return annotateShotOutput{}, fmt.Errorf("shot history is not available")
@@ -218,7 +242,11 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 		patch["notes"] = *in.Notes
 	}
 	if in.GrindSetting != nil {
-		patch["grindSetting"] = *in.GrindSetting
+		setting, err := fitGrindSetting(deps, annotationString(shot, "grinder"), *in.GrindSetting)
+		if err != nil {
+			return annotateShotOutput{}, err
+		}
+		patch["grindSetting"] = setting
 	}
 	if in.TasteTag != nil {
 		patch["tasteTag"] = *in.TasteTag
@@ -267,8 +295,12 @@ func setKnownGrind(deps Deps, in setKnownGrindInput) (setKnownGrindOutput, error
 	if grindSetting == "" {
 		return setKnownGrindOutput{}, fmt.Errorf("grind_setting is required")
 	}
+	grindSetting, err := fitGrindSetting(deps, grinder, grindSetting)
+	if err != nil {
+		return setKnownGrindOutput{}, err
+	}
 	var bean library.Entity
-	err := deps.Library.Update(func(lib *library.Library) error {
+	err = deps.Library.Update(func(lib *library.Library) error {
 		var found bool
 		bean, found = library.UpsertKnownGrindSetting(lib, in.BeanID, grinder, grindSetting)
 		if !found {

@@ -2,21 +2,27 @@
 // valid settings of a stepped or stepless grinder. It is a leaf package because
 // internal/library and internal/shots both need it and library imports shots.
 // public-src/grind-scale.ts is the browser's copy; keep the two in step.
-//
-// This slice only validates and stores a scale. Snapping a setting, judging
-// whether a shot is on target and normalising typed input arrive with the
-// grind-advice slice that calls them, so no function here is unreachable from
-// the production binary (CI's deadcode gate).
 package grindscale
 
-import "math"
+import (
+	"fmt"
+	"math"
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 const (
 	TypeStepped  = "stepped"
 	TypeStepless = "stepless"
 
 	maxSteppedValues = 500
+	// referenceSpan is the dial the fixed advice numbers were sized for.
+	referenceSpan = 50.0
+	eps           = 1e-9
 )
+
+var numberRe = regexp.MustCompile(`^\d+(?:[.,]\d+)?$`)
 
 // Scale is one grinder's valid settings.
 type Scale struct {
@@ -52,6 +58,74 @@ func Parse(raw any) *Scale {
 // Map is the stored form of s.
 func (s *Scale) Map() map[string]any {
 	return map[string]any{"type": s.Type, "min": s.Min, "max": s.Max, "step": s.Step}
+}
+
+// ForGrinder returns the scale of the named grinder, nil when it has none.
+func ForGrinder(grinders []map[string]any, name string) *Scale {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	for _, g := range grinders {
+		if n, _ := g["name"].(string); strings.EqualFold(strings.TrimSpace(n), name) {
+			return Parse(g["scale"])
+		}
+	}
+	return nil
+}
+
+// InRange reports whether v lies within the scale's range.
+func (s *Scale) InRange(v float64) bool { return v >= s.Min && v <= s.Max }
+
+// Snap returns the valid setting nearest to v.
+func (s *Scale) Snap(v float64) float64 {
+	if v <= s.Min {
+		return s.Min
+	}
+	if last := s.last(); v >= last {
+		return last
+	}
+	return s.round(s.Min + math.Round((v-s.Min)/s.Step)*s.Step)
+}
+
+// OnTarget reports whether a difference from the best setting is small enough
+// to leave alone: about one step, and never less than the old 0.6 scaled to
+// this dial.
+func (s *Scale) OnTarget(diff float64) bool {
+	return math.Abs(diff) < math.Max(1.2*s.Step, 0.6*(s.Max-s.Min)/referenceSpan)
+}
+
+// Normalize returns input in the one stored number format, "" for an empty
+// input, or an error when it is not a valid setting of this scale.
+func (s *Scale) Normalize(input string) (string, error) {
+	text := strings.TrimSpace(input)
+	if text == "" {
+		return "", nil
+	}
+	if numberRe.MatchString(text) {
+		v, err := strconv.ParseFloat(strings.Replace(text, ",", ".", 1), 64)
+		if err == nil && s.InRange(v) && math.Abs(v-s.Snap(v)) <= eps {
+			return strconv.FormatFloat(s.Snap(v), 'f', -1, 64), nil
+		}
+	}
+	return "", fmt.Errorf("must be a number from %g to %g in steps of %g", s.Min, s.Max, s.Step)
+}
+
+func (s *Scale) last() float64 {
+	return s.round(s.Min + math.Floor((s.Max-s.Min)/s.Step+eps)*s.Step)
+}
+
+func (s *Scale) round(v float64) float64 {
+	p := math.Pow10(max(decimals(s.Min), decimals(s.Step)))
+	return math.Round(v*p) / p
+}
+
+func decimals(v float64) int {
+	text := strconv.FormatFloat(v, 'f', -1, 64)
+	if i := strings.IndexByte(text, '.'); i >= 0 {
+		return len(text) - i - 1
+	}
+	return 0
 }
 
 // fitsDecimals rejects a value with more than three decimals: a stored scale is
