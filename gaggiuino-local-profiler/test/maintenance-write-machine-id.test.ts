@@ -34,11 +34,12 @@ function makeFakeDocument() {
 }
 
 const { S } = await import('../public-src/state/index.js');
-const { submitMaintLogEntry } = await import('../public-src/views/maintenance.js');
+const { submitMaintLogEntry, toggleMaintPaused } = await import('../public-src/views/maintenance.js');
 
 describe('_writeMachineId() in the all-machines scope — #1605', () => {
   let doc: ReturnType<typeof makeFakeDocument>;
   let fetchUrls: string[];
+  let fetchBodies: unknown[];
 
   beforeEach(() => {
     doc = makeFakeDocument();
@@ -50,8 +51,10 @@ describe('_writeMachineId() in the all-machines scope — #1605', () => {
     // simply take machines[0].
     S.machines = [{ id: 3, name: 'B' }, { id: 5, name: 'A', isDefault: true }];
     fetchUrls = [];
-    g.fetch = vi.fn((url: unknown) => {
+    fetchBodies = [];
+    g.fetch = vi.fn((url: unknown, init?: RequestInit) => {
       fetchUrls.push(String(url));
+      fetchBodies.push(init?.body);
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as unknown as Response);
     });
   });
@@ -59,5 +62,15 @@ describe('_writeMachineId() in the all-machines scope — #1605', () => {
   it('targets the default machine (not machines[0]) for a manual log entry', async () => {
     await submitMaintLogEntry();
     expect(fetchUrls).toContain('api/maintenance/log?machineId=5');
+  });
+
+  // #1955: pausing writes only the paused flag, to the tile's own machine.
+  // The refresh that follows the write runs into the fake document and is
+  // swallowed by the function's own catch, so only the request is asserted.
+  it('posts the paused flag to the tile machine threshold route', async () => {
+    await toggleMaintPaused('descaling', 3, true);
+
+    expect(fetchUrls).toContain('api/maintenance/descaling/threshold?machineId=3');
+    expect(fetchBodies[0]).toBe('{"paused":true}');
   });
 });
