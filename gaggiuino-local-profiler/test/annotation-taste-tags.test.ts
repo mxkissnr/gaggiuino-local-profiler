@@ -77,7 +77,7 @@ async function drain(): Promise<void> {
 }
 
 function saveWith(annotation: Record<string, unknown> | null): Promise<void> {
-  const response = { ok: true, json: async () => ({ annotation, score: 50 }) } as unknown as Response;
+  const response = { ok: true, json: () => Promise.resolve({ annotation, score: 50 }) } as unknown as Response;
   fetchSpy.mockResolvedValueOnce(response);
   scheduleAutoSave();
   flushAutoSave();
@@ -169,7 +169,7 @@ describe('taste tag refresh (#1957)', () => {
   it('does not rerun updateView while another autosave is pending', async () => {
     const updateView = vi.fn();
     (g.window as { updateView?: () => void }).updateView = updateView;
-    const response = { ok: true, json: async () => ({ annotation: { tasteTag: 'sour' }, score: 50 }) } as unknown as Response;
+    const response = { ok: true, json: () => Promise.resolve({ annotation: { tasteTag: 'sour' }, score: 50 }) } as unknown as Response;
     fetchSpy.mockResolvedValueOnce(response);
     selectTasteTag('sour');
     // Starts the save with the debounce already flushed…
