@@ -8446,6 +8446,11 @@ export interface components {
             roastDate?: string;
             tds?: number | null;
             notes?: string;
+            /**
+             * @description How the shot tasted. Feeds the grind advice, never the score. Send null or an empty string to clear
+             * @enum {string|null}
+             */
+            tasteTag?: "sour" | "bitter" | "balanced" | "thin" | null;
             /** @description Set automatically when an order is completed for this shot. */
             orderedBy?: {
                 customer?: string;
