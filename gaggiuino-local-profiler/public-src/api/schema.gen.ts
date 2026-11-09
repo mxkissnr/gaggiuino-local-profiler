@@ -3247,6 +3247,8 @@ export interface paths {
                         threshold_days?: number | null;
                         /** @description custom_* tasks only — renames the task's display label. */
                         label?: string;
+                        /** @description true starts a pause, false ends it; repeating the current state changes nothing. */
+                        paused?: boolean;
                     };
                 };
             };
@@ -8745,7 +8747,17 @@ export interface components {
             machineSyncedAt?: string | null;
             /** @description grinder_* only: task hidden from the maintenance view when true */
             disabled?: boolean;
-            /** @description Days since last maintenance, null when never done */
+            /**
+             * Format: int64
+             * @description Unix ms the running pause started, absent when not paused
+             */
+            pausedAt?: number | null;
+            /**
+             * Format: int64
+             * @description Paused time since lastDate from pauses that already ended
+             */
+            pausedMs?: number | null;
+            /** @description Days since last maintenance with paused time excluded, null when never done */
             daysSince: number | null;
             /** @description Shots since last maintenance */
             shotsSince: number;
@@ -8754,7 +8766,7 @@ export interface components {
             /** @description Progress toward threshold (0–1, capped at 1) */
             pct: number;
             /** @enum {string} */
-            status: "never" | "ok" | "soon" | "due";
+            status: "never" | "ok" | "soon" | "due" | "paused";
         };
         /** @description Keys are task names: `descaling`, `backflush`, `grouphead`, `gaskets`, `waterfilter`, `grinder_{id}`. */
         MaintenanceStats: {

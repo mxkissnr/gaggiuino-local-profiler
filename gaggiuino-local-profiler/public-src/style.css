@@ -2861,12 +2861,14 @@
         .maint-chip.soon   { background: color-mix(in srgb, var(--amber-deep) 18%, transparent); color: var(--accent-ink); }
         .maint-chip.ok     { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
         .maint-chip.never  { background: var(--gray-800); color: var(--gray-500); }
+        .maint-chip.paused { background: var(--gray-800); color: var(--gray-500); }
         .maint-row-meta { grid-area: meta; font-size: var(--fs-1); color: var(--gray-500); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
         .maint-row-bar { grid-area: bar; display: block; position: relative; height: 4px; margin-top: var(--sp-1); background: var(--gray-800); border-radius: 2px; overflow: hidden; }
         .maint-row-fill { display: block; height: 100%; border-radius: 2px; background: var(--ok); }
         .maint-row-fill.due   { background: var(--err); }
         .maint-row-fill.soon  { background: var(--accent); }
         .maint-row-fill.never { background: var(--gray-700); }
+        .maint-row-fill.paused { background: var(--gray-700); }
         @media (prefers-reduced-motion: no-preference) {
             .maint-row-fill { transition: width .3s; }
         }
@@ -2910,6 +2912,9 @@
         .maint-done-btn { background:var(--accent-glow); border:none; border-radius:var(--radius); color:var(--accent-ink); font-size:var(--fs-1); font-weight:600; padding:6px 16px; cursor:pointer; transition:opacity .15s; }
         .maint-done-btn:hover { opacity:.85; }
         .maint-done-btn:disabled { opacity:.4; cursor:not-allowed; }
+        .maint-pause-btn { background:transparent; border:none; color:var(--gray-600); font-size:var(--fs-1); padding:6px 0; cursor:pointer; transition:color .15s; margin-left:auto; }
+        .maint-pause-btn:hover { color:var(--accent); }
+        .maint-pause-btn + .maint-disable-btn, .maint-pause-btn + .maint-delete-btn { margin-left: var(--sp-4); }
         .maint-disable-btn { background:transparent; border:none; color:var(--gray-600); font-size:var(--fs-1); padding:6px 0; cursor:pointer; transition:color .15s; margin-left:auto; }
         .maint-disable-btn:hover { color:var(--err); }
         .maint-delete-btn  { background:transparent; border:none; color:var(--err); font-size:var(--fs-1); padding:6px 0; cursor:pointer; transition:opacity .15s; margin-left:auto; }

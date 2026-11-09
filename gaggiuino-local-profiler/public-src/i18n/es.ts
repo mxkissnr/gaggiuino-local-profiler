@@ -599,6 +599,7 @@ const es: Partial<Translations> = {
     maint_custom_every:'Cada', maint_unit_shots:'shots', maint_unit_grams:'gramos', maint_mode_both:'Ambos',
     maint_custom_add:'Añadir', maint_enable_btn:'Activar', maint_disable_btn:'Desactivar',
     maint_disabled_section:(n)=>`Tareas desactivadas (${n})`, maint_rename_label:'Nombre',
+    maint_paused:'En pausa', maint_pause_btn:'Pausar', maint_resume_btn:'Reanudar',
     maint_confirm_delete_custom:(name)=>`¿Eliminar la tarea personalizada "${name}"?`,
     maint_custom_add_summary:'Añadir tarea personalizada', maint_custom_label_ph:'Nombre (p.ej. Backflush con limpiador)',
     lib_scan_barcode:`${BARCODE_ICON_SVG} Scan`,

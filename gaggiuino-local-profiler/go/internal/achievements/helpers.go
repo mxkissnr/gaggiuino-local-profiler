@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -356,7 +357,9 @@ func maintenanceCleanStreakDays(ctx *Context) int {
 					reset = stamps[i]
 				}
 			}
-			currentGapDays := (nowMS - stamps[len(stamps)-1]) / dayMS
+			lastStamp := stamps[len(stamps)-1]
+			pausedMS := float64(maintenance.PausedMsSince(conf[task], int64(lastStamp), ctx.Now))
+			currentGapDays := (nowMS - lastStamp - pausedMS) / dayMS
 			if currentGapDays > thresholdDays {
 				reset = nowMS
 			}
