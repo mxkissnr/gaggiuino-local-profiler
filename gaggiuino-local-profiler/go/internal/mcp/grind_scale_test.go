@@ -150,7 +150,8 @@ func TestSetKnownGrind_FitsTheGrindersScale(t *testing.T) {
 		t.Fatalf("expected an error for a setting above the grinder's maximum")
 	}
 
-	if res := call(t, session, "set_known_grind", map[string]any{"bean_id": 1, "grinder": "Plain", "grind_setting": "8,3"}); res.IsError {
+	res = call(t, session, "set_known_grind", map[string]any{"bean_id": 1, "grinder": "Plain", "grind_setting": "8,3"})
+	if res.IsError {
 		t.Fatalf("set_known_grind rejected a free-text setting: %s", errorText(t, res))
 	}
 	settings = objects(structured(t, res), "known_grind_settings")
