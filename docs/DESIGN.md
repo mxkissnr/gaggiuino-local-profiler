@@ -31,6 +31,19 @@ insights" summary, with a two-column desktop layout for the rest.
 - **No generic look.** No default font stacks, no purple gradients, no emoji, no interchangeable dashboard cards; every element earns its place with real data.
 - **Six languages.** Every visible string goes through `t()` in all six language files.
 
+## Interaction rules
+
+The same kind of control behaves the same way on every page.
+
+- **Choosing.** Show a fixed set of up to 5 short options as visible pills. Use a dropdown for longer lists and for anything backed by the library. Use free text with suggestions only where new values are legitimate; never free text for a fixed set and never a native `<datalist>`. A visible choice is faster, and a mistyped value cannot split the data.
+- **Saving.** Editing an existing entry saves automatically and shows a visible saved state; creating an entry uses a save button. Nothing is lost on edit, and a new entry only exists once the user decides it should.
+- **Confirming.** No native `alert` or `confirm`. Use one dialog for irreversible actions and a toast with undo for everything else. Browser dialogs cannot be styled or translated consistently and block the page.
+- **Errors.** Show field errors at the field and everything else as a toast. The user sees the problem where it can be fixed.
+- **Numbers.** Put the unit in the label, always set min, max and step, and accept a comma as decimal separator. Users type in their own locale, and limits stop impossible values early.
+- **Dates.** Format every date through one shared helper with a short and a long form. Views that format on their own drift apart.
+- **Switches.** A toggle takes effect immediately; a checkbox belongs in a form with a save button. The control then tells the user whether anything still has to be saved.
+- **States.** Every view defines its loading, empty and error state. No view is ever blank or stuck without saying why.
+
 ## Checklist before a UI pull request
 
 - [ ] Verdict and toolbar present.
@@ -40,3 +53,6 @@ insights" summary, with a two-column desktop layout for the rest.
 - [ ] Reduced motion checked.
 - [ ] Light and dark theme checked.
 - [ ] All six languages.
+- [ ] Interaction rules followed: choosing, saving, confirming, errors, numbers, dates, switches.
+- [ ] Loading, empty and error state defined for every view.
+- [ ] No native `alert`, `confirm` or `<datalist>`.
