@@ -80,7 +80,9 @@ func tasteOutcome(tag, dir string) string {
 }
 
 // grindDirection is the direction a difference from the best setting asks
-// for, "" when within the 0.6 the advice treats as on target.
+// for, "" when within the 0.6 this no-scale rule treats as on target. A
+// grinder with a scale judges the difference with the scale's own OnTarget
+// instead, see comparativeMatch.direction (#1961).
 func grindDirection(diff float64) string {
 	switch {
 	case abs(diff) < 0.6:
