@@ -142,6 +142,16 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 		if _, present := body["enabled"]; present {
 			bean["enabled"] = sanitizeEnabled(body["enabled"])
 		}
+		// #1958: the newest bag the "bean is empty" offer was resolved for. It
+		// only moves forward, so a stale device cannot offer a bean again.
+		if v, present := body["emptyOfferBagId"]; present {
+			if id, ok := jsParseIntLoose(v); ok && id >= 0 {
+				current, hasCurrent := jsParseIntLoose(bean["emptyOfferBagId"])
+				if !hasCurrent || id > current {
+					bean["emptyOfferBagId"] = id
+				}
+			}
+		}
 
 		_, roastDatePresent := body["roastDate"]
 		_, stockPresent := body["stock_g"]

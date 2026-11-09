@@ -957,7 +957,7 @@ export interface paths {
         put?: never;
         /**
          * Open a new bag for a bean (joins the back of the queue)
-         * @description The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields.
+         * @description The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields. A new bag with a stock above 0 also reactivates an archived bean (#1958).
          */
         post: {
             parameters: {
@@ -8559,8 +8559,10 @@ export interface components {
             /** @description Mirrors the active (last) bag's stock_g */
             stock_g?: number | null;
             decaf?: boolean;
-            /** @description Manual override for the order card's bean picker (#578) — independent of stock */
+            /** @description False archives the bean (#578, #1958): left out of the app's bean pickers, the order card and, by default, MCP list_beans. Shots, statistics and stock are unaffected */
             enabled?: boolean;
+            /** @description Newest bag id the bean-is-empty offer was resolved for (#1958), 0 for a bean without bags. Only moves forward */
+            emptyOfferBagId?: number;
             /** @description Legacy single ISO 3166-1 alpha-2 code — first entry of origins[] */
             origin?: string;
             /** @description Source of truth for origin (#singleOrBlend beans) — replaces the legacy `origin` field. */

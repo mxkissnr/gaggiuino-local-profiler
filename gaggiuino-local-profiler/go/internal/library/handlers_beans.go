@@ -168,6 +168,14 @@ func (h *Handlers) newBag(w http.ResponseWriter, r *http.Request) {
 			bagID = newID()
 			bag = Entity{"id": bagID, "roastDate": roastDate, "stock_g": stockG, "openedAt": newID(), "batchNumber": batchNumber, "price_eur": priceEur, "sortOrder": nextSort}
 			bean["bags"] = append(bags, bag)
+			// #1958: a genuinely new bag with stock brings an archived bean back,
+			// however it was archived. Only here: restores, bag edits, bean updates
+			// and the placeholder fill-in above never reactivate. emptyOfferBagId is
+			// left alone on purpose: this bag's id is higher, so emptying it is a
+			// new offer.
+			if s, ok := jsParseFloat(stockG); ok && s > 0 && !sanitizeEnabled(bean["enabled"]) {
+				bean["enabled"] = true
+			}
 		}
 		// Sync bean-level fields only when this bag is the one
 		// SimulateBagQueue actually considers current (i.e. every other bag
