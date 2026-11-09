@@ -414,4 +414,43 @@ describe('annotation grinder markup sources (#1960)', () => {
   it('gives the free-text fallback a 44px target on a phone', () => {
     expect(read('../public-src/style.css')).toMatch(/#annGrinderOther[^{]*\{\s*min-height:\s*44px/);
   });
+
+  // The 44px rule only applies on a phone if it sits inside the mobile media
+  // block; outside it, it would shrink desktop pickers to a touch target.
+  it('puts that rule inside the max-width: 768px media block', () => {
+    const css = read('../public-src/style.css');
+    const ruleAt = css.indexOf('#annGrinderOther');
+    expect(ruleAt).toBeGreaterThan(-1);
+    // Walk back out of the rule: the first '{' met at depth 0 is the one whose
+    // prelude has to be the media query.
+    let depth = 0;
+    let prelude = '';
+    for (let i = ruleAt - 1; i >= 0; i--) {
+      const ch = css[i];
+      if (ch === '}') depth++;
+      else if (ch === '{') {
+        if (depth === 0) { prelude = css.slice(css.lastIndexOf('\n', i) + 1, i).trim(); break; }
+        depth--;
+      }
+    }
+    expect(prelude).toBe('@media (max-width: 768px)');
+  });
+});
+
+describe('kiosk page needs no change for this slice (#1960)', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const read = (rel: string): string => readFileSync(join(here, rel), 'utf8');
+
+  // A native <select> opens the platform picker, which the kiosk would have to
+  // style itself. It has no select and no library field, so this slice leaves
+  // it alone — pinned here so a later edit cannot quietly add one.
+  it.each(['../public-src/kiosk.html', '../public-src/kiosk.ts', '../public-src/kiosk.css'])(
+    '%s has no select and no grinder field',
+    rel => {
+      const source = read(rel);
+      expect(source).not.toMatch(/<select\b/);
+      expect(source).not.toMatch(/grinder/i);
+      expect(source).not.toMatch(/coffeeLibrary/);
+    },
+  );
 });
