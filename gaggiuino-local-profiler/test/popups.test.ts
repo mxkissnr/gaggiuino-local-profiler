@@ -222,14 +222,16 @@ describe('the What\'s New popup', () => {
   it('shows every newer entry in one popup', async () => {
     const { popups, S } = await load();
     withShots(S);
-    store.prefs.set('popups.whats_new_seen', popups.versionCode(getWhatsNewEntries()[1]!.version));
+    const newest = getWhatsNewEntries();
+    store.prefs.set('popups.whats_new_seen', popups.versionCode(newest[2]!.version));
 
     popups.startPopups(() => {});
     await tick();
 
     const body = openDetailSheet.mock.calls[0]?.[0]?.body ?? '';
-    expect(body).toContain(`v${getWhatsNewEntries()[0]!.version}`);
-    expect(body).not.toContain(`v${getWhatsNewEntries()[1]!.version}`);
+    expect(body).toContain(`v${newest[0]!.version}`);
+    expect(body).toContain(`v${newest[1]!.version}`);
+    expect(body).not.toContain(`v${newest[2]!.version}`);
   });
 
   it('does not open on a suppressed switch but still advances the marker', async () => {
