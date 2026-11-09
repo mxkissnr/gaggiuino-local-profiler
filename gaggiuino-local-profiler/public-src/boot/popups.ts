@@ -24,7 +24,7 @@ export interface PopupSwitches {
 /** The stored switches; anything but an explicit false counts as on. */
 export function popupSwitches(): PopupSwitches {
   const v = getUiPref<Partial<PopupSwitches> | null>(POPUPS_PREF);
-  const o = v && typeof v === 'object' ? v : {};
+  const o: Partial<PopupSwitches> = v && typeof v === 'object' ? v : {};
   return {
     enabled: o.enabled !== false,
     whats_new: o.whats_new !== false,
