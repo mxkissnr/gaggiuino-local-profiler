@@ -544,6 +544,10 @@ A dedicated **Achievements** view shows a printed-cardboard "stamp card": 64 bad
 
 ⚙ Settings → **What's New** shows the last 8 GLP releases, newest first, each with a short list of highlights — so you can see what changed without leaving the app or digging through GitHub. This card is a curated, hand-maintained subset (`public-src/shared/whats-new.ts`) rather than a rendered copy of the full history: **`CHANGELOG.md` stays the source of truth** for every change ever shipped; the in-app card only ever shows a short highlight per release, capped at the last 8. Highlight text is English-only regardless of your UI language — only the card's own title and description are translated, the same approach taken for shot annotations and tasting notes.
 
+### In-app popups
+
+GLP can open a short popup for two things: what an update brought, and achievements you have just earned. What's New appears once per new version and not again on your other devices, and a new install starts without one. Achievements are checked when the app starts and after a new shot. Several at once are listed together in one popup, and achievements you already had before never pop up. A popup waits while a shot is running or another sheet or dialog is open, and two popups open one after the other. ⚙ Settings → **Popups** has a master switch and one switch each for What's New and achievements, all on by default. Your choices follow you across devices.
+
 ### Shot logging defaults
 
 ⚙ Settings → **Shot logging defaults** lets you configure optional default values for Drink Type, Coffee/Bean, Basket, Puck Screen, Grinder and Dose — the fields most home baristas re-enter identically on every shot with a single primary setup. Leave any field blank to keep selecting it manually as before. A configured default is auto-prefilled the moment you open a brand-new, not-yet-annotated shot's panel; every prefilled field stays fully editable, and it never touches a shot that already has any annotation data, even a single field.
