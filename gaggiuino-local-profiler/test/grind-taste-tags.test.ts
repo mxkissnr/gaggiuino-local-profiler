@@ -189,6 +189,12 @@ describe('calcGrindAdvice applies the tag to the time advice', () => {
   });
 });
 
+// A Bean A + Bean B mix whose primary bean still reads as Bean A (#1837).
+const MIX = [
+  { beanId: 1, coffee: 'Bean A', grams: 10 },
+  { beanId: 2, coffee: 'Bean B', grams: 8 },
+];
+
 // One Bean A sibling on the Niche Zero; the tag is optional.
 function sibling(id: number, score: number, grindSetting: string, tag?: string, grinder = 'Niche Zero'): GrindShot {
   return {
@@ -291,6 +297,27 @@ describe('calcComparativeGrindAdvice applies the tag', () => {
     expect(withTags?.type).toBe(without?.type);
     expect(withTags?.text).toBe(without?.text);
     expect(withTags?.shots).toHaveLength(2);
+  });
+
+  it('never lets a tag make a mixed shot comparable', () => {
+    // #1837 keeps a mixed shot out of the comparison entirely; the tag filter
+    // must not become a way back in, as the viewed shot or as a sibling.
+    const taggedMix = (id: number, score: number, tag: string): GrindShot => ({
+      id,
+      timestamp: 1000 + id,
+      annotation: {
+        beanId: 7, coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '14',
+        dose: '18', beanMix: MIX, tasteTag: tag,
+      },
+      score,
+    });
+
+    const mixed = taggedMix(2, 95, 'sour');
+    expect(calcComparativeGrindAdvice(mixed, [mixed, sibling(3, 88, '19')])).toBeNull();
+
+    const target = viewed('20');
+    const advice = calcComparativeGrindAdvice(target, [target, taggedMix(2, 30, 'balanced'), sibling(3, 88, '19')]);
+    expect(advice?.shots.map(s => s.shot.id)).toEqual([3]);
   });
 
   it('ignores a tagged sibling on another grinder', () => {
