@@ -13,7 +13,9 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
 installBootStubs();
 
-const mocks = vi.hoisted(() => ({ saveGrinder: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  saveGrinder: vi.fn<(id: number | null, payload: unknown) => Promise<Grinder>>(),
+}));
 
 vi.mock('../public-src/api/library.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/api/library.js')>()),
@@ -128,7 +130,7 @@ g.document = doc;
 // namespace import, which a spy on the test's own handle would not replace.
 const saveSpy = mocks.saveGrinder;
 // Echoes the payload back, so the library holds exactly what was saved.
-saveSpy.mockImplementation((id: number | null, payload: unknown) => Promise.resolve(
+saveSpy.mockImplementation((id, payload) => Promise.resolve(
   { id: id ?? 7, ...(payload as Record<string, unknown>) } as unknown as Grinder));
 
 const STEPPED_0_60: GrindScale = { type: 'stepped', min: 0, max: 60, step: 1 };
