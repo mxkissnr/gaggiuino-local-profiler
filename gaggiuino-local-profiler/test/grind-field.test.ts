@@ -25,16 +25,13 @@ function at<T>(arr: readonly T[], i: number): T {
 class FakeInput {
   value = '';
   hidden = false;
+  textContent = '';
   readonly attrs: Record<string, string> = {};
   private markup = '';
   setAttribute(name: string, value: string): void { this.attrs[name] = value; }
   removeAttribute(name: string): void { delete this.attrs[name]; }
   get innerHTML(): string { return this.markup; }
   set innerHTML(value: string) { this.markup = value; }
-}
-
-class FakeHint extends FakeInput {
-  textContent = '';
 }
 
 class FakeSelect {
@@ -90,11 +87,11 @@ function rootEl(id: string): FakeRoot {
 function optionsOf(select: FakeSelect): FakeOption[] { return (select.options ?? []) as FakeOption[]; }
 
 // One plain text field plus the two optional companions the render path looks up.
-function field(id: string): { input: FakeInput; select: FakeSelect; hint: FakeHint } {
+function field(id: string): { input: FakeInput; select: FakeSelect; hint: FakeInput } {
   return {
     input: doc.add(id, new FakeInput()),
     select: doc.add(`grindSelect-${id}`, new FakeSelect()),
-    hint: doc.add(`grindHint-${id}`, new FakeHint()),
+    hint: doc.add(`grindHint-${id}`, new FakeInput()),
   };
 }
 
@@ -307,7 +304,7 @@ describe('the grinder form', () => {
     doc.add('grinderFormScaleMin', new FakeInput());
     doc.add('grinderFormScaleMax', new FakeInput());
     doc.add('grinderFormScaleStep', new FakeInput());
-    doc.add('grinderFormScaleError', new FakeHint());
+    doc.add('grinderFormScaleError', new FakeInput());
   });
 
   it('marks the saved scale type and fills its values', () => {
