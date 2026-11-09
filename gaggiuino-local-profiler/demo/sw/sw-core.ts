@@ -86,14 +86,6 @@ export const GLPDemo = (() => {
     // it is matched explicitly.
     const TIMESTAMP_KEY = /^(timestamp|date|time|ts)$|(At|Time|Date|Ts)$/;
 
-    // #1956: an achievement's unlockedAt is compared with a seen marker the
-    // app keeps, so re-dating it per response made every read report the same
-    // badges as newly unlocked. The demo then opened a 41-entry achievement
-    // popup on the first shot refetch, whose backdrop swallowed every later
-    // click (the E2E smoke run failed on it). These keys keep their recorded
-    // value; only the keys that read as "recent activity" are aged.
-    const FIXED_TIME_KEYS = new Set(['unlockedAt']);
-
     // Fixtures are recorded in this window (2017-07-14 .. 2096-10-02), which
     // is what lets a bare number be told apart from a duration/weight/count.
     const EPOCH_MS = [1_500_000_000_000, 4_000_000_000_000] as const;
@@ -134,8 +126,7 @@ export const GLPDemo = (() => {
         if (isJsonObject(value)) {
             const out: Record<string, unknown> = {};
             for (const [key, child] of Object.entries(value)) {
-                const shift = TIMESTAMP_KEY.test(key) && !FIXED_TIME_KEYS.has(key);
-                out[key] = shift ? shiftTimestampValue(child, deltaMs) : shiftNode(child, deltaMs);
+                out[key] = TIMESTAMP_KEY.test(key) ? shiftTimestampValue(child, deltaMs) : shiftNode(child, deltaMs);
             }
             return out;
         }
