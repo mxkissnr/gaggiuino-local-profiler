@@ -25,7 +25,7 @@ vi.mock('../public-src/components/sidebar.js', async (importOriginal) => ({
 
 vi.mock('../public-src/api/shots.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/api/shots.js')>()),
-  annotateShot: mocks.annotateShot,
+  annotateShot: (...args: unknown[]) => mocks.annotateShot(...args),
   // The wizard evaluates the confirmed shot through its lazy curve; no shot
   // data here means an empty curve, which is all these tests need.
   getShot: () => Promise.resolve(null),
