@@ -6,6 +6,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getWhatsNewEntries } from '../public-src/shared/whats-new.js';
 import type { WhatsNewEntry } from '../public-src/shared/whats-new.js';
 
+// A few modules on the import graph read localStorage/navigator at load time
+// (ui-prefs' cache, state's saved language); node has neither.
+const g = globalThis as unknown as Record<string, unknown>;
+g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+g.window ??= globalThis;
+
 const store = vi.hoisted(() => ({
   prefs: new Map<string, unknown>(),
   writes: [] as Array<{ key: string; value: number }>,
@@ -85,9 +91,9 @@ function withShots(S: StateModule['S'], count = 1): void {
   S.allShots = Array.from({ length: count }, (_, i) => ({ id: i + 1, timestamp: 0 }));
 }
 
-// Lets the queue's zero-delay first tick and the refresh promise settle.
+// Lets the queue's zero-delay first tick and the nested refresh promise settle.
 async function tick(): Promise<void> {
-  await vi.advanceTimersByTimeAsync(1);
+  for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(1);
 }
 
 beforeEach(() => {
