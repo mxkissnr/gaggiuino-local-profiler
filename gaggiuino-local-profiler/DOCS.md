@@ -409,6 +409,10 @@ The editor covers a profile's name, water temperature, recipe (dose/yield/ratio)
 
 "Send to machine" asks for confirmation, then creates or updates the profile directly on the machine — on a Gaggiuino, new profiles are created over REST on firmware that supports it (falling back to the WebSocket API on older firmware), while updates and deletes always go over the WebSocket API (the machine has no REST endpoint for either); a GaggiMate is always written over its WebSocket connection — a failed send surfaces an error toast rather than failing silently. Profiles are saved locally first, so creating, editing or deleting one works even while the machine is unreachable, and the change is pushed to the machine automatically once it is reachable again.
 
+### Picking beans and grinders
+
+The shot annotation panel, the pre-shot setup and the guided dial-in pick the grinder from a dropdown of your library, and the guided dial-in and the recipe form pick the bean the same way, so a mistyped name can no longer start a separate grinder history. The grinder dropdown ends with **Other…** for a grinder that is not in your library. A name already saved stays visible and is kept when you edit it. With no grinders in your library the field is a plain text box, and so is the guided dial-in's bean field with no beans.
+
 ### Guided Dial-In wizard
 
 > **⚠ Experimental / work in progress:** the guided dial-in wizard is usable but still evolving — its grind suggestions are a starting point based on a target extraction-time band, not a guaranteed dial-in. Treat suggested grind steps as a helpful nudge, not gospel, and always confirm shots make sense before accepting a round.
