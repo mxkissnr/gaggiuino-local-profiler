@@ -202,8 +202,12 @@ func setDefaultGrinder(grinders []Entity, idx int, isDefault bool) {
 // UpdateGrinder applies a partial update to grinder id, mirroring
 // PUT /api/library/grinder/:id.
 func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error) {
+	scale, scalePresent, err := grinderScaleInput(body)
+	if err != nil {
+		return nil, false, err
+	}
 	var grinder Entity
-	err := repo.Update(func(lib *Library) error {
+	err = repo.Update(func(lib *Library) error {
 		idx := findEntityIndex(lib.Grinders, id)
 		if idx == -1 {
 			return ErrSkipSave
@@ -229,6 +233,13 @@ func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error
 		if v, present := body["isDefault"]; present {
 			isDefault, _ := v.(bool)
 			setDefaultGrinder(lib.Grinders, idx, isDefault)
+		}
+		if scalePresent {
+			if scale == nil {
+				delete(grinder, "scale")
+			} else {
+				grinder["scale"] = scale.Map()
+			}
 		}
 		lib.Grinders[idx] = grinder
 		return nil

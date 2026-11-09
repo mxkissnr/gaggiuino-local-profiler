@@ -12,6 +12,7 @@ import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { loadGrinderImageBlobUrl, invalidateGrinderImage } from '../../bean-image.js';
 import { currentGrinderZeroPoint } from '../../grind-zero.js';
+import { renderGrinderScaleForm, readGrinderScaleForm } from '../shots/grind-field.js';
 import type { Grinder } from '../../api/types.js';
 import * as library from '../library.js';
 
@@ -136,6 +137,7 @@ export function openGrinderForm(grinder?: GrinderRow | null): void {
   _input('grinderFormBurrType').value     = grinder?.burrType || '';
   attachAutocomplete(_input('grinderFormBurrType'), () => _burrTypeSuggestions());
   _input('grinderFormPurchaseDate').value = toIsoDateInput(grinder?.purchaseDate);
+  renderGrinderScaleForm(grinder?.scale);
   _el('grinderFormImageField').style.display = grinder ? '' : 'none';
   _el('grinderFormImageAdjustBtn').style.display = grinder?.image ? '' : 'none';
   // onclick, not addEventListener: reopening the form must not stack handlers.
@@ -202,7 +204,10 @@ export async function saveGrinder(): Promise<void> {
   const burrType     = _input('grinderFormBurrType').value.trim();
   const purchaseDate = _input('grinderFormPurchaseDate').value.trim();
   if (!name) { _input('grinderFormName').focus(); return; }
-  const first = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate });
+  // #1961: undefined means the scale fields are invalid and already say so.
+  const scale = readGrinderScaleForm();
+  if (scale === undefined) return;
+  const first = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate, scale });
   if (!first) return;
   let saved = _asRow(first);
 

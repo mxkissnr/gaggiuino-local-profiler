@@ -420,6 +420,14 @@ Der Editor deckt Name, Wassertemperatur, Rezept (Dosis/Ausbeute/Ratio) und die P
 
 Die Shot-Notizen, „Bezug einstellen“ und das geführte Einwählen wählen die Mühle aus einer Liste deiner Bibliothek, das geführte Einwählen und das Rezeptformular ebenso die Bohne. So kann ein Tippfehler keine eigene Mühlen-Historie mehr anlegen. Am Ende der Mühlenliste steht **Andere …** für eine Mühle, die nicht in deiner Bibliothek ist. Ein bereits gespeicherter Name bleibt sichtbar und bleibt beim Bearbeiten erhalten. Ohne Mühlen in der Bibliothek ist das Feld ein einfaches Textfeld, ebenso das Bohnenfeld des geführten Einwählens ohne Bohnen.
 
+### Mahlgrad-Skalen
+
+Eine Mühle unter Bibliothek → Mühlen kann eine optionale **Mahlgrad-Skala** haben: **Gestuft** für ganze Klicks oder **Stufenlos** für ein Einstellrad, jeweils mit Bereich und Schritt. Bei einer gestuften Mühle ist der Mahlgrad eine Liste ihrer gültigen Werte. Bei einer stufenlosen Mühle gibst du eine Zahl innerhalb des Bereichs ein; ein Komma ist erlaubt, gespeichert wird mit Punkt. Eine Mühle ohne Skala behält das Freitextfeld, das auch Formate wie `1.2.3` erlaubt.
+
+Trage den Bereich ein, den du wirklich nutzt, nicht den gesamten mechanischen Bereich der Mühle: Das geführte Einwählen und die vergleichende Mahlgrad-Empfehlung bemessen ihre Schritte danach und schlagen nie einen Wert außerhalb des Bereichs oder zwischen zwei gültigen Schritten vor. Die vergleichende Empfehlung nennt ihren besten Mahlgrad in der Schrittweite der Mühle.
+
+Eine Skala ändert nie einen gespeicherten Mahlgrad, und 8 und 8.0 gelten als derselbe Wert. Ein gespeicherter Wert, der nicht auf der Liste einer gestuften Mühle steht, bleibt oben in der Liste und ist als nicht auf dieser Skala markiert, bis du einen anderen wählst. Ein aus früheren Shots vorausgefüllter Mahlgrad rückt auf den nächsten gültigen Wert und bleibt leer, wenn er außerhalb des Bereichs liegt. Die Skala ist Teil des Backups.
+
 ### Geführter Einwähl-Assistent
 
 > **⚠ Experimentell / Work in Progress:** Der geführte Einwähl-Assistent ist nutzbar, entwickelt sich aber noch weiter — die Mahlgrad-Vorschläge sind ein Ausgangspunkt basierend auf einem Ziel-Extraktionszeitfenster, keine garantierte Einwähl-Lösung. Vorgeschlagene Mahlgrad-Schritte als hilfreichen Hinweis verstehen, nicht als unumstößliche Wahrheit, und immer prüfen, ob ein Shot plausibel ist, bevor eine Runde angenommen wird.

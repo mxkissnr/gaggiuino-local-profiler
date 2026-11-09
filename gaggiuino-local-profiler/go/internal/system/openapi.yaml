@@ -339,6 +339,16 @@ components:
         remainingG: { type: integer, description: "Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
         consumedG:  { type: integer, description: "Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
 
+    GrinderScale:
+      type: object
+      required: [type, min, max, step]
+      description: "A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text."
+      properties:
+        type: { type: string, enum: [stepped, stepless] }
+        min:  { type: number }
+        max:  { type: number }
+        step: { type: number }
+
     Grinder:
       type: object
       required: [id, name]
@@ -349,6 +359,7 @@ components:
         burrType:      { type: string, maxLength: 200 }
         purchaseDate:  { type: string, maxLength: 10 }
         isDefault:     { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
+        scale:         { $ref: '#/components/schemas/GrinderScale' }
         burrsResetAt:  { type: string, description: "ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any" }
         imageCrop:     { $ref: '#/components/schemas/ImageCrop' }
@@ -1928,6 +1939,7 @@ paths:
                 burrType:     { type: string, maxLength: 200 }
                 purchaseDate: { type: string, format: date }
                 isDefault:    { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
+                scale:        { $ref: '#/components/schemas/GrinderScale' }
                 burrsResetAt: { type: string, format: date, description: "Defaults to purchaseDate if omitted" }
       responses:
         "200": { description: Created grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
@@ -1955,6 +1967,10 @@ paths:
                 burrType:     { type: string, maxLength: 200 }
                 purchaseDate: { type: string, format: date }
                 isDefault:    { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
+                scale:
+                  allOf: [{ $ref: '#/components/schemas/GrinderScale' }]
+                  nullable: true
+                  description: "Null removes the scale; omit it to leave the scale unchanged."
                 burrsResetAt: { type: string, format: date }
       responses:
         "200": { description: Updated grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }

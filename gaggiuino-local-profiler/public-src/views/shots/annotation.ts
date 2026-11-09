@@ -16,6 +16,7 @@ import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput, BeanMixPartPayload } from '../../shared/bean-mix.js';
+import { getGrindFieldValue, renderGrindField } from './grind-field.js';
 import { initBeanMix, loadBeanMix, mixFields, mixParts, resetBeanMix } from './annotation-mix.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
@@ -177,7 +178,7 @@ function _buildAnnotationPayload(shot: AnnotationShot | undefined): AnnotationPa
     basketId,
     puckScreenId,
     grinder:      getGrinderFieldValue('annGrinder', 'annGrinderOther'),
-    grindSetting: (document.getElementById('annGrindSetting') as HTMLInputElement).value.trim(),
+    grindSetting: getGrindFieldValue('annGrindSetting'),
     dose:         mix ? mix.dose : parseFloat((document.getElementById('annDose') as HTMLInputElement).value) || null,
     roastDate:    germanToIso(_roastDateFromLibrary(shotCoffee, shot?.timestamp, shotBeanId) || '') || null,
     tds:          parseFloat((document.getElementById('annTds') as HTMLInputElement).value) || null,
@@ -806,7 +807,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   _renderPuckScreenSelect(ann.puckScreenId ?? null);
   _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null, ann.beanId ?? null);
   renderGrinderField('annGrinder', 'annGrinderOther', ann.grinder || '');
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting ?? '');
+  renderGrindField('annGrindSetting', ann.grinder || '', ann.grindSetting ?? '');
   (document.getElementById('annDose') as HTMLInputElement).value         = String(ann.dose        || '');
   // #1837: after the bean select and the dose it renders row 1 from — a saved
   // mix restores its rows and takes the dose over as their sum.
@@ -867,8 +868,9 @@ export function quickClone(): void {
   // its own setting — the previous shot's value is on another scale, so an
   // empty suggestion stays empty instead of copying ann.
   const defaultGrinder = defaultGrinderName(S.coffeeLibrary);
-  renderGrinderField('annGrinder', 'annGrinderOther', defaultGrinder || suggested.grinder || ann.grinder || '');
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(defaultGrinder ? suggested.grindSetting : (suggested.grindSetting || ann.grindSetting || ''));
+  const clonedGrinder = defaultGrinder || suggested.grinder || ann.grinder || '';
+  renderGrinderField('annGrinder', 'annGrinderOther', clonedGrinder);
+  renderGrindField('annGrindSetting', clonedGrinder, defaultGrinder ? suggested.grindSetting : (suggested.grindSetting || ann.grindSetting || ''));
   (document.getElementById('annDose') as HTMLInputElement).value         = String(suggested.dose         || ann.dose         || '');
   updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '');
   // Basket/puck screen are equipment, not per-shot state — carried over from

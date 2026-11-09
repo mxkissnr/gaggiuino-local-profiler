@@ -3,6 +3,7 @@ package library
 import (
 	"strings"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
@@ -134,11 +135,30 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, error) 
 	return bean, nil
 }
 
+// grinderScaleInput reads the optional scale of a grinder body (#1961). present
+// is false when the body has no scale key; a JSON null is present with a nil
+// scale, which an update takes as "remove the scale".
+func grinderScaleInput(body Entity) (scale *grindscale.Scale, present bool, err error) {
+	raw, present := body["scale"]
+	if !present || raw == nil {
+		return nil, present, nil
+	}
+	scale = grindscale.Parse(raw)
+	if scale == nil {
+		return nil, true, &ValidationError{Message: "invalid grind scale"}
+	}
+	return scale, true, nil
+}
+
 // CreateGrinder builds POST /api/library/grinder's entity-construction
 // body (handlers_grinders.go's createGrinder).
 func CreateGrinder(repo *Repository, body Entity) (Entity, error) {
 	if trimMax(body["name"], 200) == "" {
 		return nil, &ValidationError{Message: "name required"}
+	}
+	scale, _, err := grinderScaleInput(body)
+	if err != nil {
+		return nil, err
 	}
 	purchaseDate := trimMax(body["purchaseDate"], 10)
 	burrsResetAt := trimMax(body["burrsResetAt"], 10)
@@ -149,6 +169,9 @@ func CreateGrinder(repo *Repository, body Entity) (Entity, error) {
 		"id": newID(), "name": trimMax(body["name"], 200), "notes": trimMax(body["notes"], 1000),
 		"burrType": trimMax(body["burrType"], 200), "purchaseDate": purchaseDate,
 		"burrsResetAt": burrsResetAt,
+	}
+	if scale != nil {
+		grinder["scale"] = scale.Map()
 	}
 	if err := repo.Update(func(lib *Library) error {
 		lib.Grinders = append(lib.Grinders, grinder)

@@ -417,6 +417,14 @@ The editor covers a profile's name, water temperature, recipe (dose/yield/ratio)
 
 The shot annotation panel, the pre-shot setup and the guided dial-in pick the grinder from a dropdown of your library, and the guided dial-in and the recipe form pick the bean the same way, so a mistyped name can no longer start a separate grinder history. The grinder dropdown ends with **Other…** for a grinder that is not in your library. A name already saved stays visible and is kept when you edit it. With no grinders in your library the field is a plain text box, and so is the guided dial-in's bean field with no beans.
 
+### Grind scales
+
+A grinder under Library → Grinders can have an optional **Grind scale**: **Stepped** for whole clicks or **Stepless** for a dial, each with a range and a step. On a stepped grinder the grind setting is a dropdown of its valid values. On a stepless grinder you type a number inside the range; a comma is accepted and the value is saved with a dot. A grinder without a scale keeps the free-text field, which also fits formats like `1.2.3`.
+
+Enter the range you actually use rather than the grinder's full mechanical range: the guided dial-in and the comparative grind advice size their steps from it, and never suggest a value outside it or between two valid steps. The comparative advice reports its best setting on the grinder's own step.
+
+Adding a scale never changes a saved setting, and 8 and 8.0 count as the same setting. A saved value that is not on a stepped grinder's list stays at the top of the dropdown, marked as not on this scale, until you choose another one. A setting pre-filled from earlier shots moves to the nearest valid value, and stays empty if it is outside the range. The scale is part of a backup.
+
 ### Guided Dial-In wizard
 
 > **⚠ Experimental / work in progress:** the guided dial-in wizard is usable but still evolving — its grind suggestions are a starting point based on a target extraction-time band, not a guaranteed dial-in. Treat suggested grind steps as a helpful nudge, not gospel, and always confirm shots make sense before accepting a round.

@@ -26,8 +26,11 @@ import { calcBestGrindCombosForBean, defaultGrinderName, suggestGrindDoseForBean
 import { normalizeGrindToNow } from '../grind-zero.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
 import type { DialinSuggestion } from '../dialin-convergence.js';
+import { prefillGrind, scaleForGrinder } from '../grind-scale.js';
+import type { GrindScale } from '../grind-scale.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange, _renderBeanSelect } from './shots/annotation.js';
+import { checkGrindField, forgetGrindField, getGrindFieldValue, grindFieldInvalid, refreshGrindField, renderGrindField } from './shots/grind-field.js';
 import { bestRound, checkForCandidate, createWizardSession, renderChips } from './wizard-session.js';
 
 // state/index.ts types the session as Record<string, unknown> and shot rows
@@ -198,6 +201,11 @@ function _suggestStartGrind(beanName: string | undefined, grinderName: string | 
   return null;
 }
 
+// #1961: read fresh, so a scale edited during a session takes effect at once.
+function _sessionScale(s: DialinSession): GrindScale | null {
+  return scaleForGrinder(S.coffeeLibrary?.grinders, s.grinder);
+}
+
 // ── Round evaluation ────────────────────────────────────────────────────
 
 async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channeling: boolean; ratio: number | null; score: number | null }> {
@@ -231,7 +239,8 @@ export function dialinAcceptNext(): void {
     s.grinder = getGrinderFieldValue('dwGrinder', 'dwGrinderOther');
     s.dose        = parseFloat((document.getElementById('dwDose') as HTMLInputElement | null)?.value as string) || null;
     s.targetRatio = parseFloat((document.getElementById('dwRatio') as HTMLInputElement | null)?.value as string) || 2;
-    s.pendingGrind = (document.getElementById('dwStartGrind') as HTMLInputElement | null)?.value.trim() || '';
+    if (grindFieldInvalid('dwStartGrind')) { checkGrindField('dwStartGrind'); return; }
+    s.pendingGrind = getGrindFieldValue('dwStartGrind');
     s.startGrind   = s.pendingGrind;
     if (!s.bean || !s.pendingGrind) return;
     s.status = 'active';
@@ -243,10 +252,10 @@ export function dialinAcceptNext(): void {
 
   if (!s.reviewRound) return;
   s.rounds.push(s.reviewRound);
-  const suggestion = calcNextGrindSuggestion(s.rounds);
+  const suggestion = calcNextGrindSuggestion(s.rounds, _sessionScale(s));
   s.reviewRound = null;
   s.candidateShotId = null;
-  if (isConverged(s.rounds)) {
+  if (isConverged(s.rounds, _sessionScale(s))) {
     s.status = 'converged';
     wizard.persist();
     renderDialinWizard();
@@ -262,7 +271,8 @@ export function dialinOverride(): void {
   const s = wizard.session();
   if (!s || !s.reviewRound) return;
   const input = document.getElementById('dwOverrideInput') as HTMLInputElement | null;
-  const val = input?.value.trim();
+  if (grindFieldInvalid('dwOverrideInput')) { checkGrindField('dwOverrideInput'); return; }
+  const val = getGrindFieldValue('dwOverrideInput');
   if (!val) { input?.focus(); return; }
   s.rounds.push(s.reviewRound);
   s.reviewRound = null;
@@ -339,7 +349,7 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     grindSetting: grindNum !== null && Number.isFinite(grindNum) ? grindNum : 0,
     shotId, score: evald.score, seconds: evald.secs, ratio: evald.ratio, channeling: evald.channeling,
   };
-  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound]);
+  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound], _sessionScale(s));
   s.candidateShotId = null;
   wizard.persist();
   renderDialinWizard();
@@ -393,6 +403,7 @@ export function renderDialinWizard(): void {
   }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   body.innerHTML = _renderRound(s);
+  if (s.reviewRound) renderGrindField('dwOverrideInput', s.grinder, '');
 }
 
 // #1960: the setup step's two library fields use the same helpers as the
@@ -401,12 +412,19 @@ export function renderDialinWizard(): void {
 function _fillSetupFields(s: DialinSession): void {
   if (S.coffeeLibrary?.beans?.length) _renderBeanSelect(s.bean || null, s.beanId, 'dwBean');
   const firstGrinder = (S.coffeeLibrary?.grinders?.[0]?.name as string | undefined) || '';
-  renderGrinderField('dwGrinder', 'dwGrinderOther', s.grinder || firstGrinder);
+  const grinder = s.grinder || firstGrinder;
+  renderGrinderField('dwGrinder', 'dwGrinderOther', grinder);
+  // #1961: this is a suggestion, not a saved value, so it must be a valid one.
+  const scale = scaleForGrinder(S.coffeeLibrary?.grinders, grinder);
+  // Without a scale the markup's value attribute already shows the suggestion.
+  if (scale) renderGrindField('dwStartGrind', grinder, prefillGrind(scale, _parseGrindNum(s.pendingGrind)));
+  else forgetGrindField('dwStartGrind');
 }
 
 // Wired via the document-level [data-action] change delegation.
 export function dialinGrinderChange(): void {
   handleGrinderFieldChange('dwGrinder', 'dwGrinderOther');
+  refreshGrindField('dwStartGrind', getGrinderFieldValue('dwGrinder', 'dwGrinderOther'));
 }
 
 function _renderSetup(s: DialinSession): Html {
@@ -433,6 +451,8 @@ function _renderSetup(s: DialinSession): Html {
     <div class="lib-form-field">
       <label for="dwStartGrind">${tHtml('dialin_wizard_setup_start_grind')}</label>
       <input type="text" id="dwStartGrind" value="${esc(String(s.pendingGrind ?? ''))}">
+      <select id="grindSelect-dwStartGrind" aria-label="${esc(t('dialin_wizard_setup_start_grind'))}" hidden></select>
+      <div class="bf-error" id="grindHint-dwStartGrind" role="alert" hidden></div>
     </div>
   </div>
   <div class="lib-form-actions">
@@ -461,8 +481,10 @@ function _renderRound(s: DialinSession): Html {
         <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_accept_next')}</button>
         <div class="dw-override-row">
           <input type="text" id="dwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${tHtml('dialin_wizard_override')}">
+          <select id="grindSelect-dwOverrideInput" class="machine-form-input" style="flex:1 1 auto" aria-label="${esc(t('dialin_wizard_override'))}" hidden></select>
           <button class="lib-btn-sm" data-action="dialin-override">${tHtml('dialin_wizard_override')}</button>
         </div>
+        <div class="bf-error" id="grindHint-dwOverrideInput" role="alert" hidden></div>
         <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
       </div>
       ${chips}
@@ -492,7 +514,7 @@ function _renderSummary(s: DialinSession): Html {
   const best = bestRound(s.rounds);
   const title = s.status === 'converged' ? tHtml('dialin_wizard_converged_title') : tHtml('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length
-    ? t(calcNextGrindSuggestion(s.rounds).reason) : '';
+    ? t(calcNextGrindSuggestion(s.rounds, _sessionScale(s)).reason) : '';
   return html`<div class="dw-summary">
     <div class="dw-summary-title">${title}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}

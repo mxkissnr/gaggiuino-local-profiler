@@ -22,6 +22,8 @@ import { safeLocalStorage } from '../storage.js';
 import { beanLabel } from '../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../shared/bean-mix.js';
 import { defaultGrinderName, suggestGrindDoseForBean } from './shots/grind.js';
+import { checkGrindField, getGrindFieldValue as grindFieldValue, grindSelectId,
+         refreshGrindField, renderGrindField, tidyGrindField } from './shots/grind-field.js';
 
 // GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
 // view reads off the poll payload. Named locally rather than reusing
@@ -167,13 +169,12 @@ export function renderLiveShotSetupPanel(): void {
   _renderPuckScreenSelect(draft.puckScreenId ?? null, 'lsPuckScreen');
   _renderRecipeSelect(draft.recipeId ?? null, 'lsRecipeField', 'lsRecipe');
   renderGrinderField('lsGrinder', 'lsGrinderOther', draft.grinder || '');
+  renderGrindField('lsGrindSetting', draft.grinder || '', draft.grindSetting || '');
   // The tests' fake DOM records the raw assigned value (no <input> string
-  // coercion), so these two fields stay number-or-string when assigned;
+  // coercion), so the dose field stays number-or-string when assigned;
   // a real input stringifies on assignment.
   const doseEl = document.getElementById('lsDose') as (HTMLElement & { value: number | string }) | null;
-  const grindEl = document.getElementById('lsGrindSetting') as (HTMLElement & { value: number | string }) | null;
-  if (doseEl)  doseEl.value  = draft.dose ?? '';
-  if (grindEl) grindEl.value = draft.grindSetting || '';
+  if (doseEl) doseEl.value = draft.dose ?? '';
 
   if (_lsWired) return;
   _lsWired = true;
@@ -219,15 +220,24 @@ export function renderLiveShotSetupPanel(): void {
     const d = _loadLiveSetupDraft();
     d.grinder = getGrinderFieldValue('lsGrinder', 'lsGrinderOther');
     _saveLiveSetupDraft(d);
+    refreshGrindField('lsGrindSetting', d.grinder);
   });
   document.getElementById('lsGrinderOther')?.addEventListener('input', () => {
     const d = _loadLiveSetupDraft();
     d.grinder = getGrinderFieldValue('lsGrinder', 'lsGrinderOther');
     _saveLiveSetupDraft(d);
+    refreshGrindField('lsGrindSetting', d.grinder);
   });
   document.getElementById('lsGrindSetting')?.addEventListener('input', () => {
+    checkGrindField('lsGrindSetting');
     const d = _loadLiveSetupDraft();
-    d.grindSetting = (document.getElementById('lsGrindSetting') as HTMLInputElement).value.trim();
+    d.grindSetting = grindFieldValue('lsGrindSetting');
+    _saveLiveSetupDraft(d);
+  });
+  document.getElementById('lsGrindSetting')?.addEventListener('blur', () => tidyGrindField('lsGrindSetting'));
+  document.getElementById(grindSelectId('lsGrindSetting'))?.addEventListener('change', () => {
+    const d = _loadLiveSetupDraft();
+    d.grindSetting = grindFieldValue('lsGrindSetting');
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsDose')?.addEventListener('input', () => {

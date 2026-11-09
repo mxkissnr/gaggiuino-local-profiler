@@ -1,5 +1,7 @@
 package library
 
+import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
+
 // This file holds the whole-entity sanitizers
 // (sanitizeBeanFields/sanitizeGrinderFields/sanitizeRecipeFields/
 // sanitizeMilkFields/sanitizeBasketFields/sanitizePuckScreenFields) —
@@ -72,6 +74,13 @@ func SanitizeGrinderFields(grinder Entity) Entity {
 	delete(out, "isDefault")
 	if isDefault, ok := grinder["isDefault"].(bool); ok && isDefault {
 		out["isDefault"] = true
+	}
+	// scale is a valid scale or nothing: a crafted backup must not reach the
+	// browser's dropdowns, and a grinder with a broken scale keeps working as a
+	// grinder without one.
+	delete(out, "scale")
+	if scale := grindscale.Parse(grinder["scale"]); scale != nil {
+		out["scale"] = scale.Map()
 	}
 	return out
 }
