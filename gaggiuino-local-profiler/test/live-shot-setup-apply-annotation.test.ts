@@ -18,6 +18,11 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 g.window ??= globalThis;
 
+// #1958 slice 4: the client skips the SSE echo of its own write, so the bean's
+// stock (changed by the applied dose) only refreshes through an explicit
+// library reload.
+const loadLibrarySpy = vi.fn((): Promise<void> => Promise.resolve());
+
 const getLiveDataMock = vi.fn();
 vi.mock('../public-src/api/system.js', () => ({
   getLiveData: (...args: unknown[]) => getLiveDataMock(...args) as unknown,
@@ -123,6 +128,8 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     S.currentLang = 'en';
     S.liveWasLive = true; // simulate a brew already in progress
     S.liveLastSeq = 0;
+    loadLibrarySpy.mockClear();
+    window.loadLibrary = loadLibrarySpy;
     S.shots = [
       { id: 10, machineId: 1, timestamp: 0, annotation: {} },
       { id: 11, machineId: 2, timestamp: 0, annotation: {} }, // other machine, higher id — must never be picked for machine 1
@@ -193,6 +200,35 @@ describe('_applyLiveSetupToShot (via fetchLiveData brew-end transition)', () => 
     });
 
     expect(annotateShotMock).not.toHaveBeenCalled();
+  });
+
+  // #1958: this page's own annotate write is not echoed back over SSE, so the
+  // bean's remainingG would stay stale after the dose was booked off it.
+  it('reloads the library once after a successful apply', async () => {
+    draftStore[draftKey(1)] = JSON.stringify({ coffee: 'Bean', beanId: 3, dose: 18 });
+
+    await triggerBrewEnd({
+      newShotsAfterSync: [
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
+      ],
+    });
+
+    expect(loadLibrarySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reload the library when the annotate call fails', async () => {
+    draftStore[draftKey(1)] = JSON.stringify({ coffee: 'Bean', beanId: 3, dose: 18 });
+    annotateShotMock.mockImplementationOnce(() => Promise.reject(new Error('rejected')));
+
+    await triggerBrewEnd({
+      newShotsAfterSync: [
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
+      ],
+    });
+
+    expect(loadLibrarySpy).not.toHaveBeenCalled();
   });
 
   // #1120 review: the draft only applies to a finished BREW. A steam/flush

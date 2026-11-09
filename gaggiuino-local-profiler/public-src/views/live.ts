@@ -296,6 +296,8 @@ async function _applyLiveSetupToShot(shotId: number): Promise<void> {
       const idx = S.shots.findIndex(s => s.id === shotId);
       const shotRow = idx !== -1 ? S.shots[idx] : undefined;
       if (shotRow) shotRow.annotation = { ...(shotRow.annotation as Record<string, unknown>), ...payload };
+      // This page's own write is not echoed back, and the dose changes the bean's stock.
+      void window.loadLibrary?.();
     }
   } catch (e) {
     // Best-effort — the shot still exists, just unannotated — but log it
