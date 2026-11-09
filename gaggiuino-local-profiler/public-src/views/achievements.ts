@@ -19,7 +19,7 @@ import type { Html } from '../utils.js';
 // The badge record as GET /api/achievements serves it (see
 // AchievementService.getState): only unlocked/secret badges carry name and
 // description.
-interface Achievement {
+export interface Achievement {
   id: string;
   card: string;
   stamp: string;
@@ -129,11 +129,11 @@ export function isCardFull(badges: Achievement[]): boolean {
 // badges carry neither field from the API until unlocked, so a locked
 // secret badge renders nothing here by construction, not by a client-side
 // guard that could be forgotten.
-function badgeName(b: Achievement): string | null {
+export function badgeName(b: Achievement): string | null {
   if (b.secret) return b.unlocked ? (b.name ?? null) : null;
   return t(`ach_${b.id}_n`);
 }
-function badgeDesc(b: Achievement): string | null {
+export function badgeDesc(b: Achievement): string | null {
   if (b.secret) return b.unlocked ? (b.description ?? null) : null;
   return t(`ach_${b.id}_d`);
 }

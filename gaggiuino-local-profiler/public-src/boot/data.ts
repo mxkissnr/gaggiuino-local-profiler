@@ -28,6 +28,7 @@ import { renderBeanFreshnessSettings } from '../components/bean-freshness-settin
 import { applyBlindRating } from '../components/dev-score-settings.js';
 import { renderApiTokenCard } from './settings.js';
 import { runBootTasks } from './run-step.js';
+import { checkAchievementPopups, renderPopupSettings, startPopups } from './popups.js';
 import type { BootOutcome } from './run-step.js';
 
 // #1375/#1539: apply the shared UI choices once they have been loaded from the
@@ -39,6 +40,7 @@ import type { BootOutcome } from './run-step.js';
 function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void {
   applyBlindRating();
   resetShelfPrefs(keepShelfQuery);
+  renderPopupSettings();
   if (!includeMachine) return;
   const activeId = getUiPref<number | 'all'>('machine.active');
   if (activeId === undefined) return;
@@ -118,6 +120,7 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
           loadSettingsState,
           applyServerUiPrefs,
           maintenanceCanRefetch: _maintenanceCanRefetch,
+          onShotsChanged: () => { void checkAchievementPopups(); },
         }));
         // #1539 slice 3: recover refetches that failed or were missed while
         // offline -- a browser online event or an SSE reconnect resyncs every kind.
@@ -148,6 +151,7 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
         // case where the server copy differs from that cache.
         if (await loadUiPrefsFromServer()) applyServerUiPrefs();
         else applyBlindRating();
+        renderPopupSettings();
       },
     },
     // The Settings-page loaders (#1539 slice 5) are shared with the live-sync
@@ -205,6 +209,12 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
     {
       name: 'setup wizard', requires: ['status', 'machines'],
       run: () => { if (shouldOpenSetupWizard(S.machines)) openSetupWizard(); },
+    },
+    // #1956: after the wizard so it counts as an open overlay. Needs the shared
+    // preferences, the shot list (fresh install or update) and isDemo (status).
+    {
+      name: 'popups', requires: ['ui prefs', 'shots', 'status'], after: ['setup wizard'],
+      run: () => { startPopups(() => { applyServerUiPrefs(false, true); }); },
     },
   ]);
 }

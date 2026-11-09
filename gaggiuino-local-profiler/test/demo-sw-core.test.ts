@@ -203,6 +203,25 @@ describe('sw-core shiftTimestamps (#1193)', () => {
         const input = { createdAt: 1_700_000_000_000 };
         expect(glp.shiftTimestamps(input, Number.NaN)).toEqual(input);
     });
+
+    // #1956: the in-app popups compare an achievement's unlockedAt with a
+    // marker they keep, so re-dating it per response would report the same
+    // badges as new on every read and re-open the popup forever — which then
+    // covers the app for every later click in the demo.
+    it('leaves an achievement unlockedAt alone, whatever the delta', () => {
+        const input = { badges: [{ id: 'backup', unlocked: true, unlockedAt: 1_791_311_112 }] };
+        expect(glp.shiftTimestamps(input, DAY_MS)).toEqual(input);
+        expect(glp.shiftTimestamps(input, 5_000)).toEqual(input);
+    });
+
+    it('still shifts the other timestamp keys beside an unlockedAt', () => {
+        const out = glp.shiftTimestamps(
+            { unlockedAt: 1_791_311_112, createdAt: 1_700_000_000_000 },
+            DAY_MS,
+        ) as { unlockedAt: number; createdAt: number };
+        expect(out.unlockedAt).toBe(1_791_311_112);
+        expect(out.createdAt).toBe(1_700_000_000_000 + DAY_MS);
+    });
 });
 
 const NOW_MS = Date.UTC(2026, 0, 15, 10, 30, 0);

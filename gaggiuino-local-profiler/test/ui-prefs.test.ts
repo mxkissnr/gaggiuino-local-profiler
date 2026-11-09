@@ -109,6 +109,116 @@ describe('mergeUiPrefs (#1375, #1403)', () => {
       pushUp: [],
     });
   });
+
+  it('a queued seen marker lower than the server takes the server value (#1956)', async () => {
+    const { mergeUiPrefs, SEEN_WHATS_NEW_PREF } = await loadModule();
+    const key = SEEN_WHATS_NEW_PREF;
+    expect(mergeUiPrefs(
+      { [key]: 1000 },
+      { [key]: 2000 },
+      new Set([key]),
+    )).toEqual({ merged: { [key]: 2000 }, pushUp: [] });
+  });
+
+  it('a queued seen marker higher than the server keeps the local value (#1956)', async () => {
+    const { mergeUiPrefs, SEEN_ACHIEVEMENTS_PREF } = await loadModule();
+    const key = SEEN_ACHIEVEMENTS_PREF;
+    expect(mergeUiPrefs(
+      { [key]: 3000 },
+      { [key]: 2000 },
+      new Set([key]),
+    )).toEqual({ merged: { [key]: 3000 }, pushUp: [] });
+  });
+
+  it('a seen marker that is not queued takes the server value even when lower (#1956)', async () => {
+    const { mergeUiPrefs, SEEN_WHATS_NEW_PREF } = await loadModule();
+    const key = SEEN_WHATS_NEW_PREF;
+    expect(mergeUiPrefs({ [key]: 5000 }, { [key]: 1000 })).toEqual({
+      merged: { [key]: 1000 },
+      pushUp: [],
+    });
+  });
+
+  it('a pending unrelated key still beats the server (#1956)', async () => {
+    const { mergeUiPrefs, SEEN_WHATS_NEW_PREF } = await loadModule();
+    expect(mergeUiPrefs(
+      { view: 'grid', [SEEN_WHATS_NEW_PREF]: 100 },
+      { view: 'list', [SEEN_WHATS_NEW_PREF]: 200 },
+      new Set(['view']),
+    )).toEqual({
+      merged: { view: 'grid', [SEEN_WHATS_NEW_PREF]: 200 },
+      pushUp: [],
+    });
+  });
+});
+
+describe('advanceSeenMarker (#1956)', () => {
+  it('ignores a lower or equal value', async () => {
+    _store.set('glp_ui_prefs', JSON.stringify({ 'popups.whats_new_seen': 2000 }));
+    const mod = await loadModule();
+    const fetchMock = vi.fn<FetchFn>(() => Promise.resolve(okJson({})));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    mod.advanceSeenMarker('popups.whats_new_seen', 1000);
+    mod.advanceSeenMarker('popups.whats_new_seen', 2000);
+
+    expect(mod.getUiPref('popups.whats_new_seen')).toBe(2000);
+    expect(cachedPrefs()).toEqual({ 'popups.whats_new_seen': 2000 });
+    expect(pendingKeys()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stores and queues a higher value, and a first value', async () => {
+    _store.set('glp_ui_prefs', JSON.stringify({ 'popups.achievements_seen': 2000 }));
+    const mod = await loadModule();
+    const fetchMock = vi.fn<FetchFn>(() => Promise.resolve(okJson({})));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    mod.advanceSeenMarker('popups.achievements_seen', 3000);
+    mod.advanceSeenMarker('popups.whats_new_seen', 42);
+
+    expect(mod.getUiPref('popups.achievements_seen')).toBe(3000);
+    expect(mod.getUiPref('popups.whats_new_seen')).toBe(42);
+    expect(pendingKeys()).toEqual(['popups.achievements_seen', 'popups.whats_new_seen']);
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sentBody(fetchMock.mock.calls[0])).toEqual({
+      'popups.achievements_seen': 3000,
+      'popups.whats_new_seen': 42,
+    });
+  });
+});
+
+describe('uiPrefsInSync (#1956)', () => {
+  it('is false before any load', async () => {
+    const mod = await loadModule();
+    expect(mod.uiPrefsInSync()).toBe(false);
+  });
+
+  it('is true after a successful load', async () => {
+    const mod = await loadModule();
+    vi.stubGlobal('fetch', vi.fn<FetchFn>(() => Promise.resolve(okJson({ view: 'grid' }))));
+    await mod.loadUiPrefsFromServer();
+    expect(mod.uiPrefsInSync()).toBe(true);
+  });
+
+  it('is false after a non-ok response', async () => {
+    const mod = await loadModule();
+    vi.stubGlobal('fetch', vi.fn<FetchFn>(() => Promise.resolve({ ok: false } as Response)));
+    await mod.loadUiPrefsFromServer();
+    expect(mod.uiPrefsInSync()).toBe(false);
+  });
+
+  it('is false after a rejected fetch', async () => {
+    const mod = await loadModule();
+    vi.stubGlobal('fetch', vi.fn<FetchFn>(() => Promise.reject(new Error('offline'))));
+    await mod.loadUiPrefsFromServer();
+    expect(mod.uiPrefsInSync()).toBe(false);
+  });
 });
 
 describe('setUiPref (#1375)', () => {
