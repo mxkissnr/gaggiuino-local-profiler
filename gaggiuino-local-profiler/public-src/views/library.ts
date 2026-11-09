@@ -60,11 +60,9 @@ export async function loadLibrary(): Promise<void> {
 }
 
 // #1960: a library change re-fills the annotation panel's grinder dropdown and
-// keeps its choice. The recipeFormBean autocomplete reads S.coffeeLibrary live
-// and only needs re-rendering when it is open.
+// keeps its choice.
 export function updateLibraryDatalist(): void {
   refreshGrinderField('annGrinder', 'annGrinderOther');
-  (document.getElementById('recipeFormBean') as HTMLInputElement | null)?._autocomplete?.refresh();
 }
 
 export function switchLibTab(tab: string): void {

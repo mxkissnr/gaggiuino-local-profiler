@@ -7,6 +7,7 @@ import { esc, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
+import { _renderBeanSelect } from '../shots/annotation.js';
 import type { Recipe } from '../../api/types.js';
 import type { ShotMeta } from '../../state/index.js';
 
@@ -161,8 +162,7 @@ export function openRecipeForm(recipe?: Recipe | null): void {
   (document.getElementById('recipeFormSourceUrl') as HTMLInputElement).value    = recipe?.sourceUrl     || '';
   (document.getElementById('recipeFormProfile') as HTMLInputElement).value      = recipe?.profileName   || '';
   attachAutocomplete(document.getElementById('recipeFormProfile') as HTMLInputElement, () => S.machineProfiles.map(p => p.name));
-  (document.getElementById('recipeFormBean') as HTMLInputElement).value         = recipe?.beanName      || '';
-  attachAutocomplete(document.getElementById('recipeFormBean') as HTMLInputElement, () => S.coffeeLibrary.beans.map(b => b.name));
+  _renderBeanSelect(recipe?.beanName || null, null, 'recipeFormBean');
   (document.getElementById('recipeFormNotes') as HTMLInputElement).value        = recipe?.notes         || '';
   _renderStepRows(recipe?.steps || []);
   (document.getElementById('recipeAddForm') as HTMLElement).classList.add('open');
