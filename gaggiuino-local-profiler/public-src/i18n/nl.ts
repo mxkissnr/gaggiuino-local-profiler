@@ -599,6 +599,7 @@ const nl: Partial<Translations> = {
     maint_custom_every:'Elke', maint_unit_shots:'shots', maint_unit_grams:'gram', maint_mode_both:'Beide',
     maint_custom_add:'Toevoegen', maint_enable_btn:'Inschakelen', maint_disable_btn:'Uitschakelen',
     maint_disabled_section:(n)=>`Uitgeschakelde taken (${n})`, maint_rename_label:'Naam',
+    maint_paused:'Gepauzeerd', maint_pause_btn:'Pauzeren', maint_resume_btn:'Hervatten',
     maint_confirm_delete_custom:(name)=>`Eigen taak "${name}" echt verwijderen?`,
     maint_custom_add_summary:'Eigen taak toevoegen', maint_custom_label_ph:'Naam (bijv. Backflush met reiniger)',
     lib_scan_barcode:`${BARCODE_ICON_SVG} Scan`,

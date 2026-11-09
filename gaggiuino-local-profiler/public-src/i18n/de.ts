@@ -588,6 +588,7 @@ const de: Partial<Translations> = {
     maint_custom_every:'Alle', maint_unit_shots:'Bezüge', maint_unit_grams:'Gramm', maint_mode_both:'Beides',
     maint_custom_add:'Hinzufügen', maint_enable_btn:'Aktivieren', maint_disable_btn:'Deaktivieren',
     maint_disabled_section:(n)=>`Deaktivierte Wartungen (${n})`, maint_rename_label:'Name',
+    maint_paused:'Pausiert', maint_pause_btn:'Pausieren', maint_resume_btn:'Fortsetzen',
     maint_confirm_delete_custom:(name)=>`Eigene Wartung "${name}" wirklich löschen?`,
     maint_custom_add_summary:'Eigene Wartung hinzufügen', maint_custom_label_ph:'Name (z.B. Rückspülen mit Reiniger)',
     lib_scan_barcode:`${BARCODE_ICON_SVG} Scan`, lib_url_import:`${LINK_ICON_SVG} URL`, lib_url_placeholder:'kaffeebraun.com / hoppenworth-ploch.de …',

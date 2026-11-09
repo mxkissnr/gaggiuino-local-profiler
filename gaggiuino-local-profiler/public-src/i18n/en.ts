@@ -599,6 +599,7 @@ const en: Translations = {
     maint_custom_every:'Every', maint_unit_shots:'shots', maint_unit_grams:'grams', maint_mode_both:'Both',
     maint_custom_add:'Add', maint_enable_btn:'Enable', maint_disable_btn:'Disable',
     maint_disabled_section:(n)=>`Disabled tasks (${n})`, maint_rename_label:'Name',
+    maint_paused:'Paused', maint_pause_btn:'Pause', maint_resume_btn:'Resume',
     maint_confirm_delete_custom:(name)=>`Really delete custom task "${name}"?`,
     maint_custom_add_summary:'Add custom task', maint_custom_label_ph:'Name (e.g. Backflush with cleaner)',
     lib_scan_barcode:`${BARCODE_ICON_SVG} Scan`,

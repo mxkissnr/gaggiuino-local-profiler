@@ -114,7 +114,7 @@ export function taskTitle(task: string, d: MaintTaskNames): string {
 
 export function maintStatusLabel(status: string): string {
   const labels: Record<string, string> =
-    { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') };
+    { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never'), paused: t('maint_paused') };
   return labels[status] || '';
 }
 
