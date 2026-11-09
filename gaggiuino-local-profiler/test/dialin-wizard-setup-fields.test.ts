@@ -117,7 +117,7 @@ function chooseBean(dom: Dom, name: string, beanId?: number): void {
 describe('dial-in wizard setup fields (#1960)', () => {
   beforeEach(() => {
     S.dialinSession = null;
-    S.shots = [] as unknown as typeof S.shots;
+    S.shots = [];
     S.coffeeLibrary = library([{ name: 'Grinder X' }], [{ id: 1, name: 'Bean A' }]);
   });
 
