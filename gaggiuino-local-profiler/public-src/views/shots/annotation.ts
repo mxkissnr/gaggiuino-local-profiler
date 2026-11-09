@@ -8,7 +8,7 @@ import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js
 import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
-import { suggestGrindDoseForBean } from './grind.js';
+import { defaultGrinderName, suggestGrindDoseForBean } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
@@ -293,6 +293,8 @@ export async function loadShotDefaults(): Promise<void> {
 // completely untouched: a configured default must never overwrite something
 // the user already recorded. Applied fields stay fully editable afterward —
 // this only changes what the form starts out showing.
+// #1954: with a default grinder a new shot opens with that grinder, the same
+// one bean selection prefills from.
 export function _applyShotDefaults(ann: AnnotationData | null | undefined): AnnotationData | null | undefined {
   if (ann && Object.keys(ann).length > 0) return ann;
   const d = S.shotDefaults as Partial<ShotDefaults> | null;
@@ -303,7 +305,7 @@ export function _applyShotDefaults(ann: AnnotationData | null | undefined): Anno
     beanId:       d.beanId       ?? null,
     basketId:     d.basketId     ?? null,
     puckScreenId: d.puckScreenId ?? null,
-    grinder:      d.grinder      || '',
+    grinder:      defaultGrinderName(S.coffeeLibrary) || d.grinder || '',
     dose:         d.dose         ?? null,
   };
 }
@@ -815,8 +817,12 @@ export function quickClone(): void {
   const suggested = beanName
     ? suggestGrindDoseForBean(beanName, S.coffeeLibrary, S.shots, { preferMostRecent: true, beanId })
     : { grinder: '', grindSetting: '', dose: '' };
-  (document.getElementById('annGrinder') as HTMLInputElement).value      = suggested.grinder      || ann.grinder      || '';
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(suggested.grindSetting || ann.grindSetting || '');
+  // #1954: with a default grinder, a clone always uses that grinder and only
+  // its own setting — the previous shot's value is on another scale, so an
+  // empty suggestion stays empty instead of copying ann.
+  const defaultGrinder = defaultGrinderName(S.coffeeLibrary);
+  (document.getElementById('annGrinder') as HTMLInputElement).value      = defaultGrinder || suggested.grinder || ann.grinder || '';
+  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(defaultGrinder ? suggested.grindSetting : (suggested.grindSetting || ann.grindSetting || ''));
   (document.getElementById('annDose') as HTMLInputElement).value         = String(suggested.dose         || ann.dose         || '');
   updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '');
   // Basket/puck screen are equipment, not per-shot state — carried over from

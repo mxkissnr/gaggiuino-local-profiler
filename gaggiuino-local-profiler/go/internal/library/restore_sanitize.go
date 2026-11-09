@@ -67,6 +67,12 @@ func SanitizeGrinderFields(grinder Entity) Entity {
 	out["notes"] = trimMax(grinder["notes"], 1000)
 	out["burrType"] = trimMax(grinder["burrType"], 200)
 	out["purchaseDate"] = trimMax(grinder["purchaseDate"], 10)
+	// isDefault is a plain bool or nothing: the copy loop above would otherwise
+	// let a crafted backup carry an arbitrary truthy value.
+	delete(out, "isDefault")
+	if isDefault, ok := grinder["isDefault"].(bool); ok && isDefault {
+		out["isDefault"] = true
+	}
 	return out
 }
 
@@ -221,6 +227,19 @@ func SanitizeLibraryForRestore(lib Library) Library {
 		out.Grinders = make([]Entity, len(lib.Grinders))
 		for i, g := range lib.Grinders {
 			out.Grinders[i] = SanitizeGrinderFields(g)
+		}
+		// A backup can never restore two defaults: only the first flagged
+		// grinder keeps the flag.
+		seenDefault := false
+		for _, g := range out.Grinders {
+			if _, ok := g["isDefault"]; !ok {
+				continue
+			}
+			if seenDefault {
+				delete(g, "isDefault")
+				continue
+			}
+			seenDefault = true
 		}
 	}
 	if lib.Recipes != nil {

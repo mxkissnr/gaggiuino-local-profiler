@@ -1606,6 +1606,8 @@ export interface paths {
                         burrType?: string;
                         /** Format: date */
                         purchaseDate?: string;
+                        /** @description Only the single default grinder carries it; setting it clears the previous default. */
+                        isDefault?: boolean;
                         /**
                          * Format: date
                          * @description Defaults to purchaseDate if omitted
@@ -1674,6 +1676,8 @@ export interface paths {
                         burrType?: string;
                         /** Format: date */
                         purchaseDate?: string;
+                        /** @description Only the single default grinder carries it; setting it clears the previous default. */
+                        isDefault?: boolean;
                         /** Format: date */
                         burrsResetAt?: string;
                     };
@@ -8639,6 +8643,8 @@ export interface components {
             notes?: string;
             burrType?: string;
             purchaseDate?: string;
+            /** @description Only the single default grinder carries it; setting it clears the previous default. */
+            isDefault?: boolean;
             /** @description ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs */
             burrsResetAt?: string;
             /** @description File extension of the stored photo, if any */

@@ -88,7 +88,10 @@ export function renderGrinderList(): void {
     <div class="lib-item">
       ${g.image ? html`<img class="lib-grinder-thumb" data-grinder-id="${esc(g.id)}" alt="">` : html``}
       <div class="lib-item-info">
-        <div class="lib-item-name">${esc(g.name)}</div>
+        <div class="lib-item-name-row">
+          <div class="lib-item-name">${esc(g.name)}</div>
+          ${g.isDefault === true ? html`<span class="machine-row-badge">${tHtml('lib_grinder_default')}</span>` : html``}
+        </div>
         ${extra ? html`<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : html``}
         ${g.notes ? html`<div class="lib-item-sub">${esc(g.notes)}</div>` : html``}
         ${zeroPoint != null ? html`<div class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : html``}
