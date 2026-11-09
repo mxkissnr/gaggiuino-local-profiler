@@ -348,6 +348,7 @@ const nl: Partial<Translations> = {
     profile_unknown:'Onbekend profiel',
     nav_settings:'Instellingen', settings_theme:'Thema', settings_accent:'Kleurenschema', settings_accent_machine_theme_note:'De actieve machine heeft een eigen kleurthema — dit bepaalt momenteel het app-accent in plaats van de kiezer hieronder.', theme_dark:'Donker', theme_light:'Licht', theme_auto:'Auto', settings_language:'Taal',
     settings_whats_new:'Wat is er nieuw', settings_whats_new_desc:'Recente GLP-releases en hun hoogtepunten.',
+    popups_ach_title_one:'Nieuwe prestatie', popups_ach_title_many:(n)=>`${n} nieuwe prestaties`, settings_popups_title:'Pop-ups', settings_popups_desc:'Korte meldingen die vanzelf openen. Je keuzes gelden op al je apparaten.', settings_popups_enabled:'Pop-ups tonen', settings_popups_whats_new:'Wat is er nieuw na een update', settings_popups_achievements:'Nieuwe prestaties',
     settings_bottom_nav:'Mobiele navigatiebalk', settings_bottom_nav_desc:'Kies tot 4 bestemmingen voor de onderste navigatiebalk op mobiel. Al het andere komt onder "Meer" terecht.',
     settings_bottom_nav_checkbox_label:'Tonen in de balk', settings_bottom_nav_move_up:'Omhoog verplaatsen', settings_bottom_nav_move_down:'Omlaag verplaatsen',
     settings_notify_title:'Meldingen', settings_notify_desc:'Welke automatische meldingen van de machine en de koffiebibliotheek moeten worden verstuurd?',

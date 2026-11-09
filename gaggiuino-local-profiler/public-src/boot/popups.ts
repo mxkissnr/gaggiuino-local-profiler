@@ -2,18 +2,21 @@
 // components/popup-queue.ts for how popups wait for their turn. Preferences and
 // seen markers live in the shared ui-prefs store (ui-prefs.ts).
 import { S } from '../state/index.js';
-import { t } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import { reloadBlocked } from '../live-sync.js';
 import {
-  POPUPS_PREF, SEEN_WHATS_NEW_PREF, advanceSeenMarker, getUiPref,
-  loadUiPrefsFromServer, uiPrefsInSync,
+  POPUPS_PREF, SEEN_ACHIEVEMENTS_PREF, SEEN_WHATS_NEW_PREF, advanceSeenMarker,
+  getUiPref, loadUiPrefsFromServer, setUiPref, uiPrefsInSync,
 } from '../ui-prefs.js';
 import { getWhatsNewEntries } from '../shared/whats-new.js';
 import type { WhatsNewEntry } from '../shared/whats-new.js';
 import { whatsNewEntriesHtml } from '../components/whats-new.js';
 import { openDetailSheet } from '../components/detail-sheet.js';
 import { enqueuePopup, initPopupQueue } from '../components/popup-queue.js';
-import { html } from '../utils.js';
+import { esc, html, joinHtml } from '../utils.js';
+import { getAchievements } from '../api/system.js';
+import { badgeDesc, badgeName } from '../views/achievements.js';
+import type { Achievement } from '../views/achievements.js';
 
 export interface PopupSwitches {
   enabled: boolean;
@@ -64,6 +67,28 @@ export function planWhatsNew(
   return { marker, entries: entries.filter(e => versionCode(e.version) > seen) };
 }
 
+interface Stamped {
+  unlocked?: boolean;
+  unlockedAt?: number | null;
+}
+
+function _unlockedTime(b: Stamped): number | null {
+  return b.unlocked === true && typeof b.unlockedAt === 'number' ? b.unlockedAt : null;
+}
+
+/**
+ * Decides the achievement popup. Without a marker (the first run) it only
+ * returns the baseline. `fresh` holds nothing but unlocked badges.
+ */
+export function planAchievements<T extends Stamped>(
+  badges: readonly T[],
+  seen: unknown,
+): { marker: number; fresh: T[] } {
+  const newest = badges.reduce((max, b) => Math.max(max, _unlockedTime(b) ?? 0), 0);
+  if (typeof seen !== 'number') return { marker: newest, fresh: [] };
+  return { marker: Math.max(seen, newest), fresh: badges.filter(b => (_unlockedTime(b) ?? 0) > seen) };
+}
+
 function _canShow(): boolean {
   return document.visibilityState === 'visible' && !S.liveWasLive && !reloadBlocked();
 }
@@ -94,6 +119,76 @@ function _checkWhatsNew(): void {
   });
 }
 
+let _started = false;
+
+/** Compares the unlocked badges with the seen marker; at start and after new shots. */
+export async function checkAchievementPopups(): Promise<void> {
+  if (!_started) return;
+  let badges: Achievement[];
+  try {
+    const r = await getAchievements(S.currentLang);
+    if (!r.ok) return;
+    badges = ((await r.json()) as { badges?: Achievement[] }).badges ?? [];
+  } catch {
+    return;
+  }
+  const plan = planAchievements(badges, getUiPref(SEEN_ACHIEVEMENTS_PREF));
+  if (!plan.fresh.length || !_allowed('achievements')) {
+    advanceSeenMarker(SEEN_ACHIEVEMENTS_PREF, plan.marker);
+    return;
+  }
+  enqueuePopup({
+    id: 'achievements',
+    isDue: () => _allowed('achievements') && _isBehind(SEEN_ACHIEVEMENTS_PREF, plan.marker),
+    show: done => {
+      // Only what this device has not seen by now; a secret badge without copy is left out.
+      const items = planAchievements(plan.fresh, getUiPref(SEEN_ACHIEVEMENTS_PREF)).fresh.filter(b => badgeName(b));
+      advanceSeenMarker(SEEN_ACHIEVEMENTS_PREF, plan.marker);
+      if (!items.length) { done(); return; }
+      openDetailSheet({
+        title: items.length === 1 ? t('popups_ach_title_one') : t('popups_ach_title_many', items.length),
+        body: html`<div class="whats-new-list" style="max-height:none">${joinHtml(items.map(b => html`
+          <div class="whats-new-entry">
+            <h4 class="whats-new-version">${esc(badgeName(b) ?? '')}</h4>
+            <p class="settings-card-desc">${esc(badgeDesc(b) ?? '')}</p>
+          </div>`))}</div>`,
+        onClose: done,
+      });
+    },
+  });
+}
+
+function _bindSwitch(id: string, key: keyof PopupSwitches, s: PopupSwitches): void {
+  const box = document.getElementById(id) as HTMLInputElement | null;
+  if (!box) return;
+  box.checked = s[key];
+  if (key !== 'enabled') box.disabled = !s.enabled;
+  box.onchange = () => {
+    setUiPref(POPUPS_PREF, { ...popupSwitches(), [key]: box.checked });
+    renderPopupSettings();
+  };
+}
+
+/** Fills the switches from the shared preferences; the markup is built once. */
+export function renderPopupSettings(): void {
+  const card = document.getElementById('popupSettingsCard');
+  if (!card) return;
+  if (!card.dataset.ready) {
+    card.dataset.ready = '1';
+    card.innerHTML = html`
+      <h3 class="settings-card-title" data-i18n="settings_popups_title">${tHtml('settings_popups_title')}</h3>
+      <p class="settings-card-desc" data-i18n="settings_popups_desc">${tHtml('settings_popups_desc')}</p>
+      <div class="orders-broadcast-row" style="min-height:44px"><input type="checkbox" id="popupsEnabled"><label for="popupsEnabled" data-i18n="settings_popups_enabled">${tHtml('settings_popups_enabled')}</label></div>
+      <div class="orders-broadcast-row" style="min-height:44px"><input type="checkbox" id="popupsWhatsNew"><label for="popupsWhatsNew" data-i18n="settings_popups_whats_new">${tHtml('settings_popups_whats_new')}</label></div>
+      <div class="orders-broadcast-row" style="min-height:44px"><input type="checkbox" id="popupsAchievements"><label for="popupsAchievements" data-i18n="settings_popups_achievements">${tHtml('settings_popups_achievements')}</label></div>`;
+    card.style.display = '';
+  }
+  const s = popupSwitches();
+  _bindSwitch('popupsEnabled', 'enabled', s);
+  _bindSwitch('popupsWhatsNew', 'whats_new', s);
+  _bindSwitch('popupsAchievements', 'achievements', s);
+}
+
 /** Boot entry point. `applyPrefs` applies a changed shared-preferences read. */
 export function startPopups(applyPrefs: () => void): void {
   if (S.isDemo || !uiPrefsInSync()) return;
@@ -104,5 +199,7 @@ export function startPopups(applyPrefs: () => void): void {
       return uiPrefsInSync();
     },
   });
+  _started = true;
   _checkWhatsNew();
+  void checkAchievementPopups();
 }

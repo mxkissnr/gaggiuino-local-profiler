@@ -348,6 +348,7 @@ const es: Partial<Translations> = {
     profile_unknown:'Perfil desconocido',
     nav_settings:'Ajustes', settings_theme:'Tema', settings_accent:'Esquema de colores', settings_accent_machine_theme_note:'La máquina activa tiene su propio tema de color — actualmente controla el acento de la app en lugar del selector de abajo.', theme_dark:'Oscuro', theme_light:'Claro', theme_auto:'Auto', settings_language:'Idioma',
     settings_whats_new:'Novedades', settings_whats_new_desc:'Las versiones recientes de GLP y sus novedades principales.',
+    popups_ach_title_one:'Nuevo logro', popups_ach_title_many:(n)=>`${n} logros nuevos`, settings_popups_title:'Ventanas emergentes', settings_popups_desc:'Avisos breves que se abren solos. Tu elección se aplica en todos tus dispositivos.', settings_popups_enabled:'Mostrar ventanas emergentes', settings_popups_whats_new:'Novedades tras una actualización', settings_popups_achievements:'Nuevos logros',
     settings_bottom_nav:'Barra de navegación móvil', settings_bottom_nav_desc:'Elige hasta 4 destinos para la barra de navegación inferior en el móvil. Todo lo demás va a "Más".',
     settings_bottom_nav_checkbox_label:'Mostrar en la barra', settings_bottom_nav_move_up:'Subir', settings_bottom_nav_move_down:'Bajar',
     settings_notify_title:'Notificaciones', settings_notify_desc:'¿Qué notificaciones automáticas de la máquina y de la biblioteca de café deben enviarse?',

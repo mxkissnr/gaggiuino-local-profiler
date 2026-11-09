@@ -348,6 +348,7 @@ const fr: Partial<Translations> = {
     profile_unknown:'Profil inconnu',
     nav_settings:'Paramètres', settings_theme:'Thème', settings_accent:'Schéma de couleurs', settings_accent_machine_theme_note:'La machine active a son propre thème de couleur — il détermine actuellement l’accent de l’application au lieu du sélecteur ci-dessous.', theme_dark:'Sombre', theme_light:'Clair', theme_auto:'Auto', settings_language:'Langue',
     settings_whats_new:'Nouveautés', settings_whats_new_desc:'Les dernières versions de GLP et leurs points forts.',
+    popups_ach_title_one:'Nouveau succès', popups_ach_title_many:(n)=>`${n} nouveaux succès`, settings_popups_title:'Fenêtres contextuelles', settings_popups_desc:"De courts messages qui s'ouvrent d'eux-mêmes. Vos choix s'appliquent à tous vos appareils.", settings_popups_enabled:'Afficher les fenêtres contextuelles', settings_popups_whats_new:'Nouveautés après une mise à jour', settings_popups_achievements:'Nouveaux succès',
     settings_bottom_nav:'Barre de navigation mobile', settings_bottom_nav_desc:'Choisis jusqu\'à 4 destinations pour la barre de navigation inférieure sur mobile. Tout le reste va sous "Plus".',
     settings_bottom_nav_checkbox_label:'Afficher dans la barre', settings_bottom_nav_move_up:'Déplacer vers le haut', settings_bottom_nav_move_down:'Déplacer vers le bas',
     settings_notify_title:'Notifications', settings_notify_desc:'Quelles notifications automatiques de la machine et de la bibliothèque de café doivent être envoyées ?',
