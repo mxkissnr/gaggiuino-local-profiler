@@ -29,7 +29,12 @@ const {
   flushAutoSave,
 } = await import('../public-src/views/shots/annotation.js');
 
-interface FakeEl { value?: string; innerHTML?: string; style: { display?: string } }
+interface FakeEl {
+  value?: string;
+  innerHTML?: string;
+  style: { display?: string };
+  classList?: { add: () => void; remove: () => void };
+}
 
 let els: Record<string, FakeEl>;
 
@@ -53,7 +58,7 @@ function fakeAnnotationDom(hiddenTag?: string): void {
     annTds:                 { value: '', innerHTML: '', style: {} },
     annNotes:               { value: '', innerHTML: '', style: {} },
   };
-  (els.annCoffee as unknown as { selectedOptions: unknown[] }).selectedOptions = [{ dataset: {} }];
+  (el('annCoffee') as unknown as { selectedOptions: unknown[] }).selectedOptions = [{ dataset: {} }];
   g.document = { getElementById: (id: string) => els[id] ?? null };
 }
 
@@ -108,6 +113,9 @@ describe('taste-tag chips (#1957)', () => {
     // Tapping the active chip clears it.
     selectTasteTag('thin');
     expect(el('annTasteTag').value).toBe('');
+    // Selecting schedules a save; flush it so the debounce does not outlive the
+    // test and leak into the next one's `_autoSaveTimer` check.
+    flushAutoSave();
   });
 });
 
