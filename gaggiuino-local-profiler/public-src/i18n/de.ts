@@ -205,6 +205,7 @@ const de: Partial<Translations> = {
     lib_sheet_close:'Schließen', lib_sheet_more:'Weitere Aktionen', lib_sheet_shot_log:'Shot-Log', lib_sheet_aromas:'Aromen',
     lib_form_sheet_new:'Neue Bohne', lib_form_sheet_edit:'Bohne bearbeiten', lib_form_discard_q:'Änderungen verwerfen?', lib_form_discard:'Verwerfen', lib_form_keep_editing:'Weiter bearbeiten',
     lib_archived_toast:'Beutel gefaltet und weggeräumt.', lib_restored_toast:'Wieder im Regal.',
+    bean_empty_offer_toast:(n)=>`${n} ist leer`,
     lib_confirm_delete_bean:'Bohne aus der Bibliothek löschen?',
     lib_confirm_delete_grinder:'Mühle aus der Bibliothek löschen?',
     lib_grinder_wear:(n,g)=>`${n} Shots · ${g} seit letztem Mahlscheiben-Wechsel`, lib_grinder_reset_burrs:'Mahlscheiben erneuert', lib_grinder_confirm_reset_burrs:'Verschleiß-Zähler zurücksetzen? Mahlscheiben-Wechsel jetzt als heute vermerken.',

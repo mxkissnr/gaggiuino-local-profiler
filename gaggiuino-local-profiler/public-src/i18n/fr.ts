@@ -205,6 +205,7 @@ const fr: Partial<Translations> = {
     lib_sheet_close:'Fermer', lib_sheet_more:"Plus d'actions", lib_sheet_shot_log:'Historique des shots', lib_sheet_aromas:'Arômes',
     lib_form_sheet_new:'Nouveau grain', lib_form_sheet_edit:'Modifier le grain', lib_form_discard_q:'Abandonner les modifications ?', lib_form_discard:'Abandonner', lib_form_keep_editing:'Continuer la modification',
     lib_archived_toast:'Sachet plié et rangé.', lib_restored_toast:"De retour sur l'étagère.",
+    bean_empty_offer_toast:(n)=>`${n} est épuisé`,
     lib_confirm_delete_bean:'Supprimer le grain de la bibliothèque ?',
     lib_confirm_delete_grinder:'Supprimer le moulin de la bibliothèque ?',
     lib_grinder_wear:(n,g)=>`${n} shots · ${g} depuis le dernier changement de meules`, lib_grinder_reset_burrs:'Meules remplacées', lib_grinder_confirm_reset_burrs:'Réinitialiser le compteur d\'usure ? Marque le changement de meules comme effectué aujourd\'hui.',
