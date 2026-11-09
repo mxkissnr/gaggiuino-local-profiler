@@ -312,6 +312,7 @@ describe('_maintRowHtml (#1923)', () => {
     const html = _maintRowHtml(paused);
     expect(html).toContain('class="maint-row status-paused"');
     expect(html).toContain('maint-chip paused');
+    expect(html).toContain('>Paused</span>');
   });
 
   it('marks the just-finished row as fresh, and only when asked', () => {
