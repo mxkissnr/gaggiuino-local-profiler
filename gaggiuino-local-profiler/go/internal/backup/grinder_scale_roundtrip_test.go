@@ -23,6 +23,7 @@ func restoreGrinders(t *testing.T, grinders []library.Entity) map[string]map[str
 	}
 	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
 
+	useImageDirAt(t, t.TempDir())
 	h2, deps2, _ := newTestHandlersInDir(t)
 	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
 	if rr.Code != http.StatusOK {
