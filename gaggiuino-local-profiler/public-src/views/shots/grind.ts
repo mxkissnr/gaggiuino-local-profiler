@@ -6,6 +6,7 @@ import { calcShotScore }                   from './utils.js';
 import type { ShotLike }                   from './utils.js';
 import { getRawCurve }                     from '../../shot-curves.js';
 import { normalizeGrindToNow }             from '../../grind-zero.js';
+import { grindOnTarget, inGrindRange, prefillGrind, scaleForGrinder, snapGrind } from '../../grind-scale.js';
 import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../icons.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../../shared/bean-mix.js';
@@ -60,7 +61,7 @@ interface GrindBean {
 
 interface GrindLibrary {
   beans?: GrindBean[];
-  grinders?: { name?: unknown; isDefault?: unknown }[];
+  grinders?: { name?: unknown; isDefault?: unknown; scale?: unknown }[];
 }
 
 // The library's default grinder (#1954), or '' when none is set.
@@ -267,13 +268,17 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   });
   if (comparable.length < 1) return null;
 
-  const ranked = _rankableSiblings(comparable);
+  const scale = scaleForGrinder(S.coffeeLibrary?.grinders, ann.grinder);
+  // #1961: a sibling outside the range says nothing about a setting the grinder can reach.
+  const ranked = _rankableSiblings(comparable).filter(s =>
+    !scale || inGrindRange(scale, _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp) as number));
+  if (!ranked.length) return null;
 
   const byGrind: Record<number, number[]> = {};
   ranked.forEach(s => {
     const g   = _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp) as number;
     const sc  = calcShotScore(s) as number;
-    const key = Math.round(g * 2) / 2;
+    const key = scale ? snapGrind(scale, g) : Math.round(g * 2) / 2;
     const bucket = (byGrind[key] ??= []);
     bucket.push(sc);
   });
@@ -295,12 +300,12 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
     return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
   const diff = currentGrind - bestSetting;
   const tag = tasteTagOf(ann);
-  const outcome = tag && _tasteOutcome(tag, Math.abs(diff) < 0.6 ? null : diff > 0 ? 'finer' : 'coarser', false);
+  const outcome = tag && _tasteOutcome(tag, grindOnTarget(scale, diff) ? null : diff > 0 ? 'finer' : 'coarser', false);
   const tasteKey = outcome ? COMPARATIVE_TASTE_KEYS[outcome] : undefined;
   if (outcome && tasteKey) {
     return { type: outcome === 'finer' || outcome === 'coarser' ? outcome : 'ok', icon: BAR_CHART_ICON_SVG, text: t(tasteKey, n, bestSetting, bestScore), shots };
   }
-  if (Math.abs(diff) < 0.6)
+  if (grindOnTarget(scale, diff))
     return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
   if (diff > 0)
     return { type: 'finer',   icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_finer',   n, bestSetting, bestScore), shots };
@@ -345,7 +350,10 @@ export function calcBestGrindCombosForBean(
   const byCombo: Record<string, { grinder: string; grindSetting: number; scores: number[] }> = {};
   scored.forEach(s => {
     const grinder = (s.annotation?.grinder as string).trim();
-    const grind    = Math.round((_currentGrindNum(grinder, s.annotation?.grindSetting, s.timestamp) as number) * 2) / 2;
+    const scale    = scaleForGrinder(S.coffeeLibrary?.grinders, grinder);
+    const current  = _currentGrindNum(grinder, s.annotation?.grindSetting, s.timestamp) as number;
+    if (scale && !inGrindRange(scale, current)) return;
+    const grind    = scale ? snapGrind(scale, current) : Math.round(current * 2) / 2;
     const key      = `${grinder.toLowerCase()}${grind}`;
     const combo    = (byCombo[key] ??= { grinder, grindSetting: grind, scores: [] });
     combo.scores.push(calcShotScore(s) as number);
@@ -441,5 +449,9 @@ export function suggestGrindDoseForBean(
   if (!grindSetting) grindSetting = lastGrindShot?.annotation?.grindSetting || '';
   const dose = lastForBean?.annotation?.dose || '';
 
-  return { grinder: defaultGrinder || grinder, grindSetting, dose };
+  // #1961: a prefill is about to be saved, so on a scaled grinder it must be a
+  // valid value; one that cannot be stays empty, as in #1954.
+  const finalGrinder = defaultGrinder || grinder;
+  const scale = scaleForGrinder(coffeeLibrary?.grinders, finalGrinder);
+  return { grinder: finalGrinder, grindSetting: scale ? prefillGrind(scale, _parseGrindNum(grindSetting)) : grindSetting, dose };
 }

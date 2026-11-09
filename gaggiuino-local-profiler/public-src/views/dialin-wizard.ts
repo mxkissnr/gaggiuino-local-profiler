@@ -26,6 +26,8 @@ import { calcBestGrindCombosForBean, defaultGrinderName, suggestGrindDoseForBean
 import { normalizeGrindToNow } from '../grind-zero.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
 import type { DialinSuggestion } from '../dialin-convergence.js';
+import { scaleForGrinder } from '../grind-scale.js';
+import type { GrindScale } from '../grind-scale.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange, _renderBeanSelect } from './shots/annotation.js';
 import { bestRound, checkForCandidate, createWizardSession, renderChips } from './wizard-session.js';
@@ -198,6 +200,11 @@ function _suggestStartGrind(beanName: string | undefined, grinderName: string | 
   return null;
 }
 
+// #1961: read fresh, so a scale edited during a session takes effect at once.
+function _sessionScale(s: DialinSession): GrindScale | null {
+  return scaleForGrinder(S.coffeeLibrary?.grinders, s.grinder);
+}
+
 // ── Round evaluation ────────────────────────────────────────────────────
 
 async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channeling: boolean; ratio: number | null; score: number | null }> {
@@ -243,10 +250,10 @@ export function dialinAcceptNext(): void {
 
   if (!s.reviewRound) return;
   s.rounds.push(s.reviewRound);
-  const suggestion = calcNextGrindSuggestion(s.rounds);
+  const suggestion = calcNextGrindSuggestion(s.rounds, _sessionScale(s));
   s.reviewRound = null;
   s.candidateShotId = null;
-  if (isConverged(s.rounds)) {
+  if (isConverged(s.rounds, _sessionScale(s))) {
     s.status = 'converged';
     wizard.persist();
     renderDialinWizard();
@@ -339,7 +346,7 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     grindSetting: grindNum !== null && Number.isFinite(grindNum) ? grindNum : 0,
     shotId, score: evald.score, seconds: evald.secs, ratio: evald.ratio, channeling: evald.channeling,
   };
-  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound]);
+  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound], _sessionScale(s));
   s.candidateShotId = null;
   wizard.persist();
   renderDialinWizard();
@@ -492,7 +499,7 @@ function _renderSummary(s: DialinSession): Html {
   const best = bestRound(s.rounds);
   const title = s.status === 'converged' ? tHtml('dialin_wizard_converged_title') : tHtml('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length
-    ? t(calcNextGrindSuggestion(s.rounds).reason) : '';
+    ? t(calcNextGrindSuggestion(s.rounds, _sessionScale(s)).reason) : '';
   return html`<div class="dw-summary">
     <div class="dw-summary-title">${title}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}

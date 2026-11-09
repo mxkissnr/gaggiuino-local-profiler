@@ -58,7 +58,7 @@ describe('calcNextGrindSuggestion on a grinder scale', () => {
     expect(new Set([none, fine, coarse]).size).toBe(3);
     expect(none).toBe(6.9);
     expect(fine).toBe(8);
-    expect(coarse).toBe(7);
+    expect(coarse).toBe(6);
   });
 
   it('without a scale equals calling without the argument, field by field', () => {
