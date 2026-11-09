@@ -43,7 +43,7 @@ func checkTasteTag(body map[string]any) []ValidationIssue {
 	if s, ok := v.(string); ok && slices.Contains(tasteTags, s) {
 		return nil
 	}
-	return []ValidationIssue{{"tasteTag", "Must be one of " + strings.Join(tasteTags, ", ")}}
+	return []ValidationIssue{{"tasteTag", "Must be one of " + strings.Join(TasteTags(), ", ")}}
 }
 
 // Outcomes of a tag against a grind direction, besides "finer" and "coarser".
