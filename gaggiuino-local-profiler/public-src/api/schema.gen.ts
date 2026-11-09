@@ -8561,7 +8561,10 @@ export interface components {
             decaf?: boolean;
             /** @description False archives the bean (#578, #1958): left out of the app's bean pickers, the order card and, by default, MCP list_beans. Shots, statistics and stock are unaffected */
             enabled?: boolean;
-            /** @description Newest bag id the bean-is-empty offer was resolved for (#1958), 0 for a bean without bags. Only moves forward */
+            /**
+             * Format: int64
+             * @description Newest bag id the bean-is-empty offer was resolved for (#1958), 0 for a bean without bags. Only moves forward
+             */
             emptyOfferBagId?: number;
             /** @description Legacy single ISO 3166-1 alpha-2 code — first entry of origins[] */
             origin?: string;
