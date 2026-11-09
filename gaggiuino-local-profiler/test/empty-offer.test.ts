@@ -71,8 +71,8 @@ vi.mock('../public-src/ui-prefs.js', () => ({
 }));
 
 vi.mock('../public-src/components/toast.js', () => ({
-  showToast: (msg: string, opts?: unknown): void => {
-    mocks.toasts.push({ msg, opts: (opts ?? {}) as ToastOpts });
+  showToast: (msg: string, opts?: ToastOpts): void => {
+    mocks.toasts.push({ msg, opts: opts ?? {} });
   },
 }));
 

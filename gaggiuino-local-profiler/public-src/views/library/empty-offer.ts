@@ -77,7 +77,6 @@ async function _record(beans: readonly BeanListRow[], arm: boolean): Promise<voi
   } catch (e) {
     console.error('[GLP] recording empty beans failed:', e);
   } finally {
-    // eslint-disable-next-line require-atomic-updates -- re-entrancy guard, cleared once this call's own writes are through
     _baselining = false;
   }
 }
