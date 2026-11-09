@@ -27,7 +27,7 @@ interface FakeEl {
   removeAttribute: (name: string) => void;
   focus: () => void;
   addEventListener: (name: string, cb: Handler) => void;
-  replaceChildren: (frag?: { children: unknown[] }) => void;
+  replaceChildren: (frag: { children: FakeOption[] }) => void;
   options: FakeOption[];
   onchange?: (() => void) | null;
 }
@@ -139,7 +139,7 @@ function installDom(): Dom {
 // can read back what renderGrindField produced.
 function makeSelect(): FakeEl {
   const node = makeEl({ tagName: 'SELECT', hidden: true });
-  node.replaceChildren = (frag?: { children: unknown[] }) => { node.options = (frag?.children ?? []) as FakeOption[]; };
+  node.replaceChildren = frag => { node.options = frag.children; };
   return node;
 }
 
