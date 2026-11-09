@@ -104,6 +104,11 @@ const CHECKBOX_IDS = ['popupsEnabled', 'popupsWhatsNew', 'popupsAchievements'] a
 // The same minimal document fake test/detail-sheet.test.ts uses, extended with
 // what boot/popups.ts reads: the visibility state, the Settings card and its
 // three checkboxes, and the generic query helpers live-sync's guards call.
+//
+// That test file is the source of this fake, not a file this slice changes: the
+// plan names it for its makeHost/installDom shape, and detail-sheet.ts's own
+// onClose behaviour is already covered there (added with the sheet change, see
+// "detail sheet onClose (#1956)" in that file).
 function installDom(): Dom {
   const host = makeHost();
   const card: FakeCard = { innerHTML: '', dataset: {}, style: {} };
