@@ -385,7 +385,7 @@ export function closeBeanSheet(): void {
   }
 }
 
-// Manual override for the bean pickers and the order card's bean list.
+// Manual override for the order card's bean picker — independent of stock.
 // The bean stays fully visible/editable in the library either way; archiving
 // takes it out of the bean pickers and the order card, never out of history.
 export async function toggleBeanActive(id: number): Promise<void> {
