@@ -474,7 +474,7 @@ describe('achievement details', () => {
     expect(html).not.toContain('locked_badge');
     expect(html).not.toContain('hidden_badge');
     // One entry only: the locked badges add nothing to the list.
-    expect(html.match(/whats-new-entry/g)).toHaveLength(1);
+    expect(html.match(/whats-new-entry/g) ?? []).toHaveLength(1);
   });
 
   it('escapes the name an unlocked secret badge brought', async () => {
