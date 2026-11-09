@@ -10,16 +10,17 @@ const stepless09 = { type: 'stepless', min: 0, max: 9, step: 0.1 } as const;
 const stepped060 = { type: 'stepped', min: 0, max: 60, step: 1 } as const;
 
 describe('parseGrindScale', () => {
-  it.each([
+  const cases: Array<[string, unknown, unknown]> = [
     ['stepped', { type: 'stepped', min: 0, max: 60, step: 1 }, { type: 'stepped', min: 0, max: 60, step: 1 }],
     ['stepless', { type: 'stepless', min: 0, max: 9, step: 0.1 }, { type: 'stepless', min: 0, max: 9, step: 0.1 }],
     ['decimals in min', { type: 'stepless', min: 0.5, max: 9, step: 0.1 }, { type: 'stepless', min: 0.5, max: 9, step: 0.1 }],
     ['last span under the stepped cap', { type: 'stepped', min: 0, max: 499, step: 1 }, { type: 'stepped', min: 0, max: 499, step: 1 }],
-  ])('accepts %s', (_name, raw, want) => {
+  ];
+  it.each(cases)('accepts %s', (_name, raw, want) => {
     expect(parseGrindScale(raw)).toEqual(want);
   });
 
-  it.each([
+  const invalid: Array<[string, unknown]> = [
     ['not an object', 'stepped'],
     ['null', null],
     ['undefined', undefined],
@@ -41,7 +42,8 @@ describe('parseGrindScale', () => {
     ['stepped span beyond 500 values', { type: 'stepped', min: 0, max: 1000, step: 1 }],
     ['NaN', { type: 'stepless', min: NaN, max: 9, step: 0.1 }],
     ['Infinity', { type: 'stepless', min: 0, max: Infinity, step: 0.1 }],
-  ])('rejects %s', (_name, raw) => {
+  ];
+  it.each(invalid)('rejects %s', (_name, raw) => {
     expect(parseGrindScale(raw)).toBeNull();
   });
 

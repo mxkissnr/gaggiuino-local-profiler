@@ -71,7 +71,8 @@ describe('calcComparativeGrindAdvice on a grinder scale', () => {
   it('halves to 8.5 when the grinder has no scale', () => {
     useGrinders([{ name: GRINDER }]);
     const siblings = [shot(2, 90, '8.4'), shot(3, 60, '7.9')];
-    const advice = calcComparativeGrindAdvice(viewed('9'), siblings);
+    const advice = calcComparativeGrindAdvice(viewed('10'), siblings);
+    expect(advice?.type).toBe('finer');
     expect(advice?.text).toContain('8.5');
   });
 

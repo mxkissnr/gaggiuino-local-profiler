@@ -60,7 +60,7 @@ function startSession(scale: unknown): SessionView {
     status: 'active',
   };
   S.dialinSession = session as unknown as typeof S.dialinSession;
-  return session as SessionView;
+  return session as unknown as SessionView;
 }
 
 describe('dial-in wizard steps on a grinder scale (#1961)', () => {
