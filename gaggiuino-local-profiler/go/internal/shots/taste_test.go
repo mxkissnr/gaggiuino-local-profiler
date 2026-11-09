@@ -299,7 +299,7 @@ func TestAdvice_TasteTable(t *testing.T) {
 		if got.Type != c.wantType {
 			t.Errorf("tag %q grind %q: Type = %q, want %q", c.tag, c.grind, got.Type, c.wantType)
 		}
-		wantText := cardTextf("en", c.wantKey, 1, 10, 100)
+		wantText := cardTextf("en", c.wantKey, 1, 10.0, 100)
 		if c.wantKey == "compare_ok" {
 			wantText = cardTextf("en", c.wantKey, 1, 100)
 		}
