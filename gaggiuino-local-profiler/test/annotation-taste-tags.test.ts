@@ -73,7 +73,7 @@ function savedPayload(): SavedPayload {
 // _performAnnotationSave() is fired without being awaited (as in the app), so
 // the assertions drain the promise chain it left behind.
 async function drain(): Promise<void> {
-  for (let i = 0; i < 10; i++) await Promise.resolve();
+  for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
 function saveWith(annotation: Record<string, unknown> | null): Promise<void> {
@@ -86,6 +86,7 @@ function saveWith(annotation: Record<string, unknown> | null): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  delete (g.window as { updateView?: () => void }).updateView;
   fetchSpy.mockReset();
   fetchSpy.mockResolvedValue({ ok: false } as Response);
   S.shots = [{ id: 1, timestamp: 1700000000, annotation: {} }];
