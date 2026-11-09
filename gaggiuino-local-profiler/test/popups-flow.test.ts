@@ -493,12 +493,12 @@ describe('achievement details', () => {
   it('never renders an unlocked badge\'s id', async () => {
     const ctx = await harness({
       prefs: { 'popups.achievements_seen': 100 },
-      badges: [unlockedBadge('badge_a', 'Espresso explorer', 200)],
+      badges: [unlockedBadge('badge_a', 'Plain badge name', 200)],
     });
     hideWhatsNew(ctx);
     await ctx.boot();
 
-    expect(ctx.dom.host.innerHTML).toContain('Espresso explorer');
+    expect(ctx.dom.host.innerHTML).toContain('Plain badge name');
     expect(ctx.dom.host.innerHTML).not.toContain('badge_a');
   });
 });
