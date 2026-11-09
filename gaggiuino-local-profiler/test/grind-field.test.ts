@@ -147,10 +147,10 @@ describe('renderGrindField on a stepped grinder', () => {
     expect(at(optionsOf(second.select), 1).text).toBe('33 clicks (not on this scale)');
     expect(getGrindFieldValue('f3b')).toBe('33 clicks');
 
-    const third = field('f3c');
-    renderGrindField('f3c', 'Niche', '34');
-    expect(optionsOf(third.select).map(o => o.value)).not.toContain('33.5');
-    expect(optionsOf(third.select)).toHaveLength(42);
+    // The extra option belongs to that one value; the next shot does not see it.
+    renderGrindField('f3', 'Niche', '34');
+    expect(optionsOf(select).map(o => o.value)).not.toContain('33.5');
+    expect(optionsOf(select)).toHaveLength(42);
   });
 
   it('never writes a stored value into markup', () => {
