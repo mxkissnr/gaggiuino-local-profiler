@@ -98,6 +98,28 @@ func ComputeGrinderWearStats(shotsRepo *shots.Repository, grinder Entity) (shots
 	return s, g, nil
 }
 
+// GrinderUsesSince counts the uses after sinceMs whose grinder matches and sums
+// their doses, unrounded. It is the one fold over GrinderUse rows: burr wear and
+// the maintenance task counters differ only in their since date and matcher.
+func GrinderUsesSince(uses []shots.GrinderUse, sinceMs int64, match func(grinder string) bool) (count int, grams float64) {
+	for _, u := range uses {
+		if !match(u.Grinder) || u.Timestamp*1000 <= sinceMs {
+			continue
+		}
+		count++
+		if dose, ok := jsParseFloat(u.Dose); ok {
+			grams += dose
+		}
+	}
+	return count, grams
+}
+
+// GrinderNamed matches an annotated grinder by name, ignoring case.
+func GrinderNamed(name string) func(grinder string) bool {
+	name = lowerOrEmpty(name)
+	return func(grinder string) bool { return lowerOrEmpty(grinder) == name }
+}
+
 // ComputeGrinderWearFromUses folds one grinder's burr wear over the
 // history's GrinderUse rows (internal/shots.Repository.GrinderUses).
 // Enriching every grinder for GET /api/library used to call
@@ -106,7 +128,6 @@ func ComputeGrinderWearStats(shotsRepo *shots.Repository, grinder Entity) (shots
 // through this. The rows replace a full hydrate of every shot (#1616).
 func ComputeGrinderWearFromUses(uses []shots.GrinderUse, grinder Entity) (shotsSinceBurrs int, gramsSinceBurrs float64) {
 	name, _ := grinder["name"].(string)
-	name = lowerOrEmpty(name)
 
 	var resetTs int64
 	resetValid := true
@@ -122,19 +143,7 @@ func ComputeGrinderWearFromUses(uses []shots.GrinderUse, grinder Entity) (shotsS
 		return 0, 0
 	}
 
-	var grams float64
-	for _, u := range uses {
-		if lowerOrEmpty(u.Grinder) != name {
-			continue
-		}
-		if u.Timestamp*1000 <= resetTs {
-			continue
-		}
-		shotsSinceBurrs++
-		if dose, ok := jsParseFloat(u.Dose); ok {
-			grams += dose
-		}
-	}
+	shotsSinceBurrs, grams := GrinderUsesSince(uses, resetTs, GrinderNamed(name))
 	return shotsSinceBurrs, roundTo1(grams)
 }
 

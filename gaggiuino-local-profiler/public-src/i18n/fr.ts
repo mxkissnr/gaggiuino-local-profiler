@@ -600,6 +600,7 @@ const fr: Partial<Translations> = {
     maint_custom_every:'Tous les', maint_unit_shots:'shots', maint_unit_grams:'grammes', maint_mode_both:'Les deux',
     maint_custom_add:'Ajouter', maint_enable_btn:'Activer', maint_disable_btn:'Désactiver',
     maint_disabled_section:(n)=>`Tâches désactivées (${n})`, maint_rename_label:'Nom',
+    maint_paused:'En pause', maint_pause_btn:'Mettre en pause', maint_resume_btn:'Reprendre',
     maint_confirm_delete_custom:(name)=>`Supprimer la tâche personnalisée "${name}" ?`,
     maint_custom_add_summary:'Ajouter une tâche personnalisée', maint_custom_label_ph:'Nom (ex. Backflush avec nettoyant)',
     lib_scan_barcode:`${BARCODE_ICON_SVG} Scan`,

@@ -38,7 +38,7 @@ func TestJsFloorDivDays_NegativeDelta_FloorsNotTruncates(t *testing.T) {
 // the same fix through the real call path: a task's lastDate 1.5 days in
 // the future must produce daysSince = -2 in the computed stat.
 func TestComputeMaintenanceStats_FutureLastDate_DaysSinceIsMinusTwo(t *testing.T) {
-	_, _, _, sqlDB := newTestHandlers(t)
+	_, _, libRepo, sqlDB := newTestHandlers(t)
 	shotsRepo := shots.NewRepository(sqlDB)
 
 	future := time.Now().Add(36 * time.Hour) // 1.5 days from now
@@ -49,7 +49,7 @@ func TestComputeMaintenanceStats_FutureLastDate_DaysSinceIsMinusTwo(t *testing.T
 		},
 	}
 
-	stats, err := ComputeMaintenanceStats(shotsRepo, maint, 1)
+	stats, err := ComputeMaintenanceStats(shotsRepo, libRepo, maint, 1)
 	if err != nil {
 		t.Fatalf("ComputeMaintenanceStats: %v", err)
 	}

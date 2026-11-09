@@ -600,6 +600,7 @@ const it: Partial<Translations> = {
     maint_custom_every:'Ogni', maint_unit_shots:'shot', maint_unit_grams:'grammi', maint_mode_both:'Entrambi',
     maint_custom_add:'Aggiungi', maint_enable_btn:'Attiva', maint_disable_btn:'Disattiva',
     maint_disabled_section:(n)=>`Attività disattivate (${n})`, maint_rename_label:'Nome',
+    maint_paused:'In pausa', maint_pause_btn:'Metti in pausa', maint_resume_btn:'Riprendi',
     maint_confirm_delete_custom:(name)=>`Eliminare l'attività personalizzata "${name}"?`,
     maint_custom_add_summary:'Aggiungi attività personalizzata', maint_custom_label_ph:'Nome (es. Backflush con detergente)',
     lib_scan_barcode:`${BARCODE_ICON_SVG} Scan`,
