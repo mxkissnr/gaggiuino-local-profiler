@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"net/http"
 	"testing"
 )
 
@@ -26,7 +27,12 @@ func TestRestore_ArchivedBeanStaysArchived(t *testing.T) {
 		"shots":          []any{},
 		"coffee_library": map[string]any{"beans": []any{bean}},
 	}
-	restoreBundle(t, mux, handBuiltBackupZip(t, bundle, map[string][]byte{}))
+	// Posted as application/zip, the same upload shape the frontend and the
+	// other round-trip tests use, so this drives the real restore route.
+	rec := doZip(t, mux, "/api/restore", handBuiltBackupZip(t, bundle, map[string][]byte{}), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
 
 	lib, err := deps.LibRepo.GetLibrary()
 	if err != nil {

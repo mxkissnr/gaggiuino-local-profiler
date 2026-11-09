@@ -86,8 +86,10 @@ describe('showToast onHide (#1958)', () => {
 
     showToast('undo me', { duration: 1000, action: { label: 'Undo', onClick }, onHide });
     const btn = toastElement().querySelector('.glp-toast-action');
-    if (!btn?.onclick) throw new Error('the action button was never wired up');
-    btn.onclick();
+    expect(btn).not.toBeNull();
+    const click = btn ? btn.onclick : null;
+    expect(click).not.toBeNull();
+    click?.();
 
     expect(onHide).toHaveBeenCalledTimes(1);
     expect(onHide).toHaveBeenCalledWith('action');

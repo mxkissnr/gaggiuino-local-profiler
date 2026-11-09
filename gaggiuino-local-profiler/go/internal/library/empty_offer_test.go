@@ -27,7 +27,17 @@ func libraryBeanByID(t *testing.T, mux *http.ServeMux, id int64) map[string]any 
 
 func emptyOfferBagID(t *testing.T, bean map[string]any) (int64, bool) {
 	t.Helper()
-	return jsParseIntLoose(bean["emptyOfferBagId"])
+	// The marker is an int64 in memory (SanitizeBeanFields) and a float64
+	// after a JSON round trip.
+	switch v := bean["emptyOfferBagId"].(type) {
+	case float64:
+		return int64(v), true
+	case int64:
+		return v, true
+	case int:
+		return int64(v), true
+	}
+	return 0, false
 }
 
 func beanBagIDs(t *testing.T, bean map[string]any) []int64 {
