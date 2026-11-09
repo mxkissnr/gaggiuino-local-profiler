@@ -4,7 +4,7 @@
 // exactly once (the _lsWired guard) so re-renders don't pile up duplicate
 // listeners that would each independently write the same draft key. Same
 // fake-document harness as the sibling live.ts test files.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { FakeOption } from './helpers/fake-option-dom.js';
 import type { GrindScale } from '../public-src/grind-scale.js';
 
@@ -33,7 +33,7 @@ interface FakeElement {
   style: Record<string, string>;
   value: string;
   hidden: boolean;
-  options?: unknown[];
+  options: unknown[];
   onchange: (() => void) | null;
   classList: { add: () => void; remove: () => void; contains: () => boolean; toggle: () => void };
   querySelector: () => null;
@@ -52,7 +52,7 @@ function makeFakeDocument() {
   function makeElement(): FakeElement {
     const listeners: Record<string, Array<() => void>> = {};
     const node: FakeElement = {
-      className: '', textContent: '', style: {}, value: '', hidden: false, options: undefined, onchange: null,
+      className: '', textContent: '', style: {}, value: '', hidden: false, options: [], onchange: null,
       classList: { add() {}, remove() {}, contains: () => false, toggle() {} },
       querySelector: () => null,
       selectedOptions: [],
@@ -188,6 +188,10 @@ describe('renderLiveShotSetupPanel()', () => {
     function setGrinders(grinders: Array<{ name: string; scale?: GrindScale }>): void {
       S.coffeeLibrary = { grinders, beans: [] } as unknown as typeof S.coffeeLibrary;
     }
+
+    afterEach(() => {
+      S.coffeeLibrary = { grinders: [], beans: [] } as unknown as typeof S.coffeeLibrary;
+    });
 
     function savedGrind(): string | undefined {
       const raw = draftStore['glp_live_shot_setup_1'];
