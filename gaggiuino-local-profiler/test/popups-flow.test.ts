@@ -158,10 +158,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 function installServer(state: ServerState): void {
   vi.stubGlobal('fetch', (url: string, opts?: RequestInit): Promise<Response> => {
     state.urls.push(url);
+    const init = opts ?? {};
     if (url.startsWith('api/ui-prefs')) {
-      const method = (opts?.method ?? 'GET').toUpperCase();
+      const method = (init.method ?? 'GET').toUpperCase();
       if (method === 'PUT') {
-        const raw = typeof opts?.body === 'string' ? opts.body : '{}';
+        const raw = typeof init.body === 'string' ? init.body : '{}';
         const body = JSON.parse(raw) as Record<string, unknown>;
         state.puts.push(body);
         Object.assign(state.prefs, body);
