@@ -48,6 +48,11 @@ const NEW_KEYS = [
     // #1923: the maintenance page's own wording — the all-good verdict
     // sentence and the tasks section heading.
     'maint_verdict_ok', 'maint_tasks_title',
+    // #1956: the new-achievement popup's title (a formatter for the plural)
+    // and the Settings card's four labels.
+    'popups_ach_title_one', 'popups_ach_title_many',
+    'settings_popups_title', 'settings_popups_desc', 'settings_popups_enabled',
+    'settings_popups_whats_new', 'settings_popups_achievements',
 ];
 
 describe('i18n language files', () => {
