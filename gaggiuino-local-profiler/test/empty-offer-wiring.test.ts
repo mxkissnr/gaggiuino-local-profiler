@@ -16,8 +16,9 @@ g.document = { getElementById: () => null };
 
 const mocks = vi.hoisted(() => ({ checkEmptyBeanOffer: vi.fn() }));
 
-vi.mock('../public-src/views/library/empty-offer.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../public-src/views/library/empty-offer.js')>()),
+// views/library.ts is the only consumer of this module, and all it takes is
+// this one function, so the spy stands in for the whole module.
+vi.mock('../public-src/views/library/empty-offer.js', () => ({
   checkEmptyBeanOffer: mocks.checkEmptyBeanOffer,
 }));
 
