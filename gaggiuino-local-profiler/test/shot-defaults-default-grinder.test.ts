@@ -301,3 +301,40 @@ describe('default grinder in shot defaults (#1954)', () => {
     expect(mocks.saveShotDefaults).not.toHaveBeenCalled();
   });
 });
+
+// #1960: the Coffee field had the same gap the grinder field got a carve-out
+// for in #1954 — a saved bean that left the library had no option, so saving
+// the card silently dropped it.
+function coffeeSelect(): FakeEl {
+  const el = docEls.get('sdCoffee');
+  if (!el) throw new Error('missing #sdCoffee');
+  return el;
+}
+
+describe('a saved default bean outside the library (#1960)', () => {
+  it('renders it once as a selected option and keeps it through a save', async () => {
+    S.shotDefaults = { ...savedDefaults(), coffee: 'Gone Bean', beanId: 7 };
+
+    renderShotDefaultsSettingsCard();
+
+    const markup = coffeeSelect().innerHTML;
+    expect(markup.match(/Gone Bean/g)).toHaveLength(2); // the value and the label of one option
+    expect(markup).toContain('<option value="Gone Bean" data-bean-id="7" selected>Gone Bean</option>');
+
+    coffeeSelect().value = 'Gone Bean';
+    coffeeSelect().selectedOptions = [{ dataset: { beanId: '7' } }];
+    await saveShotDefaultsSettings();
+
+    expect(mocks.saveShotDefaults).toHaveBeenCalledWith(
+      expect.objectContaining({ coffee: 'Gone Bean', beanId: 7 }),
+    );
+  });
+
+  it('adds no extra option for a saved bean that is in the library', () => {
+    renderShotDefaultsSettingsCard();
+
+    const markup = coffeeSelect().innerHTML;
+    expect(markup.match(/Bean A/g)).toHaveLength(2); // value and label of the library option
+    expect(markup).toContain('<option value="Bean A" data-bean-id="1" selected>Bean A</option>');
+  });
+});

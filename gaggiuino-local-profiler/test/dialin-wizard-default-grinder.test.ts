@@ -153,4 +153,35 @@ describe('dial-in wizard start grind with a default grinder (#1954)', () => {
     expect(session().startGrind).toBe('');
     expect(session().pendingGrind).toBe('');
   });
+
+  // #1960: the setup step now fills its two library fields through the DOM
+  // (_fillSetupFields) instead of rendering them as one markup string. This
+  // file's fake document is the one place the setup step renders against a
+  // page with no field elements, so pin that the new path handles them
+  // missing: the wizard must still open and keep the flagged grinder.
+  it('keeps the default grinder when the setup field elements are missing', () => {
+    const body: { innerHTML: string } = { innerHTML: '' };
+    g.document = {
+      getElementById: (id: string) => {
+        if (id === 'dialinWizardModal') return modalStub();
+        if (id === 'dwBody') return body;
+        return null;
+      },
+    };
+    try {
+      S.coffeeLibrary = library(
+        [{ name: 'Old Grinder' }, { name: 'New Grinder', isDefault: true }],
+        [{ id: 1, name: 'Bean A' }],
+      );
+
+      expect(() => openDialinWizard({ beanName: 'Bean A', beanId: 1 })).not.toThrow();
+      expect(session().grinder).toBe('New Grinder');
+      // The setup step did render, so _fillSetupFields really ran.
+      expect(body.innerHTML).toContain('dwGrinder');
+    } finally {
+      g.document = {
+        getElementById: (id: string) => (id === 'dialinWizardModal' ? modalStub() : null),
+      };
+    }
+  });
 });

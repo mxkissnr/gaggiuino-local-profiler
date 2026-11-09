@@ -397,7 +397,8 @@
                     </div>
                     <div class="annotation-field">
                         <label for="annGrinder" data-i18n="ann_grinder">Mühle</label>
-                        <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off">
+                        <select id="annGrinder"></select>
+                        <input type="text" id="annGrinderOther" aria-label="Grinder" data-i18n-aria-label="ann_grinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off" style="display:none">
                     </div>
                     <div class="annotation-field">
                         <label for="annGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
@@ -851,7 +852,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormBean" data-i18n="lib_recipe_bean">Bohne</label>
-                                <input type="text" id="recipeFormBean" placeholder="Ethiopia …">
+                                <select id="recipeFormBean"></select>
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormNotes" data-i18n="lib_recipe_notes">Notizen</label>

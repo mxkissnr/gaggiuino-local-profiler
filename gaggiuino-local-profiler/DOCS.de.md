@@ -412,6 +412,10 @@ Der Editor deckt Name, Wassertemperatur, Rezept (Dosis/Ausbeute/Ratio) und die P
 
 „An Maschine senden" fragt vorher um Bestätigung, dann wird das Profil direkt auf der Maschine erstellt oder geändert — bei einer Gaggiuino werden neue Profile auf Firmware mit entsprechender Unterstützung über REST angelegt (mit Fallback auf die WebSocket-API bei älterer Firmware), Änderungen und Löschungen laufen immer über die WebSocket-API (dafür gibt es keinen REST-Endpunkt); eine GaggiMate wird immer über ihre WebSocket-Verbindung beschrieben — ein fehlgeschlagenes Senden zeigt eine Fehlermeldung statt still zu scheitern. Profile werden zuerst lokal gespeichert, sodass Anlegen, Bearbeiten und Löschen auch dann funktionieren, wenn die Maschine nicht erreichbar ist; die Änderung wird automatisch an die Maschine übertragen, sobald sie wieder erreichbar ist.
 
+### Bohnen und Mühlen auswählen
+
+Die Shot-Notizen, „Bezug einstellen“ und das geführte Einwählen wählen die Mühle aus einer Liste deiner Bibliothek, das geführte Einwählen und das Rezeptformular ebenso die Bohne. So kann ein Tippfehler keine eigene Mühlen-Historie mehr anlegen. Am Ende der Mühlenliste steht **Andere …** für eine Mühle, die nicht in deiner Bibliothek ist. Ein bereits gespeicherter Name bleibt sichtbar und bleibt beim Bearbeiten erhalten. Ohne Mühlen in der Bibliothek ist das Feld ein einfaches Textfeld, ebenso das Bohnenfeld des geführten Einwählens ohne Bohnen.
+
 ### Geführter Einwähl-Assistent
 
 > **⚠ Experimentell / Work in Progress:** Der geführte Einwähl-Assistent ist nutzbar, entwickelt sich aber noch weiter — die Mahlgrad-Vorschläge sind ein Ausgangspunkt basierend auf einem Ziel-Extraktionszeitfenster, keine garantierte Einwähl-Lösung. Vorgeschlagene Mahlgrad-Schritte als hilfreichen Hinweis verstehen, nicht als unumstößliche Wahrheit, und immer prüfen, ob ein Shot plausibel ist, bevor eine Runde angenommen wird.

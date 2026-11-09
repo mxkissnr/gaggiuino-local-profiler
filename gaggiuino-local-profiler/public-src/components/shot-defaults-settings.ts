@@ -68,9 +68,13 @@ export function renderShotDefaultsSettingsCard(): void {
   const coffeeSelect = document.getElementById('sdCoffee');
   if (coffeeSelect) {
     const beans = _catalog(lib.beans);
+    // #1960: a saved bean that left the library keeps its own option, or saving
+    // this card would silently drop it.
+    const staleCoffee = d.coffee && !beans.some(b => b.name === d.coffee) ? d.coffee : '';
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     coffeeSelect.innerHTML = html`<option value="">${esc(t('sd_none'))}</option>${joinHtml(
-      beans.map(b => html`<option value="${esc(b.name)}" data-bean-id="${esc(b.id)}"${d.coffee === b.name ? html` selected` : html``}>${esc(b.name)}</option>`))}`;
+      beans.map(b => html`<option value="${esc(b.name)}" data-bean-id="${esc(b.id)}"${d.coffee === b.name ? html` selected` : html``}>${esc(b.name)}</option>`))}${
+      staleCoffee ? html`<option value="${esc(staleCoffee)}"${d.beanId != null ? html` data-bean-id="${esc(d.beanId)}"` : html``} selected>${esc(staleCoffee)}</option>` : html``}`;
   }
 
   const basketSelect = document.getElementById('sdBasket');
