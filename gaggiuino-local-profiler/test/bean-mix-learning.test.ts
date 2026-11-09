@@ -151,6 +151,32 @@ describe('grind learning ignores mixed shots (#1837)', () => {
     expect(calcComparativeGrindAdvice(target, [target, mixed(2, 30)])).toBeNull();
   });
 
+  // #1957 adds a taste tag to shots, and a tag steers the comparative advice
+  // by dropping sour or bitter siblings from the ranking. A mixed shot carries
+  // no usable per-bean grind at all, so no tag may pull one in — neither as
+  // the shot being viewed nor as a sibling.
+  it('a taste tag does not make a mixed shot comparable', () => {
+    const taggedMix = (id: number, score: number, tag: string): GrindShot => ({
+      id,
+      timestamp: 1000 + id,
+      annotation: {
+        beanId: 7, coffee: 'Bean A', grinder: 'Niche Zero', grindSetting: '14',
+        dose: '18', beanMix: MIX, tasteTag: tag,
+      },
+      score,
+    });
+
+    // A sour-tagged mix is still not comparable to a single-bean shot.
+    const viewed = taggedMix(2, 95, 'sour');
+    expect(calcComparativeGrindAdvice(viewed, [viewed, single(3, 88, '19')])).toBeNull();
+
+    // ... and a balanced-tagged one contributes nothing to a single-bean
+    // shot's ranking either.
+    const target = single(1, 90);
+    const advice = calcComparativeGrindAdvice(target, [target, taggedMix(2, 30, 'balanced'), single(3, 88, '19')]);
+    expect(advice?.shots.map(s => s.shot.id)).toEqual([3]);
+  });
+
   it('calcBestGrindCombosForBean ignores mixed shots', () => {
     // Three single-bean shots at grind 18 and three higher-scoring mixed shots
     // at grind 14: only the singles may form a combo.
