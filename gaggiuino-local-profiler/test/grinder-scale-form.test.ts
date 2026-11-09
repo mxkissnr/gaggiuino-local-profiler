@@ -14,7 +14,7 @@ g.navigator    ??= { language: 'en-US' };
 installBootStubs();
 
 const mocks = vi.hoisted(() => ({
-  saveGrinder: vi.fn<(id: number | null, payload: unknown) => Promise<Grinder>>(),
+  saveGrinder: vi.fn<(id: number | null, payload: unknown) => Promise<Grinder | null>>(),
 }));
 
 vi.mock('../public-src/api/library.js', async (importOriginal) => ({
