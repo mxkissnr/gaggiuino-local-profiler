@@ -121,10 +121,10 @@ function installDom(): Dom {
   // helper's replaceChildren() then captures the options it produced.
   const startSelect = Object.assign(
     selects['grindSelect-dwStartGrind'] as unknown as FakeEl,
-    { hidden: true, value: '' as string, onchange: null as (() => void) | null });
+    { hidden: true, value: '', onchange: null });
   const overrideSelect = Object.assign(
     selects['grindSelect-dwOverrideInput'] as unknown as FakeEl,
-    { hidden: true, value: '' as string, onchange: null as (() => void) | null });
+    { hidden: true, value: '', onchange: null });
   (g.document as { activeElement: unknown }).activeElement = null;
   return { body, bean, grinder, grinderOther, start, startSelect, startHint,
            override, overrideSelect, overrideHint };
