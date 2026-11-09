@@ -12,7 +12,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 g.navigator ??= { language: 'en-US' };
-g.document = { getElementById: () => null };
+
+// The fake document the render paths read. It is installed per test, not at
+// module load: bags.ts registers a document-level pointerdown listener when
+// `document` already exists at import time, and none of this test's assertions
+// are about that listener.
+function fakeDocument(getElementById: (id: string) => unknown): Record<string, unknown> {
+  return { getElementById };
+}
 
 const mocks = vi.hoisted(() => ({ checkEmptyBeanOffer: vi.fn() }));
 
@@ -27,11 +34,10 @@ const { renderBeanList } = await import('../public-src/views/library.js');
 describe('renderBeanList wiring (#1958)', () => {
   beforeEach(() => {
     mocks.checkEmptyBeanOffer.mockClear();
+    g.document = fakeDocument(() => null);
   });
 
   it('asks the offer check once when #beanListUI is missing', () => {
-    g.document = { getElementById: () => null };
-
     renderBeanList();
 
     expect(mocks.checkEmptyBeanOffer).toHaveBeenCalledTimes(1);
@@ -39,7 +45,7 @@ describe('renderBeanList wiring (#1958)', () => {
 
   it('asks the offer check once when the library has no beans', () => {
     const el = { innerHTML: '' };
-    g.document = { getElementById: () => el };
+    g.document = fakeDocument(() => el);
 
     renderBeanList();
 
