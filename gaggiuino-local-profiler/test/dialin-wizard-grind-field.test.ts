@@ -27,7 +27,6 @@ interface FakeEl {
   removeAttribute: (name: string) => void;
   focus: () => void;
   addEventListener: (name: string, cb: Handler) => void;
-  replaceChildren: (frag: { children: FakeOption[] }) => void;
   options: FakeOption[];
   onchange?: (() => void) | null;
 }
@@ -46,7 +45,6 @@ function makeEl(overrides: Partial<FakeEl> = {}): FakeEl {
     removeAttribute: () => {},
     focus: () => {},
     addEventListener: () => {},
-    replaceChildren: () => {},
     options: [],
     ...overrides,
   };
@@ -101,46 +99,35 @@ function installDom(): Dom {
   const startHint = makeEl({ hidden: true });
   const override = makeEl();
   const overrideHint = makeEl({ hidden: true });
-  const selects = installFakeOptionDom(['dwBean'], {
-    dwBody: body,
-    dwGrinder: grinder,
-    dwGrinderOther: grinderOther,
-    dwDose: makeEl({ value: '18' }),
-    dwRatio: makeEl({ value: '2' }),
-    dwStartGrind: start,
-    'grindHint-dwStartGrind': startHint,
-    dwOverrideInput: override,
-    'grindHint-dwOverrideInput': overrideHint,
-    dialinWizardModal: makeEl({ tagName: 'DIV' }),
-  });
+  const selects = installFakeOptionDom(
+    ['dwBean', 'grindSelect-dwStartGrind', 'grindSelect-dwOverrideInput'],
+    {
+      dwBody: body,
+      dwGrinder: grinder,
+      dwGrinderOther: grinderOther,
+      dwDose: makeEl({ value: '18' }),
+      dwRatio: makeEl({ value: '2' }),
+      dwStartGrind: start,
+      'grindHint-dwStartGrind': startHint,
+      dwOverrideInput: override,
+      'grindHint-dwOverrideInput': overrideHint,
+      dialinWizardModal: makeEl({ tagName: 'DIV' }),
+    });
   // The bean select needs the fields dialinAcceptNext reads off it; the
   // helper's fake select already has replaceChildren().
   Object.assign(selects.dwBean as unknown as FakeEl, bean);
-  // The grind field's companions are static markup in the real page: both
-  // start hidden, and renderGrindField assigns each one's onchange.
-  const startSelect = makeSelect();
-  const overrideSelect = makeSelect();
-  const doc = g.document as {
-    activeElement: unknown;
-    getElementById: (id: string) => unknown;
-  };
-  const owned = doc.getElementById;
-  doc.getElementById = (id: string) => {
-    if (id === 'grindSelect-dwStartGrind') return startSelect;
-    if (id === 'grindSelect-dwOverrideInput') return overrideSelect;
-    return owned(id);
-  };
-  doc.activeElement = null;
+  // The two grind selects are static markup in the real page: both start
+  // hidden, show nothing, and renderGrindField assigns onchange itself. The
+  // helper's replaceChildren() then captures the options it produced.
+  const startSelect = Object.assign(
+    selects['grindSelect-dwStartGrind'] as unknown as FakeEl,
+    { hidden: true, value: '' as string, onchange: null as (() => void) | null });
+  const overrideSelect = Object.assign(
+    selects['grindSelect-dwOverrideInput'] as unknown as FakeEl,
+    { hidden: true, value: '' as string, onchange: null as (() => void) | null });
+  (g.document as { activeElement: unknown }).activeElement = null;
   return { body, bean, grinder, grinderOther, start, startSelect, startHint,
            override, overrideSelect, overrideHint };
-}
-
-// A <select> whose replaceChildren() keeps the options on itself, so a test
-// can read back what renderGrindField produced.
-function makeSelect(): FakeEl {
-  const node = makeEl({ tagName: 'SELECT', hidden: true });
-  node.replaceChildren = frag => { node.options = frag.children; };
-  return node;
 }
 
 function optionsOf(select: FakeEl): FakeOption[] { return select.options; }
