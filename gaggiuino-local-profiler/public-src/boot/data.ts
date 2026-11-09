@@ -52,9 +52,6 @@ function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void
 // (not the "disabled tasks" details). #1923: an open task details sheet is a
 // guard too — it holds inputs the user is editing and would be repainted
 // under them; the scheduler retries the run once the sheet is closed.
-// #1955: pausing deliberately leaves that sheet open and repaints it through
-// refreshMaintenanceView(), so this guard keeps an SSE refetch deferred until
-// the user closes it; no task status is read here.
 function _maintenanceCanRefetch(): boolean {
   if (S.currentMode !== 'maintenance') return true;
   const view = document.getElementById('maintenance-view');
