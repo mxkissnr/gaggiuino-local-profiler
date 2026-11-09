@@ -9,7 +9,8 @@ import { switchMode } from '../components/mode.js';
 import { loadBeanImageBlobUrl } from '../bean-image.js';
 import { openLightbox } from '../components/lightbox.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
-import { refreshGrinderField } from './shots/annotation.js';
+import { getGrinderFieldValue, refreshGrinderField } from './shots/annotation.js';
+import { refreshGrindField } from './shots/grind-field.js';
 import { renderRecipeList } from './library/recipes.js';
 import { renderMilkList } from './library/milk.js';
 import { renderBasketList } from './library/baskets.js';
@@ -60,10 +61,11 @@ export async function loadLibrary(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// #1960: a library change re-fills the annotation panel's grinder dropdown and
-// keeps its choice.
+// #1960, #1961: a library change re-fills the annotation panel's grinder dropdown
+// and applies a changed grinder scale to its grind field, keeping both values.
 export function updateLibraryDatalist(): void {
   refreshGrinderField('annGrinder', 'annGrinderOther');
+  refreshGrindField('annGrindSetting', getGrinderFieldValue('annGrinder', 'annGrinderOther'));
 }
 
 export function switchLibTab(tab: string): void {

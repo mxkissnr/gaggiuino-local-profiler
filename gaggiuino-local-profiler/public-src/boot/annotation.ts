@@ -10,6 +10,7 @@ import { renderStars, scheduleAutoSave, flushAutoSave, updateDegassing, calcBean
          suggestGrindDoseForBean, defaultGrinderName, _renderFrozenPortionPills,
          renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange } from '../views/shots.js';
 import { BEAN_ICON_SVG } from '../icons.js';
+import { checkGrindField, grindSelectId, refreshGrindField, renderGrindField, tidyGrindField } from '../views/shots/grind-field.js';
 import { addMixRow, isMixActive } from '../views/shots/annotation-mix.js';
 
 export function wireAnnotationPanel(): void {
@@ -51,12 +52,13 @@ export function wireAnnotationPanel(): void {
       // (best scored combo, then known-good grind, then its last shot) —
       // never the literal previous shot, which may have used a different bean.
       const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id });
-      const grindEl   = document.getElementById('annGrindSetting') as HTMLInputElement | null;
       const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
       if (suggested.grinder) renderGrinderField('annGrinder', 'annGrinderOther', suggested.grinder);
       // #1954: with a default grinder the field must never keep the previous
       // bean's value — an empty suggestion clears it.
-      if ((suggested.grindSetting || defaultGrinderName(S.coffeeLibrary)) && grindEl) grindEl.value = String(suggested.grindSetting);
+      if (suggested.grindSetting || defaultGrinderName(S.coffeeLibrary)) {
+        renderGrindField('annGrindSetting', getGrinderFieldValue('annGrinder', 'annGrinderOther'), suggested.grindSetting);
+      }
       // #1837: in a mix the dose is the rows' sum, so a bean change must not
       // overwrite it with this bean's own suggestion.
       if (suggested.dose && doseEl && !isMixActive()) doseEl.value = String(suggested.dose);
@@ -98,9 +100,16 @@ export function wireAnnotationPanel(): void {
     el.addEventListener('input', scheduleAutoSave);
     el.addEventListener('blur', flushAutoSave);
   });
+  const grindInput = document.getElementById('annGrindSetting');
+  grindInput?.addEventListener('input', () => checkGrindField('annGrindSetting'));
+  grindInput?.addEventListener('blur', () => tidyGrindField('annGrindSetting'));
+  const grindSelect = document.getElementById(grindSelectId('annGrindSetting'));
+  grindSelect?.addEventListener('change', scheduleAutoSave);
+  grindSelect?.addEventListener('blur', flushAutoSave);
   const grinderSelect = document.getElementById('annGrinder') as HTMLSelectElement | null;
   grinderSelect?.addEventListener('change', () => {
     handleGrinderFieldChange('annGrinder', 'annGrinderOther');
+    refreshGrindField('annGrindSetting', getGrinderFieldValue('annGrinder', 'annGrinderOther'));
     // #1960: "Other…" with nothing typed yet is not a choice; saving now would
     // blank the shot's grinder.
     if (grinderSelect.value !== '__other__' || getGrinderFieldValue('annGrinder', 'annGrinderOther')) scheduleAutoSave();

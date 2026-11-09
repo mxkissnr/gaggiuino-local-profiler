@@ -403,6 +403,8 @@
                     <div class="annotation-field">
                         <label for="annGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
                         <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks">
+                        <select id="grindSelect-annGrindSetting" aria-label="Grind setting" data-i18n-aria-label="ann_grind_setting" hidden></select>
+                        <div class="bf-error" id="grindHint-annGrindSetting" role="alert" hidden></div>
                     </div>
                     <div class="annotation-field">
                         <label for="annDose" data-i18n="ann_dose">Dosis (g)</label>
@@ -773,6 +775,7 @@
                                     <button type="button" class="lib-open-btn" id="grinderFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
+                            <div id="grinderFormScale"></div>
                             <div class="lib-form-field" id="grinderFormZeroPointField" style="display:none">
                                 <label for="grinderFormZeroPoint" data-i18n="lib_grinder_zero_point">Nullpunkt</label>
                                 <input type="number" step="0.1" id="grinderFormZeroPoint">
@@ -1215,6 +1218,8 @@
                         <div class="annotation-field">
                             <label for="lsGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
                             <input type="text" id="lsGrindSetting">
+                            <select id="grindSelect-lsGrindSetting" aria-label="Grind setting" data-i18n-aria-label="ann_grind_setting" hidden></select>
+                            <div class="bf-error" id="grindHint-lsGrindSetting" role="alert" hidden></div>
                         </div>
                         <div class="annotation-field">
                             <label for="lsBasket" data-i18n="ann_basket">Sieb</label>
