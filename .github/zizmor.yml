@@ -1,0 +1,9 @@
+rules:
+  # The SHA pin is what matters, not the tag named in the trailing comment.
+  # An upstream tag that moves must not turn every pull request red.
+  ref-version-mismatch:
+    disable: true
+  # The `$/` syntax is not exercised by pull request checks (the dev image
+  # workflows only run on dev), so these calls keep the established `./` form.
+  self-repository:
+    disable: true

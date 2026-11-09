@@ -42,7 +42,7 @@ jobs:
 
       - name: Set up Go
         if: matrix.language == 'go'
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7 # zizmor: ignore[cache-poisoning] CI only, publishes no artifacts
         with:
           go-version-file: gaggiuino-local-profiler/go/go.mod
 
