@@ -6,6 +6,12 @@ set -euo pipefail
 git config user.name  "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 for b in ${DEV_FEATURES:-}; do
+  # #1982: only feature/* is covered by the ruleset that requires a reviewed
+  # pull request, so nothing else may reach a published dev build.
+  case "$b" in
+    feature/?*) ;;
+    *) echo "::error::DEV_FEATURES entry '$b' is not a feature/* branch"; exit 1 ;;
+  esac
   git fetch --no-tags origin "$b"
   git merge --no-edit FETCH_HEAD || {
     echo "::error::$b does not merge cleanly onto dev -- merge dev into $b first"
