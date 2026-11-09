@@ -215,7 +215,7 @@ describe('dialinConfirmShot — reloads bean stock after an annotation save (#19
     mocks.annotateShot.mockReset();
     mocks.loadLibrary.mockReset();
     S.coffeeLibrary = { beans: [{ id: 2, name: 'Archived Bean', enabled: false }] } as unknown as typeof S.coffeeLibrary;
-    S.dialinSession = dialinSession() as unknown as typeof S.dialinSession;
+    S.dialinSession = dialinSession();
     S.shots = [dialinShot()] as unknown as typeof S.shots;
   });
 
