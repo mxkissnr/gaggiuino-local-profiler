@@ -8,7 +8,8 @@ import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js
 import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
-import { defaultGrinderName, suggestGrindDoseForBean } from './grind.js';
+import { defaultGrinderName, suggestGrindDoseForBean, TASTE_TAGS, TASTE_TAG_LABELS, tasteTagOf } from './grind.js';
+import type { TasteTag } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
@@ -46,6 +47,8 @@ interface AnnotationData {
   recipeId?: number | null;
   frozenPortionId?: number | null;
   beanAgeDays?: number | null;
+  // #1957: one taste tag per shot; it only feeds the grind advice.
+  tasteTag?: string | null;
   // #1837: 2-4 per-bean shares of the dose; absent on a single-bean shot.
   beanMix?: readonly BeanMixPartInput[] | null;
   orderedBy?: OrderedBy | null;
@@ -82,6 +85,7 @@ interface AnnotationPayload {
   roastDate: string | null;
   tds: number | null;
   notes: string;
+  tasteTag: TasteTag | null;
   drinkType: string | null;
   milkType: number | null;
   recipeId: number | null;
@@ -176,6 +180,7 @@ function _buildAnnotationPayload(shot: AnnotationShot | undefined): AnnotationPa
     roastDate:    germanToIso(_roastDateFromLibrary(shotCoffee, shot?.timestamp, shotBeanId) || '') || null,
     tds:          parseFloat((document.getElementById('annTds') as HTMLInputElement).value) || null,
     notes:        (document.getElementById('annNotes') as HTMLInputElement).value.trim(),
+    tasteTag:     tasteTagOf({ tasteTag: (document.getElementById('annTasteTag') as HTMLInputElement | null)?.value }),
     drinkType:    (document.getElementById('annDrinkType') as HTMLSelectElement | null)?.value || null,
     milkType:     (document.getElementById('annMilkType') as HTMLSelectElement | null)?.value ? parseInt((document.getElementById('annMilkType') as HTMLSelectElement).value) : null,
     recipeId:     parseInt((document.getElementById('annRecipe') as HTMLSelectElement | null)?.value as string) || null,
@@ -233,6 +238,9 @@ async function _performAnnotationSave(): Promise<void> {
         }
       }
       if (_stockFieldsChanged(prev, next)) void window.loadLibrary?.();
+      // #1957: the advice is built by updateView, so a new tag must rerun it. It
+      // re-renders this panel from the saved values, so never while an edit waits.
+      if ((prev?.tasteTag ?? null) !== (next.tasteTag ?? null) && _autoSaveTimer === null) window.updateView?.();
       renderSidebar();
       updateSidebarHighlighting();
       _setAutoSaveStatus('saved');
@@ -355,6 +363,26 @@ export function selectMilkType(id: string): void {
   if (!hidden) return;
   const newVal = hidden.value === id ? '' : id;
   _renderMilkPills(newVal);
+  scheduleAutoSave();
+}
+
+// ── Taste tag (#1957): at most one per shot, feeds the grind advice only ───
+
+export function _renderTasteTagPills(selected: string): void {
+  const container = document.getElementById('tasteTagPillsContainer');
+  const hidden    = document.getElementById('annTasteTag') as HTMLInputElement | null;
+  if (!container) return;
+  container.innerHTML = joinHtml(TASTE_TAGS.map(tag =>
+    html`<button type="button" class="drink-pill${esc(selected === tag ? ' active' : '')}" aria-pressed="${esc(String(selected === tag))}"
+      data-action="select-taste-tag" data-id="${esc(tag)}">${esc(t(TASTE_TAG_LABELS[tag]))}</button>`
+  ));
+  if (hidden) hidden.value = selected;
+}
+
+export function selectTasteTag(id: string): void {
+  const hidden = document.getElementById('annTasteTag') as HTMLInputElement | null;
+  if (!hidden) return;
+  _renderTasteTagPills(hidden.value === id ? '' : id);
   scheduleAutoSave();
 }
 
@@ -769,6 +797,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '', _frozenShotAge(ann, shot?.timestamp));
   (document.getElementById('annTds') as HTMLInputElement).value          = String(ann.tds         || '');
   (document.getElementById('annNotes') as HTMLInputElement).value        = ann.notes        || '';
+  _renderTasteTagPills(tasteTagOf(ann) ?? '');
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills(ann.milkType ? String(ann.milkType) : '');
   _updateMilkFieldVisibility();

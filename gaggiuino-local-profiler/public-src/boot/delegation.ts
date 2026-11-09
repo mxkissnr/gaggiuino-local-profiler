@@ -5,7 +5,7 @@
 import { S } from '../state/index.js';
 import { toggleMonthGroup, clearBeanFilter } from '../components/sidebar.js';
 import { switchMode, goToShot } from '../components/mode.js';
-import { loadData, restoreShot, permanentDeleteShot, selectDrinkType, selectMilkType, selectFrozenPortion } from '../views/shots.js';
+import { loadData, restoreShot, permanentDeleteShot, selectDrinkType, selectMilkType, selectFrozenPortion, selectTasteTag } from '../views/shots.js';
 import { openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail,
          setDialinProgressionBean, openFactDetail, shuffleFacts } from '../views/analytics.js';
 import { markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope, deleteMaintLogEntry,
@@ -133,6 +133,7 @@ export function wireDelegation(): void {
       case 'select-drink':       selectDrinkType(strId()); break;
       case 'select-milk':        selectMilkType(strId()); break;
       case 'select-frozen-portion': selectFrozenPortion(strId()); break;
+      case 'select-taste-tag':   selectTasteTag(strId()); break;
       case 'reload-data':        void loadData(); break;
       // #807: the "why is this empty" notices (in-view block and app-wide
       // banner, components/api-port-notice.ts) both link here.
