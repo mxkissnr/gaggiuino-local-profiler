@@ -59,8 +59,7 @@ function makeEl(overrides: Partial<FakeEl> = {}): FakeEl {
     replaceChildren: () => {},
     addEventListener(name, fn) { (node.listeners[name] ??= []).push(fn); },
     querySelectorAll: () => [],
-    // attachAutocomplete() (reached through wireAnnotationPanel) annotates the
-    // grinder input with these.
+    // Attribute writes on these fake nodes are ignored.
     setAttribute: () => {},
     removeAttribute: () => {},
     ...overrides,
@@ -631,6 +630,7 @@ describe('default grinder prefill (#1954)', () => {
   });
 
   it('still copies the previous shot\'s grind setting on a clone without a default', () => {
+    S.coffeeLibrary.grinders = [{ id: 2, name: 'Old Grinder' }];
     S.shots = [
       { id: 1, timestamp: 1700000000, annotation: { coffee: 'Bean A', beanId: 11, grinder: 'Old Grinder', grindSetting: '22', dose: 18 } },
       { id: 2, timestamp: 1700000100, annotation: {} },

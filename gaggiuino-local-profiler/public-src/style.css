@@ -2777,6 +2777,8 @@
             .annotation-actions { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
             .star              { padding: var(--sp-2) var(--sp-2); font-size: var(--fs-5); }
             .drink-pill        { min-height: 44px; padding: var(--sp-2) var(--sp-4); font-size: var(--fs-2); display: flex; align-items: center; }
+            /* #1960: every library picker and its free-text fallback is a 44px target on a phone. */
+            .annotation-field select, .lib-form-field select, select.machine-form-input, #annGrinderOther, #lsGrinderOther, #dwGrinderOther { min-height: 44px; }
         }
         /* ── Maintenance view: Dashboard redesign (#393) ── */
         #maintenance-view {

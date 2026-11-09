@@ -9,6 +9,7 @@ import { switchMode } from '../components/mode.js';
 import { loadBeanImageBlobUrl } from '../bean-image.js';
 import { openLightbox } from '../components/lightbox.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
+import { refreshGrinderField } from './shots/annotation.js';
 import { renderRecipeList } from './library/recipes.js';
 import { renderMilkList } from './library/milk.js';
 import { renderBasketList } from './library/baskets.js';
@@ -58,13 +59,11 @@ export async function loadLibrary(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// Bean/grinder names feed the annGrinder (boot/annotation.ts) and recipeFormBean
-// autocompletes (components/autocomplete.ts) — both read S.coffeeLibrary
-// live, so nothing needs to be "populated" ahead of time. This just
-// re-renders whichever of those is currently open, so a save/delete
-// elsewhere in the library shows up immediately if the user has one open.
+// #1960: a library change re-fills the annotation panel's grinder dropdown and
+// keeps its choice. The recipeFormBean autocomplete reads S.coffeeLibrary live
+// and only needs re-rendering when it is open.
 export function updateLibraryDatalist(): void {
-  (document.getElementById('annGrinder') as HTMLInputElement | null)?._autocomplete?.refresh();
+  refreshGrinderField('annGrinder', 'annGrinderOther');
   (document.getElementById('recipeFormBean') as HTMLInputElement | null)?._autocomplete?.refresh();
 }
 

@@ -174,7 +174,7 @@ function _buildAnnotationPayload(shot: AnnotationShot | undefined): AnnotationPa
     beanId:       shotBeanId,
     basketId,
     puckScreenId,
-    grinder:      (document.getElementById('annGrinder') as HTMLInputElement).value.trim(),
+    grinder:      getGrinderFieldValue('annGrinder', 'annGrinderOther'),
     grindSetting: (document.getElementById('annGrindSetting') as HTMLInputElement).value.trim(),
     dose:         mix ? mix.dose : parseFloat((document.getElementById('annDose') as HTMLInputElement).value) || null,
     roastDate:    germanToIso(_roastDateFromLibrary(shotCoffee, shot?.timestamp, shotBeanId) || '') || null,
@@ -489,26 +489,39 @@ export function _updateMilkFieldVisibility(): void {
 // so the three grinder-field helpers below and the selectId/fieldId arguments
 // on the render helpers further down live here instead.
 //
-// Same select-with-"other"-fallback grinder field as dialin-wizard.ts's
-// _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
-// existing <select>/<input> pair by id) instead of returning an HTML
-// string, since live.ts's pre-shot setup panel's markup is static in
-// index.html rather than re-rendered from a template each time.
+// The select-with-"Other…" grinder field. It fills an existing <select>/<input>
+// pair by id, so the markup can stay static in index.html.
 export function renderGrinderField(selectId: string, otherId: string, currentValue: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   const other  = document.getElementById(otherId) as HTMLInputElement | null;
   if (!select) return;
   const grinders    = S.coffeeLibrary?.grinders || [];
   const knownNames  = new Set(grinders.map(g => g.name));
-  const isOther     = !!currentValue && !knownNames.has(currentValue);
-  select.innerHTML = html`${joinHtml(grinders.map(g =>
+  // #1960: without library grinders the free-text input is the whole field.
+  const isOther     = !grinders.length || (!!currentValue && !knownNames.has(currentValue));
+  // #1960: the blank option keeps a shot without a grinder from taking the first one.
+  select.innerHTML = html`<option value=""></option>${joinHtml(grinders.map(g =>
     html`<option value="${esc(g.name as string)}"${esc(!isOther && currentValue === g.name ? ' selected' : '')}>${esc(g.name as string)}</option>`
   ))}<option value="__other__"${esc(isOther ? ' selected' : '')}>${tHtml('dialin_wizard_grinder_other')}</option>`;
+  select.value  = isOther ? '__other__' : currentValue;
+  select.hidden = !grinders.length;
   if (other) {
     other.style.display = isOther ? '' : 'none';
     other.value = isOther ? currentValue : '';
     other.setAttribute('aria-label', t('dialin_wizard_grinder_other_ph'));
   }
+}
+
+// #1960: re-fills the options after the library changed and keeps the current
+// choice. Leaves the field alone while it is being filled in: the text input has
+// focus, or "Other…" was just picked and nothing is typed yet.
+export function refreshGrinderField(selectId: string, otherId: string): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
+  if (!select) return;
+  if (other && document.activeElement === other) return;
+  if (!select.hidden && select.value === '__other__' && !other?.value.trim()) return;
+  renderGrinderField(selectId, otherId, getGrinderFieldValue(selectId, otherId));
 }
 
 // Resolves the field's effective value: the select's own value, or the
@@ -521,8 +534,7 @@ export function getGrinderFieldValue(selectId: string, otherId: string): string 
   return select.value;
 }
 
-// Toggles the free-text fallback input's visibility on select change —
-// mirrors dialin-wizard.ts's dialinGrinderChange.
+// Toggles the free-text fallback input's visibility on select change.
 export function handleGrinderFieldChange(selectId: string, otherId: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   const other  = document.getElementById(otherId) as HTMLInputElement | null;
@@ -788,7 +800,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   _renderBasketSelect(ann.basketId ?? null);
   _renderPuckScreenSelect(ann.puckScreenId ?? null);
   _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null, ann.beanId ?? null);
-  (document.getElementById('annGrinder') as HTMLInputElement).value      = ann.grinder      || '';
+  renderGrinderField('annGrinder', 'annGrinderOther', ann.grinder || '');
   (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting ?? '');
   (document.getElementById('annDose') as HTMLInputElement).value         = String(ann.dose        || '');
   // #1837: after the bean select and the dose it renders row 1 from — a saved
@@ -850,7 +862,7 @@ export function quickClone(): void {
   // its own setting — the previous shot's value is on another scale, so an
   // empty suggestion stays empty instead of copying ann.
   const defaultGrinder = defaultGrinderName(S.coffeeLibrary);
-  (document.getElementById('annGrinder') as HTMLInputElement).value      = defaultGrinder || suggested.grinder || ann.grinder || '';
+  renderGrinderField('annGrinder', 'annGrinderOther', defaultGrinder || suggested.grinder || ann.grinder || '');
   (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(defaultGrinder ? suggested.grindSetting : (suggested.grindSetting || ann.grindSetting || ''));
   (document.getElementById('annDose') as HTMLInputElement).value         = String(suggested.dose         || ann.dose         || '');
   updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '');

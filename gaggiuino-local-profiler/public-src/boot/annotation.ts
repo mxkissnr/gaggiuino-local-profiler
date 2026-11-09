@@ -7,8 +7,8 @@ import type { Bean } from '../api/types.js';
 import { tHtml } from '../i18n.js';
 import { html } from '../utils.js';
 import { renderStars, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
-         suggestGrindDoseForBean, defaultGrinderName, _renderFrozenPortionPills } from '../views/shots.js';
-import { attachAutocomplete } from '../components/autocomplete.js';
+         suggestGrindDoseForBean, defaultGrinderName, _renderFrozenPortionPills,
+         renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange } from '../views/shots.js';
 import { BEAN_ICON_SVG } from '../icons.js';
 import { addMixRow, isMixActive } from '../views/shots/annotation-mix.js';
 
@@ -51,10 +51,9 @@ export function wireAnnotationPanel(): void {
       // (best scored combo, then known-good grind, then its last shot) —
       // never the literal previous shot, which may have used a different bean.
       const suggested = suggestGrindDoseForBean(name, S.coffeeLibrary, S.shots, { beanId: bean.id });
-      const grinderEl = document.getElementById('annGrinder') as HTMLInputElement | null;
       const grindEl   = document.getElementById('annGrindSetting') as HTMLInputElement | null;
       const doseEl    = document.getElementById('annDose') as HTMLInputElement | null;
-      if (suggested.grinder      && grinderEl) grinderEl.value = suggested.grinder;
+      if (suggested.grinder) renderGrinderField('annGrinder', 'annGrinderOther', suggested.grinder);
       // #1954: with a default grinder the field must never keep the previous
       // bean's value — an empty suggestion clears it.
       if ((suggested.grindSetting || defaultGrinderName(S.coffeeLibrary)) && grindEl) grindEl.value = String(suggested.grindSetting);
@@ -94,12 +93,22 @@ export function wireAnnotationPanel(): void {
   // #430: no more explicit Save button — auto-save on input, flushed
   // immediately on blur (leaving the field) and on page hide/mode-switch
   // (below) so a pending debounced save is never silently dropped.
-  ['annCoffee','annGrinder','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
+  ['annCoffee','annGrindSetting','annDose','annTds','annNotes'].forEach(id => {
     const el = document.getElementById(id)!;
     el.addEventListener('input', scheduleAutoSave);
     el.addEventListener('blur', flushAutoSave);
   });
-  attachAutocomplete(document.getElementById('annGrinder') as HTMLInputElement | null, () => S.coffeeLibrary.grinders.map(g => g.name));
+  const grinderSelect = document.getElementById('annGrinder') as HTMLSelectElement | null;
+  grinderSelect?.addEventListener('change', () => {
+    handleGrinderFieldChange('annGrinder', 'annGrinderOther');
+    // #1960: "Other…" with nothing typed yet is not a choice; saving now would
+    // blank the shot's grinder.
+    if (grinderSelect.value !== '__other__' || getGrinderFieldValue('annGrinder', 'annGrinderOther')) scheduleAutoSave();
+  });
+  grinderSelect?.addEventListener('blur', flushAutoSave);
+  const grinderOther = document.getElementById('annGrinderOther');
+  grinderOther?.addEventListener('input', scheduleAutoSave);
+  grinderOther?.addEventListener('blur', flushAutoSave);
   // #1837: "Add another bean" splits the dose over a second (to fourth) bean,
   // turning the dose field into the read-only sum of the rows.
   document.getElementById('annMixAddBtn')?.addEventListener('click', addMixRow);
