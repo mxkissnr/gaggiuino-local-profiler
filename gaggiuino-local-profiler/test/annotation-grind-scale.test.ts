@@ -138,10 +138,8 @@ const STEPPED_0_60: GrindScale = { type: 'stepped', min: 0, max: 60, step: 1 };
 const STEPPED_0_10: GrindScale = { type: 'stepped', min: 0, max: 10, step: 1 };
 const STEPLESS_0_9: GrindScale = { type: 'stepless', min: 0, max: 9, step: 0.1 };
 
-type PanelShot = Parameters<typeof renderAnnotationPanel>[0];
-
 function panel(ann: Record<string, unknown>, grinder = 'K6'): void {
-  renderAnnotationPanel({ id: 1, timestamp: 1700000000, annotation: { grinder, ...ann } } as PanelShot);
+  renderAnnotationPanel({ id: 1, timestamp: 1700000000, annotation: { grinder, ...ann } });
 }
 
 beforeEach(async () => {

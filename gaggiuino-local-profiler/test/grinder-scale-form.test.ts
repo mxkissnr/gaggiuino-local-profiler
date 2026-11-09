@@ -13,6 +13,13 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
 installBootStubs();
 
+const mocks = vi.hoisted(() => ({ saveGrinder: vi.fn() }));
+
+vi.mock('../public-src/api/library.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../public-src/api/library.js')>()),
+  saveGrinder: mocks.saveGrinder,
+}));
+
 interface FakeEl {
   value: string;
   hidden: boolean;
@@ -111,17 +118,18 @@ class FakeOption {
 g.Option = FakeOption;
 
 const { S } = await import('../public-src/state/index.js');
-const libraryApi = await import('../public-src/api/library.js');
 const { openGrinderForm, saveGrinder } = await import('../public-src/views/library/grinders.js');
 const { renderGrindField, grindSelectId } = await import('../public-src/views/shots/grind-field.js');
 const { scaleForGrinder } = await import('../public-src/grind-scale.js');
 const { calcNextGrindSuggestion } = await import('../public-src/dialin-convergence.js');
 g.document = doc;
 
+// The whole module is mocked (not spied on): grinders.ts reads it through a
+// namespace import, which a spy on the test's own handle would not replace.
+const saveSpy = mocks.saveGrinder;
 // Echoes the payload back, so the library holds exactly what was saved.
-const saveSpy = vi.spyOn(libraryApi, 'saveGrinder').mockImplementation(
-  async (id, payload) => ({ id: id ?? 7, ...(payload as Record<string, unknown>) }) as unknown as Grinder,
-);
+saveSpy.mockImplementation((id: number | null, payload: unknown) => Promise.resolve(
+  { id: id ?? 7, ...(payload as Record<string, unknown>) } as unknown as Grinder));
 
 const STEPPED_0_60: GrindScale = { type: 'stepped', min: 0, max: 60, step: 1 };
 const STEPLESS_0_9: GrindScale = { type: 'stepless', min: 0, max: 9, step: 0.1 };
@@ -200,14 +208,14 @@ describe('saving the scale from the grinder form (#1961)', () => {
   });
 
   it('shows a saved scale when the grinder is opened, and none for a grinder without one', () => {
-    openGrinderForm({ id: 1, name: 'K6', scale: STEPPED_0_60 } as GrinderRow);
+    openGrinderForm({ id: 1, name: 'K6', scale: STEPPED_0_60 });
     expect(el('grinderFormScaleType').innerHTML).toContain('aria-pressed="true" data-scale-type="stepped"');
     expect(el('grinderFormScaleMin').value).toBe('0');
     expect(el('grinderFormScaleMax').value).toBe('60');
     expect(el('grinderFormScaleStep').value).toBe('1');
     expect(el('grinderFormScaleRange').hidden).toBe(false);
 
-    openGrinderForm({ id: 2, name: 'Hand' } as GrinderRow);
+    openGrinderForm({ id: 2, name: 'Hand' });
     expect(el('grinderFormScaleType').innerHTML).toContain('aria-pressed="true" data-scale-type=""');
     expect(el('grinderFormScaleRange').hidden).toBe(true);
     expect(el('grinderFormScaleMin').value).toBe('');
