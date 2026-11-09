@@ -105,9 +105,9 @@ function installDom(): Dom {
     dwDose: makeEl({ value: '18' }),
     dwRatio: makeEl({ value: '2' }),
     dwStartGrind: start,
-    grindHint-dwStartGrind: startHint,
+    'grindHint-dwStartGrind': startHint,
     dwOverrideInput: override,
-    grindHint-dwOverrideInput: overrideHint,
+    'grindHint-dwOverrideInput': overrideHint,
     dialinWizardModal: makeEl({ tagName: 'DIV' }),
   });
   // The bean select needs the fields dialinAcceptNext reads off it; the
