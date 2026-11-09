@@ -5,6 +5,8 @@
 // listeners that would each independently write the same draft key. Same
 // fake-document harness as the sibling live.ts test files.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { FakeOption } from './helpers/fake-option-dom.js';
+import type { GrindScale } from '../public-src/grind-scale.js';
 
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis (the same bridge the sibling live tests use).
@@ -30,11 +32,17 @@ interface FakeElement {
   textContent: string;
   style: Record<string, string>;
   value: string;
+  hidden: boolean;
+  options?: unknown[];
+  onchange: (() => void) | null;
   classList: { add: () => void; remove: () => void; contains: () => boolean; toggle: () => void };
   querySelector: () => null;
   selectedOptions: { dataset: Record<string, string> }[];
   addEventListener: (type: string, cb: () => void) => void;
   removeEventListener: () => void;
+  replaceChildren: (frag: { children: unknown[] }) => void;
+  setAttribute: (name: string, value: string) => void;
+  removeAttribute: (name: string) => void;
   _fire: (type: string) => void;
   _listenerCount: (type: string) => number;
 }
@@ -43,11 +51,15 @@ function makeFakeDocument() {
   const registry = new Map<string, FakeElement>();
   function makeElement(): FakeElement {
     const listeners: Record<string, Array<() => void>> = {};
-    return {
-      className: '', textContent: '', style: {}, value: '',
+    const node: FakeElement = {
+      className: '', textContent: '', style: {}, value: '', hidden: false, options: undefined, onchange: null,
       classList: { add() {}, remove() {}, contains: () => false, toggle() {} },
       querySelector: () => null,
       selectedOptions: [],
+      // The grind field builds its options with new Option() + a fragment.
+      replaceChildren(frag) { node.options = frag.children; },
+      setAttribute() {},
+      removeAttribute() {},
       // Keep every listener per event type rather than overwriting the previous
       // one, so a double-wired field (a broken _lsWired guard) is observable.
       addEventListener(type, cb) { (listeners[type] ??= []).push(cb); },
@@ -55,11 +67,16 @@ function makeFakeDocument() {
       _fire(type) { listeners[type]?.forEach(cb => cb()); },
       _listenerCount(type) { return listeners[type]?.length ?? 0; },
     };
+    return node;
   }
   return {
     getElementById: (id: string): FakeElement => {
       if (!registry.has(id)) registry.set(id, makeElement());
       return registry.get(id)!;
+    },
+    createDocumentFragment: () => {
+      const frag = { children: [] as unknown[], append: (v: unknown) => { frag.children.push(v); } };
+      return frag;
     },
   };
 }
@@ -86,6 +103,7 @@ describe('renderLiveShotSetupPanel()', () => {
     };
     doc = makeFakeDocument();
     g.document = doc;
+    g.Option = FakeOption;
 
     vi.resetModules();
     ({ S } = await import('../public-src/state/index.js'));
@@ -160,6 +178,74 @@ describe('renderLiveShotSetupPanel()', () => {
     renderLiveShotSetupPanel();
 
     expect(doc.getElementById('lsDose').value).toBe(16);
+  });
+
+  // #1961 slice 6 — the panel's grind field follows the draft grinder's scale.
+  describe('grind field', () => {
+    const STEPPED: GrindScale  = { type: 'stepped', min: 0, max: 10, step: 1 };
+    const STEPLESS: GrindScale = { type: 'stepless', min: 0, max: 9, step: 0.1 };
+
+    function setGrinders(grinders: Array<{ name: string; scale?: GrindScale }>): void {
+      S.coffeeLibrary = { grinders, beans: [] } as unknown as typeof S.coffeeLibrary;
+    }
+
+    function savedGrind(): string | undefined {
+      const raw = draftStore['glp_live_shot_setup_1'];
+      if (raw === undefined) throw new Error('draft not persisted');
+      return (JSON.parse(raw) as { grindSetting?: string }).grindSetting;
+    }
+
+    it('shows a stepped grinder\'s draft value in the dropdown and writes a pick back', () => {
+      setGrinders([{ name: 'K6', scale: STEPPED }]);
+      draftStore['glp_live_shot_setup_1'] = JSON.stringify({ grinder: 'K6', grindSetting: '3' });
+
+      renderLiveShotSetupPanel();
+
+      const select = doc.getElementById('grindSelect-lsGrindSetting');
+      expect(select.hidden).toBe(false);
+      expect(doc.getElementById('lsGrindSetting').hidden).toBe(true);
+      expect((select.options as FakeOption[]).map(o => o.value)).toContain('3');
+      expect(select.value).toBe('3');
+
+      select.value = '6';
+      select._fire('change');
+
+      expect(savedGrind()).toBe('6');
+    });
+
+    it('accepts a comma decimal on a stepless grinder and keeps the last good value on a bad one', () => {
+      setGrinders([{ name: 'Lagom', scale: STEPLESS }]);
+      draftStore['glp_live_shot_setup_1'] = JSON.stringify({ grinder: 'Lagom', grindSetting: '5' });
+
+      renderLiveShotSetupPanel();
+
+      const input = doc.getElementById('lsGrindSetting');
+      expect(input.hidden).toBe(false);
+
+      input.value = '8,3';
+      input._fire('input');
+      expect(savedGrind()).toBe('8.3');
+
+      input.value = '12';
+      input._fire('input');
+      expect(savedGrind()).toBe('8.3');
+    });
+
+    it('leaves an off-list stepped value in the draft unchanged', () => {
+      setGrinders([{ name: 'K6', scale: STEPPED }]);
+      draftStore['glp_live_shot_setup_1'] = JSON.stringify({ grinder: 'K6', grindSetting: '33.5' });
+
+      renderLiveShotSetupPanel();
+
+      const select = doc.getElementById('grindSelect-lsGrindSetting');
+      const extra = (select.options as FakeOption[])[1];
+      expect(extra?.value).toBe('33.5');
+      expect(select.value).toBe('33.5');
+
+      doc.getElementById('lsDose').value = '20';
+      doc.getElementById('lsDose')._fire('input');
+      expect(savedGrind()).toBe('33.5');
+    });
   });
 
   // #1954 — the bean change handler's grinder/grind-setting prefill. The
