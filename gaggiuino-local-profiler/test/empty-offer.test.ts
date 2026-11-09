@@ -112,7 +112,9 @@ function makeBean(
   remainingG: number | null | undefined,
   extra: Partial<FakeBean> = {},
 ): FakeBean {
-  return { id, name: `Bean ${id}`, remainingG, bags: [{ id: id * 100, remainingG }], ...extra };
+  // A real bag's remainingG is absent, never null, for an unweighed bag.
+  const bagRemaining = remainingG ?? undefined;
+  return { id, name: `Bean ${id}`, remainingG, bags: [{ id: id * 100, remainingG: bagRemaining }], ...extra };
 }
 
 function row(id: number): FakeBean {
