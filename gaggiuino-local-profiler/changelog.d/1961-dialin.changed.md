@@ -1,1 +1,0 @@
-- **Guided dial-in steps, comparative advice and prefilled settings now follow a grinder's own grind scale.** Part of #1961
