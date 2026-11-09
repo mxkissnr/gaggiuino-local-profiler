@@ -62,6 +62,9 @@ function singleShot(duration: number, tag?: string | null): GrindShot {
   };
 }
 
+type Tag = GrindModule['TASTE_TAGS'][number];
+const TAGS: readonly Tag[] = ['sour', 'bitter', 'balanced', 'thin'];
+
 interface Expectation { type: string; key?: string; args?: unknown[]; text?: string }
 
 function expectAdvice(advice: GrindAdvice | null | undefined, expected: Expectation): void {
@@ -160,7 +163,7 @@ describe('calcGrindAdvice applies the tag to the time advice', () => {
 
   it('follows the table for every duration and tag', () => {
     for (const row of table) {
-      for (const tag of ['sour', 'bitter', 'balanced', 'thin'] as const) {
+      for (const tag of TAGS) {
         const expected = row[tag];
         expectAdvice(calcGrindAdvice(singleShot(row.duration, tag), series()), expected);
       }
@@ -170,7 +173,7 @@ describe('calcGrindAdvice applies the tag to the time advice', () => {
   it('never overrides the channeling warning', () => {
     // 9 → 6 bar within one second is channeling.
     const channeling = series([], [9, 9, 9, 9, 9, 6]);
-    for (const tag of ['sour', 'bitter', 'balanced', 'thin'] as const) {
+    for (const tag of TAGS) {
       expectAdvice(calcGrindAdvice(singleShot(300, tag), channeling),
         { type: 'warning', key: 'grind_channeling_full' });
     }
@@ -179,7 +182,7 @@ describe('calcGrindAdvice applies the tag to the time advice', () => {
   it('never overrides the ratio warning', () => {
     // 60 g out of 18 g in is 1:3.3, well above the window.
     const withTag = (tag: string): GrindShot => ({ id: 1, duration: 300, annotation: { dose: '18', tasteTag: tag } });
-    for (const tag of ['sour', 'bitter', 'balanced', 'thin'] as const) {
+    for (const tag of TAGS) {
       expectAdvice(calcGrindAdvice(withTag(tag), series([{ x: 30, y: 60 }])),
         { type: 'warning', key: 'dialin_ratio_high', args: ['3.3'] });
     }
@@ -229,7 +232,7 @@ describe('calcComparativeGrindAdvice without a tag pins today\'s advice', () => 
 
 describe('calcComparativeGrindAdvice applies the tag', () => {
   // Every cell of the slice's comparative table: current tag × grind direction.
-  const table: Record<string, { none: Expectation; finer: Expectation; coarser: Expectation }> = {
+  const table: Record<Tag, { none: Expectation; finer: Expectation; coarser: Expectation }> = {
     sour: {
       none:    { type: 'finer', key: 'grind_comparative_taste_finer', args: [2, BEST, BEST_SCORE] },
       finer:   { type: 'finer', key: 'grind_comparative_finer', args: [2, BEST, BEST_SCORE] },
@@ -254,7 +257,8 @@ describe('calcComparativeGrindAdvice applies the tag', () => {
   const dirGrind = { none: '20', finer: '24', coarser: '16' } as const;
 
   it('follows the table for every tag and direction', () => {
-    for (const [tag, cells] of Object.entries(table)) {
+    for (const tag of TAGS) {
+      const cells = table[tag];
       for (const dir of ['none', 'finer', 'coarser'] as const) {
         const advice = calcComparativeGrindAdvice(viewed(dirGrind[dir], tag), siblings());
         expectAdvice(advice, cells[dir]);
