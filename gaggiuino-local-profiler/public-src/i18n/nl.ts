@@ -205,6 +205,7 @@ const nl: Partial<Translations> = {
     lib_sheet_close:'Sluiten', lib_sheet_more:'Meer acties', lib_sheet_shot_log:'Shotlog', lib_sheet_aromas:'Aroma\'s',
     lib_form_sheet_new:'Nieuwe boon', lib_form_sheet_edit:'Boon bewerken', lib_form_discard_q:'Wijzigingen verwerpen?', lib_form_discard:'Verwerpen', lib_form_keep_editing:'Doorgaan met bewerken',
     lib_archived_toast:'Zak opgevouwen en opgeborgen.', lib_restored_toast:'Weer op de plank.',
+    bean_empty_offer_toast:(n)=>`${n} is op`,
     lib_confirm_delete_bean:'Boon uit de bibliotheek verwijderen?',
     lib_confirm_delete_grinder:'Molen uit de bibliotheek verwijderen?',
     lib_grinder_wear:(n,g)=>`${n} shots · ${g} sinds laatste steenwissel`, lib_grinder_reset_burrs:'Stenen vervangen', lib_grinder_confirm_reset_burrs:'Slijtageteller resetten? Markeert de steenwissel als vandaag uitgevoerd.',

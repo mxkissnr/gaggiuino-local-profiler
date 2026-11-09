@@ -205,6 +205,7 @@ const en: Translations = {
     lib_sheet_close:'Close', lib_sheet_more:'More actions', lib_sheet_shot_log:'Shot log', lib_sheet_aromas:'Aromas',
     lib_form_sheet_new:'New bean', lib_form_sheet_edit:'Edit bean', lib_form_discard_q:'Discard your changes?', lib_form_discard:'Discard', lib_form_keep_editing:'Keep editing',
     lib_archived_toast:'Bag folded and put away.', lib_restored_toast:'Back on the shelf.',
+    bean_empty_offer_toast:(n)=>`${n} is empty`,
     lib_confirm_delete_bean:'Remove bean from library?',
     lib_confirm_delete_grinder:'Remove grinder from library?',
     lib_grinder_wear:(n,g)=>`${n} shots · ${g} since last burr swap`, lib_grinder_reset_burrs:'Burrs replaced', lib_grinder_confirm_reset_burrs:'Reset wear counter? Marks the burr swap as done today.',

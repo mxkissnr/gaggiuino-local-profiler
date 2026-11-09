@@ -24,6 +24,7 @@ import { _beanList, _state, _el } from './library/bean-shared.js';
 import {
   sheetBeanId, renderBeanSheet, closeBeanSheet,
 } from './library/bean-sheet.js';
+import { checkEmptyBeanOffer } from './library/empty-offer.js';
 
 // ── Library load ──────────────────────────────────────────────────────────
 export async function loadLibrary(): Promise<void> {
@@ -250,6 +251,8 @@ function renderShelfSections(): void {
 }
 
 export function renderBeanList(): void {
+  // #1958: every stock change on this page or another device ends up here.
+  checkEmptyBeanOffer();
   const el = document.getElementById('beanListUI');
   if (!el) return;
   const beans = _beanList();

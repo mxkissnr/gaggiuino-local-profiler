@@ -205,6 +205,7 @@ const es: Partial<Translations> = {
     lib_sheet_close:'Cerrar', lib_sheet_more:'Más acciones', lib_sheet_shot_log:'Registro de shots', lib_sheet_aromas:'Aromas',
     lib_form_sheet_new:'Nuevo grano', lib_form_sheet_edit:'Editar grano', lib_form_discard_q:'¿Descartar los cambios?', lib_form_discard:'Descartar', lib_form_keep_editing:'Seguir editando',
     lib_archived_toast:'Bolsa plegada y guardada.', lib_restored_toast:'De vuelta en el estante.',
+    bean_empty_offer_toast:(n)=>`${n} se ha agotado`,
     lib_confirm_delete_bean:'¿Eliminar el grano de la biblioteca?',
     lib_confirm_delete_grinder:'¿Eliminar el molino de la biblioteca?',
     lib_grinder_wear:(n,g)=>`${n} shots · ${g} desde el último cambio de muelas`, lib_grinder_reset_burrs:'Muelas renovadas', lib_grinder_confirm_reset_burrs:'¿Reiniciar el contador de desgaste? Marca el cambio de muelas como hecho hoy.',

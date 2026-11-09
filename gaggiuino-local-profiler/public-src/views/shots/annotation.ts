@@ -133,10 +133,12 @@ export function annotationBusy(): boolean {
 }
 
 // #1411: the server books milk stock and frozen-portion counts while it
-// saves; the library only needs a reload when a field it books from changed.
+// saves; bean stock (#1958) derives from the bean, the dose and the mix, so the
+// library only needs a reload when one of those fields changed.
 export function _stockFieldsChanged(prev: AnnotationData | null | undefined, next: AnnotationData | null | undefined): boolean {
   const key = (a: AnnotationData | null | undefined): string =>
-    [a?.drinkType || '', String(a?.milkType ?? ''), String(a?.frozenPortionId ?? '')].join('|');
+    [a?.drinkType || '', String(a?.milkType ?? ''), String(a?.frozenPortionId ?? ''),
+      a?.coffee || '', String(a?.beanId ?? ''), String(a?.dose ?? ''), JSON.stringify(a?.beanMix ?? null)].join('|');
   return key(prev) !== key(next);
 }
 
@@ -565,6 +567,9 @@ export function _renderBeanSelect(selectedName: string | null, selectedBeanId: n
   const inStock: LibraryRow[] = [];
   const exhausted: LibraryRow[] = [];
   for (const b of allBeans) {
+    // #1958: an archived bean is no longer offered, unless it is the one already
+    // chosen, so an old shot, draft, recipe or default never loses its bean.
+    if (b.enabled === false && b.id !== selectedBeanId && b.name !== selectedName) continue;
     const remainingG = b.remainingG;
     (remainingG == null || remainingG > 0 ? inStock : exhausted).push(b);
   }

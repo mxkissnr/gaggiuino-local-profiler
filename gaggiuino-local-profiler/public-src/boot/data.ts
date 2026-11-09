@@ -29,6 +29,7 @@ import { applyBlindRating } from '../components/dev-score-settings.js';
 import { renderApiTokenCard } from './settings.js';
 import { runBootTasks } from './run-step.js';
 import { checkAchievementPopups, renderPopupSettings, startPopups } from './popups.js';
+import { startEmptyBeanOffers } from '../views/library/empty-offer.js';
 import type { BootOutcome } from './run-step.js';
 
 // #1375/#1539: apply the shared UI choices once they have been loaded from the
@@ -216,5 +217,7 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
       name: 'popups', requires: ['ui prefs', 'shots', 'status'], after: ['setup wizard'],
       run: () => { startPopups(() => { applyServerUiPrefs(false, true); }); },
     },
+    // #1958: after the popups task, which initialises the queue the offer waits in.
+    { name: 'empty bean offers', requires: ['popups'], run: startEmptyBeanOffers },
   ]);
 }

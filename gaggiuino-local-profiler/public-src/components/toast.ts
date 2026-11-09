@@ -9,24 +9,38 @@ export interface ToastAction {
   onClick: () => void;
 }
 
+export type ToastHideReason = 'timeout' | 'action' | 'replaced';
+
 export interface ToastOptions {
   duration?: number;
   /** Optional button (e.g. Undo). Clicking it hides the toast. */
   action?: ToastAction;
+  /** Runs once when this toast is gone, with how it ended. */
+  onHide?: (how: ToastHideReason) => void;
 }
 
-type ToastElement = HTMLElement & { _t?: ReturnType<typeof setTimeout> };
+type ToastElement = HTMLElement & {
+  _t?: ReturnType<typeof setTimeout>;
+  _onHide?: ((how: ToastHideReason) => void) | undefined;
+};
 
-function hideToast(el: ToastElement): void {
+function fireOnHide(el: ToastElement, how: ToastHideReason): void {
+  const fn = el._onHide;
+  el._onHide = undefined;
+  fn?.(how);
+}
+
+function hideToast(el: ToastElement, how: ToastHideReason): void {
   clearTimeout(el._t);
   el.style.opacity = '0';
   el.style.pointerEvents = 'none';
   // Drop the action so a faded-out toast leaves no focusable button behind.
   el.querySelector('.glp-toast-action')?.remove();
+  fireOnHide(el, how);
 }
 
 export function showToast(msg: string, opts: ToastOptions | number = {}): void {
-  const { duration = 3000, action } = typeof opts === 'number' ? { duration: opts } : opts;
+  const { duration = 3000, action, onHide } = typeof opts === 'number' ? { duration: opts } : opts;
   let el = document.getElementById('glpToast');
   if (!el) {
     el = document.createElement('div');
@@ -46,18 +60,20 @@ export function showToast(msg: string, opts: ToastOptions | number = {}): void {
     document.body.appendChild(el);
   }
   const toast = el as ToastElement;
+  fireOnHide(toast, 'replaced');
   toast.textContent = msg;
   if (action) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'glp-toast-action';
     btn.textContent = action.label;
-    btn.onclick = () => { hideToast(toast); action.onClick(); };
+    btn.onclick = () => { hideToast(toast, 'action'); action.onClick(); };
     toast.appendChild(btn);
   }
   toast.style.opacity = '1';
   // Only a toast with a button takes clicks; a plain one stays click-through.
   toast.style.pointerEvents = action ? 'auto' : 'none';
+  toast._onHide = onHide;
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => { hideToast(toast); }, duration);
+  toast._t = setTimeout(() => { hideToast(toast, 'timeout'); }, duration);
 }
