@@ -200,6 +200,10 @@ describe('taste tag wiring sources (#1957)', () => {
     expect(read('../public-src/boot/delegation.ts')).toContain("case 'select-taste-tag':");
   });
 
+  it('needs no barrel edit: views/shots.ts already re-exports the annotation module', () => {
+    expect(read('../public-src/views/shots.ts')).toContain("export * from './shots/annotation.js'");
+  });
+
   it('keeps the 44 px touch target on mobile', () => {
     expect(read('../public-src/style.css')).toMatch(/\.drink-pill\s*\{\s*min-height: 44px/);
   });
