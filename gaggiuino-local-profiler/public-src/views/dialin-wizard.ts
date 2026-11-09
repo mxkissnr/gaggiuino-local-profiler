@@ -411,6 +411,7 @@ export function renderDialinWizard(): void {
 // as this wizard always did.
 function _fillSetupFields(s: DialinSession): void {
   if (S.coffeeLibrary?.beans?.length) _renderBeanSelect(s.bean || null, s.beanId, 'dwBean');
+  const firstGrinder = (S.coffeeLibrary?.grinders?.[0]?.name as string | undefined) || '';
   const grinder = s.grinder || firstGrinder;
   renderGrinderField('dwGrinder', 'dwGrinderOther', grinder);
   // #1961: this is a suggestion, not a saved value, so it must be a valid one.
