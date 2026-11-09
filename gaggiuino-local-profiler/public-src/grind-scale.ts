@@ -33,7 +33,8 @@ export function parseGrindScale(raw: unknown): GrindScale | null {
 }
 
 export function scaleForGrinder(grinders: readonly { name?: unknown; scale?: unknown }[] | undefined, name: string | null | undefined): GrindScale | null {
-  const grinder = findGrinderByName(grinders as GrinderLike[] | undefined, name) as (GrinderLike & { scale?: unknown }) | null;
+  // Annotated, not asserted: the cast only restated the type the annotation gives.
+  const grinder: (GrinderLike & { scale?: unknown }) | null = findGrinderByName(grinders as GrinderLike[] | undefined, name);
   return grinder ? parseGrindScale(grinder.scale) : null;
 }
 
