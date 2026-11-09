@@ -14,6 +14,7 @@ import { textEntryFocused } from '../live-sync.js';
 import { esc, html, joinHtml, scoreColor } from '../utils.js';
 import type { Html } from '../utils.js';
 import { safeLocalStorage } from '../storage.js';
+import { grindSelectId } from './shots/grind-field.js';
 
 const POLL_MS = 3000;
 
@@ -51,6 +52,7 @@ export function createWizardSession<TSession extends Record<string, unknown>, TS
   // must not re-render the wizard over it.
   const overrideHasValue = (): boolean => {
     const input = document.getElementById(overrideInputId) as HTMLInputElement | null;
+    if (document.activeElement && document.activeElement === document.getElementById(grindSelectId(overrideInputId))) return true;
     return input !== null && input.value !== '';
   };
 
