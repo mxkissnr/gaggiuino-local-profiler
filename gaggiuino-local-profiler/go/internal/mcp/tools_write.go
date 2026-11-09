@@ -51,6 +51,7 @@ type annotateShotInput struct {
 	Rating       *int    `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating; omit to leave the stored rating unchanged"`
 	Notes        *string `json:"notes,omitempty" jsonschema:"free-text notes, up to 2000 characters; omit to leave them unchanged, pass an empty string to clear"`
 	GrindSetting *string `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting (dial/click position), up to 50 characters; omit to leave it unchanged"`
+	TasteTag     *string `json:"taste_tag,omitempty" jsonschema:"how the shot tasted: sour, bitter, balanced or thin; feeds the grind advice and never the score; omit to leave it unchanged, pass an empty string to clear"`
 }
 
 type annotateShotOutput struct {
@@ -58,6 +59,7 @@ type annotateShotOutput struct {
 	Rating       *int    `json:"rating,omitempty" jsonschema:"the shot's 1-5 star rating after the change"`
 	Notes        *string `json:"notes,omitempty" jsonschema:"the shot's notes after the change"`
 	GrindSetting *string `json:"grind_setting,omitempty" jsonschema:"the shot's grinder setting after the change"`
+	TasteTag     *string `json:"taste_tag,omitempty" jsonschema:"the shot's taste tag after the change"`
 }
 
 // ── set_known_grind ───────────────────────────────────────────────────────
@@ -94,7 +96,7 @@ func registerWriteTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:         "annotate_shot",
 		Title:        "Annotate shot",
-		Description:  "Change one shot's annotation: its 1-5 star rating, free-text notes and free-text grinder setting (dial/click position). Only the fields you pass change; every other stored field (bean, dose, order info, ...) is preserved. The change is persisted immediately. Provide at least one field.",
+		Description:  "Change one shot's annotation: its 1-5 star rating, free-text notes, free-text grinder setting (dial/click position) and taste tag. Only the fields you pass change; every other stored field (bean, dose, order info, ...) is preserved. The change is persisted immediately. Provide at least one field.",
 		Annotations:  writeAnnotations("Annotate shot", true),
 		InputSchema:  annotateShotSchema(),
 		OutputSchema: mustSchema[annotateShotOutput](),
@@ -139,6 +141,9 @@ func annotateShotSchema() *jsonschema.Schema {
 	}
 	if p := schemaProp(s, "grind_setting"); p != nil {
 		p.MaxLength = jsonschema.Ptr(maxGrindSettingLen)
+	}
+	if p := schemaProp(s, "taste_tag"); p != nil {
+		p.Enum = stringEnum(append(shots.TasteTags(), ""))
 	}
 	return s
 }
@@ -190,8 +195,8 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if deps.Shots == nil {
 		return annotateShotOutput{}, fmt.Errorf("shot history is not available")
 	}
-	if in.Rating == nil && in.Notes == nil && in.GrindSetting == nil {
-		return annotateShotOutput{}, fmt.Errorf("nothing to change: provide at least one of rating, notes or grind_setting")
+	if in.Rating == nil && in.Notes == nil && in.GrindSetting == nil && in.TasteTag == nil {
+		return annotateShotOutput{}, fmt.Errorf("nothing to change: provide at least one of rating, notes, grind_setting or taste_tag")
 	}
 	// Check existence first so an unknown id reports the same actionable error
 	// the read tools do, instead of relying on the annotations FK failure.
@@ -215,6 +220,9 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if in.GrindSetting != nil {
 		patch["grindSetting"] = *in.GrindSetting
 	}
+	if in.TasteTag != nil {
+		patch["tasteTag"] = *in.TasteTag
+	}
 	ann, err := deps.Shots.PatchAnnotation(in.ID, patch)
 	if err != nil {
 		var verr *shots.AnnotationValidationError
@@ -236,6 +244,9 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	}
 	if setting, ok := ann["grindSetting"].(string); ok {
 		out.GrindSetting = &setting
+	}
+	if tag, ok := ann["tasteTag"].(string); ok {
+		out.TasteTag = &tag
 	}
 	// The annotation itself changes the shot; its dose also drives the library's
 	// derived bag stock, so both kinds changed (#1539 slice 2).

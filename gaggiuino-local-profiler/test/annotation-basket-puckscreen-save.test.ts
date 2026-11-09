@@ -33,6 +33,10 @@ function fakeAnnotationDom(basketId: number | null, puckScreenId: number | null)
     annDose:        { value: '' },
     annTds:         { value: '' },
     annNotes:       { value: '' },
+    // #1957: the taste-tag field is part of the same payload; this fixture
+    // leaves it unset, so those tests also pin the no-tag default.
+    annTasteTag:            { value: '' },
+    tasteTagPillsContainer: { innerHTML: '' },
   };
   g.document = { getElementById: (id: string) => elements[id] };
 }
@@ -43,7 +47,7 @@ function fakeAnnotationDom(basketId: number | null, puckScreenId: number | null)
 interface CatalogRow { id: number; name: string }
 
 // The subset of the POST /annotate body these tests read back.
-interface AnnotationPayload { basketId: number | null; puckScreenId: number | null }
+interface AnnotationPayload { basketId: number | null; puckScreenId: number | null; tasteTag: string | null }
 
 beforeEach(() => {
   fetchSpy.mockClear();
@@ -66,6 +70,7 @@ describe('annotation save — basketId/puckScreenId roundtrip (#635, beanId patt
     const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string) as AnnotationPayload;
     expect(body.basketId).toBe(5);
     expect(body.puckScreenId).toBe(9);
+    expect(body.tasteTag).toBeNull();
   });
 
   it('defaults both to null when nothing is selected, same as beanId', () => {
@@ -75,5 +80,6 @@ describe('annotation save — basketId/puckScreenId roundtrip (#635, beanId patt
     const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string) as AnnotationPayload;
     expect(body.basketId).toBeNull();
     expect(body.puckScreenId).toBeNull();
+    expect(body.tasteTag).toBeNull();
   });
 });

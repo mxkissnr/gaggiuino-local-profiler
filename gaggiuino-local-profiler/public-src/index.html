@@ -418,6 +418,11 @@
                         <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
                     </div>
                     <div class="annotation-field full-width">
+                        <label id="annTasteTagLabel" data-i18n="profile_dialin_symptom_prompt">Wie hat der Shot geschmeckt?</label>
+                        <div class="drink-pills" id="tasteTagPillsContainer" role="group" aria-labelledby="annTasteTagLabel"></div>
+                        <input type="hidden" id="annTasteTag">
+                    </div>
+                    <div class="annotation-field full-width">
                         <label for="annNotes" data-i18n="ann_notes">Notizen</label>
                         <textarea id="annNotes" data-i18n-placeholder="ann_notes_ph" placeholder="Geschmack, Beobachtungen, Anpassungen …"></textarea>
                     </div>

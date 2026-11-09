@@ -34,7 +34,7 @@ func ComputeComparativeGrindAdvice(shot Shot, allShots []Shot) *ComparativeGrind
 		if score == nil {
 			continue
 		}
-		comparable = append(comparable, comparableSibling{grind: g, score: *score})
+		comparable = append(comparable, comparableSibling{grind: g, score: *score, tasteTag: tasteTagOf(toMap(s["annotation"]))})
 	}
 	return m.advice(comparable, "en")
 }

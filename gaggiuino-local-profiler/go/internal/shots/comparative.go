@@ -79,12 +79,15 @@ type comparativeMatch struct {
 	hasDose         bool
 	currentGrind    float64
 	hasCurrentGrind bool
+	tasteTag        string
 }
 
-// comparableSibling is one comparable sibling's grind setting and score.
+// comparableSibling is one comparable sibling's grind setting, score and
+// taste tag (a sour/bitter sibling does not rank, see rankableSiblings).
 type comparableSibling struct {
-	grind float64
-	score int
+	grind    float64
+	score    int
+	tasteTag string
 }
 
 // newComparativeMatch returns shot's comparison key, or nil when shot has
@@ -101,10 +104,11 @@ func newComparativeMatch(shot Shot) *comparativeMatch {
 		return nil
 	}
 	m := &comparativeMatch{
-		shotID:  shot.id(),
-		ann:     ann,
-		grinder: grinder,
-		profile: strings.ToLower(strings.TrimSpace(shot.profileName())),
+		shotID:   shot.id(),
+		ann:      ann,
+		grinder:  grinder,
+		profile:  strings.ToLower(strings.TrimSpace(shot.profileName())),
+		tasteTag: tasteTagOf(ann),
 	}
 	m.dose, m.hasDose = toFloat(ann["dose"])
 	m.currentGrind, m.hasCurrentGrind = parseGrindNum(annotationStr(ann, "grindSetting"))
@@ -145,6 +149,7 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 	if len(comparable) < 1 {
 		return nil
 	}
+	comparable = rankableSiblings(comparable)
 
 	byGrind := map[float64][]int{}
 	for _, c := range comparable {
@@ -198,6 +203,9 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 		}
 	}
 	diff := m.currentGrind - bestSetting
+	if outcome := tasteOutcome(m.tasteTag, grindDirection(diff)); outcome != "" {
+		return tasteAdvice(outcome, lang, n, bestSetting, bestScore)
+	}
 	if abs(diff) < 0.6 {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",
