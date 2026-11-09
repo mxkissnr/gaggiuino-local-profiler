@@ -198,7 +198,7 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 	if !m.hasCurrentGrind {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",
-			Text: cardTextf(lang, "compare_ok", n, bestScore),
+			Text:        cardTextf(lang, "compare_ok", n, bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
@@ -209,20 +209,20 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 	if abs(diff) < 0.6 {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",
-			Text: cardTextf(lang, "compare_ok", n, bestScore),
+			Text:        cardTextf(lang, "compare_ok", n, bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
 	if diff > 0 {
 		return &ComparativeGrindAdvice{
 			Type: "finer", Icon: "📊",
-			Text: cardTextf(lang, "compare_finer", n, bestSetting, bestScore),
+			Text:        cardTextf(lang, "compare_finer", n, bestSetting, bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
 	return &ComparativeGrindAdvice{
 		Type: "coarser", Icon: "📊",
-		Text: cardTextf(lang, "compare_coarser", n, bestSetting, bestScore),
+		Text:        cardTextf(lang, "compare_coarser", n, bestSetting, bestScore),
 		SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 	}
 }
