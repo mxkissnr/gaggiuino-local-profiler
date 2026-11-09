@@ -11,7 +11,9 @@ g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} 
 g.navigator ??= { language: 'en-US' };
 
 const mocks = vi.hoisted(() => ({
-  annotateShot: vi.fn(),
+  // Typed with unknown args so the test body can pass them straight through
+  // the module mock, as test/live-shot-setup-apply-annotation.test.ts does.
+  annotateShot: vi.fn((..._args: unknown[]) => Promise.resolve({ ok: false, status: 500 })),
   loadLibrary: vi.fn(),
 }));
 
@@ -25,7 +27,7 @@ vi.mock('../public-src/components/sidebar.js', async (importOriginal) => ({
 
 vi.mock('../public-src/api/shots.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/api/shots.js')>()),
-  annotateShot: (...args: unknown[]) => mocks.annotateShot(...args),
+  annotateShot: (...args: unknown[]) => mocks.annotateShot(...args) as unknown,
   // The wizard evaluates the confirmed shot through its lazy curve; no shot
   // data here means an empty curve, which is all these tests need.
   getShot: () => Promise.resolve(null),
