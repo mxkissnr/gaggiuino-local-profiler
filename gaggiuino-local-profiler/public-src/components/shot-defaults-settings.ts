@@ -67,7 +67,8 @@ export function renderShotDefaultsSettingsCard(): void {
 
   const coffeeSelect = document.getElementById('sdCoffee');
   if (coffeeSelect) {
-    const beans = _catalog(lib.beans);
+    // #1958: same rule as the bean dropdowns: archived beans go, the saved default stays.
+    const beans = _catalog(lib.beans).filter(b => b.enabled !== false || b.name === d.coffee);
     // #1960: a saved bean that left the library keeps its own option, or saving
     // this card would silently drop it.
     const staleCoffee = d.coffee && !beans.some(b => b.name === d.coffee) ? d.coffee : '';

@@ -319,6 +319,9 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
       }
       renderSidebar();
       updateSidebarHighlighting();
+      // #1958: the annotation just booked bean stock server-side, and this
+      // device skips the echo of its own write, so reload it here.
+      void window.loadLibrary?.();
     } else {
       window.showToast?.(t('error_generic', r.status));
     }
