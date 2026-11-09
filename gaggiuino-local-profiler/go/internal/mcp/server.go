@@ -209,7 +209,7 @@ func newServer(deps Deps, allowWrite, allowDeveloperTools bool) *mcpsdk.Server {
 		"dialling in a bean or reviewing a shot."
 	if allowWrite {
 		instructions += " This server can also change a few things on the user's behalf: " +
-			"annotate_shot merges rating, notes and grind setting into one shot, " +
+			"annotate_shot merges rating, notes, grind setting and taste tag into one shot, " +
 			"set_known_grind remembers a bean's winning grind setting, " +
 			"and mark_maintenance_done records that a maintenance task was completed."
 	}

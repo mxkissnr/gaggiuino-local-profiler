@@ -156,7 +156,7 @@ func (s *Service) GetComparativeGrindAdvice(shot Shot, lang string) (*Comparativ
 		if c.score == nil {
 			continue
 		}
-		comparable = append(comparable, comparableSibling{grind: g, score: *c.score})
+		comparable = append(comparable, comparableSibling{grind: g, score: *c.score, tasteTag: tasteTagOf(toMap(c.light["annotation"]))})
 	}
 	return m.advice(comparable, lang), nil
 }
@@ -203,7 +203,9 @@ func SetAnnotationStockHook(fn func(prev, next map[string]any) error) {
 // deleted, and keys absent from patch are kept. Server-owned keys are ignored.
 // Only the keys the patch actually sets are validated, so an older stored
 // value the current rules no longer accept (an over-long notes, an
-// out-of-range rating) cannot block an unrelated edit. The patched keys are
+// out-of-range rating) cannot block an unrelated edit. The tasteTag value is
+// checked here rather than in ValidateAnnotation, so a restore never drops an
+// annotation over a tag this version does not know. The patched keys are
 // validated before the write; an invalid patch returns
 // *AnnotationValidationError and leaves the stored annotation untouched.
 // Returns the saved annotation. The installed annotation stock hook (see
@@ -227,7 +229,9 @@ func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[strin
 			ann[k] = v
 			applied[k] = v
 		}
-		if issues := ValidateAnnotation(applied); len(issues) > 0 {
+		issues := ValidateAnnotation(applied)
+		issues = append(issues, checkTasteTag(applied)...)
+		if len(issues) > 0 {
 			return &AnnotationValidationError{Issues: issues}
 		}
 		return nil

@@ -135,6 +135,7 @@ components:
         roastDate:    { type: string, format: date, maxLength: 10 }
         tds:          { type: number, minimum: 0.1, maximum: 30, nullable: true }
         notes:        { type: string, maxLength: 2000 }
+        tasteTag:     { type: string, enum: [sour, bitter, balanced, thin, null], nullable: true, description: "How the shot tasted. Feeds the grind advice, never the score. Send null or an empty string to clear" }
         orderedBy:
           type: object
           description: Set automatically when an order is completed for this shot.

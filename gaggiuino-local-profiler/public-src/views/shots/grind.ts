@@ -17,6 +17,7 @@ interface GrindAnnotation {
   dose?: string | number | null;
   grindSetting?: string | number | null;
   beanMix?: readonly BeanMixPartInput[] | null;
+  tasteTag?: string | null;
 }
 
 export interface GrindShot extends ShotLike {
@@ -118,18 +119,88 @@ export function _parseGrindNum(s: string | number | null | undefined): number | 
   return captured !== undefined ? parseFloat(captured.replace(',', '.')) : null;
 }
 
+// ── Taste tags (#1957) ─────────────────────────────────────────────────────
+
+export const TASTE_TAGS = ['sour', 'bitter', 'balanced', 'thin'] as const;
+export type TasteTag = typeof TASTE_TAGS[number];
+
+// The chips' i18n keys; three are shared with the Profile Dial-In wizard.
+export const TASTE_TAG_LABELS: Record<TasteTag, string> = {
+  sour: 'profile_dialin_symptom_sour',
+  bitter: 'profile_dialin_symptom_bitter',
+  balanced: 'profile_dialin_symptom_balanced',
+  thin: 'taste_tag_thin',
+};
+
+// An absent or unknown value is no tag: a backup from a newer version may carry
+// a tag this one does not know.
+export function tasteTagOf(ann: { tasteTag?: unknown } | null | undefined): TasteTag | null {
+  const tag = ann?.tasteTag;
+  return TASTE_TAGS.find(known => known === tag) ?? null;
+}
+
+type GrindDirection = 'finer' | 'coarser';
+type TasteOutcome = GrindDirection | 'hold' | 'conflict' | 'thin';
+
+// What a tag does to a grind direction; null keeps the advice as it is. Keep in
+// step with tasteOutcome in go/internal/shots/taste.go. timeFarOff applies to
+// the single-shot advice only, where a far-off time wins over a disagreeing taste.
+function _tasteOutcome(tag: TasteTag, dir: GrindDirection | null, timeFarOff: boolean): TasteOutcome | null {
+  if (tag === 'balanced') return dir ? 'hold' : null;
+  if (tag === 'thin') return dir ? null : 'thin';
+  const want: GrindDirection = tag === 'sour' ? 'finer' : 'coarser';
+  if (!dir) return want;
+  return dir !== want && !timeFarOff ? 'conflict' : null;
+}
+
+const COMPARATIVE_TASTE_KEYS: Partial<Record<TasteOutcome, string>> = {
+  finer: 'grind_comparative_taste_finer',
+  coarser: 'grind_comparative_taste_coarser',
+  hold: 'grind_comparative_taste_hold',
+  conflict: 'grind_comparative_taste_conflict',
+};
+
+// A sibling the user tasted as sour or bitter cannot be the best setting,
+// unless that would leave none.
+function _rankableSiblings(comparable: GrindShot[]): GrindShot[] {
+  const kept = comparable.filter(s => {
+    const tag = tasteTagOf(s.annotation);
+    return tag !== 'sour' && tag !== 'bitter';
+  });
+  return kept.length ? kept : comparable;
+}
+
+const GRIND_FAR_SHORT_S = 18;
+const GRIND_FAR_LONG_S = 50;
+
+function _applyTaste(base: GrindAdvice | null, shot: GrindShot): GrindAdvice | null {
+  const tag = tasteTagOf(shot.annotation);
+  if (!base || !tag || base.type === 'warning') return base;
+  const secs = (shot.duration || 0) / 10;
+  const dir = base.type === 'finer' || base.type === 'coarser' ? base.type : null;
+  const s = secs.toFixed(0);
+  switch (_tasteOutcome(tag, dir, secs < GRIND_FAR_SHORT_S || secs > GRIND_FAR_LONG_S)) {
+    case 'finer':    return { type: 'finer',   icon: html`↓`, text: t('grind_taste_finer') };
+    case 'coarser':  return { type: 'coarser', icon: html`↑`, text: t('grind_taste_coarser') };
+    case 'hold':     return { type: 'ok',      icon: html`✓`, text: t('grind_taste_balanced', s) };
+    case 'conflict': return { type: 'warning', icon: html`↕`, text: t('grind_taste_conflict', s) };
+    case 'thin':     return { type: 'ok',      icon: html`✓`, text: t('grind_taste_thin') };
+    default:         return base;
+  }
+}
+
 // ── Grind advice ──────────────────────────────────────────────────────────
 
-export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice | null {
+function _timeGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice | null {
   const secs = (shot.duration || 0) / 10;
   if (secs < 8) return null;
   const pTimes = data.pressure.map(p => p.x);
   const pAll   = data.pressure.map(p => p.y);
   if (detectChanneling(pTimes, pAll))
     return { type: 'warning', icon: LIGHTNING_ICON_SVG, text: t('grind_channeling_full') };
-  if (secs < 18) return { type: 'finer',   icon: html`↓`, text: t('grind_short', secs.toFixed(0)) };
+  if (secs < GRIND_FAR_SHORT_S) return { type: 'finer',   icon: html`↓`, text: t('grind_short', secs.toFixed(0)) };
   if (secs < 23) return { type: 'finer',   icon: html`↓`, text: t('grind_short_slight', secs.toFixed(0)) };
-  if (secs > 50) return { type: 'coarser', icon: html`↑`, text: t('grind_long', secs.toFixed(0)) };
+  if (secs > GRIND_FAR_LONG_S) return { type: 'coarser', icon: html`↑`, text: t('grind_long', secs.toFixed(0)) };
   if (secs > 42) return { type: 'coarser', icon: html`↑`, text: t('grind_long_slight', secs.toFixed(0)) };
   // Duration is fine — check the brew ratio against the classic espresso
   // window (1:1.8–1:2.2). Yield is machine-stopped, so this is dose/yield
@@ -142,6 +213,10 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
   const pVals = pAll.filter(v => v >= 5);
   const avgP  = pVals.length ? pVals.reduce((a, b) => a + b, 0) / pVals.length : 0;
   return { type: 'ok', icon: html`✓`, text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
+}
+
+export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice | null {
+  return _applyTaste(_timeGrindAdvice(shot, data), shot);
 }
 
 // Parses a shot's own recorded grindSetting and normalizes it to what it
@@ -192,8 +267,10 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   });
   if (comparable.length < 1) return null;
 
+  const ranked = _rankableSiblings(comparable);
+
   const byGrind: Record<number, number[]> = {};
-  comparable.forEach(s => {
+  ranked.forEach(s => {
     const g   = _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp) as number;
     const sc  = calcShotScore(s) as number;
     const key = Math.round(g * 2) / 2;
@@ -208,15 +285,21 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   });
   if (bestSetting === null) return null;
 
-  const n         = comparable.length;
+  const n         = ranked.length;
   const bestScore = Math.round(bestAvg);
-  const shots: ComparativeShot[] = comparable
+  const shots: ComparativeShot[] = ranked
     .map(s => ({ shot: s, grind: _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp), score: calcShotScore(s) as number }))
     .sort((a, b) => b.score - a.score);
 
   if (currentGrind === null)
     return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
   const diff = currentGrind - bestSetting;
+  const tag = tasteTagOf(ann);
+  const outcome = tag && _tasteOutcome(tag, Math.abs(diff) < 0.6 ? null : diff > 0 ? 'finer' : 'coarser', false);
+  const tasteKey = outcome ? COMPARATIVE_TASTE_KEYS[outcome] : undefined;
+  if (outcome && tasteKey) {
+    return { type: outcome === 'finer' || outcome === 'coarser' ? outcome : 'ok', icon: BAR_CHART_ICON_SVG, text: t(tasteKey, n, bestSetting, bestScore), shots };
+  }
   if (Math.abs(diff) < 0.6)
     return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
   if (diff > 0)

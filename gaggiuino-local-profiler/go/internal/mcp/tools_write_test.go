@@ -266,6 +266,100 @@ func TestAnnotateShotRunsStockHook(t *testing.T) {
 	}
 }
 
+func TestAnnotateShotTasteTag(t *testing.T) {
+	ts, sqlDB, _, _, _ := newWriteServer(t, true)
+	insertShot(t, sqlDB, 24, 1000, nil, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	res := call(t, session, "annotate_shot", map[string]any{"id": 24, "taste_tag": "sour"})
+	if res.IsError {
+		t.Fatalf("annotate_shot failed: %s", errorText(t, res))
+	}
+	if tag, _ := structured(t, res)["taste_tag"].(string); tag != "sour" {
+		t.Fatalf("output taste_tag = %v, want sour", structured(t, res)["taste_tag"])
+	}
+	ann, err := shots.NewRepository(sqlDB).GetAnnotation(24)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if tag, _ := ann["tasteTag"].(string); tag != "sour" {
+		t.Fatalf("stored tasteTag = %v, want sour", ann["tasteTag"])
+	}
+	if coffee, _ := ann["coffee"].(string); coffee != "Alpha" {
+		t.Fatalf("stored coffee = %v, want Alpha", ann["coffee"])
+	}
+
+	// An empty string clears the key, as it does for notes.
+	res = call(t, session, "annotate_shot", map[string]any{"id": 24, "taste_tag": ""})
+	if res.IsError {
+		t.Fatalf("clearing annotate_shot failed: %s", errorText(t, res))
+	}
+	if _, ok := structured(t, res)["taste_tag"]; ok {
+		t.Fatalf("output still carries taste_tag after clearing: %v", structured(t, res))
+	}
+	ann, err = shots.NewRepository(sqlDB).GetAnnotation(24)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if _, ok := ann["tasteTag"]; ok {
+		t.Fatalf("tasteTag not cleared: %v", ann["tasteTag"])
+	}
+	if coffee, _ := ann["coffee"].(string); coffee != "Alpha" {
+		t.Fatalf("coffee lost while clearing the tag: %v", ann["coffee"])
+	}
+}
+
+func TestAnnotateShotRejectsUnknownTasteTag(t *testing.T) {
+	ts, sqlDB, _, _, _ := newWriteServer(t, true)
+	insertShot(t, sqlDB, 25, 1000, nil, map[string]any{"coffee": "Alpha", "tasteTag": "sour"})
+	session := connect(t, ts.URL+Path)
+
+	res := call(t, session, "annotate_shot", map[string]any{"id": 25, "taste_tag": "astringent"})
+	if !res.IsError {
+		t.Fatalf("expected isError for an unknown taste tag")
+	}
+	ann, err := shots.NewRepository(sqlDB).GetAnnotation(25)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if tag, _ := ann["tasteTag"].(string); tag != "sour" {
+		t.Fatalf("stored tasteTag = %v, want the unchanged sour", ann["tasteTag"])
+	}
+}
+
+func TestAnnotateShotSchemaListsTasteTags(t *testing.T) {
+	ts, _, _, _, _ := newWriteServer(t, true)
+	session := connect(t, ts.URL+Path)
+	tool := listToolsByName(t, session)["annotate_shot"]
+	if tool == nil {
+		t.Fatalf("annotate_shot is missing from tools/list")
+	}
+	tag := schemaProperty(t, tool.InputSchema, "taste_tag")
+	got := strings.Join(stringList(tag, "enum"), ",")
+	if want := "sour,bitter,balanced,thin,"; got != want {
+		t.Fatalf("annotate_shot taste_tag enum = %q, want %q", got, want)
+	}
+}
+
+func TestGetShotReturnsTasteTag(t *testing.T) {
+	ts, sqlDB, _, _, _ := newWriteServer(t, true)
+	insertShot(t, sqlDB, 26, 1000, nil, map[string]any{"coffee": "Alpha", "tasteTag": "bitter"})
+	session := connect(t, ts.URL+Path)
+
+	res := call(t, session, "get_shot", map[string]any{"id": 26})
+	if res.IsError {
+		t.Fatalf("get_shot failed: %s", errorText(t, res))
+	}
+	out := structured(t, res)
+	ann := object(out, "annotation")
+	if ann == nil {
+		t.Fatalf("get_shot returned no annotation: %v", out)
+	}
+	if tag, _ := ann["tasteTag"].(string); tag != "bitter" {
+		t.Fatalf("annotation.tasteTag = %v, want bitter", ann["tasteTag"])
+	}
+}
+
 func TestSetKnownGrindUpsert(t *testing.T) {
 	ts, _, libRepo, _, _ := newWriteServer(t, true)
 	lib, err := libRepo.GetLibrary()
