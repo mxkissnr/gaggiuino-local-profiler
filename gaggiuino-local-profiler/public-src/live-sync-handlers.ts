@@ -21,6 +21,8 @@ export interface LiveSyncHandlerDeps {
   loadSettingsState: () => Promise<void>;
   applyServerUiPrefs: (includeMachine?: boolean, keepShelfQuery?: boolean) => void;
   maintenanceCanRefetch: () => boolean;
+  /** Runs after the shot list was refetched (a new shot, trash or restore). */
+  onShotsChanged?: () => void;
 }
 
 export function createLiveSyncHandlers(deps: LiveSyncHandlerDeps): LiveSyncHandlers {
@@ -49,7 +51,7 @@ export function createLiveSyncHandlers(deps: LiveSyncHandlerDeps): LiveSyncHandl
       // A shot-list change (trash/restore/delete). No single id to patch, so
       // the whole list is re-fetched quietly, deferred on the same guards.
       canRun: () => !annotationBusy() && !shotsLoadInProgress(),
-      run: () => refreshShots(null),
+      run: async () => { await refreshShots(null); deps.onShotsChanged?.(); },
     },
     orders: {
       // Deferred, not dropped, while the orders view holds uncommitted text

@@ -28,6 +28,7 @@ import { renderBeanFreshnessSettings } from '../components/bean-freshness-settin
 import { applyBlindRating } from '../components/dev-score-settings.js';
 import { renderApiTokenCard } from './settings.js';
 import { runBootTasks } from './run-step.js';
+import { startPopups } from './popups.js';
 import type { BootOutcome } from './run-step.js';
 
 // #1375/#1539: apply the shared UI choices once they have been loaded from the
@@ -205,6 +206,12 @@ export function bootData(): Promise<Map<string, BootOutcome>> {
     {
       name: 'setup wizard', requires: ['status', 'machines'],
       run: () => { if (shouldOpenSetupWizard(S.machines)) openSetupWizard(); },
+    },
+    // #1956: after the wizard so it counts as an open overlay. Needs the shared
+    // preferences, the shot list (fresh install or update) and isDemo (status).
+    {
+      name: 'popups', requires: ['ui prefs', 'shots', 'status'], after: ['setup wizard'],
+      run: () => { startPopups(() => { applyServerUiPrefs(false, true); }); },
     },
   ]);
 }

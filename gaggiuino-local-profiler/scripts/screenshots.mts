@@ -248,6 +248,13 @@ async function main(): Promise<void> {
     if (fromBackup) {
         const result = await restoreBackup(baseUrl, path.resolve(backupPath));
         console.log(`Restored backup ${backupPath ?? ''} (${result.shots ?? 0} shots)`);
+        // A restored backup is not demo mode, so the update popup would cover the shots.
+        const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken: string };
+        await fetch(`${baseUrl}/api/ui-prefs`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'x-glp-token': apiToken },
+            body: JSON.stringify({ popups: { enabled: false } }),
+        });
     } else {
         await seed(baseUrl);
     }
