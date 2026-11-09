@@ -21,7 +21,7 @@ vi.mock('../public-src/components/sidebar.js', () => ({
 
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
-const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
+const fetchSpy = vi.spyOn(apiModule, 'apiFetch').mockResolvedValue({ ok: false } as Response);
 const {
   _renderTasteTagPills,
   selectTasteTag,
@@ -87,7 +87,7 @@ function saveWith(annotation: Record<string, unknown> | null): Promise<void> {
 beforeEach(() => {
   vi.useFakeTimers();
   delete (g.window as { updateView?: () => void }).updateView;
-  fetchSpy.mockReset();
+  fetchSpy.mockClear();
   fetchSpy.mockResolvedValue({ ok: false } as Response);
   S.shots = [{ id: 1, timestamp: 1700000000, annotation: {} }];
   S.primaryShotId = 1;
