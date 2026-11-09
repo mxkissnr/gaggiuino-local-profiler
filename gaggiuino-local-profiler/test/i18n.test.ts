@@ -48,6 +48,8 @@ const NEW_KEYS = [
     // #1923: the maintenance page's own wording — the all-good verdict
     // sentence and the tasks section heading.
     'maint_verdict_ok', 'maint_tasks_title',
+    // #1955: the task sheet's pause/resume toggle and the paused row label.
+    'maint_paused', 'maint_pause_btn', 'maint_resume_btn',
 ];
 
 describe('i18n language files', () => {
