@@ -22,7 +22,7 @@ import { safeLocalStorage } from '../storage.js';
 import { beanLabel } from '../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../shared/bean-mix.js';
 import { defaultGrinderName, suggestGrindDoseForBean } from './shots/grind.js';
-import { checkGrindField, getGrindFieldValue as _grindFieldValue, grindSelectId,
+import { checkGrindField, getGrindFieldValue as grindFieldValue, grindSelectId,
          refreshGrindField, renderGrindField, tidyGrindField } from './shots/grind-field.js';
 
 // GET /api/live/data (and the SSE live-snapshot passthrough) — the fields this
@@ -231,13 +231,13 @@ export function renderLiveShotSetupPanel(): void {
   document.getElementById('lsGrindSetting')?.addEventListener('input', () => {
     checkGrindField('lsGrindSetting');
     const d = _loadLiveSetupDraft();
-    d.grindSetting = _grindFieldValue('lsGrindSetting');
+    d.grindSetting = grindFieldValue('lsGrindSetting');
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsGrindSetting')?.addEventListener('blur', () => tidyGrindField('lsGrindSetting'));
   document.getElementById(grindSelectId('lsGrindSetting'))?.addEventListener('change', () => {
     const d = _loadLiveSetupDraft();
-    d.grindSetting = _grindFieldValue('lsGrindSetting');
+    d.grindSetting = grindFieldValue('lsGrindSetting');
     _saveLiveSetupDraft(d);
   });
   document.getElementById('lsDose')?.addEventListener('input', () => {
