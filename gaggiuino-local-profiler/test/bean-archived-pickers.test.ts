@@ -156,13 +156,15 @@ describe('renderShotDefaultsSettingsCard — archived beans (#1958)', () => {
     installShotDefaultsDom();
     // No grinder in the library and no saved grinder name, so the #1954
     // migration never fires a write here.
+    // With both required collections present the literal is already a
+    // CoffeeLibrary (beans/grinders are Record<string, unknown>[]), so no cast.
     S.coffeeLibrary = {
       beans: [
         { id: 1, name: 'Fresh Bean' },
         { id: 2, name: 'Archived Bean', enabled: false },
       ],
       grinders: [],
-    } as unknown as typeof S.coffeeLibrary;
+    };
     S.shotDefaults = { drinkType: 'espresso', coffee: 'Fresh Bean', beanId: 1 };
   });
 
@@ -216,7 +218,7 @@ describe('dialinConfirmShot — reloads bean stock after an annotation save (#19
     mocks.loadLibrary.mockReset();
     S.coffeeLibrary = { beans: [{ id: 2, name: 'Archived Bean', enabled: false }] } as unknown as typeof S.coffeeLibrary;
     S.dialinSession = dialinSession();
-    S.shots = [dialinShot()] as unknown as typeof S.shots;
+    S.shots = [dialinShot()];
   });
 
   afterEach(() => {
