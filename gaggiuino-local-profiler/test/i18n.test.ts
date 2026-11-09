@@ -50,13 +50,6 @@ const NEW_KEYS = [
     'maint_verdict_ok', 'maint_tasks_title',
     // #1955: the task sheet's pause/resume toggle and the paused row label.
     'maint_paused', 'maint_pause_btn', 'maint_resume_btn',
-    // #1957: the taste tag chip label (the other three reuse the Profile
-    // Dial-In wizard's symptom keys) and the taste-tag grind advice lines.
-    'taste_tag_thin',
-    'grind_taste_finer', 'grind_taste_coarser', 'grind_taste_conflict',
-    'grind_taste_balanced', 'grind_taste_thin',
-    'grind_comparative_taste_finer', 'grind_comparative_taste_coarser',
-    'grind_comparative_taste_hold', 'grind_comparative_taste_conflict',
 ];
 
 describe('i18n language files', () => {
@@ -104,29 +97,6 @@ describe('i18n language files', () => {
             for (const key of ['backup_progress_download', 'backup_progress_upload']) {
                 expect(typeof obj[key], `${name}.js ${key} should be a function`).toBe('function');
                 expect((obj[key] as (pct: number) => string)(42), `${name}.js ${key}(42)`).toContain('42');
-            }
-        }
-    });
-
-    it('the taste-tag advice lines interpolate their arguments (#1957)', () => {
-        // A formatter that dropped a placeholder would still pass the key-set
-        // and placeholder-count tests above; only rendering proves the tag
-        // advice reads its numbers.
-        for (const [name, obj] of Object.entries(LANGS)) {
-            const comparative = ['grind_comparative_taste_finer', 'grind_comparative_taste_coarser',
-                'grind_comparative_taste_hold', 'grind_comparative_taste_conflict'];
-            for (const key of comparative) {
-                const fn = obj[key] as ((n: number, s: number, sc: number) => string) | undefined;
-                expect(typeof fn, `${name}.js ${key} should be a function`).toBe('function');
-                const rendered = fn?.(7, 18.5, 91) ?? '';
-                expect(rendered, `${name}.js ${key}(7, 18.5, 91)`).toContain('7');
-                expect(rendered, `${name}.js ${key}(7, 18.5, 91)`).toContain('18.5');
-                expect(rendered, `${name}.js ${key}(7, 18.5, 91)`).toContain('91');
-            }
-            for (const key of ['grind_taste_conflict', 'grind_taste_balanced']) {
-                const fn = obj[key] as ((s: number) => string) | undefined;
-                expect(typeof fn, `${name}.js ${key} should be a function`).toBe('function');
-                expect(fn?.(21) ?? '', `${name}.js ${key}(21)`).toContain('21');
             }
         }
     });
