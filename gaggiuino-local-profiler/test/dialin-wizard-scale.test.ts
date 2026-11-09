@@ -34,7 +34,7 @@ interface SessionView {
 // A session already waiting on confirmation of one 20 s shot at 8.3 — a fast
 // shot, so the next suggestion asks finer.
 function startSession(scale: unknown): SessionView {
-  S.coffeeLibrary = { grinders: [{ name: GRINDER, isDefault: true, scale }], beans: [] } as unknown as typeof S.coffeeLibrary;
+  S.coffeeLibrary = { grinders: [{ name: GRINDER, isDefault: true, scale }], beans: [] };
   const session = {
     id: Date.now(),
     startedAt: Date.now(),
@@ -59,8 +59,8 @@ function startSession(scale: unknown): SessionView {
     awaitingShotSince: null,
     status: 'active',
   };
-  S.dialinSession = session as unknown as typeof S.dialinSession;
-  return session as unknown as SessionView;
+  S.dialinSession = session;
+  return session;
 }
 
 describe('dial-in wizard steps on a grinder scale (#1961)', () => {
