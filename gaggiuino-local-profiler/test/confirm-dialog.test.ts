@@ -131,6 +131,14 @@ describe('confirmDialog() (#1962)', () => {
     expect(keyboard.release).toHaveBeenCalledTimes(1);
   });
 
+  it('resolves once, even when two ways out fire together', async () => {
+    const pending = confirmDialog('Delete this?');
+    lastKeyboardCall().onEscape();
+    overlay().fire('click', { target: overlay() });
+    await expect(pending).resolves.toBe(false);
+    expect(keyboard.release).toHaveBeenCalledTimes(1);
+  });
+
   it('resolves false on a backdrop click but stays open on a click inside', async () => {
     const pending = confirmDialog('Delete this?');
     const dialog = overlay();
