@@ -7,7 +7,8 @@ const descriptor = (prop: 'value' | 'disabled'): PropertyDescriptor | undefined 
   proto ? Object.getOwnPropertyDescriptor(proto, prop) : undefined;
 
 export function bindPillSelect(select: HTMLSelectElement | null): void {
-  if (!select || select.dataset.pillsBound) return;
+  // Stub DOMs in other views' tests hand over selects without an option list.
+  if (!select?.options || select.dataset.pillsBound) return;
   select.dataset.pillsBound = '1';
   select.style.display = 'none';
 
