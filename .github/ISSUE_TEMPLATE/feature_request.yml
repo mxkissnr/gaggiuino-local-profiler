@@ -27,3 +27,10 @@ body:
     attributes:
       label: Alternatives considered
       description: Any other approaches you thought about? (optional)
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I plan to open a pull request for this myself
+          required: false
