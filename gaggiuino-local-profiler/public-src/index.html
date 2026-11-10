@@ -916,7 +916,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="basketFormWallType" data-i18n="lib_basket_wall_type">Wandtyp</label>
-                                <select id="basketFormWallType">
+                                <select id="basketFormWallType" data-pills>
                                     <option value="" data-i18n="basket_wall_type_none">– keine Angabe –</option>
                                     <option value="pressurized" data-i18n="basket_wall_type_pressurized">Pressurized</option>
                                     <option value="single-wall" data-i18n="basket_wall_type_single_wall">Single-Wall</option>
@@ -926,7 +926,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="basketFormShape" data-i18n="lib_basket_shape">Form</label>
-                                <select id="basketFormShape">
+                                <select id="basketFormShape" data-pills>
                                     <option value="" data-i18n="basket_shape_none">– keine Angabe –</option>
                                     <option value="straight" data-i18n="basket_shape_straight">Gerade</option>
                                     <option value="tapered" data-i18n="basket_shape_tapered">Konisch</option>
@@ -968,7 +968,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="puckScreenFormThickness" data-i18n="lib_puckscreen_thickness">Dicke</label>
-                                <select id="puckScreenFormThickness">
+                                <select id="puckScreenFormThickness" data-pills>
                                     <option value="" data-i18n="puckscreen_thickness_none">– keine Angabe –</option>
                                     <option value="very-thin" data-i18n="puckscreen_thickness_very_thin">Sehr dünn</option>
                                     <option value="thin" data-i18n="puckscreen_thickness_thin">Dünn</option>
@@ -1433,7 +1433,7 @@
             <h3 style="margin:0;font-size:.95rem;color:var(--gray-200)" data-i18n="dialin_title">Einwählen</h3>
             <div class="dialin-header-actions">
                 <button class="lib-btn-sm" id="startDialinWizardBtn" data-action="start-dialin" data-i18n="dialin_wizard_start_btn">Geführtes Einwählen starten</button>
-                <select id="dialinCount" class="dialin-count-select" aria-label="Shots" data-i18n-aria-label="nav_shots">
+                <select id="dialinCount" class="dialin-count-select" aria-label="Shots" data-i18n-aria-label="nav_shots" data-pills>
                     <option value="3">3 Shots</option>
                     <option value="5" selected>5 Shots</option>
                     <option value="10">10 Shots</option>
@@ -1690,7 +1690,7 @@
             <label for="machineFormName" class="machine-form-label" data-i18n="settings_machine_name">Name</label>
             <input type="text" id="machineFormName" class="machine-form-input">
             <label for="machineFormType" class="machine-form-label" data-i18n="settings_machine_type">Typ</label>
-            <select id="machineFormType" class="machine-form-input">
+            <select id="machineFormType" class="machine-form-input" data-pills>
                 <option value="gaggiuino">Gaggiuino</option>
                 <option value="gaggimate" data-i18n="settings_machine_type_gaggimate">GaggiMate</option>
             </select>
@@ -1706,7 +1706,7 @@
             </div>
             <div id="machineReleaseChannelRow" style="display:none">
                 <label for="machineFormReleaseChannel" class="machine-form-label" data-i18n="settings_machine_release_channel">Release-Kanal</label>
-                <select id="machineFormReleaseChannel" class="machine-form-input">
+                <select id="machineFormReleaseChannel" class="machine-form-input" data-pills>
                     <option value="0" data-i18n="settings_machine_release_channel_stable">Stable</option>
                     <option value="1" data-i18n="settings_machine_release_channel_test">Test</option>
                     <option value="2" data-i18n="settings_machine_release_channel_debug">Debug</option>

@@ -6,13 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Choosing | public-src/index.html | `id="basketFormWallType"` | S3 |
-| Choosing | public-src/index.html | `id="basketFormShape"` | S3 |
-| Choosing | public-src/index.html | `id="puckScreenFormThickness"` | S3 |
-| Choosing | public-src/index.html | `id="dialinCount"` | S3 |
-| Choosing | public-src/index.html | `id="machineFormType"` | S3 |
-| Choosing | public-src/index.html | `id="machineFormReleaseChannel"` | S3 |
-| Choosing | public-src/views/library.ts | `id="libShelfSort"` | S3 |
 | Confirming | public-src/components/machine-backups.ts | `return confirm(` | S4 |
 | Confirming | public-src/components/machine-backups.ts | `confirm(t('mbk_delete_confirm'))` | S4 |
 | Confirming | public-src/components/machine-backups.ts | `confirm(t('mbk_download_secrets_confirm'))` | S4 |

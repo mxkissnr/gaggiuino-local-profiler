@@ -10,6 +10,7 @@ import { loadBeanImageBlobUrl } from '../bean-image.js';
 import { openLightbox } from '../components/lightbox.js';
 import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
 import { getGrinderFieldValue, refreshGrinderField } from './shots/annotation.js';
+import { bindPillSelect } from '../components/pill-select.js';
 import { refreshGrindField } from './shots/grind-field.js';
 import { renderRecipeList } from './library/recipes.js';
 import { renderMilkList } from './library/milk.js';
@@ -156,6 +157,7 @@ function wireShelfToolbar(): void {
   const sort = document.getElementById('libShelfSort') as HTMLSelectElement | null;
   if (sort?.addEventListener) {
     sort.value = prefs.sort;
+    bindPillSelect(sort);
     sort.addEventListener('change', () => {
       prefs.sort = (sort.value as ShelfSort) || 'fresh';
       saveShelfPrefs(prefs);
