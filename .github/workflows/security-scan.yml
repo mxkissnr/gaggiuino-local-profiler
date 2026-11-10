@@ -118,6 +118,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      attestations: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -128,7 +129,7 @@ jobs:
       # The latest published release, not config.yaml: during a release the
       # version on main can be ahead of the published image. A script exit of 1
       # means a verification failed (text goes to findings/attestation.txt);
-      # any other non-zero exit is a crash and fails the job.
+      # any other non-zero exit fails the job without opening an issue.
       - name: Verify attestation of the published images
         env:
           GH_TOKEN: ${{ github.token }}
@@ -139,7 +140,7 @@ jobs:
           rc=0
           .github/scripts/verify-release-images.sh "$tag" > findings/attestation.txt 2>&1 || rc=$?
           cat findings/attestation.txt
-          [ "$rc" -eq 0 ] && rm findings/attestation.txt
+          [ "$rc" -eq 1 ] || rm -f findings/attestation.txt
           [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || exit "$rc"
 
       - name: Upload findings
