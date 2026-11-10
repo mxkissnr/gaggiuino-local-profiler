@@ -4,16 +4,6 @@
       "count": 5
     }
   },
-  "public-src/components/machine-backups.ts": {
-    "local/no-native-dialog": {
-      "count": 3
-    }
-  },
-  "public-src/components/machines-settings.ts": {
-    "local/no-native-dialog": {
-      "count": 1
-    }
-  },
   "public-src/views/library-profile-editor.ts": {
     "local/no-native-dialog": {
       "count": 2

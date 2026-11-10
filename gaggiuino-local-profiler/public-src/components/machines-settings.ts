@@ -16,6 +16,7 @@ import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-pre
 import { migrateLegacyAccent } from '../theme.js';
 import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
+import { confirmDialog } from './confirm-dialog.js';
 import { confirmUpdateWithoutBackup, machineBackupsButtonHtml, openMachineBackups } from './machine-backups.js';
 import { esc as escapeHtml, html, joinHtml, safeHttpUrl } from '../utils.js';
 import type { Html } from '../utils.js';
@@ -260,6 +261,8 @@ export function applyActiveMachineAccentTheme(): void {
 }
 
 export async function loadMachines(): Promise<void> {
+  const list = document.getElementById('machinesList');
+  if (list && list.innerHTML === '') list.innerHTML = html`<div class="loading-state">${tHtml('please_wait')}</div>`;
   try {
     const machines = await machinesApi.listMachines();
     if (!machines) return;
@@ -302,7 +305,9 @@ export async function loadMachines(): Promise<void> {
     // a no-op for single-machine installs and for the case where loadData()
     // simply hasn't run yet (S.allShots still empty).
     applyActiveMachineChange();
-  } catch { /* offline/first-run — settings card just stays empty */ }
+  } catch {
+    if (list) list.innerHTML = html`<div class="loading-state" style="color:var(--err)">${tHtml('error_load')}</div>`;
+  }
 }
 
 // Topbar switcher (#325) — only shown once >1 machine is registered, so a
@@ -810,7 +815,7 @@ export async function triggerMachineFirmwareUpdate(machineId: number, row: HTMLE
       // the user's explicit yes in the confirm dialog resends without one.
       if (data.code === 'pre_update_backup_failed' && !skipBackup) {
         setFirmwareUpdateBusy(row, false);
-        if (confirmUpdateWithoutBackup()) await triggerMachineFirmwareUpdate(machineId, row, true);
+        if (await confirmUpdateWithoutBackup()) await triggerMachineFirmwareUpdate(machineId, row, true);
         return;
       }
       if (window.showToast) window.showToast(t('settings_machine_firmware_trigger_failed', data.error || r.status));
@@ -1100,7 +1105,7 @@ export async function setDefaultMachine(id: number): Promise<void> {
 // toast pattern in components/status.ts.
 export async function deleteMachine(id: number, isDefault?: boolean): Promise<void> {
   const confirmKey = isDefault ? 'settings_machine_delete_default_confirm' : 'settings_machine_delete_confirm';
-  if (!confirm(t(confirmKey))) return;
+  if (!await confirmDialog(t(confirmKey), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await machinesApi.deleteMachine(id);
   if (r.ok) { void loadMachines(); return; }
   const body = await r.json().catch(() => ({})) as { error?: string };
