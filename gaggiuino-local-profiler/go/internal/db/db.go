@@ -96,6 +96,10 @@ func Open(path string) (*sql.DB, error) {
 		sqlDB.Close()
 		return nil, err
 	}
+	if err := BackfillShotProfileNames(sqlDB); err != nil {
+		sqlDB.Close()
+		return nil, err
+	}
 	if _, err := EnsureInstallID(sqlDB); err != nil {
 		sqlDB.Close()
 		return nil, err
@@ -538,6 +542,27 @@ func MigrateMachineWaterSensor(sqlDB *sql.DB) error {
 	}
 	if _, err := sqlDB.Exec(`ALTER TABLE machines ADD COLUMN has_water_sensor INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return fmt.Errorf("db: adding has_water_sensor column to machines: %w", err)
+	}
+	return nil
+}
+
+// BackfillShotProfileNames fills shots.profile_name from the stored shot
+// payload's profile.name for rows that have none (#1989). The Gaggiuino
+// history sync stored those shots before shotInsertArgs learned to read
+// profile.name, so the column-based lookups (FindPreviousByProfile, the
+// comparative candidates) and the MCP tools never saw their profile. Only
+// NULL or empty names are touched and a non-text or empty profile.name is
+// left alone, so re-running it on every start is a no-op.
+func BackfillShotProfileNames(sqlDB *sql.DB) error {
+	if _, err := sqlDB.Exec(`
+		UPDATE shots
+		   SET profile_name = json_extract(data, '$.profile.name')
+		 WHERE (profile_name IS NULL OR profile_name = '')
+		   AND json_valid(data)
+		   AND json_type(data, '$.profile.name') = 'text'
+		   AND json_extract(data, '$.profile.name') <> ''
+	`); err != nil {
+		return fmt.Errorf("db: backfilling shots.profile_name: %w", err)
 	}
 	return nil
 }

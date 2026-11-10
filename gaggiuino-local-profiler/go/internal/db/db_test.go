@@ -271,3 +271,57 @@ func TestFixSchema_RecreatesIntegerOrdersTable(t *testing.T) {
 		t.Fatalf("expected FixSchema to leave a TEXT-pk orders table's data alone, got %d rows", n)
 	}
 }
+
+// TestBackfillShotProfileNames fills profile_name from data.profile.name for
+// Gaggiuino history shots stored without one (#1989), and leaves every other
+// row alone.
+func TestBackfillShotProfileNames(t *testing.T) {
+	sqlDB, err := Open(filepath.Join(t.TempDir(), "glp.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+
+	rows := []struct {
+		id          int64
+		profileName any
+		data        string
+	}{
+		{1, nil, `{"profile":{"name":"IUIUIU Classic"}}`}, // synced, no column value
+		{2, "", `{"profile":{"name":"Londinium"}}`},       // empty column value
+		{3, "Live name", `{"profile":{"name":"Other"}}`},  // already set: untouched
+		{4, nil, `{"datapoints":{}}`},                     // no profile: stays NULL
+		{5, nil, `{"profile":{"name":""}}`},               // empty name: stays NULL
+		{6, nil, `{"profile":{"name":42}}`},               // not text: stays NULL
+	}
+	for _, r := range rows {
+		if _, err := sqlDB.Exec(`INSERT INTO shots (id, timestamp, profile_name, data) VALUES (?, ?, ?, ?)`,
+			r.id, r.id*1000, r.profileName, r.data); err != nil {
+			t.Fatalf("seeding shot %d: %v", r.id, err)
+		}
+	}
+
+	for run := 1; run <= 2; run++ { // second run must be a no-op
+		if err := BackfillShotProfileNames(sqlDB); err != nil {
+			t.Fatalf("BackfillShotProfileNames run %d: %v", run, err)
+		}
+	}
+
+	want := map[int64]sql.NullString{
+		1: {String: "IUIUIU Classic", Valid: true},
+		2: {String: "Londinium", Valid: true},
+		3: {String: "Live name", Valid: true},
+		4: {},
+		5: {},
+		6: {},
+	}
+	for id, w := range want {
+		var got sql.NullString
+		if err := sqlDB.QueryRow(`SELECT profile_name FROM shots WHERE id = ?`, id).Scan(&got); err != nil {
+			t.Fatalf("reading shot %d: %v", id, err)
+		}
+		if got != w {
+			t.Errorf("shot %d profile_name = %+v, want %+v", id, got, w)
+		}
+	}
+}
