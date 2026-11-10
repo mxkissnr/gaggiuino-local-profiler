@@ -39,7 +39,6 @@ interface KeyboardCall {
 const keyboard = vi.hoisted(() => ({
   calls: [] as KeyboardCall[],
   release: vi.fn(),
-  labels: { maint_ok: 'OK', lib_cancel: 'Cancel' } as Record<string, string>,
 }));
 
 vi.mock('../public-src/components/dialog-a11y.js', () => ({
@@ -49,8 +48,12 @@ vi.mock('../public-src/components/dialog-a11y.js', () => ({
   },
 }));
 
+// The two labels the dialog reads; anything else falls back to its key. The
+// `mock` prefix is vitest's marker for a variable its hoisted factory may read.
+const mockLabels: Record<string, string> = { maint_ok: 'OK', lib_cancel: 'Cancel' };
+
 vi.mock('../public-src/i18n.js', () => ({
-  t: (key: string): string => keyboard.labels[key] ?? key,
+  t: (key: string): string => mockLabels[key] ?? key,
 }));
 
 const { confirmDialog } = await import('../public-src/components/confirm-dialog.js');
