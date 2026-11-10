@@ -25,6 +25,7 @@ import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.
 import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
 import { showToast }                                          from '../../components/toast.js';
+import { confirmDialog }                                      from '../../components/confirm-dialog.js';
 import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
 import { beanLabel }                                          from '../../shared/bean-mix.js';
@@ -441,7 +442,7 @@ export async function loadTrashData(): Promise<void> {
     if (page.error != null) return;
     S.trashedShots = page.shots || [];
     renderTrash();
-  } catch { /* ignore */ }
+  } catch (e) { showToast(t('error_generic', (e as Error).message)); }
 }
 
 export function renderTrash(): void {
@@ -517,7 +518,7 @@ export async function trashShot(id: number): Promise<void> {
     }
     await loadTrashData();
   } catch (e) {
-    alert(t('error_generic', (e as Error).message));
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 
@@ -558,12 +559,12 @@ export async function restoreShot(id: number): Promise<void> {
     if (!r.ok) throw new Error(await r.text());
     await loadData();
   } catch (e) {
-    alert(t('error_generic', (e as Error).message));
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 
 export async function permanentDeleteShot(id: number): Promise<void> {
-  if (!confirm(t('confirm_perm_delete', id))) return;
+  if (!await confirmDialog(t('confirm_perm_delete', id), { confirmLabel: t('lib_btn_delete') })) return;
   try {
     const r = await deleteShotPermanently(id);
     if (!r.ok) throw new Error(await r.text());
@@ -571,7 +572,7 @@ export async function permanentDeleteShot(id: number): Promise<void> {
     S.trashedShots = S.trashedShots.filter(s => s.id !== id);
     renderTrash();
   } catch (e) {
-    alert(t('error_generic', (e as Error).message));
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 
