@@ -142,7 +142,7 @@ describe('confirmDialog() (#1962)', () => {
     expect(keyboard.release).toHaveBeenCalledTimes(1);
   });
 
-  it('shows Cancel and OK by default and focuses Cancel', async () => {
+  it('shows Cancel and OK by default and focuses Cancel', () => {
     void confirmDialog('Delete this?');
     expect(buttons()).toHaveLength(2);
     expect(cancelButton().textContent).toBe('Cancel');
@@ -157,7 +157,7 @@ describe('confirmDialog() (#1962)', () => {
     await expect(pending).resolves.toBe(true);
   });
 
-  it('sets the message as text, never as markup', async () => {
+  it('sets the message as text, never as markup', () => {
     void confirmDialog('Server said <img src=x onerror=alert(1)>');
     expect(text().textContent).toBe('Server said <img src=x onerror=alert(1)>');
     expect(doc.created).not.toContain('img');

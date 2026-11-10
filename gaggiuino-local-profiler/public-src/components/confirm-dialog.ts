@@ -28,10 +28,10 @@ export function confirmDialog(message: string, opts: ConfirmDialogOptions = {}):
 
     const actions = document.createElement('div');
     actions.className = 'lib-form-actions';
-    const confirm = document.createElement('button');
-    confirm.type = 'button';
-    confirm.className = 'lib-save-btn';
-    confirm.textContent = opts.confirmLabel ?? t('maint_ok');
+    const accept = document.createElement('button');
+    accept.type = 'button';
+    accept.className = 'lib-save-btn';
+    accept.textContent = opts.confirmLabel ?? t('maint_ok');
 
     let cancel: HTMLButtonElement | null = null;
     if (!opts.acknowledgeOnly) {
@@ -41,20 +41,26 @@ export function confirmDialog(message: string, opts: ConfirmDialogOptions = {}):
       cancel.textContent = t('lib_cancel');
       actions.appendChild(cancel);
     }
-    actions.appendChild(confirm);
+    actions.appendChild(accept);
     box.appendChild(text);
     box.appendChild(actions);
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
+    // Escape and a backdrop click mean "no" everywhere except an acknowledgement,
+    // which has no "no": closing it is the only way to continue.
+    const dismissed = opts.acknowledgeOnly === true;
+    let settled = false;
     const finish = (result: boolean): void => {
+      if (settled) return;
+      settled = true;
       keyboard.release();
       overlay.remove();
       resolve(result);
     };
-    const keyboard = attachDialogKeyboard(overlay, () => { finish(opts.acknowledgeOnly === true); }, { initialFocus: cancel ?? confirm });
-    confirm.addEventListener('click', () => { finish(true); });
+    const keyboard = attachDialogKeyboard(overlay, () => { finish(dismissed); }, { initialFocus: cancel ?? accept });
+    accept.addEventListener('click', () => { finish(true); });
     cancel?.addEventListener('click', () => { finish(false); });
-    overlay.addEventListener('click', e => { if (e.target === overlay) finish(opts.acknowledgeOnly === true); });
+    overlay.addEventListener('click', e => { if (e.target === overlay) finish(dismissed); });
   });
 }
