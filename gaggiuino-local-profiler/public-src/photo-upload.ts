@@ -13,6 +13,7 @@ import type { ImageCrop } from './api/types.js';
 import { t } from './i18n.js';
 import { openCropEditor, cropQuery, isValidCrop } from './components/image-crop.js';
 import type { CropEditorOptions, CropEditorResult } from './components/image-crop.js';
+import { showToast } from './components/toast.js';
 
 /** The crop-editor settings a photo field picks, e.g. `{ shape: 'square' }`. */
 export type PhotoCropShape = Pick<CropEditorOptions, 'shape' | 'aspect'>;
@@ -124,6 +125,6 @@ export async function adjustPhoto(
 export async function savedPhotoRow<T>(r: Response): Promise<T | null> {
   if (r.ok) return (await r.json()) as T;
   const { error } = (await r.json().catch(() => ({}))) as { error?: string };
-  alert(t('error_generic', error || r.statusText));
+  showToast(t('error_generic', error || r.statusText));
   return null;
 }
