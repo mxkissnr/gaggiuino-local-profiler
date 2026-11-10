@@ -313,11 +313,17 @@ describe('machine backup restore (#1878 U2)', () => {
     expect(api.saveSettings.mock.calls[1]).toEqual([{ machineId: 1, schedule: 'weekly', keepAutomatic: 5 }]);
     expect(el.innerHTML).toContain('GLP keeps the last 5 automatic backups.');
     const calls = api.saveSettings.mock.calls.length;
+    const kept = toast.show.mock.calls.length;
     for (const bad of ['0', '101', '2.5', 'abc', '']) {
       change('mbk-keep', bad);
       await settle();
-      expect(toast.show).toHaveBeenLastCalledWith('Enter a number from 1 to 100.');
+      // #1962: the error sits at the field, so no toast is added.
+      expect(el.innerHTML).toContain('<div class="bf-error" role="alert">Enter a number from 1 to 100.</div>');
+      expect(toast.show.mock.calls.length).toBe(kept);
     }
+    change('mbk-keep', '5');
+    await settle();
+    expect(el.innerHTML).not.toContain('class="bf-error"');
     change('mbk-schedule', 'hourly');
     await settle();
     expect(api.saveSettings.mock.calls.length).toBe(calls);

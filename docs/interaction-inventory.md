@@ -6,14 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Confirming | public-src/components/machine-backups.ts | `return confirm(` | S4 |
-| Confirming | public-src/components/machine-backups.ts | `confirm(t('mbk_delete_confirm'))` | S4 |
-| Confirming | public-src/components/machine-backups.ts | `confirm(t('mbk_download_secrets_confirm'))` | S4 |
-| Confirming | public-src/components/machines-settings.ts | `confirm(t(confirmKey))` | S4 |
-| Errors | public-src/components/machine-backups.ts | `showToast(t('mbk_keep_range'))` | S4 |
-| Choosing | public-src/components/machine-backups.ts | `mbk-select mbk-schedule` | S4 |
-| Dates | public-src/components/machine-backups.ts | `new Intl.DateTimeFormat(locale, { dateStyle:` | S4 |
-| States | public-src/components/machines-settings.ts | `settings card just stays empty` | S4 |
 | Confirming | public-src/components/backup-modal.ts | `alert(t('backup_invalid'))` | S5 |
 | Confirming | public-src/components/backup-modal.ts | `alert(t('backup_error', (e as Error).message))` | S5 |
 | Confirming | public-src/components/backup-modal.ts | `alert(t('backup_invalid'))` | S5 |

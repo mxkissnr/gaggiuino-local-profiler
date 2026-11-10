@@ -562,9 +562,23 @@ export function isoToGerman(iso: string | null | undefined): string {
   return `${dd}.${mm}.${yy}`;
 }
 
+export type DateForm = 'short' | 'long';
+
+const DATE_FORMS: Record<DateForm, Intl.DateTimeFormatOptions> = {
+  short: { day: '2-digit', month: '2-digit', year: 'numeric' },
+  long: { day: 'numeric', month: 'long', year: 'numeric' },
+};
+
+/** The one date format for display (#1962, docs/DESIGN.md "Dates"). */
+export function formatDate(value: number | Date, locale: string, form: DateForm = 'short', withTime = false): string {
+  const d = new Date(value);
+  const date = d.toLocaleDateString(locale, DATE_FORMS[form]);
+  return withTime ? `${date} ${d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}` : date;
+}
+
 /** Locale-aware short date for a Unix-ms timestamp (#1351 coffee-history tiles). */
 export function formatDayLabel(ms: number, locale: string): string {
-  return new Date(ms).toLocaleDateString(locale);
+  return formatDate(ms, locale);
 }
 
 export function germanToIso(s: string | null | undefined): string | null {
