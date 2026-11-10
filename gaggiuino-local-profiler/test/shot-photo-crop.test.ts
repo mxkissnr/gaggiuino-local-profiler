@@ -11,8 +11,6 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 g.window ??= {};
-const alertMock = vi.fn<(msg: string) => void>();
-g.alert = alertMock;
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(),
@@ -21,7 +19,11 @@ const mocks = vi.hoisted(() => ({
   loadShotImageBlobUrl: vi.fn<(id: number) => Promise<string | null>>(),
   renderSidebar: vi.fn(),
   updateSidebarHighlighting: vi.fn(),
+  showToast: vi.fn<(msg: string) => void>(),
 }));
+
+// #1962: a failed upload reports through the app toast, not native alert().
+vi.mock('../public-src/components/toast.js', () => ({ showToast: mocks.showToast }));
 
 vi.mock('../public-src/api/transport.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/transport.js')>();
@@ -135,7 +137,7 @@ beforeEach(() => {
   mocks.loadShotImageBlobUrl.mockReset();
   mocks.renderSidebar.mockReset();
   mocks.updateSidebarHighlighting.mockReset();
-  alertMock.mockReset();
+  mocks.showToast.mockReset();
   mocks.loadShotImageBlobUrl.mockResolvedValue(null);
   S.allShots = [{ id: 7, timestamp: 1000 }];
   S.shots = S.allShots;
@@ -184,7 +186,7 @@ describe('shot photo upload keeps the original (#1845)', () => {
     expect('imageCrop' in row()).toBe(false);
   });
 
-  it('alerts and keeps the row when the upload fails', async () => {
+  it('shows a toast and keeps the row when the upload fails', async () => {
     mocks.openCropEditor.mockResolvedValue({ blob: cropped, crop: CROP, original });
     mocks.apiFetch.mockResolvedValueOnce(json({ error: 'unsupported image' }, 400));
 
@@ -192,7 +194,7 @@ describe('shot photo upload keeps the original (#1845)', () => {
     await uploadShotImage(input);
 
     expect(calls()).toHaveLength(1);
-    expect(alertMock).toHaveBeenCalledWith(t('error_generic', 'unsupported image'));
+    expect(mocks.showToast).toHaveBeenCalledWith(t('error_generic', 'unsupported image'));
     expect('image' in row()).toBe(false);
     expect('imageCrop' in row()).toBe(false);
     expect(mocks.invalidateShotImage).not.toHaveBeenCalled();

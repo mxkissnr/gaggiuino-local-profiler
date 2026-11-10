@@ -8,13 +8,15 @@ import type { CropEditorOptions, CropEditorResult } from '../public-src/componen
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
-const alertMock = vi.fn<(msg: string) => void>();
-g.alert = alertMock;
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn<(url: string, opts?: RequestInit) => Promise<Response>>(),
   openCropEditor: vi.fn<(file: Blob, opts?: CropEditorOptions) => Promise<CropEditorResult | null>>(),
+  showToast: vi.fn<(msg: string) => void>(),
 }));
+
+// #1962: a failed upload reports through the app toast, not native alert().
+vi.mock('../public-src/components/toast.js', () => ({ showToast: mocks.showToast }));
 
 vi.mock('../public-src/api/transport.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/transport.js')>();
@@ -64,7 +66,7 @@ const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 beforeEach(() => {
   mocks.apiFetch.mockReset();
   mocks.openCropEditor.mockReset();
-  alertMock.mockReset();
+  mocks.showToast.mockReset();
   warn.mockClear();
 });
 
@@ -259,13 +261,13 @@ describe('savedPhotoRow', () => {
   it('parses the entity JSON of a successful response', async () => {
     expect(await savedPhotoRow<{ id: number; name: string }>(json({ id: 7, name: 'Niche' })))
       .toEqual({ id: 7, name: 'Niche' });
-    expect(alertMock).not.toHaveBeenCalled();
+    expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
-  it('alerts the server error and resolves null on a failure', async () => {
+  it('shows the server error in a toast and resolves null on a failure', async () => {
     expect(await savedPhotoRow(json({ error: 'no original' }, 409))).toBeNull();
-    expect(alertMock).toHaveBeenCalledTimes(1);
-    expect(String(alertMock.mock.calls[0]?.[0])).toContain('no original');
+    expect(mocks.showToast).toHaveBeenCalledTimes(1);
+    expect(String(mocks.showToast.mock.calls[0]?.[0])).toContain('no original');
   });
 });
 

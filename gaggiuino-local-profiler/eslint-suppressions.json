@@ -14,21 +14,6 @@
       "count": 1
     }
   },
-  "public-src/components/onboarding.ts": {
-    "local/no-native-dialog": {
-      "count": 1
-    }
-  },
-  "public-src/components/status.ts": {
-    "local/no-native-dialog": {
-      "count": 4
-    }
-  },
-  "public-src/photo-upload.ts": {
-    "local/no-native-dialog": {
-      "count": 1
-    }
-  },
   "public-src/views/library-profile-editor.ts": {
     "local/no-native-dialog": {
       "count": 2

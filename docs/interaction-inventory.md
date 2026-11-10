@@ -6,13 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Confirming | public-src/components/onboarding.ts | `confirm(t('demo_mode_end_confirm'))` | S2 |
-| Confirming | public-src/components/status.ts | `confirm(t('settings_devtools_import_db_confirm'))` | S2 |
-| Confirming | public-src/components/status.ts | `alert(body.error` | S2 |
-| Confirming | public-src/components/status.ts | `alert(t('settings_devtools_import_db_done'))` | S2 |
-| Confirming | public-src/components/status.ts | `alert(t('settings_devtools_import_db_failed'))` | S2 |
-| Confirming | public-src/photo-upload.ts | `alert(t('error_generic', error` | S2 |
-| Errors | public-src/components/onboarding.ts | `catch { /* ignore */ }` | S2 |
 | Choosing | public-src/index.html | `id="basketFormWallType"` | S3 |
 | Choosing | public-src/index.html | `id="basketFormShape"` | S3 |
 | Choosing | public-src/index.html | `id="puckScreenFormThickness"` | S3 |
