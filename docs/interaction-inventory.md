@@ -6,19 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Confirming | public-src/components/backup-modal.ts | `alert(t('backup_invalid'))` | S5 |
-| Confirming | public-src/components/backup-modal.ts | `alert(t('backup_error', (e as Error).message))` | S5 |
-| Confirming | public-src/components/backup-modal.ts | `alert(t('backup_invalid'))` | S5 |
-| Confirming | public-src/components/backup-modal.ts | `alert(t('backup_error', (e as Error).message))` | S5 |
-| Confirming | public-src/components/backup-modal.ts | `alert(res.imagesFailed && res.imagesFailed > 0` | S5 |
-| Confirming | public-src/views/shots/export.ts | `alert(t('profile_export_no_data'))` | S5 |
-| Confirming | public-src/views/shots/export.ts | `alert(t('error_generic', (e as Error).message))` | S5 |
-| Confirming | public-src/views/shots/index.ts | `alert(t('error_generic', (e as Error).message))` | S5 |
-| Confirming | public-src/views/shots/index.ts | `alert(t('error_generic', (e as Error).message))` | S5 |
-| Confirming | public-src/views/shots/index.ts | `confirm(t('confirm_perm_delete', id))` | S5 |
-| Confirming | public-src/views/shots/index.ts | `alert(t('error_generic', (e as Error).message))` | S5 |
-| Errors | public-src/views/shots/index.ts | `catch { /* ignore */ }` | S5 |
-| Dates | public-src/views/shots/export.ts | `.toLocaleString(localeFor(S.currentLang));` | S5 |
 | Confirming | public-src/views/library/import.ts | `alert(t('lib_url_unsupported'))` | S6 |
 | Confirming | public-src/views/library/import.ts | `alert(t('lib_url_error'))` | S6 |
 | Confirming | public-src/views/library/import.ts | `alert(t('lib_url_error'))` | S6 |

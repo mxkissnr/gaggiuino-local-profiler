@@ -1,9 +1,4 @@
 {
-  "public-src/components/backup-modal.ts": {
-    "local/no-native-dialog": {
-      "count": 5
-    }
-  },
   "public-src/views/library-profile-editor.ts": {
     "local/no-native-dialog": {
       "count": 2
@@ -62,16 +57,6 @@
   "public-src/views/orders.ts": {
     "local/no-native-dialog": {
       "count": 3
-    }
-  },
-  "public-src/views/shots/export.ts": {
-    "local/no-native-dialog": {
-      "count": 2
-    }
-  },
-  "public-src/views/shots/index.ts": {
-    "local/no-native-dialog": {
-      "count": 4
     }
   }
 }

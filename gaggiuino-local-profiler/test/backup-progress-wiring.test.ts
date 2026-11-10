@@ -119,10 +119,7 @@ let doc: FakeDoc = makeDocument();
 g.document = doc;
 g.window = g;
 const showToast = vi.fn();
-const alertSpy = vi.fn();
 g.showToast = showToast;
-g.alert = alertSpy;
-g.confirm = vi.fn(() => true);
 g.location = { reload: vi.fn() };
 
 const { openBackupExportModal, openBackupRestoreModal } = await import('../public-src/components/backup-modal.js');
@@ -144,7 +141,6 @@ beforeEach(() => {
   transport.apiFetchToBlob.mockReset();
   transport.apiUpload.mockReset();
   showToast.mockReset();
-  alertSpy.mockReset();
   dialogs.confirm.mockClear();
   dialogs.toast.mockReset();
   freshDoc();
