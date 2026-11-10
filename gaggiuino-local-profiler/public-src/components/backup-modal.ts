@@ -10,6 +10,8 @@ import { requestBackup, postRestore } from '../api/system.js';
 import { esc, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
 import type { Html } from '../utils.js';
 import { attachDialogKeyboard } from './dialog-a11y.js';
+import { showToast } from './toast.js';
+import { confirmDialog } from './confirm-dialog.js';
 import type { DialogKeyboardHandle } from './dialog-a11y.js';
 
 const SECTION_KEYS = ['shots', 'maintenance', 'orders', 'machines', 'settings', 'secrets'];
@@ -373,14 +375,14 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
             const r = await postRestore({ bundle: restoreBundle ?? undefined, zipBytes: restoreZipBytes, sections: undefined, passphrase: undefined, dryRun: true });
             const body = await r.json() as { preview?: BackupPreview };
             if (!r.ok || !body.preview) {
-                alert(t('backup_invalid'));
+                showToast(t('backup_invalid'));
                 restoreZipBytes = null;
                 input.value = '';
                 return;
             }
             present = new Set(body.preview.sectionsPresent ?? []);
         } catch (e) {
-            alert(t('backup_error', (e as Error).message));
+            showToast(t('backup_error', (e as Error).message));
             restoreZipBytes = null;
             input.value = '';
             return;
@@ -389,7 +391,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
         try {
             const bundle = JSON.parse(new TextDecoder('utf-8').decode(bytes)) as Record<string, unknown>;
             if (!bundle.glp_backup) {
-                alert(t('backup_invalid'));
+                showToast(t('backup_invalid'));
                 input.value = '';
                 return;
             }
@@ -397,7 +399,7 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
             restoreZipBytes = null;
             present = new Set(SECTION_KEYS.filter(key => (SECTION_PRESENCE_KEYS[key] ?? []).some(k => k in bundle)));
         } catch (e) {
-            alert(t('backup_error', (e as Error).message));
+            showToast(t('backup_error', (e as Error).message));
             input.value = '';
             return;
         }
@@ -459,9 +461,12 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
                 : t('backup_restored', res.shots);
             // #1602: the server counted the photos it could not write; say so
             // instead of letting the restore look complete.
-            alert(res.imagesFailed && res.imagesFailed > 0
-                ? `${restoredMsg}\n${t('backup_restored_images_failed', res.imagesFailed)}`
-                : restoredMsg);
+            await confirmDialog(
+                res.imagesFailed && res.imagesFailed > 0
+                    ? `${restoredMsg}\n${t('backup_restored_images_failed', res.imagesFailed)}`
+                    : restoredMsg,
+                { acknowledgeOnly: true },
+            );
             // #684: a restore can touch library/machines/settings/menu/etc,
             // not just shots -- window.loadData() only ever refreshed shots,
             // leaving everything else stale until a manual reload. A full

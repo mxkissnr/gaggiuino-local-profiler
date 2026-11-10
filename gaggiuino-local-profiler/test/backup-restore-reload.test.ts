@@ -1,10 +1,10 @@
 // #684: after a successful restore, the app used to only refresh shots
-// (window.loadData()) before showing the result alert -- restored
+// (window.loadData()) before showing the result message -- restored
 // library/machines/settings/menu/etc. stayed stale until a manual reload.
 //
 // This drives the real restore confirm handler through a fake DOM (the same
 // harness test/backup-modal-preview.test.ts uses) with a mocked successful
-// postRestore, and records the order of the result alert and location.reload()
+// postRestore, and records the order of the result dialog and location.reload()
 // instead of grepping backup-modal.ts for the two calls.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -12,8 +12,13 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 
-const mocks = vi.hoisted(() => ({ postRestore: vi.fn() }));
+const mocks = vi.hoisted(() => ({ postRestore: vi.fn(), confirmDialog: vi.fn() }));
 vi.mock('../public-src/api/system.js', () => ({ requestBackup: vi.fn(), postRestore: mocks.postRestore }));
+// The restore result is shown in the app's acknowledge-only dialog (#1962),
+// not a browser alert; the mock records when it was shown and how it ended.
+vi.mock('../public-src/components/confirm-dialog.js', () => ({
+  confirmDialog: mocks.confirmDialog,
+}));
 
 interface FakeDoc {
   els: Record<string, FakeEl>;
@@ -100,7 +105,6 @@ let alertMsg: unknown;
 
 let doc: FakeDoc = makeDocument();
 g.document = doc;
-g.alert = (msg: unknown): void => { alertMsg = msg; order.push('alert'); };
 g.location = { reload: (): void => { order.push('reload'); } };
 const loadData = vi.fn();
 g.window = { showToast: (): void => {}, loadData };
@@ -112,6 +116,12 @@ beforeEach(() => {
   alertMsg = undefined;
   loadData.mockReset();
   mocks.postRestore.mockReset();
+  mocks.confirmDialog.mockReset();
+  mocks.confirmDialog.mockImplementation((msg: unknown) => {
+    alertMsg = msg;
+    order.push('alert');
+    return Promise.resolve(true);
+  });
   doc = makeDocument();
   g.document = doc;
   const cb = doc.createElement();
@@ -140,7 +150,7 @@ describe('restore confirm handler (#684)', () => {
     expect(order.indexOf('alert')).toBeLessThan(order.indexOf('reload'));
     expect(order).not.toContain('loadData');
     expect(loadData).not.toHaveBeenCalled();
-    // The alert carries the restored-shot-count message, not an empty string.
+    // The dialog carries the restored-shot-count message, not an empty string.
     expect(typeof alertMsg).toBe('string');
     expect(String(alertMsg)).toContain('3');
   });
