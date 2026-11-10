@@ -8,8 +8,10 @@ import { getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold } from '.
 import { setOrdersEnabled, toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify, toggleOrdersKiosk } from '../views/orders.js';
 import { renderDialin } from '../views/dialin.js';
 import { safeLocalStorage } from '../storage.js';
+import { bindPillSelects } from '../components/pill-select.js';
 
 export function wireViews(): void {
+  bindPillSelects();
   document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => { void setOrdersEnabled((e.target as HTMLInputElement).checked); });
   document.getElementById('ordersMenuTitle')!.addEventListener('click', toggleOrdersMenu);
   document.getElementById('ordersStatsTitle')!.addEventListener('click', toggleOrdersStats);
