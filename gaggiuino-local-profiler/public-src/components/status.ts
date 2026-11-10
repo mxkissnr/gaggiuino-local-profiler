@@ -14,6 +14,8 @@ import { updateApiPortClosedBanner } from './api-port-notice.js';
 import { showDevBuildBanner } from './dev-banner.js';
 import { syncTopbarMachineIconFallback } from './topbar-machine-icon.js';
 import { applyDevScoreSettings } from './dev-score-settings.js';
+import { showToast } from './toast.js';
+import { confirmDialog } from './confirm-dialog.js';
 
 // /api/status and /api/switch responses are plain fetch Responses, so their
 // parsed bodies are named here rather than left as `any`.
@@ -305,12 +307,10 @@ export async function exportDevDb(): Promise<void> {
 // export button. The backend swaps the file via a rename rather than an
 // in-place write specifically so the currently-running server keeps serving
 // from its already-open handle untouched -- the import only takes effect
-// after a manual restart of the add-on, which this tells the user about
-// via alert() since there's no toast/notification system wired into this
-// dev-only diagnostic card.
+// after a manual restart of the add-on, which this tells the user about.
 export async function importDevDb(file: File): Promise<void> {
   if (!file) return;
-  if (!confirm(t('settings_devtools_import_db_confirm'))) return;
+  if (!await confirmDialog(t('settings_devtools_import_db_confirm'))) return;
   const input = document.getElementById('devImportDbInput') as HTMLInputElement | null;
   const label = (document.querySelector('#devToolsCard label span[data-i18n="settings_devtools_import_db"]')
     || { textContent: '', disabled: false }) as ProgressButton;
@@ -322,11 +322,11 @@ export async function importDevDb(file: File): Promise<void> {
         : t('backup_progress_upload', Math.floor((sent / total) * 100))));
       let body: { error?: string } = {};
       try { body = JSON.parse(res.text || '{}') as { error?: string }; } catch { /* non-JSON body */ }
-      if (!res.ok) { alert(body.error || t('settings_devtools_import_db_failed')); return; }
-      alert(t('settings_devtools_import_db_done'));
+      if (!res.ok) { showToast(body.error || t('settings_devtools_import_db_failed')); return; }
+      showToast(t('settings_devtools_import_db_done'));
     });
   } catch {
-    alert(t('settings_devtools_import_db_failed'));
+    showToast(t('settings_devtools_import_db_failed'));
   } finally {
     if (input) input.disabled = false;
   }
