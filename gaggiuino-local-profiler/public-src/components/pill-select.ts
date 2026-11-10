@@ -48,23 +48,19 @@ export function bindPillSelect(select: HTMLSelectElement | null): void {
   // `select.disabled = true`); mirroring both accessors repaints the pills
   // without every form-open function having to remember to.
   const valueProp = descriptor('value');
-  const valueGet = valueProp?.get;
-  const valueSet = valueProp?.set;
-  if (valueGet && valueSet) {
+  if (valueProp?.get && valueProp.set) {
     Object.defineProperty(select, 'value', {
       configurable: true,
-      get: (): string => valueGet.call(select) as string,
-      set: (v: string) => { valueSet.call(select, v); paint(); },
+      get: (): string => valueProp.get?.call(select) as string,
+      set: (v: string) => { valueProp.set?.call(select, v); paint(); },
     });
   }
   const disabledProp = descriptor('disabled');
-  const disabledGet = disabledProp?.get;
-  const disabledSet = disabledProp?.set;
-  if (disabledGet && disabledSet) {
+  if (disabledProp?.get && disabledProp.set) {
     Object.defineProperty(select, 'disabled', {
       configurable: true,
-      get: (): boolean => disabledGet.call(select) as boolean,
-      set: (v: boolean) => { disabledSet.call(select, v); paint(); },
+      get: (): boolean => disabledProp.get?.call(select) as boolean,
+      set: (v: boolean) => { disabledProp.set?.call(select, v); paint(); },
     });
   }
   for (const btn of buttons) group.appendChild(btn);
