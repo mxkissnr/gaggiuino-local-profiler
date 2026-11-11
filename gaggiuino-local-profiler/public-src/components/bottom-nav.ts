@@ -321,9 +321,8 @@ export function renderBottomNavSettings(): void {
       renderBottomNavSettings();
     });
     // A row that applies at once is a switch, not a form checkbox (#1962,
-    // docs/DESIGN.md "Switches"). The checkbox is hidden inline because
+    // docs/DESIGN.md "Switches"). The size is inline because
     // .bottom-nav-config-check sizes any checkbox it contains.
-    checkbox.style.opacity = '0';
     checkbox.style.width = '0';
     checkbox.style.height = '0';
     const toggle = document.createElement('span');
