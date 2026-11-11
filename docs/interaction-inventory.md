@@ -6,14 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Dates | public-src/views/dialin.ts | `.toLocaleDateString(locale, { day:` | S12 |
-| Errors | public-src/views/dialin-wizard.ts | `if (!val) { input?.focus(); return; }` | S12 |
-| Errors | public-src/views/profile-dialin-wizard.ts | `if (!Number.isFinite(val)) { input?.focus(); return; }` | S12 |
-| Numbers | public-src/views/dialin-wizard.ts | `id="dwDose"` | S12 |
-| Numbers | public-src/views/dialin-wizard.ts | `id="dwRatio"` | S12 |
-| Numbers | public-src/views/profile-dialin-wizard.ts | `id="pdwOverrideInput"` | S12 |
-| States | public-src/views/analytics.ts | `export function initAnalytics` | S12 |
-| States | public-src/views/dialin.ts | `tHtml('dialin_empty')` | S12 |
 | Errors | public-src/views/library/baskets.ts | `getElementById('basketFormName') as HTMLInputElement).focus(); return;` | S14 |
 | Errors | public-src/views/library/puck-screens.ts | `getElementById('puckScreenFormName') as HTMLInputElement).focus(); return;` | S14 |
 | Errors | public-src/views/library/recipes.ts | `getElementById('recipeFormName') as HTMLInputElement).focus(); return;` | S14 |
