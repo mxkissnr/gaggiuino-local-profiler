@@ -408,7 +408,7 @@
                     </div>
                     <div class="annotation-field">
                         <label for="annDose" data-i18n="ann_dose">Dosis (g)</label>
-                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
+                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" max="100">
                     </div>
                     <div class="annotation-field">
                         <div id="degassingTracker" class="degassing-bar-wrap" style="display:none">
@@ -778,7 +778,7 @@
                             <div id="grinderFormScale"></div>
                             <div class="lib-form-field" id="grinderFormZeroPointField" style="display:none">
                                 <label for="grinderFormZeroPoint" data-i18n="lib_grinder_zero_point">Nullpunkt</label>
-                                <input type="number" step="0.1" id="grinderFormZeroPoint">
+                                <input type="number" step="0.1" id="grinderFormZeroPoint" min="-1000" max="1000">
                                 <div class="lib-form-hint" data-i18n="lib_grinder_zero_point_hint">Nach dem Reinigen: Nullpunkt hier aktualisieren, statt jedes Rezept anzupassen. Vorschläge/Vergleiche rechnen automatisch um.</div>
                                 <label for="grinderFormZeroPointSince" data-i18n="lib_grinder_zero_point_since" style="margin-top:0.5rem">Aktiv seit (leer = jetzt)</label>
                                 <input type="date" id="grinderFormZeroPointSince">
@@ -819,15 +819,15 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormDose" data-i18n="lib_recipe_dose">Dosis (g)</label>
-                                <input type="number" id="recipeFormDose" step="0.1" min="0" placeholder="11">
+                                <input type="number" id="recipeFormDose" step="0.1" min="0" max="100" placeholder="11">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormYield" data-i18n="lib_recipe_yield">Ausbeute (g)</label>
-                                <input type="number" id="recipeFormYield" step="0.1" min="0" placeholder="200">
+                                <input type="number" id="recipeFormYield" step="0.1" min="0" max="2000" placeholder="200">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormTime" data-i18n="lib_recipe_time">Zeit (s)</label>
-                                <input type="number" id="recipeFormTime" step="1" min="0" placeholder="150">
+                                <input type="number" id="recipeFormTime" step="1" min="0" max="3600" placeholder="150">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormWaterTemp" data-i18n="lib_recipe_water_temp">Wassertemperatur (°C)</label>
@@ -835,11 +835,11 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormWaterG" data-i18n="lib_recipe_water_g">Wassermenge (g)</label>
-                                <input type="number" id="recipeFormWaterG" step="1" min="0" placeholder="65">
+                                <input type="number" id="recipeFormWaterG" step="1" min="0" max="5000" placeholder="65">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormIceG" data-i18n="lib_recipe_ice_g">Eismenge (g)</label>
-                                <input type="number" id="recipeFormIceG" step="1" min="0" placeholder="85">
+                                <input type="number" id="recipeFormIceG" step="1" min="0" max="5000" placeholder="85">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormGrind" data-i18n="lib_recipe_grind">Mahlgrad</label>
@@ -891,7 +891,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="milkFormStock" data-i18n="lib_milk_stock">Vorrat (ml)</label>
-                                <input type="number" id="milkFormStock" placeholder="1000" min="0" step="50">
+                                <input type="number" id="milkFormStock" placeholder="1000" min="0" max="20000" step="50">
                             </div>
                         </div>
                         <div class="lib-form-actions">
@@ -1029,19 +1029,19 @@
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormCoffeeIn" data-i18n="profile_form_coffee_in">Dosis (g)</label>
-                        <input type="number" id="profileFormCoffeeIn" step="0.1" min="0" placeholder="18">
+                        <input type="number" id="profileFormCoffeeIn" step="0.1" min="0" max="100" placeholder="18">
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormCoffeeOut" data-i18n="profile_form_coffee_out">Ausbeute (g)</label>
-                        <input type="number" id="profileFormCoffeeOut" step="0.1" min="0" placeholder="36">
+                        <input type="number" id="profileFormCoffeeOut" step="0.1" min="0" max="2000" placeholder="36">
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormRatio" data-i18n="profile_form_ratio">Ratio</label>
-                        <input type="number" id="profileFormRatio" step="0.1" min="0" placeholder="2">
+                        <input type="number" id="profileFormRatio" step="0.1" min="0" max="30" placeholder="2">
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormWeight" data-i18n="profile_form_weight">Stopp-Gewicht (g)</label>
-                        <input type="number" id="profileFormWeight" step="0.1" min="0" placeholder="39.6">
+                        <input type="number" id="profileFormWeight" step="0.1" min="0" max="2000" placeholder="39.6">
                     </div>
                 </div>
                 <div class="lib-recipe-steps-section">
@@ -1208,7 +1208,7 @@
                         </div>
                         <div class="annotation-field">
                             <label for="lsDose" data-i18n="ann_dose">Dosis (g)</label>
-                            <input type="number" id="lsDose" step="0.1" min="0">
+                            <input type="number" id="lsDose" step="0.1" min="0" max="100">
                         </div>
                         <div class="annotation-field">
                             <label for="lsGrinder" data-i18n="ann_grinder">Mühle</label>
@@ -1581,7 +1581,10 @@
             <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
             <div class="orders-broadcast-list">
                 <div class="orders-broadcast-row">
-                    <input type="checkbox" id="machineControlEnabled">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="machineControlEnabled">
+                        <span class="toggle-track"></span>
+                    </label>
                     <label for="machineControlEnabled" data-i18n="settings_machine_control_enabled">Maschinensteuerung erlauben</label>
                 </div>
             </div>
@@ -1609,7 +1612,7 @@
             <select id="sdGrinder" class="machine-form-input"></select>
             <p class="settings-card-desc" data-i18n="sd_grinder_hint">Bohnenauswahl, „Letzten“ und geführtes Einwählen nutzen diese Mühle und nur ihre Mahlgrade für die Bohne. Leer, solange es keine gibt.</p>
             <label for="sdDose" class="machine-form-label" data-i18n="ann_dose">Dosis (g)</label>
-            <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
+            <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" max="100">
             <div class="machine-form-actions">
                 <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
             </div>
@@ -1656,7 +1659,7 @@
                 <label for="mqttHost" class="machine-form-label" data-i18n="settings_mqtt_host">Broker-Host</label>
                 <input type="text" id="mqttHost" class="machine-form-input" placeholder="core-mosquitto">
                 <label for="mqttPort" class="machine-form-label" data-i18n="settings_mqtt_port">Port</label>
-                <input type="number" id="mqttPort" class="machine-form-input" placeholder="1883">
+                <input type="number" id="mqttPort" class="machine-form-input" placeholder="1883" min="1" max="65535" step="1">
                 <label for="mqttUsername" class="machine-form-label" data-i18n="settings_mqtt_username">Benutzername (optional)</label>
                 <input type="text" id="mqttUsername" class="machine-form-input">
                 <label for="mqttPassword" class="machine-form-label" data-i18n="settings_mqtt_password">Passwort (optional)</label>
@@ -1784,7 +1787,10 @@
             <select id="devScoreModel" class="machine-form-input"></select>
             <p class="settings-card-desc" data-i18n="settings_devtools_score_model_desc">Welches Modell deine Shots bewertet. Ein Wechsel lädt die App neu; Stable-Builds nutzen immer classic.</p>
             <div class="orders-broadcast-row">
-                <input type="checkbox" id="devBlindRating">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="devBlindRating">
+                    <span class="toggle-track"></span>
+                </label>
                 <label for="devBlindRating" data-i18n="settings_devtools_blind_rating">Blind bewerten — Score und Urteil eines Shots erst nach der Sternebewertung zeigen</label>
             </div>
             <button id="devExportDbBtn" type="button" class="backup-btn" data-i18n="settings_devtools_export_db">Download raw database</button>

@@ -13,8 +13,10 @@ import { toggleTrash, flushAutoSave } from '../views/shots.js';
 import { loadDemoData, endDemo } from '../components/onboarding.js';
 import { handleTopbarMachineIconClick, bindEasterEggPanelEscape } from '../components/topbar-machine-icon.js';
 import { renderWhatsNewCard } from '../components/whats-new.js';
+import { installNumberComma } from '../components/number-comma.js';
 
 export function wireAppShell(): void {
+  installNumberComma();
   bindEasterEggPanelEscape();
 
   // ── Keyboard navigation: left/right arrows between shots ──────────────

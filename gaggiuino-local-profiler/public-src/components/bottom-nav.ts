@@ -320,10 +320,20 @@ export function renderBottomNavSettings(): void {
       renderBottomNav();
       renderBottomNavSettings();
     });
+    // A row that applies at once is a switch, not a form checkbox (#1962,
+    // docs/DESIGN.md "Switches").
+    const toggle = document.createElement('span');
+    toggle.className = 'toggle-switch';
+    toggle.appendChild(checkbox);
+    const track = document.createElement('span');
+    track.className = 'toggle-track';
+    if (row.checkDisabled) track.style.opacity = '0.5';
+    toggle.appendChild(track);
+
     const labelText = document.createElement('span');
     labelText.setAttribute('data-i18n', item.i18nKey);
     labelText.textContent = t(item.i18nKey);
-    label.appendChild(checkbox);
+    label.appendChild(toggle);
     label.appendChild(labelText);
 
     const reorder = document.createElement('span');
