@@ -5,6 +5,8 @@ import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import { CLOSE_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
 import type { Milk } from '../../api/types.js';
 
 // state/index.ts's CoffeeLibrary types the milk collection as Milk[]; this
@@ -45,7 +47,7 @@ export function renderMilkList(): void {
         ${m.stockMl! < 300 ? html`<span style="color:${esc(m.stockMl! <= 0 ? '#ef4444' : '#f59e0b')}">${m.stockMl! <= 0 ? tHtml('lib_milk_empty') : tHtml('lib_milk_low')}</span>` : html``}
       </div>
       <div class="lib-milk-restock-row">
-        <input class="lib-milk-restock-input" type="number" aria-label="${tHtml('lib_milk_restock')}" id="milkRestock_${esc(m.id)}" placeholder="ml" min="0" step="50">
+        <input class="lib-milk-restock-input" type="number" aria-label="${tHtml('lib_milk_restock')} (ml)" id="milkRestock_${esc(m.id)}" placeholder="ml" min="0" max="20000" step="50">
         <button class="lib-btn-sm" data-action="restock-milk" data-id="${esc(m.id)}">${tHtml('lib_milk_restock')}</button>
       </div>
     </div>`;
@@ -69,7 +71,7 @@ export async function saveMilk(): Promise<void> {
   const stockMl = parseFloat((document.getElementById('milkFormStock') as HTMLInputElement | null)?.value ?? '') || 0;
   if (!name) return;
   const saved = await libraryApi.createMilk({ name, emoji, stockMl });
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const lib = _state().coffeeLibrary;
   const milks = lib.milks ?? [];
   lib.milks = milks;
@@ -82,7 +84,7 @@ export async function restockMilk(id: number): Promise<void> {
   const val = parseFloat(_el(`milkRestock_${id}`)?.value ?? '');
   if (!val || val <= 0) return;
   const saved = await libraryApi.restockMilk(id, val);
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const milks = _state().coffeeLibrary.milks || [];
   const idx = milks.findIndex(m => m.id === id);
   if (idx !== -1) milks[idx] = saved;
@@ -90,9 +92,9 @@ export async function restockMilk(id: number): Promise<void> {
 }
 
 export async function deleteMilk(id: number): Promise<void> {
-  if (!confirm(t('lib_milk_delete') + '?')) return;
+  if (!await confirmDialog(t('lib_milk_delete') + '?', { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteMilkById(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.milks = (_state().coffeeLibrary.milks || []).filter(m => m.id !== id);
   renderMilkList();
 }

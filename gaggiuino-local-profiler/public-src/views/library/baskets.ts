@@ -9,6 +9,8 @@ import type { Html } from '../../utils.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
 import { loadBasketImageBlobUrl, invalidateBasketImage } from '../../bean-image.js';
 import type { Basket } from '../../api/types.js';
 
@@ -112,7 +114,7 @@ export async function saveBasket(): Promise<void> {
   const notes        = (document.getElementById('basketFormNotes') as HTMLInputElement).value.trim();
   if (!name) { (document.getElementById('basketFormName') as HTMLInputElement).focus(); return; }
   const saved = await libraryApi.saveBasket(S.basketEditId, { name, doseCapacity, wallType, shape, holeCount, notes });
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const lib = _state().coffeeLibrary;
   const baskets = lib.baskets ?? [];
   lib.baskets = baskets;
@@ -156,9 +158,9 @@ async function _storeBasketPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deleteBasket(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_basket'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_basket'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteBasketById(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.baskets = (_state().coffeeLibrary.baskets || []).filter(b => b.id !== id);
   renderBasketList();
 }
