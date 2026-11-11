@@ -23,8 +23,9 @@ export function bindFormAutosave(form: HTMLElement, opts: { isEditing: () => boo
     clearTimeout(hideTimer);
     status.textContent = t('autosave_pending');
     status.classList.add('visible');
-    let ok = false;
-    try { ok = await opts.save(); } finally { running = false; }
+    let ok: boolean;
+    try { ok = await opts.save(); } catch { ok = false; }
+    running = false;
     if (again) { again = false; void run(); return; }
     status.textContent = ok ? t('autosave_saved') : '';
     // The form stays open, so the confirmation has to clear itself again.
