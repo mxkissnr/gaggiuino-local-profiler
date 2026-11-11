@@ -13,7 +13,7 @@ import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { getAchievements } from '../api/system.js';
 import { localeFor } from '../constants.js';
-import { esc, html, joinHtml } from '../utils.js';
+import { esc, formatDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 
 // The badge record as GET /api/achievements serves it (see
@@ -105,14 +105,13 @@ export function askewDeg(id: string): number {
 export function formatStampedOn(unlockedAtSeconds: number, lang: string): string {
   const d = new Date(unlockedAtSeconds * 1000);
   const locale = localeFor(lang);
-  const dateStr = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dateStr = formatDate(d, locale);
   const timeStr = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   return t('ach_stamped_on', dateStr, timeStr);
 }
 
 function formatFullDate(unlockedAtSeconds: number, lang: string): string {
-  return new Date(unlockedAtSeconds * 1000)
-    .toLocaleDateString(localeFor(lang), { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatDate(unlockedAtSeconds * 1000, localeFor(lang));
 }
 
 // A card (category) is full once every one of its badges — including any

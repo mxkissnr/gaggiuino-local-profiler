@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeFacts, _circularMinutes } from '../public-src/views/analytics-facts.js';
 import type { Fact, FactShot } from '../public-src/views/analytics-facts.js';
+import { formatDate } from '../public-src/utils.js';
 
 // analytics-facts is pure and DOM-free (only a type-only import), so the tests
 // drive it directly. Every timestamp is built through the local Date
@@ -358,19 +359,18 @@ describe('computeFacts date formatting (#1467)', () => {
   it('renders date and time in the locale', () => {
     const y = new Date().getFullYear();
     const facts = computeFacts([...oddSet(y, 6, 17), ...pad100(at(y, 6, 18, 10, 0))], scoreOf, 'de-DE');
-    const expected = new Date(at(y, 6, 17, 21, 21) * 1000)
-      .toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
+    const expected = formatDate(at(y, 6, 17, 21, 21) * 1000, 'de-DE', 'long');
     const date = byId(facts, 'odd_hour')?.vars.date;
     expect(date).toBe(`${expected}, 21:21`);
     expect(date).not.toMatch(/^\d{4}-\d{2}-\d{2}/);
     expect(date).toContain('Juni');
+    expect(date).toContain(String(y));
   });
 
-  it('adds the year only when the shot is not from this year', () => {
+  it('uses the same long form for shots from an earlier year', () => {
     const y = new Date().getFullYear();
     const facts = computeFacts([...oddSet(y - 1, 6, 17), ...pad100(at(y - 1, 6, 18, 10, 0))], scoreOf, 'en-US');
-    const expected = new Date(at(y - 1, 6, 17, 21, 21) * 1000)
-      .toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+    const expected = formatDate(at(y - 1, 6, 17, 21, 21) * 1000, 'en-US', 'long');
     expect(byId(facts, 'odd_hour')?.vars.date).toBe(`${expected}, 21:21`);
   });
 });
