@@ -12,9 +12,11 @@ import type {
   MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats,
   OrdersSettings, QueueEta,
 } from '../api/types.js';
-import { esc, html, joinHtml } from '../utils.js';
+import { esc, formatDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { localeFor } from '../constants.js';
+import { confirmDialog } from '../components/confirm-dialog.js';
+import { showToast } from '../components/toast.js';
 import { textEntryFocused } from '../live-sync.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
 // .rail-icon treatment as the 🔥 trend toggle, #415). Used both in the
@@ -159,6 +161,7 @@ export async function setOrdersEnabled(enabled: boolean): Promise<void> {
     if (!res.ok) throw new Error('save failed');
     _updateOrdersToggleUI(enabled);
   } catch {
+    showToast(t('gm_toast_save_error'));
     // Save failed — reload actual state from server so toggle reflects reality
     try {
       const settings = await getOrdersSettings();
@@ -346,7 +349,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
       <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-eta-picker">
         ${joinHtml(etaBtns.map(m => html`<button class="order-eta-btn${selectedEta === m ? html` selected` : html``}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
-        <input class="order-eta-custom" type="number" min="1" max="60" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
+        <input class="order-eta-custom" type="number" min="1" max="60" step="1" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
         ${queuePos ? html`<span class="order-eta-suggest">${tHtml('orders_suggested_eta', queuePos.suggestedEta)}</span>` : html``}
       </div>
       <div class="order-actions">
@@ -453,7 +456,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
       <div class="orders-menu-milk-row">
-        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
+        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" max="5000" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
       </div>
     </div>`;
   }));
@@ -468,7 +471,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
   });
   list.querySelectorAll<HTMLElement>('[data-menu-del]').forEach(btn => {
     _onAsync(btn, 'click', async () => {
-      if (!confirm(t('orders_confirm_delete_item'))) return;
+      if (!await confirmDialog(t('orders_confirm_delete_item'), { confirmLabel: t('lib_btn_delete') })) return;
       await deleteMenuItem(btn.dataset.menuDel as string);
       void loadOrdersView();
     });
@@ -539,7 +542,7 @@ export function renderOrdersStats(stats: OrderStats | null | undefined): void {
     return;
   }
 
-  const fmtDate = (ts: number | null | undefined): Html => esc(ts ? new Date(ts).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '–');
+  const fmtDate = (ts: number | null | undefined): Html => esc(ts ? formatDate(ts, localeFor(S.currentLang)) : '–');
   const cards = joinHtml((stats.customers || []).map(c => html`<div class="orders-stats-card">
       <div class="orders-stats-name" title="${esc(c.name)}">${esc(c.name)}</div>
       <div class="orders-stats-row"><span>${tHtml('orders_stats_total')}</span><span class="orders-stats-val">${esc(c.count)} ${tHtml('orders_stats_orders')}</span></div>
@@ -567,7 +570,7 @@ export async function deleteOrder(id: string): Promise<void> {
 }
 
 export async function clearOrderHistory(): Promise<void> {
-  if (!confirm(t('orders_confirm_clear_history'))) return;
+  if (!await confirmDialog(t('orders_confirm_clear_history'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await deleteOrderHistory();
   if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
@@ -781,8 +784,10 @@ function renderKioskLink(section: HTMLElement, key: string): void {
       .catch(() => {});
   });
   document.getElementById('ordersKioskRotateBtn')?.addEventListener('click', () => {
-    if (!confirm(t('orders_kiosk_link_rotate_confirm'))) return;
-    void rotateKioskLinkAndRender(section);
+    void (async () => {
+      if (!await confirmDialog(t('orders_kiosk_link_rotate_confirm'))) return;
+      await rotateKioskLinkAndRender(section);
+    })();
   });
 }
 

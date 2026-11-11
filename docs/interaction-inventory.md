@@ -6,50 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Confirming | public-src/views/library-profile-editor.ts | `confirm(t('profile_confirm_delete'))` | S8 |
-| Confirming | public-src/views/library-profile-editor.ts | `confirm(t('profile_confirm_send'))` | S8 |
-| Confirming | public-src/views/maintenance.ts | `confirm(t('maint_confirm_delete_custom', task.replace('custom_', '')))` | S8 |
-| Confirming | public-src/views/maintenance.ts | `confirm(t('maint_log_confirm_delete'))` | S8 |
-| Confirming | public-src/views/orders.ts | `confirm(t('orders_confirm_delete_item'))` | S8 |
-| Confirming | public-src/views/orders.ts | `confirm(t('orders_confirm_clear_history'))` | S8 |
-| Confirming | public-src/views/orders.ts | `confirm(t('orders_kiosk_link_rotate_confirm'))` | S8 |
-| Errors | public-src/views/library-profile-editor.ts | `getElementById('profileFormName') as HTMLInputElement).focus(); return` | S8 |
-| Errors | public-src/views/orders.ts | `Save failed` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Errors | public-src/views/maintenance.ts | `catch { /* ignore */ }` | S8 |
-| Choosing | public-src/views/library-profile-editor.ts | `class="pp-type"` | S8 |
-| Choosing | public-src/views/library-profile-editor.ts | `class="pp-target-curve"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-target-start"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-target-end"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-target-time"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-target-volume"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-restriction"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-water-temp"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-stop-time"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-stop-pressure-above"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-stop-pressure-below"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-stop-flow-above"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-stop-flow-below"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-stop-weight"` | S8 |
-| Numbers | public-src/views/library-profile-editor.ts | `id="profilePhase${esc(i)}-stop-water-pumped"` | S8 |
-| Numbers | public-src/views/maintenance-sheet.ts | `<input type="number" min="1" max="10000" value="${esc(d.th` | S8 |
-| Numbers | public-src/views/maintenance-sheet.ts | `<input type="number" min="1" max="3650" value="${esc(d.thr` | S8 |
-| Numbers | public-src/views/maintenance-sheet.ts | `<input type="number" min="1" max="100000" value="${esc(d.t` | S8 |
-| Numbers | public-src/views/maintenance-sheet.ts | `id="customTaskShots"` | S8 |
-| Numbers | public-src/views/maintenance-sheet.ts | `id="customTaskDays"` | S8 |
-| Numbers | public-src/views/orders.ts | `id="etaCustom_${esc(o.id)}"` | S8 |
-| Numbers | public-src/views/orders.ts | `id="milkMl_${esc(item.id)}"` | S8 |
-| Dates | public-src/views/maintenance-sheet.ts | `.toLocaleDateString(locale, { day:` | S8 |
-| Dates | public-src/views/maintenance.ts | `.toLocaleDateString(locale, { day:` | S8 |
-| Dates | public-src/views/orders.ts | `.toLocaleDateString(localeFor(S.currentLang), { da` | S8 |
 | Dates | public-src/views/achievements.ts | `.toLocaleDateString(locale, { day:` | S9 |
 | Dates | public-src/views/achievements.ts | `.toLocaleDateString(localeFor(lang), { day:` | S9 |
 | Dates | public-src/views/analytics-facts.ts | `.toLocaleDateString(locale, _dateOpts(d, { day:` | S9 |

@@ -9,7 +9,7 @@
 // library/bean-form-sheet.ts.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
-import { esc, html, joinHtml } from '../utils.js';
+import { esc, formatDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
 import { GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
@@ -43,17 +43,17 @@ function _thresholdFields(tile: MaintTile, mode: string): Html {
   const { task, d, machineId } = tile;
   const shotsInput = html`<label class="maint-threshold-field">
     <span>${tHtml('maint_unit_shots')}</span>
-    <input type="number" min="1" max="10000" value="${esc(d.threshold_shots ?? '')}" placeholder="–"
+    <input type="number" min="1" max="10000" step="1" value="${esc(d.threshold_shots ?? '')}" placeholder="–"
         data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_shots" data-machine-id="${esc(machineId)}">
   </label>`;
   const daysInput = html`<label class="maint-threshold-field">
     <span>${tHtml('maint_by_days')}</span>
-    <input type="number" min="1" max="3650" value="${esc(d.threshold_days ?? '')}" placeholder="–"
+    <input type="number" min="1" max="3650" step="1" value="${esc(d.threshold_days ?? '')}" placeholder="–"
         data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_days" data-machine-id="${esc(machineId)}">
   </label>`;
   const gInput = html`<label class="maint-threshold-field">
     <span>${tHtml('maint_unit_grams')}</span>
-    <input type="number" min="1" max="100000" value="${esc(d.threshold_g ?? '')}" placeholder="–"
+    <input type="number" min="1" max="100000" step="1" value="${esc(d.threshold_g ?? '')}" placeholder="–"
         data-action="save-maint-threshold" data-task="${esc(task)}" data-field="threshold_g" data-machine-id="${esc(machineId)}">
   </label>`;
   const fields: Html = mode === 'g' ? gInput : mode === 'shots' ? shotsInput : mode === 'days' ? daysInput : joinHtml([shotsInput, daysInput]);
@@ -78,7 +78,7 @@ function _entryBelongsToTile(e: MaintLogEntry, tile: MaintTile): boolean {
 }
 
 function _historyRow(e: MaintLogEntry, locale: string): Html {
-  const dateStr = new Date(e.ts * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dateStr = formatDate(e.ts * 1000, locale);
   const isManual = e.shotCountAtTime === null;
   const note = e.notes === AUTO_SYNCED_NOTE
     ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
@@ -156,8 +156,8 @@ export function maintCustomFormBody(): Html {
   return html`<div class="maint-sheet maint-form">
     <input type="text" aria-label="${esc(t('maint_custom_label_ph'))}" id="customTaskLabel" placeholder="${esc(t('maint_custom_label_ph'))}" maxlength="100">
     <div class="maint-form-intervals">
-      <label>${tHtml('maint_custom_every')} <input type="number" id="customTaskShots" min="1" max="10000" placeholder="–"> ${tHtml('maint_unit_shots')}</label>
-      <label>${tHtml('maint_custom_every')} <input type="number" id="customTaskDays" min="1" max="3650" placeholder="–"> ${tHtml('maint_by_days')}</label>
+      <label>${tHtml('maint_custom_every')} <input type="number" id="customTaskShots" min="1" max="10000" step="1" placeholder="–"> ${tHtml('maint_unit_shots')}</label>
+      <label>${tHtml('maint_custom_every')} <input type="number" id="customTaskDays" min="1" max="3650" step="1" placeholder="–"> ${tHtml('maint_by_days')}</label>
     </div>
   </div>`;
 }

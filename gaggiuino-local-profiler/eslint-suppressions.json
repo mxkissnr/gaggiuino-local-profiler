@@ -1,9 +1,4 @@
 {
-  "public-src/views/library-profile-editor.ts": {
-    "local/no-native-dialog": {
-      "count": 2
-    }
-  },
   "public-src/views/library/bean-card.ts": {
     "local/no-native-dialog": {
       "count": 2
@@ -17,16 +12,6 @@
   "public-src/views/library/bean-sticker.ts": {
     "local/no-native-dialog": {
       "count": 1
-    }
-  },
-  "public-src/views/maintenance.ts": {
-    "local/no-native-dialog": {
-      "count": 2
-    }
-  },
-  "public-src/views/orders.ts": {
-    "local/no-native-dialog": {
-      "count": 3
     }
   }
 }
