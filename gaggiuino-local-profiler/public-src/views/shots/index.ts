@@ -165,6 +165,7 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
     const page = await fetchShotsPage();
     if (token !== _loadDataReqToken) return;
     if (page.error != null) {
+      S.shotsLoadFailed = true;
       // A quiet reload is best-effort: keep the painted sidebar/list untouched
       // rather than replacing them with an error card.
       if (opts?.quiet) return;
@@ -178,12 +179,14 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
         : html`<div class="loading-state" style="color:#ef4444">HTTP ${esc(page.error)}</div>`;
       return;
     }
+    S.shotsLoadFailed = false;
     fetched = [...(page.shots || [])].reverse(); // page is newest-first; keep S.allShots oldest-first
     S.shotsPageCursor = page.hasMore ? (page.nextCursor ?? null) : null;
     S.shotsHasMore    = !!page.hasMore;
     S.allShotsLoaded  = !page.hasMore;
   } catch {
     if (token !== _loadDataReqToken) return;
+    S.shotsLoadFailed = true;
     if (opts?.quiet) return;
     shotsEl.innerHTML = joinHtml([
       // #814: was a hardcoded #ef4444 (the pre-redesign err value) and an

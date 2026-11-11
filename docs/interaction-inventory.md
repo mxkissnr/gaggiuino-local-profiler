@@ -6,14 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Dates | public-src/views/dialin.ts | `.toLocaleDateString(locale, { day:` | S12 |
-| Errors | public-src/views/dialin-wizard.ts | `if (!val) { input?.focus(); return; }` | S12 |
-| Errors | public-src/views/profile-dialin-wizard.ts | `if (!Number.isFinite(val)) { input?.focus(); return; }` | S12 |
-| Numbers | public-src/views/dialin-wizard.ts | `id="dwDose"` | S12 |
-| Numbers | public-src/views/dialin-wizard.ts | `id="dwRatio"` | S12 |
-| Numbers | public-src/views/profile-dialin-wizard.ts | `id="pdwOverrideInput"` | S12 |
-| States | public-src/views/analytics.ts | `export function initAnalytics` | S12 |
-| States | public-src/views/dialin.ts | `tHtml('dialin_empty')` | S12 |
 | Dates | public-src/views/live.ts | `.toLocaleDateString(localeFor(S.currentLang), { da` | S13 |
 | States | public-src/views/library.ts | `export async function loadLibrary` | S13 |
 | States | public-src/views/orders.ts | `export async function loadOrdersView` | S13 |
