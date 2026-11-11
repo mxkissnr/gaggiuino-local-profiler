@@ -5,7 +5,7 @@ import { t } from '../i18n.js';
 export function bindFormAutosave(form: HTMLElement, opts: { isEditing: () => boolean; save: () => Promise<boolean> }): void {
   // A form without an actions row has nowhere to show the status; the DOM
   // fakes in the unit tests have no querySelector at all, so check first.
-  const actions = typeof form.querySelector === 'function' ? form.querySelector('.lib-form-actions') : null;
+  const actions = (form as Partial<Element>).querySelector?.('.lib-form-actions') ?? null;
   if (!actions) return;
 
   const status = document.createElement('span');
