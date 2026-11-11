@@ -19,6 +19,9 @@ g.localStorage = {
   removeItem: (k: string) => { _store.delete(k); },
 };
 g.navigator ??= { language: 'en-US' };
+// The write functions report a failed refresh through window.showToast (#1962);
+// a bare object keeps that a no-op in this node-only harness.
+g.window ??= {};
 
 interface FakeField { value: string }
 
