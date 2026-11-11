@@ -181,6 +181,12 @@ export function _updateOrdersToggleUI(enabled: boolean): void {
 }
 
 export async function loadOrdersView(): Promise<void> {
+  // #1962: only a view that has nothing on screen yet says it is loading, so a
+  // background refresh never flashes over the list the user is reading.
+  const pendingListEl = document.getElementById('orders-pending-list');
+  if (pendingListEl && pendingListEl.innerHTML === '') {
+    pendingListEl.innerHTML = html`<div class="loading-state">${tHtml('please_wait')}</div>`;
+  }
   const [sw, settings] = await Promise.all([
     _getSwitchState(),
     _getSettingsOr({ enabled: true }),
@@ -190,8 +196,9 @@ export async function loadOrdersView(): Promise<void> {
   if (banner) { banner.style.display = machineOff ? '' : 'none'; banner.textContent = t('orders_machine_off'); }
   _updateOrdersToggleUI(!!settings.enabled);
 
+  let ordersFailed = false;
   const [orders, menu, queueEta, milkStock] = await Promise.all([
-    listOrders().catch(() => [] as Order[]),
+    listOrders().catch(() => { ordersFailed = true; return [] as Order[]; }),
     getOrdersMenu().catch(() => [] as MenuItem[]),
     getQueueEta().catch(() => null),
     getMilkStock().catch(() => [] as MilkStock[]),
@@ -199,6 +206,9 @@ export async function loadOrdersView(): Promise<void> {
   SO._ordersQueueEta = queueEta;
 
   renderOrdersList(orders);
+  if (ordersFailed && pendingListEl) {
+    pendingListEl.innerHTML = html`<div class="loading-state" style="color:var(--err)">${tHtml('error_load')}</div>`;
+  }
   renderOrdersMenuAdmin(menu);
   renderMilkStock(milkStock);
   if (S._ordersStatsOpen) {

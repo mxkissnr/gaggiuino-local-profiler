@@ -14,9 +14,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 | Numbers | public-src/views/profile-dialin-wizard.ts | `id="pdwOverrideInput"` | S12 |
 | States | public-src/views/analytics.ts | `export function initAnalytics` | S12 |
 | States | public-src/views/dialin.ts | `tHtml('dialin_empty')` | S12 |
-| Dates | public-src/views/live.ts | `.toLocaleDateString(localeFor(S.currentLang), { da` | S13 |
-| States | public-src/views/library.ts | `export async function loadLibrary` | S13 |
-| States | public-src/views/orders.ts | `export async function loadOrdersView` | S13 |
 | Errors | public-src/views/library/baskets.ts | `getElementById('basketFormName') as HTMLInputElement).focus(); return;` | S14 |
 | Errors | public-src/views/library/puck-screens.ts | `getElementById('puckScreenFormName') as HTMLInputElement).focus(); return;` | S14 |
 | Errors | public-src/views/library/recipes.ts | `getElementById('recipeFormName') as HTMLInputElement).focus(); return;` | S14 |

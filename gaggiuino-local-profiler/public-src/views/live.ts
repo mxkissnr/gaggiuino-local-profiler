@@ -8,7 +8,7 @@ import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
 import type { Bean, MachineControlState, ShotAnnotation } from '../api/types.js';
-import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, html } from '../utils.js';
+import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, formatDate, html } from '../utils.js';
 import type { ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
@@ -391,7 +391,7 @@ export function populateRefSelector(): void {
   S.shots.filter(s => s.hasChartData)
     .slice().reverse().slice(0, 40)
     .forEach(s => {
-      const date    = new Date(s.timestamp * 1000).toLocaleDateString(localeFor(S.currentLang), { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const date    = formatDate(s.timestamp * 1000, localeFor(S.currentLang));
       const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
       const ann     = (s.annotation as LiveShotAnnotation | undefined) || {};
       const score   = ann.score != null ? ` · ${ann.score}` : '';
