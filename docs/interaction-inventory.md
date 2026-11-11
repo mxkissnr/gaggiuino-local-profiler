@@ -7,12 +7,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
 | Dates | public-src/views/dialin.ts | `.toLocaleDateString(locale, { day:` | S12 |
-| Number units | public-src/i18n/en.ts | `profile_stop_pressure_above:` | S11 |
-| Number units | public-src/i18n/en.ts | `profile_stop_pressure_below:` | S11 |
-| Number units | public-src/i18n/en.ts | `profile_stop_flow_above:` | S11 |
-| Number units | public-src/i18n/en.ts | `profile_stop_flow_below:` | S11 |
-| Number units | public-src/i18n/en.ts | `profile_phase_target_start:` | S11 |
-| Number units | public-src/i18n/en.ts | `profile_phase_target_end:` | S11 |
 | Errors | public-src/views/dialin-wizard.ts | `if (!val) { input?.focus(); return; }` | S12 |
 | Errors | public-src/views/profile-dialin-wizard.ts | `if (!Number.isFinite(val)) { input?.focus(); return; }` | S12 |
 | Numbers | public-src/views/dialin-wizard.ts | `id="dwDose"` | S12 |
