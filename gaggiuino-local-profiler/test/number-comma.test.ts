@@ -2,8 +2,13 @@
 // number input, so Firefox does not empty the field on "8,3". vitest runs with
 // environment 'node', so the document is the same minimal fake the sibling
 // DOM tests use.
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { installNumberComma } from '../public-src/components/number-comma.js';
+
+const appRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 interface FakeEvent {
   target: unknown;
@@ -69,5 +74,12 @@ describe('installNumberComma (#1962)', () => {
 
     expect(event.prevented).toBe(false);
     expect(fake.inserted).toEqual([]);
+  });
+
+  it('is installed by wireAppShell before any other wiring', () => {
+    const shell = readFileSync(join(appRoot, 'public-src', 'boot', 'shell.ts'), 'utf8');
+    const body = shell.slice(shell.indexOf('export function wireAppShell'));
+    expect(body).toContain('installNumberComma();');
+    expect(body.indexOf('installNumberComma();')).toBeLessThan(body.indexOf('bindEasterEggPanelEscape();'));
   });
 });
