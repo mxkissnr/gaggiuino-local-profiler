@@ -64,11 +64,17 @@ jobs:
         # survives and holds the dpkg lock, so every retry failed (#1821).
         run: |
           printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
+          # Attempts 2 and 3 skip --with-deps: when the runner cannot reach the
+          # Ubuntu mirror at all, apt fails every time, while the browser itself
+          # comes from the Playwright CDN and the runner image already ships its
+          # libraries (#2002).
+          deps=--with-deps
           for attempt in 1 2 3; do
-            if timeout 300 npx playwright install --with-deps chromium; then
+            if timeout 300 npx playwright install $deps chromium; then
               exit 0
             fi
             echo "Playwright install attempt $attempt/3 failed or timed out, retrying..."
+            deps=
             sudo pkill -x apt-get || true
             while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done
             sudo dpkg --configure -a || true
