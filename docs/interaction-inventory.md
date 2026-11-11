@@ -6,15 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Dates | public-src/views/achievements.ts | `.toLocaleDateString(locale, { day:` | S9 |
-| Dates | public-src/views/achievements.ts | `.toLocaleDateString(localeFor(lang), { day:` | S9 |
-| Dates | public-src/views/analytics-facts.ts | `.toLocaleDateString(locale, _dateOpts(d, { day:` | S9 |
-| Dates | public-src/views/analytics-facts.ts | `.toLocaleDateString(locale, _dateOpts(d, { weekday` | S9 |
-| Dates | public-src/views/analytics.ts | `.toLocaleString(locale, { day:` | S9 |
-| Dates | public-src/views/analytics.ts | `.toLocaleDateString(locale, { day:` | S9 |
-| Dates | public-src/views/analytics/calendar.ts | `.toLocaleDateString(locale, { weekday:` | S9 |
-| Dates | public-src/views/analytics/calendar.ts | `.toLocaleDateString(locale, { weekday:` | S9 |
-| Dates | public-src/views/analytics/shared.ts | `.toLocaleDateString(locale, { day:` | S9 |
 | Dates | public-src/views/dialin.ts | `.toLocaleDateString(locale, { day:` | S12 |
 | Numbers | public-src/index.html | `id="annDose"` | S10 |
 | Numbers | public-src/index.html | `id="grinderFormZeroPoint"` | S10 |

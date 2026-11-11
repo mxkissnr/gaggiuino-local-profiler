@@ -1,7 +1,7 @@
 import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { localeFor } from '../../constants.js';
-import { esc, html, joinHtml, localDateKey, scoreClass } from '../../utils.js';
+import { esc, formatDate, html, joinHtml, localDateKey, scoreClass } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { openDetailSheet } from '../../components/detail-sheet.js';
 import type { DetailAnchorPoint } from '../../components/detail-sheet.js';
@@ -147,7 +147,7 @@ export function openCalendarDayDetail(day: string, anchor: HTMLElement | DetailA
     return html`<div class="bests-row"><span class="bests-lbl">${esc(time)} · ${esc(name)}</span><span class="bests-val">${scHtml} <button type="button" class="bests-link" data-action="goto-shot" data-id="${esc(s.id)}">→</button></span></div>`;
   });
   openDetailSheet({
-    title: _dateFromKey(day).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    title: formatDate(_dateFromKey(day), locale, 'long'),
     sub,
     body: html`<div class="detail-rows">${joinHtml(rows)}</div>`,
     anchor,
@@ -303,7 +303,7 @@ export function _renderCalendar() {
       if (day.isToday) classes.push('cal-today');
       if (day.count > 0) {
         classes.push('cal-day-link');
-        const dateStr = day.date.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const dateStr = formatDate(day.date, locale, 'long');
         const aria = `${dateStr} · ${day.count} ${t('analytics_unit_shots', day.count)}${day.avg !== null ? ` · Ø ${day.avg}` : ''}`;
         cells.push(html`<button type="button" class="${esc(classes.join(' '))}" data-action="analytics-day" data-day="${esc(day.key)}" aria-label="${esc(aria)}"></button>`);
       } else {
