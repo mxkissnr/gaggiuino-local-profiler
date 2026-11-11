@@ -321,15 +321,13 @@ export function renderBottomNavSettings(): void {
       renderBottomNavSettings();
     });
     // A row that applies at once is a switch, not a form checkbox (#1962,
-    // docs/DESIGN.md "Switches"). The size is inline because
-    // .bottom-nav-config-check sizes any checkbox it contains.
-    checkbox.style.width = '0';
-    checkbox.style.height = '0';
+    // docs/DESIGN.md "Switches").
     const toggle = document.createElement('span');
     toggle.className = 'toggle-switch';
     toggle.appendChild(checkbox);
     const track = document.createElement('span');
     track.className = 'toggle-track';
+    if (row.checkDisabled) track.style.opacity = '0.5';
     toggle.appendChild(track);
 
     const labelText = document.createElement('span');
