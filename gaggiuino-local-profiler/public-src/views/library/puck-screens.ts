@@ -9,6 +9,8 @@ import type { Html } from '../../utils.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
 import { loadPuckScreenImageBlobUrl, invalidatePuckScreenImage } from '../../bean-image.js';
 import type { PuckScreen } from '../../api/types.js';
 
@@ -101,7 +103,7 @@ export async function savePuckScreen(): Promise<void> {
   const notes     = (document.getElementById('puckScreenFormNotes') as HTMLInputElement).value.trim();
   if (!name) { (document.getElementById('puckScreenFormName') as HTMLInputElement).focus(); return; }
   const saved = await libraryApi.savePuckScreen(S.puckScreenEditId, { name, thickness, material, notes });
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const lib = _state().coffeeLibrary;
   const puckScreens = lib.puckScreens ?? [];
   lib.puckScreens = puckScreens;
@@ -145,9 +147,9 @@ async function _storePuckScreenPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deletePuckScreen(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_puckscreen'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_puckscreen'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deletePuckScreenById(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.puckScreens = (_state().coffeeLibrary.puckScreens || []).filter(p => p.id !== id);
   renderPuckScreenList();
 }
