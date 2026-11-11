@@ -6,19 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Confirming | public-src/views/library/import.ts | `alert(t('lib_url_unsupported'))` | S6 |
-| Confirming | public-src/views/library/import.ts | `alert(t('lib_url_error'))` | S6 |
-| Confirming | public-src/views/library/import.ts | `alert(t('lib_url_error'))` | S6 |
-| Confirming | public-src/views/library/import.ts | `alert(t('lib_import_settings_invalid_domain'))` | S6 |
-| Errors | public-src/views/library/import.ts | `if (!r.ok) return;` | S6 |
-| Switches | public-src/views/library/import.ts | `data-provider-id="${esc(p.id)}"` | S6 |
-| Errors | public-src/views/gaggimate-profile-editor.ts | `t('gm_toast_name_required')` | S6 |
-| Choosing | public-src/views/gaggimate-profile-editor.ts | `function _phaseTypeSelect` | S6 |
-| Numbers | public-src/views/gaggimate-profile-editor.ts | `id="gm-std-vol-${esc(i)}"` | S6 |
-| Numbers | public-src/views/gaggimate-profile-editor.ts | `id="gm-pro-pressure-${esc(i)}"` | S6 |
-| Numbers | public-src/views/gaggimate-profile-editor.ts | `id="gm-pro-flow-${esc(i)}"` | S6 |
-| Numbers | public-src/views/gaggimate-profile-editor.ts | `id="gm-pro-ramp-duration-${esc(i)}"` | S6 |
-| Numbers | public-src/views/gaggimate-profile-editor.ts | `<input type="number" class="lib-input" style="width:80px"` | S6 |
 | Confirming | public-src/views/library/baskets.ts | `confirm(t('lib_confirm_delete_basket'))` | S7 |
 | Confirming | public-src/views/library/grinders.ts | `confirm(t('lib_grinder_confirm_reset_burrs'))` | S7 |
 | Confirming | public-src/views/library/grinders.ts | `confirm(t('lib_confirm_delete_grinder'))` | S7 |

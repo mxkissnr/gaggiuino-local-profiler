@@ -8,6 +8,7 @@ import { t } from '../../i18n.js';
 import { importFromUrl as apiImportFromUrl, importFromPaste as apiImportFromPaste, getImportSettings, saveImportSettings } from '../../api/system.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml, safeHttpUrl, toIsoDateInput } from '../../utils.js';
+import { showToast } from '../../components/toast.js';
 import { WARNING_ICON_SVG } from '../../icons.js';
 import { parseGlpQrParams } from '../../glp-qr.js';
 import type { BarcodeFormat } from 'barcode-detector/ponyfill';
@@ -201,7 +202,7 @@ export async function importFromUrl(): Promise<void> {
   try {
     const r = await apiImportFromUrl(url);
     if (r.status === 400) {
-      alert(t('lib_url_unsupported'));
+      showToast(t('lib_url_unsupported'));
       return;
     }
     // A proxy can answer 502 itself with any body, so only the code counts; an
@@ -217,7 +218,7 @@ export async function importFromUrl(): Promise<void> {
     const data = await r.json() as UrlImportData;
     _fillFromImport(data, url);
   } catch {
-    alert(t('lib_url_error'));
+    showToast(t('lib_url_error'));
   } finally {
     btn.textContent = t('lib_url_btn');
     btn.disabled = false;
@@ -254,7 +255,7 @@ export async function importFromPaste(): Promise<void> {
     const data = await r.json() as UrlImportData;
     _fillFromImport(data, null);
   } catch {
-    alert(t('lib_url_error'));
+    showToast(t('lib_url_error'));
   } finally {
     if (btn) {
       btn.textContent = t('lib_url_paste_btn');
@@ -411,7 +412,7 @@ export async function toggleImportSettings(): Promise<void> {
 
 async function _loadAndRenderImportSettings(): Promise<void> {
   const r = await getImportSettings();
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   const data = await r.json() as ImportSettings;
   _state()._importSettings = data;
   _renderImportSettingsPanel(data);
@@ -420,9 +421,12 @@ async function _loadAndRenderImportSettings(): Promise<void> {
 function _renderImportSettingsPanel(data: ImportSettings): void {
   const providersEl = _field('importSettingsProviders');
   const customEl    = _field('importSettingsCustomList');
+  // A provider switch applies at once, so it is a toggle, not a form checkbox
+  // (#1962, docs/DESIGN.md "Switches"). The wrapper is a <span> because the row
+  // itself is already the <label>.
   providersEl.innerHTML = joinHtml(data.providers.map(p => html`
     <label class="lib-import-settings-provider">
-      <input type="checkbox" data-provider-id="${esc(p.id)}" ${p.enabled ? html`checked` : html``}>
+      <span class="toggle-switch"><input type="checkbox" data-provider-id="${esc(p.id)}" ${p.enabled ? html`checked` : html``}><span class="toggle-track"></span></span>
       ${esc(p.label)} <span class="lib-import-settings-host">(${esc(p.hostSuffix)})</span>
     </label>`));
   providersEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach(cb => {
@@ -447,7 +451,14 @@ async function _saveProviderToggle(providerId: string, enabled: boolean): Promis
     .filter(p => !p.enabled)
     .map(p => p.id);
   const r = await saveImportSettings({ disabledProviders, customShopifyDomains: current.customShopifyDomains });
-  if (r.ok) await _loadAndRenderImportSettings();
+  if (!r.ok) {
+    showToast(t('error_generic', r.status));
+    // Repaint from the stored settings, so the switch that just moved shows
+    // what the server still has.
+    _renderImportSettingsPanel(current);
+    return;
+  }
+  await _loadAndRenderImportSettings();
 }
 
 export async function addCustomShopifyDomain(): Promise<void> {
@@ -461,7 +472,7 @@ export async function addCustomShopifyDomain(): Promise<void> {
     input.value = '';
     await _loadAndRenderImportSettings();
   } else {
-    alert(t('lib_import_settings_invalid_domain'));
+    showToast(t('lib_import_settings_invalid_domain'));
   }
 }
 

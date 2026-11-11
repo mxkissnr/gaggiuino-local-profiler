@@ -26,6 +26,10 @@ const library = vi.hoisted(() => ({
 }));
 vi.mock('../public-src/views/library.js', () => library);
 
+// The view reports every failure with the app toast (#1962: no native alert).
+const toast = vi.hoisted(() => ({ showToast: vi.fn() }));
+vi.mock('../public-src/components/toast.js', () => toast);
+
 // The elements the import paths read/write. The fake keeps a real innerHTML
 // string so the escaping assertions can inspect what would reach the DOM.
 class FakeEl {
@@ -98,7 +102,6 @@ const { importFromUrl, importFromPaste, toggleUrlImport } =
 const { S } = (await import('../public-src/state/index.js')) as unknown as { S: { currentLang: string } };
 const { t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string };
 
-const alertSpy = vi.fn();
 
 const BLOCKED_URL = 'https://shop.example.com/products/bean';
 const DATA_URL = 'https://shop.example.com/products/bean.js';
@@ -125,11 +128,10 @@ beforeEach(() => {
     getElementById: (id: string) => elements[id] ?? null,
     querySelector: (selector: string) => (selector === '#urlImportRow .lib-url-btn' ? importUrlBtn : null),
   };
-  g.alert = alertSpy;
 
   api.importFromUrl.mockReset();
   api.importFromPaste.mockReset();
-  alertSpy.mockReset();
+  toast.showToast.mockReset();
   library.openBeanForm.mockReset();
   library.setFormOrigins.mockReset();
   library.setFormFlavors.mockReset();
@@ -150,7 +152,7 @@ describe('shop import: a blocked shop offers the paste path', () => {
     expect(el('urlImportPasteRow').style.display).toBe('flex');
     expect(el('urlImportPasteSteps').style.display).toBe('flex');
     expect(el('urlImportPasteLink').href).toBe(DATA_URL);
-    expect(alertSpy).not.toHaveBeenCalled();
+    expect(toast.showToast).not.toHaveBeenCalled();
     expect(library.openBeanForm).not.toHaveBeenCalled();
   });
 
@@ -183,7 +185,7 @@ describe('shop import: a blocked shop offers the paste path', () => {
     await importFromUrl();
 
     expect(el('urlImportPasteRow').style.display).toBe('none');
-    expect(alertSpy).toHaveBeenCalledWith(t('lib_url_error'));
+    expect(toast.showToast).toHaveBeenCalledWith(t('lib_url_error'));
   });
 
   it('keeps the generic error for a 500', async () => {
@@ -193,7 +195,7 @@ describe('shop import: a blocked shop offers the paste path', () => {
     await importFromUrl();
 
     expect(el('urlImportPasteRow').style.display).toBe('none');
-    expect(alertSpy).toHaveBeenCalledWith(t('lib_url_error'));
+    expect(toast.showToast).toHaveBeenCalledWith(t('lib_url_error'));
   });
 
   it('closes the panel when a new import starts', async () => {
@@ -353,7 +355,7 @@ describe('shop import: pasting product data', () => {
 
     await importFromPaste();
 
-    expect(alertSpy).toHaveBeenCalledWith(t('lib_url_error'));
+    expect(toast.showToast).toHaveBeenCalledWith(t('lib_url_error'));
     expect(library.openBeanForm).not.toHaveBeenCalled();
   });
 

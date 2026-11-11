@@ -29,11 +29,6 @@
       "count": 2
     }
   },
-  "public-src/views/library/import.ts": {
-    "local/no-native-dialog": {
-      "count": 4
-    }
-  },
   "public-src/views/library/milk.ts": {
     "local/no-native-dialog": {
       "count": 1
