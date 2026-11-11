@@ -7,28 +7,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
 | Dates | public-src/views/dialin.ts | `.toLocaleDateString(locale, { day:` | S12 |
-| Numbers | public-src/index.html | `id="annDose"` | S10 |
-| Numbers | public-src/index.html | `id="grinderFormZeroPoint"` | S10 |
-| Numbers | public-src/index.html | `id="recipeFormDose"` | S10 |
-| Numbers | public-src/index.html | `id="recipeFormYield"` | S10 |
-| Numbers | public-src/index.html | `id="recipeFormTime"` | S10 |
-| Numbers | public-src/index.html | `id="recipeFormWaterG"` | S10 |
-| Numbers | public-src/index.html | `id="recipeFormIceG"` | S10 |
-| Numbers | public-src/index.html | `id="milkFormStock"` | S10 |
-| Numbers | public-src/index.html | `id="profileFormCoffeeIn"` | S10 |
-| Numbers | public-src/index.html | `id="profileFormCoffeeOut"` | S10 |
-| Numbers | public-src/index.html | `id="profileFormRatio"` | S10 |
-| Numbers | public-src/index.html | `id="profileFormWeight"` | S10 |
-| Numbers | public-src/index.html | `id="lsDose"` | S10 |
-| Numbers | public-src/index.html | `id="sdDose"` | S10 |
-| Numbers | public-src/index.html | `id="mqttPort"` | S10 |
-| Number comma | public-src/index.html | `type="number"` | S10 |
-| Switches | public-src/boot/popups.ts | `id="popupsEnabled"` | S10 |
-| Switches | public-src/boot/popups.ts | `id="popupsWhatsNew"` | S10 |
-| Switches | public-src/boot/popups.ts | `id="popupsAchievements"` | S10 |
-| Switches | public-src/components/bottom-nav.ts | `checkbox.type = 'checkbox'` | S10 |
-| Switches | public-src/index.html | `id="devBlindRating"` | S10 |
-| Switches | public-src/index.html | `id="machineControlEnabled"` | S10 |
 | Number units | public-src/i18n/en.ts | `profile_stop_pressure_above:` | S11 |
 | Number units | public-src/i18n/en.ts | `profile_stop_pressure_below:` | S11 |
 | Number units | public-src/i18n/en.ts | `profile_stop_flow_above:` | S11 |
