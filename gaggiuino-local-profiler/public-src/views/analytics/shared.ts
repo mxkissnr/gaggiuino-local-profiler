@@ -1,6 +1,6 @@
 import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
-import { esc, html, localDateKey, utcDateKey, scoreColor, themeColor } from '../../utils.js';
+import { esc, formatDate, html, localDateKey, utcDateKey, scoreColor, themeColor } from '../../utils.js';
 import { resolveBeanForAnnotation } from '../shots/utils.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../../shared/bean-mix.js';
@@ -194,7 +194,7 @@ export function _keyFromNum(n: number): string {
   return utcDateKey(new Date(n * 86400000));
 }
 export function _fmtCalendarDay(key: string, locale: string): string {
-  return _dateFromKey(key).toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+  return formatDate(_dateFromKey(key), locale, 'long');
 }
 
 // #811: was the hardcoded #52525b (Tailwind zinc-600) on every chart's tick
