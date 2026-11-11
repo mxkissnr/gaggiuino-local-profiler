@@ -1,4 +1,5 @@
 import { t, tHtml } from '../../i18n.js';
+import { showToast } from '../../components/toast.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
@@ -399,7 +400,7 @@ export async function toggleBeanActive(id: number): Promise<void> {
   let folded = false;
   try {
     const saved = await libraryApi.toggleBeanActive(id);
-    if (!saved) return;
+    if (!saved) { showToast(t('gm_toast_save_error')); return; }
     const idx = _beanList().findIndex(b => b.id === id);
     if (idx !== -1) _beanList()[idx] = saved;
     window.showToast?.(t(saved.enabled === false ? 'lib_archived_toast' : 'lib_restored_toast'));
