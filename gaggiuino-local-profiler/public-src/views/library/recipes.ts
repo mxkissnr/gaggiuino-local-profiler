@@ -128,8 +128,8 @@ function _stepRowHtml(i: number, text: string | undefined = '', dur: number | st
 // of its own; while editing, say so explicitly (#1962).
 function _notifyStepChange(): void {
   if (!_state().recipeEditId) return;
-  const form = document.getElementById('recipeAddForm') as HTMLElement | null;
-  if (typeof form?.dispatchEvent === 'function') form.dispatchEvent(new Event('change', { bubbles: true }));
+  const form = document.getElementById('recipeAddForm');
+  if (form) form.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 export function addRecipeStep(): void {

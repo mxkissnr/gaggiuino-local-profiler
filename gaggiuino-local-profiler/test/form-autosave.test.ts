@@ -66,7 +66,7 @@ function createdStatuses(): FakeStatus[] {
 describe('bindFormAutosave (#1962)', () => {
   it('mounts one status element into the form actions', () => {
     const form = makeForm();
-    bind(form, true, async () => true);
+    bind(form, true, () => Promise.resolve(true));
 
     const statuses = createdStatuses();
     expect(statuses).toHaveLength(1);
@@ -76,13 +76,13 @@ describe('bindFormAutosave (#1962)', () => {
 
   it('does nothing for a form without an actions row', () => {
     const form = makeForm(false);
-    bind(form, true, async () => true);
+    bind(form, true, () => Promise.resolve(true));
 
     expect(createdStatuses()).toHaveLength(0);
   });
 
   it('does not save while creating', () => {
-    const save = vi.fn(async () => true);
+    const save = vi.fn(() => Promise.resolve(true));
     const form = makeForm();
     bind(form, false, save);
 
@@ -108,7 +108,7 @@ describe('bindFormAutosave (#1962)', () => {
 
   it('clears the status when the save fails', async () => {
     const form = makeForm();
-    bind(form, true, async () => false);
+    bind(form, true, () => Promise.resolve(false));
 
     form.commit(INPUT);
     await vi.waitFor(() => expect(createdStatuses()[0]?.textContent).toBe(''));
@@ -134,7 +134,7 @@ describe('bindFormAutosave (#1962)', () => {
   });
 
   it('ignores a picked file', () => {
-    const save = vi.fn(async () => true);
+    const save = vi.fn(() => Promise.resolve(true));
     const form = makeForm();
     bind(form, true, save);
 
