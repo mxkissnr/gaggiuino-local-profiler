@@ -149,7 +149,16 @@ export function initAnalytics() {
 export function rebuildAnalyticsPage(): void {
   const empty = _pageShots().length === 0;
   const emptyEl = document.getElementById('analyticsFilterEmpty');
-  if (emptyEl) emptyEl.style.display = empty ? '' : 'none';
+  if (emptyEl) {
+    emptyEl.style.display = empty ? '' : 'none';
+    // #1962: "no shots" has three different reasons — the load failed, it is
+    // still running, or the filter really matches nothing. The markup's own
+    // data-i18n key is the third text, so it comes back after a reload.
+    const ownKey = emptyEl.dataset.i18n ?? 'analytics_filter_empty';
+    emptyEl.textContent = empty && S.shotsLoadFailed ? t('error_load')
+      : empty && !S.allShotsLoaded ? t('loading')
+      : t(ownKey);
+  }
   document.querySelectorAll<HTMLElement>('[data-analytics-period]').forEach(el => {
     el.style.display = empty ? 'none' : '';
   });
