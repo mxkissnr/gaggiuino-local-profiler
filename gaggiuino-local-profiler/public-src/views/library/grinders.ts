@@ -3,10 +3,13 @@
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml, toIsoDateInput, localMidnightMs } from '../../utils.js';
+import { esc, html, joinHtml, toIsoDateInput, localMidnightMs, formatDate } from '../../utils.js';
+import { localeFor } from '../../constants.js';
 import type { Html } from '../../utils.js';
 import { WRENCH_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
@@ -172,7 +175,7 @@ function renderGrinderZeroPointHistory(grinder: GrinderRow | null | undefined): 
   if (!Array.isArray(history) || !history.length) { el.innerHTML = html``; return; }
   const sorted = [...history].sort((a, b) => a.since - b.since);
   el.innerHTML = html`<div class="zp-history">${joinHtml(sorted.map(e => {
-    const date = new Date(e.since).toLocaleDateString();
+    const date = formatDate(e.since, localeFor(S.currentLang));
     return html`<div class="zp-history-entry">
       <span>${esc(String(e.zeroPoint))} &mdash; ${esc(date)}</span>
       <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder?.id)}" data-since="${esc(e.since)}" title="${tHtml('lib_grinder_zero_point_delete')}">&#x2715;</button>
@@ -208,7 +211,7 @@ export async function saveGrinder(): Promise<void> {
   const scale = readGrinderScaleForm();
   if (scale === undefined) return;
   const first = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate, scale });
-  if (!first) return;
+  if (!first) { showToast(t('gm_toast_save_error')); return; }
   let saved = _asRow(first);
 
   if (S.grinderEditId) {
@@ -246,9 +249,9 @@ export async function saveGrinder(): Promise<void> {
 }
 
 export async function resetGrinderBurrs(id: number): Promise<void> {
-  if (!confirm(t('lib_grinder_confirm_reset_burrs'))) return;
+  if (!await confirmDialog(t('lib_grinder_confirm_reset_burrs'))) return;
   const saved = await libraryApi.resetGrinderBurrs(id);
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const grinders = _grinders();
   const idx = grinders.findIndex(g => g.id === id);
   if (idx !== -1) grinders[idx] = _asRow(saved);
@@ -285,9 +288,9 @@ async function _storeGrinderPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deleteGrinder(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_grinder'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_grinder'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteGrinderPermanently(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   S.coffeeLibrary.grinders = S.coffeeLibrary.grinders.filter(g => g.id !== id);
   library.updateLibraryDatalist();
   renderGrinderList();

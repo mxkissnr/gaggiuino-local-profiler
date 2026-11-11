@@ -6,27 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Confirming | public-src/views/library/baskets.ts | `confirm(t('lib_confirm_delete_basket'))` | S7 |
-| Confirming | public-src/views/library/grinders.ts | `confirm(t('lib_grinder_confirm_reset_burrs'))` | S7 |
-| Confirming | public-src/views/library/grinders.ts | `confirm(t('lib_confirm_delete_grinder'))` | S7 |
-| Confirming | public-src/views/library/milk.ts | `confirm(t('lib_milk_delete') + '?')` | S7 |
-| Confirming | public-src/views/library/puck-screens.ts | `confirm(t('lib_confirm_delete_puckscreen'))` | S7 |
-| Confirming | public-src/views/library/recipes.ts | `confirm(t('lib_confirm_delete_recipe'))` | S7 |
-| Errors | public-src/views/library/baskets.ts | `if (!saved) return;` | S7 |
-| Errors | public-src/views/library/baskets.ts | `if (!r.ok) return;` | S7 |
-| Errors | public-src/views/library/grinders.ts | `if (!first) return;` | S7 |
-| Errors | public-src/views/library/grinders.ts | `if (!saved) return;` | S7 |
-| Errors | public-src/views/library/grinders.ts | `if (!r.ok) return;` | S7 |
-| Errors | public-src/views/library/milk.ts | `if (!saved) return;` | S7 |
-| Errors | public-src/views/library/milk.ts | `if (!saved) return;` | S7 |
-| Errors | public-src/views/library/milk.ts | `if (!r.ok) return;` | S7 |
-| Errors | public-src/views/library/puck-screens.ts | `if (!saved) return;` | S7 |
-| Errors | public-src/views/library/puck-screens.ts | `if (!r.ok) return;` | S7 |
-| Errors | public-src/views/library/recipes.ts | `if (!saved) return;` | S7 |
-| Errors | public-src/views/library/recipes.ts | `if (!r.ok) return;` | S7 |
-| Numbers | public-src/views/library/milk.ts | `id="milkRestock_${esc(m.id)}"` | S7 |
-| Numbers | public-src/views/library/recipes.ts | `<input class="lib-step-dur" type="number" min="0" step="1"` | S7 |
-| Dates | public-src/views/library/grinders.ts | `.toLocaleDateString();` | S7 |
 | Confirming | public-src/views/library-profile-editor.ts | `confirm(t('profile_confirm_delete'))` | S8 |
 | Confirming | public-src/views/library-profile-editor.ts | `confirm(t('profile_confirm_send'))` | S8 |
 | Confirming | public-src/views/maintenance.ts | `confirm(t('maint_confirm_delete_custom', task.replace('custom_', '')))` | S8 |
@@ -103,7 +82,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 | Switches | public-src/components/bottom-nav.ts | `checkbox.type = 'checkbox'` | S10 |
 | Switches | public-src/index.html | `id="devBlindRating"` | S10 |
 | Switches | public-src/index.html | `id="machineControlEnabled"` | S10 |
-| Number units | public-src/i18n/en.ts | `lib_milk_restock:` | S7 |
 | Number units | public-src/i18n/en.ts | `profile_stop_pressure_above:` | S11 |
 | Number units | public-src/i18n/en.ts | `profile_stop_pressure_below:` | S11 |
 | Number units | public-src/i18n/en.ts | `profile_stop_flow_above:` | S11 |

@@ -7,6 +7,8 @@ import { esc, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
 import { _renderBeanSelect } from '../shots/annotation.js';
 import type { Recipe } from '../../api/types.js';
 import type { ShotMeta } from '../../state/index.js';
@@ -115,7 +117,7 @@ function _stepRowHtml(i: number, text: string | undefined = '', dur: number | st
   return html`<div class="lib-step-row" id="recipeStep${esc(i)}">
     <span class="lib-step-num">${esc(i + 1)}</span>
     <input class="lib-step-text" aria-label="${tHtml('lib_recipe_step_ph')}" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
-    <input class="lib-step-dur" type="number" min="0" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
+    <input class="lib-step-dur" type="number" min="0" max="3600" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
     <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}">${ICON_TRASH}</button>
   </div>`;
 }
@@ -202,7 +204,7 @@ export async function saveRecipe(): Promise<void> {
     steps:         _collectSteps(),
   };
   const saved = await libraryApi.saveRecipe(_state().recipeEditId ?? null, payload);
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const lib = _state().coffeeLibrary;
   const recipes = lib.recipes ?? [];
   lib.recipes = recipes;
@@ -217,9 +219,9 @@ export async function saveRecipe(): Promise<void> {
 }
 
 export async function deleteRecipe(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_recipe'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_recipe'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteRecipePermanently(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.recipes = (_state().coffeeLibrary.recipes || []).filter(r => r.id !== id);
   renderRecipeList();
 }
