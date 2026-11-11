@@ -17,12 +17,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 | Dates | public-src/views/live.ts | `.toLocaleDateString(localeFor(S.currentLang), { da` | S13 |
 | States | public-src/views/library.ts | `export async function loadLibrary` | S13 |
 | States | public-src/views/orders.ts | `export async function loadOrdersView` | S13 |
-| Errors | public-src/views/library/baskets.ts | `getElementById('basketFormName') as HTMLInputElement).focus(); return;` | S14 |
-| Errors | public-src/views/library/puck-screens.ts | `getElementById('puckScreenFormName') as HTMLInputElement).focus(); return;` | S14 |
-| Errors | public-src/views/library/recipes.ts | `getElementById('recipeFormName') as HTMLInputElement).focus(); return;` | S14 |
-| Saving | public-src/index.html | `id="saveBasketBtn"` | S14 |
-| Saving | public-src/index.html | `id="savePuckScreenBtn"` | S14 |
-| Saving | public-src/index.html | `id="saveRecipeBtn"` | S14 |
 | Confirming | public-src/views/library/bean-card.ts | `confirm(t('lib_bag_delete_confirm'))` | S15 |
 | Confirming | public-src/views/library/bean-card.ts | `alert(t('bean_qr_error'))` | S15 |
 | Confirming | public-src/views/library/bean-form-sheet.ts | `confirm(t('lib_confirm_delete_bean'))` | S15 |
