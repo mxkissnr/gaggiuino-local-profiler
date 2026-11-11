@@ -1,6 +1,6 @@
 import type { ShelfBean } from './library/shelf.js';
 import { S } from '../state/index.js';
-import { tHtml } from '../i18n.js';
+import { t, tHtml } from '../i18n.js';
 import * as libraryApi from '../api/library.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
@@ -29,10 +29,30 @@ import {
 import { checkEmptyBeanOffer } from './library/empty-offer.js';
 
 // ── Library load ──────────────────────────────────────────────────────────
+// #1962: the view says when it is loading or failed instead of showing the
+// per-list "nothing here yet" texts, which would claim the library is empty.
+// A background refresh leaves whatever is already on screen alone.
+function _setLibraryLoad(state: 'loading' | 'failed' | null): void {
+  const view = document.getElementById('library-view');
+  const line = document.getElementById('libraryLoadState');
+  if (!view || !line) return;
+  if (state) view.setAttribute('data-load', state);
+  else view.removeAttribute('data-load');
+  line.textContent = state === 'loading' ? t('please_wait') : state === 'failed' ? t('error_load') : '';
+  if (state === 'failed') line.style.color = 'var(--err)';
+  else line.style.removeProperty('color');
+  line.style.display = state ? '' : 'none';
+}
+
 export async function loadLibrary(): Promise<void> {
+  const firstLoad = _beanList().length === 0;
+  if (firstLoad) _setLibraryLoad('loading');
   try {
     const library = await libraryApi.getLibrary();
-    if (!library) return;
+    if (!library) {
+      if (firstLoad) _setLibraryLoad('failed');
+      return;
+    }
     S.coffeeLibrary = library as typeof S.coffeeLibrary;
     const lib = _state().coffeeLibrary;
     if (!lib.recipes)     lib.recipes     = [];
@@ -59,7 +79,10 @@ export async function loadLibrary(): Promise<void> {
     // screen <select>s are also populated straight off S.coffeeLibrary at
     // init, before this fetch necessarily resolves.
     renderShotDefaultsSettingsCard();
-  } catch { /* ignore */ }
+    _setLibraryLoad(null);
+  } catch {
+    if (firstLoad) _setLibraryLoad('failed');
+  }
 }
 
 // #1960, #1961: a library change re-fills the annotation panel's grinder dropdown
