@@ -22,8 +22,10 @@ const viewMarkup = (() => {
 })();
 const chunks = viewMarkup.split('<section class="settings-page"');
 
-const { SETTINGS_GROUPS, settingsGroupsHtml, openSettingsPage, closeSettingsPage } =
-    await import('../public-src/boot/settings-page.js');
+const {
+    SETTINGS_GROUPS, settingsGroupsHtml, openSettingsPage, closeSettingsPage,
+    filterSettingsItems,
+} = await import('../public-src/boot/settings-page.js');
 const { t } = await import('../public-src/i18n.js');
 const en = (await import('../public-src/i18n/en.js')).default;
 
@@ -48,7 +50,7 @@ describe('settings markup: every setting sits in exactly one sub-page (#2038)', 
         'mqttTransportToggle', 'mqttSaveBtn', 'machinesList', 'addMachineBtn',
         'machineFormCard', 'backupDownloadBtn', 'backupRestoreInput',
         'apiTokenCard', 'devToolsCard', 'devScoreModel',
-        'whatsNewList', 'settingsVersion',
+        'whatsNewList', 'settingsVersion', 'settingsLang', 'settingsSearch',
     ];
 
     it('keeps every setting id in the document exactly once, inside a section', () => {
@@ -56,12 +58,27 @@ describe('settings markup: every setting sits in exactly one sub-page (#2038)', 
             expect(occurrences(indexHtml, `id="${id}"`), id).toBe(1);
             expect(chunks.some(c => c.includes(`id="${id}"`)), id).toBe(true);
         }
+        // The search belongs to the bar above the list, not to any sub-page.
+        expect(occurrences(indexHtml, 'id="settingsSearch"')).toBe(1);
+        expect(chunks.slice(1).some(c => c.includes('id="settingsSearch"'))).toBe(false);
     });
 
-    it('puts the language buttons in the appearance chunk', () => {
+    // #2038: six visible buttons broke the "at most five pills" rule, so the
+    // language picker is one dropdown; the stored glp_lang key is unchanged.
+    it('puts the language dropdown in the appearance chunk', () => {
         const appearance = chunks.find(c => c.includes('data-settings-page="appearance"')) ?? '';
-        expect(occurrences(appearance, 'lang-option-btn')).toBe(6);
-        expect(chunks.filter(c => c.includes('data-lang="de"')).length).toBe(1);
+        expect(appearance).toContain('<select id="settingsLang"');
+        expect(appearance).toContain('<label for="settingsLang"');
+        const values = [...appearance.matchAll(/<option value="([a-z]{2})"/g)].map(m => m[1]);
+        expect(values).toEqual(['de', 'en', 'es', 'fr', 'it', 'nl']);
+        expect(indexHtml).not.toContain('lang-option-btn');
+    });
+
+    it('puts the search field in the settings bar, never inside a sub-page', () => {
+        const bar = indexHtml.match(/<div class="settings-bar" id="settingsBar">[\s\S]*?<\/div>\s*<div class="settings-layout">/)?.[0] ?? '';
+        expect(bar).toContain('id="settingsSearch"');
+        expect(bar).toContain('data-i18n-aria-label="settings_search_ph"');
+        expect(bar).toContain('data-i18n-placeholder="settings_search_ph"');
     });
 
     it('moves "Restart setup tour" into the bar overflow menu', () => {
@@ -90,6 +107,47 @@ describe('settingsGroupsHtml()', () => {
 
     it('renders the rows in two group cards', () => {
         expect(occurrences(markup, 'class="settings-group"')).toBe(2);
+    });
+});
+
+describe('filterSettingsItems() (#2038)', () => {
+    const items = [
+        { group: 'machines', label: 'MQTT', el: null },
+        { group: 'coffee', label: 'Café', el: null },
+        { group: 'appearance', label: 'Sprache', el: null },
+        { group: 'appearance', label: 'Sprache', el: null },
+        { group: 'machines', label: 'Sprache', el: null },
+    ];
+
+    it('matches a label anywhere inside it, ignoring case', () => {
+        expect(filterSettingsItems(items, 'mqtt').map(i => i.label)).toEqual(['MQTT']);
+        expect(filterSettingsItems(items, 'MQTT').map(i => i.label)).toEqual(['MQTT']);
+        const labels = filterSettingsItems(items, 'sprach').map(i => i.label);
+        expect(labels).toEqual(['Sprache', 'Sprache']);
+    });
+
+    it('ignores diacritics in the label and in the query', () => {
+        expect(filterSettingsItems(items, 'cafe').map(i => i.label)).toEqual(['Café']);
+        expect(filterSettingsItems(items, 'café').map(i => i.label)).toEqual(['Café']);
+    });
+
+    it('keeps one entry for a label repeated inside a group, but not across groups', () => {
+        const sameGroup = filterSettingsItems(items, 'sprache');
+        expect(sameGroup.filter(i => i.group === 'appearance').length).toBe(1);
+        expect(sameGroup.filter(i => i.group === 'machines').length).toBe(1);
+        expect(sameGroup.length).toBe(2);
+    });
+
+    it('returns every match in input order', () => {
+        expect(filterSettingsItems(items, 'sprache').map(i => i.group)).toEqual(['appearance', 'machines']);
+        const order = filterSettingsItems(items, 'e').map(i => i.label);
+        expect(order).toEqual(['Café', 'Sprache', 'Sprache']);
+    });
+
+    it('returns nothing for a blank query', () => {
+        expect(filterSettingsItems(items, '')).toEqual([]);
+        expect(filterSettingsItems(items, '   ')).toEqual([]);
+        expect(filterSettingsItems(items, 'zzz')).toEqual([]);
     });
 });
 

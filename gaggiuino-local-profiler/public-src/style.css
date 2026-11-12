@@ -764,6 +764,13 @@
         }
         .settings-bar-title, .settings-subbar-title { flex:1; min-width:0; margin:0; font-size: var(--fs-4); font-weight:600; color: var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .settings-groups { display:flex; flex-direction:column; gap: var(--sp-4); }
+        .settings-groups[hidden], #settingsSearchResults[hidden], .settings-search-empty[hidden] { display:none; }
+        .settings-search-empty { padding: var(--sp-4); }
+        /* Scoped to the bar so .lib-shelf-search/.lib-sheet-iconbtn, defined
+           further down the file, cannot override these. */
+        .settings-bar .settings-search { display:none; flex: 1 1 auto; min-width:0; }
+        .settings-bar.is-searching .settings-search { display:block; }
+        .settings-bar.is-searching .settings-bar-title, .settings-bar.is-searching .settings-search-btn { display:none; }
         .settings-group { background: var(--gray-900); border-radius: var(--radius-lg); overflow:hidden; }
         .settings-row {
             display:flex; align-items:center; width:100%; min-height:64px;
@@ -802,15 +809,13 @@
             .settings-subbar { position: static; margin-top: 0; padding-top: 0; }
             .settings-back { display:none; }
             .settings-row[aria-current="page"] { background: var(--raised); }
+            .settings-bar .settings-search { display:block; flex: 0 1 320px; }
+            .settings-bar .settings-search-btn { display:none; }
         }
         .settings-more .lib-sheet-menu-list { z-index: var(--z-dropdown); }
         .settings-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-3); }
         .settings-card-title { margin: 0; font-size: var(--fs-3); font-weight:600; color:var(--gray-200); }
         .settings-card-desc { margin: 0; font-size: var(--fs-1); color:var(--gray-500); line-height:1.5; }
-        .settings-lang-group { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
-        .lang-option-btn { background:var(--gray-800); border:1px solid var(--gray-700); color:var(--gray-400); padding: var(--sp-2) var(--sp-4); border-radius:var(--radius); cursor:pointer; font-size: var(--fs-2); font-weight:600; transition:all .15s; }
-        .lang-option-btn:hover { background:var(--gray-700); color:var(--gray-200); }
-        .lang-option-btn.active { border-color:var(--err); color:var(--gray-200); }
         .backup-btn { background:var(--gray-800); border:1px solid var(--gray-700); color:var(--gray-200); padding: var(--sp-3) var(--sp-4); border-radius:var(--radius); cursor:pointer; font-size: var(--fs-2); text-align:left; transition:background .15s; text-decoration:none; display:block; }
         .backup-btn:hover { background:var(--gray-700); }
         .api-token-row { display:flex; align-items:center; gap: var(--sp-2); flex-wrap:wrap; }

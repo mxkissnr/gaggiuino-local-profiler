@@ -1,6 +1,7 @@
 // #2038: the settings page is a grouped list (Home Assistant's pattern) with
-// one sub-page per group. This module only switches between those sub-pages:
-// every card inside a sub-page keeps its own wiring (boot/settings.ts etc.).
+// one sub-page per group. This module switches between those sub-pages and
+// filters the settings by label; every card inside a sub-page keeps its own
+// wiring (boot/settings.ts etc.).
 import { t, tHtml } from '../i18n.js';
 import { machineIconMiniSvg } from '../machine-icon.js';
 import {
@@ -30,6 +31,38 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   { id: 'developer', titleKey: 'settings_group_dev', subKey: 'settings_group_dev_sub', icon: LINK_ICON_SVG, tint: 'var(--swatch-cyan)', card: 2 },
   { id: 'about', titleKey: 'settings_group_about', subKey: 'settings_group_about_sub', icon: COFFEE_ICON_SVG, tint: 'var(--gray-400)', card: 2 },
 ];
+
+export interface SettingsSearchItem {
+  group: string;
+  label: string;
+  el: HTMLElement | null;
+}
+
+// Search matches labels regardless of accents and case ("cafe" finds "Café").
+export function normalizeSettingsText(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export function filterSettingsItems(items: readonly SettingsSearchItem[], query: string): SettingsSearchItem[] {
+  const q = normalizeSettingsText(query);
+  if (!q) return [];
+  const seen = new Set<string>();
+  const out: SettingsSearchItem[] = [];
+  for (const item of items) {
+    const label = normalizeSettingsText(item.label);
+    if (!label.includes(q)) continue;
+    const key = `${item.group}\u0000${label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
 
 function _row(g: SettingsGroup): Html {
   // The data-i18n spans hold text only, so a language switch relabels them.
@@ -96,6 +129,71 @@ export function closeSettingsPage(): void {
   view.querySelector<HTMLElement>(`[data-settings-open="${open}"]`)?.focus();
 }
 
+let _searchResults: readonly SettingsSearchItem[] = [];
+
+function _resultRow(item: SettingsSearchItem, index: number): Html {
+  const group = _group(item.group);
+  const icon = group ? group.icon : esc('');
+  const tint = group ? group.tint : 'var(--gray-400)';
+  const groupTitle = group ? t(group.titleKey) : '';
+  return html`<button type="button" class="settings-row" data-settings-open="${esc(item.group)}" data-settings-result="${esc(index)}" style="--settings-tint:${esc(tint)}">
+                    <span class="settings-row-icon" aria-hidden="true">${icon}</span>
+                    <span class="settings-row-text"><span class="settings-row-title">${esc(item.label)}</span><span class="settings-row-sub">${esc(groupTitle)}</span></span>
+                    <span class="settings-chev" aria-hidden="true"></span>
+                </button>`;
+}
+
+// Cards the build or the session hides (dev tools on a stable install, the API
+// token card without a token) are not settings the user can reach.
+function _collectSettingsItems(): SettingsSearchItem[] {
+  const items: SettingsSearchItem[] = SETTINGS_GROUPS.map(g => ({ group: g.id, label: t(g.titleKey), el: null }));
+  // A group title that also heads a card ("Notifications") is one entry: keep
+  // the card title, so the result jumps to it instead of stopping at the top.
+  const seen = new Map<string, SettingsSearchItem>(
+    items.map(item => [`${item.group}\u0000${normalizeSettingsText(item.label)}`, item] as const),
+  );
+  const view = _view();
+  if (!view) return items;
+  for (const page of Array.from(view.querySelectorAll<HTMLElement>('.settings-page'))) {
+    const group = page.dataset.settingsPage ?? '';
+    const labels = page.querySelectorAll<HTMLElement>('.settings-card-title, .settings-row-title, label');
+    for (const el of Array.from(labels)) {
+      const label = el.textContent?.trim() ?? '';
+      if (!label) continue;
+      if (el.closest<HTMLElement>('.settings-card')?.style.display === 'none') continue;
+      const key = `${group}\u0000${normalizeSettingsText(label)}`;
+      const existing = seen.get(key);
+      if (existing) {
+        if (!existing.el) existing.el = el;
+        continue;
+      }
+      const item: SettingsSearchItem = { group, label, el };
+      seen.set(key, item);
+      items.push(item);
+    }
+  }
+  return items;
+}
+
+function _renderSearch(query: string): void {
+  const resultsEl = document.getElementById('settingsSearchResults');
+  const emptyEl = document.getElementById('settingsSearchEmpty');
+  const groupsEl = document.getElementById('settingsGroups');
+  if (!resultsEl || !emptyEl || !groupsEl) return;
+  if (!normalizeSettingsText(query)) {
+    _searchResults = [];
+    resultsEl.hidden = true;
+    emptyEl.hidden = true;
+    groupsEl.hidden = false;
+    return;
+  }
+  groupsEl.hidden = true;
+  _searchResults = filterSettingsItems(_collectSettingsItems(), query);
+  resultsEl.innerHTML = joinHtml(_searchResults.map(_resultRow));
+  resultsEl.hidden = _searchResults.length === 0;
+  emptyEl.hidden = _searchResults.length > 0;
+}
+
 export function wireSettingsPage(): void {
   const view = _view();
   if (!view) return;
@@ -109,6 +207,9 @@ export function wireSettingsPage(): void {
     const open = target?.closest<HTMLElement>('[data-settings-open]');
     if (open?.dataset.settingsOpen) {
       openSettingsPage(open.dataset.settingsOpen);
+      const result = open.dataset.settingsResult;
+      const el = result === undefined ? null : _searchResults[Number(result)]?.el ?? null;
+      if (el && el.offsetParent !== null) el.scrollIntoView({ block: 'center' });
       return;
     }
     if (target?.closest('[data-settings-back]')) {
@@ -122,4 +223,25 @@ export function wireSettingsPage(): void {
       if (more) more.open = false;
     }
   });
+
+  // The query survives while a sub-page is open, so the phone back arrow
+  // returns to the same results.
+  const search = document.getElementById('settingsSearch') as HTMLInputElement | null;
+  const bar = document.getElementById('settingsBar');
+  if (search) {
+    search.addEventListener('input', () => _renderSearch(search.value));
+    search.addEventListener('keydown', (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      search.value = '';
+      _renderSearch('');
+      bar?.classList.remove('is-searching');
+    });
+    search.addEventListener('blur', () => {
+      if (!search.value.trim()) bar?.classList.remove('is-searching');
+    });
+    document.getElementById('settingsSearchBtn')?.addEventListener('click', () => {
+      bar?.classList.add('is-searching');
+      search.focus();
+    });
+  }
 }
