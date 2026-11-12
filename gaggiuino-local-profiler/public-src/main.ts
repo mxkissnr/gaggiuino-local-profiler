@@ -62,6 +62,7 @@ import { wireShotDetail } from './boot/shot-detail.js';
 import { wireViews } from './boot/views.js';
 import { wireLibrary } from './boot/library.js';
 import { wireSettings } from './boot/settings.js';
+import { wireSettingsPage } from './boot/settings-page.js';
 import { wireDelegation } from './boot/delegation.js';
 import { bootData } from './boot/data.js';
 
@@ -147,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
   runStep('views', wireViews);
   runStep('library', wireLibrary);
   runStep('settings', wireSettings);
+  runStep('settings page', wireSettingsPage);
   runStep('delegation', wireDelegation);
 
   // ── Init sequence ──────────────────────────────────────────────────────

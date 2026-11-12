@@ -749,7 +749,61 @@
         }
 
         /* ── Settings view ── */
-        #settings-view { display:none; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); align-content:start; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding: var(--sp-5); gap: var(--sp-4); }
+        #settings-view { --settings-pad: var(--sp-5); display:none; grid-template-columns: minmax(0, 1fr); align-content:start; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding: var(--settings-pad); gap: var(--sp-4); }
+        @media (max-width: 480px) { #settings-view { --settings-pad: var(--sp-3); } }
+
+        /* #2038: Settings is a grouped list of rows; a row opens a sub-page.
+           Phone: the sub-page replaces the list. Desktop (900 px and wider):
+           list on the left, the open sub-page on the right. */
+        .settings-bar, .settings-subbar {
+            position: sticky; top: calc(-1 * var(--settings-pad)); z-index: var(--z-sticky);
+            display:flex; align-items:center; gap: var(--sp-2); min-height:56px;
+            margin-top: calc(-1 * var(--settings-pad));
+            padding: var(--settings-pad) 0 var(--sp-2);
+            background: var(--gray-950);
+        }
+        .settings-bar-title, .settings-subbar-title { flex:1; min-width:0; margin:0; font-size: var(--fs-4); font-weight:600; color: var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .settings-groups { display:flex; flex-direction:column; gap: var(--sp-4); }
+        .settings-group { background: var(--gray-900); border-radius: var(--radius-lg); overflow:hidden; }
+        .settings-row {
+            display:flex; align-items:center; width:100%; min-height:64px;
+            padding: var(--sp-2) var(--sp-4); gap: var(--sp-3);
+            border:0; background:transparent; color:inherit; font:inherit;
+            text-align:left; text-decoration:none; cursor:pointer;
+        }
+        .settings-row + .settings-row { border-top: 1px solid var(--gray-800); }
+        .settings-row:hover { background: var(--raised); }
+        .settings-row:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
+        .settings-row-static { cursor: default; }
+        .settings-row-static:hover { background: none; }
+        .settings-row-icon {
+            flex:0 0 auto; width:40px; height:40px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            color: var(--settings-tint, var(--gray-300));
+            background: color-mix(in srgb, var(--settings-tint, var(--gray-500)) 18%, transparent);
+        }
+        .settings-row-icon svg { width:22px; height:22px; display:block; }
+        .settings-row-icon .rail-icon { width:22px; height:22px; }
+        .settings-row-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+        .settings-row-title { font-size: var(--fs-2); color: var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .settings-row-sub { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .settings-row-value { flex:0 0 auto; font-size: var(--fs-1); color: var(--gray-400); font-variant-numeric: tabular-nums; }
+        .settings-chev { flex:0 0 auto; width:8px; height:8px; border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500); transform: rotate(-45deg); }
+        .settings-row-card { padding: 0; gap: 0; }
+        .settings-page { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
+        .settings-page[hidden] { display:none; }
+        .settings-page .whats-new-list { max-height:none; overflow:visible; }
+        @media (max-width: 899px) {
+            #settings-view[data-page] .settings-bar, #settings-view[data-page] .settings-list { display:none; }
+            #settings-view:not([data-page]) .settings-pages { display:none; }
+        }
+        @media (min-width: 900px) {
+            .settings-layout { display:grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: var(--sp-5); align-items:start; }
+            .settings-subbar { position: static; margin-top: 0; padding-top: 0; }
+            .settings-back { display:none; }
+            .settings-row[aria-current="page"] { background: var(--raised); }
+        }
+        .settings-more .lib-sheet-menu-list { z-index: var(--z-dropdown); }
         .settings-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-3); }
         .settings-card-title { margin: 0; font-size: var(--fs-3); font-weight:600; color:var(--gray-200); }
         .settings-card-desc { margin: 0; font-size: var(--fs-1); color:var(--gray-500); line-height:1.5; }
