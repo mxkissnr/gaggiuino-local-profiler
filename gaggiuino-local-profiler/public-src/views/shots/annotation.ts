@@ -5,7 +5,7 @@ import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, deleteShotImage, shotImageUrl } from '../../api/shots.js';
 import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js';
-import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
+import { esc, formatDate, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
 import { defaultGrinderName, suggestGrindDoseForBean, TASTE_TAGS, TASTE_TAG_LABELS, tasteTagOf } from './grind.js';
@@ -426,7 +426,7 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
   field.style.display = '';
   const locale = localeFor(S.currentLang);
   const options = [{ id: '', label: t('ann_frozen_portion_none') }, ...portions.map(p => {
-    const dateStr    = new Date(p.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const dateStr    = formatDate(p.frozenAt, locale);
     const remaining  = Number.isFinite(p.remainingCount) ? p.remainingCount as number : p.portionCount;
     // #811: no glyph in the label -- this string is rendered as an <option>
     // text node in one place and as escaped markup in another, and an <option>
@@ -784,7 +784,7 @@ export async function removeShotImage(): Promise<void> {
   if (!S.primaryShotId) return;
   const id = S.primaryShotId;
   const r = await deleteShotImage(id);
-  if (!r.ok) return;
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const idx = S.shots.findIndex(s => s.id === id);
   if (idx !== -1) {
     const entry = S.shots[idx];
