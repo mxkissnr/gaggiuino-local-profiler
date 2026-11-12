@@ -25,6 +25,7 @@ class FakeClassList {
 }
 
 class FakeElement {
+  id = '';
   readonly dataset: Record<string, string> = {};
   readonly style: Record<string, string> = {};
   readonly classList = new FakeClassList();
@@ -71,12 +72,19 @@ class FakeHTMLSelectElement extends FakeElement {
   dispatchEvent(e: FakeEvent): void { this.dispatched.push(e); }
 }
 
+// Labels a select can be named by, keyed by the id in `label[for="<id>"]`.
+const labels = new Map<string, FakeElement>();
+
 const g = globalThis as unknown as Record<string, unknown>;
 g.HTMLSelectElement = FakeHTMLSelectElement;
 g.Event = FakeEvent;
 g.document = {
   createElement: () => new FakeElement(),
   querySelectorAll: () => [],
+  querySelector: (selector: string): FakeElement | null => {
+    const match = /^label\[for="(.*)"\]$/.exec(selector);
+    return match ? labels.get(match[1]!) ?? null : null;
+  },
 };
 
 const { bindPillSelect, bindPillSelects } = await import('../public-src/components/pill-select.js');
@@ -109,7 +117,10 @@ const WALL_TYPES: FakeOptionSpec[] = [
 
 describe('#1962 pill select', () => {
   let select: FakeHTMLSelectElement;
-  beforeEach(() => { select = makeSelect(WALL_TYPES, 'Wall type'); });
+  beforeEach(() => {
+    labels.clear();
+    select = makeSelect(WALL_TYPES, 'Wall type');
+  });
 
   it('renders one pill per non-empty option and hides the select', () => {
     bindPillSelect(asSelect(select));
@@ -126,6 +137,21 @@ describe('#1962 pill select', () => {
     bindPillSelect(asSelect(select));
     expect(at(select.inserted, 0).getAttribute('data-i18n-aria-label'))
       .toBe('basket_wall_type_label');
+  });
+
+  it('names the group from a <label for> when the select has no aria-label', () => {
+    const select = makeSelect(WALL_TYPES);
+    select.id = 'basketWallType';
+    const labelEl = new FakeElement();
+    labelEl.setAttribute('for', 'basketWallType');
+    labels.set('basketWallType', labelEl);
+
+    bindPillSelect(asSelect(select));
+
+    const group = at(select.inserted, 0);
+    expect(labelEl.id).toBe('basketWallType-label');
+    expect(group.getAttribute('aria-labelledby')).toBe('basketWallType-label');
+    expect(group.getAttribute('aria-label')).toBeNull();
   });
 
   it('copies data-i18n from the option to its pill', () => {

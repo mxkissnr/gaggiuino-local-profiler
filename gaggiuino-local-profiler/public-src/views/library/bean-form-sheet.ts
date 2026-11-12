@@ -540,12 +540,16 @@ async function _persistBean(): Promise<Bean | null> {
       _beanList().push(saved);
     }
     // Also persist price_eur to the current bag so per-bag price stays in sync
+    // — but only when it actually differs, so saving any other field leaves the
+    // bag untouched (#2018).
     if (editId && price_eur) {
       const activeBagForSave = classifyBeanBags(saved).current?.bg || null;
-      if (activeBagForSave) {
+      const nextPrice = parseFloat(price_eur) || null;
+      const bagPrice = activeBagForSave?.price_eur ?? null;
+      if (activeBagForSave && nextPrice !== bagPrice) {
         const savedWithBag = await libraryApi.updateBeanBag(editId, activeBagForSave.id as number, {
           roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
-          batchNumber: activeBagForSave.batchNumber || '', price_eur: parseFloat(price_eur) || null,
+          batchNumber: activeBagForSave.batchNumber || '', price_eur: nextPrice,
         });
         if (savedWithBag) {
           const idx2 = _beanList().findIndex(b => b.id === editId);

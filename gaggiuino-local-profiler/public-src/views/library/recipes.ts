@@ -120,7 +120,7 @@ function _stepRowHtml(i: number, text: string | undefined = '', dur: number | st
     <span class="lib-step-num">${esc(i + 1)}</span>
     <input class="lib-step-text" aria-label="${tHtml('lib_recipe_step_ph')}" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
     <input class="lib-step-dur" type="number" min="0" max="3600" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
-    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}">${ICON_TRASH}</button>
+    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}" aria-label="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
   </div>`;
 }
 
