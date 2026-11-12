@@ -3,9 +3,11 @@ import * as libraryApi from '../../api/library.js';
 import { S } from '../../state/index.js';
 import type { ShotMeta } from '../../state/index.js';
 import { localeFor, countryName } from '../../constants.js';
-import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, freshnessWindows, calcBeanRating, shouldShowFreshBadge, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, freshnessWindows, calcBeanRating, shouldShowFreshBadge, formatDate, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
+import { showToast } from '../../components/toast.js';
 import { miniWheelSvg, flavorChipsHtml } from '../../components/flavor-mini-wheel.js';
 import { calcBestGrindCombosForBean } from '../shots/grind.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
@@ -200,13 +202,13 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   // single "auftauen" click reads as "pull one portion out", not "close
   // out the whole batch" — matches decrementing thaw-portion server-side.
   const frozenHtml: Html = frozenPortions.length ? html`<div class="lib-frozen-row">${joinHtml(frozenPortions.map(fp => {
-    const frozenStr = new Date(fp.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const frozenStr = formatDate(fp.frozenAt, locale);
     const remaining = Number.isFinite(fp.remainingCount) ? fp.remainingCount : fp.portionCount;
     const editForm: Html = html`
       <div id="editFrozenForm${esc(fp.id)}" class="lib-new-bag-form" style="display:none">
         <div class="lib-new-bag-fields">
           <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="editFrozenRemaining${esc(fp.id)}" placeholder="${tHtml('bag_freeze_count')}" min="0" max="${esc(fp.portionCount)}" step="1" value="${esc(remaining)}">
-          <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="editFrozenWeight${esc(fp.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1" value="${esc(fp.portionWeight_g)}">
+          <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="editFrozenWeight${esc(fp.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" max="1000" step="0.1" value="${esc(fp.portionWeight_g)}">
           <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="editFrozenDate${esc(fp.id)}" value="${esc(localIsoDate(fp.frozenAt))}" max="${esc(todayIsoDate())}">
         </div>
         <div class="lib-form-actions">
@@ -228,7 +230,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(fpAge))}" title="${esc(t('bag_frozen_portion_age', fpAge))}">${esc(fpAge)}d</span>`
       : esc('');
     if (fp.thawedAt) {
-      const thawedStr = new Date(fp.thawedAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const thawedStr = formatDate(fp.thawedAt, locale);
       return html`<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${tHtml('bag_frozen_thawed_badge', esc(thawedStr))}${fpAgeBadge}
         <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
     }
@@ -262,7 +264,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
   const lastGrindHtml: Html = lastGrind ? (() => {
     const usedAtMs = lastGrind.timestamp * 1000;
     const ageDays = Math.floor((Date.now() - usedAtMs) / 86400000);
-    const dateStr = new Date(usedAtMs).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const dateStr = formatDate(usedAtMs, locale);
     return html`<div class="lib-last-grind-row" title="${esc(t('bean_last_grind_tooltip', dateStr))}">
     <span class="lib-last-grind-label">${tHtml('bean_last_grind_label')}</span>
     <span class="lib-last-grind-value">${esc(t('bean_best_combo_value', lastGrind.grinder, lastGrind.grindSetting))}</span>
@@ -326,7 +328,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     <div id="newBagForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
       <div class="lib-new-bag-fields">
         <input type="date" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_roast_date')}" id="newBagRoastDate${esc(b.id)}" title="${tHtml('lib_bag_roast_date')}" max="${esc(todayIsoDate())}">
-        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="newBagStock${esc(b.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" step="1">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_stock')}" id="newBagStock${esc(b.id)}" placeholder="${tHtml('lib_bag_stock')}" min="0" max="20000" step="1">
         <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="newBagBatchNumber${esc(b.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50">
       </div>
       <div class="lib-form-actions">
@@ -336,8 +338,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     </div>
     <div id="freezeForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
       <div class="lib-new-bag-fields">
-        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="freezePortionCount${esc(b.id)}" placeholder="${tHtml('bag_freeze_count')}" min="1" step="1">
-        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="freezePortionWeight${esc(b.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" step="0.1">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_count')}" id="freezePortionCount${esc(b.id)}" placeholder="${tHtml('bag_freeze_count')}" min="1" max="100" step="1">
+        <input type="number" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_weight')}" id="freezePortionWeight${esc(b.id)}" placeholder="${tHtml('bag_freeze_weight')}" min="0.1" max="1000" step="0.1">
         <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="freezeDate${esc(b.id)}" title="${tHtml('bag_freeze_date')}" value="${esc(todayIsoDate())}" max="${esc(todayIsoDate())}">
       </div>
       <div class="lib-form-actions">
@@ -377,9 +379,9 @@ export async function deleteBag(beanId: number, bagId: number): Promise<void> {
   if (!bean || bags.length <= 1) return;
   const { current } = classifyBeanBags(bean);
   if (current?.bg.id === bagId) return;
-  if (!confirm(t('lib_bag_delete_confirm'))) return;
+  if (!await confirmDialog(t('lib_bag_delete_confirm'), { confirmLabel: t('lib_btn_delete') })) return;
   const saved = await libraryApi.deleteBeanBag(beanId, bagId);
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const idx = _beanList().findIndex(b => b.id === beanId);
   if (idx !== -1) _beanList()[idx] = saved;
   library.renderBeanList();
@@ -390,7 +392,7 @@ export async function saveNewBag(id: number): Promise<void> {
   const stock_g     = parseFloat(_field(`newBagStock${id}`)?.value) || null;
   const batchNumber = _field(`newBagBatchNumber${id}`)?.value.trim() || '';
   const saved = await libraryApi.addBeanBag(id, { roastDate, stock_g, batchNumber });
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   closeNewBagForm(id);
   const idx = _beanList().findIndex(b => b.id === id);
   if (idx !== -1) _beanList()[idx] = saved;
@@ -420,7 +422,7 @@ export async function saveFreezePortions(id: number): Promise<void> {
   const frozenAt = isoDateInputToMs(_field(`freezeDate${id}`)?.value) ?? Date.now();
   if (!(portionCount > 0) || !(portionWeight_g > 0)) return;
   const saved = await libraryApi.freezeBeanPortions(id, { portionCount, portionWeight_g, frozenAt });
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   closeFreezeForm(id);
   const idx = _beanList().findIndex(b => b.id === id);
   if (idx !== -1) _beanList()[idx] = saved;
@@ -434,7 +436,7 @@ export async function saveFreezePortions(id: number): Promise<void> {
 // reaches 0 server-side.
 export async function thawPortion(beanId: number, portionId: number): Promise<void> {
   const saved = await libraryApi.thawBeanPortion(beanId, { portionId, count: 1 });
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const idx = _beanList().findIndex(b => b.id === beanId);
   if (idx !== -1) _beanList()[idx] = saved;
   library.renderBeanList();
@@ -466,7 +468,7 @@ export async function saveEditFrozenForm(beanId: number, portionId: number): Pro
   if (portionWeight_g > 0) body.portionWeight_g = portionWeight_g;
   if (frozenAt != null) body.frozenAt = frozenAt;
   const saved = await libraryApi.adjustFrozenPortion(beanId, { portionId, ...body });
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   closeEditFrozenForm(portionId);
   const idx = _beanList().findIndex(b => b.id === beanId);
   if (idx !== -1) _beanList()[idx] = saved;
@@ -505,7 +507,7 @@ export function toggleBeanQR(id: number): void {
   }).catch(() => {
     wrap.style.display = 'none';
     if (label) label.textContent = t('bean_qr_label');
-    alert(t('bean_qr_error'));
+    showToast(t('bean_qr_error'));
   });
 }
 
