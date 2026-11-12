@@ -87,8 +87,9 @@ function at(list: FakeEl[], index: number): FakeEl {
 }
 
 function openOverlays(): FakeEl[] { return doc.body.children.filter(el => !el.removed); }
-// The dialog currently on screen: the fakes keep a closed overlay in the list.
-function overlay(): FakeEl { return at(openOverlays(), openOverlays().length - 1); }
+// The newest dialog: a closed one stays in the list, and a test can then check
+// that it was removed.
+function overlay(): FakeEl { return at(doc.body.children, doc.body.children.length - 1); }
 function box(): FakeEl { return at(overlay().children, 0); }
 function text(): FakeEl { return at(box().children, 0); }
 function buttons(): FakeEl[] { return at(box().children, 1).children; }
