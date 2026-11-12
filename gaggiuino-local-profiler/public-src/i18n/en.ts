@@ -563,6 +563,7 @@ const en: Translations = {
     backup_preview_maintenance_log:(valid,total)=>`${valid} of ${total} log entries`,
     backup_preview_orders:(valid,total)=>`${valid} of ${total} orders`,
     backup_preview_machines:(n)=>`${n} machines`,
+    backup_preview_pending_profiles:(n)=>n===1?'1 profile change not yet sent to the machine will be lost':`${n} profile changes not yet sent to the machine will be lost`,
     backup_preview_settings:'settings',
     backup_preview_images:(n)=>`${n} images`,
     backup_preview_secrets_ok:'Passphrase correct — token & MQTT login will be restored',
