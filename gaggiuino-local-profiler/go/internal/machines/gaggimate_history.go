@@ -116,8 +116,6 @@ type gaggiMatePhaseTransition struct {
 	name        string
 }
 
-// gaggiMateSample is one decoded .slog sample. bleScaleConnected reports an
-// active scale: a Bluetooth scale, or a hardware scale from shot log v8 on.
 type gaggiMateSample struct {
 	tickMs            float64
 	tt, ct            float64
@@ -126,6 +124,8 @@ type gaggiMateSample struct {
 	pf, vf            float64
 	v, ev             float64
 	pr, wp            float64
+	// bleScaleConnected reports an active scale: a Bluetooth scale, or a
+	// hardware scale from shot log v8 on.
 	bleScaleConnected bool
 	hasTickMs         bool
 	hasTT, hasCT      bool
