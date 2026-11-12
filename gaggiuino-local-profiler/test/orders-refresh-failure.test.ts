@@ -73,7 +73,7 @@ beforeEach(() => {
   api.getQueueEta.mockReset().mockRejectedValue(new Error('no eta'));
   api.getMilkStock.mockReset().mockResolvedValue([]);
   api.getOrdersSettings.mockReset().mockResolvedValue({ enabled: true });
-  api.getSwitch.mockReset().mockResolvedValue({ json: async () => ({}) } as unknown as Response);
+  api.getSwitch.mockReset().mockResolvedValue({ json: () => Promise.resolve({}) } as unknown as Response);
   SO._knownPendingIds = null;
 });
 
