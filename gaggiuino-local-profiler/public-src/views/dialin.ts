@@ -2,7 +2,7 @@ import { S } from '../state/index.js';
 import type { ShotMeta } from '../state/index.js';
 import { tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { esc, html, joinHtml, scoreColor } from '../utils.js';
+import { esc, formatDate, html, joinHtml, scoreColor } from '../utils.js';
 import type { Html } from '../utils.js';
 import { safeLocalStorage } from '../storage.js';
 
@@ -37,7 +37,9 @@ export async function renderDialin(): Promise<void> {
     .slice(0, n);
 
   if (recent.length === 0) {
-    grid.innerHTML = html`<div class="dialin-empty">${tHtml('dialin_empty')}</div>`;
+    // #1962: same three reasons as analytics — failed, still loading, or truly empty.
+    const emptyKey = S.shotsLoadFailed ? 'error_load' : !S.allShotsLoaded ? 'loading' : 'dialin_empty';
+    grid.innerHTML = html`<div class="dialin-empty">${tHtml(emptyKey)}</div>`;
     return;
   }
 
@@ -63,7 +65,7 @@ export async function renderDialin(): Promise<void> {
     const dose   = ann.dose  ? html`${esc(String(ann.dose))} g`  : null;
     const yield_ = s.weight  ? html`${esc((s.weight / 10).toFixed(1))} g` : null;
     const ratio  = (ann.dose && s.weight) ? html`1:${esc((s.weight / 10 / (ann.dose as number)).toFixed(1))}` : null;
-    const date   = new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const date   = formatDate(s.timestamp * 1000, locale);
     const profile = s.profile?.name || s.profileName || '–';
     const scorePill: Html = score != null
       // #811: colour/size/radius moved to .score-pill in style.css so this

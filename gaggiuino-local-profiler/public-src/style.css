@@ -1604,6 +1604,7 @@
         .lib-add-trigger { background: none; border: 1px dashed var(--gray-700); border-radius:var(--radius); color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2); width: 100%; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-add-trigger:hover { border-color: var(--gray-500); color: var(--gray-200); }
         .lib-empty { color: var(--gray-600); font-size: var(--fs-1); text-align: center; padding: var(--sp-5) 0; }
+        #library-view[data-load] .lib-empty { display: none; }
         .lib-trigger-row { display: flex; gap: var(--sp-2); }
         .lib-trigger-row .lib-add-trigger { flex: 1; }
         .lib-scan-trigger { background: none; border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor: pointer; transition: border-color .15s, color .15s; white-space: nowrap; display: inline-flex; align-items: center; gap: var(--sp-1); }
