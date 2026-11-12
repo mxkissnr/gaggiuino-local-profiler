@@ -340,7 +340,7 @@ const es: Partial<Translations> = {
     exit_reason_1:'peso objetivo alcanzado', exit_reason_2:'presión objetivo alcanzada',
     exit_reason_3:'caudal objetivo alcanzado', exit_reason_4:'volumen de agua objetivo alcanzado',
     exit_reason_5:'tiempo de fase agotado', exit_reason_6:'tiempo límite de seguridad',
-    exit_reason_7:'detenida manualmente',
+    exit_reason_7:'detenida manualmente', exit_reason_8:'botón soltado', exit_reason_9:'proporción objetivo alcanzada',
     grind_short:(s)=>`Shot demasiado corto (${s} s) — moler más fino`,
     grind_short_slight:(s)=>`Shot ligeramente corto (${s} s) — moler ligeramente más fino`,
     grind_long:(s)=>`Shot demasiado largo (${s} s) — moler más grueso`,

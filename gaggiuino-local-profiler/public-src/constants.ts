@@ -185,9 +185,9 @@ export function buildRecordedGmPhaseRanges(
   });
 }
 
-// PHASE_EXIT_REASON_* code (1..7) -> i18n key, else null.
+// PHASE_EXIT_REASON_* code (1..9) -> i18n key, else null.
 export function exitReasonKey(code: unknown): string | null {
-  return typeof code === 'number' && Number.isInteger(code) && code >= 1 && code <= 7 ? `exit_reason_${code}` : null;
+  return typeof code === 'number' && Number.isInteger(code) && code >= 1 && code <= 9 ? `exit_reason_${code}` : null;
 }
 
 // ── Phase background plugin ───────────────────────────────────────────────

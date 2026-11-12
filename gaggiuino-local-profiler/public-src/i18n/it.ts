@@ -340,7 +340,7 @@ const it: Partial<Translations> = {
     exit_reason_1:'peso target raggiunto', exit_reason_2:'pressione target raggiunta',
     exit_reason_3:'flusso target raggiunto', exit_reason_4:"volume d'acqua target raggiunto",
     exit_reason_5:'tempo della fase scaduto', exit_reason_6:'timeout di sicurezza',
-    exit_reason_7:'fermata manualmente',
+    exit_reason_7:'fermata manualmente', exit_reason_8:'pulsante rilasciato', exit_reason_9:'rapporto target raggiunto',
     grind_short:(s)=>`Shot troppo corto (${s} s) — macinare più fine`,
     grind_short_slight:(s)=>`Shot leggermente corto (${s} s) — macinare leggermente più fine`,
     grind_long:(s)=>`Shot troppo lungo (${s} s) — macinare più grosso`,

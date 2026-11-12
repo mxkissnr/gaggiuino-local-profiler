@@ -340,7 +340,7 @@ const fr: Partial<Translations> = {
     exit_reason_1:'poids cible atteint', exit_reason_2:'pression cible atteinte',
     exit_reason_3:'débit cible atteint', exit_reason_4:"volume d'eau cible atteint",
     exit_reason_5:'durée de phase écoulée', exit_reason_6:'délai de sécurité dépassé',
-    exit_reason_7:'arrêtée manuellement',
+    exit_reason_7:'arrêtée manuellement', exit_reason_8:'bouton relâché', exit_reason_9:'ratio cible atteint',
     grind_short:(s)=>`Shot trop court (${s} s) — moudre plus fin`,
     grind_short_slight:(s)=>`Shot légèrement court (${s} s) — moudre légèrement plus fin`,
     grind_long:(s)=>`Shot trop long (${s} s) — moudre plus grossier`,
