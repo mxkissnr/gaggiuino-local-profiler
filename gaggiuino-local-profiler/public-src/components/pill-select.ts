@@ -17,6 +17,10 @@ export function bindPillSelect(select: HTMLSelectElement | null): void {
   group.setAttribute('role', 'group');
   const label = select.getAttribute('aria-label');
   if (label) group.setAttribute('aria-label', label);
+  // The translation pass only rewrites the select; the group must carry the
+  // key too so the visible control gets the translated name.
+  const labelKey = select.getAttribute('data-i18n-aria-label');
+  if (labelKey) group.setAttribute('data-i18n-aria-label', labelKey);
 
   const clearable = Array.from(select.options).some(o => o.value === '');
   const buttons = Array.from(select.options).filter(o => o.value !== '').map(option => {

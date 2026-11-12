@@ -55,6 +55,10 @@ let _formSheetSaveBtn: HTMLButtonElement | null = null;
 // while the first is pending is ignored instead of creating the bean twice
 // (#1614 slice 4).
 let _beanSaveInFlight = false;
+// An autosave that arrived while the previous one was still in flight. Only an
+// edit queues: the edit form must end with the user's last keystroke on the
+// server, whereas a create is submitted explicitly.
+let _beanSaveQueued = false;
 // The form saves itself while editing (#1962); the save button stays for
 // creating. Bound once, on the first open: the form element is persistent.
 let _autosaveBound = false;
@@ -470,9 +474,14 @@ function _setBeanSaveButtonsDisabled(disabled: boolean): void {
 // create-only follow-ups (photo, extra recipes, new-bag dialog) stay in
 // saveBeanInternal, which is the button path.
 async function _persistBean(): Promise<boolean> {
-  // A save while the previous request is still pending is dropped: without
-  // this the second POST creates the bean a second time (#1614 slice 4).
-  if (_beanSaveInFlight) return false;
+  // A save while the previous request is still pending must not race it:
+  // without this the second POST creates the bean a second time (#1614 slice
+  // 4). An edit instead remembers that one more save is wanted and runs it
+  // once the request in flight has settled (#2016).
+  if (_beanSaveInFlight) {
+    if (S.beanEditId != null) _beanSaveQueued = true;
+    return false;
+  }
   _persistedBean = null;
   const name      = _field('beanFormName').value.trim();
   const roaster   = _field('beanFormRoaster').value.trim();
@@ -557,6 +566,10 @@ async function _persistBean(): Promise<boolean> {
   } finally {
     _beanSaveInFlight = false;
     _setBeanSaveButtonsDisabled(false);
+    if (_beanSaveQueued) {
+      _beanSaveQueued = false;
+      if (S.beanEditId != null) void _persistBean().then(ok => { if (ok) library.renderBeanList(); });
+    }
   }
 }
 
