@@ -563,6 +563,7 @@ const es: Partial<Translations> = {
     backup_preview_maintenance_log:(valid,total)=>`${valid} de ${total} entradas de registro`,
     backup_preview_orders:(valid,total)=>`${valid} de ${total} pedidos`,
     backup_preview_machines:(n)=>`${n} máquina${n!==1?'s':''}`,
+    backup_preview_pending_profiles:(n)=>n===1?'Se perderá 1 cambio de perfil aún no enviado a la máquina':`Se perderán ${n} cambios de perfil aún no enviados a la máquina`,
     backup_preview_settings:'ajustes',
     backup_preview_images:(n)=>`${n} imagen${n!==1?'es':''}`,
     backup_preview_secrets_ok:'Contraseña correcta — el token y el inicio de sesión MQTT se restaurarán',

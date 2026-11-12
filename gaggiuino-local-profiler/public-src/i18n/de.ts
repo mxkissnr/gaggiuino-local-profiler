@@ -552,6 +552,7 @@ const de: Partial<Translations> = {
     backup_preview_maintenance_log:(valid,total)=>`${valid} von ${total} Protokoll-Einträgen`,
     backup_preview_orders:(valid,total)=>`${valid} von ${total} Bestellungen`,
     backup_preview_machines:(n)=>`${n} Maschinen`,
+    backup_preview_pending_profiles:(n)=>n===1?'1 noch nicht an die Maschine übertragene Profiländerung geht verloren':`${n} noch nicht an die Maschine übertragene Profiländerungen gehen verloren`,
     backup_preview_settings:'Einstellungen',
     backup_preview_images:(n)=>`${n} Bilder`,
     backup_preview_secrets_ok:'Passwort korrekt — Token & MQTT-Login werden wiederhergestellt',

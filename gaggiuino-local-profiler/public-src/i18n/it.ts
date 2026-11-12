@@ -563,6 +563,7 @@ const it: Partial<Translations> = {
     backup_preview_maintenance_log:(valid,total)=>`${valid} di ${total} voci di registro`,
     backup_preview_orders:(valid,total)=>`${valid} di ${total} ordini`,
     backup_preview_machines:(n)=>`${n} macchine`,
+    backup_preview_pending_profiles:(n)=>n===1?'1 modifica al profilo non ancora inviata alla macchina andrà persa':`${n} modifiche ai profili non ancora inviate alla macchina andranno perse`,
     backup_preview_settings:'impostazioni',
     backup_preview_images:(n)=>`${n} immagini`,
     backup_preview_secrets_ok:'Password corretta — token e login MQTT verranno ripristinati',

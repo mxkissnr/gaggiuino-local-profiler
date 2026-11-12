@@ -563,6 +563,7 @@ const nl: Partial<Translations> = {
     backup_preview_maintenance_log:(valid,total)=>`${valid} van ${total} logitems`,
     backup_preview_orders:(valid,total)=>`${valid} van ${total} bestellingen`,
     backup_preview_machines:(n)=>`${n} machine${n!==1?'s':''}`,
+    backup_preview_pending_profiles:(n)=>n===1?'1 profielwijziging die nog niet naar de machine is gestuurd, gaat verloren':`${n} profielwijzigingen die nog niet naar de machine zijn gestuurd, gaan verloren`,
     backup_preview_settings:'instellingen',
     backup_preview_images:(n)=>`${n} afbeelding${n!==1?'en':''}`,
     backup_preview_secrets_ok:'Wachtwoord correct — token & MQTT-inloggegevens worden hersteld',
