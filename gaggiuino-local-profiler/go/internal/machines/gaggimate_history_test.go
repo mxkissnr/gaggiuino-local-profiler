@@ -604,8 +604,19 @@ func TestGaggiMateSlogToShot_LegacyZeroReasons(t *testing.T) {
 	}
 }
 
-// TestGaggiMateSlogToShot_ScaleWeightSource covers the v8 active-scale rule: v
-// (the active scale's weight) feeds shotWeight only when the version's scale
+// gaggiMateScaleSample is one sample of the scale-source table below: the
+// shared payload, with the row systemInfo and that sample's measured (v) and
+// estimated (ev) weight.
+func gaggiMateScaleSample(tick uint32, measured, estimated, si uint16) gaggiMateTestSample {
+	s := gaggiMateV7Sample(tick)
+	s.v = measured
+	s.ev = estimated
+	s.si = si
+	return s
+}
+
+// TestGaggiMateSlogToShot_ScaleWeightSource covers the v8 active-scale rule:
+// v (the active scale's weight) feeds shotWeight only when the version's scale
 // bit is set, and the legacy hardware-scale v6 layout keeps 16-bit ticks.
 func TestGaggiMateSlogToShot_ScaleWeightSource(t *testing.T) {
 	cases := []struct {
@@ -625,24 +636,21 @@ func TestGaggiMateSlogToShot_ScaleWeightSource(t *testing.T) {
 		{"upstream v6, 28-byte samples", 6, 0x1FFF, 0x0004, false, []int64{0, 92, 184}, true},
 		{"legacy hardware-scale v6, 26-byte samples", 6, 0x1FFF, 0x0100, true, []int64{0, 92, 184}, true},
 	}
-	volumetric := []uint16{0, 85, 170}
 	measured := []uint16{0, 92, 184}
+	estimated := []uint16{0, 85, 170}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			// A legacy hardware-scale v6 file is built as v5 (26-byte samples,
+			// 16-bit ticks) and only then stamped as version 6.
 			buildVersion := tc.version
-			if tc.legacyV6 {
-				buildVersion = 5
-			}
 			ticks := []uint32{0, 250, 500}
 			if tc.legacyV6 {
+				buildVersion = 5
 				ticks = []uint32{0, 1, 2}
 			}
-			samples := make([]gaggiMateTestSample, len(ticks))
-			for i := range samples {
-				samples[i] = gaggiMateTestSample{
-					t: ticks[i], tt: 930, ct: 925, tp: 90, cp: 87,
-					fl: 210, v: measured[i], ev: volumetric[i], si: tc.si, wp: 253,
-				}
+			samples := make([]gaggiMateTestSample, 0, len(ticks))
+			for i, tick := range ticks {
+				samples = append(samples, gaggiMateScaleSample(tick, measured[i], estimated[i], tc.si))
 			}
 			data := buildGaggiMateSlog(t, buildVersion, tc.mask, 250, samples)
 			if tc.legacyV6 {
@@ -676,21 +684,22 @@ func TestGaggiMateSlogToShot_ScaleWeightSource(t *testing.T) {
 			if got := shot["gaggimateBleScale"]; got != tc.wantMeasured {
 				t.Fatalf("gaggimateBleScale = %v, want %v", got, tc.wantMeasured)
 			}
-			if tc.mask == 0x3FFF {
-				extra, ok := shot["gaggimateExtra"].(map[string]any)
-				if !ok {
-					t.Fatalf("gaggimateExtra missing or wrong type: %T", shot["gaggimateExtra"])
-				}
-				waterPumped, ok := extra["waterPumped"].([]any)
-				if !ok {
-					t.Fatalf("waterPumped missing or wrong type: %T", extra["waterPumped"])
-				}
-				f, ok := waterPumped[2].(float64)
-				if !ok {
-					t.Fatalf("waterPumped[2] = %v (%T), want a float64", waterPumped[2], waterPumped[2])
-				}
-				assertGaggiMateFloat(t, "waterPumped", f, 25.3)
+			if tc.mask != 0x3FFF {
+				return
 			}
+			extra, ok := shot["gaggimateExtra"].(map[string]any)
+			if !ok {
+				t.Fatalf("gaggimateExtra missing or wrong type: %T", shot["gaggimateExtra"])
+			}
+			waterPumped, ok := extra["waterPumped"].([]any)
+			if !ok {
+				t.Fatalf("waterPumped missing or wrong type: %T", extra["waterPumped"])
+			}
+			water, ok := waterPumped[2].(float64)
+			if !ok {
+				t.Fatalf("waterPumped[2] = %v (%T), want a float64", waterPumped[2], waterPumped[2])
+			}
+			assertGaggiMateFloat(t, "waterPumped", water, 25.3)
 		})
 	}
 }

@@ -58,10 +58,8 @@ const (
 
 // systemInfo scale bits, per upstream shot_log_format.h.
 const (
-	// gaggiMateSIBluetoothScale is SYSTEM_INFO_BLUETOOTH_SCALE_CONNECTED.
-	gaggiMateSIBluetoothScale = 0x0004
-	// gaggiMateSIActiveScale is SYSTEM_INFO_ACTIVE_SCALE_CONNECTED.
-	gaggiMateSIActiveScale = 0x0100
+	gaggiMateSIBluetoothScale = 0x0004 // SYSTEM_INFO_BLUETOOTH_SCALE_CONNECTED
+	gaggiMateSIActiveScale    = 0x0100 // SYSTEM_INFO_ACTIVE_SCALE_CONNECTED
 )
 
 // A legacy hardware-scale v6 file kept the v5 26-byte sample layout.
@@ -118,6 +116,8 @@ type gaggiMatePhaseTransition struct {
 	name        string
 }
 
+// gaggiMateSample is one decoded .slog sample. bleScaleConnected reports an
+// active scale: a Bluetooth scale, or a hardware scale from shot log v8 on.
 type gaggiMateSample struct {
 	tickMs            float64
 	tt, ct            float64
@@ -126,8 +126,6 @@ type gaggiMateSample struct {
 	pf, vf            float64
 	v, ev             float64
 	pr, wp            float64
-	// bleScaleConnected reports an active scale (Bluetooth, or a hardware scale
-	// from shot log v8 on).
 	bleScaleConnected bool
 	hasTickMs         bool
 	hasTT, hasCT      bool
