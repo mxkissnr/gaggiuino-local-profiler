@@ -357,7 +357,7 @@ const ingressPageHTML = `<!doctype html>
 </head>
 <body>
 <h1>GLP — HA Ingress Self-Check</h1>
-<p>Open this through the Home Assistant sidebar panel. It reports what the add-on received from the HA Ingress proxy and live-probes whether that proxy buffers Server-Sent Events.</p>
+<p>Open this through the Home Assistant sidebar panel. It reports what the app received from the HA Ingress proxy and live-probes whether that proxy buffers Server-Sent Events.</p>
 <h2>Verdicts</h2>
 <div id="v-path" class="verdict unknown">path prefix: waiting for script…</div>
 <div id="v-token" class="verdict unknown">token flow: waiting for script…</div>
