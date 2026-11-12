@@ -20,7 +20,7 @@ g.window ??= globalThis;
 const api = vi.hoisted(() => ({
   listOrders: vi.fn<() => Promise<Order[]>>(),
   getOrdersMenu: vi.fn<() => Promise<MenuItem[]>>(),
-  getQueueEta: vi.fn<() => Promise<QueueEta | null>>(),
+  getQueueEta: vi.fn<() => Promise<QueueEta>>(),
   getMilkStock: vi.fn<() => Promise<MilkStock[]>>(),
   getOrdersSettings: vi.fn<() => Promise<OrdersSettings>>(),
   getSwitch: vi.fn<() => Promise<Response>>(),
@@ -70,7 +70,7 @@ function docWith(els: Record<string, FakeEl | null>): Record<string, unknown> {
 beforeEach(() => {
   api.listOrders.mockReset();
   api.getOrdersMenu.mockReset().mockResolvedValue([]);
-  api.getQueueEta.mockReset().mockResolvedValue(null);
+  api.getQueueEta.mockReset().mockRejectedValue(new Error('no eta'));
   api.getMilkStock.mockReset().mockResolvedValue([]);
   api.getOrdersSettings.mockReset().mockResolvedValue({ enabled: true });
   api.getSwitch.mockReset().mockResolvedValue({ json: async () => ({}) } as unknown as Response);
