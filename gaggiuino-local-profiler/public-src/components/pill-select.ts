@@ -21,6 +21,19 @@ export function bindPillSelect(select: HTMLSelectElement | null): void {
   // key too so the visible control gets the translated name.
   const labelKey = select.getAttribute('data-i18n-aria-label');
   if (labelKey) group.setAttribute('data-i18n-aria-label', labelKey);
+  // A select named by a visible <label for> instead of an aria-label keeps that
+  // name on the group, since the select itself is hidden (#2018).
+  if (!label && select.id) {
+    const id = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(select.id) : select.id;
+    // Stub DOMs in other views' tests only implement the methods they need.
+    const labelEl = typeof document.querySelector === 'function'
+      ? document.querySelector<HTMLLabelElement>(`label[for="${id}"]`)
+      : null;
+    if (labelEl) {
+      if (!labelEl.id) labelEl.id = `${select.id}-label`;
+      group.setAttribute('aria-labelledby', labelEl.id);
+    }
+  }
 
   const clearable = Array.from(select.options).some(o => o.value === '');
   const buttons = Array.from(select.options).filter(o => o.value !== '').map(option => {
