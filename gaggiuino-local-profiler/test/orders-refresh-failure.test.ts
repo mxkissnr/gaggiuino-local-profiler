@@ -23,7 +23,7 @@ const api = vi.hoisted(() => ({
   getQueueEta: vi.fn<() => Promise<QueueEta | null>>(),
   getMilkStock: vi.fn<() => Promise<MilkStock[]>>(),
   getOrdersSettings: vi.fn<() => Promise<OrdersSettings>>(),
-  getSwitch: vi.fn<() => Promise<{ json: () => Promise<unknown> }>>(),
+  getSwitch: vi.fn<() => Promise<Response>>(),
 }));
 
 vi.mock('../public-src/api/orders.js', async (importOriginal) => {
@@ -73,7 +73,7 @@ beforeEach(() => {
   api.getQueueEta.mockReset().mockResolvedValue(null);
   api.getMilkStock.mockReset().mockResolvedValue([]);
   api.getOrdersSettings.mockReset().mockResolvedValue({ enabled: true });
-  api.getSwitch.mockReset().mockResolvedValue({ json: async () => ({}) });
+  api.getSwitch.mockReset().mockResolvedValue({ json: async () => ({}) } as unknown as Response);
   SO._knownPendingIds = null;
 });
 
