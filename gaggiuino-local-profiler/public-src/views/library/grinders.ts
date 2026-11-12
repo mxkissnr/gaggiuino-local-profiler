@@ -15,6 +15,8 @@ import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { loadGrinderImageBlobUrl, invalidateGrinderImage } from '../../bean-image.js';
 import { currentGrinderZeroPoint } from '../../grind-zero.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
 import { renderGrinderScaleForm, readGrinderScaleForm } from '../shots/grind-field.js';
 import type { Grinder } from '../../api/types.js';
 import * as library from '../library.js';
@@ -133,6 +135,10 @@ function loadGrinderThumbnails(): void {
 }
 
 // ── Grinder form ──────────────────────────────────────────────────────────
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open: the form element is persistent.
+let _autosaveBound = false;
+
 export function openGrinderForm(grinder?: GrinderRow | null): void {
   S.grinderEditId = grinder ? grinder.id : null;
   _input('grinderFormName').value  = grinder?.name  || '';
@@ -152,6 +158,16 @@ export function openGrinderForm(grinder?: GrinderRow | null): void {
   _input('grinderFormZeroPoint').value = _zeroPointValue(grinder);
   _input('grinderFormZeroPointSince').value = '';
   renderGrinderZeroPointHistory(grinder);
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('saveGrinderBtn');
+  if (saveBtn) saveBtn.style.display = grinder ? 'none' : '';
+  if (!_autosaveBound) {
+    _autosaveBound = true;
+    bindFormAutosave(_el('grinderAddForm'), {
+      isEditing: () => !!S.grinderEditId,
+      save: async () => { const ok = await _persistGrinder(); if (ok) renderGrinderList(); return ok; },
+    });
+  }
   _el('grinderAddForm').classList.add('open');
   _el('grinderAddTrigger').style.display = 'none';
   _input('grinderFormName').focus();
@@ -201,20 +217,23 @@ export async function deleteGrinderZeroPointEntry(grinderId: number, since: numb
   }
 }
 
-export async function saveGrinder(): Promise<void> {
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same grinder (#1962).
+async function _persistGrinder(): Promise<boolean> {
   const name         = _input('grinderFormName').value.trim();
   const notes        = _input('grinderFormNotes').value.trim();
   const burrType     = _input('grinderFormBurrType').value.trim();
   const purchaseDate = _input('grinderFormPurchaseDate').value.trim();
-  if (!name) { _input('grinderFormName').focus(); return; }
+  if (!name) { markFieldInvalid(_input('grinderFormName')); return false; }
   // #1961: undefined means the scale fields are invalid and already say so.
   const scale = readGrinderScaleForm();
-  if (scale === undefined) return;
-  const first = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate, scale });
-  if (!first) { showToast(t('gm_toast_save_error')); return; }
+  if (scale === undefined) return false;
+  const editId = S.grinderEditId;
+  const first = await libraryApi.saveGrinder(editId, { name, notes, burrType, purchaseDate, scale });
+  if (!first) { showToast(t('gm_toast_save_error')); return false; }
   let saved = _asRow(first);
 
-  if (S.grinderEditId) {
+  if (editId) {
     const zpRaw    = _input('grinderFormZeroPoint').value.trim();
     const sinceRaw = _input('grinderFormZeroPointSince').value.trim();
     if (zpRaw !== '') {
@@ -224,16 +243,15 @@ export async function saveGrinder(): Promise<void> {
       // for retroactive inserts we always send (dedup is on exact since+value pair).
       const isRetroactive = sinceMs > 0;
       if (!Number.isNaN(zeroPoint) && (isRetroactive || zeroPoint !== currentGrinderZeroPoint(saved))) {
-        const updated = await libraryApi.setGrinderZeroPoint(S.grinderEditId, zeroPoint, isRetroactive ? sinceMs : undefined);
+        const updated = await libraryApi.setGrinderZeroPoint(editId, zeroPoint, isRetroactive ? sinceMs : undefined);
         if (updated) saved = _asRow(updated);
       }
     }
   }
 
-
   const grinders = _grinders();
-  if (S.grinderEditId) {
-    const idx = grinders.findIndex(g => g.id === S.grinderEditId);
+  if (editId) {
+    const idx = grinders.findIndex(g => g.id === editId);
     // The PUT response doesn't recompute wear stats — keep the existing ones
     // until the next full library load rather than dropping the card.
     if (idx !== -1) {
@@ -244,6 +262,12 @@ export async function saveGrinder(): Promise<void> {
     grinders.push(saved);
   }
   library.updateLibraryDatalist();
+  return true;
+}
+
+export async function saveGrinder(): Promise<void> {
+  const ok = await _persistGrinder();
+  if (!ok) return;
   closeGrinderForm();
   renderGrinderList();
 }
