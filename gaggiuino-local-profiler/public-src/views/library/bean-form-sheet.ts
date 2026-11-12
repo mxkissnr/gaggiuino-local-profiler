@@ -548,15 +548,26 @@ async function _persistBean(): Promise<Bean | null> {
       // The server may send a price as a string; a missing one counts as null.
       const bagPrice = parseFloat(String(activeBagForSave?.price_eur ?? '')) || null;
       if (activeBagForSave && nextPrice !== bagPrice) {
-        const savedWithBag = await libraryApi.updateBeanBag(editId, activeBagForSave.id as number, {
-          roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
-          batchNumber: activeBagForSave.batchNumber || '', price_eur: nextPrice,
-        });
-        if (savedWithBag) {
-          const idx2 = _beanList().findIndex(b => b.id === editId);
-          if (idx2 !== -1) _beanList()[idx2] = savedWithBag;
-          saved = savedWithBag;
+        // A failed bag update leaves the price on the bean but not on the bag.
+        // Keep the form unsaved so the next save retries it (#2022); the bean
+        // row already stored above stays in the list.
+        let savedWithBag: Bean | null = null;
+        try {
+          savedWithBag = await libraryApi.updateBeanBag(editId, activeBagForSave.id as number, {
+            roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
+            batchNumber: activeBagForSave.batchNumber || '', price_eur: nextPrice,
+          });
+        } catch {
+          savedWithBag = null;
         }
+        if (!savedWithBag) {
+          showToast(t('gm_toast_save_error'));
+          _beanFormDirty = true;
+          return null;
+        }
+        const idx2 = _beanList().findIndex(b => b.id === editId);
+        if (idx2 !== -1) _beanList()[idx2] = savedWithBag;
+        saved = savedWithBag;
       }
     }
     // Everything the user typed is on the server, so a close must not ask

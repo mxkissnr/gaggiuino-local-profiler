@@ -9,11 +9,12 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 
 // saveBeanAddBag() drives saveBeanInternal, which calls into the library API;
 // mocking it keeps the test off the network and lets it return a canned bean.
-const mocks = vi.hoisted(() => ({ saveBean: vi.fn(), updateBeanBag: vi.fn() }));
+const mocks = vi.hoisted(() => ({ saveBean: vi.fn(), updateBeanBag: vi.fn(), toast: vi.fn() }));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
   return { ...actual, saveBean: mocks.saveBean, updateBeanBag: mocks.updateBeanBag };
 });
+vi.mock('../public-src/components/toast.js', () => ({ showToast: mocks.toast }));
 
 type Listener = (event: FakeEvent) => void;
 interface FakeEvent { target?: unknown; key?: string; preventDefault?: () => void }
@@ -289,6 +290,7 @@ beforeEach(async () => {
   g.window = { matchMedia: () => ({ matches: false }), showToast };
   mocks.saveBean.mockReset();
   mocks.updateBeanBag.mockReset();
+  mocks.toast.mockReset();
   vi.resetModules();
   ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
   library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
@@ -579,6 +581,43 @@ describe('bean autosave leaves the bag alone (#2018)', () => {
     expect(call[0]).toBe(1);
     expect(call[1]).toBe(1);
     expect(call[2]?.price_eur).toBe(13);
+  });
+});
+
+describe('a failed bag price update keeps the form unsaved (#2022)', () => {
+  const bagWithPrice = (price: number | null): unknown[] => [
+    { id: 1, stock_g: 250, consumedG: 0, remainingG: 250, current: true, roastDate: '2026-01-01', price_eur: price },
+  ];
+
+  it('shows the save error, returns no row and retries the bag update next time', async () => {
+    const { home, form } = setupHome();
+    const bean = addBean();
+    bean.bags = bagWithPrice(12.5);
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bagWithPrice(12.5), flavors: [],
+    });
+    // The bean itself saves; only the follow-up bag update fails.
+    mocks.updateBeanBag
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bagWithPrice(13), flavors: [],
+      });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormPrice')!.value = '13';
+
+    await library.saveBean();
+
+    // The sheet's own toast, not the window one the rejected save uses.
+    expect(mocks.toast).toHaveBeenCalledWith('Error saving');
+    expect(mocks.updateBeanBag).toHaveBeenCalledTimes(1);
+    // The bean row the first request stored stays; the form counts as unsaved.
+    expect(S.coffeeLibrary.beans).toHaveLength(1);
+    expect(form.parentNode).not.toBe(home);
+
+    await library.saveBean();
+
+    expect(mocks.updateBeanBag).toHaveBeenCalledTimes(2);
+    expect(form.parentNode).toBe(home);
   });
 });
 

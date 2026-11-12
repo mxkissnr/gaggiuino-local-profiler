@@ -217,9 +217,15 @@ export async function deleteGrinderZeroPointEntry(grinderId: number, since: numb
   }
 }
 
+// A second Save while the first request is pending must not create the grinder
+// twice (#2022); same guard as the bean form's _beanSaveInFlight. The form
+// saves through more than one request, so the flag covers the whole sequence.
+let _grinderSaveInFlight = false;
+
 // Reads, validates and persists the form; leaves the form open and does not
 // clear the edit id, so autosave can keep saving the same grinder (#1962).
 async function _persistGrinder(): Promise<boolean> {
+  if (_grinderSaveInFlight) return false;
   const name         = _input('grinderFormName').value.trim();
   const notes        = _input('grinderFormNotes').value.trim();
   const burrType     = _input('grinderFormBurrType').value.trim();
@@ -229,40 +235,52 @@ async function _persistGrinder(): Promise<boolean> {
   const scale = readGrinderScaleForm();
   if (scale === undefined) return false;
   const editId = S.grinderEditId;
-  const first = await libraryApi.saveGrinder(editId, { name, notes, burrType, purchaseDate, scale });
-  if (!first) { showToast(t('gm_toast_save_error')); return false; }
-  let saved = _asRow(first);
+  _grinderSaveInFlight = true;
+  const saveBtn = document.getElementById('saveGrinderBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const first = await libraryApi.saveGrinder(editId, { name, notes, burrType, purchaseDate, scale });
+    if (!first) { showToast(t('gm_toast_save_error')); return false; }
+    let saved = _asRow(first);
 
-  if (editId) {
-    const zpRaw    = _input('grinderFormZeroPoint').value.trim();
-    const sinceRaw = _input('grinderFormZeroPointSince').value.trim();
-    if (zpRaw !== '') {
-      const zeroPoint = parseFloat(zpRaw);
-      const sinceMs   = sinceRaw ? localMidnightMs(sinceRaw) : 0;
-      // For "now" inserts (sinceMs=0) the backend deduplicates on value;
-      // for retroactive inserts we always send (dedup is on exact since+value pair).
-      const isRetroactive = sinceMs > 0;
-      if (!Number.isNaN(zeroPoint) && (isRetroactive || zeroPoint !== currentGrinderZeroPoint(saved))) {
-        const updated = await libraryApi.setGrinderZeroPoint(editId, zeroPoint, isRetroactive ? sinceMs : undefined);
-        if (updated) saved = _asRow(updated);
+    if (editId) {
+      const zpRaw    = _input('grinderFormZeroPoint').value.trim();
+      const sinceRaw = _input('grinderFormZeroPointSince').value.trim();
+      if (zpRaw !== '') {
+        const zeroPoint = parseFloat(zpRaw);
+        const sinceMs   = sinceRaw ? localMidnightMs(sinceRaw) : 0;
+        // For "now" inserts (sinceMs=0) the backend deduplicates on value;
+        // for retroactive inserts we always send (dedup is on exact since+value pair).
+        const isRetroactive = sinceMs > 0;
+        if (!Number.isNaN(zeroPoint) && (isRetroactive || zeroPoint !== currentGrinderZeroPoint(saved))) {
+          const updated = await libraryApi.setGrinderZeroPoint(editId, zeroPoint, isRetroactive ? sinceMs : undefined);
+          if (updated) saved = _asRow(updated);
+        }
       }
     }
-  }
 
-  const grinders = _grinders();
-  if (editId) {
-    const idx = grinders.findIndex(g => g.id === editId);
-    // The PUT response doesn't recompute wear stats — keep the existing ones
-    // until the next full library load rather than dropping the card.
-    if (idx !== -1) {
-      const existing = grinders[idx];
-      if (existing) grinders[idx] = { ...saved, wear: existing.wear };
+    const grinders = _grinders();
+    if (editId) {
+      const idx = grinders.findIndex(g => g.id === editId);
+      // The PUT response doesn't recompute wear stats — keep the existing ones
+      // until the next full library load rather than dropping the card.
+      if (idx !== -1) {
+        const existing = grinders[idx];
+        if (existing) grinders[idx] = { ...saved, wear: existing.wear };
+      }
+    } else {
+      grinders.push(saved);
     }
-  } else {
-    grinders.push(saved);
+    library.updateLibraryDatalist();
+    return true;
+  } catch {
+    // A throw in any of these requests left the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _grinderSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
-  library.updateLibraryDatalist();
-  return true;
 }
 
 export async function saveGrinder(): Promise<void> {
