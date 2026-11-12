@@ -6,12 +6,6 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Errors | public-src/views/library/baskets.ts | `getElementById('basketFormName') as HTMLInputElement).focus(); return;` | S14 |
-| Errors | public-src/views/library/puck-screens.ts | `getElementById('puckScreenFormName') as HTMLInputElement).focus(); return;` | S14 |
-| Errors | public-src/views/library/recipes.ts | `getElementById('recipeFormName') as HTMLInputElement).focus(); return;` | S14 |
-| Saving | public-src/index.html | `id="saveBasketBtn"` | S14 |
-| Saving | public-src/index.html | `id="savePuckScreenBtn"` | S14 |
-| Saving | public-src/index.html | `id="saveRecipeBtn"` | S14 |
 | Saving | public-src/views/library/bean-card.ts | `save-edit-frozen-form` | exempt: inline form re-renders on save, so it keeps its save button |
 | Errors | public-src/views/library/bean-form-sheet.ts | `_field('beanFormName').focus(); return;` | S16 |
 | Errors | public-src/views/library/grinders.ts | `_input('grinderFormName').focus(); return;` | S16 |

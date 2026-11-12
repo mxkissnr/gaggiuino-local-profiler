@@ -11,6 +11,8 @@ import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { showToast } from '../../components/toast.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
 import { loadBasketImageBlobUrl, invalidateBasketImage } from '../../bean-image.js';
 import type { Basket } from '../../api/types.js';
 
@@ -76,6 +78,10 @@ function loadBasketThumbnails(): void {
   });
 }
 
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open: the form element is persistent.
+let _autosaveBound = false;
+
 export function openBasketForm(basket?: Basket | null): void {
   S.basketEditId = basket ? basket.id : null;
   (document.getElementById('basketFormName') as HTMLInputElement).value         = basket?.name         || '';
@@ -89,7 +95,18 @@ export function openBasketForm(basket?: Basket | null): void {
   adjustBtn.style.display = basket?.image ? '' : 'none';
   // onclick, not addEventListener: reopening the form must not stack handlers.
   adjustBtn.onclick = () => { if (S.basketEditId) void _adjustBasketImage(S.basketEditId); };
-  (document.getElementById('basketAddForm') as HTMLElement).classList.add('open');
+  const form = document.getElementById('basketAddForm') as HTMLElement;
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('saveBasketBtn');
+  if (saveBtn) saveBtn.style.display = basket ? 'none' : '';
+  if (!_autosaveBound) {
+    _autosaveBound = true;
+    bindFormAutosave(form, {
+      isEditing: () => !!S.basketEditId,
+      save: async () => { const ok = await _persistBasket(); if (ok) renderBasketList(); return ok; },
+    });
+  }
+  form.classList.add('open');
   (document.getElementById('basketAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('basketFormName') as HTMLInputElement).focus();
 }
@@ -105,25 +122,34 @@ export function editBasket(id: number): void {
   if (b) openBasketForm(b);
 }
 
-export async function saveBasket(): Promise<void> {
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same entry (#1962).
+async function _persistBasket(): Promise<boolean> {
   const name         = (document.getElementById('basketFormName') as HTMLInputElement).value.trim();
   const doseCapacity = (document.getElementById('basketFormDoseCapacity') as HTMLInputElement).value.trim();
   const wallType     = (document.getElementById('basketFormWallType') as HTMLInputElement).value;
   const shape        = (document.getElementById('basketFormShape') as HTMLInputElement).value;
   const holeCount    = (document.getElementById('basketFormHoleCount') as HTMLInputElement).value.trim();
   const notes        = (document.getElementById('basketFormNotes') as HTMLInputElement).value.trim();
-  if (!name) { (document.getElementById('basketFormName') as HTMLInputElement).focus(); return; }
-  const saved = await libraryApi.saveBasket(S.basketEditId, { name, doseCapacity, wallType, shape, holeCount, notes });
-  if (!saved) { showToast(t('gm_toast_save_error')); return; }
+  if (!name) { markFieldInvalid(document.getElementById('basketFormName')); return false; }
+  const editId = S.basketEditId;
+  const saved = await libraryApi.saveBasket(editId, { name, doseCapacity, wallType, shape, holeCount, notes });
+  if (!saved) { showToast(t('gm_toast_save_error')); return false; }
   const lib = _state().coffeeLibrary;
   const baskets = lib.baskets ?? [];
   lib.baskets = baskets;
-  if (S.basketEditId) {
-    const idx = baskets.findIndex(b => b.id === S.basketEditId);
+  if (editId) {
+    const idx = baskets.findIndex(b => b.id === editId);
     if (idx !== -1) baskets[idx] = saved;
   } else {
     baskets.push(saved);
   }
+  return true;
+}
+
+export async function saveBasket(): Promise<void> {
+  const ok = await _persistBasket();
+  if (!ok) return;
   closeBasketForm();
   renderBasketList();
 }

@@ -9,6 +9,8 @@ import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, ICON_TRASH } fr
 import { attachAutocomplete } from '../../components/autocomplete.js';
 import { showToast } from '../../components/toast.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
 import { _renderBeanSelect } from '../shots/annotation.js';
 import type { Recipe } from '../../api/types.js';
 import type { ShotMeta } from '../../state/index.js';
@@ -122,11 +124,20 @@ function _stepRowHtml(i: number, text: string | undefined = '', dur: number | st
   </div>`;
 }
 
+// Adding, removing or moving a step touches no field, so it fires no `change`
+// of its own; while editing, say so explicitly (#1962).
+function _notifyStepChange(): void {
+  if (!_state().recipeEditId) return;
+  const form = document.getElementById('recipeAddForm');
+  if (form) form.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 export function addRecipeStep(): void {
   const list = document.getElementById('recipeStepsList');
   if (!list) return;
   const idx = list.children.length;
   list.insertAdjacentHTML('beforeend', _stepRowHtml(idx));
+  _notifyStepChange();
 }
 
 export function removeRecipeStep(i: number): void {
@@ -140,6 +151,7 @@ export function removeRecipeStep(i: number): void {
     delBtn.dataset.action = 'remove-recipe-step';
     delBtn.dataset.idx = String(idx);
   });
+  if (row) _notifyStepChange();
 }
 
 function _collectSteps(): { text: string; duration_s: number | null }[] {
@@ -148,6 +160,10 @@ function _collectSteps(): { text: string; duration_s: number | null }[] {
     duration_s: parseFloat(row.querySelector<HTMLInputElement>('.lib-step-dur')?.value ?? '') || null,
   })).filter(s => s.text);
 }
+
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open: the form element is persistent.
+let _autosaveBound = false;
 
 export function openRecipeForm(recipe?: Recipe | null): void {
   _state().recipeEditId = recipe ? recipe.id : null;
@@ -167,7 +183,18 @@ export function openRecipeForm(recipe?: Recipe | null): void {
   _renderBeanSelect(recipe?.beanName || null, null, 'recipeFormBean');
   (document.getElementById('recipeFormNotes') as HTMLInputElement).value        = recipe?.notes         || '';
   _renderStepRows(recipe?.steps || []);
-  (document.getElementById('recipeAddForm') as HTMLElement).classList.add('open');
+  const form = document.getElementById('recipeAddForm') as HTMLElement;
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('saveRecipeBtn');
+  if (saveBtn) saveBtn.style.display = recipe ? 'none' : '';
+  if (!_autosaveBound) {
+    _autosaveBound = true;
+    bindFormAutosave(form, {
+      isEditing: () => !!_state().recipeEditId,
+      save: async () => { const ok = await _persistRecipe(); if (ok) renderRecipeList(); return ok; },
+    });
+  }
+  form.classList.add('open');
   (document.getElementById('recipeAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('recipeFormName') as HTMLInputElement).focus();
 }
@@ -183,9 +210,11 @@ export function editRecipe(id: number): void {
   if (recipe) openRecipeForm(recipe);
 }
 
-export async function saveRecipe(): Promise<void> {
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same entry (#1962).
+async function _persistRecipe(): Promise<boolean> {
   const name = (document.getElementById('recipeFormName') as HTMLInputElement).value.trim();
-  if (!name) { (document.getElementById('recipeFormName') as HTMLInputElement).focus(); return; }
+  if (!name) { markFieldInvalid(document.getElementById('recipeFormName')); return false; }
   const payload = {
     name,
     brewMethod:    (document.getElementById('recipeFormBrewMethod') as HTMLInputElement).value,
@@ -203,17 +232,24 @@ export async function saveRecipe(): Promise<void> {
     notes:         (document.getElementById('recipeFormNotes') as HTMLInputElement).value.trim(),
     steps:         _collectSteps(),
   };
-  const saved = await libraryApi.saveRecipe(_state().recipeEditId ?? null, payload);
-  if (!saved) { showToast(t('gm_toast_save_error')); return; }
+  const editId = _state().recipeEditId ?? null;
+  const saved = await libraryApi.saveRecipe(editId, payload);
+  if (!saved) { showToast(t('gm_toast_save_error')); return false; }
   const lib = _state().coffeeLibrary;
   const recipes = lib.recipes ?? [];
   lib.recipes = recipes;
-  if (_state().recipeEditId) {
-    const idx = recipes.findIndex(r => r.id === _state().recipeEditId);
+  if (editId) {
+    const idx = recipes.findIndex(r => r.id === editId);
     if (idx !== -1) recipes[idx] = saved;
   } else {
     recipes.push(saved);
   }
+  return true;
+}
+
+export async function saveRecipe(): Promise<void> {
+  const ok = await _persistRecipe();
+  if (!ok) return;
   closeRecipeForm();
   renderRecipeList();
 }

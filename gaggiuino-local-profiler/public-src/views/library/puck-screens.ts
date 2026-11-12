@@ -11,6 +11,8 @@ import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { showToast } from '../../components/toast.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
 import { loadPuckScreenImageBlobUrl, invalidatePuckScreenImage } from '../../bean-image.js';
 import type { PuckScreen } from '../../api/types.js';
 
@@ -69,6 +71,10 @@ function loadPuckScreenThumbnails(): void {
   });
 }
 
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open: the form element is persistent.
+let _autosaveBound = false;
+
 export function openPuckScreenForm(puckScreen?: PuckScreen | null): void {
   S.puckScreenEditId = puckScreen ? puckScreen.id : null;
   (document.getElementById('puckScreenFormName') as HTMLInputElement).value      = puckScreen?.name      || '';
@@ -80,7 +86,18 @@ export function openPuckScreenForm(puckScreen?: PuckScreen | null): void {
   adjustBtn.style.display = puckScreen?.image ? '' : 'none';
   // onclick, not addEventListener: reopening the form must not stack handlers.
   adjustBtn.onclick = () => { if (S.puckScreenEditId) void _adjustPuckScreenImage(S.puckScreenEditId); };
-  (document.getElementById('puckScreenAddForm') as HTMLElement).classList.add('open');
+  const form = document.getElementById('puckScreenAddForm') as HTMLElement;
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('savePuckScreenBtn');
+  if (saveBtn) saveBtn.style.display = puckScreen ? 'none' : '';
+  if (!_autosaveBound) {
+    _autosaveBound = true;
+    bindFormAutosave(form, {
+      isEditing: () => !!S.puckScreenEditId,
+      save: async () => { const ok = await _persistPuckScreen(); if (ok) renderPuckScreenList(); return ok; },
+    });
+  }
+  form.classList.add('open');
   (document.getElementById('puckScreenAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('puckScreenFormName') as HTMLInputElement).focus();
 }
@@ -96,23 +113,32 @@ export function editPuckScreen(id: number): void {
   if (p) openPuckScreenForm(p);
 }
 
-export async function savePuckScreen(): Promise<void> {
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same entry (#1962).
+async function _persistPuckScreen(): Promise<boolean> {
   const name      = (document.getElementById('puckScreenFormName') as HTMLInputElement).value.trim();
   const thickness = (document.getElementById('puckScreenFormThickness') as HTMLInputElement).value;
   const material  = (document.getElementById('puckScreenFormMaterial') as HTMLInputElement).value.trim();
   const notes     = (document.getElementById('puckScreenFormNotes') as HTMLInputElement).value.trim();
-  if (!name) { (document.getElementById('puckScreenFormName') as HTMLInputElement).focus(); return; }
-  const saved = await libraryApi.savePuckScreen(S.puckScreenEditId, { name, thickness, material, notes });
-  if (!saved) { showToast(t('gm_toast_save_error')); return; }
+  if (!name) { markFieldInvalid(document.getElementById('puckScreenFormName')); return false; }
+  const editId = S.puckScreenEditId;
+  const saved = await libraryApi.savePuckScreen(editId, { name, thickness, material, notes });
+  if (!saved) { showToast(t('gm_toast_save_error')); return false; }
   const lib = _state().coffeeLibrary;
   const puckScreens = lib.puckScreens ?? [];
   lib.puckScreens = puckScreens;
-  if (S.puckScreenEditId) {
-    const idx = puckScreens.findIndex(p => p.id === S.puckScreenEditId);
+  if (editId) {
+    const idx = puckScreens.findIndex(p => p.id === editId);
     if (idx !== -1) puckScreens[idx] = saved;
   } else {
     puckScreens.push(saved);
   }
+  return true;
+}
+
+export async function savePuckScreen(): Promise<void> {
+  const ok = await _persistPuckScreen();
+  if (!ok) return;
   closePuckScreenForm();
   renderPuckScreenList();
 }
