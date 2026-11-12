@@ -1,5 +1,7 @@
 import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
+import { showToast } from '../../components/toast.js';
 import { html, toIsoDateInput } from '../../utils.js';
 import { CLOSE_ICON_SVG } from '../../icons.js';
 import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, settleSheetOut, startSheetEnter } from '../../components/sheet-swipe.js';
@@ -551,9 +553,9 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
 }
 
 export async function deleteBean(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_bean'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_bean'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteBeanPermanently(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   S.coffeeLibrary.beans = S.coffeeLibrary.beans.filter(b => b.id !== id);
   library.updateLibraryDatalist();
   library.renderBeanList();

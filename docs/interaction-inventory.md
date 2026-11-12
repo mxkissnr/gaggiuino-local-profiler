@@ -6,30 +6,7 @@ Every existing control that breaks a rule in the "Interaction rules" section of 
 
 | Rule | File | Anchor | Slice |
 |---|---|---|---|
-| Confirming | public-src/views/library/bean-card.ts | `confirm(t('lib_bag_delete_confirm'))` | S15 |
-| Confirming | public-src/views/library/bean-card.ts | `alert(t('bean_qr_error'))` | S15 |
-| Confirming | public-src/views/library/bean-form-sheet.ts | `confirm(t('lib_confirm_delete_bean'))` | S15 |
-| Confirming | public-src/views/library/bean-sticker.ts | `alert(t('error_generic', err.error` | S15 |
-| Errors | public-src/views/library/bags.ts | `if (!saved) return;` | S15 |
-| Errors | public-src/views/library/bags.ts | `if (!saved) return false;` | S15 |
-| Errors | public-src/views/library/bean-card.ts | `if (!saved) return;` | S15 |
-| Errors | public-src/views/library/bean-card.ts | `if (!saved) return;` | S15 |
-| Errors | public-src/views/library/bean-card.ts | `if (!saved) return;` | S15 |
-| Errors | public-src/views/library/bean-card.ts | `if (!saved) return;` | S15 |
-| Errors | public-src/views/library/bean-card.ts | `if (!saved) return;` | S15 |
-| Errors | public-src/views/library/bean-form-sheet.ts | `if (!r.ok) return;` | S15 |
-| Errors | public-src/views/library/bean-sheet.ts | `if (!saved) return;` | S15 |
 | Saving | public-src/views/library/bean-card.ts | `save-edit-frozen-form` | exempt: inline form re-renders on save, so it keeps its save button |
-| Numbers | public-src/views/library/bags.ts | `id="bagStockEditInput${esc(bg.id)}"` | S15 |
-| Numbers | public-src/views/library/bags.ts | `id="editBagStock${esc(bg.id)}"` | S15 |
-| Numbers | public-src/views/library/bags.ts | `id="editBagPrice${esc(bg.id)}"` | S15 |
-| Numbers | public-src/views/library/bean-card.ts | `id="editFrozenWeight${esc(fp.id)}"` | S15 |
-| Numbers | public-src/views/library/bean-card.ts | `id="newBagStock${esc(b.id)}"` | S15 |
-| Numbers | public-src/views/library/bean-card.ts | `id="freezePortionCount${esc(b.id)}"` | S15 |
-| Numbers | public-src/views/library/bean-card.ts | `id="freezePortionWeight${esc(b.id)}"` | S15 |
-| Dates | public-src/views/library/bean-card.ts | `.toLocaleDateString(locale, { day:` | S15 |
-| Dates | public-src/views/library/bean-card.ts | `.toLocaleDateString(locale, { day:` | S15 |
-| Dates | public-src/views/library/bean-card.ts | `.toLocaleDateString(locale, { day:` | S15 |
 | Errors | public-src/views/library/bean-form-sheet.ts | `_field('beanFormName').focus(); return;` | S16 |
 | Errors | public-src/views/library/grinders.ts | `_input('grinderFormName').focus(); return;` | S16 |
 | Errors | public-src/views/shots/annotation.ts | `if (!r.ok) return;` | S16 |
