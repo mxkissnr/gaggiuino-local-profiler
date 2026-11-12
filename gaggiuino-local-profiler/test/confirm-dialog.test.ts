@@ -86,7 +86,9 @@ function at(list: FakeEl[], index: number): FakeEl {
   return el;
 }
 
-function overlay(): FakeEl { return at(doc.body.children, 0); }
+function openOverlays(): FakeEl[] { return doc.body.children.filter(el => !el.removed); }
+// The dialog currently on screen: the fakes keep a closed overlay in the list.
+function overlay(): FakeEl { return at(openOverlays(), openOverlays().length - 1); }
 function box(): FakeEl { return at(overlay().children, 0); }
 function text(): FakeEl { return at(box().children, 0); }
 function buttons(): FakeEl[] { return at(box().children, 1).children; }
@@ -106,6 +108,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // confirmDialog keeps one dialog open at a time, so a test that leaves one up
+  // would block the next. Closing it through the backdrop resolves it as a "no".
+  for (const dialog of [...doc.body.children]) {
+    if (!dialog.removed) dialog.fire('click', { target: dialog });
+  }
   delete g.document;
 });
 
@@ -151,6 +158,31 @@ describe('confirmDialog() (#1962)', () => {
     await expect(pending).resolves.toBe(false);
     expect(dialog.removed).toBe(true);
     expect(keyboard.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens one dialog for two calls in a row, and the second resolves false at once', async () => {
+    const first = confirmDialog('Delete this?');
+    const second = confirmDialog('Delete this?');
+
+    await expect(second).resolves.toBe(false);
+    expect(openOverlays()).toHaveLength(1);
+    expect(keyboard.calls).toHaveLength(1);
+
+    confirmButton().fire('click');
+    await expect(first).resolves.toBe(true);
+  });
+
+  it('opens a dialog again once the first one is answered', async () => {
+    const first = confirmDialog('Delete this?');
+    cancelButton().fire('click');
+    await expect(first).resolves.toBe(false);
+
+    const second = confirmDialog('Delete this?');
+    expect(openOverlays()).toHaveLength(1);
+    expect(keyboard.calls).toHaveLength(2);
+
+    confirmButton().fire('click');
+    await expect(second).resolves.toBe(true);
   });
 
   it('shows Cancel and OK by default and focuses Cancel', () => {
