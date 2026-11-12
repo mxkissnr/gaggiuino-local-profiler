@@ -257,7 +257,7 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 		// reaching a machine. Report that number here so the user sees it before
 		// confirming; a count failure must not fail the dry run (#2023).
 		pending := 0
-		if plan.wantsMachines && machines.CountRestorableMachines(plan.restoredMachines) > 0 {
+		if machineCountForPreview(plan) > 0 {
 			if n, err := machines.NewProfilesRepository(h.deps.DB).CountPending(); err != nil {
 				log.Printf("backup: counting pending profile changes for preview: %v", err)
 			} else {
