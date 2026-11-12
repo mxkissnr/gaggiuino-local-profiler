@@ -148,12 +148,15 @@ published, with their SHA-256 checksums and provenance, in the
 
 ### MIT License — onnxruntime-web, chart.js, qrcode, barcode-detector, zxing-wasm
 
-Each component's own copyright line:
+MIT License
 
-- Copyright (c) Microsoft Corporation. (onnxruntime-web)
-- Copyright (c) 2014-2024 Chart.js Contributors (chart.js)
-- Copyright (c) 2012 Ryan Day (qrcode)
-- Copyright (c) 2023 Ze-Zheng Wu (barcode-detector, zxing-wasm)
+Copyright (c) Microsoft Corporation. (onnxruntime-web)
+
+Copyright (c) 2014-2024 Chart.js Contributors (chart.js)
+
+Copyright (c) 2012 Ryan Day (qrcode)
+
+Copyright (c) 2023 Ze-Zheng Wu (barcode-detector, zxing-wasm)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
