@@ -628,6 +628,26 @@
                                     <option value="omni" data-i18n="roast_type_omni">Omni-Röstung</option>
                                 </select>
                             </div>
+                            <div class="lib-form-field">
+                                <label for="beanFormRoastLevel" data-i18n="bean_roast_level">Röstgrad</label>
+                                <select id="beanFormRoastLevel" data-pills>
+                                    <option value="" data-i18n="roast_level_none">– keine Angabe –</option>
+                                    <option value="light" data-i18n="roast_level_light">Hell</option>
+                                    <option value="medium-light" data-i18n="roast_level_medium_light">Hell-mittel</option>
+                                    <option value="medium" data-i18n="roast_level_medium">Mittel</option>
+                                    <option value="medium-dark" data-i18n="roast_level_medium_dark">Dunkel-mittel</option>
+                                    <option value="dark" data-i18n="roast_level_dark">Dunkel</option>
+                                </select>
+                            </div>
+                            <div class="lib-form-field lib-form-field-wide">
+                                <label for="beanFormBestFrom" data-i18n="bean_best_for">Optimal zum Verwenden (Tage seit Röstung)</label>
+                                <div class="bean-best-window">
+                                    <input type="number" id="beanFormBestFrom" step="1" min="1" max="365" inputmode="numeric" data-i18n-placeholder="bean_best_from_ph" placeholder="von">
+                                    <span aria-hidden="true">–</span>
+                                    <input type="number" id="beanFormBestUntil" step="1" min="1" max="365" inputmode="numeric" data-i18n-placeholder="bean_best_until_ph" placeholder="bis" aria-label="Optimal bis (Tag)" data-i18n-aria-label="bean_best_until_label">
+                                </div>
+                                <span class="lib-form-hint" id="beanFormBestHint" data-i18n="bean_best_hint">Leer lassen, um den Vorschlag des Röstgrads zu nutzen.</span>
+                            </div>
                             <div class="lib-form-field lib-form-field-wide">
                                 <label for="beanFormFlavorInput" data-i18n="bean_flavors_label">Geschmacksnoten</label>
                                 <div class="flavor-chips-wrap" id="beanFormFlavorChips">
@@ -1640,6 +1660,16 @@
         <div class="settings-card" id="beanFreshnessCard">
             <h3 class="settings-card-title" data-i18n="bf_title">Bohnen-Frische</h3>
             <p class="settings-card-desc" data-i18n="bf_desc">Ab welchem Alter eine Röstung als degasend, optimal oder alt gilt — und ab wie vielen Gramm eine Packung als fast leer gemeldet wird.</p>
+            <label for="bfLevel" class="machine-form-label" data-i18n="bf_level">Röstgrad</label>
+            <select id="bfLevel" class="machine-form-input">
+                <option value="" data-i18n="bf_scope_global">Alle Bohnen (Standard)</option>
+                <option value="light" data-i18n="roast_level_light">Hell</option>
+                <option value="medium-light" data-i18n="roast_level_medium_light">Hell-mittel</option>
+                <option value="medium" data-i18n="roast_level_medium">Mittel</option>
+                <option value="medium-dark" data-i18n="roast_level_medium_dark">Dunkel-mittel</option>
+                <option value="dark" data-i18n="roast_level_dark">Dunkel</option>
+            </select>
+            <p class="settings-card-desc" data-i18n="bf_level_hint">Die Tage darunter gelten für die gewählte Gruppe. Bohnen ohne Röstgrad und ohne eigene „optimal bis“-Angabe nutzen „Alle Bohnen“.</p>
             <label for="bfDegasUntil" class="machine-form-label" data-i18n="bf_degas_until">Degasen bis (Tage)</label>
             <input type="number" id="bfDegasUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
             <label for="bfPeakFrom" class="machine-form-label" data-i18n="bf_peak_from">Optimal ab (Tage)</label>
@@ -1648,8 +1678,10 @@
             <input type="number" id="bfPeakUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
             <label for="bfFadingUntil" class="machine-form-label" data-i18n="bf_fading_until">Abbauend bis (Tage)</label>
             <input type="number" id="bfFadingUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
-            <label for="bfLowStock" class="machine-form-label" data-i18n="bf_low_stock">Warnung unter (g)</label>
-            <input type="number" id="bfLowStock" class="machine-form-input" step="1" min="1" max="5000" inputmode="numeric">
+            <div id="bfLowStockRow">
+                <label for="bfLowStock" class="machine-form-label" data-i18n="bf_low_stock">Warnung unter (g)</label>
+                <input type="number" id="bfLowStock" class="machine-form-input" step="1" min="1" max="5000" inputmode="numeric">
+            </div>
             <div id="bfError" class="bf-error" role="alert" style="display:none"></div>
             <div class="machine-form-actions">
                 <button id="bfSaveBtn" type="button" class="backup-btn" data-i18n="bf_save">Speichern</button>

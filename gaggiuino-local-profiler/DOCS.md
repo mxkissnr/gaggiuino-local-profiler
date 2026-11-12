@@ -389,7 +389,7 @@ An alternative to the WebSocket connection above for getting live sensor/system 
 
 ### Bean freshness and photos
 
-**Settings → Bean freshness** sets the roast-age bands behind the freshness badge on bean cards (degassing, peak, fading) and the number of grams left in a bag that counts as running low. The badge tooltip shows your own windows; **Reset to defaults** restores the built-in ones.
+**Settings → Bean freshness** sets the roast-age bands behind the freshness badge on bean cards (degassing, peak, fading) and the number of grams left in a bag that counts as running low. The badge tooltip shows your own windows; **Reset to defaults** restores the built-in ones. A bean's **roast level** picks a matching window (each level is edited on its own in the card), and a bean can override its peak band with an optional **best for use** from/until range.
 
 Every photo field has two buttons: **Choose photo** opens the gallery, **Take photo** opens a camera inside the app (it needs an HTTPS connection to Home Assistant, like the barcode scanner). Tap the preview to focus; the photo is cropped to exactly what the preview showed, then goes through the crop editor.
 
@@ -574,7 +574,17 @@ The **Grinder** field lists the grinders in your library and sets your one defau
 
 ### Bean freshness
 
-⚙ Settings → **Bean freshness** sets the four day bounds that separate the freshness bands (degassing until, peak from, peak until, fading until) and the grams below which a tracked bag counts as running low. Both used to be fixed values; the card makes them yours. The badge on a bean, the degassing tracker in a shot's annotation panel and the "bean running low" notification all read these settings, and they are stored with your other shared UI preferences — so they follow you to another device and travel with a backup. Leave the defaults untouched to keep the behaviour every earlier version had (4 / 7 / 21 / 35 days, 100 g).
+⚙ Settings → **Bean freshness** sets the four day bounds that separate the freshness bands (degassing until, peak from, peak until, fading until) and the grams below which a tracked bag counts as running low. Both used to be fixed values; the card makes them yours. A bean can also carry a **roast level** (light, medium-light, medium, medium-dark, dark) in its edit form. The card's level picker edits each level's own window set, and a bean without a level keeps using the global set — a bean *with* a level uses that level's window even if you have tuned the global set. The low-stock grams stay global and are never overwritten by a level reset. Every level ships with a suggested window that gives the beans real rest — even a dark roast is not treated as peak within the first week — and you can tune any level in the card. On top of that, a bean can set an optional **best for use** from/until range, which replaces the peak band for that one bean while keeping its level's degassing/fading bounds. The badge on a bean, the degassing tracker in a shot's annotation panel and the "bean running low" notification all read these settings, and the badge tooltip names which layer supplied the window (a roast level, a custom window, or the global set). Everything is stored with your other shared UI preferences — so it follows you to another device and travels with a backup. Beans without a roast level keep the behaviour every earlier version had (the global 4 / 7 / 21 / 35 days and 100 g).
+
+Where the built-in values come from: only the direction is well established — a darker roast is more porous and releases CO₂ faster, so each step down the scale opens the peak earlier and also ends it sooner. The days themselves are a cautious starting point rather than a measurement. Early discussion of this feature put a dark roast's peak at roughly days 4–7, but a bag that young still tastes of degassing to many, so every suggestion opens its peak later than that. Nothing here is fixed: each level's window is a starting point you can tune in the card, and a bean with its own **best for use** range overrides the peak for that bean alone. The shipped suggestions are:
+
+| Roast level | Degassing until | Peak from | Peak until | Fading until |
+| --- | --- | --- | --- | --- |
+| Light | 14 | 21 | 45 | 70 |
+| Medium-light | 10 | 17 | 38 | 58 |
+| Medium | 8 | 13 | 30 | 48 |
+| Medium-dark | 6 | 10 | 24 | 38 |
+| Dark | 5 | 8 | 18 | 30 |
 
 ### Backup & Restore
 

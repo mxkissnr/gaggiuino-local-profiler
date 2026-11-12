@@ -187,6 +187,27 @@ func TestListBeansFilterAndPaging(t *testing.T) {
 	}
 }
 
+// TestListBeansReportsRoastLevel covers #1977: roast_level used to echo the
+// legacy roastType label ("espresso"), so a caller asking for the bean's roast
+// level got a process-style value instead.
+func TestListBeansReportsRoastLevel(t *testing.T) {
+	bean := library.Entity{
+		"id": int64(1), "name": "Alpha", "enabled": true,
+		"roastType": "espresso", "roastLevel": "medium-light",
+	}
+	info := toBeanInfo(bean, []library.Entity{bean}, nil, time.Now())
+	if info.RoastLevel != "medium-light" {
+		t.Fatalf("roast_level = %q, want medium-light (the roastLevel field)", info.RoastLevel)
+	}
+
+	// A bean saved before #1977 has no roastLevel: report no level rather than
+	// falling back to the unrelated roastType.
+	legacy := library.Entity{"id": int64(2), "name": "Beta", "enabled": true, "roastType": "espresso"}
+	if got := toBeanInfo(legacy, []library.Entity{legacy}, nil, time.Now()).RoastLevel; got != "" {
+		t.Fatalf("legacy roast_level = %q, want empty (roastType must not be used)", got)
+	}
+}
+
 func findBean(beans []any, name string) map[string]any {
 	for _, raw := range beans {
 		b, _ := raw.(map[string]any)

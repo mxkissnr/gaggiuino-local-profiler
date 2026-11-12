@@ -1,7 +1,7 @@
 import { t, tHtml } from '../../i18n.js';
 import { showToast } from '../../components/toast.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml } from '../../utils.js';
+import { esc, html, joinHtml, normalizeRoastLevel, freshnessOverrideFrom } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { SLIDERS_ICON_SVG, TARGET_ICON_SVG, SNOWFLAKE_ICON_SVG, CLOSE_ICON_SVG, EDIT_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { applySheetFlavorHighlight, resetSheetFlavorHighlight } from '../../components/flavor-mini-wheel.js';
@@ -82,8 +82,15 @@ function _sheetHost(): HTMLElement | null {
 // card's header row renders.
 function _sheetBadges(b: BeanListRow): Html {
   const disabled = b.enabled === false;
+  // #1977: normalise the stored level and read the override through the shared
+  // helper, so an unknown level renders nothing and a half-set pair renders no
+  // "best for use" chip — the sheet never invents a window.
+  const level = normalizeRoastLevel(b.roastLevel);
+  const best = freshnessOverrideFrom(b);
   return html`${beanFreshBadge(b)}
     ${b.roastType ? html`<span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}
+    ${level ? html`<span class="lib-roast-badge">${esc(t('roast_level_' + level.replace(/-/g, '_')))}</span>` : esc('')}
+    ${best ? html`<span class="lib-roast-badge">${esc(t('bean_best_badge', best.from, best.until))}</span>` : esc('')}
     ${b.decaf ? html`<span class="lib-decaf-badge">${tHtml('lib_bean_decaf_short')}</span>` : esc('')}
     ${disabled ? html`<span class="lib-disabled-badge">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}`;
 }

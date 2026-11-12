@@ -44,6 +44,7 @@ func beanFields(body Entity) Entity {
 			origin, _ = m["code"].(string)
 		}
 	}
+	bestFrom, bestUntil := sanitizeBestForUse(body["bestFromDays"], body["bestUntilDays"])
 	return Entity{
 		"name":          trimMax(body["name"], 200),
 		"roaster":       trimMax(body["roaster"], 200),
@@ -57,6 +58,9 @@ func beanFields(body Entity) Entity {
 		"process":       trimMax(body["process"], 200),
 		"flavors":       sanitizeFlavors(body["flavors"]),
 		"roastType":     sanitizeRoastType(body["roastType"]),
+		"roastLevel":    sanitizeRoastLevel(body["roastLevel"]),
+		"bestFromDays":  bestFrom,
+		"bestUntilDays": bestUntil,
 		"region":        trimMax(body["region"], 200),
 		"altitude_m":    sanitizeAltitude(body["altitude_m"]),
 		"importer":      trimMax(body["importer"], 200),

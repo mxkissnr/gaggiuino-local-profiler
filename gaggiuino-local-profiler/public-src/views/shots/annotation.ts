@@ -5,9 +5,10 @@ import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, deleteShotImage, shotImageUrl } from '../../api/shots.js';
 import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js';
-import { esc, formatDate, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
+import { esc, formatDate, germanToIso, html, joinHtml, parseRoastDate, resolveFreshness } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
-import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
+import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation, beanFreshnessContext } from './utils.js';
+import type { BeanFreshnessContext } from './utils.js';
 import { defaultGrinderName, suggestGrindDoseForBean, TASTE_TAGS, TASTE_TAG_LABELS, tasteTagOf } from './grind.js';
 import type { TasteTag } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
@@ -455,7 +456,7 @@ export function selectFrozenPortion(id: string | null | undefined): void {
   // matches the badge the shot will show once saved.
   const mix = mixFields(mixParts());
   const ann = { ...(shot?.annotation ?? {}), coffee: beanName, beanId, frozenPortionId: id ? parseInt(id, 10) : null, beanMix: mix ? mix.beanMix : null };
-  updateDegassing(_roastDateFromLibrary(beanName, shot?.timestamp, beanId) || '', _frozenShotAge(ann, shot?.timestamp));
+  updateDegassing(_roastDateFromLibrary(beanName, shot?.timestamp, beanId) || '', _frozenShotAge(ann, shot?.timestamp), beanFreshnessContext(ann));
   scheduleAutoSave();
 }
 
@@ -676,7 +677,11 @@ export function _frozenShotAge(ann: AnnotationData, shotTimestampSec: number | u
   return shotBeanAge(ann, shotTimestampSec, { relativeToNow: false })?.days;
 }
 
-export function updateDegassing(val: string | null | undefined, effectiveDays?: number | null): void {
+export function updateDegassing(
+  val: string | null | undefined,
+  effectiveDays?: number | null,
+  freshness?: BeanFreshnessContext | null,
+): void {
   const tracker = document.getElementById('degassingTracker') as HTMLElement;
   const fill    = document.getElementById('degassingFill') as HTMLElement;
   const label   = document.getElementById('degassingLabel') as HTMLElement;
@@ -687,13 +692,15 @@ export function updateDegassing(val: string | null | undefined, effectiveDays?: 
   const days = effectiveDays ?? Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
   tracker.style.display = 'block';
-  // #1835: the bands come from the shared freshness windows; the bar keeps its
-  // 42-day scale, measured from the end of the fading band so a wider window
-  // still fills the bar at the same point.
-  const w = freshnessWindows();
+  // #1835/#1977: the bands come from the same resolved windows as the badge —
+  // per-bean override → roast level → global; the bar keeps its 42-day scale,
+  // measured from the end of the fading band so a wider window still fills the
+  // bar at the same point.
+  const resolved = resolveFreshness(days, freshness?.roastLevel, freshness?.override);
+  const w = resolved.windows;
   const pct = Math.min(100, (days / (w.fadingUntil + 7)) * 100);
   fill.style.width = pct + '%';
-  const state = freshnessState(days) ?? 'old';
+  const state = resolved.state ?? 'old';
   let color: string, text: string;
   switch (state) {
     case 'degassing': color = '#52525b'; text = t('degas_too_fresh', days); break;
@@ -812,7 +819,7 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   // #1837: after the bean select and the dose it renders row 1 from — a saved
   // mix restores its rows and takes the dose over as their sum.
   loadBeanMix(ann);
-  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '', _frozenShotAge(ann, shot?.timestamp));
+  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '', _frozenShotAge(ann, shot?.timestamp), beanFreshnessContext(ann));
   (document.getElementById('annTds') as HTMLInputElement).value          = String(ann.tds         || '');
   (document.getElementById('annNotes') as HTMLInputElement).value        = ann.notes        || '';
   _renderTasteTagPills(tasteTagOf(ann) ?? '');
@@ -872,7 +879,7 @@ export function quickClone(): void {
   renderGrinderField('annGrinder', 'annGrinderOther', clonedGrinder);
   renderGrindField('annGrindSetting', clonedGrinder, defaultGrinder ? suggested.grindSetting : (suggested.grindSetting || ann.grindSetting || ''));
   (document.getElementById('annDose') as HTMLInputElement).value         = String(suggested.dose         || ann.dose         || '');
-  updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '');
+  updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '', undefined, beanFreshnessContext({ coffee: beanName, beanId }));
   // Basket/puck screen are equipment, not per-shot state — carried over from
   // the previous shot like the grinder above, rather than reset like the
   // frozen-portion choice below.
