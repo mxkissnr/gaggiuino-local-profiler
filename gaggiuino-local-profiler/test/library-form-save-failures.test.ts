@@ -9,10 +9,10 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
 installBootStubs();
 
-// Every form's save request goes through this module, so stubbing it keeps the
-// tests off the network and lets each case decide how the request settles.
 type SaveApi = Mock<(id: number | null, payload: unknown) => Promise<unknown>>;
 
+// Every form's save request goes through this module, so stubbing it keeps the
+// tests off the network and lets each case decide how the request settles.
 const mocks = vi.hoisted(() => ({
   saveBasket: vi.fn<(id: number | null, payload: unknown) => Promise<unknown>>(),
   savePuckScreen: vi.fn<(id: number | null, payload: unknown) => Promise<unknown>>(),
