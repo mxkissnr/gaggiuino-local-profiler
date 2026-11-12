@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { installBootStubs } from './helpers/boot-stub-dom.js';
 
 // The library view graph reads localStorage/navigator at module load; the boot
@@ -11,12 +11,14 @@ installBootStubs();
 
 // Every form's save request goes through this module, so stubbing it keeps the
 // tests off the network and lets each case decide how the request settles.
+type SaveApi = Mock<(id: number | null, payload: unknown) => Promise<unknown>>;
+
 const mocks = vi.hoisted(() => ({
-  saveBasket: vi.fn(),
-  savePuckScreen: vi.fn(),
-  saveRecipe: vi.fn(),
-  saveGrinder: vi.fn(),
-  showToast: vi.fn(),
+  saveBasket: vi.fn<(id: number | null, payload: unknown) => Promise<unknown>>(),
+  savePuckScreen: vi.fn<(id: number | null, payload: unknown) => Promise<unknown>>(),
+  saveRecipe: vi.fn<(id: number | null, payload: unknown) => Promise<unknown>>(),
+  saveGrinder: vi.fn<(id: number | null, payload: unknown) => Promise<unknown>>(),
+  showToast: vi.fn<(msg: string) => void>(),
 }));
 
 vi.mock('../public-src/api/library.js', async (importOriginal) => ({
@@ -227,7 +229,7 @@ interface FormCase {
   formId: string;
   fieldId: string;
   saveBtnId: string;
-  api: ReturnType<typeof vi.fn>;
+  api: SaveApi;
   open: () => void;
   save: () => Promise<void>;
   savedRow: Record<string, unknown>;
@@ -242,7 +244,7 @@ function makeCase(
   formId: string,
   fieldId: string,
   saveBtnId: string,
-  api: ReturnType<typeof vi.fn>,
+  api: SaveApi,
   open: () => void,
   save: () => Promise<void>,
   savedRow: Record<string, unknown>,
@@ -279,15 +281,18 @@ function resetDocument(): void {
 }
 
 beforeEach(async () => {
-  resetDocument();
   mocks.saveBasket.mockReset();
   mocks.savePuckScreen.mockReset();
   mocks.saveRecipe.mockReset();
   mocks.saveGrinder.mockReset();
   mocks.showToast.mockReset();
   vi.resetModules();
+  // Import the graph against the boot stub (it reads localStorage/navigator at
+  // module load), then hand the forms this test's fake document.
+  installBootStubs();
   ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
   libraryApiModule = (await import('../public-src/views/library.js')) as unknown as LibraryApi;
+  resetDocument();
   S.currentLang = 'en';
   S.shots = [];
   S.basketEditId = null;
@@ -316,7 +321,7 @@ describe('a failed save shows the error and keeps the form open (#2022)', () => 
 describe('a double tap on Save makes one request (#2022)', () => {
   it.each(cases())('$label', async form => {
     let release!: (row: Record<string, unknown>) => void;
-    form.api.mockImplementation(() => new Promise<Record<string, unknown>>(res => { release = res; }));
+    form.api.mockImplementation(() => new Promise(res => { release = res; }));
     form.open();
     doc.getElementById(form.fieldId).value = 'Test entry';
 
