@@ -97,6 +97,10 @@ class FakeElement {
     return child;
   }
 
+  prepend(node: FakeElement): void {
+    this.insertBefore(node, this.firstChild);
+  }
+
   insertBefore(node: FakeElement, ref: FakeElement | null): FakeElement {
     node.detach();
     node.parentNode = this;
@@ -551,6 +555,45 @@ describe('double save guard (#1614 slice 4)', () => {
     await second;
 
     expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('edit autosave catch-up (#2016)', () => {
+  it('saves once more after the in-flight save and still closes the form', async () => {
+    const { home, form } = setupHome();
+    // bindFormAutosave needs the actions row it puts its status into.
+    const actions = doc.createElement();
+    actions.className = 'lib-form-actions';
+    form.appendChild(actions);
+    const bean = addBean();
+    const row = (name: string): Bean => ({ id: 1, name, roaster: 'Kaffee Braun', bags: bean.bags, flavors: [] });
+    const releases: ((bean: Bean) => void)[] = [];
+    mocks.saveBean.mockImplementation(() => new Promise<Bean>(res => { releases.push(res); }));
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+
+    // The user clicks Save, then types. The autosave finds the save in flight
+    // and must queue one catch-up save instead of dropping the keystroke.
+    const buttonSave = library.saveBean();
+    form.dispatch('change', { target: { type: 'text' } });
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+
+    releases[0]!(row('Renamed'));
+    await buttonSave;
+
+    // Both requests are still open here, which is exactly when a catch-up save
+    // that shares the row with the button path would strand the form: the
+    // button save has to close it on its own result, not on shared state.
+    await vi.waitFor(() => expect(form.parentNode).toBe(home));
+    expect(S.coffeeLibrary.beans[0]?.name).toBe('Renamed');
+
+    await vi.waitFor(() => expect(mocks.saveBean).toHaveBeenCalledTimes(2));
+    releases[1]!(row('Renamed'));
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    // The late catch-up must not reopen the form or start a third save.
+    expect(form.parentNode).toBe(home);
+    expect(mocks.saveBean).toHaveBeenCalledTimes(2);
   });
 });
 
