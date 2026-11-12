@@ -346,6 +346,81 @@ describe('setUiPref (#1375)', () => {
     expect(mod.getUiPref('a')).toEqual({ nested: { deep: 1 } });
   });
 
+  it('empties the queue when a 400 names no queued key (#2026)', async () => {
+    const mod = await loadModule();
+    const bad = {
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'Validation failed', issues: ['invalid value for key "other"'] }),
+    } as unknown as Response;
+    const fetchMock = vi.fn<FetchFn>(() => Promise.resolve(bad));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    mod.setUiPref('a', { nested: { deep: 1 } });
+    mod.setUiPref('b', 'ok');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(pendingKeys()).toEqual([]);
+
+    mod.setUiPref('c', 3);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentBody(fetchMock.mock.calls[1])).toEqual({ c: 3 });
+    expect(mod.getUiPref('a')).toEqual({ nested: { deep: 1 } });
+  });
+
+  it('empties the queue when the 400 body cannot be read (#2026)', async () => {
+    const mod = await loadModule();
+    const bad = {
+      ok: false,
+      status: 400,
+      json: () => Promise.reject(new Error('no body')),
+    } as unknown as Response;
+    const fetchMock = vi.fn<FetchFn>(() => Promise.resolve(bad));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    mod.setUiPref('a', 1);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(pendingKeys()).toEqual([]);
+
+    mod.setUiPref('b', 2);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(sentBody(fetchMock.mock.calls[1])).toEqual({ b: 2 });
+  });
+
+  it('keeps a key changed during a rejected request queued (#2026)', async () => {
+    const mod = await loadModule();
+    const resolvers: Array<(r: Response) => void> = [];
+    const fetchMock = vi.fn<FetchFn>(() => new Promise<Response>(res => { resolvers.push(res); }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    mod.setUiPref('lib.shelf', { filter: 'v1' });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(sentBody(fetchMock.mock.calls[0])).toEqual({ 'lib.shelf': { filter: 'v1' } });
+
+    mod.setUiPref('lib.shelf', { filter: 'v2' });
+
+    const bad = {
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ error: 'Validation failed' }),
+    } as unknown as Response;
+    resolvers[0]?.(bad);
+    await vi.runAllTimersAsync();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentBody(fetchMock.mock.calls[1])).toEqual({ 'lib.shelf': { filter: 'v2' } });
+    expect(mod.getUiPref('lib.shelf')).toEqual({ filter: 'v2' });
+  });
+
   it('flushes the pending set with keepalive on pagehide (#1403)', async () => {
     _store.set('glp_ui_prefs', JSON.stringify({ 'lib.shelf': { filter: 'all' } }));
     _store.set('glp_ui_prefs_pending', JSON.stringify(['lib.shelf']));
