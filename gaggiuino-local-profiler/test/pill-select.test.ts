@@ -154,6 +154,18 @@ describe('#1962 pill select', () => {
     expect(group.getAttribute('aria-label')).toBeNull();
   });
 
+  it('keeps an id the label already has when pointing aria-labelledby at it', () => {
+    const select = makeSelect(WALL_TYPES);
+    select.id = 'basketWallType';
+    const labelEl = new FakeElement();
+    labelEl.id = 'wallTypeHeading';
+    labels.set('basketWallType', labelEl);
+
+    bindPillSelect(asSelect(select));
+
+    expect(at(select.inserted, 0).getAttribute('aria-labelledby')).toBe('wallTypeHeading');
+  });
+
   it('copies data-i18n from the option to its pill', () => {
     bindPillSelect(asSelect(select));
     expect(pillsOf(select).map(p => p.getAttribute('data-i18n')))
