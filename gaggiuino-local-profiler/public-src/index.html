@@ -1481,6 +1481,8 @@
     <div id="settings-view">
         <div class="settings-bar" id="settingsBar">
             <h1 class="settings-bar-title" data-i18n="nav_settings">Einstellungen</h1>
+            <input type="search" id="settingsSearch" class="lib-shelf-search settings-search" placeholder="Einstellung suchen" aria-label="Einstellung suchen" data-i18n-placeholder="settings_search_ph" data-i18n-aria-label="settings_search_ph" autocomplete="off">
+            <button type="button" id="settingsSearchBtn" class="lib-sheet-iconbtn settings-search-btn" aria-label="Einstellung suchen" data-i18n-aria-label="settings_search_ph" aria-controls="settingsSearch"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
             <details class="lib-sheet-more settings-more" id="settingsMore">
                 <summary aria-label="Weitere Aktionen" data-i18n-aria-label="lib_sheet_more">⋯</summary>
                 <div class="lib-sheet-menu-list">
@@ -1491,6 +1493,8 @@
         <div class="settings-layout">
             <div class="settings-list">
                 <div id="settingsGroups" class="settings-groups"></div>
+                <div id="settingsSearchResults" class="settings-group" hidden></div>
+                <p id="settingsSearchEmpty" class="settings-card-desc settings-search-empty" data-i18n="settings_search_none" hidden>Keine Einstellung passt zur Suche.</p>
             </div>
             <div class="settings-pages">
                 <div class="settings-subbar">
@@ -1535,15 +1539,15 @@
             <div id="bottomNavConfigList" class="bottom-nav-config-list"></div>
         </div>
         <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
-            <div class="settings-lang-group">
-                <button class="lang-option-btn" data-lang="de">Deutsch</button>
-                <button class="lang-option-btn" data-lang="en">English</button>
-                <button class="lang-option-btn" data-lang="it">Italiano</button>
-                <button class="lang-option-btn" data-lang="fr">Français</button>
-                <button class="lang-option-btn" data-lang="es">Español</button>
-                <button class="lang-option-btn" data-lang="nl">Nederlands</button>
-            </div>
+            <label for="settingsLang" class="settings-card-title" data-i18n="settings_language">Sprache</label>
+            <select id="settingsLang" class="machine-form-input">
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="it">Italiano</option>
+                <option value="nl">Nederlands</option>
+            </select>
         </div>
         </section>
         <section class="settings-page" data-settings-page="notifications" hidden>
