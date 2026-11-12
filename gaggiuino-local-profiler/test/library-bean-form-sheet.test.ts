@@ -575,7 +575,7 @@ describe('bean autosave leaves the bag alone (#2018)', () => {
     await library.saveBean();
 
     expect(mocks.updateBeanBag).toHaveBeenCalledTimes(1);
-    const call = mocks.updateBeanBag.mock.calls[0] as [number, number, Record<string, unknown>];
+    const call = mocks.updateBeanBag.mock.calls[0] as unknown as [number, number, Record<string, unknown>];
     expect(call[0]).toBe(1);
     expect(call[1]).toBe(1);
     expect(call[2]?.price_eur).toBe(13);
