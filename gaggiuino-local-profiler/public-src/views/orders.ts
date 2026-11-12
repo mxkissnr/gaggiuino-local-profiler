@@ -184,7 +184,8 @@ export async function loadOrdersView(): Promise<void> {
   // #1962: only a view that has nothing on screen yet says it is loading, so a
   // background refresh never flashes over the list the user is reading.
   const pendingListEl = document.getElementById('orders-pending-list');
-  if (pendingListEl && pendingListEl.innerHTML === '') {
+  const listShowedNothing = pendingListEl?.innerHTML === '';
+  if (listShowedNothing && pendingListEl) {
     pendingListEl.innerHTML = html`<div class="loading-state">${tHtml('please_wait')}</div>`;
   }
   const [sw, settings] = await Promise.all([
@@ -205,15 +206,23 @@ export async function loadOrdersView(): Promise<void> {
   ]);
   SO._ordersQueueEta = queueEta;
 
-  renderOrdersList(orders);
-  if (ordersFailed && pendingListEl) {
-    pendingListEl.innerHTML = html`<div class="loading-state" style="color:var(--err)">${tHtml('error_load')}</div>`;
+  // #2016: a failed list call returns an empty array, which is not the same as
+  // an empty list. Keep what is on screen (and the known pending ids) instead
+  // of wiping both and re-notifying every pending order on the next good load.
+  if (ordersFailed) {
+    if (pendingListEl && listShowedNothing) {
+      pendingListEl.innerHTML = html`<div class="loading-state" style="color:var(--err)">${tHtml('error_load')}</div>`;
+    }
+  } else {
+    renderOrdersList(orders);
   }
   renderOrdersMenuAdmin(menu);
   renderMilkStock(milkStock);
   if (S._ordersStatsOpen) {
     getOrdersStats().then(renderOrdersStats).catch(() => {});
   }
+
+  if (ordersFailed) return;
 
   const pendingOrders = orders.filter(o => o.status === 'pending');
   const badge = document.getElementById('ordersBadge');

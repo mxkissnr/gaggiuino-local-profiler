@@ -121,6 +121,13 @@ describe('#1962 pill select', () => {
     expect(at(select.inserted, 0).getAttribute('aria-label')).toBe('Wall type');
   });
 
+  it('copies data-i18n-aria-label from the select to its group', () => {
+    select.setAttribute('data-i18n-aria-label', 'basket_wall_type_label');
+    bindPillSelect(asSelect(select));
+    expect(at(select.inserted, 0).getAttribute('data-i18n-aria-label'))
+      .toBe('basket_wall_type_label');
+  });
+
   it('copies data-i18n from the option to its pill', () => {
     bindPillSelect(asSelect(select));
     expect(pillsOf(select).map(p => p.getAttribute('data-i18n')))

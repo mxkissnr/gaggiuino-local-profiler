@@ -55,15 +55,16 @@ let _formSheetSaveBtn: HTMLButtonElement | null = null;
 // while the first is pending is ignored instead of creating the bean twice
 // (#1614 slice 4).
 let _beanSaveInFlight = false;
+// An autosave that arrived while the previous one was still in flight. Only an
+// edit queues: the edit form must end with the user's last keystroke on the
+// server, whereas a create is submitted explicitly.
+let _beanSaveQueued = false;
 // The form saves itself while editing (#1962); the save button stays for
 // creating. Bound once, on the first open: the form element is persistent.
 let _autosaveBound = false;
 // The sheet bar's action row, kept so the autosave status can sit next to the
 // bar's Save button: the form's own action row is hidden while editing.
 let _formSheetHeadActions: HTMLElement | null = null;
-// The row the last successful _persistBean wrote, for the create-only
-// follow-ups that need its id.
-let _persistedBean: Bean | null = null;
 
 function _rememberFormHome(): void {
   const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
@@ -379,7 +380,7 @@ export function openBeanForm(bean?: BeanRow | null): void {
     _autosaveBound = true;
     bindFormAutosave(form, {
       isEditing: () => !!S.beanEditId,
-      save: async () => { const ok = await _persistBean(); if (ok) library.renderBeanList(); return ok; },
+      save: async () => { const row = await _persistBean(); if (row) library.renderBeanList(); return row !== null; },
     });
   }
   _el('beanAddTrigger').style.display = 'none';
@@ -469,11 +470,15 @@ function _setBeanSaveButtonsDisabled(disabled: boolean): void {
 // clear the edit id, so autosave can keep saving the same bean (#1962). The
 // create-only follow-ups (photo, extra recipes, new-bag dialog) stay in
 // saveBeanInternal, which is the button path.
-async function _persistBean(): Promise<boolean> {
-  // A save while the previous request is still pending is dropped: without
-  // this the second POST creates the bean a second time (#1614 slice 4).
-  if (_beanSaveInFlight) return false;
-  _persistedBean = null;
+async function _persistBean(): Promise<Bean | null> {
+  // A save while the previous request is still pending must not race it:
+  // without this the second POST creates the bean a second time (#1614 slice
+  // 4). An edit instead remembers that one more save is wanted and runs it
+  // once the request in flight has settled (#2016).
+  if (_beanSaveInFlight) {
+    if (S.beanEditId != null) _beanSaveQueued = true;
+    return null;
+  }
   const name      = _field('beanFormName').value.trim();
   const roaster   = _field('beanFormRoaster').value.trim();
   const roastDate = _field('beanFormRoastDate').value.trim();
@@ -496,7 +501,7 @@ async function _persistBean(): Promise<boolean> {
   const brewTimeS  = _field('beanFormBrewTime').value;
   const brewNotes  = _field('beanFormBrewNotes').value.trim();
   commitFlavorInput(); // take a still-typed flavor along
-  if (!name) { markFieldInvalid(_field('beanFormName')); return false; }
+  if (!name) { markFieldInvalid(_field('beanFormName')); return null; }
   const payload: Record<string, unknown> = {
     name, roaster, roastDate, notes, decaf, origins: formOrigins(), variety, species, category, process, flavors: formFlavors(), roastType, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
@@ -526,7 +531,7 @@ async function _persistBean(): Promise<boolean> {
       saved = await libraryApi.saveBean(editId, payload);
     } catch (e) {
       window.showToast?.(t('error_generic', (e as Error).message));
-      return false;
+      return null;
     }
     if (editId) {
       const idx = _beanList().findIndex(b => b.id === editId);
@@ -549,14 +554,17 @@ async function _persistBean(): Promise<boolean> {
         }
       }
     }
-    _persistedBean = saved;
     // Everything the user typed is on the server, so a close must not ask
     // about discarding it any more (#1962).
     _beanFormDirty = false;
-    return true;
+    return saved;
   } finally {
     _beanSaveInFlight = false;
     _setBeanSaveButtonsDisabled(false);
+    if (_beanSaveQueued) {
+      _beanSaveQueued = false;
+      if (S.beanEditId != null) void _persistBean().then(row => { if (row) library.renderBeanList(); });
+    }
   }
 }
 
@@ -567,8 +575,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   // checked before closeBeanForm() clears both the DOM and this state.
   const extraRecipesToImport = (_state()._urlImportExtraRecipes || []).filter((_, i) =>
     document.querySelector<HTMLInputElement>(`[data-extra-recipe-idx="${i}"]`)?.checked);
-  if (!await _persistBean()) return;
-  const saved = _persistedBean;
+  const saved = await _persistBean();
   if (!saved) return;
   // #1329 part 2: upload a photo staged while creating, now that the bean has
   // an id. A failed upload must not lose the bean — it stays in the list and
