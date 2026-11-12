@@ -136,7 +136,7 @@ function _resultRow(item: SettingsSearchItem, index: number): Html {
   const icon = group ? group.icon : esc('');
   const tint = group ? group.tint : 'var(--gray-400)';
   const groupTitle = group ? t(group.titleKey) : '';
-  return html`<button type="button" class="settings-row" data-settings-open="${esc(item.group)}" data-settings-result="${index}" style="--settings-tint:${esc(tint)}">
+  return html`<button type="button" class="settings-row" data-settings-open="${esc(item.group)}" data-settings-result="${esc(index)}" style="--settings-tint:${esc(tint)}">
                     <span class="settings-row-icon" aria-hidden="true">${icon}</span>
                     <span class="settings-row-text"><span class="settings-row-title">${esc(item.label)}</span><span class="settings-row-sub">${esc(groupTitle)}</span></span>
                     <span class="settings-chev" aria-hidden="true"></span>
@@ -147,6 +147,11 @@ function _resultRow(item: SettingsSearchItem, index: number): Html {
 // token card without a token) are not settings the user can reach.
 function _collectSettingsItems(): SettingsSearchItem[] {
   const items: SettingsSearchItem[] = SETTINGS_GROUPS.map(g => ({ group: g.id, label: t(g.titleKey), el: null }));
+  // A group title that also heads a card ("Notifications") is one entry: keep
+  // the card title, so the result jumps to it instead of stopping at the top.
+  const seen = new Map<string, SettingsSearchItem>(
+    items.map(item => [`${item.group}\u0000${normalizeSettingsText(item.label)}`, item] as const),
+  );
   const view = _view();
   if (!view) return items;
   for (const page of Array.from(view.querySelectorAll<HTMLElement>('.settings-page'))) {
@@ -156,7 +161,15 @@ function _collectSettingsItems(): SettingsSearchItem[] {
       const label = el.textContent?.trim() ?? '';
       if (!label) continue;
       if (el.closest<HTMLElement>('.settings-card')?.style.display === 'none') continue;
-      items.push({ group, label, el });
+      const key = `${group}\u0000${normalizeSettingsText(label)}`;
+      const existing = seen.get(key);
+      if (existing) {
+        if (!existing.el) existing.el = el;
+        continue;
+      }
+      const item: SettingsSearchItem = { group, label, el };
+      seen.set(key, item);
+      items.push(item);
     }
   }
   return items;
@@ -194,8 +207,8 @@ export function wireSettingsPage(): void {
     const open = target?.closest<HTMLElement>('[data-settings-open]');
     if (open?.dataset.settingsOpen) {
       openSettingsPage(open.dataset.settingsOpen);
-      const index = Number(open.dataset.settingsResult);
-      const el = open.dataset.settingsResult !== undefined ? _searchResults[index]?.el : null;
+      const result = open.dataset.settingsResult;
+      const el = result === undefined ? null : _searchResults[Number(result)]?.el ?? null;
       if (el && el.offsetParent !== null) el.scrollIntoView({ block: 'center' });
       return;
     }

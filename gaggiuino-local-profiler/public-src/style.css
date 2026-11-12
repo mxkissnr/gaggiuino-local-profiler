@@ -766,7 +766,9 @@
         .settings-groups { display:flex; flex-direction:column; gap: var(--sp-4); }
         .settings-groups[hidden], #settingsSearchResults[hidden], .settings-search-empty[hidden] { display:none; }
         .settings-search-empty { padding: var(--sp-4); }
-        .settings-search { display:none; flex: 1 1 auto; }
+        /* Scoped to the bar so .lib-shelf-search/.lib-sheet-iconbtn, defined
+           further down the file, cannot override these. */
+        .settings-bar .settings-search { display:none; flex: 1 1 auto; min-width:0; }
         .settings-bar.is-searching .settings-search { display:block; }
         .settings-bar.is-searching .settings-bar-title, .settings-bar.is-searching .settings-search-btn { display:none; }
         .settings-group { background: var(--gray-900); border-radius: var(--radius-lg); overflow:hidden; }
@@ -807,8 +809,8 @@
             .settings-subbar { position: static; margin-top: 0; padding-top: 0; }
             .settings-back { display:none; }
             .settings-row[aria-current="page"] { background: var(--raised); }
-            .settings-search { display:block; flex: 0 1 320px; }
-            .settings-search-btn { display:none; }
+            .settings-bar .settings-search { display:block; flex: 0 1 320px; }
+            .settings-bar .settings-search-btn { display:none; }
         }
         .settings-more .lib-sheet-menu-list { z-index: var(--z-dropdown); }
         .settings-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-3); }

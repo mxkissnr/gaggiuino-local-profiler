@@ -76,7 +76,8 @@ describe('settings markup: every setting sits in exactly one sub-page (#2038)', 
         expect(bar).toContain('id="settingsSearch"');
         expect(bar).toContain('data-i18n-aria-label="settings_search_ph"');
         expect(bar).toContain('data-i18n-placeholder="settings_search_ph"');
-        expect(chunks.some(c => c.includes('id="settingsSearch"'))).toBe(false);
+        expect(occurrences(indexHtml, 'id="settingsSearch"')).toBe(1);
+        expect(chunks.slice(1).some(c => c.includes('id="settingsSearch"'))).toBe(false);
     });
 
     it('moves "Restart setup tour" into the bar overflow menu', () => {
