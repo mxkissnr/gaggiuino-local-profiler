@@ -12,7 +12,14 @@ export interface ConfirmDialogOptions {
   acknowledgeOnly?: boolean;
 }
 
+// Only one dialog may be up at a time (#2026): a quick double tap on delete
+// used to stack two overlays, and answering both sent the request twice. A call
+// while one is open resolves false at once, which is the same as "no".
+let _open = false;
+
 export function confirmDialog(message: string, opts: ConfirmDialogOptions = {}): Promise<boolean> {
+  if (_open) return Promise.resolve(false);
+  _open = true;
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.className = 'guided-maint-overlay';
@@ -54,6 +61,7 @@ export function confirmDialog(message: string, opts: ConfirmDialogOptions = {}):
     const finish = (result: boolean): void => {
       if (settled) return;
       settled = true;
+      _open = false;
       keyboard.release();
       overlay.remove();
       resolve(result);

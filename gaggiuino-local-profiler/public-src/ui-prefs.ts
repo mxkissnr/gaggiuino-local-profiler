@@ -149,11 +149,19 @@ async function _flush(): Promise<void> {
             if (_queue.delete(key)) dropped = true;
           }
         } catch {
-          // Unreadable error body: keep everything queued and retry later.
+          // Unreadable error body: fall through to dropping what was sent.
         }
-        if (dropped) _persistPending();
+        if (!dropped) {
+          // The body named no queued key (or could not be read). The request was
+          // rejected as a whole, so nothing that was sent can ever go through;
+          // drop the sent keys, keeping any value changed while it was in flight.
+          for (const key of keys) {
+            if ((_version.get(key) ?? 0) === sentVersions.get(key)) _queue.delete(key);
+          }
+        }
+        _persistPending();
       }
-      return; // keep queued for the next change / next start
+      return; // other failures stay queued; a 400 already dropped what it could
     }
     for (const key of keys) {
       // Keep the key queued if its value changed while this PUT was in flight.
