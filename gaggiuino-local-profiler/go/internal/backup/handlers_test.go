@@ -410,15 +410,23 @@ func TestRestore_DryRunPreview_ReportsPendingProfileChanges(t *testing.T) {
 		VALUES (1, 'Kitchen', 'gaggiuino', 'kitchen.local', 1, 1, 1)`); err != nil {
 		t.Fatalf("seeding machine: %v", err)
 	}
-	statuses := []string{
-		machines.ProfileSyncSynced, machines.ProfileSyncPendingCreate,
-		machines.ProfileSyncDirty, machines.ProfileSyncPendingDelete,
+	profiles := []struct {
+		remoteID, status string
+	}{
+		{"r1", machines.ProfileSyncSynced},
+		{"", machines.ProfileSyncPendingCreate},
+		{"r2", machines.ProfileSyncDirty},
+		{"r3", machines.ProfileSyncPendingDelete},
 	}
-	for i, status := range statuses {
+	for i, p := range profiles {
+		var remoteID any
+		if p.remoteID != "" {
+			remoteID = p.remoteID
+		}
 		if _, err := sqlDB.Exec(`INSERT INTO machine_profiles
 			(machine_id, remote_id, name, data, utility, sync_status, created_at, updated_at)
-			VALUES (1, ?, ?, '{}', 0, ?, 1, 1)`, status+string(rune('0'+i)), "Profile "+status, status); err != nil {
-			t.Fatalf("seeding profile %q: %v", status, err)
+			VALUES (1, ?, ?, '{}', 0, ?, 1, 1)`, remoteID, "Profile "+strconv.Itoa(i), p.status); err != nil {
+			t.Fatalf("seeding profile %q: %v", p.status, err)
 		}
 	}
 
