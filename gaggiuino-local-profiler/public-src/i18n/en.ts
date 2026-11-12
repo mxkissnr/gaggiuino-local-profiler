@@ -340,7 +340,7 @@ const en: Translations = {
     exit_reason_1:'target weight reached', exit_reason_2:'target pressure reached',
     exit_reason_3:'target flow reached', exit_reason_4:'target water volume reached',
     exit_reason_5:'phase time elapsed', exit_reason_6:'safety timeout',
-    exit_reason_7:'stopped manually',
+    exit_reason_7:'stopped manually', exit_reason_8:'button released', exit_reason_9:'target ratio reached',
     grind_short:(s)=>`Shot too short (${s} s) — grind finer`,
     grind_short_slight:(s)=>`Shot slightly short (${s} s) — grind slightly finer`,
     grind_long:(s)=>`Shot too long (${s} s) — grind coarser`,

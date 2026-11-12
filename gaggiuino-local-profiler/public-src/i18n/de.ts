@@ -340,7 +340,7 @@ const de: Partial<Translations> = {
     exit_reason_1:'Zielgewicht erreicht', exit_reason_2:'Zieldruck erreicht',
     exit_reason_3:'Zielfluss erreicht', exit_reason_4:'Ziel-Wassermenge erreicht',
     exit_reason_5:'Phasenzeit abgelaufen', exit_reason_6:'Sicherheits-Timeout',
-    exit_reason_7:'manuell gestoppt',
+    exit_reason_7:'manuell gestoppt', exit_reason_8:'Taste losgelassen', exit_reason_9:'Zielverhältnis erreicht',
     grind_short:(s)=>`Bezug zu kurz (${s} s) – feiner mahlen`,
     grind_short_slight:(s)=>`Bezug etwas kurz (${s} s) – leicht feiner mahlen`,
     grind_long:(s)=>`Bezug zu lang (${s} s) – gröber mahlen`,

@@ -340,7 +340,7 @@ const nl: Partial<Translations> = {
     exit_reason_1:'doelgewicht bereikt', exit_reason_2:'doeldruk bereikt',
     exit_reason_3:'doelflow bereikt', exit_reason_4:'doelhoeveelheid water bereikt',
     exit_reason_5:'fasetijd verstreken', exit_reason_6:'veiligheidstime-out',
-    exit_reason_7:'handmatig gestopt',
+    exit_reason_7:'handmatig gestopt', exit_reason_8:'knop losgelaten', exit_reason_9:'doelverhouding bereikt',
     grind_short:(s)=>`Shot te kort (${s} s) — fijner malen`,
     grind_short_slight:(s)=>`Shot iets te kort (${s} s) — iets fijner malen`,
     grind_long:(s)=>`Shot te lang (${s} s) — grover malen`,
