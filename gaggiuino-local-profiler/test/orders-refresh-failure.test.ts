@@ -92,7 +92,7 @@ describe('#2016 orders refresh failure', () => {
 
     expect(list.innerHTML).toBe('<div class="order-card">Order A</div>');
     expect(SO._knownPendingIds).toBe(known);
-    expect(Array.from(SO._knownPendingIds ?? [])).toEqual(['o1']);
+    expect([...known]).toEqual(['o1']);
     expect(badge.style.display).toBe('');
   });
 
