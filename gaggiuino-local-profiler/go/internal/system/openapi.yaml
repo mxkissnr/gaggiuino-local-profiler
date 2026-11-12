@@ -4326,6 +4326,7 @@ paths:
                       orders:              { type: integer }
                       ordersTotal:         { type: integer }
                       machines:            { type: integer }
+                      pendingProfileChanges: { type: integer, description: Machine profile changes not yet sent to a machine that restoring the machines section would discard }
                       settings:            { type: boolean }
                       images:              { type: integer }
                       secretsPresent:      { type: boolean }

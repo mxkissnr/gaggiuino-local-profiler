@@ -8086,6 +8086,8 @@ export interface paths {
                                 orders?: number;
                                 ordersTotal?: number;
                                 machines?: number;
+                                /** @description Machine profile changes not yet sent to a machine that restoring the machines section would discard */
+                                pendingProfileChanges?: number;
                                 settings?: boolean;
                                 images?: number;
                                 secretsPresent?: boolean;
