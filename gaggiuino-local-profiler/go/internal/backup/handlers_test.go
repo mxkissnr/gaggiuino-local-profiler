@@ -397,6 +397,87 @@ func TestRestore_DryRunPreview_NoWrites(t *testing.T) {
 	}
 }
 
+// TestRestore_DryRunPreview_ReportsPendingProfileChanges (#2023): restoring
+// the machines section clears the whole local machine_profiles table
+// (RestoreMachines — a restored machine id may name a different physical
+// machine), so rows that only exist in the app are discarded. The preview
+// must report how many, and a dry run must still write nothing.
+func TestRestore_DryRunPreview_ReportsPendingProfileChanges(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+
+	if _, err := sqlDB.Exec(`INSERT INTO machines (id, name, type, host, is_default, enabled, created_at)
+		VALUES (1, 'Kitchen', 'gaggiuino', 'kitchen.local', 1, 1, 1)`); err != nil {
+		t.Fatalf("seeding machine: %v", err)
+	}
+	profiles := []struct {
+		remoteID, status string
+	}{
+		{"r1", machines.ProfileSyncSynced},
+		{"", machines.ProfileSyncPendingCreate},
+		{"r2", machines.ProfileSyncDirty},
+		{"r3", machines.ProfileSyncPendingDelete},
+	}
+	for i, p := range profiles {
+		var remoteID any
+		if p.remoteID != "" {
+			remoteID = p.remoteID
+		}
+		if _, err := sqlDB.Exec(`INSERT INTO machine_profiles
+			(machine_id, remote_id, name, data, utility, sync_status, created_at, updated_at)
+			VALUES (1, ?, ?, '{}', 0, ?, 1, 1)`, remoteID, "Profile "+strconv.Itoa(i), p.status); err != nil {
+			t.Fatalf("seeding profile %q: %v", p.status, err)
+		}
+	}
+
+	bundle := map[string]any{
+		"glp_backup": true,
+		"dryRun":     true,
+		"shots":      []any{},
+		"sections":   []any{"machines"},
+		"machines": []any{
+			map[string]any{"id": 1, "name": "Kitchen", "type": "gaggiuino", "host": "kitchen.local"},
+		},
+	}
+
+	rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("dry-run restore status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	preview, ok := decodeBody(t, rec.Body.Bytes())["preview"].(map[string]any)
+	if !ok {
+		t.Fatalf("no preview in response: %s", rec.Body.String())
+	}
+	if machinesCount, _ := preview["machines"].(float64); machinesCount != 1 {
+		t.Fatalf("preview.machines = %v; want 1", preview["machines"])
+	}
+	if pending, _ := preview["pendingProfileChanges"].(float64); pending != 3 {
+		t.Errorf("preview.pendingProfileChanges = %v; want 3 (synced row excluded)", preview["pendingProfileChanges"])
+	}
+
+	var after int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM machine_profiles`).Scan(&after); err != nil {
+		t.Fatalf("counting profiles: %v", err)
+	}
+	if after != 4 {
+		t.Errorf("profile rows after dry run = %d; want 4 (unchanged)", after)
+	}
+
+	// Without the machines section nothing is cleared, so nothing is discarded.
+	bundle["sections"] = []any{"shots"}
+	rec = doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("dry-run restore (no machines) status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	preview, ok = decodeBody(t, rec.Body.Bytes())["preview"].(map[string]any)
+	if !ok {
+		t.Fatalf("no preview in response: %s", rec.Body.String())
+	}
+	if pending, _ := preview["pendingProfileChanges"].(float64); pending != 0 {
+		t.Errorf("preview.pendingProfileChanges without machines = %v; want 0", preview["pendingProfileChanges"])
+	}
+}
+
 // TestRestore_DryRunPreview_ZipReportsShotsPresent (#967): the streamed zip
 // parser consumes the shots array via its callback and never stores it in
 // b, so sectionsPresent used to omit "shots" for every zip bundle — the UI
