@@ -603,3 +603,94 @@ func TestGaggiMateSlogToShot_LegacyZeroReasons(t *testing.T) {
 		t.Fatalf("finalExitReason = %v, want 0", v)
 	}
 }
+
+// TestGaggiMateSlogToShot_ScaleWeightSource covers the v8 active-scale rule: v
+// (the active scale's weight) feeds shotWeight only when the version's scale
+// bit is set, and the legacy hardware-scale v6 layout keeps 16-bit ticks.
+func TestGaggiMateSlogToShot_ScaleWeightSource(t *testing.T) {
+	cases := []struct {
+		name         string
+		version      byte
+		mask         uint32
+		si           uint16
+		legacyV6     bool
+		wantWeight   []int64
+		wantMeasured bool
+	}{
+		{"v8 hardware scale", 8, 0x3FFF, 0x0100, false, []int64{0, 92, 184}, true},
+		{"v8 hardware and Bluetooth bits", 8, 0x3FFF, 0x0104, false, []int64{0, 92, 184}, true},
+		{"v8 Bluetooth bit only, active scale not healthy", 8, 0x3FFF, 0x0004, false, []int64{0, 85, 170}, false},
+		{"v7 Bluetooth scale", 7, 0x3FFF, 0x0004, false, []int64{0, 92, 184}, true},
+		{"v7 ignores the v8 active-scale bit", 7, 0x3FFF, 0x0100, false, []int64{0, 85, 170}, false},
+		{"upstream v6, 28-byte samples", 6, 0x1FFF, 0x0004, false, []int64{0, 92, 184}, true},
+		{"legacy hardware-scale v6, 26-byte samples", 6, 0x1FFF, 0x0100, true, []int64{0, 92, 184}, true},
+	}
+	volumetric := []uint16{0, 85, 170}
+	measured := []uint16{0, 92, 184}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buildVersion := tc.version
+			if tc.legacyV6 {
+				buildVersion = 5
+			}
+			ticks := []uint32{0, 250, 500}
+			if tc.legacyV6 {
+				ticks = []uint32{0, 1, 2}
+			}
+			samples := make([]gaggiMateTestSample, len(ticks))
+			for i := range samples {
+				samples[i] = gaggiMateTestSample{
+					t: ticks[i], tt: 930, ct: 925, tp: 90, cp: 87,
+					fl: 210, v: measured[i], ev: volumetric[i], si: tc.si, wp: 253,
+				}
+			}
+			data := buildGaggiMateSlog(t, buildVersion, tc.mask, 250, samples)
+			if tc.legacyV6 {
+				if got := int(data[5]); got != 26 {
+					t.Fatalf("legacy v6 sample size byte = %d, want 26", got)
+				}
+				data[4] = tc.version
+			}
+
+			slog, err := gaggiMateParseSlog(data)
+			if err != nil {
+				t.Fatalf("gaggiMateParseSlog: %v", err)
+			}
+			shot := gaggiMateSlogToShot(slog, 1)
+			dp, ok := shot["datapoints"].(map[string]any)
+			if !ok {
+				t.Fatalf("datapoints missing or wrong type: %T", shot["datapoints"])
+			}
+			if got := dp["shotWeight"].([]int64); !reflect.DeepEqual(got, tc.wantWeight) {
+				t.Fatalf("shotWeight = %v, want %v", got, tc.wantWeight)
+			}
+			if got, want := dp["timeInShot"].([]int64), []int64{0, 3, 5}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("timeInShot = %v, want %v", got, want)
+			}
+			if got, want := dp["pressure"].([]int64), []int64{87, 87, 87}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("pressure = %v, want %v", got, want)
+			}
+			if got := dp["bleScaleConnected"]; got != tc.wantMeasured {
+				t.Fatalf("datapoints bleScaleConnected = %v, want %v", got, tc.wantMeasured)
+			}
+			if got := shot["gaggimateBleScale"]; got != tc.wantMeasured {
+				t.Fatalf("gaggimateBleScale = %v, want %v", got, tc.wantMeasured)
+			}
+			if tc.mask == 0x3FFF {
+				extra, ok := shot["gaggimateExtra"].(map[string]any)
+				if !ok {
+					t.Fatalf("gaggimateExtra missing or wrong type: %T", shot["gaggimateExtra"])
+				}
+				waterPumped, ok := extra["waterPumped"].([]any)
+				if !ok {
+					t.Fatalf("waterPumped missing or wrong type: %T", extra["waterPumped"])
+				}
+				f, ok := waterPumped[2].(float64)
+				if !ok {
+					t.Fatalf("waterPumped[2] = %v (%T), want a float64", waterPumped[2], waterPumped[2])
+				}
+				assertGaggiMateFloat(t, "waterPumped", f, 25.3)
+			}
+		})
+	}
+}
