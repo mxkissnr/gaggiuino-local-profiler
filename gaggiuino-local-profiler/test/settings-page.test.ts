@@ -50,7 +50,7 @@ describe('settings markup: every setting sits in exactly one sub-page (#2038)', 
         'mqttTransportToggle', 'mqttSaveBtn', 'machinesList', 'addMachineBtn',
         'machineFormCard', 'backupDownloadBtn', 'backupRestoreInput',
         'apiTokenCard', 'devToolsCard', 'devScoreModel',
-        'whatsNewList', 'settingsVersion', 'settingsLang',
+        'whatsNewList', 'settingsVersion', 'settingsLang', 'settingsSearch',
     ];
 
     it('keeps every setting id in the document exactly once, inside a section', () => {
@@ -58,6 +58,9 @@ describe('settings markup: every setting sits in exactly one sub-page (#2038)', 
             expect(occurrences(indexHtml, `id="${id}"`), id).toBe(1);
             expect(chunks.some(c => c.includes(`id="${id}"`)), id).toBe(true);
         }
+        // The search belongs to the bar above the list, not to any sub-page.
+        expect(occurrences(indexHtml, 'id="settingsSearch"')).toBe(1);
+        expect(chunks.slice(1).some(c => c.includes('id="settingsSearch"'))).toBe(false);
     });
 
     // #2038: six visible buttons broke the "at most five pills" rule, so the
@@ -76,8 +79,6 @@ describe('settings markup: every setting sits in exactly one sub-page (#2038)', 
         expect(bar).toContain('id="settingsSearch"');
         expect(bar).toContain('data-i18n-aria-label="settings_search_ph"');
         expect(bar).toContain('data-i18n-placeholder="settings_search_ph"');
-        expect(occurrences(indexHtml, 'id="settingsSearch"')).toBe(1);
-        expect(chunks.slice(1).some(c => c.includes('id="settingsSearch"'))).toBe(false);
     });
 
     it('moves "Restart setup tour" into the bar overflow menu', () => {
