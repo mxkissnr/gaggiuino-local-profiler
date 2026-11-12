@@ -139,6 +139,65 @@ func TestSecretsTableDecodes(t *testing.T) {
 	}
 }
 
+// TestCounterBadge_UnlocksAfterAProgressRowExists (#2021): a badge that
+// stored progress while still locked must unlock once its condition is met —
+// the persisted progress row used to swallow the unlock insert.
+func TestCounterBadge_UnlocksAfterAProgressRowExists(t *testing.T) {
+	env := newTestEnv(t)
+	event := &Event{Type: "noop"}
+
+	// Below the target: one shot, so shots_10 stores progress but stays locked.
+	env.insertShot(t, 5, time.Now().Unix(), map[string]any{"datapoints": map[string]any{}}, nil)
+	first, err := env.svc.EvaluateEvent(event)
+	if err != nil {
+		t.Fatalf("EvaluateEvent (below target): %v", err)
+	}
+	if containsID(first, "shots_10") {
+		t.Fatalf("shots_10 reported unlocked with only 1 of 10 shots")
+	}
+	repo := NewRepository(env.db)
+	runLocked, err := repo.GetAll()
+	if err != nil {
+		t.Fatalf("GetAll: %v", err)
+	}
+	if row, ok := runLocked["shots_10"]; !ok || row.UnlockedAt != nil || row.Progress == nil || *row.Progress != 1 {
+		t.Fatalf("shots_10 row after 1 shot = %+v, want unlocked_at NULL and progress 1", row)
+	}
+
+	// Reach the target: nine more shots, so shots_10 unlocks this pass.
+	for id := int64(6); id <= 14; id++ {
+		env.insertShot(t, id, time.Now().Unix(), map[string]any{"datapoints": map[string]any{}}, nil)
+	}
+	second, err := env.svc.EvaluateEvent(event)
+	if err != nil {
+		t.Fatalf("EvaluateEvent (at target): %v", err)
+	}
+	if !containsID(second, "shots_10") {
+		t.Fatalf("shots_10 not reported as newly unlocked at 10 shots: %v", second)
+	}
+	if got := badgeByID(env.get(t, "en"))["shots_10"]["unlocked"]; got != true {
+		t.Fatalf("shots_10 should be unlocked in the served state, got %v", got)
+	}
+
+	// Exactly once: the next pass has nothing to report for shots_10.
+	third, err := env.svc.EvaluateEvent(event)
+	if err != nil {
+		t.Fatalf("EvaluateEvent (after unlock): %v", err)
+	}
+	if containsID(third, "shots_10") {
+		t.Fatalf("shots_10 reported unlocked a second time: %v", third)
+	}
+}
+
+func containsID(ids []string, want string) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+
 // TestGetState_SkipsFullEvaluateWhenNothingChanged pins the #956
 // fingerprint gate: GET /api/achievements must not re-run the full
 // evaluateAll(nil) context scan when no shot/annotation/order/bean/
