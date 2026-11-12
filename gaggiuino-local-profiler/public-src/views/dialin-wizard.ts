@@ -16,6 +16,7 @@ import { annotateShot }          from '../api/shots.js';
 import type { ShotAnnotationInput } from '../api/types.js';
 import { esc, html, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
 import { parseBrewRatio } from '../shared/score.js';
+import { markFieldInvalid } from '../components/field-error.js';
 import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
@@ -273,7 +274,7 @@ export function dialinOverride(): void {
   const input = document.getElementById('dwOverrideInput') as HTMLInputElement | null;
   if (grindFieldInvalid('dwOverrideInput')) { checkGrindField('dwOverrideInput'); return; }
   const val = getGrindFieldValue('dwOverrideInput');
-  if (!val) { input?.focus(); return; }
+  if (!val) { markFieldInvalid(input); return; }
   s.rounds.push(s.reviewRound);
   s.reviewRound = null;
   s.candidateShotId = null;
@@ -442,11 +443,11 @@ function _renderSetup(s: DialinSession): Html {
     </div>
     <div class="lib-form-field">
       <label for="dwDose">${tHtml('dialin_wizard_setup_dose')}</label>
-      <input type="number" step="0.1" min="0" id="dwDose" value="${esc(s.dose)}">
+      <input type="number" step="0.1" min="0" max="100" id="dwDose" value="${esc(s.dose)}">
     </div>
     <div class="lib-form-field">
       <label for="dwRatio">${tHtml('dialin_wizard_setup_ratio')}</label>
-      <input type="number" step="0.1" min="0" id="dwRatio" value="${esc(s.targetRatio ?? 2)}">
+      <input type="number" step="0.1" min="0" max="30" id="dwRatio" value="${esc(s.targetRatio ?? 2)}">
     </div>
     <div class="lib-form-field">
       <label for="dwStartGrind">${tHtml('dialin_wizard_setup_start_grind')}</label>
