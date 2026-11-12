@@ -273,7 +273,7 @@ function formOpen(formId: string): boolean {
 // import/open time are plain cached nodes.
 function resetDocument(): void {
   doc = new FakeDocument();
-  g.document = doc as unknown as Document;
+  g.document = doc;
   for (const id of [
     'grinderFormScale', 'grinderFormScaleType', 'grinderFormScaleRange',
     'grinderFormScaleMin', 'grinderFormScaleMax', 'grinderFormScaleStep', 'grinderFormScaleError',

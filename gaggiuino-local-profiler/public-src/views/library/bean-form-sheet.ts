@@ -551,7 +551,7 @@ async function _persistBean(): Promise<Bean | null> {
         // A failed bag update leaves the price on the bean but not on the bag.
         // Keep the form unsaved so the next save retries it (#2022); the bean
         // row already stored above stays in the list.
-        let savedWithBag: Bean | null;
+        let savedWithBag: Bean | null = null;
         try {
           savedWithBag = await libraryApi.updateBeanBag(editId, activeBagForSave.id as number, {
             roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
