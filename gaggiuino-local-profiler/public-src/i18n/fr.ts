@@ -563,6 +563,7 @@ const fr: Partial<Translations> = {
     backup_preview_maintenance_log:(valid,total)=>`${valid} sur ${total} entrées de journal`,
     backup_preview_orders:(valid,total)=>`${valid} sur ${total} commandes`,
     backup_preview_machines:(n)=>`${n} machine${n!==1?'s':''}`,
+    backup_preview_pending_profiles:(n)=>n===1?'1 modification de profil pas encore envoyée à la machine sera perdue':`${n} modifications de profil pas encore envoyées à la machine seront perdues`,
     backup_preview_settings:'réglages',
     backup_preview_images:(n)=>`${n} image${n!==1?'s':''}`,
     backup_preview_secrets_ok:'Mot de passe correct — le jeton et les identifiants MQTT seront restaurés',

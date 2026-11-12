@@ -52,6 +52,7 @@ interface BackupPreview {
     orders?: number;
     ordersTotal?: number;
     machines?: number;
+    pendingProfileChanges?: number;
     settings?: boolean;
     images?: number;
     secretsPresent?: boolean;
@@ -265,6 +266,7 @@ async function refreshRestorePreview(): Promise<void> {
         if (sections.includes('maintenance')) lines.push(html`${tHtml('backup_preview_maintenance', p.maintenance, p.maintenanceTotal)}, ${tHtml('backup_preview_maintenance_log', p.maintenanceLog, p.maintenanceLogTotal)}`);
         if (sections.includes('orders'))      lines.push(tHtml('backup_preview_orders', p.orders, p.ordersTotal));
         if (sections.includes('machines'))    lines.push(tHtml('backup_preview_machines', p.machines));
+        if (sections.includes('machines') && (p.pendingProfileChanges ?? 0) > 0) lines.push(tHtml('backup_preview_pending_profiles', p.pendingProfileChanges));
         if (sections.includes('settings') && p.settings) lines.push(tHtml('backup_preview_settings'));
         if (p.images) lines.push(tHtml('backup_preview_images', p.images));
         if (els().secretsCb.checked) {
