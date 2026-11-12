@@ -1479,19 +1479,29 @@
 
     <!-- Settings view -->
     <div id="settings-view">
-        <!-- "What's New" in-app changelog (#610) — always visible, newest
-             release first. Entries come from shared/whats-new.ts (hand-
-             maintained, English-only, capped at 8), rendered by
-             renderWhatsNewCard() (components/whats-new.js). Only the card
-             title/description are translated; highlight text stays
-             English, same as CHANGELOG.md itself. -->
-        <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_whats_new">What's New</h3>
-            <p class="settings-card-desc" data-i18n="settings_whats_new_desc">Recent GLP releases and their highlights.</p>
-            <div id="whatsNewList" class="whats-new-list"></div>
+        <div class="settings-bar" id="settingsBar">
+            <h1 class="settings-bar-title" data-i18n="nav_settings">Einstellungen</h1>
+            <details class="lib-sheet-more settings-more" id="settingsMore">
+                <summary aria-label="Weitere Aktionen" data-i18n-aria-label="lib_sheet_more">⋯</summary>
+                <div class="lib-sheet-menu-list">
+                    <button id="restartSetupWizardBtn" type="button" class="lib-sheet-menu-btn" data-i18n="settings_restart_setup_wizard">Setup-Tour neu starten</button>
+                </div>
+            </details>
         </div>
-        <!-- #1956: popup switches, rendered by boot/popups.ts -->
-        <div class="settings-card" id="popupSettingsCard" style="display:none"></div>
+        <div class="settings-layout">
+            <div class="settings-list">
+                <div id="settingsGroups" class="settings-groups"></div>
+            </div>
+            <div class="settings-pages">
+                <div class="settings-subbar">
+                    <button type="button" class="lib-sheet-close settings-back" data-settings-back aria-label="Zurück" data-i18n-aria-label="settings_back"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+                    <h2 class="settings-subbar-title" id="settingsPageTitle" data-i18n="settings_group_appearance">Darstellung</h2>
+                </div>
+                <!-- The What's New entries are filled at boot from the curated release list (components/whats-new.ts). -->
+                <section class="settings-page" data-settings-page="whats-new" hidden>
+                    <div class="settings-card"><div id="whatsNewList" class="whats-new-list"></div></div>
+                </section>
+                <section class="settings-page" data-settings-page="appearance">
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_theme">Theme</h3>
             <div class="theme-toggle-group" id="themeToggleGroup">
@@ -1524,6 +1534,21 @@
             <p class="settings-card-desc" data-i18n="settings_bottom_nav_desc">Wähle bis zu 4 Ziele für die untere Navigationsleiste auf dem Handy. Alles andere landet unter "Mehr".</p>
             <div id="bottomNavConfigList" class="bottom-nav-config-list"></div>
         </div>
+        <div class="settings-card">
+            <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
+            <div class="settings-lang-group">
+                <button class="lang-option-btn" data-lang="de">Deutsch</button>
+                <button class="lang-option-btn" data-lang="en">English</button>
+                <button class="lang-option-btn" data-lang="it">Italiano</button>
+                <button class="lang-option-btn" data-lang="fr">Français</button>
+                <button class="lang-option-btn" data-lang="es">Español</button>
+                <button class="lang-option-btn" data-lang="nl">Nederlands</button>
+            </div>
+        </div>
+        </section>
+        <section class="settings-page" data-settings-page="notifications" hidden>
+        <!-- #1956: popup switches, rendered by boot/popups.ts -->
+        <div class="settings-card" id="popupSettingsCard" style="display:none"></div>
         <!-- Machine/library notification toggles (#614) — moved out of the
              Orders admin panel (which only exists when enable_orders: true)
              since notify_preheat_ready/notify_low_stock fire regardless of
@@ -1548,48 +1573,8 @@
                 <button class="orders-menu-save-btn" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
-        <!-- AI assistants (MCP) settings (#1288, part of #1196) — the built-in
-             MCP server's toggles. The developer-tools row is revealed by
-             loadMcpSettingsCard() only when the build offers it (GLP_DEV_BUILD). -->
-        <div class="settings-card" id="mcpSettingsCard">
-            <h3 class="settings-card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
-            <p class="settings-card-desc" data-i18n="settings_mcp_desc">Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.</p>
-            <div class="orders-broadcast-list" id="mcpSettingsList">
-                <div class="orders-broadcast-row">
-                    <input type="checkbox" id="mcpEnabled" data-mcp-key="enabled">
-                    <label for="mcpEnabled" data-i18n="settings_mcp_enabled">MCP-Server aktivieren</label>
-                </div>
-                <div class="orders-broadcast-row">
-                    <input type="checkbox" id="mcpAllowWrite" data-mcp-key="allowWrite">
-                    <label for="mcpAllowWrite" data-i18n="settings_mcp_write">Schreib-Tools erlauben — diese verändern deine Daten</label>
-                </div>
-                <div class="orders-broadcast-row" id="mcpDevRow" style="display:none">
-                    <input type="checkbox" id="mcpAllowDeveloperTools" data-mcp-key="allowDeveloperTools">
-                    <label for="mcpAllowDeveloperTools" data-i18n="settings_mcp_dev">Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben</label>
-                </div>
-            </div>
-            <div class="orders-notify-actions">
-                <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
-            </div>
-        </div>
-        <!-- GaggiMate machine control (#1324) — opt-in, off by default, and
-             deliberately not part of backup/restore. GaggiMate firmware v1.9.0+
-             only; the Live view's flush button and the brew-confirmation dialog
-             only appear while this is on. Saving is immediate (change event),
-             there is no Save button. -->
-        <div class="settings-card" id="machineControlSettingsCard">
-            <h3 class="settings-card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
-            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
-            <div class="orders-broadcast-list">
-                <div class="orders-broadcast-row">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="machineControlEnabled">
-                        <span class="toggle-track"></span>
-                    </label>
-                    <label for="machineControlEnabled" data-i18n="settings_machine_control_enabled">Maschinensteuerung erlauben</label>
-                </div>
-            </div>
-        </div>
+        </section>
+        <section class="settings-page" data-settings-page="coffee" hidden>
         <!-- Shot logging auto-prefill defaults (#654) — optional, per-install
              default values for a brand-new shot's annotation panel. Never
              overwrites an already-annotated shot's data (see
@@ -1643,6 +1628,8 @@
                 <button id="bfResetBtn" type="button" class="backup-btn" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
             </div>
         </div>
+        </section>
+        <section class="settings-page" data-settings-page="machines" hidden>
         <!-- Live-data transport (#598) — self-contained card, does not touch
              the machine registry card below it. Connection fields are only
              shown once "MQTT" is picked (renderMqttSettingsCard() toggles
@@ -1686,7 +1673,6 @@
             <p class="settings-card-desc" data-i18n="settings_machines_desc">Verwalte die Espressomaschinen, die diese App überwacht.</p>
             <div id="machinesList" class="machines-list"></div>
             <button id="addMachineBtn" type="button" class="backup-btn" data-i18n="settings_machines_add">+ Maschine hinzufügen</button>
-            <button id="restartSetupWizardBtn" type="button" class="lib-btn-sm" data-i18n="settings_restart_setup_wizard">Setup-Tour neu starten</button>
         </div>
         <div class="settings-card" id="machineFormCard" style="display:none">
             <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">+ Maschine hinzufügen</h3>
@@ -1736,17 +1722,26 @@
             </div>
             <div id="machineFormTestResult" class="machine-form-test-result"></div>
         </div>
-        <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
-            <div class="settings-lang-group">
-                <button class="lang-option-btn" data-lang="de">Deutsch</button>
-                <button class="lang-option-btn" data-lang="en">English</button>
-                <button class="lang-option-btn" data-lang="it">Italiano</button>
-                <button class="lang-option-btn" data-lang="fr">Français</button>
-                <button class="lang-option-btn" data-lang="es">Español</button>
-                <button class="lang-option-btn" data-lang="nl">Nederlands</button>
+        <!-- GaggiMate machine control (#1324) — opt-in, off by default, and
+             deliberately not part of backup/restore. GaggiMate firmware v1.9.0+
+             only; the Live view's flush button and the brew-confirmation dialog
+             only appear while this is on. Saving is immediate (change event),
+             there is no Save button. -->
+        <div class="settings-card" id="machineControlSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
+            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
+            <div class="orders-broadcast-list">
+                <div class="orders-broadcast-row">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="machineControlEnabled">
+                        <span class="toggle-track"></span>
+                    </label>
+                    <label for="machineControlEnabled" data-i18n="settings_machine_control_enabled">Maschinensteuerung erlauben</label>
+                </div>
             </div>
         </div>
+        </section>
+        <section class="settings-page" data-settings-page="data" hidden>
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
             <p class="settings-card-desc" data-i18n="backup_desc">Die komplette Datenbank (Shots, Bibliothek, Wartung, Bestellungen, Maschinen, Einstellungen) als ZIP-Datei sichern oder wiederherstellen. API-Token und MQTT-Login sind nur verschlüsselt mit einem selbst gewählten Passwort enthalten.</p>
@@ -1760,6 +1755,8 @@
                 <input type="file" id="backupRestoreInput" accept=".zip,.json" style="display:none">
             </label>
         </div>
+        </section>
+        <section class="settings-page" data-settings-page="developer" hidden>
         <!-- Shown once the session holds a token (default: any caller that can
              reach the port, #533), OR when it doesn't because expose_api_port
              is off and this session isn't Ingress (#803) -- see main.ts's
@@ -1805,6 +1802,45 @@
                 <input type="file" id="devImportDbInput" accept=".db" style="display:none">
             </label>
         </div>
+        <!-- AI assistants (MCP) settings (#1288, part of #1196) — the built-in
+             MCP server's toggles. The developer-tools row is revealed by
+             loadMcpSettingsCard() only when the build offers it (GLP_DEV_BUILD). -->
+        <div class="settings-card" id="mcpSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
+            <p class="settings-card-desc" data-i18n="settings_mcp_desc">Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.</p>
+            <div class="orders-broadcast-list" id="mcpSettingsList">
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpEnabled" data-mcp-key="enabled">
+                    <label for="mcpEnabled" data-i18n="settings_mcp_enabled">MCP-Server aktivieren</label>
+                </div>
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpAllowWrite" data-mcp-key="allowWrite">
+                    <label for="mcpAllowWrite" data-i18n="settings_mcp_write">Schreib-Tools erlauben — diese verändern deine Daten</label>
+                </div>
+                <div class="orders-broadcast-row" id="mcpDevRow" style="display:none">
+                    <input type="checkbox" id="mcpAllowDeveloperTools" data-mcp-key="allowDeveloperTools">
+                    <label for="mcpAllowDeveloperTools" data-i18n="settings_mcp_dev">Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben</label>
+                </div>
+            </div>
+            <div class="orders-notify-actions">
+                <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
+            </div>
+        </div>
+        </section>
+                <section class="settings-page" data-settings-page="about" hidden>
+                    <div class="settings-card settings-row-card">
+                        <div class="settings-row settings-row-static">
+                            <span class="settings-row-text"><span class="settings-row-title" data-i18n="settings_about_version">Version</span></span>
+                            <span class="settings-row-value" id="settingsVersion">–</span>
+                        </div>
+                        <a class="settings-row" href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki" target="_blank" rel="noopener">
+                            <span class="settings-row-text"><span class="settings-row-title" data-i18n="onboarding_wiki_link">Einrichtungshilfe</span></span>
+                            <span class="settings-chev" aria-hidden="true"></span>
+                        </a>
+                    </div>
+                </section>
+            </div><!-- /.settings-pages -->
+        </div><!-- /.settings-layout -->
     </div>
 
 </div><!-- /main -->
