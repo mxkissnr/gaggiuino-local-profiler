@@ -54,10 +54,14 @@ function _group(id: string): SettingsGroup | undefined {
   return SETTINGS_GROUPS.find(g => g.id === id);
 }
 
+function _page(view: HTMLElement, id: string): HTMLElement | null {
+  return view.querySelector<HTMLElement>(`.settings-page[data-settings-page="${id}"]`);
+}
+
 export function showSettingsPage(id: string): void {
   const view = _view();
   if (!view) return;
-  const page = view.querySelector(`.settings-page[data-settings-page="${id}"]`);
+  const page = _page(view, id);
   if (!page) return;
   for (const el of Array.from(view.querySelectorAll<HTMLElement>('.settings-page'))) {
     el.hidden = el !== page;
@@ -76,8 +80,8 @@ export function showSettingsPage(id: string): void {
 
 export function openSettingsPage(id: string): void {
   const view = _view();
+  if (!view || !_page(view, id)) return;
   showSettingsPage(id);
-  if (!view) return;
   view.dataset.page = id;
   view.scrollTop = 0;
   if (isPhoneSheetWidth()) view.querySelector<HTMLElement>('[data-settings-back]')?.focus();
