@@ -545,7 +545,8 @@ async function _persistBean(): Promise<Bean | null> {
     if (editId && price_eur) {
       const activeBagForSave = classifyBeanBags(saved).current?.bg || null;
       const nextPrice = parseFloat(price_eur) || null;
-      const bagPrice = activeBagForSave?.price_eur ?? null;
+      // The server may send a price as a string; a missing one counts as null.
+      const bagPrice = parseFloat(String(activeBagForSave?.price_eur ?? '')) || null;
       if (activeBagForSave && nextPrice !== bagPrice) {
         const savedWithBag = await libraryApi.updateBeanBag(editId, activeBagForSave.id as number, {
           roastDate: activeBagForSave.roastDate || '', stock_g: activeBagForSave.stock_g ?? null,
