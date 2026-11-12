@@ -212,11 +212,15 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     const railNameEl = document.getElementById('railMachineName');
     if (railNameEl && railName) railNameEl.textContent = railName;
     if (s.glpVersion) {
-      const vEl = document.getElementById('glpVersionBadge');
       // s.devBuild is only ever present on the dev-channel image (see
       // go/internal/system's /api/status and the Dockerfile's GLP_DEV_BUILD
       // build-arg) -- appending it here is a no-op for every real install.
-      if (vEl) vEl.textContent = `v${s.glpVersion}` + (s.devBuild ? ` (${s.devBuild})` : '');
+      const versionText = `v${s.glpVersion}` + (s.devBuild ? ` (${s.devBuild})` : '');
+      const vEl = document.getElementById('glpVersionBadge');
+      if (vEl) vEl.textContent = versionText;
+      // #2038: the About sub-page shows the same text, so it is not written twice.
+      const aboutVersion = document.getElementById('settingsVersion');
+      if (aboutVersion) aboutVersion.textContent = versionText;
     }
     // #683: same devBuild signal as the version-badge suffix above, but as a
     // persistent top-of-page banner -- much harder to miss than the small
