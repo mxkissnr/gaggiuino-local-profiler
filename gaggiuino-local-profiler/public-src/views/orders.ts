@@ -184,8 +184,8 @@ export async function loadOrdersView(): Promise<void> {
   // #1962: only a view that has nothing on screen yet says it is loading, so a
   // background refresh never flashes over the list the user is reading.
   const pendingListEl = document.getElementById('orders-pending-list');
-  const listShowedNothing = pendingListEl !== null && pendingListEl.innerHTML === '';
-  if (listShowedNothing) {
+  const listShowedNothing = pendingListEl?.innerHTML === '';
+  if (listShowedNothing && pendingListEl) {
     pendingListEl.innerHTML = html`<div class="loading-state">${tHtml('please_wait')}</div>`;
   }
   const [sw, settings] = await Promise.all([
