@@ -432,13 +432,13 @@ func TestRestore_DryRunPreview_ReportsPendingProfileChanges(t *testing.T) {
 
 	bundle := map[string]any{
 		"glp_backup": true,
+		"dryRun":     true,
 		"shots":      []any{},
 		"sections":   []any{"machines"},
 		"machines": []any{
 			map[string]any{"id": 1, "name": "Kitchen", "type": "gaggiuino", "host": "kitchen.local"},
 		},
 	}
-	bundle["dryRun"] = true
 
 	rec := doJSON(t, mux, http.MethodPost, "/api/restore", mustMarshal(t, bundle))
 	if rec.Code != http.StatusOK {
