@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
 )
 
@@ -249,7 +251,21 @@ func (h *Handlers) postRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isDryRun {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "dryRun": true, "preview": plan.preview()})
+		preview := plan.preview()
+		// Restoring the machines section clears machine_profiles wholesale
+		// (RestoreMachines), so any row not yet synced is discarded without ever
+		// reaching a machine. Report that number here so the user sees it before
+		// confirming; a count failure must not fail the dry run (#2023).
+		pending := 0
+		if plan.wantsMachines && machines.CountRestorableMachines(plan.restoredMachines) > 0 {
+			if n, err := machines.NewProfilesRepository(h.deps.DB).CountPending(); err != nil {
+				log.Printf("backup: counting pending profile changes for preview: %v", err)
+			} else {
+				pending = n
+			}
+		}
+		preview["pendingProfileChanges"] = pending
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "dryRun": true, "preview": preview})
 		return
 	}
 
