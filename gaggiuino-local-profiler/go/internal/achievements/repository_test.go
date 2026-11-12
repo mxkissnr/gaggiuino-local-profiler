@@ -62,3 +62,83 @@ func TestReplaceAll_EmptyClearsTable(t *testing.T) {
 		t.Errorf("achievements not cleared: %+v", got)
 	}
 }
+
+// TestUnlock_UpgradesALockedProgressRow (#2021): a badge whose progress row was
+// written by SetProgress must still unlock — the upsert sees unlocked_at NULL
+// and fills it in instead of ignoring the existing row.
+func TestUnlock_UpgradesALockedProgressRow(t *testing.T) {
+	env := newTestEnv(t)
+	repo := NewRepository(env.db)
+
+	if err := repo.SetProgress("x", 3); err != nil {
+		t.Fatalf("SetProgress: %v", err)
+	}
+
+	progress := int64(10)
+	if err := repo.Unlock("x", 100, &progress); err != nil {
+		t.Fatalf("Unlock: %v", err)
+	}
+
+	got, err := repo.GetAll()
+	if err != nil {
+		t.Fatalf("GetAll: %v", err)
+	}
+	row, ok := got["x"]
+	if !ok || row.UnlockedAt == nil || *row.UnlockedAt != 100 {
+		t.Fatalf("x row = %+v, want unlockedAt 100", row)
+	}
+	if row.Progress == nil || *row.Progress != 10 {
+		t.Errorf("x progress = %v, want 10", row.Progress)
+	}
+}
+
+// TestUnlock_KeepsTheOriginalUnlock pins idempotency: a second Unlock must not
+// move unlocked_at or overwrite the stored progress.
+func TestUnlock_KeepsTheOriginalUnlock(t *testing.T) {
+	env := newTestEnv(t)
+	repo := NewRepository(env.db)
+
+	progress := int64(10)
+	if err := repo.Unlock("x", 100, &progress); err != nil {
+		t.Fatalf("first Unlock: %v", err)
+	}
+	if err := repo.Unlock("x", 200, &progress); err != nil {
+		t.Fatalf("second Unlock: %v", err)
+	}
+
+	got, err := repo.GetAll()
+	if err != nil {
+		t.Fatalf("GetAll: %v", err)
+	}
+	row := got["x"]
+	if row.UnlockedAt == nil || *row.UnlockedAt != 100 {
+		t.Fatalf("x unlockedAt = %v, want the original 100", row.UnlockedAt)
+	}
+}
+
+// TestSetProgress_LeavesAnUnlockedRowAlone guards the other direction: a
+// progress write never disturbs a row Unlock already stamped.
+func TestSetProgress_LeavesAnUnlockedRowAlone(t *testing.T) {
+	env := newTestEnv(t)
+	repo := NewRepository(env.db)
+
+	progress := int64(10)
+	if err := repo.Unlock("x", 100, &progress); err != nil {
+		t.Fatalf("Unlock: %v", err)
+	}
+	if err := repo.SetProgress("x", 3); err != nil {
+		t.Fatalf("SetProgress: %v", err)
+	}
+
+	got, err := repo.GetAll()
+	if err != nil {
+		t.Fatalf("GetAll: %v", err)
+	}
+	row := got["x"]
+	if row.UnlockedAt == nil || *row.UnlockedAt != 100 {
+		t.Fatalf("x unlockedAt = %v, want 100", row.UnlockedAt)
+	}
+	if row.Progress == nil || *row.Progress != 10 {
+		t.Errorf("x progress = %v, want the unlocked 10", row.Progress)
+	}
+}
