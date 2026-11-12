@@ -10,12 +10,12 @@ import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
-function read(rel: string): string {
-    return readFileSync(join(ROOT, rel), 'utf8');
+function read(...segments: string[]): string {
+    return readFileSync(join(ROOT, ...segments), 'utf8');
 }
 
 function installedVersion(pkg: string): string {
-    return (JSON.parse(read(join('node_modules', pkg, 'package.json'))) as { version: string }).version;
+    return (JSON.parse(read('node_modules', pkg, 'package.json')) as { version: string }).version;
 }
 
 const manifest = JSON.parse(read('package.json')) as { dependencies?: Record<string, string> };
