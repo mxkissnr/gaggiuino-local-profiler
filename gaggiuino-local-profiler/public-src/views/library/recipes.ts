@@ -210,9 +210,14 @@ export function editRecipe(id: number): void {
   if (recipe) openRecipeForm(recipe);
 }
 
+// A second Save while the first request is pending must not create the entry
+// twice (#2022); same guard as the bean form's _beanSaveInFlight.
+let _recipeSaveInFlight = false;
+
 // Reads, validates and persists the form; leaves the form open and does not
 // clear the edit id, so autosave can keep saving the same entry (#1962).
 async function _persistRecipe(): Promise<boolean> {
+  if (_recipeSaveInFlight) return false;
   const name = (document.getElementById('recipeFormName') as HTMLInputElement).value.trim();
   if (!name) { markFieldInvalid(document.getElementById('recipeFormName')); return false; }
   const payload = {
@@ -233,18 +238,30 @@ async function _persistRecipe(): Promise<boolean> {
     steps:         _collectSteps(),
   };
   const editId = _state().recipeEditId ?? null;
-  const saved = await libraryApi.saveRecipe(editId, payload);
-  if (!saved) { showToast(t('gm_toast_save_error')); return false; }
-  const lib = _state().coffeeLibrary;
-  const recipes = lib.recipes ?? [];
-  lib.recipes = recipes;
-  if (editId) {
-    const idx = recipes.findIndex(r => r.id === editId);
-    if (idx !== -1) recipes[idx] = saved;
-  } else {
-    recipes.push(saved);
+  _recipeSaveInFlight = true;
+  const saveBtn = document.getElementById('saveRecipeBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await libraryApi.saveRecipe(editId, payload);
+    if (!saved) { showToast(t('gm_toast_save_error')); return false; }
+    const lib = _state().coffeeLibrary;
+    const recipes = lib.recipes ?? [];
+    lib.recipes = recipes;
+    if (editId) {
+      const idx = recipes.findIndex(r => r.id === editId);
+      if (idx !== -1) recipes[idx] = saved;
+    } else {
+      recipes.push(saved);
+    }
+    return true;
+  } catch {
+    // A request that fails outright used to leave the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _recipeSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
-  return true;
 }
 
 export async function saveRecipe(): Promise<void> {

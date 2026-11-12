@@ -113,27 +113,44 @@ export function editPuckScreen(id: number): void {
   if (p) openPuckScreenForm(p);
 }
 
+// A second Save while the first request is pending must not create the entry
+// twice (#2022); same guard as the bean form's _beanSaveInFlight.
+let _puckScreenSaveInFlight = false;
+
 // Reads, validates and persists the form; leaves the form open and does not
 // clear the edit id, so autosave can keep saving the same entry (#1962).
 async function _persistPuckScreen(): Promise<boolean> {
+  if (_puckScreenSaveInFlight) return false;
   const name      = (document.getElementById('puckScreenFormName') as HTMLInputElement).value.trim();
   const thickness = (document.getElementById('puckScreenFormThickness') as HTMLInputElement).value;
   const material  = (document.getElementById('puckScreenFormMaterial') as HTMLInputElement).value.trim();
   const notes     = (document.getElementById('puckScreenFormNotes') as HTMLInputElement).value.trim();
   if (!name) { markFieldInvalid(document.getElementById('puckScreenFormName')); return false; }
   const editId = S.puckScreenEditId;
-  const saved = await libraryApi.savePuckScreen(editId, { name, thickness, material, notes });
-  if (!saved) { showToast(t('gm_toast_save_error')); return false; }
-  const lib = _state().coffeeLibrary;
-  const puckScreens = lib.puckScreens ?? [];
-  lib.puckScreens = puckScreens;
-  if (editId) {
-    const idx = puckScreens.findIndex(p => p.id === editId);
-    if (idx !== -1) puckScreens[idx] = saved;
-  } else {
-    puckScreens.push(saved);
+  _puckScreenSaveInFlight = true;
+  const saveBtn = document.getElementById('savePuckScreenBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await libraryApi.savePuckScreen(editId, { name, thickness, material, notes });
+    if (!saved) { showToast(t('gm_toast_save_error')); return false; }
+    const lib = _state().coffeeLibrary;
+    const puckScreens = lib.puckScreens ?? [];
+    lib.puckScreens = puckScreens;
+    if (editId) {
+      const idx = puckScreens.findIndex(p => p.id === editId);
+      if (idx !== -1) puckScreens[idx] = saved;
+    } else {
+      puckScreens.push(saved);
+    }
+    return true;
+  } catch {
+    // A request that fails outright used to leave the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _puckScreenSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
-  return true;
 }
 
 export async function savePuckScreen(): Promise<void> {

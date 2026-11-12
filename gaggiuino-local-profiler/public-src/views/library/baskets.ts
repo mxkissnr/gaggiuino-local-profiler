@@ -122,9 +122,14 @@ export function editBasket(id: number): void {
   if (b) openBasketForm(b);
 }
 
+// A second Save while the first request is pending must not create the entry
+// twice (#2022); same guard as the bean form's _beanSaveInFlight.
+let _basketSaveInFlight = false;
+
 // Reads, validates and persists the form; leaves the form open and does not
 // clear the edit id, so autosave can keep saving the same entry (#1962).
 async function _persistBasket(): Promise<boolean> {
+  if (_basketSaveInFlight) return false;
   const name         = (document.getElementById('basketFormName') as HTMLInputElement).value.trim();
   const doseCapacity = (document.getElementById('basketFormDoseCapacity') as HTMLInputElement).value.trim();
   const wallType     = (document.getElementById('basketFormWallType') as HTMLInputElement).value;
@@ -133,18 +138,30 @@ async function _persistBasket(): Promise<boolean> {
   const notes        = (document.getElementById('basketFormNotes') as HTMLInputElement).value.trim();
   if (!name) { markFieldInvalid(document.getElementById('basketFormName')); return false; }
   const editId = S.basketEditId;
-  const saved = await libraryApi.saveBasket(editId, { name, doseCapacity, wallType, shape, holeCount, notes });
-  if (!saved) { showToast(t('gm_toast_save_error')); return false; }
-  const lib = _state().coffeeLibrary;
-  const baskets = lib.baskets ?? [];
-  lib.baskets = baskets;
-  if (editId) {
-    const idx = baskets.findIndex(b => b.id === editId);
-    if (idx !== -1) baskets[idx] = saved;
-  } else {
-    baskets.push(saved);
+  _basketSaveInFlight = true;
+  const saveBtn = document.getElementById('saveBasketBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await libraryApi.saveBasket(editId, { name, doseCapacity, wallType, shape, holeCount, notes });
+    if (!saved) { showToast(t('gm_toast_save_error')); return false; }
+    const lib = _state().coffeeLibrary;
+    const baskets = lib.baskets ?? [];
+    lib.baskets = baskets;
+    if (editId) {
+      const idx = baskets.findIndex(b => b.id === editId);
+      if (idx !== -1) baskets[idx] = saved;
+    } else {
+      baskets.push(saved);
+    }
+    return true;
+  } catch {
+    // A request that fails outright used to leave the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _basketSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
-  return true;
 }
 
 export async function saveBasket(): Promise<void> {
