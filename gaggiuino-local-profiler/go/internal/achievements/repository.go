@@ -117,16 +117,19 @@ func (r *Repository) ChangeFingerprint() (string, error) {
 	), nil
 }
 
-// Unlock records id as unlocked, idempotent via INSERT OR IGNORE — a badge
-// already unlocked keeps its original unlocked_at forever, even if
-// evaluateAll runs again.
+// Unlock records id as unlocked. It is idempotent via the WHERE clause: a badge
+// already unlocked keeps its original unlocked_at and progress forever, even if
+// evaluateAll runs again. A row created by SetProgress while the badge was still
+// locked carries unlocked_at NULL and is upgraded in place rather than ignored.
 func (r *Repository) Unlock(id string, unlockedAt int64, progress *int64) error {
 	var prog any
 	if progress != nil {
 		prog = *progress
 	}
 	_, err := r.db.Exec(
-		`INSERT OR IGNORE INTO achievements (id, unlocked_at, progress) VALUES (?, ?, ?)`,
+		`INSERT INTO achievements (id, unlocked_at, progress) VALUES (?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET unlocked_at = excluded.unlocked_at, progress = excluded.progress
+		 WHERE achievements.unlocked_at IS NULL`,
 		id, unlockedAt, prog,
 	)
 	if err != nil {
