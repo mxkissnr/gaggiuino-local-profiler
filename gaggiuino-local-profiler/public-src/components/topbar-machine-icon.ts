@@ -145,7 +145,10 @@ export function syncTopbarMachineIconFallback(reachable: unknown): void {
  * between connected and off/not reachable.
  */
 export function settingsVerdictTitle(
-  machine: { name?: unknown; host?: unknown } | undefined,
+  // The index signature matters: with only optional properties the shape is a
+  // weak type, and MachineRecord exposes name/host solely through its own
+  // index signature, so it would share no property with it (TS2559).
+  machine: { name?: unknown; host?: unknown; [key: string]: unknown } | undefined,
   mode: string,
 ): string {
   const name = typeof machine?.name === 'string' ? machine.name : '';
