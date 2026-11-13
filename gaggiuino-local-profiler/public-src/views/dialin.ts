@@ -190,7 +190,7 @@ export function _dialinCurvesHtml(shots: ShotRow[]): Html | null {
 
   const lines = kept.map((points, i) => {
     const pts = points.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
-    const opacity = i === 0 ? '1' : String(Math.max(0.15, 0.55 - 0.08 * i));
+    const opacity = i === 0 ? '1' : Math.max(0.15, 0.55 - 0.08 * i).toFixed(2);
     return html`<polyline class="dialin-curve${i === 0 ? html` dialin-curve-newest` : html``}" points="${esc(pts)}" stroke-opacity="${esc(opacity)}"/>`;
   }).reverse();
 
