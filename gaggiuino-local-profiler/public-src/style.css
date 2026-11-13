@@ -966,22 +966,34 @@
         .degassing-label { font-size: var(--fs-1); margin-top: var(--sp-1); }
         .bean-age-hint { font-size: var(--fs-1); color:var(--gray-500); margin-top: var(--sp-1); display: inline-flex; align-items: center; gap: var(--sp-1); }
 
-        /* ── Einwähl-Modus ── */
-        #dialin-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding: var(--sp-5); gap: var(--sp-5); }
-        .dialin-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap: var(--sp-4); }
-        .dialin-card { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); padding: var(--sp-4); cursor:pointer; transition:border-color .15s; }
-        .dialin-card:hover { border-color:var(--gray-600); }
-        .dialin-card:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-        .dialin-card-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: var(--sp-3); }
-        .dialin-profile { font-size: var(--fs-1); font-weight:600; color:var(--gray-200); }
-        .dialin-date { font-size: var(--fs-1); color:var(--gray-600); margin-top: 2px; }
-        .dialin-metrics { display:flex; flex-direction:column; gap: var(--sp-1); }
-        .dialin-metric { display:flex; justify-content:space-between; font-size: var(--fs-1); }
-        .dialin-metric-lbl { color:var(--gray-600); }
-        .dialin-metric-val { color:var(--gray-400); font-weight:500; }
-        .dialin-empty { color:var(--gray-600); font-size: var(--fs-2); text-align:center; padding: var(--sp-6) 0; }
-        .dialin-header { display:flex; justify-content:space-between; align-items:center; }
-        .dialin-count-select { background:var(--gray-900); border:1px solid var(--gray-700); color:var(--gray-500); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); border-radius:var(--radius); cursor:pointer; outline:none; }
+        /* ── Dial-In (#1465) ── Home Assistant page pattern (docs/DESIGN.md):
+           the settings page's top app bar and row look, the statistics verdict,
+           one floating action button. --settings-pad drives the sticky bar. */
+        #dialin-view { --settings-pad: var(--sp-5); display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding: var(--settings-pad); gap: var(--sp-4); }
+        @media (max-width: 480px) { #dialin-view { --settings-pad: var(--sp-3); } }
+        .dialin-chips { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); }
+        .dialin-layout { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
+        .dialin-verdict[hidden] { display:none; }
+        .dialin-score-bars { display:flex; align-items:flex-end; gap: var(--sp-1); height:48px; margin-top: var(--sp-4); }
+        .dialin-score-bars i { flex:1 1 0; max-width:40px; min-height:4px; background: currentColor; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+        .dialin-score-bars .dialin-bar-none { color: var(--gray-700); }
+        .dialin-grind { font-size: var(--fs-1); font-weight:600; color: var(--gray-200); font-variant-numeric: tabular-nums; }
+        .dialin-grind-dir { margin-left:1px; font-size: .85em; color: var(--gray-400); }
+        .dialin-score { font-size: var(--fs-3); font-weight:700; }
+        .dialin-empty { color:var(--gray-500); font-size: var(--fs-2); text-align:center; padding: var(--sp-6) var(--sp-4); }
+        .page-fab {
+            position: sticky; bottom: var(--sp-2); z-index: var(--z-sticky);
+            align-self:flex-end; margin-top:auto;
+            display:inline-flex; align-items:center; gap: var(--sp-2);
+            min-height:56px; padding: 0 var(--sp-5);
+            border:0; border-radius: var(--radius-lg);
+            background: var(--accent); color: var(--accent-text);
+            font: inherit; font-size: var(--fs-2); font-weight:600; cursor:pointer;
+            box-shadow: 0 4px 16px color-mix(in srgb, var(--scrim) 35%, transparent);
+        }
+        .page-fab:hover { filter: brightness(1.06); }
+        .page-fab:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+        .page-fab .rail-icon { width:20px; height:20px; }
 
         /* ── Shots view ── */
         #shots-view {
@@ -3097,10 +3109,6 @@
            as text on a surface. Needs its own audited on-fill token (like
            --accent-text) rather than a guessed color here; tracked as a
            follow-up, left as-is rather than silently miscalibrated. */
-        /* #811: same fill-under-text case as .dw-score-chip — the dial-in
-           list's inline-styled score pill. Background stays inline (computed
-           per score by scoreColor()); everything else lives here. */
-        .score-pill { color: var(--on-fill); font-size: var(--fs-1); font-weight: 700; padding: 1px var(--sp-2); border-radius: var(--radius); }
         .dw-score-chip { color:var(--on-fill); font-weight:700; font-size: var(--fs-3); padding: var(--sp-2) var(--sp-3); border-radius:var(--radius); flex-shrink:0; }
         .dw-score-meta { font-size: var(--fs-1); color:var(--gray-400); }
         .dw-suggestion { font-size: var(--fs-2); color:var(--gray-200); background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
@@ -3118,7 +3126,6 @@
         .pdw-symptom-row { display:flex; flex-wrap:wrap; gap: var(--sp-2); }
         .pdw-symptom-btn { background:var(--gray-800); border:1.5px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-300); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; }
         .pdw-symptom-btn.active { background:var(--accent); border-color:var(--accent); color:var(--accent-text); font-weight:700; }
-        .dialin-header-actions { display:flex; align-items:center; gap: var(--sp-2); }
         .fw-header { display:flex; align-items:center; gap: var(--sp-3); flex-shrink:0; }
         .fw-close-x { margin-left: auto; background:none; border:none; color:var(--gray-400); font-size: var(--fs-3); line-height:1; padding: var(--sp-2); cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:var(--gray-200); }
