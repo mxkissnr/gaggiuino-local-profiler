@@ -1,11 +1,13 @@
-// #914: the power button (#powerBtn) lives in #sidebar-footer, which is
-// hidden entirely on mobile (updateMobileShotSidebarVisibility() in
-// sidebar.ts), stranding it off-screen. #railPowerBtn is its topbar
-// duplicate; updatePowerButton() (components/status.ts) must mirror the
-// same display/className/title onto it, and toggleMachinePower() must keep
-// both buttons disabled in lockstep. Same fake-document/fetch harness as
-// test/machine-on-duration.test.ts.
+// #914 added a phone-only topbar copy of the power toggle (#railPowerBtn),
+// because the real one lived in the shot list footer, which mobile hides.
+// #2056 moved that one toggle -- together with the sync time and the Sync
+// button -- from the footer into the topbar for every layout, dropped the
+// copy and the footer's second status dot. Same fake-document/fetch harness
+// as test/machine-on-duration.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // vitest's node environment has no browser globals; stub them through a loose
 // view of globalThis so the minimal fakes below need not satisfy the full
@@ -22,6 +24,10 @@ g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
 const { updateStatus, toggleMachinePower } = await import('../public-src/components/status.js');
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const HTML = readFileSync(join(__dirname, '../public-src/index.html'), 'utf8');
+const CSS = readFileSync(join(__dirname, '../public-src/style.css'), 'utf8');
 
 interface FakeStatusEl {
   className: string;
@@ -83,62 +89,94 @@ function mockResponses({ switchBody, togglePending }: {
   });
 }
 
-describe('#railPowerBtn mirrors #powerBtn (#914)', () => {
+describe('the topbar power toggle and sync controls (#914, #2056)', () => {
   let doc: FakeDocument;
 
   beforeEach(() => {
     doc = makeFakeDocument();
-    ['statusDot', 'railStatusDot', 'syncTime', 'machineSubtitle', 'railMachineName',
-     'glpVersionBadge', 'btnOrders', 'bnOrders', 'powerBtn', 'railPowerBtn', 'btnLive'].forEach(id => doc._preRegister(id));
+    // No #statusDot and no #railPowerBtn: the status code must not need them
+    // any more.
+    ['railStatusDot', 'syncTime', 'machineSubtitle', 'railMachineName',
+     'glpVersionBadge', 'btnOrders', 'bnOrders', 'powerBtn', 'btnLive'].forEach(id => doc._preRegister(id));
     g.document = doc;
     S.primaryShotId = null;
     S.currentLang = 'en';
   });
 
-  it('hides both buttons when the switch is not configured', async () => {
+  it('hides the toggle when no switch is configured', async () => {
     mockResponses({ switchBody: null });
     await updateStatus();
     expect(doc.getElementById('powerBtn')!.style.display).toBe('none');
-    expect(doc.getElementById('railPowerBtn')!.style.display).toBe('none');
   });
 
-  it('mirrors display/className/title onto #railPowerBtn when configured and on', async () => {
+  it('shows the toggle with the on state', async () => {
     mockResponses({ switchBody: { configured: true, state: true } });
     await updateStatus();
     const btn = doc.getElementById('powerBtn')!;
-    const railBtn = doc.getElementById('railPowerBtn')!;
-    expect(railBtn.style.display).toBe('');
-    expect(railBtn.className).toBe(btn.className);
-    expect(railBtn.className).toBe('machine-on');
-    expect(railBtn.title).toBe(btn.title);
+    expect(btn.style.display).toBe('');
+    expect(btn.className).toBe('machine-on');
+    expect(btn.title).not.toBe('');
   });
 
-  it('mirrors the machine-off state too', async () => {
+  it('shows the off state', async () => {
     mockResponses({ switchBody: { configured: true, state: false } });
     await updateStatus();
-    const railBtn = doc.getElementById('railPowerBtn')!;
-    expect(railBtn.className).toBe('machine-off');
+    expect(doc.getElementById('powerBtn')!.className).toBe('machine-off');
   });
 
-  it('toggleMachinePower disables and re-enables both buttons in lockstep', async () => {
+  it('keeps the toggle disabled while the switch request is in flight', async () => {
     // Hold the switch request pending so the in-flight state is observable;
     // checking only the resolved end state would never catch a build that
-    // forgets to disable one of the two buttons.
+    // forgets to disable the button.
     const pending = deferredResponse();
     mockResponses({ switchBody: { configured: true, state: false }, togglePending: pending.promise });
     const btn = doc.getElementById('powerBtn')!;
-    const railBtn = doc.getElementById('railPowerBtn')!;
 
     const done = toggleMachinePower();
-    // Both surfaces must be disabled while the request is in flight, so a
-    // second tap on either can't double-fire the toggle.
     expect(btn.disabled).toBe(true);
-    expect(railBtn.disabled).toBe(true);
 
     pending.resolve({ ok: true, json: () => Promise.resolve({ state: true }) });
     await done;
 
     expect(btn.disabled).toBe(false);
-    expect(railBtn.disabled).toBe(false);
+  });
+
+  it('writes the reachability to the topbar dot alone', async () => {
+    mockResponses({ switchBody: null });
+    await updateStatus();
+    expect(doc.getElementById('railStatusDot')!.className).toBe('status-dot ok');
+  });
+
+  it('the markup has one toggle, in the topbar', () => {
+    const topbar = HTML.slice(HTML.indexOf('class="topbar-machine"'), HTML.indexOf('id="machineSwitcher"'));
+    const syncAt = topbar.indexOf('id="syncTime"');
+    const powerAt = topbar.indexOf('id="powerBtn"');
+    const syncBtnAt = topbar.indexOf('id="syncBtn"');
+    expect(syncAt).toBeGreaterThan(-1);
+    expect(powerAt).toBeGreaterThan(syncAt);
+    expect(syncBtnAt).toBeGreaterThan(powerAt);
+
+    const footer = HTML.slice(HTML.indexOf('id="sidebar-footer"'), HTML.indexOf('<!-- ── Bottom navigation'));
+    expect(footer).toContain('id="glpVersionBadge"');
+    expect(footer).toContain('id="glpDemoBadge"');
+    expect(footer).not.toContain('id="syncTime"');
+    expect(footer).not.toContain('id="powerBtn"');
+    expect(footer).not.toContain('id="syncBtn"');
+
+    expect(HTML.split('id="syncTime"').length - 1).toBe(1);
+    expect(HTML.split('id="powerBtn"').length - 1).toBe(1);
+    expect(HTML.split('id="syncBtn"').length - 1).toBe(1);
+    expect(HTML).not.toContain('id="railPowerBtn"');
+    expect(HTML).not.toContain('id="statusDot"');
+
+    const syncBtnTag = HTML.slice(HTML.indexOf('<button id="syncBtn"'), HTML.indexOf('</button>', HTML.indexOf('<button id="syncBtn"')));
+    expect(syncBtnTag).toContain('data-i18n-title="btn_sync"');
+
+    expect(CSS).not.toContain('#railPowerBtn');
+    const mediaAt = CSS.indexOf('@media (max-width: 999px)');
+    expect(mediaAt).toBeGreaterThan(-1);
+    const mediaBlock = CSS.slice(mediaAt, CSS.indexOf('\n        }', mediaAt));
+    expect(mediaBlock).toContain('#syncTime { display: none; }');
+    expect(mediaBlock).toContain('#syncBtn::before');
   });
 });

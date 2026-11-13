@@ -242,33 +242,18 @@
             cursor: pointer;
             font-size: var(--fs-1);
             transition: all .2s;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         #syncBtn:hover    { background: var(--gray-800); color: var(--gray-200); }
         #syncBtn:disabled { opacity: .4; cursor: not-allowed; }
 
+        /* #914, #2056: the one power toggle sits in the topbar on every
+           layout (it used to live in the shot list footer, with a phone-only
+           topbar copy). updatePowerButton() in the status component hides it via inline
+           style while no switch entity is configured. */
         #powerBtn {
-            background: var(--gray-800);
-            color: var(--gray-400);
-            border: 1px solid transparent;
-            border-radius:var(--radius);
-            padding: var(--sp-1) var(--sp-3);
-            cursor: pointer;
-            font-size: var(--fs-2);
-            transition: all .2s;
             display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        #powerBtn:hover          { background: var(--gray-800); color: var(--gray-200); }
-        #powerBtn:disabled       { opacity: .4; cursor: not-allowed; }
-        #powerBtn.machine-on     { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
-        #powerBtn.machine-off    { color: var(--gray-600); }
-
-        /* #914: mobile topbar duplicate of #powerBtn -- same visual language,
-           desktop-hidden below (#sidebar already shows the real #powerBtn
-           there) since .topbar-machine itself renders on both breakpoints. */
-        #railPowerBtn {
-            display: none;
             background: transparent;
             color: var(--gray-400);
             border: 1px solid transparent;
@@ -280,10 +265,11 @@
             transition: all .2s;
             flex-shrink: 0;
         }
-        #railPowerBtn:hover       { background: var(--gray-800); color: var(--gray-200); }
-        #railPowerBtn:disabled    { opacity: .4; cursor: not-allowed; }
-        #railPowerBtn.machine-on  { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
-        #railPowerBtn.machine-off { color: var(--gray-600); }
+        #powerBtn:hover       { background: var(--gray-800); color: var(--gray-200); }
+        #powerBtn:disabled    { opacity: .4; cursor: not-allowed; }
+        #powerBtn.machine-on  { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+        #powerBtn.machine-off { color: var(--gray-600); }
+        #syncTime { flex-shrink: 0; white-space: nowrap; }
 
         .loading-state { padding: var(--sp-5) var(--sp-5); color: var(--gray-600); font-size: var(--fs-2); text-align: center; }
 
@@ -361,12 +347,26 @@
 
         /* Machine status (#424): the old rail footer's online-dot/name,
            folded next to the machine switcher rather than lost — the
-           switcher itself only conveys machine identity, not reachability. */
+           switcher itself only conveys machine identity, not reachability.
+           #2056: the group may shrink so only the machine name truncates
+           when the bar runs out of room. */
         .topbar-machine {
-            display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0;
+            display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 1; min-width: 0;
             padding: 0 var(--sp-1); font-size: var(--fs-1); color: var(--gray-500);
         }
+        .topbar-machine .status-dot { flex-shrink: 0; }
         .topbar-machine-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* #2056: below 1000 px (narrow desktop windows and phones) the sync
+           time is hidden and Sync shows as its icon only, so the tabs and the
+           machine name keep their room. The button text stays its accessible
+           name, the title shows it on hover; busy and rate-limited states read
+           from the disabled look. */
+        @media (max-width: 999px) {
+            #syncTime { display: none; }
+            #syncBtn { font-size: 0; padding: var(--sp-1) var(--sp-2); }
+            #syncBtn::before { content: "\21BB" / ""; font-size: var(--fs-2); }
+        }
 
         /* Topbar ambient machine icon (#837) — the full animated
            "Instrument" SVG (machine-icon.js), sized into a ~44px square
@@ -2736,14 +2736,6 @@
             #btnSettings { display: none; }
             .topbar-sep { display: none; }
             .mobile-drawer-btn { display: flex; }
-            /* #914: #powerBtn lives in #sidebar, which is hidden entirely on
-               mobile just below -- #railPowerBtn is its topbar stand-in.
-               updatePowerButton() (status.js) still gates visibility on
-               sw.configured via inline style (set directly on the element,
-               so it still wins over this class rule when not configured);
-               this only flips the desktop-default none to flex once
-               configured, matching .mobile-drawer-btn's pattern above. */
-            #railPowerBtn { display: flex; }
             /* #410: #sidebar (shot list) is a full-screen alternate of the
                Shots tab now, not a drawer overlay — shown/hidden via plain
                inline display (updateMobileShotSidebarVisibility() in

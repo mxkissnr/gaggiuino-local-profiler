@@ -132,7 +132,6 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // (it removes itself again if the option is turned back on and a token
     // arrives), same always-run/self-correct convention as the banners above.
     updateApiPortClosedBanner();
-    const dot = document.getElementById('statusDot') as HTMLElement;
     const railDot = document.getElementById('railStatusDot');
     const timeEl = document.getElementById('syncTime') as HTMLElement;
     // #681: while the machine is on, show how long it's been on instead of
@@ -164,12 +163,9 @@ export async function updateStatus(machineId?: string | number | null): Promise<
                     : s.lastSyncError ? 'status-dot error'
                     : (s.lastSync ? 'status-dot ok' : 'status-dot unknown');
     const dotTitle = s.machineReachable === false ? t('machine_unreachable_title') : (s.lastSyncError || '');
-    dot.className = dotClass;
-    dot.title = dotTitle;
-    // #411: the rail footer mirrors the same status dot rather than tracking
-    // its own state — no second source of truth for machine reachability.
-    // #655: must mirror dotTitle too, not just dotClass — otherwise the rail
-    // dot shows the correct error color but a blank tooltip on hover.
+    // #411/#655: the topbar dot carries the reachability class and its
+    // tooltip. Since #2056 it is the only status dot; the shot list footer
+    // copy is gone.
     if (railDot) { railDot.className = dotClass; railDot.title = dotTitle; }
     // #837: the topbar's ambient machine icon mirrors the same reachability
     // signal as its SSE-less fallback — a no-op whenever SSE is already
@@ -338,13 +334,10 @@ export async function importDevDb(file: File): Promise<void> {
 
 export function updatePowerButton(sw: SwitchPayload): void {
   const btn = document.getElementById('powerBtn') as HTMLButtonElement;
-  // #914: mobile topbar duplicate of #powerBtn -- see index.html comment.
-  const railBtn = document.getElementById('railPowerBtn') as HTMLButtonElement | null;
   const liveBtn = document.getElementById('btnLive') as HTMLButtonElement;
   const bnLive  = document.getElementById('bnLive');
   if (!sw.configured) {
     btn.style.display = 'none';
-    if (railBtn) railBtn.style.display = 'none';
     S.machinePowerState = null;
     liveBtn.style.display = '';
     liveBtn.disabled = false;
@@ -353,14 +346,12 @@ export function updatePowerButton(sw: SwitchPayload): void {
     return;
   }
   btn.style.display = '';
-  if (railBtn) railBtn.style.display = '';
   S.machinePowerState = sw.state ?? null;
   btn.className = sw.state === true  ? 'machine-on'
                 : sw.state === false ? 'machine-off' : '';
   btn.title = sw.state === true  ? t('power_btn_on_title')
             : sw.state === false ? t('power_btn_off_title')
             : t('power_btn_unknown_title');
-  if (railBtn) { railBtn.className = btn.className; railBtn.title = btn.title; }
 
   const machineOff = sw.state === false;
   liveBtn.style.display = machineOff ? 'none' : '';
@@ -375,11 +366,7 @@ export function updatePowerButton(sw: SwitchPayload): void {
 
 export async function toggleMachinePower(): Promise<void> {
   const btn = document.getElementById('powerBtn') as HTMLButtonElement;
-  // #914: mobile topbar duplicate of #powerBtn -- kept disabled in lockstep
-  // so a tap on either surface can't double-fire the toggle.
-  const railBtn = document.getElementById('railPowerBtn') as HTMLButtonElement | null;
   btn.disabled = true;
-  if (railBtn) railBtn.disabled = true;
   try {
     const r = await toggleSwitch();
     if (r.ok) {
@@ -393,7 +380,6 @@ export async function toggleMachinePower(): Promise<void> {
   } catch (e) { console.error('Power toggle Fehler:', e); }
   finally {
     btn.disabled = false;
-    if (railBtn) railBtn.disabled = false;
   }
 }
 
