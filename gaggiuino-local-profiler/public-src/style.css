@@ -763,6 +763,18 @@
             background: var(--gray-950);
         }
         .settings-bar-title, .settings-subbar-title { flex:1; min-width:0; margin:0; font-size: var(--fs-4); font-weight:600; color: var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .settings-verdict { padding: var(--sp-4); margin-bottom: var(--sp-4); }
+        .settings-verdict[hidden] { display:none; }
+        /* The animated icon's clip paths need the positioned host, like .topbar-machine-icon. */
+        .settings-verdict-icon { position: relative; flex: none; width: 48px; }
+        .settings-verdict-icon svg { display:block; width:100%; height:auto; }
+        .settings-verdict .analytics-verdict-head { justify-content: flex-start; }
+        .settings-verdict .analytics-verdict-text { flex: 1; }
+        .settings-roast-dot { flex:none; width:8px; height:8px; border-radius:50%; background: var(--amber-deep); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber-deep) 30%, transparent); }
+        .settings-roast-dot[hidden] { display:none; }
+        @media (max-width: 899px) {
+            .settings-verdict .analytics-verdict-title { font-size: var(--fs-4); }
+        }
         .settings-groups { display:flex; flex-direction:column; gap: var(--sp-4); }
         .settings-groups[hidden], #settingsSearchResults[hidden], .settings-search-empty[hidden] { display:none; }
         .settings-search-empty { padding: var(--sp-4); }

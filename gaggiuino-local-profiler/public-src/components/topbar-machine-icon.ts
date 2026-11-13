@@ -26,6 +26,23 @@ function host(): HTMLElement | null {
   return document.getElementById('topbarMachineIcon');
 }
 
+// #2038: the Settings verdict is a second host of this widget — the same icon
+// painted into #settingsMachineIcon. Only the easter-egg code below stays
+// topbar-only and uses host() directly.
+const HOSTS: readonly (readonly [string, string])[] = [
+  ['topbarMachineIcon', 'topbar-machine-icon'],
+  ['settingsMachineIcon', 'settings-verdict-icon'],
+];
+
+function iconHosts(): { el: HTMLElement; base: string }[] {
+  const out: { el: HTMLElement; base: string }[] = [];
+  for (const [id, base] of HOSTS) {
+    const el = document.getElementById(id);
+    if (el) out.push({ el, base });
+  }
+  return out;
+}
+
 // Rebuilt only when the active machine actually changes (theme/kind) — same
 // caching convention as live.ts's machineIconEl(), so a state change
 // mid-animation never restarts it. The class reset below mirrors
@@ -55,16 +72,19 @@ function iconShowsDefaultMachine(): boolean {
 let _lastSnapshot: unknown = null;
 
 export function renderTopbarMachineIcon(): void {
-  const el = host();
-  if (!el) return;
+  const hosts = iconHosts();
+  if (!hosts.length) return;
   const machine = iconMachine();
   const id = machine?.id ?? null;
-  if (_iconFor !== id || !el.firstChild) {
-    el.className = `topbar-machine-icon ${MACHINE_ICON_LIVE_CLASS}`;
-    el.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
+  if (_iconFor !== id || hosts.some(h => !h.el.firstChild)) {
+    for (const { el, base } of hosts) {
+      el.className = `${base} ${MACHINE_ICON_LIVE_CLASS}`;
+      el.innerHTML = machineIconAnimatedSvg(machine?.theme, machine?.type);
+    }
     _iconFor = id;
     if (S.sseActive && iconShowsDefaultMachine()) _applyState(_lastSnapshot);
   }
+  _renderSettingsVerdict();
 }
 
 let _lastPreheat: unknown = null;
@@ -87,11 +107,14 @@ export function handleTopbarPreheatUpdateEvent(preheat: unknown): void {
   _applyState(_lastSnapshot);
 }
 
+// Kept so the verdict can derive its sentence from the same mode the icon shows.
+let _lastMode = 'off';
+
 function _applyState(msg: unknown): void {
-  const el = host();
-  if (!el) return;
   const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
-  setMachineIconMode(el, mode, heatFraction);
+  _lastMode = mode;
+  for (const { el } of iconHosts()) setMachineIconMode(el, mode, heatFraction);
+  _renderSettingsVerdict();
 }
 
 // Fallback when SSE isn't active — components/status.ts's updateStatus()
@@ -108,9 +131,37 @@ function _applyState(msg: unknown): void {
 // treatment of unknown reachability.
 export function syncTopbarMachineIconFallback(reachable: unknown): void {
   if (S.sseActive && iconShowsDefaultMachine()) return;
-  const el = host();
-  if (!el) return;
-  setMachineIconMode(el, reachable === true ? 'hot' : 'off', 1);
+  const hosts = iconHosts();
+  if (!hosts.length) return;
+  _lastMode = reachable === true ? 'hot' : 'off';
+  for (const { el } of hosts) setMachineIconMode(el, _lastMode, 1);
+  _renderSettingsVerdict();
+}
+
+/**
+ * The Settings verdict's one sentence (#2038). No machine or an empty host
+ * means nothing is set up yet; otherwise the same mode the icon shows decides
+ * between connected and off/not reachable.
+ */
+export function settingsVerdictTitle(
+  machine: { name?: string | null; host?: string | null } | undefined,
+  mode: string,
+): string {
+  const name = typeof machine?.name === 'string' ? machine.name : '';
+  if (!machine || !machine.host) return t('settings_verdict_setup');
+  if (mode === 'off') return t('settings_verdict_off', name);
+  return t('settings_verdict_on', name);
+}
+
+function _renderSettingsVerdict(): void {
+  const title = document.getElementById('settingsVerdictTitle');
+  if (!title) return;
+  title.textContent = settingsVerdictTitle(iconMachine(), _lastMode);
+  const count = (S.machines || []).length;
+  const num = document.getElementById('settingsMachineCount');
+  if (num) num.textContent = String(count);
+  const lbl = document.getElementById('settingsMachineCountLbl');
+  if (lbl) lbl.textContent = t('settings_verdict_machines', count);
 }
 
 // Easter egg (#837): 7 clicks within 3s triggers a short, reversible
