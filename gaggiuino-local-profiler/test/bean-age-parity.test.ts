@@ -1,5 +1,7 @@
-// #2025: the bean age is computed twice — in Go (go/internal/library/bean_age.go,
-// RoastAgeDays/BeanAgeAtShot/BeanAgeForAnnotation) and here (public-src/utils.ts,
+// #2025: the bean age is computed twice — in Go (RoastAgeDays/BeanAgeAtShot/
+// BeanAgeForAnnotation, the reference twin in
+// go/internal/library/bean_age_parity_test.go until the MCP and achievement
+// consumers switch over in slices 2 and 3) and here (public-src/utils.ts,
 // public-src/views/shots/utils.ts). This test and its Go twin
 // (go/internal/library/bean_age_parity_test.go) both load the same fixture
 // (test/fixtures/bean-age-parity.json) and assert the same expected age, so any
