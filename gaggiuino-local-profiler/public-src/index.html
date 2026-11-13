@@ -1682,14 +1682,15 @@
             </div>
         </div>
         <!-- Multi-machine registry (#319) -->
-        <div class="settings-card" id="machinesCard">
-            <h3 class="settings-card-title" data-i18n="settings_machines">Maschinen</h3>
-            <p class="settings-card-desc" data-i18n="settings_machines_desc">Verwalte die Espressomaschinen, die diese App überwacht.</p>
+        <div class="settings-card settings-row-card" id="machinesCard">
             <div id="machinesList" class="machines-list"></div>
-            <button id="addMachineBtn" type="button" class="backup-btn" data-i18n="settings_machines_add">+ Maschine hinzufügen</button>
+            <button id="addMachineBtn" type="button" class="settings-row settings-row-add">
+                <span class="settings-row-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="settings-row-text"><span class="settings-row-title" data-i18n="settings_machines_add">Maschine hinzufügen</span></span>
+            </button>
         </div>
         <div class="settings-card" id="machineFormCard" style="display:none">
-            <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">+ Maschine hinzufügen</h3>
+            <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">Maschine hinzufügen</h3>
             <input type="hidden" id="machineFormId">
             <label for="machineFormName" class="machine-form-label" data-i18n="settings_machine_name">Name</label>
             <input type="text" id="machineFormName" class="machine-form-input">
@@ -1732,7 +1733,6 @@
             <div class="machine-form-actions">
                 <button id="machineFormTestBtn" type="button" class="backup-btn" data-i18n="settings_machine_test">Verbindung testen</button>
                 <button id="machineFormSaveBtn" type="button" class="backup-btn" data-i18n="settings_machine_save">Speichern</button>
-                <button id="machineFormCancelBtn" type="button" class="backup-btn" data-i18n="settings_machine_cancel">Abbrechen</button>
             </div>
             <div id="machineFormTestResult" class="machine-form-test-result"></div>
         </div>
