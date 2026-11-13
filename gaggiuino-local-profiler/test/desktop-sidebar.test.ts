@@ -131,7 +131,7 @@ function click(id: number, mods: { ctrlKey: boolean; metaKey: boolean } = { ctrl
 
 const sidebar = (): FakeNode => nodes.sidebar!;
 const expanded = (): boolean => nodes.expandSidebarBtn!.classList.contains('visible');
-let updateView: ReturnType<typeof vi.fn>;
+let updateView = vi.fn();
 
 describe('desktop shot list (#2056)', () => {
   beforeEach(() => {
