@@ -118,7 +118,10 @@ export function whatsNewUnread(): boolean {
 
 /** Shows the Settings roast dot while the newest release is unread. */
 export function syncWhatsNewDot(): void {
-  const dot = document.getElementById('settingsWhatsNewDot');
+  // The popup tests fake a document without getElementById; no dot host there.
+  const dot = typeof document.getElementById === 'function'
+    ? document.getElementById('settingsWhatsNewDot')
+    : null;
   if (!dot) return;
   dot.hidden = !whatsNewUnread();
 }
