@@ -1,5 +1,5 @@
 import { S } from '../state/index.js';
-import { updateMobileShotSidebarVisibility } from './sidebar.js';
+import { setDesktopSidebarCollapsed, updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
 import { updateTopbarNavFade, isFullyVisibleIn } from './topbar-nav-fade.js';
 import { shotsRenderedLang } from '../views/shots/index.js';
@@ -7,6 +7,8 @@ import { shotsRenderedLang } from '../views/shots/index.js';
 export function goToShot(id: number): void {
   switchMode('shots');
   if (window.selectShot) window.selectShot(id);
+  // #2056: opening a shot from another page is a pick, so the desktop list folds away.
+  setDesktopSidebarCollapsed(true);
   setTimeout(() => {
     const el = document.getElementById(`wrapper-${id}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -53,6 +55,17 @@ export function switchMode(mode: string): void {
   (document.getElementById('achievements-view') as HTMLElement).style.display = mode === 'achievements' ? 'flex' : 'none';
   (document.getElementById('orders-view') as HTMLElement).style.display      = mode === 'orders'      ? 'flex' : 'none';
   (document.getElementById('settings-view') as HTMLElement).style.display    = mode === 'settings'    ? 'grid' : 'none';
+
+  // #2056: every page switch opens the desktop shot list again (entering Shots
+  // shows it; every other desktop page hides #sidebar in
+  // updateMobileShotSidebarVisibility()). Both run before the view init calls
+  // below, which measure their containers synchronously (the analytics world
+  // map), so they see the final width.
+  setDesktopSidebarCollapsed(false);
+  // #410/#461: mobile shows #shots-view full screen only while
+  // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover
+  // burger-drawer overlay closes when leaving Shots for Library.
+  updateMobileShotSidebarVisibility();
 
   if (mode === 'live') {
     if (window.populateRefSelector) window.populateRefSelector();
@@ -101,9 +114,4 @@ export function switchMode(mode: string): void {
     activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   updateTopbarNavFade(scroller);
-
-  // #410/#461: mobile shows #shots-view full screen only while
-  // mode === 'shots' — re-evaluate on every mode switch, e.g. so a leftover
-  // burger-drawer overlay closes when leaving Shots for Library.
-  updateMobileShotSidebarVisibility();
 }
