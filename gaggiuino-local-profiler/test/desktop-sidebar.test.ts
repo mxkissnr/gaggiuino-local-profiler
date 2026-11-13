@@ -231,7 +231,7 @@ describe('desktop shot list (#2056)', () => {
   });
 
   it('phones keep their drawer behaviour', () => {
-    (g.window as unknown as Record<string, unknown>).innerWidth = 390;
+    (g.window as Record<string, unknown>).innerWidth = 390;
     click(2);
     expect(sidebar().classList.contains('desktop-collapsed')).toBe(false);
     switchMode('library');
