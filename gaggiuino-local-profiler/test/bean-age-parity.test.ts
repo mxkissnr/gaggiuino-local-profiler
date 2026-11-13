@@ -11,10 +11,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+// The annotation shape shotBeanAge() reads, so the fixture cases need no cast.
+type Annotation = Parameters<(typeof import('../public-src/views/shots/utils.js'))['shotBeanAge']>[0];
+
 interface ParityCase {
     name: string;
     bean: Record<string, unknown>;
-    annotation: Record<string, unknown>;
+    annotation: Annotation;
     shotLocal: string;
     expected: number | null;
 }
