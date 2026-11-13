@@ -3,7 +3,7 @@ import * as libraryApi from '../../api/library.js';
 import { S } from '../../state/index.js';
 import type { ShotMeta } from '../../state/index.js';
 import { localeFor, countryName } from '../../constants.js';
-import { esc, roastAgeDays, frozenPortionAgeDays, freshnessState, freshnessWindows, calcBeanRating, shouldShowFreshBadge, formatDate, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
+import { esc, roastAgeDays, frozenPortionAgeDays, freshnessSourceLabelKey, resolveFreshness, freshnessOverrideFrom, calcBeanRating, shouldShowFreshBadge, formatDate, isoDateInputToMs, localIsoDate, todayIsoDate, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { generateBeanQR } from '../../glp-qr.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
@@ -108,9 +108,14 @@ export function beanFreshBadge(b: BeanListRow): Html {
   const activeBag = current?.bg || null;
   const roastAge = roastAgeDays(activeBag?.roastDate || b.roastDate);
   const remaining = b.remainingG ?? null;
-  const windows = freshnessWindows();
+  // #1977: this bean's roast level and optional "best for use" window decide
+  // the bands; the tooltip names the source when it is not the global set.
+  const override = freshnessOverrideFrom(b);
+  const resolved = resolveFreshness(roastAge, b.roastLevel, override);
+  const sourceKey = freshnessSourceLabelKey(resolved);
+  const sourceLabel = sourceKey ? t(sourceKey) : '';
   return (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
-    ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(roastAge))}" title="${esc(t('freshness_title', roastAge, windows.peakFrom, windows.peakUntil))}">${esc(roastAge)}d</span>`
+    ? html` <span class="lib-fresh-badge fresh-${esc(resolved.state)}" title="${esc(t('freshness_title', roastAge, resolved.windows.peakFrom, resolved.windows.peakUntil, sourceLabel))}">${esc(roastAge)}d</span>`
     : esc('');
 }
 
@@ -226,8 +231,13 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     // #856: the portion's own effective age is now also a visible badge
     // (reusing the bag-level fresh-badge color tiers), not just a tooltip —
     // without it, a frozen portion looked like it kept ageing at the bag's rate.
-    const fpAgeBadge: Html = fpAge != null
-      ? html` <span class="lib-fresh-badge fresh-${esc(freshnessState(fpAge))}" title="${esc(t('bag_frozen_portion_age', fpAge))}">${esc(fpAge)}d</span>`
+    // #1977: the colour comes from the same resolved window as the bag badge,
+    // so a light bean's portion and bag can't land in different bands.
+    const fpBand = fpAge != null
+      ? resolveFreshness(fpAge, b.roastLevel, freshnessOverrideFrom(b)).state
+      : null;
+    const fpAgeBadge: Html = fpBand
+      ? html` <span class="lib-fresh-badge fresh-${esc(fpBand)}" title="${esc(t('bag_frozen_portion_age', fpAge))}">${esc(fpAge)}d</span>`
       : esc('');
     if (fp.thawedAt) {
       const thawedStr = formatDate(fp.thawedAt, locale);

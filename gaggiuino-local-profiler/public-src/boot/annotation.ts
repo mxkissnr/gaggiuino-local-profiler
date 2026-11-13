@@ -7,7 +7,7 @@ import type { Bean } from '../api/types.js';
 import { tHtml } from '../i18n.js';
 import { html } from '../utils.js';
 import { renderStars, scheduleAutoSave, flushAutoSave, updateDegassing, calcBeanAgeAtShot,
-         suggestGrindDoseForBean, defaultGrinderName, _renderFrozenPortionPills,
+         suggestGrindDoseForBean, defaultGrinderName, _renderFrozenPortionPills, beanFreshnessContext,
          renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange } from '../views/shots.js';
 import { BEAN_ICON_SVG } from '../icons.js';
 import { checkGrindField, grindSelectId, refreshGrindField, renderGrindField, tidyGrindField } from '../views/shots/grind-field.js';
@@ -76,7 +76,7 @@ export function wireAnnotationPanel(): void {
       }
 
       // Update degassing tracker from library roast date
-      updateDegassing(roastDate || '');
+      updateDegassing(roastDate || '', undefined, beanFreshnessContext({ coffee: name, beanId: bean.id }));
 
       // Bean changed — the frozen-portion choices (if any) belong to the
       // previously selected bean's bag, never carry over. Reset to unset.

@@ -392,7 +392,7 @@ Eine Alternative zur obigen WebSocket-Verbindung, um Live-Sensor-/Systemdaten vo
 
 ### Bohnen-Frische und Fotos
 
-Unter **Einstellungen → Bohnen-Frische** legst du die Röstalter-Bereiche für das Frische-Badge auf den Bohnenkarten fest (Ausgasen, Höhepunkt, Nachlassen) sowie die Grammzahl, ab der ein Beutel als fast leer gilt. Der Tooltip des Badges zeigt deine eigenen Fenster; **Auf Standard zurücksetzen** stellt die eingebauten Werte wieder her.
+Unter **Einstellungen → Bohnen-Frische** legst du die Röstalter-Bereiche für das Frische-Badge auf den Bohnenkarten fest (Ausgasen, Höhepunkt, Nachlassen) sowie die Grammzahl, ab der ein Beutel als fast leer gilt. Der Tooltip des Badges zeigt deine eigenen Fenster; **Auf Standard zurücksetzen** stellt die eingebauten Werte wieder her. Der **Röstgrad** einer Bohne wählt ein passendes Fenster (jeder Röstgrad wird in der Karte einzeln bearbeitet), und eine Bohne kann ihr Optimal-Fenster mit einer optionalen **Optimal-zum-Verwenden**-Spanne (von/bis) überschreiben.
 
 Jedes Foto-Feld hat zwei Schaltflächen: **Foto wählen** öffnet die Galerie, **Foto aufnehmen** öffnet eine Kamera direkt in der App (sie braucht wie der Barcode-Scanner eine HTTPS-Verbindung zu Home Assistant). Tippe auf die Vorschau, um zu fokussieren; das Foto wird genau auf den sichtbaren Ausschnitt zugeschnitten und läuft dann durch den Zuschnitt-Editor.
 
@@ -577,7 +577,17 @@ Das Feld **Mühle** zeigt die Mühlen aus deiner Bibliothek und legt deine eine 
 
 ### Bohnen-Frische
 
-⚙ Einstellungen → **Bohnen-Frische** legt die vier Tagesgrenzen fest, die die Frische-Bänder trennen (Degasen bis, Optimal ab, Optimal bis, Abbauend bis), sowie die Gramm, unter denen eine geführte Packung als fast leer gilt. Beides war bisher fest verdrahtet; die Karte macht es einstellbar. Das Badge an einer Bohne, der Degassing-Tracker im Annotationsbereich eines Shots und die Benachrichtigung „Bohne fast leer" lesen alle diese Einstellungen, und sie liegen bei deinen übrigen geteilten UI-Einstellungen — sie folgen dir also auf ein anderes Gerät und wandern in ein Backup mit. Bleiben die Standardwerte unverändert, verhält sich die App wie jede frühere Version (4 / 7 / 21 / 35 Tage, 100 g).
+⚙ Einstellungen → **Bohnen-Frische** legt die vier Tagesgrenzen fest, die die Frische-Bänder trennen (Degasen bis, Optimal ab, Optimal bis, Abbauend bis), sowie die Gramm, unter denen eine geführte Packung als fast leer gilt. Beides war bisher fest verdrahtet; die Karte macht es einstellbar. Eine Bohne kann außerdem in ihrem Bearbeitungsformular einen **Röstgrad** tragen (hell, hell-mittel, mittel, dunkel-mittel, dunkel). Die Röstgrad-Auswahl der Karte bearbeitet das eigene Fenster je Röstgrad, und eine Bohne ohne Röstgrad nutzt weiter das globale Set — hat eine Bohne einen Röstgrad, gilt dessen Fenster, auch wenn du das globale Set angepasst hast. Die Grammzahl der Niedrigbestand-Warnung bleibt dabei immer global und wird von einem Röstgrad-Reset nicht überschrieben. Jeder Röstgrad bringt einen Vorschlag mit, der den Bohnen echte Ruhezeit gibt — auch eine dunkle Röstung gilt nicht schon in der ersten Woche als optimal — und jeder Röstgrad lässt sich in der Karte anpassen. Darüber hinaus kann eine Bohne eine optionale **Optimal-zum-Verwenden**-Spanne (von/bis) setzen, die für genau diese Bohne das Optimal-Band ersetzt, während die Degas-/Abbau-Grenzen ihres Röstgrads erhalten bleiben. Das Badge an einer Bohne, der Degassing-Tracker im Annotationsbereich eines Shots und die Benachrichtigung „Bohne fast leer" lesen alle diese Einstellungen, und der Badge-Tooltip nennt, welche Ebene das Fenster geliefert hat (ein Röstgrad, ein eigenes Fenster oder das globale Set). Alles liegt bei deinen übrigen geteilten UI-Einstellungen — es folgt dir also auf ein anderes Gerät und wandert in ein Backup mit. Bohnen ohne Röstgrad behalten das Verhalten jeder früheren Version (global 4 / 7 / 21 / 35 Tage und 100 g).
+
+Woher die eingebauten Werte kommen: Gesichert ist nur die Richtung — eine dunklere Röstung ist poröser und gibt CO₂ schneller ab, deshalb öffnet jede Stufe nach unten das Optimal-Band früher und beendet es auch früher. Die Tage selbst sind ein vorsichtiger Startpunkt und keine Messung. Die frühe Diskussion zu diesem Feature legte das Optimum einer dunklen Röstung auf etwa Tag 4–7, aber eine so junge Packung schmeckt vielen noch nach Ausgasung, deshalb öffnet jeder Vorschlag sein Optimal-Band später. Nichts davon ist fest verdrahtet: Das Fenster jedes Röstgrads ist ein Startpunkt, den du in der Karte anpasst, und eine eigene **Optimal-zum-Verwenden**-Spanne einer Bohne ersetzt das Optimal-Band für genau diese Bohne. Die mitgelieferten Vorschläge sind:
+
+| Röstgrad | Degasen bis | Optimal ab | Optimal bis | Abbauend bis |
+| --- | --- | --- | --- | --- |
+| Hell | 14 | 21 | 45 | 70 |
+| Hell-mittel | 10 | 17 | 38 | 58 |
+| Mittel | 8 | 13 | 30 | 48 |
+| Dunkel-mittel | 6 | 10 | 24 | 38 |
+| Dunkel | 5 | 8 | 18 | 30 |
 
 ### Backup & Wiederherstellung
 

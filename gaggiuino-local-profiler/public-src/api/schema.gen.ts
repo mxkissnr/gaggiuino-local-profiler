@@ -8549,7 +8549,7 @@ export interface components {
             /** @description Height */
             h: number;
         };
-        /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/flavors/origins are allowlist-validated, not just trimmed). */
+        /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/roastLevel/flavors/origins are allowlist-validated, not just trimmed). */
         Bean: {
             /** @description Unix ms timestamp used as ID */
             id: number;
@@ -8588,6 +8588,12 @@ export interface components {
             flavors?: string[];
             /** @description Allowlist-validated */
             roastType?: string;
+            /** @description Allowlist-validated roast degree (#1977): light / medium-light / medium / medium-dark / dark; empty or absent means unspecified */
+            roastLevel?: string;
+            /** @description Optional per-bean "best for use" window, first day (#1977). Whole days 1–365; stored together with bestUntilDays or not at all */
+            bestFromDays?: number | null;
+            /** @description Optional per-bean "best for use" window, last day (#1977). Must be greater than bestFromDays */
+            bestUntilDays?: number | null;
             region?: string;
             altitude_m?: number | null;
             importer?: string;

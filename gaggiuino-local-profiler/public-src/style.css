@@ -1527,6 +1527,10 @@
         /* Flavor chips (form input + static display) */
         .lib-form-field-wide { grid-column: 1 / -1; }
         .lib-form-hint { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; margin-bottom: var(--sp-2); }
+        /* #1977: the per-bean "best for use" from/until pair reads as one window. */
+        .bean-best-window { display: flex; align-items: center; gap: var(--sp-2); }
+        .bean-best-window input { flex: 1; min-width: 0; }
+        .bean-best-window span { color: var(--gray-500); }
         .flavor-chips-wrap { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); }
         /* #1543: the origin picker's chip list draws an empty bordered bar when
            the bean has no origins yet; hide it until it holds chips (the

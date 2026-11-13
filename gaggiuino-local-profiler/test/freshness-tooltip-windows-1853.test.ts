@@ -34,7 +34,7 @@ function setWindows(value: unknown): void {
 
 // The roast date is derived from a fixed day offset rather than a literal so
 // the badge's day count never drifts with the clock.
-function beanAgedDays(days: number): BeanRow {
+function beanAgedDays(days: number, extra: Partial<BeanRow> = {}): BeanRow {
   const roast = new Date(Date.now() - days * 86400000);
   const iso = `${roast.getFullYear()}-${String(roast.getMonth() + 1).padStart(2, '0')}-${String(roast.getDate()).padStart(2, '0')}`;
   return {
@@ -43,13 +43,19 @@ function beanAgedDays(days: number): BeanRow {
     stock_g: 250,
     remainingG: 240,
     bags: [{ id: 7, roastDate: iso, stock_g: 250, consumedG: 10, remainingG: 240, current: true }],
+    ...extra,
   };
 }
 
-function badgeTitle(): string {
-  const markup = beanFreshBadge(beanAgedDays(12));
+function badgeTitle(bean: BeanRow = beanAgedDays(12)): string {
+  const markup = beanFreshBadge(bean);
   const match = /title="([^"]*)"/.exec(markup);
   expect(match, 'no title attribute rendered').not.toBeNull();
+  return match?.[1] ?? '';
+}
+
+function badgeClass(bean: BeanRow): string {
+  const match = /class="lib-fresh-badge ([^"]*)"/.exec(beanFreshBadge(bean));
   return match?.[1] ?? '';
 }
 
@@ -91,5 +97,37 @@ describe('freshness tooltip follows the configured windows (#1853)', () => {
       S.currentLang = lang;
       expect(badgeTitle(), lang).not.toContain('undefined');
     }
+  });
+});
+
+// #1977: the bean card follows the same per-bean resolution as the shot badge
+// and tracker — roast level first, then an optional "best for use" override.
+describe('freshness tooltip follows the bean roast level (#1977)', () => {
+  it('uses the bean\'s level window and names the level', () => {
+    const bean = beanAgedDays(12, { roastLevel: 'light' });
+    const title = badgeTitle(bean);
+    // light defaults to 21–45, not the global 7–21
+    expect(title).toContain('21–45');
+    expect(title).toContain('Light');
+  });
+
+  it('changing the level changes the badge band at the same age', () => {
+    // Day 12 is still degassing for a light roast (degas until 14, peak from
+    // 21) but already peak under the global window (7–21).
+    expect(badgeClass(beanAgedDays(12, { roastLevel: 'light' }))).toBe('fresh-degassing');
+    expect(badgeClass(beanAgedDays(12))).toBe('fresh-peak');
+  });
+
+  it('lets a per-bean override replace the peak window and names it custom', () => {
+    const bean = beanAgedDays(12, { roastLevel: 'light', bestFromDays: 8, bestUntilDays: 10 });
+    const title = badgeTitle(bean);
+    expect(title).toContain('8–10');
+    expect(title).toContain('custom window');
+  });
+
+  it('ignores a lone override bound', () => {
+    const bean = beanAgedDays(12, { roastLevel: 'light', bestFromDays: 8 });
+    expect(badgeTitle(bean)).toContain('21–45');
+    expect(badgeTitle(bean)).not.toContain('custom window');
   });
 });

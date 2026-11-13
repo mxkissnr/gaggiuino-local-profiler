@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -74,6 +75,52 @@ func sanitizeRoastType(v any) string {
 		return s
 	}
 	return ""
+}
+
+// roastLevels is the roast-degree allow-list (#1977). It is deliberately
+// separate from roastTypes above: roastType describes the brew style a roaster
+// targets (espresso/filter/omni), while roastLevel describes how far the beans
+// were taken (light…dark) and drives the freshness guidance. "" means
+// "unspecified" and keeps the user's global window.
+var roastLevels = map[string]bool{
+	"light": true, "medium-light": true, "medium": true, "medium-dark": true, "dark": true,
+}
+
+func sanitizeRoastLevel(v any) string {
+	s, ok := v.(string)
+	if ok && roastLevels[s] {
+		return s
+	}
+	return ""
+}
+
+// wholeDay accepts an integer day count as a JSON number or a numeric string.
+// Unlike jsParseIntLoose it rejects fractions outright: 4.5 days is not a day.
+func wholeDay(v any) (int64, bool) {
+	switch t := v.(type) {
+	case float64:
+		if t != t || t != math.Trunc(t) { // NaN or fraction
+			return 0, false
+		}
+		return int64(t), true
+	case string:
+		n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
+		return n, err == nil
+	}
+	return 0, false
+}
+
+// sanitizeBestForUse validates the optional per-bean "best for use" window
+// (#1977). Both bounds are whole days, 1..365, and the window must be strictly
+// ascending. A partial or invalid pair is dropped as a whole: keeping one bound
+// would silently change the guidance in a way the user never entered.
+func sanitizeBestForUse(from, until any) (any, any) {
+	f, okF := wholeDay(from)
+	u, okU := wholeDay(until)
+	if !okF || !okU || f < 1 || u > 365 || f >= u {
+		return nil, nil
+	}
+	return f, u
 }
 
 var speciesSet = map[string]bool{"Arabica": true, "Robusta": true, "Liberica": true, "Blend": true}

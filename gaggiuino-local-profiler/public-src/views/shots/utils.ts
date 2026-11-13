@@ -1,6 +1,6 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints, parseRoastDate, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
-import type { ShotDatapoints, ShotSeries } from '../../utils.js';
+import { mapShotDatapoints, parseRoastDate, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation, freshnessOverrideFrom, normalizeRoastLevel } from '../../utils.js';
+import type { ShotDatapoints, ShotSeries, FreshnessOverride, RoastLevel } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 import type { PressureNote } from '../../shared/score.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
@@ -39,6 +39,9 @@ type BeanRecord = {
   id: number;
   name?: string | null;
   roastDate?: string | null;
+  roastLevel?: string | null;
+  bestFromDays?: number | null;
+  bestUntilDays?: number | null;
   bags?: BeanBag[];
 };
 
@@ -54,6 +57,27 @@ type BeanRecord = {
 export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): BeanRecord | null {
   const list = (Array.isArray(beans) ? beans : S.coffeeLibrary?.beans || []) as BeanRecord[];
   return _resolveBeanForAnnotation(annotation, list) as BeanRecord | null;
+}
+
+// #1977: which freshness window this shot should be judged by. A mixed shot
+// names several beans, so no single bean's level/override can describe it and
+// it stays on the global window. Otherwise the shot's library bean supplies its
+// roast level and optional "best for use" override.
+export interface BeanFreshnessContext {
+  roastLevel: RoastLevel | null;
+  override: FreshnessOverride | null;
+}
+
+export function beanFreshnessContext(
+  annotation: { beanId?: number | null; coffee?: string | null; beanMix?: readonly BeanMixPartInput[] | null } | null | undefined,
+): BeanFreshnessContext {
+  if (!S.coffeeLibrary || isBeanMix(annotation)) return { roastLevel: null, override: null };
+  const bean = resolveBeanForAnnotation(annotation);
+  if (!bean) return { roastLevel: null, override: null };
+  return {
+    roastLevel: normalizeRoastLevel(bean.roastLevel),
+    override: freshnessOverrideFrom(bean),
+  };
 }
 
 export function _roastDateFromLibrary(
