@@ -125,12 +125,13 @@ function row(id: number): FakeNode {
   return wrapper.children[0]!;
 }
 
-function click(id: number, opts: { ctrlKey?: boolean; metaKey?: boolean } = {}): void {
-  row(id).onclick?.({ ctrlKey: false, metaKey: false, stopPropagation: () => {}, ...opts });
+function click(id: number, mods: { ctrlKey: boolean; metaKey: boolean } = { ctrlKey: false, metaKey: false }): void {
+  row(id).onclick?.({ ...mods, stopPropagation: () => {} });
 }
 
 const sidebar = (): FakeNode => nodes.sidebar!;
 const expanded = (): boolean => nodes.expandSidebarBtn!.classList.contains('visible');
+let updateView: ReturnType<typeof vi.fn>;
 
 describe('desktop shot list (#2056)', () => {
   beforeEach(() => {
@@ -138,7 +139,8 @@ describe('desktop shot list (#2056)', () => {
     installDocument();
     const target = g.window as Record<string, unknown>;
     target.innerWidth = 1280;
-    target.updateView = vi.fn();
+    updateView = vi.fn();
+    target.updateView = updateView;
     target.flushAutoSave = vi.fn();
     target.selectShot = selectShot;
     target.closeBeanSheet = vi.fn();
@@ -194,12 +196,12 @@ describe('desktop shot list (#2056)', () => {
     expect(sidebar().classList.contains('desktop-collapsed')).toBe(true);
     expect(expanded()).toBe(true);
     expect(S.primaryShotId).toBe(2);
-    expect((g.window as unknown as { updateView: ReturnType<typeof vi.fn> }).updateView).toHaveBeenCalled();
+    expect(updateView).toHaveBeenCalled();
   });
 
   it('a compare click keeps the list open', () => {
     S.primaryShotId = 1;
-    click(2, { ctrlKey: true });
+    click(2, { ctrlKey: true, metaKey: false });
     expect(sidebar().classList.contains('desktop-collapsed')).toBe(false);
     expect(S.compareShotId).toBe(2);
   });
