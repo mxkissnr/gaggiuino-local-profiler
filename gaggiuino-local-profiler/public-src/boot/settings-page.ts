@@ -69,9 +69,9 @@ export function filterSettingsItems(items: readonly SettingsSearchItem[], query:
 
 function _row(g: SettingsGroup): Html {
   // The data-i18n spans hold text only, so a language switch relabels them.
-  const dot = g.dot
+  const dot: Html = g.dot
     ? html`<span class="settings-roast-dot" id="settingsWhatsNewDot" role="img" aria-label="${tHtml('settings_whats_new_unread')}" data-i18n-aria-label="settings_whats_new_unread" hidden></span>`
-    : '';
+    : esc('');
   return html`<button type="button" class="settings-row" data-settings-open="${esc(g.id)}" style="--settings-tint:${esc(g.tint)}">
                     <span class="settings-row-icon" aria-hidden="true">${g.icon}</span>
                     <span class="settings-row-text"><span class="settings-row-title" data-i18n="${esc(g.titleKey)}">${tHtml(g.titleKey)}</span><span class="settings-row-sub" data-i18n="${esc(g.subKey)}">${tHtml(g.subKey)}</span></span>

@@ -29,7 +29,6 @@ const { S } = await import('../public-src/state/index.js');
 const {
   renderTopbarMachineIcon, syncTopbarMachineIconFallback, settingsVerdictTitle,
 } = await import('../public-src/components/topbar-machine-icon.js');
-const { openSettingsPage } = await import('../public-src/boot/settings-page.js');
 const popups = await import('../public-src/boot/popups.js');
 const { READ_WHATS_NEW_PREF, SEEN_WHATS_NEW_PREF } =
   await import('../public-src/ui-prefs.js');
