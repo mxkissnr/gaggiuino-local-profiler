@@ -398,7 +398,7 @@ describe('desktop pressure curves (#1465)', () => {
     const out = _dialinCurvesHtml(shots3);
 
     expect(out).not.toBeNull();
-    const markup = String(out);
+    const markup = out ?? '';
     expect(markup).toContain('dialin-curves-svg');
     const lines = markup.match(/<polyline[^>]*>/g) ?? [];
     expect(lines).toHaveLength(2);
