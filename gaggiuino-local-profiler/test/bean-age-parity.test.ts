@@ -11,8 +11,6 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-type Annotation = Parameters<(typeof import('../public-src/views/shots/utils.js'))['shotBeanAge']>[0];
-
 interface ParityCase {
     name: string;
     bean: Record<string, unknown>;
@@ -73,8 +71,8 @@ function shotSec(c: ParityCase): number {
 
 function ageFor(c: ParityCase): number | null {
     const bean = withLocalStamps(c.bean) as Record<string, unknown>;
-    S.coffeeLibrary = { beans: [bean], grinders: [] } as unknown as typeof S.coffeeLibrary;
-    return shotBeanAge(c.annotation as unknown as Annotation, shotSec(c), { relativeToNow: false })?.days ?? null;
+    S.coffeeLibrary = { beans: [bean], grinders: [] };
+    return shotBeanAge(c.annotation, shotSec(c), { relativeToNow: false })?.days ?? null;
 }
 
 describe('Go/TS bean age parity (#2025)', () => {

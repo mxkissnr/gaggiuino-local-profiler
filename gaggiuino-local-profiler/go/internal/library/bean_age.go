@@ -125,7 +125,9 @@ func frozenPortionAgeDays(roastDate string, portion Entity, atMs int64) (int, bo
 // latest openedAt at or before the shot, a missing openedAt counting as 0, the
 // first bag winning on ties), falling back to the bean's roast date.
 func BeanAgeAtShot(bean Entity, shotSec, frozenPortionID int64) (int, bool) {
-	if bean == nil || shotSec <= 0 {
+	// The bound keeps the millisecond conversion below in range for a corrupt
+	// stored timestamp; no real shot comes anywhere near it.
+	if bean == nil || shotSec <= 0 || shotSec > math.MaxInt64/1000 {
 		return 0, false
 	}
 	shotMs := shotSec * 1000
@@ -211,7 +213,7 @@ func msOf(e Entity, key string) (int64, bool) {
 	default:
 		return 0, false
 	}
-	if math.IsNaN(v) || v >= math.MaxInt64 || v <= math.MinInt64 {
+	if math.IsNaN(v) || v >= float64(math.MaxInt64) || v <= float64(math.MinInt64) {
 		return 0, false
 	}
 	return int64(v), true
