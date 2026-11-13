@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import postcss, { type Rule } from 'postcss';
+import postcss from 'postcss';
 import de from '../public-src/i18n/de.js';
 import en from '../public-src/i18n/en.js';
 import es from '../public-src/i18n/es.js';
@@ -16,29 +16,31 @@ import itLang from '../public-src/i18n/it.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CSS_PATH = join(here, '..', 'public-src', 'style.css');
-const root = postcss.parse(readFileSync(CSS_PATH, 'utf-8'), { from: CSS_PATH });
 
 const norm = (s: string): string => s.trim().replace(/\s+/g, ' ');
 
-function rules(selector: string): Rule[] {
+type FlatRule = { selectors: string[]; parentType: string; decls: { prop: string; value: string }[] };
+
+const RULES: FlatRule[] = [];
+postcss.parse(readFileSync(CSS_PATH, 'utf-8'), { from: CSS_PATH }).walkRules((rule) => {
+  const decls: FlatRule['decls'] = [];
+  rule.walkDecls((d) => { decls.push({ prop: d.prop, value: d.value.trim() }); });
+  RULES.push({ selectors: rule.selectors.map(norm), parentType: rule.parent?.type ?? '', decls });
+});
+
+function rules(selector: string): FlatRule[] {
   const want = norm(selector);
-  const found: Rule[] = [];
-  root.walkRules((rule) => {
-    if (rule.selectors.some((sel) => norm(sel) === want)) found.push(rule);
-  });
-  return found;
+  return RULES.filter((rule) => rule.selectors.includes(want));
 }
 
 function decl(selector: string, prop: string): string | undefined {
   let value: string | undefined;
   for (const rule of rules(selector)) {
-    rule.walkDecls(prop, (d) => { value = d.value.trim(); });
+    for (const d of rule.decls) {
+      if (d.prop === prop) value = d.value;
+    }
   }
   return value;
-}
-
-function declares(selector: string, prop: string): boolean {
-  return rules(selector).some((rule) => rule.some((d) => d.type === 'decl' && d.prop === prop));
 }
 
 describe('settings polish (#2052)', () => {
@@ -48,15 +50,16 @@ describe('settings polish (#2052)', () => {
     expect(decl('#settingsMachineIcon', 'overflow')).toBe('hidden');
     expect(decl('#settingsMachineIcon .m-svg', 'height')).toBe('100%');
     expect(decl('#settingsMachineIcon .m-svg', 'width')).toBe('auto');
-    expect(declares('.settings-verdict-icon', 'width')).toBe(false);
+    const icon = rules('.settings-verdict-icon');
+    expect(icon.length).toBeGreaterThan(0);
+    expect(icon.some((rule) => rule.decls.some((d) => d.prop === 'width'))).toBe(false);
   });
 
   it('uses the compact verdict title at every width', () => {
     const found = rules('.settings-verdict .analytics-verdict-title');
-    const atRoot = found.filter((rule) => rule.parent?.type === 'root');
-    expect(atRoot.length).toBeGreaterThan(0);
+    expect(found.filter((rule) => rule.parentType === 'root').length).toBeGreaterThan(0);
     expect(decl('.settings-verdict .analytics-verdict-title', 'font-size')).toBe('var(--fs-4)');
-    expect(found.filter((rule) => rule.parent?.type !== 'root')).toHaveLength(0);
+    expect(found.filter((rule) => rule.parentType !== 'root')).toHaveLength(0);
   });
 
   it('keeps row cards free of the general card padding', () => {
@@ -75,13 +78,10 @@ describe('settings polish (#2052)', () => {
   });
 
   it('shows the locked navigation entry as a switch, in a plain row', () => {
-    let checkboxSelector = '';
-    root.walkRules((rule) => {
-      for (const sel of rule.selectors) {
-        if (norm(sel).includes('.bottom-nav-config-check input')) checkboxSelector = sel;
-      }
-    });
-    expect(checkboxSelector).toBe('');
+    const checkboxes = RULES.filter((rule) =>
+      rule.selectors.some((sel) => sel.includes('.bottom-nav-config-check input')),
+    );
+    expect(checkboxes).toHaveLength(0);
     expect(decl('.bottom-nav-config-row', 'background')).toBeUndefined();
     expect(decl('.bottom-nav-config-row + .bottom-nav-config-row', 'border-top')).toContain(
       'var(--gray-800)',
