@@ -1,1 +1,0 @@
-- **The sync time, the power toggle and the Sync button now sit in the top bar next to the machine name on every page.** Part of #2056
