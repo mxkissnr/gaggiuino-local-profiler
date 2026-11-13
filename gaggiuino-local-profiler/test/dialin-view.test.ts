@@ -19,6 +19,7 @@ let _dialinShots: DialinView['_dialinShots'];
 let _dialinVerdictState: DialinView['_dialinVerdictState'];
 let _dialinVerdictHtml: DialinView['_dialinVerdictHtml'];
 let _dialinRowHtml: DialinView['_dialinRowHtml'];
+let _dialinCurvesHtml: DialinView['_dialinCurvesHtml'];
 let renderDialin: DialinView['renderDialin'];
 let setDialinBean: DialinView['setDialinBean'];
 let openDialinShot: DialinView['openDialinShot'];
@@ -47,7 +48,7 @@ beforeAll(async () => {
   });
   g.window = globalThis;
   ({ _dialinBeanOptions, _dialinBeanKey, _dialinShots, _dialinVerdictState, _dialinVerdictHtml,
-     _dialinRowHtml, renderDialin, setDialinBean, openDialinShot, DIALIN_ALL_BEANS } =
+     _dialinRowHtml, _dialinCurvesHtml, renderDialin, setDialinBean, openDialinShot, DIALIN_ALL_BEANS } =
     await import('../public-src/views/dialin.js'));
   ({ S } = await import('../public-src/state/index.js'));
   en = (await import('../public-src/i18n/en.js')).default;
@@ -380,5 +381,75 @@ describe('openDialinShot (#1465)', () => {
     installSheetDom(host);
     openDialinShot(999, null);
     expect(host.innerHTML).toBe('untouched');
+  });
+});
+
+describe('desktop pressure curves (#1465)', () => {
+  const shots3 = [shot(3), shot(2), shot(1)];
+
+  // installDom() below points window back at globalThis, so any stub set on a
+  // window the previous describe left behind would be dropped with it.
+  beforeEach(() => {
+    g.window = globalThis;
+  });
+
+  it('draws one polyline per shot with enough pressure points, newest on top', () => {
+    const pressure: Record<number, { x: number; y: number }[]> = {
+      3: [{ x: 0, y: 1 }, { x: 1, y: 9 }, { x: 2, y: 9 }, { x: 3, y: 8 }],
+      2: [{ x: 0.5, y: 2 }, { x: 1.5, y: 7 }, { x: 2.5, y: 6 }],
+      1: [{ x: 1, y: 5 }, { x: 2, y: 5 }],
+    };
+    (g.window as Record<string, unknown>).getShotDataById = (id: number) => ({ pressure: pressure[id] ?? [] });
+
+    const out = _dialinCurvesHtml(shots3);
+
+    expect(out).not.toBeNull();
+    const markup = out ?? '';
+    expect(markup).toContain('dialin-curves-svg');
+    const lines = markup.match(/<polyline[^>]*>/g) ?? [];
+    expect(lines).toHaveLength(2);
+
+    const newest = lines[lines.length - 1] ?? '';
+    expect(newest).toContain('dialin-curve-newest');
+    expect(newest).toContain('stroke-opacity="1"');
+    // x 0..3 s, y 0..9 bar, 4 units padding — the same mapping as _miniShotChart().
+    expect(newest).toContain('points="4.0,103.6 101.3,4.0 198.7,4.0 296.0,16.4"');
+
+    const older = lines[0] ?? '';
+    expect(older).not.toContain('dialin-curve-newest');
+    const opacity = parseFloat(/stroke-opacity="([^"]+)"/.exec(older)?.[1] ?? '1');
+    expect(opacity).toBeLessThan(1);
+  });
+
+  it('gives null when no shot has pressure data', () => {
+    (g.window as Record<string, unknown>).getShotDataById = () => null;
+    expect(_dialinCurvesHtml(shots3)).toBeNull();
+  });
+
+  it('shows the curves section with the chart, and hides it without shots', async () => {
+    S.coffeeLibrary = { beans } as unknown as typeof S.coffeeLibrary;
+    S.shots = [shot(3, { annotation: { beanId: 1, coffee: 'Bean A' } })];
+    const ids: Record<string, FakeElement> = {
+      dialinCount: { value: '5', innerHTML: '' },
+      dialinGrid: { innerHTML: '' },
+      dialinVerdict: { innerHTML: '', hidden: true },
+      dialinBeanSelect: { innerHTML: '', value: '' },
+      dialinCurves: { innerHTML: '', hidden: true },
+      dialinCurvesChart: { innerHTML: '' },
+    };
+    installDom(ids);
+    (g.window as Record<string, unknown>).getShotDataById = () => ({ pressure: [{ x: 0, y: 1 }, { x: 1, y: 9 }, { x: 2, y: 9 }] });
+    (g.window as Record<string, unknown>).calcShotScore = () => 90;
+    (g.window as Record<string, unknown>).ensureCurves = async () => {};
+
+    await renderDialin();
+
+    expect(ids.dialinCurves!.hidden).toBe(false);
+    expect(ids.dialinCurvesChart!.innerHTML).toContain('dialin-curves-svg');
+
+    S.shots = [];
+    ids.dialinCurves!.hidden = false;
+    await renderDialin();
+    expect(ids.dialinCurves!.hidden).toBe(true);
   });
 });
