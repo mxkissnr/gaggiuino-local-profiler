@@ -32,6 +32,7 @@ let itLang: Record<string, unknown>;
 let nl: Record<string, unknown>;
 let NAV_ITEMS: BottomNavModule['NAV_ITEMS'];
 let _seedBeans: SharedModule['_beans'];
+let _recentShots: SharedModule['_recentShots'];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_DIR = join(__dirname, '..');
@@ -57,7 +58,7 @@ beforeAll(async () => {
   itLang = (await import('../public-src/i18n/it.js')).default;
   nl = (await import('../public-src/i18n/nl.js')).default;
   ({ NAV_ITEMS } = await import('../public-src/components/bottom-nav.js'));
-  ({ _beans: _seedBeans } = await import('../public-src/views/analytics/shared.js'));
+  ({ _beans: _seedBeans, _recentShots } = await import('../public-src/views/analytics/shared.js'));
 });
 
 beforeEach(() => {
@@ -182,6 +183,12 @@ describe('bean grouping (#1465)', () => {
   it('seeds the library from the shared module for the render test', () => {
     S.coffeeLibrary = { beans } as unknown as typeof S.coffeeLibrary;
     expect(_seedBeans().map(b => b.name)).toEqual(['Bean A', 'Bean B']);
+  });
+
+  it('reads the active shots newest first without reordering the shared array', () => {
+    S.shots = [...shots].reverse();
+    expect(_recentShots().map(s => s.id)).toEqual([3, 2, 1, 0]);
+    expect(S.shots.map(s => s.id)).toEqual([0, 1, 2, 3]);
   });
 });
 

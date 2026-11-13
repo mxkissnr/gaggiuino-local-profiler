@@ -43,6 +43,9 @@ export interface MachineRow extends MachineRecord {
 // rows through this alias instead of through S.shots directly.
 export function _shots(): ShotRow[] { return S.shots; }
 export function _allShots(): ShotRow[] { return S.allShots; }
+// The active shots newest first — S.shots already excludes the trash (#2046),
+// and the copy keeps callers from reordering the shared state array.
+export function _recentShots(): ShotRow[] { return [..._shots()].sort((a, b) => b.timestamp - a.timestamp); }
 export function _machines(): MachineRow[] { return S.machines; }
 
 // ── Page filter: period + search (#1467) ──────────────────────────────────
