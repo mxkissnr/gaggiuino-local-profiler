@@ -20,6 +20,7 @@ import { t } from '../i18n.js';
 import { esc, html, joinHtml } from '../utils.js';
 import { machineIconAnimatedSvg, setMachineIconMode, resolveMachineIconState,
          MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
+import type { MachineIconMode } from '../machine-icon.js';
 import { renderCoffeeHistory } from './coffee-history.js';
 
 function host(): HTMLElement | null {
@@ -108,7 +109,7 @@ export function handleTopbarPreheatUpdateEvent(preheat: unknown): void {
 }
 
 // Kept so the verdict can derive its sentence from the same mode the icon shows.
-let _lastMode = 'off';
+let _lastMode: MachineIconMode = 'off';
 
 function _applyState(msg: unknown): void {
   const { mode, heatFraction } = resolveMachineIconState(msg, _lastPreheat);
