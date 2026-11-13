@@ -18,6 +18,7 @@ import { machineIconSvg, machineIconMiniSvg } from '../machine-icon.js';
 import { renderTopbarMachineIcon } from './topbar-machine-icon.js';
 import { confirmDialog } from './confirm-dialog.js';
 import { confirmUpdateWithoutBackup, machineBackupsButtonHtml, openMachineBackups } from './machine-backups.js';
+import { openDetailSheet, requestCloseDetailSheet } from './detail-sheet.js';
 import { esc as escapeHtml, html, joinHtml, safeHttpUrl } from '../utils.js';
 import type { Html } from '../utils.js';
 import type { MachineRecord } from '../state/index.js';
@@ -60,6 +61,10 @@ export function presetLabelKey(key: string): string {
 // module state rather than re-read from the DOM since it isn't a plain
 // input value (preset key vs. {a,b} custom colours). Reset in openMachineForm().
 let _selectedTheme: ThemeSelection | null = null;
+
+// #2038: whether the machine form is currently inside the shared detail sheet
+// rather than in its own place in the Machines card.
+let _formInSheet = false;
 
 // #1044: the currently-editing gaggiuino machine's full 'system' settings
 // category, as last fetched by loadReleaseChannel() -- kept so
@@ -401,24 +406,17 @@ export function renderMachinesList(): void {
     const isGaggiuino = m.type === 'gaggiuino';
     const row = document.createElement('div');
     row.className = 'machine-row';
+    row.dataset.machineId = String(m.id);
     row.innerHTML = html`
-      <span class="machine-row-icon">${machineIconMiniSvg(m.theme, m.type)}</span>
-      <span class="machine-row-name">${escapeHtml(m.name)}</span>
-      <span class="machine-row-type">${m.type === 'gaggimate' ? html`GaggiMate` : html`Gaggiuino`}</span>
-      <span class="machine-row-shot-count">${tHtml('settings_machine_shot_count', shotCount)}</span>
-      ${m.isDefault ? html`<span class="machine-row-badge">${tHtml('settings_machine_default')}</span>` : html``}
-      ${isGaggiuino ? html`<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : html``}
-      <span class="machine-row-actions">
-        <button type="button" class="machine-edit-btn">${tHtml('settings_machine_edit')}</button>
-        ${isGaggiuino ? machineBackupsButtonHtml() : html``}
-        ${!m.isDefault ? html`<button type="button" class="machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
-        <button type="button" class="machine-delete-btn">${tHtml('settings_machine_delete')}</button>
-      </span>`;
-    (row.querySelector('.machine-edit-btn') as HTMLElement).addEventListener('click', () => openMachineForm(m));
-    const backupsBtn = row.querySelector<HTMLElement>('.machine-backups-btn');
-    if (backupsBtn) backupsBtn.addEventListener('click', () => void openMachineBackups(m.id, backupsBtn));
-    row.querySelector('.machine-set-default-btn')?.addEventListener('click', () => void setDefaultMachine(m.id));
-    row.querySelector('.machine-delete-btn')?.addEventListener('click', () => void deleteMachine(m.id, m.isDefault));
+      <button type="button" class="machine-row-main">
+        <span class="machine-row-icon">${machineIconMiniSvg(m.theme, m.type)}</span>
+        <span class="machine-row-text">
+          <span class="machine-row-name">${escapeHtml(m.name)}</span>
+          <span class="machine-row-sub">${m.type === 'gaggimate' ? html`GaggiMate` : html`Gaggiuino`}${m.isDefault ? html` · ${tHtml('settings_machine_default')}` : html``} · ${tHtml('settings_machine_shot_count', shotCount)}</span>
+        </span>
+      </button>
+      ${isGaggiuino ? html`<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : html``}`;
+    row.querySelector('.machine-row-main')?.addEventListener('click', () => openMachineForm(m));
     if (isGaggiuino) {
       (row.querySelector('.machine-row-firmware-badge') as HTMLElement).addEventListener('click', () => toggleMachineFirmwarePanel(row));
       void loadFirmwareStatus(m.id, row);
@@ -961,9 +959,58 @@ function renderFirmwareRestarting(row: HTMLElement): void {
   if (hint) hint.style.display = '';
 }
 
+// #2038: the machine dialog's ⋯ menu. A saved machine's only per-machine
+// actions that are not part of editing live here, in their old row order;
+// "Edit" is the row tap that opened the dialog, so it has no entry.
+export function machineDialogActionsHtml(m: MachineView): Html {
+  return html`<details class="lib-sheet-more machine-dialog-more">
+  <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
+  <div class="lib-sheet-menu-list">
+    ${m.type === 'gaggiuino' ? machineBackupsButtonHtml() : html``}
+    ${!m.isDefault ? html`<button type="button" class="lib-sheet-menu-btn machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
+    <button type="button" class="lib-sheet-menu-btn del machine-delete-btn">${tHtml('settings_machine_delete')}</button>
+  </div>
+</details>`;
+}
+
+// The Backups sheet's desktop popover anchor: the machine's row, looked up at
+// click time because the list may have been re-rendered while the dialog was
+// open (e.g. by Test). The id is numeric, so the selector cannot be injected.
+function _machineRow(id: number): HTMLElement | null {
+  return document.getElementById('machinesList')?.querySelector<HTMLElement>(`.machine-row[data-machine-id="${id}"]`) ?? null;
+}
+
+export function wireMachineDialogActions(root: HTMLElement, m: MachineView): void {
+  const foldMenu = (): void => {
+    const menu = root.querySelector<HTMLDetailsElement>('.machine-dialog-more');
+    if (menu) menu.open = false;
+  };
+  const backups = root.querySelector<HTMLElement>('.machine-backups-btn');
+  backups?.addEventListener('click', () => {
+    foldMenu();
+    void openMachineBackups(m.id, _machineRow(m.id));
+  });
+  const makeDefault = root.querySelector<HTMLButtonElement>('.machine-set-default-btn');
+  makeDefault?.addEventListener('click', () => {
+    foldMenu();
+    // The list re-renders with the new subtitle, and the dialog has no further
+    // use for the now-pointless action.
+    makeDefault.hidden = true;
+    void setDefaultMachine(m.id);
+  });
+  root.querySelector<HTMLElement>('.machine-delete-btn')?.addEventListener('click', () => {
+    foldMenu();
+    void deleteMachine(m.id, m.isDefault);
+  });
+}
+
 // #1547: the machine form's fields are static in index.html; this module only
 // reads/writes them, so it renders no field and has no accessible name to add.
-export function openMachineForm(machine?: MachineView | null): void {
+//
+// #2038: unless `inline`, the form opens in the shared detail sheet — a centred
+// dialog on desktop, a bottom sheet on phones — with its ⋯ menu for a saved
+// machine. The setup wizard passes `inline` to keep the form in its own slot.
+export function openMachineForm(machine?: MachineView | null, opts: { inline?: boolean } = {}): void {
   const card = document.getElementById('machineFormCard');
   if (!card) return;
   (document.getElementById('machineFormId') as HTMLInputElement).value = String(machine?.id || '');
@@ -981,12 +1028,38 @@ export function openMachineForm(machine?: MachineView | null): void {
   if (machine?.id && machine.type === 'gaggiuino') {
     void loadReleaseChannel(machine.id);
   }
+  if (!opts.inline) {
+    openDetailSheet({
+      title: machine?.name || t('settings_machines_add'),
+      dialog: true,
+      body: html``,
+      content: card,
+      ...(machine?.id ? { actions: machineDialogActionsHtml(machine) } : {}),
+      onClose: () => {
+        _formInSheet = false;
+        card.style.display = 'none';
+      },
+    });
+    _formInSheet = true;
+    if (machine?.id) {
+      const host = document.getElementById('detailSheet');
+      if (host && typeof host.querySelector === 'function') wireMachineDialogActions(host, machine);
+    }
+  }
+  // Must stay last: without a sheet host openDetailSheet() runs onClose at
+  // once, and the form still has to end up shown (as the tests expect).
   card.style.display = '';
 }
 
+// #2038: the form lives in the detail sheet while it is open, so closing the
+// form has to close the sheet too.
 export function closeMachineForm(): void {
   const card = document.getElementById('machineFormCard');
   if (card) card.style.display = 'none';
+  if (_formInSheet) {
+    _formInSheet = false;
+    requestCloseDetailSheet();
+  }
 }
 
 // The generated request schema leaves theme.preset/a/b plain-optional, while
@@ -1107,7 +1180,7 @@ export async function deleteMachine(id: number, isDefault?: boolean): Promise<vo
   const confirmKey = isDefault ? 'settings_machine_delete_default_confirm' : 'settings_machine_delete_confirm';
   if (!await confirmDialog(t(confirmKey), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await machinesApi.deleteMachine(id);
-  if (r.ok) { void loadMachines(); return; }
+  if (r.ok) { closeMachineForm(); void loadMachines(); return; }
   const body = await r.json().catch(() => ({})) as { error?: string };
   if (window.showToast) window.showToast(body.error || t('settings_machine_delete_failed'));
 }
