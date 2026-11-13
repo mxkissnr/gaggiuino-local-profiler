@@ -12,7 +12,7 @@ import de from '../public-src/i18n/de.js';
 import en from '../public-src/i18n/en.js';
 import es from '../public-src/i18n/es.js';
 import fr from '../public-src/i18n/fr.js';
-import it from '../public-src/i18n/it.js';
+import itLang from '../public-src/i18n/it.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CSS_PATH = join(here, '..', 'public-src', 'style.css');
@@ -92,7 +92,7 @@ describe('settings polish (#2052)', () => {
     expect(de.backup_title).not.toBe(en.backup_title);
     expect(es.backup_title).not.toBe(en.backup_title);
     expect(fr.backup_title).not.toBe(en.backup_title);
-    expect(it.backup_title).not.toBe(en.backup_title);
+    expect(itLang.backup_title).not.toBe(en.backup_title);
     expect(de.settings_api_token).toBe('API-Token');
   });
 });
