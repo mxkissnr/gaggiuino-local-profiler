@@ -145,7 +145,7 @@ export function syncTopbarMachineIconFallback(reachable: unknown): void {
  * between connected and off/not reachable.
  */
 export function settingsVerdictTitle(
-  machine: { name?: string | null; host?: string | null } | undefined,
+  machine: { name?: unknown; host?: unknown } | undefined,
   mode: string,
 ): string {
   const name = typeof machine?.name === 'string' ? machine.name : '';
