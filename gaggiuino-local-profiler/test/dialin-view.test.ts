@@ -393,7 +393,7 @@ describe('desktop pressure curves (#1465)', () => {
       2: [{ x: 0.5, y: 2 }, { x: 1.5, y: 7 }, { x: 2.5, y: 6 }],
       1: [{ x: 1, y: 5 }, { x: 2, y: 5 }],
     };
-    (g.window as Record<string, unknown>).getShotDataById = (id: number) => ({ pressure: pressure[id] });
+    (g.window as Record<string, unknown>).getShotDataById = (id: number) => ({ pressure: pressure[id] ?? [] });
 
     const out = _dialinCurvesHtml(shots3);
 

@@ -277,7 +277,7 @@ export async function renderDialin(): Promise<void> {
 
   const curves = _dialinCurvesHtml(shots);
   const curvesChart = document.getElementById('dialinCurvesChart');
-  if (curvesChart) curvesChart.innerHTML = curves ?? '';
+  if (curvesChart) curvesChart.innerHTML = curves ?? html``;
   const curvesSection = document.getElementById('dialinCurves');
   if (curvesSection) curvesSection.hidden = curves === null;
 }
