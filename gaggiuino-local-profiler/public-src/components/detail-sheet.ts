@@ -4,6 +4,8 @@
 // "Did you know?" fact cards. On phones it is a bottom sheet; from 900px up,
 // when an anchor is given, it becomes a popover floating next to that anchor.
 // #1923: an optional `actions` slot renders the sheet bar's icon buttons.
+// #2038: `dialog` centres it on desktop without an anchor, `content` moves a
+// live element into the body while open and puts it back on close.
 
 import { tHtml } from '../i18n.js';
 import { esc, html } from '../utils.js';
@@ -27,6 +29,12 @@ export interface DetailSheetOptions {
   // Main actions for the sheet bar, right of the title (44px icons, #1923).
   actions?: Html;
   anchor?: HTMLElement | DetailAnchorPoint | null;
+  // Centred dialog on desktop when there is no anchor; phones keep the bottom
+  // sheet (#2038).
+  dialog?: boolean;
+  // A live element moved into the body while the sheet is open and returned to
+  // its place on close (#2038).
+  content?: HTMLElement;
   // Runs once when this sheet is gone: closed, or replaced by a later open.
   onClose?: () => void;
 }
@@ -35,6 +43,15 @@ let _dialogKeyboard: DialogKeyboardHandle | null = null;
 // #1912: watches the open popover's size, see openDetailSheet.
 let _popResize: ResizeObserver | null = null;
 let _onClose: (() => void) | null = null;
+// #2038: where an options.content node came from, so it can go back there.
+let _content: { node: HTMLElement; parent: Node; next: Node | null } | null = null;
+
+function _returnContent(): void {
+  const held = _content;
+  if (!held) return;
+  _content = null;
+  held.parent.insertBefore(held.node, held.next);
+}
 
 function _fireOnClose(): void {
   const fn = _onClose;
@@ -97,15 +114,17 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
   settleSheetOut();
   const host = _host();
   if (!host) { opts.onClose?.(); return; }
+  _returnContent();
   _fireOnClose();
   _onClose = opts.onClose ?? null;
 
   const anchor = opts.anchor ?? null;
   const desktop = _isDesktop() && anchor !== null;
+  const centred = !desktop && opts.dialog === true && _isDesktop();
 
   host.innerHTML = html`
     <div class="lib-sheet-backdrop${desktop ? html` detail-backdrop` : esc('')}"></div>
-    <section class="lib-sheet${desktop ? html` detail-pop` : esc('')}" role="dialog" aria-modal="true" aria-labelledby="detailSheetTitle">
+    <section class="lib-sheet${desktop ? html` detail-pop` : esc('')}${centred ? html` detail-dialog` : esc('')}" role="dialog" aria-modal="true" aria-labelledby="detailSheetTitle">
       <div class="lib-sheet-grab" aria-hidden="true"></div>
       <div class="lib-sheet-bar">
         <button type="button" class="lib-sheet-close" aria-label="${tHtml('lib_sheet_close')}">${CLOSE_ICON_SVG}</button>
@@ -119,6 +138,13 @@ export function openDetailSheet(opts: DetailSheetOptions): void {
 
   const sheet = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet') : null;
   const backdrop = typeof host.querySelector === 'function' ? host.querySelector<HTMLElement>('.lib-sheet-backdrop') : null;
+  if (opts.content && typeof host.querySelector === 'function' && opts.content.parentNode) {
+    const body = host.querySelector<HTMLElement>('.detail-sheet-body');
+    if (body && typeof body.appendChild === 'function') {
+      _content = { node: opts.content, parent: opts.content.parentNode, next: opts.content.nextSibling };
+      body.appendChild(opts.content);
+    }
+  }
   // #1488: one sheet-level drag covers the grab pill, the head and the content.
   if (sheet && typeof sheet.addEventListener === 'function') attachSheetSwipe(sheet, backdrop, requestCloseDetailSheet);
   attachSheetScrollState(sheet);
@@ -160,6 +186,7 @@ export function requestCloseDetailSheet(): void {
 }
 
 export function closeDetailSheet(): void {
+  _returnContent();
   _popResize?.disconnect();
   _popResize = null;
   _dialogKeyboard?.release();
