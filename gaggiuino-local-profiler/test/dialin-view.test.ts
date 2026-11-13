@@ -387,6 +387,12 @@ describe('openDialinShot (#1465)', () => {
 describe('desktop pressure curves (#1465)', () => {
   const shots3 = [shot(3), shot(2), shot(1)];
 
+  // installDom() below points window back at globalThis, so any stub set on a
+  // window the previous describe left behind would be dropped with it.
+  beforeEach(() => {
+    g.window = globalThis;
+  });
+
   it('draws one polyline per shot with enough pressure points, newest on top', () => {
     const pressure: Record<number, { x: number; y: number }[]> = {
       3: [{ x: 0, y: 1 }, { x: 1, y: 9 }, { x: 2, y: 9 }, { x: 3, y: 8 }],
@@ -421,9 +427,6 @@ describe('desktop pressure curves (#1465)', () => {
   });
 
   it('shows the curves section with the chart, and hides it without shots', async () => {
-    (g.window as Record<string, unknown>).getShotDataById = () => ({ pressure: [{ x: 0, y: 1 }, { x: 1, y: 9 }, { x: 2, y: 9 }] });
-    (g.window as Record<string, unknown>).calcShotScore = () => 90;
-    (g.window as Record<string, unknown>).ensureCurves = async () => {};
     S.coffeeLibrary = { beans } as unknown as typeof S.coffeeLibrary;
     S.shots = [shot(3, { annotation: { beanId: 1, coffee: 'Bean A' } })];
     const ids: Record<string, FakeElement> = {
@@ -435,6 +438,9 @@ describe('desktop pressure curves (#1465)', () => {
       dialinCurvesChart: { innerHTML: '' },
     };
     installDom(ids);
+    (g.window as Record<string, unknown>).getShotDataById = () => ({ pressure: [{ x: 0, y: 1 }, { x: 1, y: 9 }, { x: 2, y: 9 }] });
+    (g.window as Record<string, unknown>).calcShotScore = () => 90;
+    (g.window as Record<string, unknown>).ensureCurves = async () => {};
 
     await renderDialin();
 
