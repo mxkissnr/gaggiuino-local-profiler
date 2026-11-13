@@ -15,7 +15,7 @@ import { openDetailSheet } from '../components/detail-sheet.js';
 import { COFFEE_ICON_SVG } from '../icons.js';
 import { _miniShotChart, _parseGrindNum } from './shots/grind.js';
 import type { GrindShot } from './shots/grind.js';
-import { _beanGroup, _beans, _recentShots } from './analytics/shared.js';
+import { _beanGroup, _beans, _shots } from './analytics/shared.js';
 import type { ShotAnnotation, ShotRow, SharedBean } from './analytics/shared.js';
 
 // The bean choice lives in a module variable for the session only: no API and
@@ -179,7 +179,11 @@ export async function renderDialin(): Promise<void> {
   if (!grid) return;
 
   const beans = _beans();
-  const all = _recentShots();
+  // Trashed shots live in S.trashedShots, so this filter is a no-op today —
+  // kept because the plan spells it out and it costs one pass.
+  const all = _shots()
+    .filter(s => !s._trashed)
+    .sort((a, b) => b.timestamp - a.timestamp);
 
   const options = _dialinBeanOptions(all, beans);
   const key = _dialinBeanKey(_chosenBean, options, all[0], beans);
