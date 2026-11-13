@@ -6,7 +6,7 @@ import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { openBackupExportModal, openBackupRestoreModal } from '../components/backup-modal.js';
 import { exportDevDb, importDevDb } from '../components/status.js';
-import { openMachineForm, closeMachineForm, saveMachineForm, testMachineForm, onThemeCustomColorAChange,
+import { openMachineForm, saveMachineForm, testMachineForm, onThemeCustomColorAChange,
          onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange } from '../components/machines-settings.js';
 import { openSetupWizard, closeSetupWizard } from '../views/setup-wizard.js';
 import { setMqttTransport, saveMqttSettings, applyMqttToMachine } from '../components/mqtt-settings.js';
@@ -70,7 +70,6 @@ export function wireSettings(): void {
   });
   document.getElementById('apiTokenCopyBtn')!.addEventListener('click', copyApiToken);
   document.getElementById('addMachineBtn')?.addEventListener('click', () => openMachineForm(null));
-  document.getElementById('machineFormCancelBtn')?.addEventListener('click', closeMachineForm);
   document.getElementById('machineFormSaveBtn')?.addEventListener('click', () => { void saveMachineForm(); });
   document.getElementById('machineFormTestBtn')?.addEventListener('click', () => { void testMachineForm(); });
   document.getElementById('restartSetupWizardBtn')?.addEventListener('click', () => openSetupWizard());
