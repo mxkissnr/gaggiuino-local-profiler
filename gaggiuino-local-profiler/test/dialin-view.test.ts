@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import type { ShotRow, SharedBean } from '../public-src/views/analytics/shared.js';
 
 // views/dialin.ts pulls in state/index.ts (localStorage/navigator at module load)
 // and i18n.ts — neither exists in the plain Node test environment, so stub the
@@ -31,8 +32,6 @@ let itLang: Record<string, unknown>;
 let nl: Record<string, unknown>;
 let NAV_ITEMS: BottomNavModule['NAV_ITEMS'];
 let _seedBeans: SharedModule['_beans'];
-type ShotRow = SharedModule['ShotRow'];
-type SharedBean = SharedModule['SharedBean'];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_DIR = join(__dirname, '..');
