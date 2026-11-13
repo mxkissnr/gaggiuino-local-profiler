@@ -765,16 +765,20 @@
         .settings-bar-title, .settings-subbar-title { flex:1; min-width:0; margin:0; font-size: var(--fs-4); font-weight:600; color: var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .settings-verdict { padding: var(--sp-4); margin-bottom: var(--sp-4); }
         .settings-verdict[hidden] { display:none; }
-        /* The animated icon's clip paths need the positioned host, like .topbar-machine-icon. */
-        .settings-verdict-icon { position: relative; flex: none; width: 48px; }
-        .settings-verdict-icon svg { display:block; width:100%; height:auto; }
+        /* The animated icon's clip paths need the positioned host, like .topbar-machine-icon.
+           #2052: the ID outranks .machine-icon-live's 100% sizing further down
+           this file, which otherwise stretches the icon over the whole card
+           (the topbar icon had the same bug, #839). 48 x 78 keeps the icon's
+           100:162 aspect. */
+        .settings-verdict-icon { position: relative; flex: none; }
+        #settingsMachineIcon { width: 48px; height: 78px; overflow: hidden; }
+        #settingsMachineIcon .m-svg { width: auto; height: 100%; }
         .settings-verdict .analytics-verdict-head { justify-content: flex-start; }
         .settings-verdict .analytics-verdict-text { flex: 1; }
         .settings-roast-dot { flex:none; width:8px; height:8px; border-radius:50%; background: var(--amber-deep); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber-deep) 30%, transparent); }
         .settings-roast-dot[hidden] { display:none; }
-        @media (max-width: 899px) {
-            .settings-verdict .analytics-verdict-title { font-size: var(--fs-4); }
-        }
+        /* The list column on desktop is about as narrow as a phone. */
+        .settings-verdict .analytics-verdict-title { font-size: var(--fs-4); }
         .settings-groups { display:flex; flex-direction:column; gap: var(--sp-4); }
         .settings-groups[hidden], #settingsSearchResults[hidden], .settings-search-empty[hidden] { display:none; }
         .settings-search-empty { padding: var(--sp-4); }
@@ -812,11 +816,18 @@
         .settings-row-sub { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .settings-row-value { flex:0 0 auto; font-size: var(--fs-1); color: var(--gray-400); font-variant-numeric: tabular-nums; }
         .settings-chev { flex:0 0 auto; width:8px; height:8px; border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500); transform: rotate(-45deg); }
-        .settings-row-card { padding: 0; gap: 0; }
+        /* #2052: .settings-card further down would win at equal specificity and
+           put its padding and gap back around the rows. The rows sit flush with
+           the card's text column, like the row-styled buttons in other cards. */
+        .settings-card.settings-row-card { padding: var(--sp-2) var(--sp-5); gap: 0; }
+        .settings-row-card .settings-row, .settings-row-card .machine-row-main { padding-inline: 0; }
+        .settings-row-card .machine-row { padding-right: 0; }
         /* #2038: a form card that became a row stays hidden in the view; it
            only shows while the detail sheet holds it (outside #settings-view). */
         #settings-view .settings-dialog-card { display: none; }
         .settings-row-group .settings-row { min-height: 52px; }
+        /* Sub-page rows have room for a second line; the list keeps the ellipsis. */
+        .settings-pages .settings-row-title { white-space: normal; }
         .settings-page { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
         .settings-page[hidden] { display:none; }
         .settings-page .whats-new-list { max-height:none; overflow:visible; }
@@ -843,6 +854,7 @@
            only, so the markup and every id stay untouched. */
         #settings-view .settings-card .orders-broadcast-row { flex-direction: row-reverse; justify-content: space-between; min-height: 44px; }
         #settings-view .settings-card .orders-broadcast-row > label:not(.toggle-switch) { flex: 1; }
+        #settings-view .settings-card .orders-broadcast-list:last-child { margin-bottom: 0; }
         /* The firmware update button sits in a machine row's accent banner and
            keeps its button look there. */
         #settings-view .backup-btn:not(#apiTokenCopyBtn):not(.machine-firmware-update-btn) {
@@ -867,11 +879,10 @@
         .whats-new-highlights li + li { margin-top: 2px; }
 
         /* Configurable mobile bottom nav (#443) */
-        .bottom-nav-config-list { display:flex; flex-direction:column; gap: var(--sp-2); }
-        .bottom-nav-config-row { display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3); background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-4); }
+        .bottom-nav-config-list { display:flex; flex-direction:column; gap: 0; }
+        .bottom-nav-config-row { display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3); min-height:52px; padding: var(--sp-1) 0; }
+        .bottom-nav-config-row + .bottom-nav-config-row { border-top: 1px solid var(--gray-800); }
         .bottom-nav-config-check { display:flex; align-items:center; gap: var(--sp-3); font-size: var(--fs-2); color:var(--gray-200); cursor:pointer; }
-        .bottom-nav-config-check input[type=checkbox] { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
-        .bottom-nav-config-check input[type=checkbox]:disabled { cursor:not-allowed; opacity:.6; }
         .bottom-nav-config-reorder { display:flex; gap: var(--sp-1); }
         .bottom-nav-reorder-btn { background:var(--gray-900); border:1px solid var(--gray-700); color:var(--gray-300); width:28px; height:28px; border-radius:var(--radius); cursor:pointer; font-size: var(--fs-2); line-height:1; }
         .bottom-nav-reorder-btn:hover:not(:disabled) { background:var(--gray-700); color:var(--gray-100); }
@@ -883,7 +894,7 @@
         .machines-list { display:flex; flex-direction:column; }
         .machine-row { display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-1) var(--sp-4) var(--sp-1) 0; min-height:64px; flex-wrap:wrap; }
         .machine-row + .machine-row { border-top: 1px solid var(--gray-800); }
-        .machine-row-main { flex:1; min-width:0; display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); border:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+        .machine-row-main { flex:1 1 auto; min-width:0; display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); border:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
         .machine-row-main:hover { background: var(--raised); }
         .machine-row-main:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
         .machine-row-icon { width:28px; height:auto; flex-shrink:0; }

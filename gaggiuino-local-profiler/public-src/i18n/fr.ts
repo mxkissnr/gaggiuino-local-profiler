@@ -530,7 +530,7 @@ const fr: Partial<Translations> = {
     degas_optimal:(d)=>`${d} jours depuis la torréfaction — fenêtre optimale`,
     degas_aging:(d)=>`${d} jours depuis la torréfaction — vieillissement`,
     degas_old:(d)=>`${d} jours depuis la torréfaction — trop vieux`,
-    backup_title:'Backup & Restore',
+    backup_title:'Sauvegarde et restauration',
     backup_desc:'Sauvegardez ou restaurez toute la base de données (shots, bibliothèque, entretien, commandes, machines, réglages) en ZIP. Le jeton API et les identifiants MQTT ne sont inclus que chiffrés, avec un mot de passe de votre choix.',
     backup_download:'Télécharger la sauvegarde', backup_restore:'Restaurer la sauvegarde',
     backup_invalid:'Fichier de sauvegarde invalide.',
