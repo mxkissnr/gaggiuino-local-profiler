@@ -179,16 +179,17 @@ function _mountDialogRows(): void {
   for (const row of SETTINGS_DIALOG_ROWS) {
     const card = document.getElementById(row.anchorId)?.closest<HTMLElement>('.settings-card');
     if (!card) continue;
-    card.classList.add('settings-dialog-card');
     let host = hosts.get(row.group);
     if (!host) {
       const page = _page(view, row.group);
+      // No page means no row to stand in for the card: leave it in place.
       if (!page) continue;
       host = document.createElement('div');
       host.className = 'settings-card settings-row-card settings-row-group';
       page.appendChild(host);
       hosts.set(row.group, host);
     }
+    card.classList.add('settings-dialog-card');
     host.insertAdjacentHTML('beforeend', _dialogRowHtml(row));
   }
 }
