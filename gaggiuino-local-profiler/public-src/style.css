@@ -1004,6 +1004,19 @@
         .page-fab:hover { filter: brightness(1.06); }
         .page-fab:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
         .page-fab .rail-icon { width:20px; height:20px; }
+        .dialin-curves { display:none; min-width:0; }
+        .dialin-curves-chart { background: var(--gray-900); border-radius: var(--radius-lg); padding: var(--sp-4); }
+        .dialin-curves-svg { display:block; width:100%; height:240px; }
+        .dialin-curve { fill:none; stroke: var(--gray-500); stroke-width:1.5px; stroke-linejoin:round; stroke-linecap:round; vector-effect: non-scaling-stroke; }
+        .dialin-curve-newest { stroke: var(--accent-ink); stroke-width:2.5px; }
+        /* Desktop (#1465): verdict across the top, rows left, curves right;
+           without curves the rows take the whole width. */
+        @media (min-width: 900px) {
+            .dialin-layout { display:grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); grid-template-areas: "verdict verdict" "shots curves"; column-gap: var(--sp-6); row-gap: var(--sp-5); align-items:start; }
+            .dialin-layout:has(> .dialin-curves[hidden]) { grid-template-areas: "verdict verdict" "shots shots"; }
+            .dialin-shots { grid-area: shots; min-width:0; }
+            .dialin-curves:not([hidden]) { display:block; grid-area: curves; }
+        }
 
         /* ── Shots view ── */
         #shots-view {

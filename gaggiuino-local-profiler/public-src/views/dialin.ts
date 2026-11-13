@@ -169,6 +169,34 @@ function _sharedValue(values: string[]): string {
   return first && values.every(v => v === first) ? first : '';
 }
 
+// #1465: the desktop overlay of the shown shots' pressure curves — one small
+// inline SVG, no chart instance to dispose. Shots are newest first; the newest
+// is drawn last so it lies on top and gets the accent colour from CSS.
+export function _dialinCurvesHtml(shots: ShotRow[]): Html | null {
+  const kept = shots
+    .map(s => (window.getShotDataById?.(s.id)?.pressure ?? [])
+      .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y) && p.y > 0))
+    .filter(points => points.length >= 3);
+  if (!kept.length) return null;
+
+  const W = 300, H = 120, pad = 4;
+  const allX = kept.flatMap(points => points.map(p => p.x));
+  const allY = kept.flatMap(points => points.map(p => p.y));
+  const xMax = Math.max(...allX) || 1;
+  const yMax = Math.max(...allY, 1);
+
+  const px = (x: number): number => pad + (x / xMax) * (W - pad * 2);
+  const py = (y: number): number => H - pad - (y / yMax) * (H - pad * 2);
+
+  const lines = kept.map((points, i) => {
+    const pts = points.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
+    const opacity = i === 0 ? '1' : String(Math.max(0.15, 0.55 - 0.08 * i));
+    return html`<polyline class="dialin-curve${i === 0 ? html` dialin-curve-newest` : html``}" points="${esc(pts)}" stroke-opacity="${esc(opacity)}"/>`;
+  }).reverse();
+
+  return html`<svg class="dialin-curves-svg" viewBox="0 0 ${esc(W)} ${esc(H)}" preserveAspectRatio="none" role="img" aria-label="${tHtml('chart_pressure_unit')}">${joinHtml(lines)}</svg>`;
+}
+
 export async function renderDialin(): Promise<void> {
   const select = document.getElementById('dialinCount') as HTMLSelectElement | null;
   const saved  = safeLocalStorage.getItem('glp_dialin_count');
@@ -207,6 +235,8 @@ export async function renderDialin(): Promise<void> {
     grid.innerHTML = html`<div class="dialin-empty">${tHtml(emptyKey)}</div>`;
     const emptyVerdict = document.getElementById('dialinVerdict');
     if (emptyVerdict) emptyVerdict.hidden = true;
+    const emptyCurves = document.getElementById('dialinCurves');
+    if (emptyCurves) emptyCurves.hidden = true;
     return;
   }
 
@@ -244,6 +274,12 @@ export async function renderDialin(): Promise<void> {
     ].filter(Boolean);
     return _dialinRowHtml(s, shots[i + 1], scores[i] ?? null, extra, locale);
   }));
+
+  const curves = _dialinCurvesHtml(shots);
+  const curvesChart = document.getElementById('dialinCurvesChart');
+  if (curvesChart) curvesChart.innerHTML = curves ?? '';
+  const curvesSection = document.getElementById('dialinCurves');
+  if (curvesSection) curvesSection.hidden = curves === null;
 }
 
 export function setDialinBean(key: string): void {
