@@ -54,8 +54,8 @@ export interface SettingsDialogRow {
   reload: () => void | Promise<void>;
 }
 
-// The click and value helpers below run on a phone too, where a stable
-// document is not guaranteed mid-render; a missing element means an empty value.
+// Test fakes provide getElementById only; a missing querySelector must read as
+// "no such element" rather than throw.
 function _query<T extends HTMLElement>(selector: string): T | null {
   return typeof document.querySelector === 'function' ? document.querySelector<T>(selector) : null;
 }
@@ -66,10 +66,10 @@ function _checkedTransport(): string {
 
 function _shotDefaultsValue(): string {
   const coffee = document.getElementById('sdCoffee') as HTMLSelectElement | null;
-  const bean = coffee?.selectedOptions?.[0]?.textContent?.trim() ?? '';
+  if (!coffee) return '';
+  const bean = coffee.selectedOptions?.[0]?.textContent?.trim() ?? '';
   const dose = (document.getElementById('sdDose') as HTMLInputElement | null)?.value.trim() ?? '';
-  const parts = [bean, dose ? `${dose} g` : ''].filter(Boolean);
-  return parts.join(' · ') || (document.getElementById('sdCoffee') ? t('sd_none') : '');
+  return [bean, dose ? `${dose} g` : ''].filter(Boolean).join(' · ') || t('sd_none');
 }
 
 function _freshnessValue(): string {

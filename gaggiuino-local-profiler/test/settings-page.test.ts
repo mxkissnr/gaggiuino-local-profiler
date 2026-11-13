@@ -297,7 +297,7 @@ describe('SETTINGS_DIALOG_ROWS table (slice 5)', () => {
     });
 
     it('opens the card in the detail sheet as a dialog and reloads it on close', async () => {
-        const card = { classList: { add: vi.fn() } };
+        const card = { classList: { add: vi.fn() }, style: { display: '' } };
         const appended: { className: string; innerHTML: string }[] = [];
         const page = { appendChild: (el: { className: string; innerHTML: string }): void => { appended.push(el); } };
         const pages = new Map<string, typeof page>();
