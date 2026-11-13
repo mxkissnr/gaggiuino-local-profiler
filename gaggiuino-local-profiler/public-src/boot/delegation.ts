@@ -16,6 +16,7 @@ import { markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope, deleteM
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from '../components/flavor-wheel.js';
 import { highlightSheetFlavor } from '../components/flavor-mini-wheel.js';
 import { closeDetailSheet } from '../components/detail-sheet.js';
+import { openDialinShot } from '../views/dialin.js';
 import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrinder, deleteGrinder,
          resetGrinderBurrs, deleteGrinderZeroPointEntry, toggleBeanQR, openNewBagForm, closeNewBagForm,
          saveNewBag, deleteBag, openEditBag, closeEditBag, saveEditBag, openBagStockEdit, closeBagStockEdit,
@@ -169,6 +170,8 @@ export function wireDelegation(): void {
       case 'highlight-flavor':        highlightSheetFlavor(el.dataset.flavorNode || null, el); break;
       case 'highlight-flavor-wheel':  highlightFlavorWheelNode(el.dataset.nodeId || null); break;
       case 'delete-maint-log':   void deleteMaintLogEntry(numId()); break;
+      case 'open-dialin-shot':   openDialinShot(numId(), el); break;
+      case 'dialin-goto-shot':   closeDetailSheet(); goToShot(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
       case 'start-dialin':           openDialinWizard(); break;

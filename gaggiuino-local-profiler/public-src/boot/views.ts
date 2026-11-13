@@ -6,7 +6,7 @@ import { t } from '../i18n.js';
 import { onRefShotChange, clearReferenceShot } from '../views/live.js';
 import { getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold } from '../views/analytics.js';
 import { setOrdersEnabled, toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify, toggleOrdersKiosk } from '../views/orders.js';
-import { renderDialin } from '../views/dialin.js';
+import { renderDialin, setDialinBean } from '../views/dialin.js';
 import { safeLocalStorage } from '../storage.js';
 import { bindPillSelects } from '../components/pill-select.js';
 
@@ -58,4 +58,5 @@ export function wireViews(): void {
     safeLocalStorage.setItem('glp_dialin_count', (e.target as HTMLInputElement).value);
     void renderDialin();
   });
+  document.getElementById('dialinBeanSelect')!.addEventListener('change', e => setDialinBean((e.target as HTMLSelectElement).value));
 }

@@ -40,7 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
     iconPaths: html`<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>` },
   { id: 'analytics', i18nKey: 'nav_analytics', label: 'Statistiken',
     iconPaths: html`<path d="M6 20v-5M12 20V9M18 20V4"/>` },
-  { id: 'dialin', i18nKey: 'nav_dialin', label: 'Bezugslog',
+  { id: 'dialin', i18nKey: 'nav_dialin', label: 'Dial-In',
     iconPaths: html`<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>` },
   { id: 'maintenance', i18nKey: 'nav_maintenance', label: 'Wartung',
     iconPaths: html`<path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/>` },
