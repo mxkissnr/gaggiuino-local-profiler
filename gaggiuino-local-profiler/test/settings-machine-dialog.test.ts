@@ -9,6 +9,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
+g.window ??= globalThis;
 
 const dialogs = vi.hoisted(() => ({
   confirmDialog: vi.fn<(message: string, opts?: { confirmLabel?: string }) => Promise<boolean>>(),
@@ -147,6 +148,8 @@ describe('the machine dialog (#2038)', () => {
   let saved: MachineFormArg;
 
   function fakeElement(id: string): FakeElement { return (elements[id] ??= fake()); }
+
+  afterEach(() => { closeDetailSheet(); });
 
   beforeEach(() => {
     for (const key of Object.keys(elements)) delete elements[key];

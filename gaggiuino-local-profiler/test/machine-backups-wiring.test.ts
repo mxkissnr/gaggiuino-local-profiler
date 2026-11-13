@@ -78,12 +78,12 @@ vi.mock('../public-src/components/machine-backups.js', async (importOriginal) =>
   confirmUpdateWithoutBackup: sheetMock.confirmUpdateWithoutBackup,
 }));
 
-type MachineFormArg = NonNullable<Parameters<typeof machineDialogActionsHtml>[0]>;
-
 const realApi = await vi.importActual<MachinesApi>('../public-src/api/machines.js');
 const { S } = await import('../public-src/state/index.js');
 const { machineDialogActionsHtml, renderMachinesList, triggerMachineFirmwareUpdate, wireMachineDialogActions }
   = await import('../public-src/components/machines-settings.js');
+
+type MachineFormArg = NonNullable<Parameters<typeof machineDialogActionsHtml>[0]>;
 const en = (await import('../public-src/i18n/en.js')).default;
 
 function formatter(value: TranslationValue | undefined): (...args: unknown[]) => string {
