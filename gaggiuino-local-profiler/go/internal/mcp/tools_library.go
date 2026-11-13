@@ -247,12 +247,14 @@ func listBeans(deps Deps, in listBeansInput) (listBeansOutput, error) {
 
 func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots.AnnotatedDose, now time.Time) beanInfo {
 	out := beanInfo{
-		ID:         entityID(bean),
-		Name:       entityStr(bean, "name"),
-		Roaster:    entityStr(bean, "roaster"),
-		Origin:     entityStr(bean, "origin"),
-		Process:    entityStr(bean, "process"),
-		RoastLevel: entityStr(bean, "roastType"),
+		ID:      entityID(bean),
+		Name:    entityStr(bean, "name"),
+		Roaster: entityStr(bean, "roaster"),
+		Origin:  entityStr(bean, "origin"),
+		Process: entityStr(bean, "process"),
+		// #1977: roast_level is the bean's own light..dark level, not the legacy
+		// roastType (a process-style label such as "espresso").
+		RoastLevel: entityStr(bean, "roastLevel"),
 		Active:     entityActive(bean),
 	}
 	if roastDate := beanRoastDate(bean, doseRows, allBeans); roastDate != "" {

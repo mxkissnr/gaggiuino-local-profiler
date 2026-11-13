@@ -140,9 +140,16 @@ export function isoDateInputToMs(value: string | null | undefined): number | nul
 
 // One source for the freshness bands: the shot badge, the annotation panel's
 // degassing tracker and the bean cards all read these windows instead of
-// carrying their own copies of the same numbers (#1835). The values live in
-// the server-synced ui-prefs store under `bean_freshness`, so they follow the
-// user across devices and ride along in backup/restore.
+// carrying their own copies of the same numbers (#1835, #1977). The values live
+// in the server-synced ui-prefs store, so they follow the user across devices
+// and ride along in backup/restore.
+//
+// #1977 adds two layers on top of the one global set:
+//   - a bean's roast level picks a per-level window (`bean_freshness_<level>`),
+//     falling back to a built-in suggestion when the user has not customised it;
+//   - an optional per-bean "best for use" from/until overrides the peak band,
+//     keeping the level's degassing/fading bounds around it.
+// Resolution order in the UI is always: per-bean override → roast level → global.
 export interface FreshnessWindows {
   /** Days below this still count as degassing. */
   degasUntil: number;
@@ -154,12 +161,53 @@ export interface FreshnessWindows {
   fadingUntil: number;
 }
 
+export type RoastLevel = 'light' | 'medium-light' | 'medium' | 'medium-dark' | 'dark';
+
+export const ROAST_LEVELS: readonly RoastLevel[] = ['light', 'medium-light', 'medium', 'medium-dark', 'dark'];
+
 export const DEFAULT_FRESHNESS_WINDOWS: FreshnessWindows = {
   degasUntil: 4,
   peakFrom: 7,
   peakUntil: 21,
   fadingUntil: 35,
 };
+
+// Suggested windows per roast level (degassing until / peak from / peak until /
+// fading until). Only the direction is well established: darker roasts are more
+// porous and release CO2 faster, so each step down this list starts its peak
+// earlier and ends it sooner. The exact days are a cautious starting point, not
+// a measurement — the #1977 discussion put a dark roast's peak at roughly days
+// 4-7, but a bag that young still tastes gassy to many, so every suggestion
+// opens the peak later than that and the Settings card lets each level be
+// tuned. Beans without a roast level never see these values.
+export const DEFAULT_LEVEL_FRESHNESS_WINDOWS: Record<RoastLevel, FreshnessWindows> = {
+  // Densest bean, slowest CO2 release and the longest opening.
+  'light':        { degasUntil: 14, peakFrom: 21, peakUntil: 45, fadingUntil: 70 },
+  // One step quicker than light, still weeks of peak.
+  'medium-light': { degasUntil: 10, peakFrom: 17, peakUntil: 38, fadingUntil: 58 },
+  // The balanced middle of the scale.
+  'medium':       { degasUntil: 8,  peakFrom: 13, peakUntil: 30, fadingUntil: 48 },
+  // More porous: settles visibly sooner than medium.
+  'medium-dark':  { degasUntil: 6,  peakFrom: 10, peakUntil: 24, fadingUntil: 38 },
+  // Fastest degassing, but still not "past peak" in the first week.
+  'dark':         { degasUntil: 5,  peakFrom: 8,  peakUntil: 18, fadingUntil: 30 },
+};
+
+// One ui-pref key per level. uiprefs only stores flat objects (no nesting), so
+// the per-level sets sit beside `bean_freshness` rather than inside it.
+export const LEVEL_FRESHNESS_PREF: Record<RoastLevel, string> = {
+  'light':        'bean_freshness_light',
+  'medium-light': 'bean_freshness_medium_light',
+  'medium':       'bean_freshness_medium',
+  'medium-dark':  'bean_freshness_medium_dark',
+  'dark':         'bean_freshness_dark',
+};
+
+/** The optional per-bean "best for use" window (days since roast). */
+export interface FreshnessOverride {
+  from: number;
+  until: number;
+}
 
 // Mirror of ui-prefs.ts's STORAGE_KEY. utils.ts cannot import getUiPref()
 // directly: constants.ts imports this module and ui-prefs.ts reaches
@@ -168,62 +216,188 @@ export const DEFAULT_FRESHNESS_WINDOWS: FreshnessWindows = {
 // constants.ts. The localStorage cache is written on every setUiPref() and
 // every server merge, so reading it here sees the same values.
 const UI_PREFS_STORAGE_KEY = 'glp_ui_prefs';
+const MAX_FRESHNESS_DAY = 365;
 
-let _windowsCacheRaw: string | null = null;
-let _windowsCache: unknown = undefined;
+let _prefsCacheRaw: string | null = null;
+let _prefsCache: Record<string, unknown> | null = null;
+
+/** Reads one key from the cached ui-prefs object (see the cycle note above). */
+function _readUiPref(key: string): unknown {
+  const raw = safeLocalStorage.getItem(UI_PREFS_STORAGE_KEY);
+  if (raw !== _prefsCacheRaw) {
+    _prefsCacheRaw = raw;
+    _prefsCache = null;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          _prefsCache = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // A corrupt cache reads as "unset".
+      }
+    }
+  }
+  return _prefsCache?.[key];
+}
 
 // A window bound is a whole number of days, within a range no real roast can
 // exceed. Anything else (a string, a negative, a fraction) makes the whole
 // stored set untrustworthy.
 function _isWindowDay(v: unknown): v is number {
-  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 365;
-}
-
-/** The configurable freshness windows from the ui-prefs store. */
-function _readStoredWindows(): unknown {
-  const raw = safeLocalStorage.getItem(UI_PREFS_STORAGE_KEY);
-  if (raw === _windowsCacheRaw) return _windowsCache;
-  _windowsCacheRaw = raw;
-  _windowsCache = undefined;
-  if (!raw) return undefined;
-  try {
-    const prefs = JSON.parse(raw) as unknown;
-    _windowsCache = prefs && typeof prefs === 'object' && !Array.isArray(prefs)
-      ? (prefs as Record<string, unknown>).bean_freshness
-      : undefined;
-  } catch {
-    _windowsCache = undefined; // a corrupt cache reads as "unset"
-  }
-  return _windowsCache;
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_FRESHNESS_DAY;
 }
 
 /**
- * Reads the configured freshness windows. A missing, partial, non-numeric or
- * non-ascending set falls back to the defaults as a whole — a half-applied set
- * would silently shift bands the user never touched.
+ * Validates one stored window set. A missing, partial, non-numeric or
+ * non-ascending set is rejected as a whole — a half-applied set would silently
+ * shift bands the user never touched.
  */
-export function freshnessWindows(): FreshnessWindows {
-  const raw = _readStoredWindows();
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...DEFAULT_FRESHNESS_WINDOWS };
+function _validWindows(raw: unknown): FreshnessWindows | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const { degasUntil, peakFrom, peakUntil, fadingUntil } = raw as Record<string, unknown>;
   if (!_isWindowDay(degasUntil) || !_isWindowDay(peakFrom) || !_isWindowDay(peakUntil) || !_isWindowDay(fadingUntil)) {
-    return { ...DEFAULT_FRESHNESS_WINDOWS };
+    return null;
   }
-  if (!(degasUntil < peakFrom && peakFrom < peakUntil && peakUntil < fadingUntil)) {
-    return { ...DEFAULT_FRESHNESS_WINDOWS };
-  }
+  if (!(degasUntil < peakFrom && peakFrom < peakUntil && peakUntil < fadingUntil)) return null;
   return { degasUntil, peakFrom, peakUntil, fadingUntil };
 }
 
-/** Freshness band for a roast age in days, using the configured windows. */
-export function freshnessState(days: number | null | undefined): 'degassing' | 'almost' | 'peak' | 'fading' | 'old' | null {
+/**
+ * The configured freshness windows for a roast level, or the global set when no
+ * level is given. A level the user has customised uses that set; otherwise the
+ * level's built-in suggestion applies (the global set stays the fallback for
+ * beans without a level).
+ */
+/** Normalises a stored/API roast level to a known level, or null. */
+export function normalizeRoastLevel(level?: string | null): RoastLevel | null {
+  return level && (ROAST_LEVELS as readonly string[]).includes(level) ? level as RoastLevel : null;
+}
+
+export function freshnessWindows(level?: string | null): FreshnessWindows {
+  const known = normalizeRoastLevel(level);
+  if (known) {
+    return _validWindows(_readUiPref(LEVEL_FRESHNESS_PREF[known])) ?? { ...DEFAULT_LEVEL_FRESHNESS_WINDOWS[known] };
+  }
+  return _validWindows(_readUiPref('bean_freshness')) ?? { ...DEFAULT_FRESHNESS_WINDOWS };
+}
+
+export type FreshnessSource = 'custom' | 'level' | 'global';
+
+export interface ResolvedFreshnessWindows {
+  windows: FreshnessWindows;
+  /** Which layer supplied the set, so the tooltip can name it. */
+  source: FreshnessSource;
+  level: RoastLevel | null;
+}
+
+/** Whether an override is a usable peak window (whole days, ascending). */
+export function isValidFreshnessOverride(override: FreshnessOverride | null | undefined): override is FreshnessOverride {
+  return !!override
+    && Number.isInteger(override.from) && Number.isInteger(override.until)
+    && override.from >= 1 && override.until <= MAX_FRESHNESS_DAY
+    && override.from < override.until;
+}
+
+/**
+ * Resolves the windows the UI should use: a valid per-bean override wins,
+ * otherwise the bean's roast level, otherwise the global set. An override only
+ * replaces the peak band; the level's degassing and fading bounds are kept,
+ * clamped so the resulting set stays ordered.
+ */
+export function resolveFreshnessWindows(
+  level?: string | null,
+  override?: FreshnessOverride | null,
+): ResolvedFreshnessWindows {
+  const resolvedLevel = normalizeRoastLevel(level);
+  const base = freshnessWindows(resolvedLevel);
+  if (!isValidFreshnessOverride(override)) {
+    return { windows: base, source: resolvedLevel ? 'level' : 'global', level: resolvedLevel };
+  }
+  const peakFrom = override.from;
+  const peakUntil = override.until;
+  const degasUntil = Math.max(0, Math.min(base.degasUntil, peakFrom - 1));
+  const fadingUntil = Math.max(peakUntil, Math.min(MAX_FRESHNESS_DAY, Math.max(base.fadingUntil, peakUntil + 1)));
+  return { windows: { degasUntil, peakFrom, peakUntil, fadingUntil }, source: 'custom', level: resolvedLevel };
+}
+
+/** Reads an override pair off a bean, or null when it is not fully set. */
+export function freshnessOverrideFrom(
+  bean: { bestFromDays?: number | null; bestUntilDays?: number | null } | null | undefined,
+): FreshnessOverride | null {
+  const from = bean?.bestFromDays;
+  const until = bean?.bestUntilDays;
+  if (typeof from !== 'number' || typeof until !== 'number') return null;
+  return { from, until };
+}
+
+export interface BestForUseParse {
+  /** Both fields parse (or both are empty); false means show the error. */
+  ok: boolean;
+  from: number | null;
+  until: number | null;
+}
+
+/**
+ * Parses the bean form's optional "best for use" from/until inputs (#1977).
+ * Empty/empty means "no override". Any other combination must be whole days
+ * 1..365 with from < until; a partial or inverted pair is rejected as a whole.
+ */
+export function parseBestForUseDays(fromRaw: string, untilRaw: string): BestForUseParse {
+  const from = fromRaw.trim();
+  const until = untilRaw.trim();
+  if (!from && !until) return { ok: true, from: null, until: null };
+  if (!/^\d+$/.test(from) || !/^\d+$/.test(until)) return { ok: false, from: null, until: null };
+  const f = Number(from);
+  const u = Number(until);
+  if (f < 1 || u > MAX_FRESHNESS_DAY || f >= u) return { ok: false, from: null, until: null };
+  return { ok: true, from: f, until: u };
+}
+
+/** i18n key naming where a resolved window came from, or null for the global set. */
+export function freshnessSourceLabelKey(resolved: ResolvedFreshnessWindows): string | null {
+  if (resolved.source === 'custom') return 'freshness_source_custom';
+  if (resolved.source === 'level' && resolved.level) return `roast_level_${resolved.level.replace(/-/g, '_')}`;
+  return null;
+}
+
+export type FreshnessBand = 'degassing' | 'almost' | 'peak' | 'fading' | 'old';
+
+/** Band a roast age falls in for an already-resolved window set. */
+function _freshnessBand(days: number | null | undefined, w: FreshnessWindows): FreshnessBand | null {
   if (days == null) return null;
-  const w = freshnessWindows();
   if (days < w.degasUntil) return 'degassing';
   if (days < w.peakFrom)   return 'almost';
   if (days <= w.peakUntil) return 'peak';
   if (days <= w.fadingUntil) return 'fading';
   return 'old';
+}
+
+export interface BeanFreshness extends ResolvedFreshnessWindows {
+  /** Band for the given age, or null when there is no age to judge. */
+  state: FreshnessBand | null;
+}
+
+/**
+ * The one freshness read (#1977): resolves the windows and the band from the
+ * same level/override pair, so a badge plus its tooltip never resolve twice.
+ */
+export function resolveFreshness(
+  days: number | null | undefined,
+  level?: string | null,
+  override?: FreshnessOverride | null,
+): BeanFreshness {
+  const resolved = resolveFreshnessWindows(level, override);
+  return { ...resolved, state: _freshnessBand(days, resolved.windows) };
+}
+
+/** Freshness band for a roast age in days, using the resolved windows. */
+export function freshnessState(
+  days: number | null | undefined,
+  level?: string | null,
+  override?: FreshnessOverride | null,
+): FreshnessBand | null {
+  return resolveFreshness(days, level, override).state;
 }
 
 // ── Frozen portions (freeze/thaw) ────────────────────────────────────────

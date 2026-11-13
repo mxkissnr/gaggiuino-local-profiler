@@ -91,6 +91,17 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 		if _, present := body["roastType"]; present {
 			bean["roastType"] = sanitizeRoastType(body["roastType"])
 		}
+		// #1977: the optional per-bean "best for use" window is both-or-none —
+		// sending either bound (or a clear with both empty) rewrites the pair, so
+		// one bound can never linger from an earlier edit.
+		_, fromPresent := body["bestFromDays"]
+		_, untilPresent := body["bestUntilDays"]
+		if fromPresent || untilPresent {
+			bean["bestFromDays"], bean["bestUntilDays"] = sanitizeBestForUse(body["bestFromDays"], body["bestUntilDays"])
+		}
+		if _, present := body["roastLevel"]; present {
+			bean["roastLevel"] = sanitizeRoastLevel(body["roastLevel"])
+		}
 		if _, present := body["altitude_m"]; present {
 			bean["altitude_m"] = sanitizeAltitude(body["altitude_m"])
 		}

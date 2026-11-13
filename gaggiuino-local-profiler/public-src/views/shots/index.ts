@@ -9,11 +9,11 @@ import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPha
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
-  chartColors, freshnessState, freshnessWindows, html, joinHtml
+  chartColors, freshnessSourceLabelKey, resolveFreshness, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel, shotBeanAge } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel, shotBeanAge, beanFreshnessContext } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
@@ -755,14 +755,21 @@ export async function updateView(): Promise<void> {
   const beanAge  = shotBeanAge(ann, shotA.timestamp, { relativeToNow: !shotB });
   if (beanAge != null && beanAge.days >= 0 && beanAge.days <= 365) {
     const ageAtShot = beanAge.days;
-    // #1835: the badge follows the same shared freshness windows as the
-    // annotation panel's tracker; degassing/almost/peak all read as "fresh".
-    const state = freshnessState(ageAtShot);
+    // #1835/#1977: the badge follows the same resolved windows as the
+    // annotation panel's tracker — per-bean override → roast level → global —
+    // and degassing/almost/peak all read as "fresh". The tooltip names the
+    // source so a "fading" verdict is explainable.
+    const fresh = beanFreshnessContext(ann);
+    const resolved = resolveFreshness(ageAtShot, fresh.roastLevel, fresh.override);
+    const state = resolved.state;
     const cls = state === 'fading' ? 'freshness-ok' : state === 'old' ? 'freshness-old' : 'freshness-fresh';
-    const windows = freshnessWindows();
+    const sourceKey = freshnessSourceLabelKey(resolved);
+    const sourceLabel = sourceKey ? t(sourceKey) : '';
     freshEl.className   = `freshness-badge ${cls}`;
     freshEl.textContent = beanAge.atShot ? t('bean_age_badge', ageAtShot) : t('freshness_badge', ageAtShot);
-    freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot, windows.peakFrom, windows.peakUntil);
+    freshEl.title       = beanAge.atShot
+      ? t('bean_age_at_shot', ageAtShot) + (sourceLabel ? ` · ${sourceLabel}` : '')
+      : t('freshness_title', ageAtShot, resolved.windows.peakFrom, resolved.windows.peakUntil, sourceLabel);
     freshEl.style.display = '';
   } else { freshEl.style.display = 'none'; }
 

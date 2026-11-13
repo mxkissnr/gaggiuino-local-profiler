@@ -269,6 +269,9 @@ interface Bean {
   bags: unknown[];
   flavors: string[];
   roastDate?: string;
+  roastLevel?: string;
+  bestFromDays?: number;
+  bestUntilDays?: number;
 }
 
 interface StateLike {
@@ -726,5 +729,108 @@ describe('rejected save shows an error (#1761)', () => {
     expect(S.coffeeLibrary.beans).toHaveLength(1);
     expect(S.coffeeLibrary.beans[0]?.name).toBe('Yirgacheffe Chelelektu');
     expectSaveButtonsEnabled();
+  });
+});
+
+// #1977: the bean form carries the roast level and the optional "best for use"
+// window. The window is both-or-none and ascending; the hint shows what the
+// chosen level will do when the window is left empty.
+describe('roast level and best for use (#1977)', () => {
+  it('prefills the level and the optional window, and hints with the level suggestion', () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastLevel = 'light';
+    bean.bestFromDays = 8;
+    bean.bestUntilDays = 12;
+    library.openBeanForm(bean);
+
+    expect(doc.getElementById('beanFormRoastLevel')!.value).toBe('light');
+    expect(doc.getElementById('beanFormBestFrom')!.value).toBe('8');
+    expect(doc.getElementById('beanFormBestUntil')!.value).toBe('12');
+    // Light's built-in peak window (21–45) is what leaving the fields empty means.
+    const hint = doc.getElementById('beanFormBestHint')!.textContent;
+    expect(hint).toContain('21');
+    expect(hint).toContain('45');
+  });
+
+  it('sends the level and both bounds with the payload', async () => {
+    setupHome();
+    const bean = addBean();
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: bean.name, roaster: bean.roaster, bags: bean.bags, flavors: [],
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormRoastLevel')!.value = 'dark';
+    doc.getElementById('beanFormBestFrom')!.value = '4';
+    doc.getElementById('beanFormBestUntil')!.value = '10';
+
+    await library.saveBean();
+
+    const payload = mocks.saveBean.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.roastLevel).toBe('dark');
+    expect(payload.bestFromDays).toBe(4);
+    expect(payload.bestUntilDays).toBe(10);
+  });
+
+  it('updates the hint when the roast level changes in the form', () => {
+    const { form } = setupHome();
+    library.openBeanForm(addBean());
+    doc.getElementById('beanFormRoastLevel')!.value = 'dark';
+
+    form.dispatch('change', { target: { id: 'beanFormRoastLevel' } });
+
+    // Dark's built-in peak window, read from the Settings card's current set.
+    const hint = doc.getElementById('beanFormBestHint')!.textContent;
+    expect(hint).toContain('8');
+    expect(hint).toContain('18');
+  });
+
+  it('stays quiet while only one bound is typed, so autosave does not scold mid-entry', () => {
+    const { form } = setupHome();
+    // bindFormAutosave only binds a form that has the action row it writes into.
+    const actions = doc.createElement();
+    actions.className = 'lib-form-actions';
+    form.appendChild(actions);
+    library.openBeanForm(addBean());
+    doc.getElementById('beanFormBestFrom')!.value = '8';
+
+    form.dispatch('change', { target: { type: 'number' } });
+
+    // Nothing is saved or flagged yet; the empty second bound is still on its way.
+    expect(mocks.saveBean).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+    expect(doc.getElementById('beanFormBestFrom')!.getAttribute('aria-invalid')).toBeNull();
+    expect(doc.getElementById('beanFormBestUntil')!.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('points at the empty bound when the create Save is clicked', async () => {
+    setupHome();
+    library.openBeanForm();
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+    doc.getElementById('beanFormBestFrom')!.value = '8';
+
+    await library.saveBean();
+
+    expect(mocks.saveBean).not.toHaveBeenCalled();
+    expect(doc.getElementById('beanFormBestUntil')!.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('refuses a lone or inverted bound at the field, without calling the API', async () => {
+    setupHome();
+    const bean = addBean();
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormBestFrom')!.value = '12';
+    doc.getElementById('beanFormBestUntil')!.value = '8';
+
+    await library.saveBean();
+
+    expect(mocks.saveBean).not.toHaveBeenCalled();
+    // A field error, not a toast autosave would repeat on every change (#1962).
+    expect(showToast).not.toHaveBeenCalled();
+    expect(doc.getElementById('beanFormBestFrom')!.getAttribute('aria-invalid')).toBe('true');
+    expect(doc.getElementById('beanFormBestUntil')!.getAttribute('aria-invalid')).toBe('true');
+    // The form stays open with the user's input intact.
+    expect(doc.body.querySelector('#beanFormSheet')?.classList.contains('open')).toBe(true);
+    expect(doc.getElementById('beanFormBestFrom')!.value).toBe('12');
   });
 });

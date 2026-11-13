@@ -2,7 +2,8 @@ import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
-import { html, toIsoDateInput } from '../../utils.js';
+import { html, toIsoDateInput, freshnessWindows, parseBestForUseDays } from '../../utils.js';
+import type { RoastLevel } from '../../utils.js';
 import { CLOSE_ICON_SVG } from '../../icons.js';
 import { attachSheetSwipe, attachSheetScrollState, animateSheetOut, settleSheetOut, startSheetEnter } from '../../components/sheet-swipe.js';
 import { classifyBeanBags } from './bags.js';
@@ -216,7 +217,11 @@ function _bindBeanFormDirty(): void {
   _beanFormDirtyBound = true;
   const mark = (): void => { _beanFormDirty = true; };
   form.addEventListener('input', mark);
-  form.addEventListener('change', mark);
+  form.addEventListener('change', (e): void => {
+    mark();
+    // #1977: the "best for use" hint follows the roast level's window.
+    if ((e.target as HTMLElement | null)?.id === 'beanFormRoastLevel') _renderBeanBestHint();
+  });
 }
 
 function _formSheetVisible(): boolean {
@@ -298,6 +303,23 @@ function _moveAutosaveStatusToBar(): void {
   else head.appendChild(status);
 }
 
+// #1977: show the roast level's suggestion under the optional "best for use"
+// fields, so the user can see what leaving them empty will do. The suggestion
+// follows the Settings card's per-level window (built-in until customised).
+function _renderBeanBestHint(): void {
+  const hint = document.getElementById('beanFormBestHint');
+  if (!hint) return;
+  const level = _field('beanFormRoastLevel').value as RoastLevel | '';
+  if (!level) { hint.textContent = t('bean_best_hint'); return; }
+  const w = freshnessWindows(level);
+  hint.textContent = t(
+    'bean_best_hint_level',
+    t(`roast_level_${level.replace(/-/g, '_')}`),
+    w.peakFrom,
+    w.peakUntil,
+  );
+}
+
 export function openBeanForm(bean?: BeanRow | null): void {
   // Finish a still-sliding close before painting, so its timer cannot wipe the
   // sheet we are about to open.
@@ -341,6 +363,10 @@ export function openBeanForm(bean?: BeanRow | null): void {
   setFormFlavors(bean?.flavors);
   _field('beanFormFlavorInput').value = '';
   _field('beanFormRoastType').value = bean?.roastType || '';
+  _field('beanFormRoastLevel').value = bean?.roastLevel || '';
+  _field('beanFormBestFrom').value  = bean?.bestFromDays != null ? String(bean.bestFromDays) : '';
+  _field('beanFormBestUntil').value = bean?.bestUntilDays != null ? String(bean.bestUntilDays) : '';
+  _renderBeanBestHint();
   _field('beanFormRegion').value    = bean?.region || '';
   _field('beanFormAltitude').value      = String(bean?.altitude_m ?? '');
   _field('beanFormImporter').value      = bean?.importer || '';
@@ -470,7 +496,7 @@ function _setBeanSaveButtonsDisabled(disabled: boolean): void {
 // clear the edit id, so autosave can keep saving the same bean (#1962). The
 // create-only follow-ups (photo, extra recipes, new-bag dialog) stay in
 // saveBeanInternal, which is the button path.
-async function _persistBean(): Promise<Bean | null> {
+async function _persistBean(reportIncomplete = false): Promise<Bean | null> {
   // A save while the previous request is still pending must not race it:
   // without this the second POST creates the bean a second time (#1614 slice
   // 4). An edit instead remembers that one more save is wanted and runs it
@@ -489,6 +515,30 @@ async function _persistBean(): Promise<Bean | null> {
   const category  = _field('beanFormCategory').value;
   const process   = _field('beanFormProcess').value.trim();
   const roastType = _field('beanFormRoastType').value;
+  const roastLevel = _field('beanFormRoastLevel').value;
+  // #1977: the per-bean override is optional, but both bounds must be present
+  // and ascending — a lone or inverted bound would silently mis-age the badge.
+  const bestFromRaw = _field('beanFormBestFrom').value.trim();
+  const bestUntilRaw = _field('beanFormBestUntil').value.trim();
+  const best = parseBestForUseDays(bestFromRaw, bestUntilRaw);
+  if (!best.ok) {
+    // A half-typed pair is not an error yet: autosave stays quiet while the
+    // second bound is still empty, and the form stays dirty so closing still
+    // asks before dropping it. The create button has no such second chance,
+    // so it points at the empty field instead. A complete-but-invalid pair is
+    // reported at the fields, not in a toast autosave would repeat (#1962
+    // "Errors").
+    if (!bestFromRaw || !bestUntilRaw) {
+      if (!reportIncomplete) return null;
+      markFieldInvalid(_field(bestFromRaw ? 'beanFormBestUntil' : 'beanFormBestFrom'));
+      return null;
+    }
+    markFieldInvalid(_field('beanFormBestFrom'));
+    markFieldInvalid(_field('beanFormBestUntil'));
+    return null;
+  }
+  const bestFromDays = best.from;
+  const bestUntilDays = best.until;
   const region    = _field('beanFormRegion').value.trim();
   const altitude_m    = _field('beanFormAltitude').value;
   const importer      = _field('beanFormImporter').value.trim();
@@ -503,7 +553,8 @@ async function _persistBean(): Promise<Bean | null> {
   commitFlavorInput(); // take a still-typed flavor along
   if (!name) { markFieldInvalid(_field('beanFormName')); return null; }
   const payload: Record<string, unknown> = {
-    name, roaster, roastDate, notes, decaf, origins: formOrigins(), variety, species, category, process, flavors: formFlavors(), roastType, region,
+    name, roaster, roastDate, notes, decaf, origins: formOrigins(), variety, species, category, process, flavors: formFlavors(), roastType, roastLevel,
+    bestFromDays, bestUntilDays, region,
     altitude_m, importer, harvest, price_eur, producer, certification,
     brewTempC, brewRatio, brewTimeS, brewNotes,
   };
@@ -591,7 +642,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
   // checked before closeBeanForm() clears both the DOM and this state.
   const extraRecipesToImport = (_state()._urlImportExtraRecipes || []).filter((_, i) =>
     document.querySelector<HTMLInputElement>(`[data-extra-recipe-idx="${i}"]`)?.checked);
-  const saved = await _persistBean();
+  const saved = await _persistBean(true);
   if (!saved) return;
   // #1329 part 2: upload a photo staged while creating, now that the bean has
   // an id. A failed upload must not lose the bean — it stays in the list and
