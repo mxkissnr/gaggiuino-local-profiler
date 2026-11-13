@@ -843,13 +843,15 @@
            only, so the markup and every id stay untouched. */
         #settings-view .settings-card .orders-broadcast-row { flex-direction: row-reverse; justify-content: space-between; min-height: 44px; }
         #settings-view .settings-card .orders-broadcast-row > label:not(.toggle-switch) { flex: 1; }
-        #settings-view .backup-btn:not(#apiTokenCopyBtn) {
+        /* The firmware update button sits in a machine row's accent banner and
+           keeps its button look there. */
+        #settings-view .backup-btn:not(#apiTokenCopyBtn):not(.machine-firmware-update-btn) {
             display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3);
             width:100%; min-height:52px; padding: var(--sp-2) 0;
             border:0; border-top:1px solid var(--gray-800); border-radius:0; background:none;
         }
-        #settings-view .backup-btn:not(#apiTokenCopyBtn):hover { background: var(--raised); }
-        #settings-view .backup-btn:not(#apiTokenCopyBtn)::after {
+        #settings-view .backup-btn:not(#apiTokenCopyBtn):not(.machine-firmware-update-btn):hover { background: var(--raised); }
+        #settings-view .backup-btn:not(#apiTokenCopyBtn):not(.machine-firmware-update-btn)::after {
             content:''; flex:0 0 auto; width:8px; height:8px;
             border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500);
             transform: rotate(-45deg);
