@@ -276,7 +276,7 @@ describe('SETTINGS_DIALOG_ROWS table (slice 5)', () => {
     });
 
     it('reads the values off the form controls', () => {
-        const rows = new Map(SETTINGS_DIALOG_ROWS.map(r => [r.id, r]));
+        const rows = new Map(SETTINGS_DIALOG_ROWS.map(r => [r.id, r] as const));
         const byId: Record<string, unknown> = {
             bfPeakFrom: { value: '7' },
             bfPeakUntil: { value: '21' },
@@ -298,10 +298,8 @@ describe('SETTINGS_DIALOG_ROWS table (slice 5)', () => {
 
     it('opens the card in the detail sheet as a dialog and reloads it on close', async () => {
         const card = { classList: { add: vi.fn() } };
-        const inserted: string[] = [];
-        const host = { className: '', insertAdjacentHTML: (_pos: string, markup: string): void => { inserted.push(markup); } };
-        const appended: unknown[] = [];
-        const page = { appendChild: (el: unknown): void => { appended.push(el); } };
+        const appended: { className: string; innerHTML: string }[] = [];
+        const page = { appendChild: (el: { className: string; innerHTML: string }): void => { appended.push(el); } };
         const pages = new Map<string, typeof page>();
         for (const id of ['machines', 'coffee', 'notifications', 'developer', 'appearance']) pages.set(id, page);
 
@@ -325,13 +323,17 @@ describe('SETTINGS_DIALOG_ROWS table (slice 5)', () => {
         };
         g.document = {
             getElementById: (id: string) => byId[id] ?? null,
-            createElement: () => host,
+            createElement: () => ({ className: '', innerHTML: '' }),
             querySelector: () => null,
         };
 
         wireSettingsPage();
-        expect(inserted.length).toBe(5);
+        // One row card per group that holds a form; the coffee page holds two.
         expect(appended.length).toBe(4);
+        expect(appended.every(host => host.className.includes('settings-row-group'))).toBe(true);
+        const markup = appended.map(host => host.innerHTML).join('');
+        expect(occurrences(markup, 'data-settings-dialog=')).toBe(5);
+        expect(markup).toContain('data-settings-value="freshness"');
 
         const target = { closest: (sel: string) => (sel === '[data-settings-dialog]' ? { dataset: { settingsDialog: 'freshness' } } : null) };
         listeners['click']?.({ target });

@@ -175,22 +175,28 @@ function _dialogRowHtml(row: SettingsDialogRow): Html {
 function _mountDialogRows(): void {
   const view = _view();
   if (!view) return;
-  const hosts = new Map<string, HTMLElement>();
+  const byGroup = new Map<string, { page: HTMLElement; cards: HTMLElement[]; rows: Html[] }>();
   for (const row of SETTINGS_DIALOG_ROWS) {
     const card = document.getElementById(row.anchorId)?.closest<HTMLElement>('.settings-card');
     if (!card) continue;
-    let host = hosts.get(row.group);
-    if (!host) {
+    let group = byGroup.get(row.group);
+    if (!group) {
       const page = _page(view, row.group);
-      // No page means no row to stand in for the card: leave it in place.
+      // Without the sub-page there is no row to stand in for the card, so the
+      // card has to stay where it is.
       if (!page) continue;
-      host = document.createElement('div');
-      host.className = 'settings-card settings-row-card settings-row-group';
-      page.appendChild(host);
-      hosts.set(row.group, host);
+      group = { page, cards: [], rows: [] };
+      byGroup.set(row.group, group);
     }
-    card.classList.add('settings-dialog-card');
-    host.insertAdjacentHTML('beforeend', _dialogRowHtml(row));
+    group.cards.push(card);
+    group.rows.push(_dialogRowHtml(row));
+  }
+  for (const { page, cards, rows } of byGroup.values()) {
+    for (const card of cards) card.classList.add('settings-dialog-card');
+    const host = document.createElement('div');
+    host.className = 'settings-card settings-row-card settings-row-group';
+    page.appendChild(host);
+    host.innerHTML = joinHtml(rows);
   }
 }
 
