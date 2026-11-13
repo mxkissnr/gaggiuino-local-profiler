@@ -1,6 +1,7 @@
 // #1878 W: the wiring of the machine backups sheet into Settings → Machines —
-// the Backups row action and the "update without a backup" override after a
-// failed pre-update backup. The sheet itself is covered by
+// the Backups action in the machine dialog's ⋯ menu (#2038 moved it there from
+// the row) and the "update without a backup" override after a failed
+// pre-update backup. The sheet itself is covered by
 // machine-backups-sheet.test.ts and is mocked here.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -15,7 +16,7 @@ g.window ??= globalThis;
 
 interface Fake {
   innerHTML: string; className: string; textContent: string; title: string;
-  style: Record<string, string>; disabled: boolean;
+  style: Record<string, string>; disabled: boolean; dataset: Record<string, string>;
   handlers: Record<string, () => void>; children: Fake[];
   addEventListener(type: string, fn: () => void): void;
   querySelector(sel: string): Fake; removeAttribute(name: string): void;
@@ -28,7 +29,7 @@ interface Fake {
 function fake(): Fake {
   const kids: Record<string, Fake> = {};
   const el: Fake = {
-    innerHTML: '', className: '', textContent: '', title: '', style: {}, disabled: false,
+    innerHTML: '', className: '', textContent: '', title: '', style: {}, disabled: false, dataset: {},
     handlers: {}, children: [],
     addEventListener(type, fn) { el.handlers[type] = fn; },
     querySelector(sel) { return (kids[sel] ??= fake()); },
@@ -77,11 +78,12 @@ vi.mock('../public-src/components/machine-backups.js', async (importOriginal) =>
   confirmUpdateWithoutBackup: sheetMock.confirmUpdateWithoutBackup,
 }));
 
+type MachineFormArg = NonNullable<Parameters<typeof machineDialogActionsHtml>[0]>;
+
 const realApi = await vi.importActual<MachinesApi>('../public-src/api/machines.js');
 const { S } = await import('../public-src/state/index.js');
-const { renderMachinesList, triggerMachineFirmwareUpdate } = await import(
-  '../public-src/components/machines-settings.js'
-);
+const { machineDialogActionsHtml, renderMachinesList, triggerMachineFirmwareUpdate, wireMachineDialogActions }
+  = await import('../public-src/components/machines-settings.js');
 const en = (await import('../public-src/i18n/en.js')).default;
 
 function formatter(value: TranslationValue | undefined): (...args: unknown[]) => string {
@@ -182,7 +184,7 @@ describe('triggerMachineFirmwareUpdate with a failed pre-update backup (#1878)',
   });
 });
 
-describe('the Backups row action (#1878)', () => {
+describe('the Backups action in the machine dialog (#1878, #2038)', () => {
   S.currentLang = 'en';
 
   beforeEach(() => {
@@ -198,23 +200,38 @@ describe('the Backups row action (#1878)', () => {
     S.allShots = [];
   });
 
-  it('adds the Backups action to Gaggiuino rows only', () => {
-    renderMachinesList();
-    const gaggiuino = list.children[0];
-    const gaggimate = list.children[1];
-    if (!gaggiuino || !gaggimate) throw new Error('expected two machine rows');
-    const markup = gaggiuino.innerHTML;
-    const edit = markup.indexOf('machine-edit-btn');
-    const backups = markup.indexOf('class="machine-backups-btn">Backups</button>');
-    const del = markup.indexOf('machine-delete-btn');
-    expect(edit).toBeGreaterThanOrEqual(0);
-    expect(backups).toBeGreaterThan(edit);
-    expect(del).toBeGreaterThan(backups);
-    expect(gaggimate.innerHTML).not.toContain('machine-backups-btn');
+  it('offers Backups in the dialog menu of Gaggiuino machines only', () => {
+    const [gaggiuino, gaggimate] = S.machines as unknown as MachineFormArg[];
+    if (!gaggiuino || !gaggimate) throw new Error('expected two machines');
 
-    const btn = gaggiuino.querySelector('.machine-backups-btn');
-    btn.handlers.click?.();
-    expect(sheetMock.openMachineBackups).toHaveBeenCalledWith(1, btn);
+    const gMarkup = machineDialogActionsHtml(gaggiuino);
+    const backups = gMarkup.indexOf('class="machine-backups-btn">Backups</button>');
+    expect(backups).toBeGreaterThanOrEqual(0);
+    expect(gMarkup.indexOf('machine-delete-btn')).toBeGreaterThan(backups);
+    expect(gMarkup).not.toContain('machine-set-default-btn');
+
+    const mMarkup = machineDialogActionsHtml(gaggimate);
+    expect(mMarkup).not.toContain('machine-backups-btn');
+    expect(mMarkup.indexOf('machine-set-default-btn')).toBeGreaterThanOrEqual(0);
+    expect(mMarkup.indexOf('machine-delete-btn')).toBeGreaterThan(mMarkup.indexOf('machine-set-default-btn'));
+
+    // The menu's Backups uses the machine's row as its popover anchor.
+    const root = fake();
+    wireMachineDialogActions(asRow(root), gaggiuino);
+    root.querySelector('.machine-backups-btn').handlers.click?.();
+    expect(sheetMock.openMachineBackups).toHaveBeenCalledWith(1, list.querySelector('.machine-row[data-machine-id="1"]'));
+  });
+
+  it('renders machine rows without action buttons', () => {
+    renderMachinesList();
+    const rows = list.children;
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.innerHTML).toContain('machine-row-main');
+      for (const cls of ['machine-edit-btn', 'machine-backups-btn', 'machine-set-default-btn', 'machine-delete-btn', 'lib-sheet-more']) {
+        expect(row.innerHTML).not.toContain(cls);
+      }
+    }
   });
 });
 
