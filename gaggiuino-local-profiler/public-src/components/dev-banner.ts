@@ -40,9 +40,9 @@ export function showDevBuildBanner(devBuild?: string | null): void {
   // just visually overlapping a corner of it.
   document.body.style.paddingTop = `${banner.offsetHeight}px`;
   // #861: on mobile, #main and #sidebar switch to `position: fixed; inset:
-  // 0` (style.css, full-screen views below the 640px breakpoint), which
-  // positions them against the viewport rather than body's content box --
-  // body's padding-top above has zero effect on them there, so the banner
+  // 0` (style.css, the #sidebar / #main rules in the max-width: 768px block),
+  // which positions them against the viewport rather than body's content box
+  // -- body's padding-top above has zero effect on them there, so the banner
   // sits on top of (and hides) the topbar/sidebar header instead of pushing
   // it down. An inline `top` always wins over the mobile media query's
   // `inset: 0` shorthand, so set it directly; on desktop neither element has
@@ -52,6 +52,11 @@ export function showDevBuildBanner(devBuild?: string | null): void {
   if (mainEl) mainEl.style.top = `${banner.offsetHeight}px`;
   const sidebarEl = document.getElementById('sidebar');
   if (sidebarEl) sidebarEl.style.top = `${banner.offsetHeight}px`;
+  // #2053: the `top` above only moves those fixed panes down -- the media
+  // query also pins them to a full `height: 100vh`, so their bottom ended up
+  // one banner-height below the viewport, under the fixed bottom nav. That
+  // height now reads `calc(100vh - var(--dev-banner-h, 0px))` (style.css), so
+  // both halves of the offset come from the variable set just below.
   // #1372: expose the banner height as a CSS variable so fixed overlays that
   // sit against the viewport (sheet backdrops, the desktop bean sheet, the
   // guided-maintenance overlay, the flavour wheel) can start below the banner
