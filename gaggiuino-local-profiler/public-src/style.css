@@ -791,6 +791,10 @@
             text-align:left; text-decoration:none; cursor:pointer;
         }
         .settings-row + .settings-row { border-top: 1px solid var(--gray-800); }
+        /* The row's own display:flex would beat the UA [hidden] rule, so a
+           hidden row (its card hidden itself, e.g. live connection on a
+           GaggiMate) needs this to actually disappear. */
+        .settings-row[hidden] { display:none; }
         .settings-row:hover { background: var(--raised); }
         .settings-row:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
         .settings-row-static { cursor: default; }
