@@ -218,6 +218,14 @@ function _renderDialogValues(): void {
   for (const row of SETTINGS_DIALOG_ROWS) {
     const el = _query<HTMLElement>(`[data-settings-value="${row.id}"]`);
     if (el) el.textContent = row.value();
+    // The card hides itself when the setting does not apply to this install
+    // (live connection on a GaggiMate); its row must disappear with it, or it
+    // would open an empty dialog.
+    const rowEl = _query<HTMLElement>(`[data-settings-dialog="${row.id}"]`);
+    if (rowEl) {
+      const card = document.getElementById(row.anchorId)?.closest<HTMLElement>('.settings-card');
+      rowEl.hidden = card?.style.display === 'none';
+    }
   }
 }
 
