@@ -1,12 +1,15 @@
 // #1956: in-app popups. What's New opens once per new version; see
 // components/popup-queue.ts for how popups wait for their turn. Preferences and
 // seen markers live in the shared ui-prefs store (ui-prefs.ts).
+// #2038: the read marker (set when What's New is opened as Settings sub-page or
+// popup) drives the roast dot on the Settings row, independent of the popup
+// switches.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { reloadBlocked } from '../live-sync.js';
 import {
-  POPUPS_PREF, SEEN_ACHIEVEMENTS_PREF, SEEN_WHATS_NEW_PREF, advanceSeenMarker,
-  getUiPref, loadUiPrefsFromServer, setUiPref, uiPrefsInSync,
+  POPUPS_PREF, READ_WHATS_NEW_PREF, SEEN_ACHIEVEMENTS_PREF, SEEN_WHATS_NEW_PREF,
+  advanceSeenMarker, getUiPref, loadUiPrefsFromServer, setUiPref, uiPrefsInSync,
 } from '../ui-prefs.js';
 import { getWhatsNewEntries } from '../shared/whats-new.js';
 import type { WhatsNewEntry } from '../shared/whats-new.js';
@@ -98,6 +101,35 @@ function _isBehind(key: string, marker: number): boolean {
   return !(typeof seen === 'number' && seen >= marker);
 }
 
+/** The version code of the newest release; 0 when the list is empty. */
+function _newestWhatsNewCode(): number {
+  const newest = getWhatsNewEntries()[0];
+  return newest ? versionCode(newest.version) : 0;
+}
+
+/**
+ * Whether the newest release has not been read yet (#2038). Reads only the read
+ * marker — the popup switches and the seen marker never affect it.
+ */
+export function whatsNewUnread(): boolean {
+  const code = _newestWhatsNewCode();
+  return code > 0 && _isBehind(READ_WHATS_NEW_PREF, code);
+}
+
+/** Shows the Settings roast dot while the newest release is unread. */
+export function syncWhatsNewDot(): void {
+  const dot = document.getElementById('settingsWhatsNewDot');
+  if (!dot) return;
+  dot.hidden = !whatsNewUnread();
+}
+
+/** Records that What's New was opened, so the Settings roast dot goes away. */
+export function markWhatsNewRead(): void {
+  const code = _newestWhatsNewCode();
+  if (code > 0) advanceSeenMarker(READ_WHATS_NEW_PREF, code);
+  syncWhatsNewDot();
+}
+
 function _checkWhatsNew(): void {
   const plan = planWhatsNew(getWhatsNewEntries(), getUiPref(SEEN_WHATS_NEW_PREF), S.allShots.length > 0);
   if (!plan) return;
@@ -110,6 +142,7 @@ function _checkWhatsNew(): void {
     isDue: () => _allowed('whats_new') && _isBehind(SEEN_WHATS_NEW_PREF, plan.marker),
     show: done => {
       advanceSeenMarker(SEEN_WHATS_NEW_PREF, plan.marker);
+      markWhatsNewRead();
       openDetailSheet({
         title: t('settings_whats_new'),
         body: html`<div class="whats-new-list" style="max-height:none">${whatsNewEntriesHtml(plan.entries)}</div>`,
@@ -171,6 +204,7 @@ function _bindSwitch(id: string, key: keyof PopupSwitches, s: PopupSwitches): vo
 
 /** Fills the switches from the shared preferences; the markup is built once. */
 export function renderPopupSettings(): void {
+  syncWhatsNewDot();
   const card = document.getElementById('popupSettingsCard');
   if (!card) return;
   if (!card.dataset.ready) {
