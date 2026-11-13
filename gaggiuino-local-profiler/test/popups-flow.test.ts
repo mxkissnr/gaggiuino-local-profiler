@@ -632,3 +632,39 @@ describe('ingress', () => {
     }
   });
 });
+
+// #2038: the read marker is independent of the popup switches. A switched-off
+// What's New popup still advances the seen marker at start-up (see the seen
+// marker cases above), which must not count as "read".
+describe('the What\'s New read marker (#2038)', () => {
+  it('stays unread while the What\'s New popup is switched off', async () => {
+    const ctx = await harness({ prefs: { 'popups.achievements_seen': 0 } });
+    setSwitch(ctx, 'popupsWhatsNew', false);
+    await ctx.boot();
+
+    expect(seen(ctx, ctx.prefs.SEEN_WHATS_NEW_PREF)).toBe(ctx.popups.versionCode(newestVersion()));
+    expect(seen(ctx, ctx.prefs.READ_WHATS_NEW_PREF)).toBeUndefined();
+    expect(ctx.popups.whatsNewUnread()).toBe(true);
+  });
+
+  it('opening What\'s New in Settings marks it read', async () => {
+    const ctx = await harness({ prefs: { 'popups.achievements_seen': 0 } });
+    setSwitch(ctx, 'popupsWhatsNew', false);
+    await ctx.boot();
+
+    ctx.popups.markWhatsNewRead();
+
+    expect(ctx.popups.whatsNewUnread()).toBe(false);
+    await flushWrites();
+    expect(sent(ctx, ctx.prefs.READ_WHATS_NEW_PREF)).toBe(ctx.popups.versionCode(newestVersion()));
+  });
+
+  it('opening the popup marks it read', async () => {
+    const ctx = await harness({ prefs: { 'popups.achievements_seen': 0 } });
+    await ctx.boot();
+
+    expect(ctx.dom.host.innerHTML).toContain(`v${newestVersion()}`);
+    expect(seen(ctx, ctx.prefs.READ_WHATS_NEW_PREF)).toBe(ctx.popups.versionCode(newestVersion()));
+    expect(ctx.popups.whatsNewUnread()).toBe(false);
+  });
+});

@@ -14,10 +14,14 @@ const FLUSH_DELAY_MS = 600;
 // #1956: the popup switches and the two seen markers. The markers are their own
 // top-level keys: the server merges per key, so writing a switch can never touch
 // a marker or the other way round. They are numbers that only move forward.
+// #2038 adds the What's New read marker, set only when What's New was actually
+// opened (Settings sub-page or popup); it drives the Settings roast dot and
+// moves forward like the seen markers.
 export const POPUPS_PREF = 'popups';
 export const SEEN_WHATS_NEW_PREF = 'popups.whats_new_seen';
 export const SEEN_ACHIEVEMENTS_PREF = 'popups.achievements_seen';
-const SEEN_MARKER_PREFS = [SEEN_WHATS_NEW_PREF, SEEN_ACHIEVEMENTS_PREF];
+export const READ_WHATS_NEW_PREF = 'popups.whats_new_read';
+const SEEN_MARKER_PREFS = [SEEN_WHATS_NEW_PREF, SEEN_ACHIEVEMENTS_PREF, READ_WHATS_NEW_PREF];
 
 let _inSync = false;
 

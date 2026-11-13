@@ -11,6 +11,7 @@ import {
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { isPhoneSheetWidth } from '../components/sheet-swipe.js';
+import { markWhatsNewRead, syncWhatsNewDot } from './popups.js';
 
 export interface SettingsGroup {
   id: string;
@@ -19,6 +20,8 @@ export interface SettingsGroup {
   icon: Html;
   tint: string;
   card: 1 | 2;
+  /** The row also shows the unread-release roast dot (#2038). */
+  dot?: true;
 }
 
 export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
@@ -27,7 +30,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   { id: 'coffee', titleKey: 'settings_group_coffee', subKey: 'settings_group_coffee_sub', icon: BEAN_ICON_SVG, tint: 'var(--amber-deep)', card: 1 },
   { id: 'notifications', titleKey: 'settings_notify_title', subKey: 'settings_group_notify_sub', icon: BELL_ICON_SVG, tint: 'var(--warn)', card: 1 },
   { id: 'data', titleKey: 'settings_group_data', subKey: 'settings_group_data_sub', icon: CLOCK_ICON_SVG, tint: 'var(--swatch-green)', card: 1 },
-  { id: 'whats-new', titleKey: 'settings_whats_new', subKey: 'settings_whats_new_desc', icon: STAR_ICON_SVG, tint: 'var(--swatch-amber)', card: 2 },
+  { id: 'whats-new', titleKey: 'settings_whats_new', subKey: 'settings_whats_new_desc', icon: STAR_ICON_SVG, tint: 'var(--swatch-amber)', card: 2, dot: true },
   { id: 'developer', titleKey: 'settings_group_dev', subKey: 'settings_group_dev_sub', icon: LINK_ICON_SVG, tint: 'var(--swatch-cyan)', card: 2 },
   { id: 'about', titleKey: 'settings_group_about', subKey: 'settings_group_about_sub', icon: COFFEE_ICON_SVG, tint: 'var(--gray-400)', card: 2 },
 ];
@@ -66,10 +69,13 @@ export function filterSettingsItems(items: readonly SettingsSearchItem[], query:
 
 function _row(g: SettingsGroup): Html {
   // The data-i18n spans hold text only, so a language switch relabels them.
+  const dot: Html = g.dot
+    ? html`<span class="settings-roast-dot" id="settingsWhatsNewDot" role="img" aria-label="${tHtml('settings_whats_new_unread')}" data-i18n-aria-label="settings_whats_new_unread" hidden></span>`
+    : esc('');
   return html`<button type="button" class="settings-row" data-settings-open="${esc(g.id)}" style="--settings-tint:${esc(g.tint)}">
                     <span class="settings-row-icon" aria-hidden="true">${g.icon}</span>
                     <span class="settings-row-text"><span class="settings-row-title" data-i18n="${esc(g.titleKey)}">${tHtml(g.titleKey)}</span><span class="settings-row-sub" data-i18n="${esc(g.subKey)}">${tHtml(g.subKey)}</span></span>
-                    <span class="settings-chev" aria-hidden="true"></span>
+                    ${dot}<span class="settings-chev" aria-hidden="true"></span>
                 </button>`;
 }
 
@@ -117,6 +123,7 @@ export function openSettingsPage(id: string): void {
   showSettingsPage(id);
   view.dataset.page = id;
   view.scrollTop = 0;
+  if (id === 'whats-new') markWhatsNewRead();
   if (isPhoneSheetWidth()) view.querySelector<HTMLElement>('[data-settings-back]')?.focus();
 }
 
@@ -180,14 +187,17 @@ function _renderSearch(query: string): void {
   const emptyEl = document.getElementById('settingsSearchEmpty');
   const groupsEl = document.getElementById('settingsGroups');
   if (!resultsEl || !emptyEl || !groupsEl) return;
+  const verdictEl = document.getElementById('settingsVerdict');
   if (!normalizeSettingsText(query)) {
     _searchResults = [];
     resultsEl.hidden = true;
     emptyEl.hidden = true;
     groupsEl.hidden = false;
+    if (verdictEl) verdictEl.hidden = false;
     return;
   }
   groupsEl.hidden = true;
+  if (verdictEl) verdictEl.hidden = true;
   _searchResults = filterSettingsItems(_collectSettingsItems(), query);
   resultsEl.innerHTML = joinHtml(_searchResults.map(_resultRow));
   resultsEl.hidden = _searchResults.length === 0;
@@ -199,6 +209,7 @@ export function wireSettingsPage(): void {
   if (!view) return;
   const groups = document.getElementById('settingsGroups');
   if (groups) groups.innerHTML = settingsGroupsHtml();
+  syncWhatsNewDot();
   // Desktop default: Appearance is open on the right. On a phone the list
   // stays in front because data-page is only set by a row click.
   showSettingsPage('appearance');
