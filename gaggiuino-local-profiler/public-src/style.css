@@ -791,6 +791,10 @@
             text-align:left; text-decoration:none; cursor:pointer;
         }
         .settings-row + .settings-row { border-top: 1px solid var(--gray-800); }
+        /* The row's own display:flex would beat the UA [hidden] rule, so a
+           hidden row (its card hidden itself, e.g. live connection on a
+           GaggiMate) needs this to actually disappear. */
+        .settings-row[hidden] { display:none; }
         .settings-row:hover { background: var(--raised); }
         .settings-row:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
         .settings-row-static { cursor: default; }
@@ -809,6 +813,10 @@
         .settings-row-value { flex:0 0 auto; font-size: var(--fs-1); color: var(--gray-400); font-variant-numeric: tabular-nums; }
         .settings-chev { flex:0 0 auto; width:8px; height:8px; border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500); transform: rotate(-45deg); }
         .settings-row-card { padding: 0; gap: 0; }
+        /* #2038: a form card that became a row stays hidden in the view; it
+           only shows while the detail sheet holds it (outside #settings-view). */
+        #settings-view .settings-dialog-card { display: none; }
+        .settings-row-group .settings-row { min-height: 52px; }
         .settings-page { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
         .settings-page[hidden] { display:none; }
         .settings-page .whats-new-list { max-height:none; overflow:visible; }
