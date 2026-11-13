@@ -12,6 +12,12 @@ import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { isPhoneSheetWidth } from '../components/sheet-swipe.js';
 import { markWhatsNewRead, syncWhatsNewDot } from './popups.js';
+import { loadMqttSettings } from '../components/mqtt-settings.js';
+import { renderShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
+import { renderBeanFreshnessSettings } from '../components/bean-freshness-settings.js';
+import { loadNotifySettingsCard } from '../components/notify-settings.js';
+import { loadMcpSettingsCard } from '../components/mcp-settings.js';
+import { openDetailSheet } from '../components/detail-sheet.js';
 
 export interface SettingsGroup {
   id: string;
@@ -33,6 +39,65 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   { id: 'whats-new', titleKey: 'settings_whats_new', subKey: 'settings_whats_new_desc', icon: STAR_ICON_SVG, tint: 'var(--swatch-amber)', card: 2, dot: true },
   { id: 'developer', titleKey: 'settings_group_dev', subKey: 'settings_group_dev_sub', icon: LINK_ICON_SVG, tint: 'var(--swatch-cyan)', card: 2 },
   { id: 'about', titleKey: 'settings_group_about', subKey: 'settings_group_about_sub', icon: COFFEE_ICON_SVG, tint: 'var(--gray-400)', card: 2 },
+];
+
+// #2038 slice 5: a form card that still sits open in its sub-page becomes one
+// row whose value is read off the form controls; tapping it opens the very
+// same card (same ids, same boot wiring) in the shared detail sheet.
+export interface SettingsDialogRow {
+  id: string;
+  group: string;
+  anchorId: string;
+  titleKey: string;
+  value: () => string;
+  /** Fills the card from its stored values, dropping an unsaved edit. */
+  reload: () => void | Promise<void>;
+}
+
+// The click and value helpers below run on a phone too, where a stable
+// document is not guaranteed mid-render; a missing element means an empty value.
+function _query<T extends HTMLElement>(selector: string): T | null {
+  return typeof document.querySelector === 'function' ? document.querySelector<T>(selector) : null;
+}
+
+function _checkedTransport(): string {
+  return _query<HTMLElement>('#mqttTransportToggle .theme-btn.active')?.textContent?.trim() ?? '';
+}
+
+function _shotDefaultsValue(): string {
+  const coffee = document.getElementById('sdCoffee') as HTMLSelectElement | null;
+  const bean = coffee?.selectedOptions?.[0]?.textContent?.trim() ?? '';
+  const dose = (document.getElementById('sdDose') as HTMLInputElement | null)?.value.trim() ?? '';
+  const parts = [bean, dose ? `${dose} g` : ''].filter(Boolean);
+  return parts.join(' · ') || (document.getElementById('sdCoffee') ? t('sd_none') : '');
+}
+
+function _freshnessValue(): string {
+  const from = (document.getElementById('bfPeakFrom') as HTMLInputElement | null)?.value.trim() ?? '';
+  const until = (document.getElementById('bfPeakUntil') as HTMLInputElement | null)?.value.trim() ?? '';
+  return from && until ? t('settings_value_days', from, until) : '';
+}
+
+function _notifyValue(): string {
+  const list = document.getElementById('notifySettingsList');
+  if (!list) return '';
+  const boxes = Array.from(list.querySelectorAll<HTMLInputElement>('[data-notify-key]'));
+  if (!boxes.length) return '';
+  return t('settings_value_n_on', boxes.filter(b => b.checked).length, boxes.length);
+}
+
+function _mcpValue(): string {
+  const on = (document.getElementById('mcpEnabled') as HTMLInputElement | null)?.checked;
+  if (on === undefined) return '';
+  return t(on ? 'settings_value_on' : 'settings_value_off');
+}
+
+export const SETTINGS_DIALOG_ROWS: readonly SettingsDialogRow[] = [
+  { id: 'live', group: 'machines', anchorId: 'mqttTransportToggle', titleKey: 'settings_mqtt_title', value: _checkedTransport, reload: loadMqttSettings },
+  { id: 'shot-defaults', group: 'coffee', anchorId: 'sdDrinkType', titleKey: 'settings_shot_defaults_title', value: _shotDefaultsValue, reload: renderShotDefaultsSettingsCard },
+  { id: 'freshness', group: 'coffee', anchorId: 'bfDegasUntil', titleKey: 'bf_title', value: _freshnessValue, reload: renderBeanFreshnessSettings },
+  { id: 'push', group: 'notifications', anchorId: 'notifySettingsList', titleKey: 'settings_push_title', value: _notifyValue, reload: loadNotifySettingsCard },
+  { id: 'mcp', group: 'developer', anchorId: 'mcpSettingsList', titleKey: 'settings_mcp_title', value: _mcpValue, reload: loadMcpSettingsCard },
 ];
 
 export interface SettingsSearchItem {
@@ -97,6 +162,64 @@ function _page(view: HTMLElement, id: string): HTMLElement | null {
   return view.querySelector<HTMLElement>(`.settings-page[data-settings-page="${id}"]`);
 }
 
+function _dialogRowHtml(row: SettingsDialogRow): Html {
+  return html`<button type="button" class="settings-row" data-settings-dialog="${esc(row.id)}">
+                    <span class="settings-row-text"><span class="settings-row-title" data-i18n="${esc(row.titleKey)}">${tHtml(row.titleKey)}</span></span>
+                    <span class="settings-row-value" data-settings-value="${esc(row.id)}"></span>
+                    <span class="settings-chev" aria-hidden="true"></span>
+                </button>`;
+}
+
+// Moves each form card out of the page flow (the row stands in for it) and
+// appends the rows to their group, at the end so they follow the machine list.
+function _mountDialogRows(): void {
+  const view = _view();
+  if (!view) return;
+  const hosts = new Map<string, HTMLElement>();
+  for (const row of SETTINGS_DIALOG_ROWS) {
+    const card = document.getElementById(row.anchorId)?.closest<HTMLElement>('.settings-card');
+    if (!card) continue;
+    card.classList.add('settings-dialog-card');
+    let host = hosts.get(row.group);
+    if (!host) {
+      const page = _page(view, row.group);
+      if (!page) continue;
+      host = document.createElement('div');
+      host.className = 'settings-card settings-row-card settings-row-group';
+      page.appendChild(host);
+      hosts.set(row.group, host);
+    }
+    host.insertAdjacentHTML('beforeend', _dialogRowHtml(row));
+  }
+}
+
+function _dialogRowForCard(card: HTMLElement): SettingsDialogRow | undefined {
+  return SETTINGS_DIALOG_ROWS.find(row => document.getElementById(row.anchorId)?.closest<HTMLElement>('.settings-card') === card);
+}
+
+function _openDialogRow(row: SettingsDialogRow): void {
+  const card = document.getElementById(row.anchorId)?.closest<HTMLElement>('.settings-card');
+  if (!card) return;
+  openDetailSheet({
+    title: t(row.titleKey),
+    dialog: true,
+    body: html``,
+    content: card,
+    // Closing drops an unsaved edit: the card is filled from its stored
+    // values again and the row shows what is actually stored.
+    onClose: () => {
+      void Promise.resolve(row.reload()).then(_renderDialogValues).catch(() => {});
+    },
+  });
+}
+
+function _renderDialogValues(): void {
+  for (const row of SETTINGS_DIALOG_ROWS) {
+    const el = _query<HTMLElement>(`[data-settings-value="${row.id}"]`);
+    if (el) el.textContent = row.value();
+  }
+}
+
 export function showSettingsPage(id: string): void {
   const view = _view();
   if (!view) return;
@@ -115,6 +238,7 @@ export function showSettingsPage(id: string): void {
     title.textContent = t(group.titleKey);
     title.dataset.i18n = group.titleKey;
   }
+  _renderDialogValues();
 }
 
 export function openSettingsPage(id: string): void {
@@ -210,6 +334,7 @@ export function wireSettingsPage(): void {
   const groups = document.getElementById('settingsGroups');
   if (groups) groups.innerHTML = settingsGroupsHtml();
   syncWhatsNewDot();
+  _mountDialogRows();
   // Desktop default: Appearance is open on the right. On a phone the list
   // stays in front because data-page is only set by a row click.
   showSettingsPage('appearance');
@@ -220,7 +345,21 @@ export function wireSettingsPage(): void {
       openSettingsPage(open.dataset.settingsOpen);
       const result = open.dataset.settingsResult;
       const el = result === undefined ? null : _searchResults[Number(result)]?.el ?? null;
+      // A label inside a dialog card is reachable by search; its row is what
+      // the result opens, since the card itself is not on the page.
+      const card = el?.closest<HTMLElement>('.settings-dialog-card') ?? null;
+      const dialogRow = card ? _dialogRowForCard(card) : undefined;
+      if (dialogRow) {
+        _openDialogRow(dialogRow);
+        return;
+      }
       if (el && el.offsetParent !== null) el.scrollIntoView({ block: 'center' });
+      return;
+    }
+    const dialogOpen = target?.closest<HTMLElement>('[data-settings-dialog]');
+    if (dialogOpen?.dataset.settingsDialog) {
+      const row = SETTINGS_DIALOG_ROWS.find(r => r.id === dialogOpen.dataset.settingsDialog);
+      if (row) _openDialogRow(row);
       return;
     }
     if (target?.closest('[data-settings-back]')) {

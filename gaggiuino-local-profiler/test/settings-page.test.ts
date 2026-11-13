@@ -12,6 +12,31 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator ??= { language: 'en-US' };
 g.window ??= globalThis;
 
+// Slice 5: a form card opens in the shared detail sheet, and closing it reloads
+// the card from its stored values. Both sides are mocked so the table's reload
+// functions can be observed and no component DOM is needed.
+interface SettingsDialogOptions {
+    title: string;
+    dialog?: boolean;
+    content?: unknown;
+    onClose?: () => void;
+}
+const reloads = vi.hoisted(() => ({
+    mqtt: vi.fn<() => void>(),
+    shotDefaults: vi.fn<() => void>(),
+    freshness: vi.fn<() => void>(),
+    notify: vi.fn<() => Promise<void>>(),
+    mcp: vi.fn<() => Promise<void>>(),
+}));
+const sheet = vi.hoisted(() => ({ openDetailSheet: vi.fn<(opts: SettingsDialogOptions) => void>() }));
+
+vi.mock('../public-src/components/mqtt-settings.js', () => ({ loadMqttSettings: reloads.mqtt }));
+vi.mock('../public-src/components/shot-defaults-settings.js', () => ({ renderShotDefaultsSettingsCard: reloads.shotDefaults }));
+vi.mock('../public-src/components/bean-freshness-settings.js', () => ({ renderBeanFreshnessSettings: reloads.freshness }));
+vi.mock('../public-src/components/notify-settings.js', () => ({ loadNotifySettingsCard: reloads.notify }));
+vi.mock('../public-src/components/mcp-settings.js', () => ({ loadMcpSettingsCard: reloads.mcp }));
+vi.mock('../public-src/components/detail-sheet.js', () => ({ openDetailSheet: sheet.openDetailSheet }));
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtml = readFileSync(join(__dirname, '../public-src/index.html'), 'utf8');
 
@@ -23,8 +48,8 @@ const viewMarkup = (() => {
 const chunks = viewMarkup.split('<section class="settings-page"');
 
 const {
-    SETTINGS_GROUPS, settingsGroupsHtml, openSettingsPage, closeSettingsPage,
-    filterSettingsItems,
+    SETTINGS_GROUPS, SETTINGS_DIALOG_ROWS, settingsGroupsHtml, openSettingsPage,
+    closeSettingsPage, filterSettingsItems, wireSettingsPage,
 } = await import('../public-src/boot/settings-page.js');
 const { t } = await import('../public-src/i18n.js');
 const en = (await import('../public-src/i18n/en.js')).default;
@@ -233,5 +258,92 @@ describe('opening a sub-page (#2038)', () => {
         openSettingsPage('nope');
         expect(view.dataset['page']).toBeUndefined();
         expect(pages.every(p => !p.hidden)).toBe(true);
+    });
+});
+
+describe('SETTINGS_DIALOG_ROWS table (slice 5)', () => {
+    it('finds every dialog anchor inside its group section', () => {
+        for (const row of SETTINGS_DIALOG_ROWS) {
+            const section = chunks.find(c => c.includes(`data-settings-page="${row.group}"`)) ?? '';
+            expect(section, row.id).toContain(`id="${row.anchorId}"`);
+        }
+    });
+
+    it('labels every dialog row with an English dictionary key', () => {
+        for (const row of SETTINGS_DIALOG_ROWS) {
+            expect(en[row.titleKey], row.titleKey).toBeTypeOf('string');
+        }
+    });
+
+    it('reads the values off the form controls', () => {
+        const rows = new Map(SETTINGS_DIALOG_ROWS.map(r => [r.id, r]));
+        const byId: Record<string, unknown> = {
+            bfPeakFrom: { value: '7' },
+            bfPeakUntil: { value: '21' },
+            mcpEnabled: { checked: false },
+        };
+        const boxes = [{ checked: true }, { checked: false }];
+        g.document = {
+            getElementById: (id: string) => byId[id] ?? null,
+            querySelector: () => null,
+        };
+        byId['notifySettingsList'] = { querySelectorAll: () => boxes };
+
+        expect(rows.get('freshness')?.value()).toBe('7–21 days');
+        expect(rows.get('push')?.value()).toBe('1 of 2 on');
+        expect(rows.get('mcp')?.value()).toBe('Off');
+        expect(rows.get('live')?.value()).toBe('');
+        expect(rows.get('shot-defaults')?.value()).toBe('');
+    });
+
+    it('opens the card in the detail sheet as a dialog and reloads it on close', async () => {
+        const card = { classList: { add: vi.fn() } };
+        const inserted: string[] = [];
+        const host = { className: '', insertAdjacentHTML: (_pos: string, markup: string): void => { inserted.push(markup); } };
+        const appended: unknown[] = [];
+        const page = { appendChild: (el: unknown): void => { appended.push(el); } };
+        const pages = new Map<string, typeof page>();
+        for (const id of ['machines', 'coffee', 'notifications', 'developer', 'appearance']) pages.set(id, page);
+
+        const listeners: Record<string, (ev: unknown) => void> = {};
+        const view = {
+            addEventListener: (type: string, fn: (ev: unknown) => void) => { listeners[type] = fn; },
+            querySelector: (sel: string) => {
+                const id = sel.match(/data-settings-page="([^"]+)"/)?.[1];
+                return (id ? pages.get(id) : null) ?? null;
+            },
+            querySelectorAll: () => [],
+        };
+        const byId: Record<string, unknown> = {
+            'settings-view': view,
+            settingsGroups: { innerHTML: '' },
+            mqttTransportToggle: { closest: () => card },
+            sdDrinkType: { closest: () => card },
+            bfDegasUntil: { closest: () => card },
+            notifySettingsList: { closest: () => card, querySelectorAll: () => [] },
+            mcpSettingsList: { closest: () => card, querySelectorAll: () => [] },
+        };
+        g.document = {
+            getElementById: (id: string) => byId[id] ?? null,
+            createElement: () => host,
+            querySelector: () => null,
+        };
+
+        wireSettingsPage();
+        expect(inserted.length).toBe(5);
+        expect(appended.length).toBe(4);
+
+        const target = { closest: (sel: string) => (sel === '[data-settings-dialog]' ? { dataset: { settingsDialog: 'freshness' } } : null) };
+        listeners['click']?.({ target });
+
+        expect(sheet.openDetailSheet).toHaveBeenCalledTimes(1);
+        const opts = sheet.openDetailSheet.mock.calls[0]?.[0];
+        expect(opts?.dialog).toBe(true);
+        expect(opts?.content).toBe(card);
+
+        opts?.onClose?.();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(reloads.freshness).toHaveBeenCalledTimes(1);
     });
 });
