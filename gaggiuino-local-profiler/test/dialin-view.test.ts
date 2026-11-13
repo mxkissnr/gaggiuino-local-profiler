@@ -31,6 +31,8 @@ let itLang: Record<string, unknown>;
 let nl: Record<string, unknown>;
 let NAV_ITEMS: BottomNavModule['NAV_ITEMS'];
 let _seedBeans: SharedModule['_beans'];
+type ShotRow = SharedModule['ShotRow'];
+type SharedBean = SharedModule['SharedBean'];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_DIR = join(__dirname, '..');
@@ -49,12 +51,12 @@ beforeAll(async () => {
      _dialinRowHtml, renderDialin, setDialinBean, openDialinShot, DIALIN_ALL_BEANS } =
     await import('../public-src/views/dialin.js'));
   ({ S } = await import('../public-src/state/index.js'));
-  en = (await import('../public-src/i18n/en.js')).default as unknown as Record<string, unknown>;
-  de = (await import('../public-src/i18n/de.js')).default as unknown as Record<string, unknown>;
-  es = (await import('../public-src/i18n/es.js')).default as unknown as Record<string, unknown>;
-  fr = (await import('../public-src/i18n/fr.js')).default as unknown as Record<string, unknown>;
-  itLang = (await import('../public-src/i18n/it.js')).default as unknown as Record<string, unknown>;
-  nl = (await import('../public-src/i18n/nl.js')).default as unknown as Record<string, unknown>;
+  en = (await import('../public-src/i18n/en.js')).default;
+  de = (await import('../public-src/i18n/de.js')).default;
+  es = (await import('../public-src/i18n/es.js')).default;
+  fr = (await import('../public-src/i18n/fr.js')).default;
+  itLang = (await import('../public-src/i18n/it.js')).default;
+  nl = (await import('../public-src/i18n/nl.js')).default;
   ({ NAV_ITEMS } = await import('../public-src/components/bottom-nav.js'));
   ({ _beans: _seedBeans } = await import('../public-src/views/analytics/shared.js'));
 });
@@ -142,21 +144,11 @@ describe('_dialinVerdictHtml (#1465)', () => {
   });
 });
 
-interface ShotFixture {
-  id: number;
-  timestamp: number;
-  weight?: number | null;
-  duration?: number | null;
-  profileName?: string | null;
-  profile?: { name?: string | null } | null;
-  annotation?: Record<string, unknown> | null;
-}
-
-const shot = (id: number, over: Partial<ShotFixture> = {}): Record<string, unknown> => ({
+const shot = (id: number, over: Partial<ShotRow> = {}): ShotRow => ({
   id, timestamp: 1_700_000_000 + id, ...over,
 });
 
-const beans = [
+const beans: SharedBean[] = [
   { id: 1, name: 'Bean A' },
   { id: 2, name: 'Bean B' },
 ];
@@ -170,21 +162,21 @@ describe('bean grouping (#1465)', () => {
   ];
 
   it('offers each bean once, most recent first, skipping shots without one', () => {
-    const options = _dialinBeanOptions(shots as never, beans as never);
+    const options = _dialinBeanOptions(shots, beans);
     expect(options.map(o => o.label)).toEqual(['Bean A', 'Bean B']);
   });
 
   it('defaults to the newest shot\'s bean when nothing was chosen', () => {
-    const options = _dialinBeanOptions(shots as never, beans as never);
-    expect(_dialinBeanKey(null, options, shots[0] as never, beans as never)).toBe('id:1');
-    expect(_dialinBeanKey('all', options, shots[0] as never, beans as never)).toBe(DIALIN_ALL_BEANS);
-    expect(_dialinBeanKey('id:gone', options, shots[0] as never, beans as never)).toBe('id:1');
+    const options = _dialinBeanOptions(shots, beans);
+    expect(_dialinBeanKey(null, options, shots[0], beans)).toBe('id:1');
+    expect(_dialinBeanKey('all', options, shots[0], beans)).toBe(DIALIN_ALL_BEANS);
+    expect(_dialinBeanKey('id:gone', options, shots[0], beans)).toBe('id:1');
   });
 
   it('keeps only the chosen bean\'s shots, or every shot for all beans', () => {
-    const a = _dialinShots(shots as never, 'id:1', 5, beans as never).map(s => s.id);
+    const a = _dialinShots(shots, 'id:1', 5, beans).map(s => s.id);
     expect(a).toEqual([3, 1]);
-    const all = _dialinShots(shots as never, DIALIN_ALL_BEANS, 2, beans as never).map(s => s.id);
+    const all = _dialinShots(shots, DIALIN_ALL_BEANS, 2, beans).map(s => s.id);
     expect(all).toEqual([3, 2]);
   });
 
@@ -202,7 +194,7 @@ describe('_dialinRowHtml (#1465)', () => {
   it('points the grind arrow down when the grind got finer on the same grinder', () => {
     const newer = shot(2, { annotation: { grindSetting: '12', grinder: 'Niche' } });
     const older = shot(1, { annotation: { grindSetting: '13', grinder: 'Niche' } });
-    const out = _dialinRowHtml(newer as never, older as never, 89, [], 'en-US');
+    const out = _dialinRowHtml(newer, older, 89, [], 'en-US');
     expect(out).toContain('dialin-grind-dir');
     expect(out).toContain('↓');
   });
@@ -210,13 +202,13 @@ describe('_dialinRowHtml (#1465)', () => {
   it('points it up when the grind got coarser', () => {
     const newer = shot(2, { annotation: { grindSetting: '14', grinder: 'Niche' } });
     const older = shot(1, { annotation: { grindSetting: '13', grinder: 'Niche' } });
-    expect(_dialinRowHtml(newer as never, older as never, 89, [], 'en-US')).toContain('↑');
+    expect(_dialinRowHtml(newer, older, 89, [], 'en-US')).toContain('↑');
   });
 
   it('shows no arrow across two different grinders', () => {
     const newer = shot(2, { annotation: { grindSetting: '12', grinder: 'Niche' } });
     const older = shot(1, { annotation: { grindSetting: '13', grinder: 'Comandante' } });
-    const out = _dialinRowHtml(newer as never, older as never, 89, [], 'en-US');
+    const out = _dialinRowHtml(newer, older, 89, [], 'en-US');
     expect(out).not.toContain('dialin-grind-dir');
   });
 
@@ -226,7 +218,7 @@ describe('_dialinRowHtml (#1465)', () => {
       weight: 362,
       annotation: { dose: 18, grindSetting: '12', grinder: 'Niche' },
     });
-    const out = _dialinRowHtml(s as never, undefined, 89, ['Profil'], 'en-US');
+    const out = _dialinRowHtml(s, undefined, 89, ['Profil'], 'en-US');
     expect(out).toContain('18 → 36.2 g · 1:2.0');
     expect(out).toContain('9.0 bar');
     expect(out).toContain('score-great');
@@ -267,7 +259,7 @@ describe('renderDialin (#1465)', () => {
   });
 
   it('renders one shared verdict and one row per shot, not the repeated profile', async () => {
-    S.shots = threeShots as unknown as typeof S.shots;
+    S.shots = threeShots;
     const ids: Record<string, FakeElement> = {
       dialinCount: { value: '5', innerHTML: '' },
       dialinGrid: { innerHTML: '' },
@@ -291,7 +283,7 @@ describe('renderDialin (#1465)', () => {
   });
 
   it('switches the verdict to "Last N shots" for all beans', async () => {
-    S.shots = threeShots as unknown as typeof S.shots;
+    S.shots = threeShots;
     const ids: Record<string, FakeElement> = {
       dialinCount: { value: '5', innerHTML: '' },
       dialinGrid: { innerHTML: '' },
@@ -363,7 +355,7 @@ describe('openDialinShot (#1465)', () => {
     (g.window as Record<string, unknown>).calcShotScore = () => 90;
     (g.window as Record<string, unknown>).getShotDataById = () => ({ pressure: [{ x: 1, y: 90 }] });
     (g.window as Record<string, unknown>).ensureCurves = async () => {};
-    S.shots = [shot(7, { weight: 360, profileName: 'Profil X', annotation: { beanId: 1, coffee: 'Bean A' } })] as unknown as typeof S.shots;
+    S.shots = [shot(7, { weight: 360, profileName: 'Profil X', annotation: { beanId: 1, coffee: 'Bean A' } })];
 
     const ids: Record<string, FakeElement> = {
       dialinCount: { value: '5', innerHTML: '' },
