@@ -57,8 +57,6 @@ export function wireAppShell(): void {
   document.getElementById('sortDur')!.addEventListener('click', () => setSortMode('duration'));
   document.getElementById('trash-toggle')!.addEventListener('click', toggleTrash);
   document.getElementById('powerBtn')!.addEventListener('click', () => { void toggleMachinePower(); });
-  // #914: mobile topbar duplicate of #powerBtn -- see index.html comment.
-  document.getElementById('railPowerBtn')!.addEventListener('click', () => { void toggleMachinePower(); });
   document.getElementById('syncBtn')!.addEventListener('click', () => { void triggerSync(); });
   document.getElementById('onboardingDemoBtn')!.addEventListener('click', () => { void loadDemoData(); });
   document.getElementById('glpDemoEndBtn')!.addEventListener('click', () => { void endDemo(); });

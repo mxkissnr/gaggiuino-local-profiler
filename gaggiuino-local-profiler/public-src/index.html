@@ -55,15 +55,7 @@
             <button id="glpDemoEndBtn" data-i18n="demo_mode_end">Demo beenden</button>
         </div>
         <div class="footer-row">
-            <div style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden">
-                <span class="status-dot unknown" id="statusDot"></span>
-                <span id="syncTime" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">kein Sync</span>
-                <span id="glpVersionBadge" style="color:var(--gray-600);font-size:.7rem;user-select:none;flex-shrink:0"></span>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                <button id="powerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
-                <button id="syncBtn">↻ Sync</button>
-            </div>
+            <span id="glpVersionBadge" style="color:var(--gray-600);font-size:.7rem;user-select:none;flex-shrink:0"></span>
         </div>
     </div>
 </div>
@@ -92,7 +84,9 @@
          active-state toggling and status.js's live/orders visibility gating
          keep working unchanged), and the multi-machine switcher + machine
          status dot (machines-settings.js's renderMachineSwitcher()/#325
-         filtering logic is unchanged). The brand icon that used to sit here
+         filtering logic is unchanged). #2056: the sync time, the power toggle
+         and the Sync button from the old shot list footer sit next to the
+         machine status. The brand icon that used to sit here
          was removed (#432) — redundant next to the nav tabs since the app is
          already framed by the HA ingress panel. -->
     <div id="content-topbar">
@@ -149,12 +143,13 @@
             <button type="button" id="topbarMachineIcon" class="topbar-machine-icon" data-i18n-title="topbar_machine_icon_title" title="Maschinen-Status" aria-label="Maschinen-Status" data-i18n-aria-label="topbar_machine_icon_title"></button>
             <span class="status-dot unknown" id="railStatusDot"></span>
             <span id="railMachineName" class="topbar-machine-name">–</span>
-            <!-- #914: mobile-only duplicate of #powerBtn -- #sidebar (which
-                 hosts #powerBtn) is hidden entirely on mobile
-                 (updateMobileShotSidebarVisibility() in sidebar.js), so the
-                 topbar needs its own power toggle there. Desktop-hidden via
-                 the max-width:768px block in style.css. -->
-            <button id="railPowerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
+            <!-- #2056: the sync time, the power toggle and the Sync button moved here
+                 from the shot list footer, so they stay reachable on every page
+                 and layout. updatePowerButton() in the status component keeps #powerBtn
+                 hidden until a switch entity is configured. -->
+            <span id="syncTime">kein Sync</span>
+            <button id="powerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
+            <button id="syncBtn" data-i18n-title="btn_sync" title="↻ Sync">↻ Sync</button>
             <select id="machineSwitcher" class="machine-switcher" aria-label="Machine" data-i18n-aria-label="machine_switcher_title" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
         </div>
     </div>
