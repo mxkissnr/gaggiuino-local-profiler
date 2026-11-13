@@ -192,15 +192,20 @@ describe('popupSwitches', () => {
 });
 
 describe('the What\'s New popup', () => {
-  it('opens once after an update and advances the marker', async () => {
+  it('opens once after an update and advances the seen and read markers', async () => {
     const { popups, S } = await load();
     withShots(S);
 
     popups.startPopups(() => {});
     await tick();
 
+    const code = popups.versionCode(newestVersion());
     expect(openDetailSheet).toHaveBeenCalledTimes(1);
-    expect(store.writes).toEqual([{ key: 'popups.whats_new_seen', value: popups.versionCode(newestVersion()) }]);
+    // #2038: opening the popup also marks What's New read.
+    expect(store.writes).toEqual([
+      { key: 'popups.whats_new_seen', value: code },
+      { key: 'popups.whats_new_read', value: code },
+    ]);
   });
 
   it('does not open again on the next start once the marker is written', async () => {
@@ -216,7 +221,8 @@ describe('the What\'s New popup', () => {
     await vi.advanceTimersByTimeAsync(4000);
 
     expect(openDetailSheet).toHaveBeenCalledTimes(1);
-    expect(store.writes).toHaveLength(1);
+    // Both markers are written by that single open; the second start adds none.
+    expect(store.writes.map(w => w.key)).toEqual(['popups.whats_new_seen', 'popups.whats_new_read']);
   });
 
   it('shows every newer entry in one popup', async () => {
