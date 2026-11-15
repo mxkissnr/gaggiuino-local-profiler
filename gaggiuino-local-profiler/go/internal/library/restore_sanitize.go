@@ -29,6 +29,11 @@ func SanitizeBeanFields(bean Entity) Entity {
 	for k, v := range beanFields(bean) {
 		out[k] = v
 	}
+	// #1963: pins run through the same sanitiser, so a crafted backup cannot
+	// store oversized or malformed entries.
+	if raw, ok := bean["pinnedProfiles"]; ok {
+		out["pinnedProfiles"] = sanitizePinnedProfiles(raw)
+	}
 	// The `s(x, n) || x` idiom: an empty trimmed name falls back to the raw
 	// value rather than clobbering it with "".
 	out["name"] = orFallback(trimMax(bean["name"], 200), bean["name"])

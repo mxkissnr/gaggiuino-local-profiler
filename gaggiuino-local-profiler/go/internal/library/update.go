@@ -88,6 +88,10 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 		if _, present := body["flavors"]; present {
 			bean["flavors"] = sanitizeFlavors(body["flavors"])
 		}
+		if _, present := body["pinnedProfiles"]; present {
+			// #1963: the client sends the whole list; an empty list clears it.
+			bean["pinnedProfiles"] = sanitizePinnedProfiles(body["pinnedProfiles"])
+		}
 		if _, present := body["roastType"]; present {
 			bean["roastType"] = sanitizeRoastType(body["roastType"])
 		}
