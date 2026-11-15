@@ -9,6 +9,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 // state/index.ts reads localStorage/navigator at module-load time, so the stubs have
 // to exist before its import is evaluated — vi.hoisted() runs ahead of the
 // hoisted import statements below. Same reason as test/api-token-client-
@@ -31,7 +33,7 @@ vi.hoisted(() => {
 
 // The view's only API call; hoisted so the mock is in place before
 // views/achievements.ts is evaluated, like the localStorage stub above.
-const api = vi.hoisted(() => ({ getAchievements: vi.fn() }));
+const api = vi.hoisted(() => ({ getAchievements: vi.fn<(lang: string) => Promise<Response>>() }));
 vi.mock('../public-src/api/system.js', () => ({ getAchievements: api.getAchievements }));
 
 import de from '../public-src/i18n/de.js';
@@ -48,10 +50,8 @@ import {
   achDetail, achPageHtml, achUpcoming, achVerdictHtml, askewDeg, fieldHtml, formatStampedOn,
   isCardFull, loadAchievementsView, openAchievement,
 } from '../public-src/views/achievements.js';
+import type { Achievement } from '../public-src/views/achievements.js';
 
-// views/achievements.ts's Achievement interface isn't exported; derive it from
-// the functions under test so the fixtures stay shape-checked against it.
-type Achievement = Parameters<typeof fieldHtml>[0];
 
 const LANGS = { de, en, it: itLang, fr, es, nl };
 
@@ -117,9 +117,9 @@ describe('achievements view — a locked secret badge leaks nothing', () => {
     // stale cache or a future refactor could. Feed them in deliberately: the
     // view must not render them either way.
     const html = fieldHtml({
-      id: 'secret_night_owl', card: 'secret', secret: true, unlocked: false,
+      id: 'secret_night_owl', card: 'secret', stamp: 'moon', secret: true, unlocked: false,
       name: 'Night Owl', description: 'Pulled a shot after 2 a.m.',
-    } as Achievement);
+    });
     expect(html).not.toContain('Night Owl');
     expect(html).not.toContain('2 a.m.');
     expect(html, 'a locked secret field should carry the "?" placeholder').toContain('ach-qm');
@@ -174,7 +174,7 @@ describe('achievements view — unlockedAt is Unix seconds', () => {
   });
 
   it('has no date formatter of its own left in the view', () => {
-    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../public-src/views/achievements.ts'), 'utf8');
+    const source = readFileSync(join(__dirname, '../public-src/views/achievements.ts'), 'utf8');
     expect(source).not.toContain('toLocaleTimeString');
     expect(source).not.toContain('toLocaleDateString');
   });
@@ -182,7 +182,7 @@ describe('achievements view — unlockedAt is Unix seconds', () => {
 
 describe('achievements view — the "Full" overprint', () => {
   const badge = (id: string, unlocked: boolean): Achievement =>
-    ({ id, card: 'basics', secret: false, unlocked } as Achievement);
+    ({ id, card: 'basics', stamp: 'gear', secret: false, unlocked });
 
   it('treats a card whose badges are all unlocked as full', () => {
     expect(isCardFull([badge('a', true), badge('b', true)])).toBe(true);
@@ -266,7 +266,7 @@ describe('achievements view — the details in the sheet', () => {
     const d = achDetail({
       id: 'secret_night_owl', card: 'secret', stamp: 'moon', secret: true, unlocked: false,
       name: 'Night Owl', description: 'Pulled a shot after 2 a.m.',
-    } as Achievement);
+    });
     expect(d.title).toBe('Secret');
     expect(d.sub).toBe('');
     expect(d.body).not.toContain('Night Owl');
@@ -364,7 +364,7 @@ describe('achievements view — opening a stamp from the loaded page', () => {
     const container = makeEl();
     const host = makeEl();
     installDom(container, host);
-    api.getAchievements.mockResolvedValue({ json: async () => ({ badges: FIXTURE }) });
+    api.getAchievements.mockResolvedValue({ json: () => Promise.resolve({ badges: FIXTURE }) } as unknown as Response);
 
     await loadAchievementsView();
     expect(container.innerHTML).toContain('data-ach-card="basics"');
@@ -379,7 +379,7 @@ describe('achievements view — opening a stamp from the loaded page', () => {
     const container = makeEl();
     const host = makeEl();
     installDom(container, host);
-    api.getAchievements.mockResolvedValue({ json: async () => ({ badges: FIXTURE }) });
+    api.getAchievements.mockResolvedValue({ json: () => Promise.resolve({ badges: FIXTURE }) } as unknown as Response);
 
     await loadAchievementsView();
     host.innerHTML = 'untouched';
