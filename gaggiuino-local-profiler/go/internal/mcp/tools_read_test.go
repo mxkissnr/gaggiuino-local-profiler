@@ -198,9 +198,7 @@ func TestListBeansReportsOriginsAndFlavors(t *testing.T) {
 		t.Fatalf("GetLibrary: %v", err)
 	}
 	lib.Beans = []library.Entity{
-		{"id": int64(1), "name": "House Blend", "roaster": "Acme", "enabled": true, "origin": "BR",
-			"origins": []any{map[string]any{"code": "BR", "percent": float64(60)}, map[string]any{"code": "ET", "percent": float64(40)}, map[string]any{"code": ""}},
-			"flavors": []any{"Chocolate", "Cherry", ""}},
+		{"id": int64(1), "name": "House Blend", "roaster": "Acme", "enabled": true, "origin": "BR", "origins": []any{map[string]any{"code": "BR", "percent": float64(60)}, map[string]any{"code": "ET", "percent": float64(40)}, map[string]any{"code": ""}}, "flavors": []any{"Chocolate", "Cherry", ""}},
 		{"id": int64(2), "name": "Old Single", "roaster": "Acme", "enabled": true, "origin": "CO"},
 		{"id": int64(3), "name": "Plain", "roaster": "Acme", "enabled": true},
 		{"id": int64(4), "name": "Night Owl", "roaster": "Acme", "enabled": true, "origin": "MX", "decaf": true},
