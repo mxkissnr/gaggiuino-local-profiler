@@ -36,6 +36,12 @@ import (
 	"syscall"
 	"time"
 
+	// The runtime image ships no time-zone database and the server embeds none, so
+	// time.Local would stay UTC even though Home Assistant passes the configured
+	// TZ through Supervisor; without this import every local-day rule (the stored
+	// bean age, the achievement streaks, the share card date) runs on UTC days (#2025).
+	_ "time/tzdata"
+
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/achievements"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/auth"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/backup"
@@ -284,6 +290,21 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 		beans := lib.Beans
 		return func(s shots.Shot) *shots.Bean {
 			return library.ScoreBean(s, beans)
+		}, nil
+	})
+	// #2025: the stored bean age comes from the shared definition in
+	// internal/library, derived here on every annotation save so the MCP
+	// annotate_shot tool and Home Assistant's assistant store what the browser
+	// stores. Same import-cycle injection as the bean source above; a library
+	// read error leaves the merged annotation's own value alone.
+	shots.SetBeanAgeSource(func() (func(map[string]any, int64) (int, bool), error) {
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
+		}
+		beans := lib.Beans
+		return func(ann map[string]any, shotSec int64) (int, bool) {
+			return library.BeanAgeForAnnotation(beans, ann, shotSec)
 		}, nil
 	})
 	// #1961: same injection as the bean source above. A library read error

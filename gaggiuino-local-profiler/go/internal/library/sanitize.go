@@ -174,6 +174,52 @@ func sanitizeFlavors(v any) []any {
 	return out
 }
 
+// maxPinnedProfiles caps a bean's pinned-profile list (#1963).
+const maxPinnedProfiles = 20
+
+// sanitizePinnedProfiles returns the profiles the user pinned as proven for a
+// bean (#1963). A pin is identified by machine plus profile name, because the
+// same name can mean different profiles on two machines. Entries with an
+// out-of-range machine id or a blank name are dropped, and duplicates (same
+// machine, same name trimmed and case-insensitive) collapse to the first
+// occurrence — the client sends the newest pin first.
+func sanitizePinnedProfiles(v any) []any {
+	arr, ok := v.([]any)
+	if !ok {
+		return []any{}
+	}
+	seen := map[string]bool{}
+	out := []any{}
+	for _, item := range arr {
+		m, _ := item.(Entity)
+		if m == nil {
+			continue
+		}
+		machineID, ok := wholeDay(m["machineId"])
+		if !ok || machineID < 1 || machineID > 2147483647 {
+			continue
+		}
+		name, ok := m["name"].(string)
+		if !ok {
+			continue
+		}
+		name = truncateUTF8(strings.TrimSpace(name), 200)
+		if name == "" {
+			continue
+		}
+		key := strconv.FormatInt(machineID, 10) + "\x00" + strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, Entity{"machineId": machineID, "name": name})
+		if len(out) >= maxPinnedProfiles {
+			break
+		}
+	}
+	return out
+}
+
 // sanitizeEnabled returns true unless the value is explicitly false-ish —
 // missing/undefined means enabled.
 func sanitizeEnabled(v any) bool {

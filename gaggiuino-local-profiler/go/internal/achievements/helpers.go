@@ -377,7 +377,10 @@ func maintenanceCleanStreakDays(ctx *Context) int {
 }
 
 // bagFirstUseAgesDays returns, for every (bean, bag) pair brewed at least
-// once, the age in days of the bag's roast date at its EARLIEST use.
+// once, the bean age in days at its EARLIEST use. The age is the shared
+// whole-day bean age (#2025) -- the same number the shot badge shows for
+// that first shot -- so a frozen portion ages at its slower rate and a
+// German-format roast date counts too.
 func bagFirstUseAgesDays(shotList []shots.Shot, beans []library.Entity) []float64 {
 	byBean := map[int64][]shots.Shot{}
 	order := []int64{}
@@ -445,21 +448,28 @@ func bagFirstUseAgesDays(shotList []shots.Shot, beans []library.Entity) []float6
 					earliest, earliestTS = s, ts
 				}
 			}
-			raw := ""
-			if ref.bag != nil {
-				raw, _ = ref.bag["roastDate"].(string)
+			ann, _ := earliest["annotation"].(map[string]any)
+			var age int
+			var ok bool
+			if id := library.AnnotationFrozenPortionID(ann); id != 0 {
+				age, ok = library.BeanAgeAtShot(bean, earliestTS, id)
+			} else {
+				raw := ""
+				if ref.bag != nil {
+					raw, _ = ref.bag["roastDate"].(string)
+				}
+				if raw == "" {
+					raw, _ = bean["roastDate"].(string)
+				}
+				if raw == "" {
+					continue
+				}
+				age, ok = library.RoastAgeDays(raw, time.Unix(earliestTS, 0))
 			}
-			if raw == "" {
-				raw, _ = bean["roastDate"].(string)
-			}
-			if raw == "" {
-				continue
-			}
-			roastMS, ok := parseDateMS(raw)
 			if !ok {
 				continue
 			}
-			ages = append(ages, (float64(earliestTS)*1000-float64(roastMS))/86_400_000)
+			ages = append(ages, float64(age))
 		}
 	}
 	return ages
@@ -528,17 +538,6 @@ func sameEntity(a, b library.Entity) bool {
 	ar, _ := a["roastDate"].(string)
 	br, _ := b["roastDate"].(string)
 	return ao == bo && ar == br
-}
-
-// parseDateMS parses the date shapes a bean/bag roastDate holds: "YYYY-MM-DD"
-// or a full ISO timestamp. ok=false for anything else.
-func parseDateMS(s string) (int64, bool) {
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t.UnixMilli(), true
-		}
-	}
-	return 0, false
 }
 
 // localParts returns the server-local calendar/clock parts of a Unix-seconds
