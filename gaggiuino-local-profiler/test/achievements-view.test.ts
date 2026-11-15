@@ -47,8 +47,8 @@ import { S } from '../public-src/state/index.js';
 import { localeFor } from '../public-src/constants.js';
 import { formatDate } from '../public-src/utils.js';
 import {
-  achDetail, achPageHtml, achUpcoming, achVerdictHtml, askewDeg, fieldHtml, formatStampedOn,
-  isCardFull, loadAchievementsView, openAchievement,
+  achDetail, achPageHtml, achRecent, achRowHtml, achUpcoming, achVerdictHtml, askewDeg, fieldHtml,
+  formatStampedOn, isCardFull, isWetInk, loadAchievementsView, openAchievement, setAchFilter,
 } from '../public-src/views/achievements.js';
 import type { Achievement } from '../public-src/views/achievements.js';
 
@@ -384,5 +384,160 @@ describe('achievements view — opening a stamp from the loaded page', () => {
     host.innerHTML = 'untouched';
     openAchievement('nope');
     expect(host.innerHTML).toBe('untouched');
+  });
+});
+
+// Four more started counters so "Coming up" has rows after the verdict's own
+// stamp, plus two more earned stamps for the newest-first order.
+const SIDE_FIXTURE: Achievement[] = [
+  ...FIXTURE,
+  { id: 'litres_10', card: 'endurance', ...STAMP, progress: { current: 9, target: 10 } },
+  { id: 'maint_30', card: 'care', ...STAMP, progress: { current: 26, target: 30 } },
+  { id: 'streak_30', card: 'endurance', ...STAMP, progress: { current: 12, target: 30 } },
+  { id: 'shots_1000', card: 'craft', ...STAMP, progress: { current: 410, target: 1000 } },
+  { id: 'first_shot', card: 'basics', ...STAMP, unlocked: true, unlockedAt: 1_772_500_000 },
+  { id: 'first_bean', card: 'beans', ...STAMP, unlocked: true, unlockedAt: 1_772_300_000 },
+];
+
+// The card's own fields carry the same ids and names as the rows, so each
+// list is checked on its own slice of the markup.
+function listSlice(markup: string, from: string, to: string | null): string {
+  const start = markup.indexOf(from);
+  expect(start, `${from} is missing`).toBeGreaterThanOrEqual(0);
+  if (to === null) return markup.slice(start);
+  const end = markup.indexOf(to, start);
+  expect(end, `${to} is missing`).toBeGreaterThan(start);
+  return markup.slice(start, end);
+}
+
+describe('Coming up, Recently stamped and wet ink (#1465)', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('lists the recently stamped badges newest first and honours the limit', () => {
+    const badges: Achievement[] = [
+      { id: 'a', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: 100 },
+      { id: 'b', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: 300 },
+      { id: 'c', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: 200 },
+      { id: 'd', card: 'basics', stamp: 'gear' },
+    ];
+    expect(achRecent(badges).map(b => b.id)).toEqual(['b', 'c', 'a']);
+    expect(achRecent(badges, 2).map(b => b.id)).toEqual(['b', 'c']);
+  });
+
+  it('builds a settings row with the stamp, the names and the value', () => {
+    const row = achRowHtml(
+      { id: 'streak_7', card: 'endurance', stamp: 'flame', progress: { current: 5, target: 7 } },
+      '5 of 7',
+      71,
+    );
+    expect(row).toContain('class="settings-row ach-row" data-ach-id="streak_7"');
+    expect(row).toContain('settings-row-icon ach-row-icon"');
+    expect(row).toContain(en.ach_streak_7_n as string);
+    expect(row).toContain(en.ach_card_endurance as string);
+    expect(row).toContain('5 of 7');
+    expect(row).toContain('ach-bar');
+    expect(row).toContain('width:71%');
+  });
+
+  it('leaves the progress bar out when there is no percentage', () => {
+    const row = achRowHtml(
+      { id: 'countries_10', card: 'beans', stamp: 'globe', unlocked: true, unlockedAt: 1_772_000_000 },
+      '12.03.2026',
+      null,
+    );
+    expect(row).not.toContain('ach-bar');
+    expect(row).toContain('ach-row-got');
+    expect(row).toContain('12.03.2026');
+  });
+
+  it('shows three coming-up rows, without the stamp the verdict names', () => {
+    const soon = listSlice(achPageHtml(SIDE_FIXTURE, 'basics', 'all'), 'ach-soon-sec', 'ach-recent-sec');
+    expect([...soon.matchAll(/class="settings-row ach-row"/g)]).toHaveLength(3);
+    // litres_10 (9/10) leads the list, so the verdict already names it.
+    expect(achUpcoming(SIDE_FIXTURE)[0]?.id).toBe('litres_10');
+    expect(soon).not.toContain('data-ach-id="litres_10"');
+    expect(soon).toContain('ach-bar');
+  });
+
+  it('shows the unlocked stamps newest first in Recently stamped', () => {
+    const recent = listSlice(achPageHtml(SIDE_FIXTURE, 'basics', 'all'), 'ach-recent-sec', null);
+    const ids = [...recent.matchAll(/data-ach-id="([a-z0-9_]+)"/g)].map(m => m[1]);
+    expect(ids).toEqual(['first_shot', 'first_bean', 'countries_10']);
+    expect(recent).toContain(formatDate(1_772_500_000 * 1000, localeFor('en')));
+    expect(recent).not.toContain('ach-bar');
+  });
+
+  it('never lets a locked secret stamp into either list', () => {
+    const markup = achPageHtml(SIDE_FIXTURE, 'secret', 'all');
+    for (const slice of [listSlice(markup, 'ach-soon-sec', 'ach-recent-sec'), listSlice(markup, 'ach-recent-sec', null)]) {
+      expect(slice).not.toContain('secret_night_owl');
+    }
+  });
+
+  it('hides the coming-up list under "Collected" and the recent one under "Open"', () => {
+    const got = achPageHtml(SIDE_FIXTURE, 'basics', 'got');
+    expect(got).toContain('class="ach-soon-sec" hidden');
+    expect(got).not.toContain('class="ach-recent-sec" hidden');
+
+    const open = achPageHtml(SIDE_FIXTURE, 'basics', 'open');
+    expect(open).not.toContain('class="ach-soon-sec" hidden');
+    expect(open).toContain('class="ach-recent-sec" hidden');
+  });
+
+  it('hides the whole side column when neither list has a row', () => {
+    const badges: Achievement[] = [
+      { id: 'shots_100', card: 'craft', ...STAMP, progress: { current: 0, target: 100 } },
+      { id: 'secret_night_owl', card: 'secret', secret: true, ...STAMP },
+    ];
+    const markup = achPageHtml(badges, 'craft', 'all');
+    expect(markup).toContain('class="ach-side" hidden');
+    expect(markup).toContain('class="ach-soon-sec" hidden');
+    expect(markup).toContain('class="ach-recent-sec" hidden');
+  });
+
+  it('treats only the last seven days as wet ink', () => {
+    const now = 1_772_000_000;
+    const base = { id: 'a', card: 'basics', stamp: 'gear', unlocked: true };
+    expect(isWetInk({ ...base, unlockedAt: now - 6 * 86400 }, now)).toBe(true);
+    expect(isWetInk({ ...base, unlockedAt: now - 8 * 86400 }, now)).toBe(false);
+    expect(isWetInk({ ...base, unlocked: false, unlockedAt: now - 86400 }, now)).toBe(false);
+    expect(isWetInk({ ...base }, now)).toBe(false);
+  });
+
+  it('marks a field as wet exactly when isWetInk says so', () => {
+    const now = 1_772_000_000;
+    const wet = { id: 'a', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: now - 86400 };
+    const dry = { id: 'a', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: now - 8 * 86400 };
+    expect(fieldHtml(wet, now)).toContain('ach-wet');
+    expect(fieldHtml(dry, now)).not.toContain('ach-wet');
+    expect(isWetInk(wet, now)).toBe(true);
+    expect(isWetInk(dry, now)).toBe(false);
+  });
+
+  it('toggles the two lists when the filter changes after the first render', () => {
+    const g = globalThis as unknown as Record<string, unknown>;
+    const el = (rows: number) => ({
+      hidden: false,
+      querySelector: () => (rows > 0 ? { found: true } : null),
+    });
+    const soon = el(2);
+    const recent = el(2);
+    const side = el(2);
+    const hadDocument = Object.prototype.hasOwnProperty.call(g, 'document');
+    const previous = g.document;
+    g.document = {
+      querySelector: (sel: string) => (sel === '.ach-soon-sec' ? soon : sel === '.ach-recent-sec' ? recent : sel === '.ach-side' ? side : null),
+      querySelectorAll: () => [],
+    };
+    try {
+      setAchFilter('got');
+      expect(soon.hidden).toBe(true);
+      expect(recent.hidden).toBe(false);
+      expect(side.hidden).toBe(false);
+    } finally {
+      setAchFilter('all');
+      if (hadDocument) g.document = previous;
+      else delete g.document;
+    }
   });
 });
