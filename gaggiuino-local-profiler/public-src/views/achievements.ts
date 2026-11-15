@@ -161,15 +161,14 @@ const _state: { badges: Achievement[]; card: string; filter: AchFilter } = { bad
 // (Array#sort is stable, so equal entries keep the order the API sent).
 // Secret badges never carry progress, so they can never be named here.
 export function achUpcoming(badges: Achievement[]): Achievement[] {
+  type Started = Achievement & { progress: { current: number; target: number } };
   return badges
-    .filter(b => !b.unlocked && !b.secret && !!b.progress
+    .filter((b): b is Started => !b.unlocked && !b.secret && b.progress != null
       && b.progress.target > 0 && b.progress.current > 0 && b.progress.current < b.progress.target)
     .sort((a, b) => {
-      const pa = a.progress as { current: number; target: number };
-      const pb = b.progress as { current: number; target: number };
-      const share = pb.current / pb.target - pa.current / pa.target;
+      const share = b.progress.current / b.progress.target - a.progress.current / a.progress.target;
       if (share !== 0) return share;
-      return (pa.target - pa.current) - (pb.target - pb.current);
+      return (a.progress.target - a.progress.current) - (b.progress.target - b.progress.current);
     });
 }
 
