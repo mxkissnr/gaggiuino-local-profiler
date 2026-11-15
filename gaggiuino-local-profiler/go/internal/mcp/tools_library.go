@@ -262,13 +262,16 @@ func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots
 		Roaster: entityStr(bean, "roaster"),
 		Origin:  entityStr(bean, "origin"),
 		Origins: beanOrigins(bean),
-		Decaf:   decafOf(bean),
 		Process: entityStr(bean, "process"),
 		Flavors: beanFlavors(bean),
 		// #1977: roast_level is the bean's own light..dark level, not the legacy
 		// roastType (a process-style label such as "espresso").
 		RoastLevel: entityStr(bean, "roastLevel"),
 		Active:     entityActive(bean),
+	}
+	// Only a real boolean true means decaf; an absent or malformed value does not.
+	if decaf, ok := bean["decaf"].(bool); ok {
+		out.Decaf = decaf
 	}
 	if roastDate := beanRoastDate(bean, doseRows, allBeans); roastDate != "" {
 		out.RoastDate = roastDate
@@ -568,13 +571,6 @@ func beanFlavors(bean library.Entity) []string {
 		out = append(out, flavor)
 	}
 	return out
-}
-
-// decafOf reports the bean's decaf flag: only a real boolean true marks the
-// bean decaffeinated, and an absent key means it is not.
-func decafOf(bean library.Entity) bool {
-	decaf, _ := bean["decaf"].(bool)
-	return decaf
 }
 
 // tracksStock reports whether the bean has any stock to track -- bean-level
