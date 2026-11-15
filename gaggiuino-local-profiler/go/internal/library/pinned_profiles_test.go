@@ -162,7 +162,7 @@ func TestUpdateBeanPinnedProfiles(t *testing.T) {
 	}
 	stored, present := libraryBeanPins(t, mux)
 	if !present {
-		t.Fatalf("pinnedProfiles key disappeared after clear")
+		t.Fatal("pinnedProfiles key disappeared after clear")
 	}
 	if arr := asAnySlice(t, stored); len(arr) != 0 {
 		t.Fatalf("pins after clear = %+v, want an empty array", stored)
@@ -196,6 +196,6 @@ func TestSanitizeBeanFieldsPinnedProfiles(t *testing.T) {
 	}
 
 	if _, present := SanitizeBeanFields(Entity{"name": "Kenya AA"})["pinnedProfiles"]; present {
-		t.Fatalf("a bean without pins gained a pinnedProfiles key")
+		t.Fatal("a bean without pins gained a pinnedProfiles key")
 	}
 }
