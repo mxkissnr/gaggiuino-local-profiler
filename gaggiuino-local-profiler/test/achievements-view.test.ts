@@ -518,7 +518,7 @@ describe('Coming up, Recently stamped and wet ink (#1465)', () => {
     const g = globalThis as unknown as Record<string, unknown>;
     const el = (rows: number) => ({
       hidden: false,
-      querySelector: () => (rows > 0 ? {} : null),
+      querySelector: () => (rows > 0 ? { found: true } : null),
     });
     const soon = el(2);
     const recent = el(2);
