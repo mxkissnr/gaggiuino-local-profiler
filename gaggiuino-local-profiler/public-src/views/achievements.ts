@@ -9,12 +9,19 @@
 // too — its colors are hardcoded (see the --ach-* custom properties in
 // style.css's "Achievements view" section), never the app's --gray-*/--err
 // etc. theme tokens.
+//
+// #1465: the page follows the Home Assistant page pattern from
+// docs/DESIGN.md — the settings top app bar, the library shelf's chip control
+// for the eight categories and for All / Collected / Open, the statistics
+// verdict as the one-line answer, and the shared detail sheet for a stamp's
+// details. The card itself is unchanged.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { getAchievements } from '../api/system.js';
 import { localeFor } from '../constants.js';
 import { esc, formatDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
+import { openDetailSheet } from '../components/detail-sheet.js';
 
 // The badge record as GET /api/achievements serves it (see
 // AchievementService.getState): only unlocked/secret badges carry name and
@@ -102,12 +109,10 @@ export function askewDeg(id: string): number {
 
 // unlockedAt is Unix SECONDS (the achievements table), not
 // milliseconds — see AchievementService.getState()'s header comment.
+// #1962: the date and the time both come from the shared formatDate() helper,
+// so this view has no formatter of its own.
 export function formatStampedOn(unlockedAtSeconds: number, lang: string): string {
-  const d = new Date(unlockedAtSeconds * 1000);
-  const locale = localeFor(lang);
-  const dateStr = formatDate(d, locale);
-  const timeStr = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-  return t('ach_stamped_on', dateStr, timeStr);
+  return t('ach_stamped_on', formatDate(unlockedAtSeconds * 1000, localeFor(lang), 'short', true));
 }
 
 function formatFullDate(unlockedAtSeconds: number, lang: string): string {
@@ -143,26 +148,82 @@ function badgeMeta(b: Achievement): string {
   return t('ach_not_yet');
 }
 
-const _state: { badges: Achievement[]; page: number } = { badges: [], page: 0 };
+export type AchFilter = 'all' | 'got' | 'open';
 
-// Exported for test/achievements-view.test.ts: a locked secret badge must
-// emit neither its name nor its description, and that is the one property of
-// this view worth nailing down at the HTML level rather than trusting
-// badgeName()/badgeDesc() to keep returning null.
-export function fieldHtml(b: Achievement): Html {
-  const rot = askewDeg(b.id);
-  const secretLocked = b.secret && !b.unlocked;
-  const label = secretLocked ? t('ach_card_secret') : (badgeName(b) || '');
-  const cls = `ach-field${b.unlocked ? ' ach-got' : ''}${secretLocked ? ' ach-secret' : ''}`;
-  return html`<button type="button" class="${esc(cls)}"
-      style="--ach-rot:${esc(rot)}deg" data-ach-id="${esc(b.id)}" aria-label="${esc(label)}">
-    <span class="ach-ring"></span>
-    ${secretLocked ? html`<span class="ach-qm">?</span>` : html``}
-    ${b.unlocked ? html`<span class="ach-ink">${stampSvg(b.stamp)}</span>` : html``}
-  </button>`;
+// The card being looked at, the All / Collected / Open filter and the loaded
+// catalogue live in module state for the session only — no API and no
+// stored-data change (#1465). The chosen category survives leaving and
+// reopening the page; only an unknown one falls back to the first card.
+const _state: { badges: Achievement[]; card: string; filter: AchFilter } = { badges: [], card: 'basics', filter: 'all' };
+
+// The stamps closest to being earned: locked, non-secret, with a counter that
+// has started. Highest share first, then the fewest left, then catalogue order
+// (Array#sort is stable, so equal entries keep the order the API sent).
+// Secret badges never carry progress, so they can never be named here.
+export function achUpcoming(badges: Achievement[]): Achievement[] {
+  return badges
+    .filter(b => !b.unlocked && !b.secret && !!b.progress
+      && b.progress.target > 0 && b.progress.current > 0 && b.progress.current < b.progress.target)
+    .sort((a, b) => {
+      const pa = a.progress as { current: number; target: number };
+      const pb = b.progress as { current: number; target: number };
+      const share = pb.current / pb.target - pa.current / pa.target;
+      if (share !== 0) return share;
+      return (pa.target - pa.current) - (pb.target - pb.current);
+    });
 }
 
-function pageHtml(cardBadges: Achievement[], idx: number): Html {
+// The page's one-line answer, built from the statistics verdict classes the
+// Dial-In view uses. The big number is the collected count and its label
+// carries the total ("of 64 stamps"); the sentence names the closest stamp
+// with its progress instead — the count is never repeated inside it
+// (docs/DESIGN.md, "Nothing twice").
+export function achVerdictHtml(badges: Achievement[]): Html {
+  const got = badges.filter(b => b.unlocked).length;
+  const total = badges.length;
+  const next = achUpcoming(badges)[0];
+  const progress = next?.progress;
+  const title = next
+    ? t('ach_verdict_next', badgeName(next) ?? '')
+    : got === total
+      ? t('ach_verdict_all')
+      : t('ach_verdict_open', total - got);
+  return html`
+    <div class="analytics-verdict-head">
+      <div class="analytics-verdict-text">
+        <h2 class="analytics-verdict-title">${esc(title)}</h2>
+        ${progress ? html`<p class="analytics-verdict-sub">${esc(t('ach_progress', progress.current, progress.target))}</p>` : html``}
+      </div>
+      <div class="analytics-verdict-score">
+        <span class="analytics-verdict-score-num serif-display">${esc(got)}</span>
+        <span class="analytics-verdict-score-lbl">${esc(t('ach_verdict_of', total))}</span>
+      </div>
+    </div>`;
+}
+
+// One stamp's details for the shared sheet. A locked secret badge shows the
+// category name ("Secret") and the standing hint, and nothing else: no name,
+// no description, no counter — even when the record it was built from carries
+// those fields (badgeName()/badgeDesc() return null for it, and this function
+// does not fall back to the raw fields either).
+export function achDetail(b: Achievement): { title: string; sub: string; body: Html } {
+  const secretLocked = b.secret && !b.unlocked;
+  const title = secretLocked ? t('ach_card_secret') : (badgeName(b) || '');
+  const sub = secretLocked ? '' : t(CARD_NAME_KEYS[b.card] ?? '');
+  const desc = secretLocked ? null : badgeDesc(b);
+  const progress = b.progress;
+  const bar = !b.unlocked && progress && progress.target > 0;
+  const pct = progress && progress.target > 0
+    ? Math.round(Math.min(100, Math.max(0, (progress.current * 100) / progress.target)))
+    : 0;
+  return {
+    title,
+    sub,
+    body: html`${desc ? html`<p class="ach-sheet-desc">${esc(desc)}</p>` : html``}<p class="ach-sheet-meta">${esc(badgeMeta(b))}</p>${bar ? html`<span class="ach-bar"><i style="width:${esc(pct)}%"></i></span>` : html``}`,
+  };
+}
+
+function pageHtml(cardBadges: Achievement[], key: string, chosen: string): Html {
   const full = isCardFull(cardBadges);
   const overprint = full
     ? (() => {
@@ -170,109 +231,95 @@ function pageHtml(cardBadges: Achievement[], idx: number): Html {
         return html`<div class="ach-overprint">${tHtml('ach_full')}<span class="ach-overprint-date">${esc(formatFullDate(latest, S.currentLang))}</span></div>`;
       })()
     : html``;
-  return html`<div class="ach-page${esc(full ? ' ach-full' : '')}" data-ach-page="${esc(idx)}"${idx === 0 ? html`` : html` hidden`}>
+  return html`<div class="ach-page${esc(full ? ' ach-full' : '')}" data-ach-page="${esc(key)}"${key === chosen ? html`` : html` hidden`}>
     <div class="ach-fields">${joinHtml(cardBadges.map(fieldHtml))}</div>
     ${overprint}
   </div>`;
 }
 
-function updateFineline(): void {
-  const key = CARD_KEYS[_state.page];
-  const titleEl = document.getElementById('achTitle');
-  if (titleEl && key !== undefined) titleEl.textContent = t(CARD_NAME_KEYS[key] ?? '');
-  const fineEl = document.getElementById('achFine');
-  if (fineEl) fineEl.textContent = t('ach_card_of', _state.page + 1, CARD_KEYS.length);
-}
-
-function showPage(i: number): void {
-  const total = CARD_KEYS.length;
-  _state.page = (i + total) % total;
-  document.querySelectorAll<HTMLElement>('.ach-page').forEach((el, n) => {
-    if (n === _state.page) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
-  });
-  document.querySelectorAll<HTMLElement>('.ach-pdot').forEach((el, n) => el.classList.toggle('ach-on', n === _state.page));
-  updateFineline();
-}
-
-function showDetail(id: string | undefined): void {
-  const badge = _state.badges.find(b => b.id === id);
-  if (!badge) return;
-  document.querySelectorAll('.ach-field').forEach(el => el.removeAttribute('aria-current'));
-  // #1626: the id lands inside a selector string, so escape it like any
-  // other value there.
-  document.querySelector(`.ach-field[data-ach-id="${CSS.escape(badge.id)}"]`)?.setAttribute('aria-current', 'true');
-
-  const secretLocked = badge.secret && !badge.unlocked;
-  const detail = document.getElementById('achDetail');
-  const hint = document.getElementById('achDetailHint');
-  const body = document.getElementById('achDetailBody');
-  if (!detail || !hint || !body) return;
-  detail.removeAttribute('data-empty');
-  hint.style.display = 'none';
-  body.style.display = '';
-  (document.getElementById('achDetailName') as HTMLElement).textContent = secretLocked ? t('ach_card_secret') : (badgeName(badge) || '');
-  (document.getElementById('achDetailDesc') as HTMLElement).textContent = secretLocked ? '' : (badgeDesc(badge) || '');
-  (document.getElementById('achDetailMeta') as HTMLElement).textContent = badgeMeta(badge);
-}
-
-function wireCardEvents(): void {
-  document.getElementById('achPrev')?.addEventListener('click', () => showPage(_state.page - 1));
-  document.getElementById('achNext')?.addEventListener('click', () => showPage(_state.page + 1));
-  document.querySelectorAll<HTMLElement>('.ach-pdot').forEach(d => d.addEventListener('click', () => showPage(+(d.dataset.achGo as string))));
-  document.querySelectorAll<HTMLElement>('.ach-field').forEach(f => f.addEventListener('click', () => showDetail(f.dataset.achId)));
-}
-
-function renderCard(): void {
-  const container = document.getElementById('achievements-view');
-  if (!container) return;
-
+// The whole page: the settings top app bar, the two chip rows, then the
+// verdict and the card. The category chips replace the old arrows/dots/"Card
+// n of 8" line — eight categories are pages of one depicted card, which is
+// what the chips say. The filter is pure CSS: the layout carries
+// data-ach-filter and the stylesheet dims the stamps that do not match, so
+// the card stays one object and nothing is hidden or reflowed.
+export function achPageHtml(badges: Achievement[], card: string, filter: AchFilter): Html {
   const byCard = new Map<string, Achievement[]>(CARD_KEYS.map(k => [k, []]));
-  for (const b of _state.badges) {
+  for (const b of badges) {
     const list = byCard.get(b.card);
     if (list) list.push(b);
   }
-  if (_state.page >= CARD_KEYS.length) _state.page = 0;
 
-  const pagesHtml = joinHtml(CARD_KEYS.map((key, i) => pageHtml(byCard.get(key) || [], i)));
-  const dotsHtml = joinHtml(CARD_KEYS.map((key, i) =>
-    html`<button type="button" class="ach-pdot${esc(i === _state.page ? ' ach-on' : '')}" data-ach-go="${esc(i)}" aria-label="${tHtml('ach_card_of', i + 1, CARD_KEYS.length)}"></button>`
+  const cardChips = joinHtml(CARD_KEYS.map(key =>
+    html`<button type="button" class="lib-shelf-chip" data-ach-card="${esc(key)}" aria-pressed="${esc(key === card ? 'true' : 'false')}">${tHtml(CARD_NAME_KEYS[key] ?? '')}</button>`
+  ));
+  const filters: [AchFilter, string][] = [['all', 'lib_shelf_all'], ['got', 'ach_filter_got'], ['open', 'ach_filter_open']];
+  const showChips = joinHtml(filters.map(([value, key]) =>
+    html`<button type="button" class="lib-shelf-chip" data-ach-show="${esc(value)}" aria-pressed="${esc(value === filter ? 'true' : 'false')}">${tHtml(key)}</button>`
   ));
 
-  container.innerHTML = html`
-    <div class="ach-cardwrap">
-      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-        <filter id="ach-rough-ink" x="-25%" y="-25%" width="150%" height="150%">
-          <feTurbulence type="fractalNoise" baseFrequency=".78" numOctaves="3" seed="9" result="achn"/>
-          <feDisplacementMap in="SourceGraphic" in2="achn" scale="1.7" xChannelSelector="R" yChannelSelector="G"/>
-        </filter>
-      </defs></svg>
-      <div class="ach-card">
-        <div class="ach-frame"></div>
-        <div class="ach-head">
-          <span class="ach-brand">Gaggiuino Local Profiler</span>
-          <span class="ach-title serif-display" id="achTitle"></span>
-        </div>
-        <div class="ach-grid">${pagesHtml}</div>
-        <div class="ach-foot">
-          <button type="button" class="ach-pg" id="achPrev" aria-label="${tHtml('ach_prev')}">&lsaquo;</button>
-          <span class="ach-dots">${dotsHtml}</span>
-          <button type="button" class="ach-pg" id="achNext" aria-label="${tHtml('ach_next')}">&rsaquo;</button>
-        </div>
-        <div class="ach-fineline"><span id="achFine"></span></div>
-      </div>
+  return html`
+    <div class="settings-bar ach-bar-top"><h1 class="settings-bar-title">${tHtml('nav_achievements')}</h1></div>
+    <div class="ach-filters">
+      <div class="ach-chips" role="group">${cardChips}</div>
+      <div class="ach-chips" role="group">${showChips}</div>
     </div>
-    <div class="ach-detail" id="achDetail" data-empty="1">
-      <div class="ach-detail-hint" id="achDetailHint">${tHtml('ach_tap_hint')}</div>
-      <div class="ach-detail-body" id="achDetailBody" style="display:none">
-        <div class="ach-detail-n" id="achDetailName"></div>
-        <div class="ach-detail-d" id="achDetailDesc"></div>
-        <div class="ach-detail-m" id="achDetailMeta"></div>
+    <div class="ach-layout" data-ach-filter="${esc(filter)}">
+      <section class="analytics-verdict-card ach-verdict">${achVerdictHtml(badges)}</section>
+      <div class="ach-cardwrap">
+        <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+          <filter id="ach-rough-ink" x="-25%" y="-25%" width="150%" height="150%">
+            <feTurbulence type="fractalNoise" baseFrequency=".78" numOctaves="3" seed="9" result="achn"/>
+            <feDisplacementMap in="SourceGraphic" in2="achn" scale="1.7" xChannelSelector="R" yChannelSelector="G"/>
+          </filter>
+        </defs></svg>
+        <div class="ach-card">
+          <div class="ach-frame"></div>
+          <div class="ach-head">
+            <span class="ach-brand">Gaggiuino Local Profiler</span>
+            <span class="ach-title serif-display" id="achTitle">${esc(t(CARD_NAME_KEYS[card] ?? ''))}</span>
+          </div>
+          <div class="ach-grid">${joinHtml(CARD_KEYS.map(key => pageHtml(byCard.get(key) || [], key, card)))}</div>
+        </div>
       </div>
-    </div>
-  `;
+    </div>`;
+}
 
-  updateFineline();
-  wireCardEvents();
+export function setAchCard(key: string): void {
+  if (!CARD_KEYS.includes(key)) return;
+  _state.card = key;
+  document.querySelectorAll<HTMLElement>('.ach-page').forEach(el => {
+    if (el.dataset.achPage === key) el.removeAttribute('hidden');
+    else el.setAttribute('hidden', '');
+  });
+  document.querySelectorAll<HTMLElement>('[data-ach-card]').forEach(el => {
+    el.setAttribute('aria-pressed', String(el.dataset.achCard === key));
+  });
+  const titleEl = document.getElementById('achTitle');
+  if (titleEl) titleEl.textContent = t(CARD_NAME_KEYS[key] ?? '');
+}
+
+export function setAchFilter(value: string): void {
+  if (value !== 'all' && value !== 'got' && value !== 'open') return;
+  _state.filter = value;
+  const layout = document.querySelector<HTMLElement>('.ach-layout');
+  if (layout) layout.dataset.achFilter = value;
+  document.querySelectorAll<HTMLElement>('[data-ach-show]').forEach(el => {
+    el.setAttribute('aria-pressed', String(el.dataset.achShow === value));
+  });
+}
+
+export function openAchievement(id: string): void {
+  const badge = _state.badges.find(b => b.id === id);
+  if (!badge) return;
+  const d = achDetail(badge);
+  // Centred dialog on desktop, the usual bottom sheet on phones (#2038).
+  openDetailSheet({ title: d.title, body: d.body, dialog: true, ...(d.sub ? { sub: d.sub } : {}) });
+}
+
+function _closest(ev: Event, attr: string): HTMLElement | null {
+  const target = ev.target as HTMLElement | null;
+  return target && typeof target.closest === 'function' ? target.closest<HTMLElement>(`[${attr}]`) : null;
 }
 
 export async function loadAchievementsView(): Promise<void> {
@@ -283,9 +330,28 @@ export async function loadAchievementsView(): Promise<void> {
     const r = await getAchievements(S.currentLang);
     const data = await r.json() as { badges?: Achievement[] };
     _state.badges = data.badges || [];
-    _state.page = 0;
-    renderCard();
   } catch {
     container.innerHTML = html`<div class="loading-state" style="color:var(--err)">${tHtml('error_load')}</div>`;
+    return;
   }
+  if (!_state.badges.length) {
+    container.innerHTML = html`<div class="loading-state" style="color:var(--err)">${tHtml('error_load')}</div>`;
+    return;
+  }
+  if (!CARD_KEYS.includes(_state.card)) _state.card = 'basics';
+  // codeql[js/xss-through-dom] false positive: esc()/html already applied, see #760
+  container.innerHTML = achPageHtml(_state.badges, _state.card, _state.filter);
+
+  // One delegated listener per container: the page re-renders itself on every
+  // open, so per-element listeners would pile up.
+  if (container.dataset.achBound) return;
+  container.dataset.achBound = '1';
+  container.addEventListener('click', ev => {
+    const chip = _closest(ev, 'data-ach-card');
+    if (chip) { setAchCard(chip.dataset.achCard as string); return; }
+    const show = _closest(ev, 'data-ach-show');
+    if (show) { setAchFilter(show.dataset.achShow as string); return; }
+    const field = _closest(ev, 'data-ach-id');
+    if (field) openAchievement(field.dataset.achId as string);
+  });
 }
