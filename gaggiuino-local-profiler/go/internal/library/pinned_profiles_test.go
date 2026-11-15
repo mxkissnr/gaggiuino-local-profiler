@@ -32,6 +32,15 @@ func TestSanitizePinnedProfiles(t *testing.T) {
 		tooManyWant = append(tooManyWant, Entity{"machineId": int64(i), "name": name})
 	}
 
+	pin := func(machineID float64, name string) []any {
+		return []any{Entity{"machineId": machineID, "name": name}}
+	}
+	wantPin := func(machineID int64, name string) []any {
+		return []any{Entity{"machineId": machineID, "name": name}}
+	}
+	duplicate := append(pin(1, "Londinium"), pin(1, "londinium ")...)
+	twoMachines := append(pin(1, "Londinium"), pin(2, "Londinium")...)
+
 	tests := []struct {
 		name string
 		in   any
@@ -40,34 +49,22 @@ func TestSanitizePinnedProfiles(t *testing.T) {
 		{"not an array", "nope", []any{}},
 		{"nil", nil, []any{}},
 		{"empty list", []any{}, []any{}},
-		{"machine id zero", []any{Entity{"machineId": float64(0), "name": "Londinium"}}, []any{}},
-		{"machine id negative", []any{Entity{"machineId": float64(-1), "name": "Londinium"}}, []any{}},
-		{"machine id fractional", []any{Entity{"machineId": 1.5, "name": "Londinium"}}, []any{}},
+		{"machine id zero", pin(0, "Londinium"), []any{}},
+		{"machine id negative", pin(-1, "Londinium"), []any{}},
+		{"machine id fractional", pin(1.5, "Londinium"), []any{}},
 		{"machine id not numeric", []any{Entity{"machineId": "x", "name": "Londinium"}}, []any{}},
 		{"machine id missing", []any{Entity{"name": "Londinium"}}, []any{}},
-		{"machine id above int32", []any{Entity{"machineId": float64(2147483648), "name": "Londinium"}}, []any{}},
-		{"machine id max int32", []any{Entity{"machineId": float64(2147483647), "name": "Londinium"}},
-			[]any{Entity{"machineId": int64(2147483647), "name": "Londinium"}}},
+		{"machine id above int32", pin(2147483648, "Londinium"), []any{}},
+		{"machine id max int32", pin(2147483647, "Londinium"), wantPin(2147483647, "Londinium")},
 		{"name missing", []any{Entity{"machineId": float64(1)}}, []any{}},
 		{"name not a string", []any{Entity{"machineId": float64(1), "name": float64(3)}}, []any{}},
-		{"name empty", []any{Entity{"machineId": float64(1), "name": ""}}, []any{}},
-		{"name whitespace", []any{Entity{"machineId": float64(1), "name": "   "}}, []any{}},
-		{"name trimmed", []any{Entity{"machineId": float64(1), "name": "  Londinium  "}},
-			[]any{Entity{"machineId": int64(1), "name": "Londinium"}}},
-		{"name capped", []any{Entity{"machineId": float64(1), "name": longName}},
-			[]any{Entity{"machineId": int64(1), "name": strings.Repeat("x", 200)}}},
+		{"name empty", pin(1, ""), []any{}},
+		{"name whitespace", pin(1, "   "), []any{}},
+		{"name trimmed", pin(1, "  Londinium  "), wantPin(1, "Londinium")},
+		{"name capped", pin(1, longName), wantPin(1, strings.Repeat("x", 200))},
 		{"item not an object", []any{"Londinium"}, []any{}},
-		{"deduped case-insensitively", []any{
-			Entity{"machineId": float64(1), "name": "Londinium"},
-			Entity{"machineId": float64(1), "name": "londinium "},
-		}, []any{Entity{"machineId": int64(1), "name": "Londinium"}}},
-		{"same name on two machines", []any{
-			Entity{"machineId": float64(1), "name": "Londinium"},
-			Entity{"machineId": float64(2), "name": "Londinium"},
-		}, []any{
-			Entity{"machineId": int64(1), "name": "Londinium"},
-			Entity{"machineId": int64(2), "name": "Londinium"},
-		}},
+		{"deduped case-insensitively", duplicate, wantPin(1, "Londinium")},
+		{"same name on two machines", twoMachines, append(wantPin(1, "Londinium"), wantPin(2, "Londinium")...)},
 		{"capped at twenty", tooMany, tooManyWant[:maxPinnedProfiles]},
 	}
 
