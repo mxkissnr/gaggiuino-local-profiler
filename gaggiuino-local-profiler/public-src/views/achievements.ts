@@ -222,6 +222,23 @@ export function achDetail(b: Achievement): { title: string; sub: string; body: H
   };
 }
 
+// Exported for test/achievements-view.test.ts: a locked secret badge must
+// emit neither its name nor its description, and that is the one property of
+// this view worth nailing down at the HTML level rather than trusting
+// badgeName()/badgeDesc() to keep returning null.
+export function fieldHtml(b: Achievement): Html {
+  const rot = askewDeg(b.id);
+  const secretLocked = b.secret && !b.unlocked;
+  const label = secretLocked ? t('ach_card_secret') : (badgeName(b) || '');
+  const cls = `ach-field${b.unlocked ? ' ach-got' : ''}${secretLocked ? ' ach-secret' : ''}`;
+  return html`<button type="button" class="${esc(cls)}"
+      style="--ach-rot:${esc(rot)}deg" data-ach-id="${esc(b.id)}" aria-label="${esc(label)}">
+    <span class="ach-ring"></span>
+    ${secretLocked ? html`<span class="ach-qm">?</span>` : html``}
+    ${b.unlocked ? html`<span class="ach-ink">${stampSvg(b.stamp)}</span>` : html``}
+  </button>`;
+}
+
 function pageHtml(cardBadges: Achievement[], key: string, chosen: string): Html {
   const full = isCardFull(cardBadges);
   const overprint = full
