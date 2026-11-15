@@ -116,7 +116,7 @@ type getShotOutput struct {
 	UsedBeanTarget    bool               `json:"used_bean_target" jsonschema:"whether the score used a bean-specific target"`
 	BeanComponents    []beanComponent    `json:"bean_components,omitempty" jsonschema:"a mixed shot's beans in dose order; omitted for a single-bean shot"`
 	Metrics           *shotMetrics       `json:"metrics,omitempty" jsonschema:"derived recipe/duration/channeling figures"`
-	Annotation        map[string]any     `json:"annotation,omitempty" jsonschema:"the raw shot annotation (coffee, grinder, dose, notes, flavours, ...)"`
+	Annotation        map[string]any     `json:"annotation,omitempty" jsonschema:"the raw shot annotation (coffee, grinder, dose, notes, flavours, ...); beanAgeDays is the bean's age in whole local days at the shot, counting a frozen portion's slower ageing"`
 	ComparativeAdvice *comparativeAdvice `json:"comparative_grind_advice,omitempty" jsonschema:"history-aware grind advice, when comparable shots exist"`
 	Curve             *shotCurve         `json:"curve,omitempty" jsonschema:"downsampled brew curve; only when include_curve is true"`
 }
