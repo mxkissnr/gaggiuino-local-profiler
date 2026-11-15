@@ -176,12 +176,17 @@ describe('provenProfilesForBean', () => {
   });
 
   it('needs three rated shots', () => {
-    expect(provenProfilesForBean(LONDINIUM, context(rated(1, 'Londinium', [5, 5]), [LONDINIUM]))).toEqual([]);
+    const two = rated(1, 'Londinium', [5, 5]);
+    expect(provenProfilesForBean(LONDINIUM, context(two, [LONDINIUM]))).toEqual([]);
+    expect(two).toHaveLength(MIN_RATED_SHOTS - 1);
+    expect(provenProfilesForBean(LONDINIUM, context(rated(1, 'Londinium', [5, 5, 5]), [LONDINIUM]))).toHaveLength(1);
   });
 
   it('rejects an average below the bar', () => {
     expect(provenProfilesForBean(LONDINIUM, context(rated(1, 'Londinium', [4, 4, 3]), [LONDINIUM]))).toEqual([]);
-    expect(MIN_AVG_RATING).toBe(4);
+    // Exactly the bar still counts; half a star below is thin evidence.
+    expect(provenProfilesForBean(LONDINIUM, context(rated(1, 'Londinium', [4, 4, MIN_AVG_RATING]), [LONDINIUM])))
+      .toHaveLength(1);
   });
 
   it('keeps the spelling of the most recent shot', () => {
@@ -196,11 +201,15 @@ describe('provenProfilesForBean', () => {
   it('accepts string ratings and ignores out-of-range ones', () => {
     const shots = [
       shot({ beanId: 1, profile: 'Londinium', rating: '5' }),
+      shot({ beanId: 1, profile: 'Londinium', rating: '4.5' }),
       shot({ beanId: 1, profile: 'Londinium', rating: '4' }),
       shot({ beanId: 1, profile: 'Londinium', rating: 9 }),
       shot({ beanId: 1, profile: 'Londinium', rating: 0 }),
+      shot({ beanId: 1, profile: 'Londinium', rating: 'not a number' }),
     ];
-    expect(provenProfilesForBean(LONDINIUM, context(shots, [LONDINIUM]))).toEqual([]);
+    const rows = provenProfilesForBean(LONDINIUM, context(shots, [LONDINIUM]));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ ratedShots: 3, avgRating: 4.5 });
   });
 
   it('never counts an unrated shot toward the bar', () => {
