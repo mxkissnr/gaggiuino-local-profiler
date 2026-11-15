@@ -521,6 +521,7 @@ describe('Coming up, Recently stamped and wet ink (#1465)', () => {
     const soon = el(2);
     const recent = el(2);
     const side = el(2);
+    const hadDocument = Object.prototype.hasOwnProperty.call(g, 'document');
     const previous = g.document;
     g.document = {
       querySelector: (sel: string) => (sel === '.ach-soon-sec' ? soon : sel === '.ach-recent-sec' ? recent : sel === '.ach-side' ? side : null),
@@ -533,7 +534,8 @@ describe('Coming up, Recently stamped and wet ink (#1465)', () => {
       expect(side.hidden).toBe(false);
     } finally {
       setAchFilter('all');
-      g.document = previous;
+      if (hadDocument) g.document = previous;
+      else delete g.document;
     }
   });
 });

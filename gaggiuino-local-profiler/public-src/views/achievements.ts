@@ -325,7 +325,7 @@ export function achPageHtml(
   )));
   const recentRows = joinHtml(recent.map(b => achRowHtml(
     b,
-    formatDate((b.unlockedAt as number) * 1000, localeFor(S.currentLang)),
+    formatDate((b.unlockedAt ?? 0) * 1000, localeFor(S.currentLang)),
     null,
   )));
   // A section stays in the markup when the filter hides it: switching the
