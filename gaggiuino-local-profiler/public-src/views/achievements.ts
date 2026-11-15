@@ -229,7 +229,7 @@ export function achRecent(badges: Achievement[], n = 5): Achievement[] {
 // stamp's details.
 export function achRowHtml(b: Achievement, value: string, pct: number | null): Html {
   return html`<button type="button" class="settings-row ach-row" data-ach-id="${esc(b.id)}" aria-haspopup="dialog">
-      <span class="settings-row-icon ach-row-icon${b.unlocked ? ' ach-row-got' : ''}" aria-hidden="true">${b.stamp ? stampSvg(b.stamp) : html``}</span>
+      <span class="${esc(`settings-row-icon ach-row-icon${b.unlocked ? ' ach-row-got' : ''}`)}" aria-hidden="true">${b.stamp ? stampSvg(b.stamp) : html``}</span>
       <span class="settings-row-text">
         <span class="settings-row-title">${esc(badgeName(b) || '')}</span>
         <span class="settings-row-sub">${esc(t(CARD_NAME_KEYS[b.card] ?? ''))}</span>
