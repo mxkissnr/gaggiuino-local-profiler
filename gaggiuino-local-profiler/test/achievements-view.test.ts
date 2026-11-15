@@ -387,14 +387,14 @@ describe('achievements view — opening a stamp from the loaded page', () => {
   });
 });
 
-// Four more badges with a started counter, so the fixture has enough to fill
-// "Coming up" after the verdict's own stamp.
+// Four more started counters so "Coming up" has rows after the verdict's own
+// stamp, plus two more earned stamps for the newest-first order.
 const SIDE_FIXTURE: Achievement[] = [
   ...FIXTURE,
-  { id: 'beans_5', card: 'beans', ...STAMP, progress: { current: 4, target: 5 } },
-  { id: 'beans_10', card: 'beans', ...STAMP, progress: { current: 6, target: 10 } },
-  { id: 'care_3', card: 'care', ...STAMP, progress: { current: 2, target: 3 } },
-  { id: 'house_2', card: 'house', ...STAMP, progress: { current: 1, target: 2 } },
+  { id: 'litres_10', card: 'endurance', ...STAMP, progress: { current: 9, target: 10 } },
+  { id: 'maint_30', card: 'care', ...STAMP, progress: { current: 26, target: 30 } },
+  { id: 'streak_30', card: 'endurance', ...STAMP, progress: { current: 12, target: 30 } },
+  { id: 'shots_1000', card: 'craft', ...STAMP, progress: { current: 410, target: 1000 } },
   { id: 'first_shot', card: 'basics', ...STAMP, unlocked: true, unlockedAt: 1_772_500_000 },
   { id: 'first_bean', card: 'beans', ...STAMP, unlocked: true, unlockedAt: 1_772_300_000 },
 ];
@@ -453,9 +453,9 @@ describe('Coming up, Recently stamped and wet ink (#1465)', () => {
   it('shows three coming-up rows, without the stamp the verdict names', () => {
     const soon = listSlice(achPageHtml(SIDE_FIXTURE, 'basics', 'all'), 'ach-soon-sec', 'ach-recent-sec');
     expect([...soon.matchAll(/class="settings-row ach-row"/g)]).toHaveLength(3);
-    // beans_5 (4/5) leads the list, so the verdict already names it.
-    expect(achUpcoming(SIDE_FIXTURE)[0]?.id).toBe('beans_5');
-    expect(soon).not.toContain('data-ach-id="beans_5"');
+    // litres_10 (9/10) leads the list, so the verdict already names it.
+    expect(achUpcoming(SIDE_FIXTURE)[0]?.id).toBe('litres_10');
+    expect(soon).not.toContain('data-ach-id="litres_10"');
     expect(soon).toContain('ach-bar');
   });
 
