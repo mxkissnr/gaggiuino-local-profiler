@@ -534,11 +534,13 @@ func TestWriteToolsDoNotPublishOnError(t *testing.T) {
 // through the MCP tool (what Home Assistant's assistant uses) stores the same
 // beanAgeDays the browser would compute, so get_shot reports it too. The age
 // source is installed exactly as cmd/server does.
+//
+// The expectation is the shared rule's own answer rather than a literal 10: the
+// rule counts whole LOCAL calendar days, and this test cannot pin time.Local --
+// writing that global while the httptest server below is live is a data race
+// against net/http's own time.Now reads (-race caught exactly that).
 func TestAnnotateShotStoresBeanAge(t *testing.T) {
 	ts, sqlDB, libRepo, _, _ := newWriteServer(t, true)
-	prev := time.Local
-	time.Local = time.UTC
-	t.Cleanup(func() { time.Local = prev })
 
 	lib, err := libRepo.GetLibrary()
 	if err != nil {
@@ -560,7 +562,12 @@ func TestAnnotateShotStoresBeanAge(t *testing.T) {
 	})
 	t.Cleanup(func() { shots.SetBeanAgeSource(nil) })
 
-	insertShot(t, sqlDB, 31, time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC).Unix(), nil, map[string]any{
+	shotSec := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC).Unix()
+	want, ok := library.RoastAgeDays("2026-07-09", time.Unix(shotSec, 0))
+	if !ok {
+		t.Fatal("the shared rule resolved no age for the fixture bean")
+	}
+	insertShot(t, sqlDB, 31, shotSec, nil, map[string]any{
 		"beanId": float64(1),
 		"coffee": "Alpha",
 	})
@@ -574,8 +581,8 @@ func TestAnnotateShotStoresBeanAge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAnnotation: %v", err)
 	}
-	if ann["beanAgeDays"] != float64(10) {
-		t.Fatalf("stored beanAgeDays = %v, want 10", ann["beanAgeDays"])
+	if ann["beanAgeDays"] != float64(want) {
+		t.Fatalf("stored beanAgeDays = %v, want %d", ann["beanAgeDays"], want)
 	}
 
 	res := call(t, session, "get_shot", map[string]any{"id": 31})
@@ -583,7 +590,7 @@ func TestAnnotateShotStoresBeanAge(t *testing.T) {
 		t.Fatalf("get_shot failed: %s", errorText(t, res))
 	}
 	out := structured(t, res)
-	if got := numberField(t, object(out, "annotation"), "beanAgeDays"); got != 10 {
-		t.Fatalf("get_shot annotation.beanAgeDays = %v, want 10", got)
+	if got := numberField(t, object(out, "annotation"), "beanAgeDays"); got != float64(want) {
+		t.Fatalf("get_shot annotation.beanAgeDays = %v, want %d", got, want)
 	}
 }
