@@ -395,6 +395,8 @@ const SIDE_FIXTURE: Achievement[] = [
   { id: 'beans_10', card: 'beans', ...STAMP, progress: { current: 6, target: 10 } },
   { id: 'care_3', card: 'care', ...STAMP, progress: { current: 2, target: 3 } },
   { id: 'house_2', card: 'house', ...STAMP, progress: { current: 1, target: 2 } },
+  { id: 'first_shot', card: 'basics', ...STAMP, unlocked: true, unlockedAt: 1_772_500_000 },
+  { id: 'first_bean', card: 'beans', ...STAMP, unlocked: true, unlockedAt: 1_772_300_000 },
 ];
 
 // The card's own fields carry the same ids and names as the rows, so each
@@ -460,8 +462,8 @@ describe('Coming up, Recently stamped and wet ink (#1465)', () => {
   it('shows the unlocked stamps newest first in Recently stamped', () => {
     const recent = listSlice(achPageHtml(SIDE_FIXTURE, 'basics', 'all'), 'ach-recent-sec', null);
     const ids = [...recent.matchAll(/data-ach-id="([a-z0-9_]+)"/g)].map(m => m[1]);
-    expect(ids).toEqual(['countries_10']);
-    expect(recent).toContain(formatDate(1_772_000_000 * 1000, localeFor('en')));
+    expect(ids).toEqual(['first_shot', 'first_bean', 'countries_10']);
+    expect(recent).toContain(formatDate(1_772_500_000 * 1000, localeFor('en')));
     expect(recent).not.toContain('ach-bar');
   });
 
