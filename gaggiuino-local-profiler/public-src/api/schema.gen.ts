@@ -8653,6 +8653,11 @@ export interface components {
                 grinder?: string;
                 grindSetting?: string;
             }[];
+            /** @description Profiles the user pinned as proven for this bean (#1963), per machine. Matched to shots by profile name, trimmed and case-insensitive. Sending the field replaces the whole list; an empty list clears it. */
+            pinnedProfiles?: {
+                machineId: number;
+                name: string;
+            }[];
             /** @description Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
             remainingG?: number;
             /** @description Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
