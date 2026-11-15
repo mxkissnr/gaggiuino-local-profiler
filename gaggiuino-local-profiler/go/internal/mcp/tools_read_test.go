@@ -188,6 +188,118 @@ func TestListBeansFilterAndPaging(t *testing.T) {
 	}
 }
 
+// TestListBeansReportsOriginsAndFlavors covers #2066: list_beans used to
+// report only the scalar origin and no flavour notes, so a caller could not
+// tell a blend's countries apart or match a bean by its second origin.
+func TestListBeansReportsOriginsAndFlavors(t *testing.T) {
+	ts, libRepo, _, _ := newReadServer(t, fakePoller{})
+	lib, err := libRepo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = []library.Entity{
+		{"id": int64(1), "name": "House Blend", "roaster": "Acme", "enabled": true, "origin": "BR", "origins": []any{map[string]any{"code": "BR", "percent": float64(60)}, map[string]any{"code": "ET", "percent": float64(40)}, map[string]any{"code": ""}}, "flavors": []any{"Chocolate", "Cherry", ""}},
+		{"id": int64(2), "name": "Old Single", "roaster": "Acme", "enabled": true, "origin": "CO"},
+		{"id": int64(3), "name": "Plain", "roaster": "Acme", "enabled": true},
+		{"id": int64(4), "name": "Night Owl", "roaster": "Acme", "enabled": true, "origin": "MX", "decaf": true},
+	}
+	if err := libRepo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	session := connect(t, ts.URL+Path)
+	all := structured(t, call(t, session, "list_beans", map[string]any{}))
+	beans := objects(all, "beans")
+
+	house := findBean(beans, "House Blend")
+	if house == nil {
+		t.Fatalf("House Blend not found in bean list")
+	}
+	if got, _ := house["origin"].(string); got != "BR" {
+		t.Fatalf("House Blend origin = %q, want BR", got)
+	}
+	origins := objects(house, "origins")
+	if len(origins) != 2 {
+		t.Fatalf("House Blend origins = %v, want 2 entries (the empty code is skipped)", origins)
+	}
+	first := origins[0].(map[string]any)
+	if got, _ := first["code"].(string); got != "BR" {
+		t.Fatalf("House Blend first origin = %q, want BR", got)
+	}
+	if got := numberField(t, first, "percent"); got != 60 {
+		t.Fatalf("House Blend first origin percent = %v, want 60", got)
+	}
+	second := origins[1].(map[string]any)
+	if got, _ := second["code"].(string); got != "ET" {
+		t.Fatalf("House Blend second origin = %q, want ET", got)
+	}
+	if got := numberField(t, second, "percent"); got != 40 {
+		t.Fatalf("House Blend second origin percent = %v, want 40", got)
+	}
+	if got := stringList(house, "flavors"); strings.Join(got, ",") != "Chocolate,Cherry" {
+		t.Fatalf("House Blend flavors = %v, want [Chocolate Cherry] (the empty string is skipped)", got)
+	}
+	if _, ok := house["decaf"]; ok {
+		t.Fatalf("House Blend should not report decaf: %v", house["decaf"])
+	}
+
+	// A bean saved before blends existed only carries the scalar origin.
+	old := findBean(beans, "Old Single")
+	if old == nil {
+		t.Fatalf("Old Single not found in bean list")
+	}
+	oldOrigins := objects(old, "origins")
+	if len(oldOrigins) != 1 {
+		t.Fatalf("Old Single origins = %v, want 1 entry (legacy fallback)", oldOrigins)
+	}
+	oldOrigin := oldOrigins[0].(map[string]any)
+	if got, _ := oldOrigin["code"].(string); got != "CO" {
+		t.Fatalf("Old Single origin code = %q, want CO", got)
+	}
+	if _, ok := oldOrigin["percent"]; ok {
+		t.Fatalf("Old Single origin should have no percent: %v", oldOrigin["percent"])
+	}
+	if _, ok := old["flavors"]; ok {
+		t.Fatalf("Old Single should not report flavors: %v", old["flavors"])
+	}
+
+	// A bean without origin or flavour notes omits every new key.
+	plain := findBean(beans, "Plain")
+	if plain == nil {
+		t.Fatalf("Plain not found in bean list")
+	}
+	for _, key := range []string{"origin", "origins", "flavors", "decaf"} {
+		if _, ok := plain[key]; ok {
+			t.Fatalf("Plain should not report %q: %v", key, plain[key])
+		}
+	}
+
+	nightOwl := findBean(beans, "Night Owl")
+	if nightOwl == nil {
+		t.Fatalf("Night Owl not found in bean list")
+	}
+	if decaf, _ := nightOwl["decaf"].(bool); !decaf {
+		t.Fatalf("Night Owl decaf = %v, want true", nightOwl["decaf"])
+	}
+
+	// The query matches any origin country, not just the first one.
+	byET := objects(structured(t, call(t, session, "list_beans", map[string]any{"query": "et"})), "beans")
+	if len(byET) != 1 {
+		t.Fatalf("query=et = %d beans, want 1 (matched via House Blend's second origin)", len(byET))
+	}
+	if got, _ := byET[0].(map[string]any)["name"].(string); got != "House Blend" {
+		t.Fatalf("query=et bean = %q, want House Blend", got)
+	}
+
+	// Legacy beans still match through the scalar origin; flavours are not searched.
+	byCO := objects(structured(t, call(t, session, "list_beans", map[string]any{"query": "co"})), "beans")
+	if len(byCO) != 1 {
+		t.Fatalf("query=co = %d beans, want 1 (legacy origin only, flavours are not searched)", len(byCO))
+	}
+	if got, _ := byCO[0].(map[string]any)["name"].(string); got != "Old Single" {
+		t.Fatalf("query=co bean = %q, want Old Single", got)
+	}
+}
+
 // TestListBeansReportsRoastLevel covers #1977: roast_level used to echo the
 // legacy roastType label ("espresso"), so a caller asking for the bean's roast
 // level got a process-style value instead.
