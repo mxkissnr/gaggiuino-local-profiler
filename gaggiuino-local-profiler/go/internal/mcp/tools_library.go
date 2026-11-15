@@ -43,7 +43,7 @@ type beanInfo struct {
 	Process             string              `json:"process,omitempty" jsonschema:"process (washed, natural, ...)"`
 	RoastLevel          string              `json:"roast_level,omitempty" jsonschema:"roast level"`
 	RoastDate           string              `json:"roast_date,omitempty" jsonschema:"roast date, YYYY-MM-DD"`
-	DaysSinceRoast      *int                `json:"days_since_roast,omitempty" jsonschema:"whole days since the roast date"`
+	DaysSinceRoast      *int                `json:"days_since_roast,omitempty" jsonschema:"whole days since the current bag's roast date, counted in local calendar days like the bean card; the plain age of the bag, so frozen portions (which age more slowly) are not reflected; omitted when the roast date is in the future, unreadable or more than two years back"`
 	Active              bool                `json:"active" jsonschema:"whether the bean is enabled in the library"`
 	RemainingG          *int64              `json:"remaining_g,omitempty" jsonschema:"remaining stock in grams, frozen portions included; omitted when stock is not tracked"`
 	FrozenPortionsG     *float64            `json:"frozen_portions_g,omitempty" jsonschema:"grams held in unthawed frozen portions of the active bag"`
@@ -259,7 +259,7 @@ func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots
 	}
 	if roastDate := beanRoastDate(bean, doseRows, allBeans); roastDate != "" {
 		out.RoastDate = roastDate
-		if days, ok := daysSinceDate(roastDate, now); ok {
+		if days, ok := library.RoastAgeDays(roastDate, now); ok {
 			out.DaysSinceRoast = &days
 		}
 	}
@@ -517,18 +517,6 @@ func tracksStock(bean library.Entity) bool {
 		}
 	}
 	return false
-}
-
-func daysSinceDate(date string, now time.Time) (int, bool) {
-	ms, ok := library.ParseJSDate(date)
-	if !ok {
-		return 0, false
-	}
-	days := int(now.Sub(time.UnixMilli(ms)).Hours() / 24)
-	if days < 0 {
-		days = 0
-	}
-	return days, true
 }
 
 func encodeOffsetCursor(offset int) string {
