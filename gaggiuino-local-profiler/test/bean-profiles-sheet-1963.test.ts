@@ -207,6 +207,23 @@ describe('bean detail sheet profile history (#1963)', () => {
     expect(S.coffeeLibrary.beans[0]?.['pinnedProfiles']).toEqual([{ machineId: 1, name: 'Londinium' }]);
   });
 
+  it('flags a pinned profile the machine no longer has, and names the machine when all are shown', () => {
+    // A pin outlives the profile it names: the machine list no longer has
+    // "Ghost", so the row stays visible (to be unpinned) and says so.
+    S.coffeeLibrary = {
+      beans: [{ ...plainBean, pinnedProfiles: [{ machineId: 1, name: 'Ghost' }] }],
+      grinders: [],
+    };
+    S.machineProfiles = [{ name: 'Londinium' }];
+    expect(card(1)).toContain('Pinned, no rated shots yet');
+    expect(card(1)).toContain('Not on this machine any more');
+
+    // With "all machines" the rows pool machines, so each row names its own.
+    S.activeMachineId = 'all';
+    expect(card(1)).toContain('lib-profile-name">Ghost');
+    expect(card(1)).toContain('Gaggia');
+  });
+
   it('escapes a profile name instead of letting it become markup', () => {
     const evil = '<img src=x onerror=alert(1)>';
     S.coffeeLibrary = { beans: [plainBean], grinders: [] };
