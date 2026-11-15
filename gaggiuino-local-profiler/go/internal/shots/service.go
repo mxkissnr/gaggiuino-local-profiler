@@ -211,11 +211,16 @@ func SetAnnotationStockHook(fn func(prev, next map[string]any) error) {
 // Returns the saved annotation. The installed annotation stock hook (see
 // SetAnnotationStockHook) runs once the merge is saved, in the same locked
 // save.
+//
+// The shot's bean age is derived from the library on every patch (#2025), so
+// every client of this merge stores the same definition; an age that cannot be
+// resolved leaves the merged value exactly as the patch produced it.
 func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[string]any, error) {
 	var after func(prev, next map[string]any) error
 	if h := annotationStockHook.Load(); h != nil {
 		after = *h
 	}
+	ageOf := s.loadBeanAge(shotID)
 	return s.repo.updateAnnotation(shotID, func(ann map[string]any) error {
 		applied := make(map[string]any, len(patch))
 		for k, v := range patch {
@@ -233,6 +238,11 @@ func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[strin
 		issues = append(issues, checkTasteTag(applied)...)
 		if len(issues) > 0 {
 			return &AnnotationValidationError{Issues: issues}
+		}
+		if ageOf != nil {
+			if days, ok := ageOf(ann); ok {
+				ann["beanAgeDays"] = float64(days)
+			}
 		}
 		return nil
 	}, after)

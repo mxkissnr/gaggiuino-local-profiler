@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -526,5 +527,70 @@ func TestWriteToolsDoNotPublishOnError(t *testing.T) {
 
 	if got := rec.snapshot(); len(got) != 0 {
 		t.Fatalf("published %v on failed writes, want none", got)
+	}
+}
+
+// TestAnnotateShotStoresBeanAge is the #2025 slice-2 outcome: a shot annotated
+// through the MCP tool (what Home Assistant's assistant uses) stores the same
+// beanAgeDays the browser would compute, so get_shot reports it too. The age
+// source is installed exactly as cmd/server does.
+//
+// The expectation is the shared rule's own answer rather than a literal 10: the
+// rule counts whole LOCAL calendar days, and this test cannot pin time.Local --
+// writing that global while the httptest server below is live is a data race
+// against net/http's own time.Now reads (-race caught exactly that).
+func TestAnnotateShotStoresBeanAge(t *testing.T) {
+	ts, sqlDB, libRepo, _, _ := newWriteServer(t, true)
+
+	lib, err := libRepo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = []library.Entity{{"id": int64(1), "name": "Alpha", "roastDate": "2026-07-09", "enabled": true}}
+	if err := libRepo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	shots.SetBeanAgeSource(func() (func(map[string]any, int64) (int, bool), error) {
+		loaded, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
+		}
+		beans := loaded.Beans
+		return func(ann map[string]any, shotSec int64) (int, bool) {
+			return library.BeanAgeForAnnotation(beans, ann, shotSec)
+		}, nil
+	})
+	t.Cleanup(func() { shots.SetBeanAgeSource(nil) })
+
+	shotSec := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC).Unix()
+	want, ok := library.RoastAgeDays("2026-07-09", time.Unix(shotSec, 0))
+	if !ok {
+		t.Fatal("the shared rule resolved no age for the fixture bean")
+	}
+	insertShot(t, sqlDB, 31, shotSec, nil, map[string]any{
+		"beanId": float64(1),
+		"coffee": "Alpha",
+	})
+	session := connect(t, ts.URL+Path)
+
+	if res := call(t, session, "annotate_shot", map[string]any{"id": 31, "rating": 4}); res.IsError {
+		t.Fatalf("annotate_shot failed: %s", errorText(t, res))
+	}
+
+	ann, err := shots.NewRepository(sqlDB).GetAnnotation(31)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if ann["beanAgeDays"] != float64(want) {
+		t.Fatalf("stored beanAgeDays = %v, want %d", ann["beanAgeDays"], want)
+	}
+
+	res := call(t, session, "get_shot", map[string]any{"id": 31})
+	if res.IsError {
+		t.Fatalf("get_shot failed: %s", errorText(t, res))
+	}
+	out := structured(t, res)
+	if got := numberField(t, object(out, "annotation"), "beanAgeDays"); got != float64(want) {
+		t.Fatalf("get_shot annotation.beanAgeDays = %v, want %d", got, want)
 	}
 }
