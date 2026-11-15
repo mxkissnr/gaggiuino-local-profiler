@@ -200,6 +200,46 @@ export function achVerdictHtml(badges: Achievement[]): Html {
     </div>`;
 }
 
+// The share of a started counter, clamped to 0..100 — one formula for the
+// details sheet and the rows of the side lists.
+function progressPct(progress: { current: number; target: number } | null | undefined): number {
+  return progress && progress.target > 0
+    ? Math.round(Math.min(100, Math.max(0, (progress.current * 100) / progress.target)))
+    : 0;
+}
+
+// A stamp earned in the last seven days still has wet ink (see the .ach-wet
+// rule in style.css). Static look, so it needs no second timestamp of its own.
+export function isWetInk(b: Achievement, nowSec: number): boolean {
+  return Boolean(b.unlocked) && typeof b.unlockedAt === 'number'
+    && nowSec - b.unlockedAt >= 0 && nowSec - b.unlockedAt < 7 * 86400;
+}
+
+// The stamps earned last, newest first. A locked secret badge has no
+// unlockedAt, so it can never appear here.
+export function achRecent(badges: Achievement[], n = 5): Achievement[] {
+  return badges
+    .filter((b): b is Achievement & { unlockedAt: number } => Boolean(b.unlocked) && typeof b.unlockedAt === 'number')
+    .sort((a, b) => b.unlockedAt - a.unlockedAt)
+    .slice(0, n);
+}
+
+// One row of the side lists, in the settings row look the Dial-In rows use. A
+// data-ach-id is all slice 1's delegated click listener needs to open the
+// stamp's details.
+export function achRowHtml(b: Achievement, value: string, pct: number | null): Html {
+  return html`<button type="button" class="settings-row ach-row" data-ach-id="${esc(b.id)}" aria-haspopup="dialog">
+      <span class="settings-row-icon ach-row-icon${b.unlocked ? ' ach-row-got' : ''}" aria-hidden="true">${b.stamp ? stampSvg(b.stamp) : html``}</span>
+      <span class="settings-row-text">
+        <span class="settings-row-title">${esc(badgeName(b) || '')}</span>
+        <span class="settings-row-sub">${esc(t(CARD_NAME_KEYS[b.card] ?? ''))}</span>
+        ${pct === null ? html`` : html`<span class="ach-bar"><i style="width:${esc(pct)}%"></i></span>`}
+      </span>
+      <span class="settings-row-value">${esc(value)}</span>
+      <span class="settings-chev" aria-hidden="true"></span>
+    </button>`;
+}
+
 // One stamp's details for the shared sheet. A locked secret badge shows the
 // category name ("Secret") and the standing hint, and nothing else: no name,
 // no description, no counter — even when the record it was built from carries
@@ -212,9 +252,7 @@ export function achDetail(b: Achievement): { title: string; sub: string; body: H
   const desc = secretLocked ? null : badgeDesc(b);
   const progress = b.progress;
   const bar = !b.unlocked && progress && progress.target > 0;
-  const pct = progress && progress.target > 0
-    ? Math.round(Math.min(100, Math.max(0, (progress.current * 100) / progress.target)))
-    : 0;
+  const pct = progressPct(progress);
   return {
     title,
     sub,
@@ -226,11 +264,11 @@ export function achDetail(b: Achievement): { title: string; sub: string; body: H
 // emit neither its name nor its description, and that is the one property of
 // this view worth nailing down at the HTML level rather than trusting
 // badgeName()/badgeDesc() to keep returning null.
-export function fieldHtml(b: Achievement): Html {
+export function fieldHtml(b: Achievement, nowSec: number = Date.now() / 1000): Html {
   const rot = askewDeg(b.id);
   const secretLocked = b.secret && !b.unlocked;
   const label = secretLocked ? t('ach_card_secret') : (badgeName(b) || '');
-  const cls = `ach-field${b.unlocked ? ' ach-got' : ''}${secretLocked ? ' ach-secret' : ''}`;
+  const cls = `ach-field${b.unlocked ? ' ach-got' : ''}${secretLocked ? ' ach-secret' : ''}${isWetInk(b, nowSec) ? ' ach-wet' : ''}`;
   return html`<button type="button" class="${esc(cls)}"
       style="--ach-rot:${esc(rot)}deg" data-ach-id="${esc(b.id)}" aria-label="${esc(label)}">
     <span class="ach-ring"></span>
@@ -239,7 +277,7 @@ export function fieldHtml(b: Achievement): Html {
   </button>`;
 }
 
-function pageHtml(cardBadges: Achievement[], key: string, chosen: string): Html {
+function pageHtml(cardBadges: Achievement[], key: string, chosen: string, nowSec: number): Html {
   const full = isCardFull(cardBadges);
   const overprint = full
     ? (() => {
@@ -248,7 +286,7 @@ function pageHtml(cardBadges: Achievement[], key: string, chosen: string): Html 
       })()
     : html``;
   return html`<div class="ach-page${esc(full ? ' ach-full' : '')}" data-ach-page="${esc(key)}"${key === chosen ? html`` : html` hidden`}>
-    <div class="ach-fields">${joinHtml(cardBadges.map(fieldHtml))}</div>
+    <div class="ach-fields">${joinHtml(cardBadges.map(b => fieldHtml(b, nowSec)))}</div>
     ${overprint}
   </div>`;
 }
@@ -259,7 +297,9 @@ function pageHtml(cardBadges: Achievement[], key: string, chosen: string): Html 
 // what the chips say. The filter is pure CSS: the layout carries
 // data-ach-filter and the stylesheet dims the stamps that do not match, so
 // the card stays one object and nothing is hidden or reflowed.
-export function achPageHtml(badges: Achievement[], card: string, filter: AchFilter): Html {
+export function achPageHtml(
+  badges: Achievement[], card: string, filter: AchFilter, nowSec: number = Date.now() / 1000,
+): Html {
   const byCard = new Map<string, Achievement[]>(CARD_KEYS.map(k => [k, []]));
   for (const b of badges) {
     const list = byCard.get(b.card);
@@ -273,6 +313,26 @@ export function achPageHtml(badges: Achievement[], card: string, filter: AchFilt
   const showChips = joinHtml(filters.map(([value, key]) =>
     html`<button type="button" class="lib-shelf-chip" data-ach-show="${esc(value)}" aria-pressed="${esc(value === filter ? 'true' : 'false')}">${tHtml(key)}</button>`
   ));
+
+  // The verdict already names the closest stamp, so "Coming up" starts after
+  // it — nothing twice (docs/DESIGN.md).
+  const soon = achUpcoming(badges).slice(1, 4);
+  const recent = achRecent(badges);
+  const soonRows = joinHtml(soon.map(b => achRowHtml(
+    b,
+    t('ach_progress', b.progress?.current ?? 0, b.progress?.target ?? 0),
+    progressPct(b.progress),
+  )));
+  const recentRows = joinHtml(recent.map(b => achRowHtml(
+    b,
+    formatDate((b.unlockedAt as number) * 1000, localeFor(S.currentLang)),
+    null,
+  )));
+  // A section stays in the markup when the filter hides it: switching the
+  // filter then only flips `hidden`, no re-render.
+  const soonHidden = !soon.length || filter === 'got';
+  const recentHidden = !recent.length || filter === 'open';
+  const sideHidden = soonHidden && recentHidden;
 
   return html`
     <div class="settings-bar ach-bar-top"><h1 class="settings-bar-title">${tHtml('nav_achievements')}</h1></div>
@@ -295,8 +355,18 @@ export function achPageHtml(badges: Achievement[], card: string, filter: AchFilt
             <span class="ach-brand">Gaggiuino Local Profiler</span>
             <span class="ach-title serif-display" id="achTitle">${esc(t(CARD_NAME_KEYS[card] ?? ''))}</span>
           </div>
-          <div class="ach-grid">${joinHtml(CARD_KEYS.map(key => pageHtml(byCard.get(key) || [], key, card)))}</div>
+          <div class="ach-grid">${joinHtml(CARD_KEYS.map(key => pageHtml(byCard.get(key) || [], key, card, nowSec)))}</div>
         </div>
+      </div>
+      <div class="ach-side"${sideHidden ? html` hidden` : html``}>
+        <section class="ach-soon-sec"${soonHidden ? html` hidden` : html``}>
+          <h2 class="analytics-section-title">${tHtml('ach_soon')}</h2>
+          <div class="settings-group">${soonRows}</div>
+        </section>
+        <section class="ach-recent-sec"${recentHidden ? html` hidden` : html``}>
+          <h2 class="analytics-section-title">${tHtml('ach_recent')}</h2>
+          <div class="settings-group">${recentRows}</div>
+        </section>
       </div>
     </div>`;
 }
@@ -315,6 +385,19 @@ export function setAchCard(key: string): void {
   if (titleEl) titleEl.textContent = t(CARD_NAME_KEYS[key] ?? '');
 }
 
+// The two side lists follow the filter; an empty one stays hidden either way
+// and the card takes the whole width once both are gone.
+function _applyAchListVisibility(filter: AchFilter): void {
+  const soon = document.querySelector<HTMLElement>('.ach-soon-sec');
+  const recent = document.querySelector<HTMLElement>('.ach-recent-sec');
+  const side = document.querySelector<HTMLElement>('.ach-side');
+  const soonHidden = !soon || !soon.querySelector('.ach-row') || filter === 'got';
+  const recentHidden = !recent || !recent.querySelector('.ach-row') || filter === 'open';
+  if (soon) soon.hidden = soonHidden;
+  if (recent) recent.hidden = recentHidden;
+  if (side) side.hidden = soonHidden && recentHidden;
+}
+
 export function setAchFilter(value: string): void {
   if (value !== 'all' && value !== 'got' && value !== 'open') return;
   _state.filter = value;
@@ -323,6 +406,7 @@ export function setAchFilter(value: string): void {
   document.querySelectorAll<HTMLElement>('[data-ach-show]').forEach(el => {
     el.setAttribute('aria-pressed', String(el.dataset.achShow === value));
   });
+  _applyAchListVisibility(value);
 }
 
 export function openAchievement(id: string): void {
