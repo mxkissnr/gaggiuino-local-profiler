@@ -560,7 +560,7 @@ func TestAnnotateShotStoresBeanAge(t *testing.T) {
 	})
 	t.Cleanup(func() { shots.SetBeanAgeSource(nil) })
 
-	insertShot(t, sqlDB, 31, time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC).Unix(), nil, nil, map[string]any{
+	insertShot(t, sqlDB, 31, time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC).Unix(), nil, map[string]any{
 		"beanId": float64(1),
 		"coffee": "Alpha",
 	})
