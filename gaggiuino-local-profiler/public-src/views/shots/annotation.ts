@@ -5,7 +5,7 @@ import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, deleteShotImage, shotImageUrl } from '../../api/shots.js';
 import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js';
-import { esc, formatDate, germanToIso, html, joinHtml, parseRoastDate, resolveFreshness } from '../../utils.js';
+import { esc, formatDate, germanToIso, html, joinHtml, parseRoastDate, resolveFreshness, roastAgeDays } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation, beanFreshnessContext } from './utils.js';
 import type { BeanFreshnessContext } from './utils.js';
@@ -688,9 +688,11 @@ export function updateDegassing(
   const date = parseRoastDate(val);
   if (!date) { tracker.style.display = 'none'; return; }
   // #1953: a frozen shot's tracker shows the same effective age as its badge;
-  // every other shot keeps reading from the roast date relative to now.
-  const days = effectiveDays ?? Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
+  // every other shot keeps reading its plain age from the roast date relative
+  // to now. #2025: that read is roastAgeDays() like every other browser path,
+  // so the tracker cannot disagree with the badge by a day.
+  const days = effectiveDays ?? roastAgeDays(val);
+  if (days == null || days < 0 || days > 180) { tracker.style.display = 'none'; return; }
   tracker.style.display = 'block';
   // #1835/#1977: the bands come from the same resolved windows as the badge —
   // per-bean override → roast level → global; the bar keeps its 42-day scale,

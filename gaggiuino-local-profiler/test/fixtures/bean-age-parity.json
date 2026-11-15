@@ -1,0 +1,233 @@
+{
+  "timeZone": "Europe/Berlin",
+  "cases": [
+    {
+      "name": "plain ISO roast date",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "2026-07-09" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": 117
+    },
+    {
+      "name": "German roast date",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "09.07.2026" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": 117
+    },
+    {
+      "name": "late evening rounds down",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "2026-07-09" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-07-19T22:00",
+      "expected": 10
+    },
+    {
+      "name": "just after local midnight",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "2026-07-09" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-07-19T00:30",
+      "expected": 10
+    },
+    {
+      "name": "daylight-saving start does not lose a day",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "2026-03-20" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-03-30T00:30",
+      "expected": 10
+    },
+    {
+      "name": "bag open at the shot wins",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-01-01",
+        "bags": [
+          { "id": 1, "roastDate": "2026-06-01", "openedAtLocal": "2026-06-05T12:00" },
+          { "id": 2, "roastDate": "2026-07-01", "openedAtLocal": "2026-07-10T12:00" }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-07-15T08:00",
+      "expected": 14
+    },
+    {
+      "name": "shot before any bag was opened uses the bean roast date",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-01-01",
+        "bags": [
+          { "id": 1, "roastDate": "2026-06-01", "openedAtLocal": "2026-06-05T12:00" },
+          { "id": 2, "roastDate": "2026-07-01", "openedAtLocal": "2026-07-10T12:00" }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-06-03T08:00",
+      "expected": 153
+    },
+    {
+      "name": "bag without openedAt counts as opened at 0",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-01-01",
+        "bags": [
+          { "id": 1, "roastDate": "2026-06-01" },
+          { "id": 2, "roastDate": "2026-07-01", "openedAtLocal": "2026-07-10T12:00" }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-07-15T08:00",
+      "expected": 14
+    },
+    {
+      "name": "frozen portion ages slowly",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-07-09",
+        "bags": [
+          {
+            "id": 1,
+            "roastDate": "2026-07-09",
+            "frozenPortions": [{ "id": 100, "frozenAtLocal": "2026-07-23T12:00" }]
+          }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean", "frozenPortionId": 100 },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": 19
+    },
+    {
+      "name": "thawed portion ages normally again",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-07-09",
+        "bags": [
+          {
+            "id": 1,
+            "roastDate": "2026-07-09",
+            "frozenPortions": [
+              { "id": 100, "frozenAtLocal": "2026-07-23T12:00", "thawedAtLocal": "2026-08-14T12:00" }
+            ]
+          }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean", "frozenPortionId": 100 },
+      "shotLocal": "2026-08-17T12:00",
+      "expected": 18
+    },
+    {
+      "name": "thaw after the shot keeps the frozen rate",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-07-09",
+        "bags": [
+          {
+            "id": 1,
+            "roastDate": "2026-07-09",
+            "frozenPortions": [
+              { "id": 100, "frozenAtLocal": "2026-07-23T12:00", "thawedAtLocal": "2026-09-01T12:00" }
+            ]
+          }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean", "frozenPortionId": 100 },
+      "shotLocal": "2026-08-14T12:00",
+      "expected": 15
+    },
+    {
+      "name": "shot before the freeze gets plain age",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-07-09",
+        "bags": [
+          {
+            "id": 1,
+            "roastDate": "2026-07-09",
+            "frozenPortions": [{ "id": 100, "frozenAtLocal": "2026-07-23T12:00" }]
+          }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean", "frozenPortionId": 100 },
+      "shotLocal": "2026-07-20T12:00",
+      "expected": 11
+    },
+    {
+      "name": "mixed shot ignores the portion",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-07-09",
+        "bags": [
+          {
+            "id": 1,
+            "roastDate": "2026-07-09",
+            "frozenPortions": [{ "id": 100, "frozenAtLocal": "2026-07-23T12:00" }]
+          }
+        ]
+      },
+      "annotation": {
+        "beanId": 1,
+        "coffee": "Test Bean",
+        "frozenPortionId": 100,
+        "beanMix": [
+          { "beanId": 1, "coffee": "Test Bean", "grams": 10 },
+          { "beanId": 2, "coffee": "Other Bean", "grams": 8 }
+        ]
+      },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": 117
+    },
+    {
+      "name": "unknown portion gives no age",
+      "bean": {
+        "id": 1,
+        "name": "Test Bean",
+        "roastDate": "2026-07-09",
+        "bags": [
+          {
+            "id": 1,
+            "roastDate": "2026-07-09",
+            "frozenPortions": [{ "id": 100, "frozenAtLocal": "2026-07-23T12:00" }]
+          }
+        ]
+      },
+      "annotation": { "beanId": 1, "coffee": "Test Bean", "frozenPortionId": 999 },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": null
+    },
+    {
+      "name": "roast date over two years back",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "2020-01-01" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": null
+    },
+    {
+      "name": "roast date after the shot",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "2026-12-01" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": null
+    },
+    {
+      "name": "bean found by name without beanId",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "2026-07-09" },
+      "annotation": { "coffee": "test bean" },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": 117
+    },
+    {
+      "name": "unparseable roast date",
+      "bean": { "id": 1, "name": "Test Bean", "roastDate": "soon" },
+      "annotation": { "beanId": 1, "coffee": "Test Bean" },
+      "shotLocal": "2026-11-03T08:00",
+      "expected": null
+    }
+  ]
+}

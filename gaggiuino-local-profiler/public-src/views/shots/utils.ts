@@ -1,5 +1,5 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints, parseRoastDate, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation, freshnessOverrideFrom, normalizeRoastLevel } from '../../utils.js';
+import { mapShotDatapoints, roastAgeDays, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation, freshnessOverrideFrom, normalizeRoastLevel } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries, FreshnessOverride, RoastLevel } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 import type { PressureNote } from '../../shared/score.js';
@@ -94,7 +94,7 @@ export function _roastDateFromLibrary(
   if (bags.length) {
     const activeBag = bags
       .filter(b => (b.openedAt || 0) <= shotMs)
-      .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
+      .sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0))[0];
     if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
   }
   return roastDateStr || null;
@@ -123,17 +123,9 @@ export function calcBeanAgeAtShot(
     }
     return null;
   }
-  let roastDateStr = bean.roastDate;
-  if (bags.length) {
-    const activeBag = bags
-      .filter(b => (b.openedAt || 0) <= shotMs)
-      .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
-    if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
-  }
-  const roastDate = parseRoastDate(roastDateStr);
-  if (!roastDate) return null;
-  const days = Math.round((shotMs - roastDate.getTime()) / 86400000);
-  return days >= 0 && days <= 730 ? days : null;
+  // #2025: the same plain-age rule as the bean card, so the shot badge and the
+  // bag badge can never disagree by a day.
+  return roastAgeDays(_roastDateFromLibrary(beanName, shotTimestampSec, beanId), shotMs);
 }
 
 export interface ShotBeanAge {
@@ -184,10 +176,8 @@ export function shotBeanAge(
   if (live != null) return { days: live, atShot: true };
   if (ann.beanAgeDays != null) return { days: ann.beanAgeDays, atShot: true };
   if (!(opts.relativeToNow ?? true) || !ann.roastDate) return null;
-  const roastDate = parseRoastDate(ann.roastDate);
-  if (!roastDate) return null;
-  const days = Math.round(((opts.nowMs ?? Date.now()) - roastDate.getTime()) / 86400000);
-  return days >= 0 ? { days, atShot: false } : null;
+  const days = roastAgeDays(ann.roastDate, opts.nowMs ?? Date.now());
+  return days != null ? { days, atShot: false } : null;
 }
 
 // ── Shot data ─────────────────────────────────────────────────────────────

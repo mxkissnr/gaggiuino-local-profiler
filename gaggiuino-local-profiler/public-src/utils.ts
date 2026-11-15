@@ -53,12 +53,25 @@ export function joinHtml(parts: readonly Html[]): Html {
 
 // ── Roast freshness ───────────────────────────────────────────────────────
 // Roast dates appear in two formats across the app: DD.MM.YYYY (bean form,
-// TT.MM.JJJJ placeholder) and YYYY-MM-DD (ISO, bags & imports). Returns whole
-// days since roast, or null when unparseable / implausible (>2 years).
+// TT.MM.JJJJ placeholder) and YYYY-MM-DD (ISO, bags & imports). Returns the
+// bean's age in whole local calendar days, or null when unparseable /
+// implausible (>2 years) / in the future.
+//
+// Whole local calendar days (i.e. rounded down from local midnight of the
+// roast day) is the one plain-age rule for every browser path: the bean card
+// badge, the shelf sort, the shot badge and the degassing tracker. Counting
+// calendar dates rather than elapsed milliseconds keeps a daylight-saving
+// switch from taking a day off. The Go twin (go/internal/library/bean_age.go,
+// RoastAgeDays) and the shared parity fixture
+// (test/fixtures/bean-age-parity.json) must change together with this.
 export function roastAgeDays(str: string | null | undefined, nowMs: number = Date.now()): number | null {
   const d = parseRoastDate(str);
   if (!d) return null;
-  const days = Math.floor((nowMs - d.getTime()) / 86400000);
+  const at = new Date(nowMs);
+  const days = Math.round(
+    (Date.UTC(at.getFullYear(), at.getMonth(), at.getDate())
+      - Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000,
+  );
   return days >= 0 && days <= 730 ? days : null;
 }
 
