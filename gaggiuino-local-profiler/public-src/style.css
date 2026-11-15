@@ -1553,6 +1553,14 @@
         .lib-sheet-aromas { margin-top: var(--sp-2); }
         .lib-sheet-aromas-title { font-size: var(--fs-1); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: var(--sp-2); }
         .lib-sheet-aromas-body { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+        /* #1963 slice 3: proven/suggested profile rows under the Aromas block.
+           Same quiet sheet styling — plain rows, no card of their own. */
+        .lib-sheet-profiles { margin-top: var(--sp-2); }
+        .lib-profile-row { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; }
+        .lib-profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .lib-profile-name { font-size: var(--fs-2); color: var(--gray-100); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lib-profile-sub { font-size: var(--fs-1); color: var(--gray-500); font-variant-numeric: tabular-nums; }
+        .lib-profile-pin[aria-pressed="true"] { color: var(--accent-ink); }
         .lib-aroma-wheel { flex: 0 0 auto; width: min(168px, 45vw); padding: 0; background: none; border: none; line-height: 0; cursor: pointer; }
         .lib-aroma-svg { display: block; width: 100%; height: auto; }
         .lib-aroma-seg { stroke: var(--gray-700); stroke-width: .6; }
