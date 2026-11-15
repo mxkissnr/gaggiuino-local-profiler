@@ -15,7 +15,7 @@ import { showToast } from '../../components/toast.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { pinnedProfilesOf, provenProfilesForBean, suggestProfilesForBean, togglePinnedProfile } from '../../shared/bean-profiles.js';
-import type { ProfileBean, ProfileContext, ProfileRow, ProfileShot } from '../../shared/bean-profiles.js';
+import type { ProfileBean, ProfileContext, ProfileRow } from '../../shared/bean-profiles.js';
 import { _beanList } from './bean-shared.js';
 import type { BeanListRow } from './bean-shared.js';
 import * as libraryView from '../library.js';
@@ -50,8 +50,8 @@ function _availableNames(machineId: number | null): ReadonlySet<string> | null {
 function _profileContext(): ProfileContext {
   const machineId = concreteActiveMachineId();
   return {
-    shots: S.shots as unknown as ProfileShot[],
-    beans: _beanList() as unknown as ProfileBean[],
+    shots: S.shots,
+    beans: _beanList(),
     machineId,
     availableNames: _availableNames(machineId),
   };
@@ -120,7 +120,7 @@ export async function toggleBeanProfilePin(beanId: number, machineId: number, na
     const next = togglePinnedProfile(pinnedProfilesOf(bean), machineId, profileName);
     const saved = await libraryApi.saveBean(beanId, { pinnedProfiles: next });
     const idx = _beanList().findIndex(b => b.id === beanId);
-    if (idx !== -1) _beanList()[idx] = saved as unknown as BeanListRow;
+    if (idx !== -1) _beanList()[idx] = saved;
   } catch {
     // saveBean throws on a non-ok response; the bean keeps its old pins.
     showToast(t('gm_toast_save_error'));
