@@ -41,31 +41,35 @@ export interface PinnedProfile {
   name: string;
 }
 
+// The `| undefined` on every optional field keeps partial fixtures (and the
+// untyped library/shot rows slice 3 passes in) assignable under
+// exactOptionalPropertyTypes, the same spelling bean-mix.ts uses.
+
 /** The annotation fields a profile statistic reads. */
 export interface ProfileAnnotation {
-  beanId?: number | null;
-  coffee?: string | null;
-  rating?: string | number | null;
-  beanMix?: readonly BeanMixPartInput[] | null;
+  beanId?: number | null | undefined;
+  coffee?: string | null | undefined;
+  rating?: string | number | null | undefined;
+  beanMix?: readonly BeanMixPartInput[] | null | undefined;
 }
 
 /** The shot fields a profile statistic reads. */
 export interface ProfileShot {
-  machineId?: number | null;
-  timestamp?: number;
+  machineId?: number | null | undefined;
+  timestamp?: number | undefined;
   profileName?: unknown;
-  profile?: { name?: unknown } | null;
-  annotation?: ProfileAnnotation | null;
+  profile?: { name?: unknown } | null | undefined;
+  annotation?: ProfileAnnotation | null | undefined;
 }
 
 /** The bean fields a profile statistic reads. */
 export interface ProfileBean {
   id: number;
-  name?: string | null;
-  decaf?: boolean | null;
-  roastLevel?: string | null;
-  roastType?: string | null;
-  process?: string | null;
+  name?: string | null | undefined;
+  decaf?: boolean | null | undefined;
+  roastLevel?: string | null | undefined;
+  roastType?: string | null | undefined;
+  process?: string | null | undefined;
   pinnedProfiles?: unknown;
 }
 
@@ -91,7 +95,7 @@ export interface ProfileContext {
   beans: readonly ProfileBean[];
   machineId: number | null;
   /** The selected machine's current profile names, lower-cased and trimmed. */
-  availableNames?: ReadonlySet<string> | null;
+  availableNames?: ReadonlySet<string> | null | undefined;
 }
 
 /** Samples a profile needs before it counts as proven. */
@@ -132,7 +136,7 @@ export function pinnedProfilesOf(bean: ProfileBean | null | undefined): PinnedPr
   const pins: PinnedProfile[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') continue;
-    const { machineId, name } = entry as Record<string, unknown>;
+    const { machineId, name } = entry as { machineId?: unknown; name?: unknown };
     if (typeof machineId !== 'number' || !Number.isInteger(machineId) || machineId <= 0) continue;
     if (typeof name !== 'string' || !name.trim()) continue;
     pins.push({ machineId, name: name.trim() });
@@ -170,7 +174,9 @@ function _processOf(bean: ProfileBean): string {
 
 function _roastIndex(bean: ProfileBean): number | null {
   const level = normalizeRoastLevel(bean.roastLevel);
-  return level ? ROAST_LEVELS.indexOf(level) : null;
+  if (!level) return null;
+  const i = ROAST_LEVELS.indexOf(level);
+  return i >= 0 ? i : null;
 }
 
 /**
@@ -216,7 +222,7 @@ interface ProfileStats {
 
 type BeanIndex = Map<number, Map<string, ProfileStats>>;
 
-function _parseRating(raw: unknown): number | null {
+function _parseRating(raw: ProfileAnnotation['rating']): number | null {
   if (raw == null) return null;
   const n = parseFloat(String(raw));
   return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null;

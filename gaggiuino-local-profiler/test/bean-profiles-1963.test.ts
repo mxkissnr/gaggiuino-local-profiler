@@ -26,15 +26,17 @@ import type {
 let _seq = 0;
 const ts = (): number => 1_700_000_000 + ++_seq;
 
+// Every field is spelled `| undefined`: the helpers spread a partial spec into
+// an object literal, which exactOptionalPropertyTypes otherwise rejects.
 interface ShotSpec {
-  beanId?: number;
-  coffee?: string | null;
-  profile?: string;
-  flat?: string;
-  rating?: number | string | null;
-  machineId?: number | null;
-  timestamp?: number;
-  mixed?: boolean;
+  beanId?: number | undefined;
+  coffee?: string | null | undefined;
+  profile?: string | undefined;
+  flat?: string | undefined;
+  rating?: number | string | null | undefined;
+  machineId?: number | null | undefined;
+  timestamp?: number | undefined;
+  mixed?: boolean | undefined;
 }
 
 function shot(spec: ShotSpec = {}): ProfileShot {
@@ -59,15 +61,22 @@ function bean(id: number, over: Partial<Omit<ProfileBean, 'id'>> = {}): ProfileB
   return { id, name: `Bean ${id}`, ...over };
 }
 
+interface ContextOverrides {
+  machineId?: number | null | undefined;
+  availableNames?: ReadonlySet<string> | null | undefined;
+}
+
 function context(
   shots: ProfileShot[],
   beans: ProfileBean[],
-  over: Partial<Omit<ProfileContext, 'shots' | 'beans'>> = {},
+  over: ContextOverrides = {},
 ): ProfileContext {
-  return { shots, beans, machineId: null, ...over };
+  const ctx: ProfileContext = { shots, beans, machineId: over.machineId ?? null };
+  if (over.availableNames !== undefined) ctx.availableNames = over.availableNames;
+  return ctx;
 }
 
-/** `count` rated shots of `profile` for the bean, all on one machine. */
+/** One rated shot of `profile` for the bean per entry in `ratings`. */
 function rated(
   beanId: number,
   profile: string,
