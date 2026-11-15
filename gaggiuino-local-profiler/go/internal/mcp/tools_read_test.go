@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	_ "time/tzdata" // Europe/Berlin must load on hosts without a tz database
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -207,6 +208,55 @@ func TestListBeansReportsRoastLevel(t *testing.T) {
 		t.Fatalf("legacy roast_level = %q, want empty (roastType must not be used)", got)
 	}
 }
+
+// TestToBeanInfoDaysSinceRoast is the #2025 slice-3 outcome: days_since_roast
+// used to parse the roast date as UTC midnight and truncate the hours, so a
+// bean roasted 2026-07-09 and first reported at 00:30 Berlin on 2026-07-19 read
+// 9 days instead of the bean card's 10. It also reported a future roast date as
+// 0 and ignored a German-format date. The field now uses the shared rule.
+func TestToBeanInfoDaysSinceRoast(t *testing.T) {
+	prev := time.Local
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatalf("LoadLocation(Europe/Berlin): %v", err)
+	}
+	time.Local = loc
+	t.Cleanup(func() { time.Local = prev })
+
+	at := func(y int, mo time.Month, d, h, mi int) time.Time {
+		return time.Date(y, mo, d, h, mi, 0, 0, loc)
+	}
+	cases := []struct {
+		name      string
+		roastDate string
+		now       time.Time
+		want      *int
+	}{
+		{"local midnight boundary", "2026-07-09", at(2026, time.July, 19, 0, 30), intPtr(10)},
+		{"german roast date", "09.07.2026", at(2026, time.July, 19, 0, 30), intPtr(10)},
+		{"future roast date", "2026-12-01", at(2026, time.November, 3, 8, 0), nil},
+		{"over two years", "2020-01-01", at(2026, time.November, 3, 8, 0), nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bean := library.Entity{"id": int64(1), "name": "Alpha", "roastDate": tc.roastDate, "enabled": true}
+			info := toBeanInfo(bean, []library.Entity{bean}, nil, tc.now)
+			if info.RoastDate != tc.roastDate {
+				t.Fatalf("roast_date = %q, want %q", info.RoastDate, tc.roastDate)
+			}
+			switch {
+			case tc.want == nil && info.DaysSinceRoast != nil:
+				t.Fatalf("days_since_roast = %d, want nil", *info.DaysSinceRoast)
+			case tc.want != nil && info.DaysSinceRoast == nil:
+				t.Fatalf("days_since_roast = nil, want %d", *tc.want)
+			case tc.want != nil && *info.DaysSinceRoast != *tc.want:
+				t.Fatalf("days_since_roast = %d, want %d", *info.DaysSinceRoast, *tc.want)
+			}
+		})
+	}
+}
+
+func intPtr(v int) *int { return &v }
 
 func findBean(beans []any, name string) map[string]any {
 	for _, raw := range beans {
