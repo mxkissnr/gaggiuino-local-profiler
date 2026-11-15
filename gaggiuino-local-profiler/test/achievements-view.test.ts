@@ -52,7 +52,6 @@ import {
 } from '../public-src/views/achievements.js';
 import type { Achievement } from '../public-src/views/achievements.js';
 
-
 const LANGS = { de, en, it: itLang, fr, es, nl };
 
 // Mirrors CARD_KEYS/CARD_NAME_KEYS in the view (and CARD_KEYS in
