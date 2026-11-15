@@ -25,9 +25,16 @@ import (
 
 type listBeansInput struct {
 	ActiveOnly *bool  `json:"active_only,omitempty" jsonschema:"only beans currently enabled in the library (default true); set false to include disabled beans"`
-	Query      string `json:"query,omitempty" jsonschema:"case-insensitive substring matched against the bean name, roaster or origin"`
+	Query      string `json:"query,omitempty" jsonschema:"case-insensitive substring matched against the bean name, roaster or any of its origin country codes"`
 	Cursor     string `json:"cursor,omitempty" jsonschema:"opaque paging cursor from a previous list_beans response's next_cursor; omit for the first page"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"maximum beans to return, 1..100 (default 20)"`
+}
+
+// originShare is one origin country of a bean, with the country's share of a
+// blend when the user entered one.
+type originShare struct {
+	Code    string   `json:"code" jsonschema:"ISO 3166-1 alpha-2 country code"`
+	Percent *float64 `json:"percent,omitempty" jsonschema:"this country's share of a blend in percent; omitted when the user entered none"`
 }
 
 type knownGrindSetting struct {
@@ -39,8 +46,11 @@ type beanInfo struct {
 	ID                  int64               `json:"id" jsonschema:"the bean's stable id"`
 	Name                string              `json:"name" jsonschema:"bean (coffee) name"`
 	Roaster             string              `json:"roaster,omitempty" jsonschema:"roaster name"`
-	Origin              string              `json:"origin,omitempty" jsonschema:"origin country code"`
+	Origin              string              `json:"origin,omitempty" jsonschema:"first origin country code (ISO 3166-1 alpha-2); origins lists every country of a blend"`
+	Origins             []originShare       `json:"origins,omitempty" jsonschema:"every origin country of the bean in the order the user entered them, with each country's blend share when entered; a single-origin bean has one entry"`
+	Decaf               bool                `json:"decaf,omitempty" jsonschema:"true when the bean is decaffeinated; omitted otherwise"`
 	Process             string              `json:"process,omitempty" jsonschema:"process (washed, natural, ...)"`
+	Flavors             []string            `json:"flavors,omitempty" jsonschema:"the bean's flavour notes as entered in the library"`
 	RoastLevel          string              `json:"roast_level,omitempty" jsonschema:"roast level"`
 	RoastDate           string              `json:"roast_date,omitempty" jsonschema:"roast date, YYYY-MM-DD"`
 	DaysSinceRoast      *int                `json:"days_since_roast,omitempty" jsonschema:"whole days since the current bag's roast date, counted in local calendar days like the bean card; the plain age of the bag, so frozen portions (which age more slowly) are not reflected; omitted when the roast date is in the future, unreadable or more than two years back"`
@@ -122,7 +132,7 @@ func registerLibraryTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:        "list_beans",
 		Title:       "List beans",
-		Description: "List coffee beans from the user's library as compact summaries: roaster, origin, process, roast level/date, active flag, remaining stock in grams and remembered grind settings. Filter with query (name/roaster/origin substring) and active_only. Page with cursor/limit. Use before describing a bean or reasoning about stock.",
+		Description: "List coffee beans from the user's library as compact summaries: roaster, origin countries (every country of a blend, with its share when entered), decaf flag, flavour notes, process, roast level/date, active flag, remaining stock in grams and remembered grind settings. Filter with query (substring of the name, roaster or any origin country code) and active_only. Page with cursor/limit. Use before describing a bean or reasoning about stock.",
 		Annotations: readOnlyAnnotations("List beans"),
 		InputSchema: listBeansSchema(),
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listBeansInput) (*mcpsdk.CallToolResult, listBeansOutput, error) {
@@ -251,7 +261,10 @@ func toBeanInfo(bean library.Entity, allBeans []library.Entity, doseRows []shots
 		Name:    entityStr(bean, "name"),
 		Roaster: entityStr(bean, "roaster"),
 		Origin:  entityStr(bean, "origin"),
+		Origins: beanOrigins(bean),
+		Decaf:   decafOf(bean),
 		Process: entityStr(bean, "process"),
+		Flavors: beanFlavors(bean),
 		// #1977: roast_level is the bean's own light..dark level, not the legacy
 		// roastType (a process-style label such as "espresso").
 		RoastLevel: entityStr(bean, "roastLevel"),
@@ -493,12 +506,75 @@ func beanRoastDate(bean library.Entity, doseRows []shots.AnnotatedDose, allBeans
 }
 
 func beanMatchesQuery(bean library.Entity, query string) bool {
-	for _, key := range []string{"name", "roaster", "origin"} {
+	for _, key := range []string{"name", "roaster"} {
 		if strings.Contains(strings.ToLower(entityStr(bean, key)), query) {
 			return true
 		}
 	}
+	// Match origins through the same list the output reports, so a legacy bean
+	// that only carries the scalar origin still matches.
+	for _, origin := range beanOrigins(bean) {
+		if strings.Contains(strings.ToLower(origin.Code), query) {
+			return true
+		}
+	}
 	return false
+}
+
+// beanOrigins reports every origin country of the bean in the order the user
+// entered them, falling back to the legacy scalar origin when the origins list
+// is absent or empty. It returns nil when the bean has no origin at all, so
+// omitempty drops the key.
+func beanOrigins(bean library.Entity) []originShare {
+	var out []originShare
+	if raw, ok := bean["origins"].([]any); ok && len(raw) > 0 {
+		for _, item := range raw {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				continue
+			}
+			code := strings.TrimSpace(entityStr(m, "code"))
+			if code == "" {
+				continue
+			}
+			share := originShare{Code: code}
+			if percent, ok := entityFloat(m, "percent"); ok {
+				share.Percent = &percent
+			}
+			out = append(out, share)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	if code := strings.TrimSpace(entityStr(bean, "origin")); code != "" {
+		return []originShare{{Code: code}}
+	}
+	return nil
+}
+
+func beanFlavors(bean library.Entity) []string {
+	raw, _ := bean["flavors"].([]any)
+	var out []string
+	for _, item := range raw {
+		flavor, ok := item.(string)
+		if !ok {
+			continue
+		}
+		flavor = strings.TrimSpace(flavor)
+		if flavor == "" {
+			continue
+		}
+		out = append(out, flavor)
+	}
+	return out
+}
+
+// decafOf reports the bean's decaf flag: only a real boolean true marks the
+// bean decaffeinated, and an absent key means it is not.
+func decafOf(bean library.Entity) bool {
+	decaf, _ := bean["decaf"].(bool)
+	return decaf
 }
 
 // tracksStock reports whether the bean has any stock to track -- bean-level
